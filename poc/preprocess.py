@@ -1,0 +1,174 @@
+from pathlib import Path
+from typing import Union, Optional, List
+import numpy as np
+import librosa
+import soundfile as sf
+
+TARGET_SR = 22050
+DURATION_SECONDS = 5.0
+TARGET_SAMPLES = int(TARGET_SR * DURATION_SECONDS)  # 110250
+
+
+def compute_rms(waveform: np.ndarray) -> float:
+    """
+    Calcula la raíz cuadrática media (Root Mean Square - RMS) de una señal.
+    Representa la energía acústica efectiva de la forma de onda.
+    """
+    if len(waveform) == 0:
+        return 0.0
+    return float(np.sqrt(np.mean(np.square(waveform, dtype=np.float64))))
+
+
+def load_and_fix_length(
+    audio_input: Union[str, Path, np.ndarray],
+    target_sr: int = TARGET_SR,
+    duration_seconds: float = DURATION_SECONDS,
+    original_sr: Optional[int] = None,
+) -> np.ndarray:
+    """
+    Carga un archivo o array de audio, lo convierte a mono, remuestrea a target_sr
+    y lo recorta o rellena (zero-padding) a exactamente target_sr * duration_seconds muestras.
+    """
+    target_samples = int(target_sr * duration_seconds)
+
+    if isinstance(audio_input, (str, Path)):
+        y, _ = librosa.load(str(audio_input), sr=target_sr, mono=True)
+    elif isinstance(audio_input, np.ndarray):
+        y = audio_input.astype(np.float32)
+        if y.ndim > 1:
+            y = np.mean(y, axis=0)  # mono
+        if original_sr is not None and original_sr != target_sr:
+            y = librosa.resample(y, orig_sr=original_sr, target_sr=target_sr)
+    else:
+        raise TypeError(f"Tipo no soportado para audio_input: {type(audio_input)}")
+
+    current_samples = len(y)
+    if current_samples < target_samples:
+        pad_width = target_samples - current_samples
+        y = np.pad(y, (0, pad_width), mode="constant", constant_values=0.0)
+    elif current_samples > target_samples:
+        start_idx = (current_samples - target_samples) // 2
+        y = y[start_idx : start_idx + target_samples]
+
+    return y.astype(np.float32)
+
+
+def extract_active_windows(
+    audio_input: Union[str, Path, np.ndarray],
+    target_sr: int = TARGET_SR,
+    duration_seconds: float = DURATION_SECONDS,
+    hop_seconds: float = 2.5,
+    top_db: float = 25.0,
+    min_energy: float = 1e-4,
+    original_sr: Optional[int] = None,
+) -> List[np.ndarray]:
+    """
+    Segmenta un audio largo en ventanas solapadas de longitud duration_seconds.
+    Aplica detección de actividad vocal (VAD) basada en RMS energético relativo
+    para descartar segmentos con silencio de fondo o ruido irrelevante.
+
+    Parámetros:
+    - audio_input: Ruta al archivo o array de audio.
+    - target_sr: Frecuencia de muestreo estándar (22.050 Hz).
+    - duration_seconds: Longitud de cada ventana (5.0 segundos = 110.250 muestras).
+    - hop_seconds: Desplazamiento temporal (2.5 segundos = 50% solapamiento).
+    - top_db: Umbral en decibelios bajo el cual una ventana se considera silencio
+              en comparación con la ventana más energética de la grabación.
+    - min_energy: Umbral absoluto de RMS mínimo para evitar considerar ruido
+                  numérico como señal válida.
+    """
+    target_samples = int(target_sr * duration_seconds)
+    hop_samples = int(target_sr * hop_seconds)
+
+    if isinstance(audio_input, (str, Path)):
+        y, _ = librosa.load(str(audio_input), sr=target_sr, mono=True)
+    elif isinstance(audio_input, np.ndarray):
+        y = audio_input.astype(np.float32)
+        if y.ndim > 1:
+            y = np.mean(y, axis=0)
+        if original_sr is not None and original_sr != target_sr:
+            y = librosa.resample(y, orig_sr=original_sr, target_sr=target_sr)
+    else:
+        raise TypeError(f"Tipo no soportado para audio_input: {type(audio_input)}")
+
+    current_samples = len(y)
+
+    # Si el audio es más corto que la ventana objetivo, se rellena con ceros
+    if current_samples < target_samples:
+        pad_width = target_samples - current_samples
+        padded = np.pad(y, (0, pad_width), mode="constant", constant_values=0.0).astype(np.float32)
+        return [padded]
+
+    # Generar ventanas candidatas
+    candidates: List[np.ndarray] = []
+    rms_values: List[float] = []
+
+    start = 0
+    while start + target_samples <= current_samples:
+        window = y[start : start + target_samples].astype(np.float32)
+        candidates.append(window)
+        rms_values.append(compute_rms(window))
+        start += hop_samples
+
+    # Si sobró un fragmento significativo al final no cubierto
+    if current_samples - (start - hop_samples + target_samples) > (target_samples // 4):
+        tail_window = y[-target_samples:].astype(np.float32)
+        candidates.append(tail_window)
+        rms_values.append(compute_rms(tail_window))
+
+    if not candidates:
+        return [load_and_fix_length(y, target_sr, duration_seconds)]
+
+    max_rms = max(rms_values)
+
+    # Salvaguarda: si todo el archivo tiene energía casi nula
+    if max_rms < min_energy:
+        best_idx = int(np.argmax(rms_values))
+        return [candidates[best_idx]]
+
+    # Filtrar por VAD relativo (top_db respecto al pico)
+    active_windows: List[np.ndarray] = []
+    # threshold_rms = max_rms * 10^(-top_db / 20)
+    threshold_rms = max_rms * (10.0 ** (-top_db / 20.0))
+    threshold_rms = max(threshold_rms, min_energy)
+
+    for w, rms in zip(candidates, rms_values):
+        if rms >= threshold_rms:
+            active_windows.append(w)
+
+    # Salvaguarda: Si el filtro descartó todas las ventanas, conservar la de mayor energía
+    if not active_windows:
+        best_idx = int(np.argmax(rms_values))
+        active_windows.append(candidates[best_idx])
+
+    return active_windows
+
+
+def extract_mel_spectrogram(
+    waveform: np.ndarray,
+    sr: int = TARGET_SR,
+    n_mels: int = 64,
+    n_fft: int = 1024,
+    hop_length: int = 512,
+    fmin: float = 50.0,
+    fmax: Optional[float] = None,
+) -> np.ndarray:
+    """
+    Extrae el espectrograma Mel en decibelios (dB) para una señal de audio 1D.
+    Retorna un array float32 de forma (n_mels, time_steps).
+    """
+    if waveform.ndim != 1:
+        raise ValueError(f"waveform debe ser 1D, recibido: {waveform.shape}")
+
+    mel = librosa.feature.melspectrogram(
+        y=waveform,
+        sr=sr,
+        n_fft=n_fft,
+        hop_length=hop_length,
+        n_mels=n_mels,
+        fmin=fmin,
+        fmax=fmax,
+        power=2.0,
+    )
+    mel_db = librosa.power_to_db(mel, ref=np.max)
+    return mel_db.astype(np.float32)

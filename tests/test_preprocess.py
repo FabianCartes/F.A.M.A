@@ -1,0 +1,104 @@
+import numpy as np
+import pytest
+import soundfile as sf
+from poc.preprocess import (
+    load_and_fix_length,
+    extract_mel_spectrogram,
+    compute_rms,
+    extract_active_windows,
+    TARGET_SR,
+    DURATION_SECONDS,
+    TARGET_SAMPLES,
+)
+
+def test_constants():
+    assert TARGET_SR == 22050
+    assert DURATION_SECONDS == 5.0
+    assert TARGET_SAMPLES == 110250
+
+def test_load_and_fix_length_from_synthetic_array_short():
+    synthetic_audio = np.ones(44100, dtype=np.float32)
+    processed = load_and_fix_length(synthetic_audio, target_sr=22050, duration_seconds=5.0, original_sr=22050)
+    
+    assert isinstance(processed, np.ndarray)
+    assert processed.dtype == np.float32
+    assert len(processed) == 110250
+    assert np.allclose(processed[:44100], 1.0)
+    assert np.allclose(processed[44100:], 0.0)
+
+def test_load_and_fix_length_from_synthetic_array_long():
+    synthetic_audio = np.linspace(0, 1, 176400, dtype=np.float32)
+    processed = load_and_fix_length(synthetic_audio, target_sr=22050, duration_seconds=5.0, original_sr=22050)
+    
+    assert len(processed) == 110250
+
+def test_load_and_fix_length_from_file(tmp_path):
+    file_path = tmp_path / "test_audio.wav"
+    sr_orig = 44100
+    dur = 3.0
+    t = np.linspace(0, dur, int(sr_orig * dur), endpoint=False)
+    sig = 0.5 * np.sin(2 * np.pi * 440 * t)
+    sf.write(str(file_path), sig, sr_orig)
+
+    processed = load_and_fix_length(file_path, target_sr=22050, duration_seconds=5.0)
+    assert len(processed) == 110250
+    assert processed.dtype == np.float32
+
+def test_extract_mel_spectrogram():
+    waveform = np.random.randn(110250).astype(np.float32)
+    mel_spec = extract_mel_spectrogram(waveform, sr=22050, n_mels=64, n_fft=1024, hop_length=512)
+    
+    assert isinstance(mel_spec, np.ndarray)
+    assert mel_spec.shape[0] == 64
+    assert mel_spec.ndim == 2
+    assert not np.isnan(mel_spec).any()
+    assert not np.isinf(mel_spec).any()
+
+def test_compute_rms():
+    silence = np.zeros(22050, dtype=np.float32)
+    assert compute_rms(silence) == 0.0
+    
+    sine = np.sin(np.linspace(0, 2 * np.pi * 100, 22050, endpoint=False)).astype(np.float32)
+    rms_val = compute_rms(sine)
+    # Theoretical RMS of a unit sine wave is 1/sqrt(2) approx 0.707
+    assert 0.70 <= rms_val <= 0.72
+
+def test_extract_active_windows_multiple():
+    # 10 seconds of active audio at 22050 Hz
+    t = np.linspace(0, 10.0, int(22050 * 10.0), endpoint=False)
+    sig = 0.5 * np.sin(2 * np.pi * 1000 * t).astype(np.float32)
+    
+    # 5s window, 2.5s hop -> windows at [0..5s], [2.5..7.5s], [5..10s] = 3 windows
+    windows = extract_active_windows(sig, target_sr=22050, duration_seconds=5.0, hop_seconds=2.5)
+    
+    assert len(windows) == 3
+    for w in windows:
+        assert len(w) == 110250
+        assert w.dtype == np.float32
+
+def test_extract_active_windows_vad_discards_silence():
+    # 5 seconds active tone + 5 seconds pure silence
+    t = np.linspace(0, 5.0, int(22050 * 5.0), endpoint=False)
+    active = (0.5 * np.sin(2 * np.pi * 1000 * t)).astype(np.float32)
+    silence = np.zeros(int(22050 * 5.0), dtype=np.float32)
+    combined = np.concatenate([active, silence])
+    
+    # hop=2.5s:
+    # w0: [0..5s] -> active tone
+    # w1: [2.5..7.5s] -> half tone, half silence
+    # w2: [5..10s] -> pure silence
+    windows = extract_active_windows(combined, target_sr=22050, duration_seconds=5.0, hop_seconds=2.5, top_db=25.0)
+    
+    # The last window (pure silence) must be discarded by VAD
+    assert len(windows) < 3
+    for w in windows:
+        assert compute_rms(w) > 0.01
+
+def test_extract_active_windows_safeguard():
+    # Very faint noise across 10 seconds (RMS very low)
+    faint_noise = (np.random.randn(int(22050 * 10.0)) * 1e-6).astype(np.float32)
+    windows = extract_active_windows(faint_noise, target_sr=22050, duration_seconds=5.0, hop_seconds=2.5, top_db=25.0)
+    
+    # Safeguard should return at least 1 window (the highest energy one)
+    assert len(windows) >= 1
+    assert len(windows[0]) == 110250
