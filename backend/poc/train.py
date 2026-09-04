@@ -27,6 +27,18 @@ from poc.preprocess import (
 from poc.split import grouped_stratified_split
 
 
+def seed_worker(worker_id: int) -> None:
+    """
+    Inicializa generadores pseudoaleatorios en cada worker de PyTorch.
+    Garantiza que random y np.random no repitan secuencias entre workers concurrentes,
+    y restringe torch.set_num_threads(1) para prevenir contención de CPU.
+    """
+    worker_seed = torch.initial_seed() % (2**32)
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+    torch.set_num_threads(1)
+
+
 class AudioDataset(Dataset):
     """
     Dataset avanzado para clasificación bioacústica con soporte para:
@@ -46,13 +58,18 @@ class AudioDataset(Dataset):
         duration_seconds: float = DURATION_SECONDS,
         n_mels: int = 64,
         is_train: bool = False,
-        pitch_shift_prob: float = 0.5,
-        pitch_shift_range: Tuple[float, float] = (-1.5, 1.5),
+        time_shift_prob: float = 0.5,
+        max_time_shift_seconds: float = 0.5,
+        gain_prob: float = 0.5,
+        gain_range: Tuple[float, float] = (0.8, 1.2),
         noise_prob: float = 0.5,
         noise_factor_range: Tuple[float, float] = (0.002, 0.010),
         spec_augment_prob: float = 0.5,
         freq_mask_param: int = 8,
         time_mask_param: int = 16,
+        windows_cache: Optional[Dict[int, List[np.ndarray]]] = None,
+        pitch_shift_prob: float = 0.0,
+        pitch_shift_range: Tuple[float, float] = (-1.5, 1.5),
     ):
         self.df = df.reset_index(drop=True)
         self.raw_dir = Path(raw_dir)
@@ -62,22 +79,23 @@ class AudioDataset(Dataset):
         self.n_mels = n_mels
         self.is_train = is_train
 
-        # Parámetros de Data Augmentation
-        self.pitch_shift_prob = pitch_shift_prob
-        self.pitch_shift_range = pitch_shift_range
+        # Parámetros de Data Augmentation seguros en memoria O(1)
+        self.time_shift_prob = time_shift_prob
+        self.max_time_shift_seconds = max_time_shift_seconds
+        self.gain_prob = gain_prob
+        self.gain_range = gain_range
         self.noise_prob = noise_prob
         self.noise_factor_range = noise_factor_range
         self.spec_augment_prob = spec_augment_prob
+        self.pitch_shift_prob = pitch_shift_prob
+        self.pitch_shift_range = pitch_shift_range
 
         # Transformaciones nativas de SpecAugment
         self.freq_mask = torchaudio.transforms.FrequencyMasking(freq_mask_param=freq_mask_param)
         self.time_mask = torchaudio.transforms.TimeMasking(time_mask_param=time_mask_param)
 
-        # Caché de ventanas activas (VAD) para evitar releer MP3s del disco en cada época
-        self._windows_cache: Dict[int, List[np.ndarray]] = {}
-
-        # Caché de evaluación determinista (val/test)
-        self._cache: Dict[int, Tuple[torch.Tensor, torch.Tensor]] = {}
+        # Caché de ventanas activas precalculadas (solo lectura para multiprocesamiento seguro)
+        self._windows_cache: Dict[int, List[np.ndarray]] = windows_cache if windows_cache is not None else {}
 
     def __len__(self) -> int:
         return len(self.df)
@@ -87,20 +105,25 @@ class AudioDataset(Dataset):
         species_slug = clase.lower().replace(" ", "_").replace("/", "_")
         filename = str(row.get("nombre_archivo", ""))
         xc_id = str(row.get("xc_id", ""))
+        stem = Path(filename).stem
 
-        candidate1 = self.raw_dir / species_slug / filename
-        if candidate1.exists():
-            return candidate1
+        # Búsqueda con prioridad para archivos saneados (.wav)
+        candidates = [
+            self.raw_dir / species_slug / f"{stem}.wav",
+            self.raw_dir / species_slug / f"{xc_id}.wav",
+            self.raw_dir.parent / "processed_wav" / species_slug / f"{stem}.wav",
+            self.raw_dir.parent / "processed_wav" / species_slug / f"{xc_id}.wav",
+            self.raw_dir / species_slug / filename,
+            self.raw_dir / species_slug / f"{xc_id}.mp3",
+            self.raw_dir / f"{stem}.wav",
+            self.raw_dir / filename,
+        ]
 
-        candidate2 = self.raw_dir / species_slug / f"{xc_id}.mp3"
-        if candidate2.exists():
-            return candidate2
+        for cand in candidates:
+            if cand.exists():
+                return cand
 
-        candidate3 = self.raw_dir / filename
-        if candidate3.exists():
-            return candidate3
-
-        return candidate1
+        return candidates[4]  # fallback a candidate1 original
 
     def _get_active_window(self, idx: int, file_path: Path) -> np.ndarray:
         """Obtiene una ventana activa usando VAD con caché en RAM; aleatoria en train, determinista en eval."""
@@ -123,7 +146,6 @@ class AudioDataset(Dataset):
                         windows = [load_and_fix_length(file_path, self.target_sr, self.duration_seconds)]
                 except Exception:
                     windows = [load_and_fix_length(file_path, self.target_sr, self.duration_seconds)]
-            self._windows_cache[idx] = windows
 
         if self.is_train:
             # Muestreo estocástico entre las ventanas activas encontradas
@@ -134,31 +156,32 @@ class AudioDataset(Dataset):
             return windows[best_idx]
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        # Para evaluación (val/test), reutilizar caché determinista
-        if not self.is_train and idx in self._cache:
-            return self._cache[idx]
-
         row = self.df.iloc[idx]
         file_path = self._resolve_file_path(row)
 
-        # 1. Obtener ventana activa con VAD (utiliza caché en RAM si ya fue decodificada)
+        # 1. Obtener ventana activa con VAD (utiliza caché en RAM si fue provista)
         waveform = self._get_active_window(idx, file_path)
 
         # 2. Data Augmentation a nivel de Audio (Waveform) - SOLO en entrenamiento
         if self.is_train:
-            # 2a. Pitch Shift leve
-            if random.random() < self.pitch_shift_prob:
-                steps = random.uniform(*self.pitch_shift_range)
-                waveform_t = torch.from_numpy(waveform).unsqueeze(0)
-                try:
-                    shifted_t = torchaudio.functional.pitch_shift(
-                        waveform_t, self.target_sr, steps
-                    )
-                    waveform = shifted_t.squeeze(0).numpy().astype(np.float32)
-                except Exception:
-                    pass
+            # 2a. Desplazamiento Temporal (Time Shift con zero-padding para evitar clics de fase)
+            if random.random() < self.time_shift_prob:
+                max_shift_samples = int(self.target_sr * self.max_time_shift_seconds)
+                shift = random.randint(-max_shift_samples, max_shift_samples)
+                if shift != 0:
+                    shifted = np.zeros_like(waveform)
+                    if shift > 0:
+                        shifted[shift:] = waveform[:-shift]
+                    else:
+                        shifted[:shift] = waveform[-shift:]
+                    waveform = shifted
 
-            # 2b. Adición de Ruido Blanco / Fondo
+            # 2b. Ganancia Aleatoria (Random Gain ANTES del ruido para modular SNR real)
+            if random.random() < self.gain_prob:
+                gain = random.uniform(*self.gain_range)
+                waveform = (waveform * gain).astype(np.float32)
+
+            # 2c. Adición de Ruido Blanco / Fondo
             if random.random() < self.noise_prob:
                 noise_factor = random.uniform(*self.noise_factor_range)
                 noise = np.random.randn(*waveform.shape).astype(np.float32) * noise_factor
@@ -186,13 +209,7 @@ class AudioDataset(Dataset):
         label_idx = self.label_to_idx.get(label_str, 0)
         label_tensor = torch.tensor(label_idx, dtype=torch.long)
 
-        res = (mel_tensor, label_tensor)
-
-        # Almacenar en caché únicamente muestras de evaluación deterministas
-        if not self.is_train:
-            self._cache[idx] = res
-
-        return res
+        return mel_tensor, label_tensor
 
 
 class AudioCNN(nn.Module):
@@ -242,6 +259,9 @@ def train_one_epoch(
     criterion: nn.Module,
     optimizer: torch.optim.Optimizer,
     device: torch.device,
+    epoch: Optional[int] = None,
+    total_epochs: Optional[int] = None,
+    show_progress: bool = True,
 ) -> Tuple[float, float]:
     """Entrena una época completa y retorna (loss_promedio, accuracy)."""
     model.train()
@@ -249,9 +269,19 @@ def train_one_epoch(
     correct = 0
     total_samples = 0
 
-    for x_batch, y_batch in loader:
-        x_batch = x_batch.to(device)
-        y_batch = y_batch.to(device)
+    if show_progress:
+        desc = (
+            f"Época [{epoch:02d}/{total_epochs:02d}]"
+            if epoch is not None and total_epochs is not None
+            else "Entrenando"
+        )
+        iterator = tqdm(loader, desc=desc, leave=False)
+    else:
+        iterator = loader
+
+    for x_batch, y_batch in iterator:
+        x_batch = x_batch.to(device, non_blocking=True)
+        y_batch = y_batch.to(device, non_blocking=True)
 
         optimizer.zero_grad()
         outputs = model(x_batch)
@@ -262,8 +292,15 @@ def train_one_epoch(
         batch_size = x_batch.size(0)
         total_loss += loss.item() * batch_size
         _, preds = torch.max(outputs, 1)
-        correct += torch.sum(preds == y_batch).item()
+        batch_correct = torch.sum(preds == y_batch).item()
+        correct += batch_correct
         total_samples += batch_size
+
+        if show_progress and hasattr(iterator, "set_postfix"):
+            iterator.set_postfix({
+                "loss": f"{loss.item():.4f}",
+                "acc": f"{(batch_correct / max(1, batch_size)) * 100:.1f}%",
+            })
 
     avg_loss = total_loss / max(1, total_samples)
     accuracy = correct / max(1, total_samples)
@@ -284,8 +321,8 @@ def evaluate_loss_acc(
 
     with torch.no_grad():
         for x_batch, y_batch in loader:
-            x_batch = x_batch.to(device)
-            y_batch = y_batch.to(device)
+            x_batch = x_batch.to(device, non_blocking=True)
+            y_batch = y_batch.to(device, non_blocking=True)
 
             outputs = model(x_batch)
             loss = criterion(outputs, y_batch)
@@ -301,6 +338,73 @@ def evaluate_loss_acc(
     return avg_loss, accuracy
 
 
+def build_dataloaders(
+    train_df: pd.DataFrame,
+    val_df: pd.DataFrame,
+    raw_dir: Path,
+    label_to_idx: Dict[str, int],
+    batch_size: int = 16,
+    num_workers: int = 4,
+    pin_memory: Optional[bool] = None,
+    device: Optional[torch.device] = None,
+    train_windows_cache: Optional[Dict[int, List[np.ndarray]]] = None,
+    val_windows_cache: Optional[Dict[int, List[np.ndarray]]] = None,
+) -> Tuple[DataLoader, DataLoader]:
+    """
+    Factoría desacoplada para construir DataLoaders concurrentes y seguros para multiprocesamiento.
+    - Aplica worker_init_fn para evitar duplicación de semillas de data augmentation en workers forked.
+    - Configura pin_memory dinámicamente según la presencia de aceleración CUDA.
+    - Habilita persistent_workers cuando num_workers > 0 para eliminar la latencia de re-creación de procesos.
+    """
+    if pin_memory is None:
+        if device is not None:
+            pin_memory = (device.type == "cuda")
+        else:
+            pin_memory = torch.cuda.is_available()
+
+    train_ds = AudioDataset(
+        train_df,
+        raw_dir,
+        label_to_idx,
+        is_train=True,
+        windows_cache=train_windows_cache,
+    )
+    val_ds = AudioDataset(
+        val_df,
+        raw_dir,
+        label_to_idx,
+        is_train=False,
+        windows_cache=val_windows_cache,
+    )
+
+    generator = torch.Generator()
+    generator.manual_seed(42)
+
+    train_loader = DataLoader(
+        train_ds,
+        batch_size=batch_size,
+        shuffle=True,
+        drop_last=False,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        worker_init_fn=seed_worker if num_workers > 0 else None,
+        generator=generator,
+        persistent_workers=(num_workers > 0),
+    )
+
+    val_loader = DataLoader(
+        val_ds,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=pin_memory,
+        worker_init_fn=seed_worker if num_workers > 0 else None,
+        persistent_workers=(num_workers > 0),
+    )
+
+    return train_loader, val_loader
+
+
 def train_pipeline(
     metadata_csv: Path,
     raw_dir: Path,
@@ -308,6 +412,7 @@ def train_pipeline(
     epochs: int = 15,
     batch_size: int = 16,
     lr: float = 1e-3,
+    num_workers: int = 4,
     device: Optional[str] = None,
     checkpoint_name: str = "augmented_best.pt",
 ) -> Dict[str, Any]:
@@ -315,8 +420,9 @@ def train_pipeline(
     Ejecuta el ciclo de entrenamiento completo:
     1. Carga particiones o genera split agrupado y estratificado.
     2. Configura AudioDataset con Data Augmentation en Train y Determinismo en Val.
-    3. Entrena la CNN registrando loss y accuracy por época.
-    4. Guarda el mejor checkpoint en checkpoints/<checkpoint_name>.
+    3. Construye DataLoaders concurrentes con multiprocesamiento y memoria fijada.
+    4. Entrena la CNN registrando loss y accuracy por época.
+    5. Guarda el mejor checkpoint en checkpoints/<checkpoint_name>.
     """
     if device is None:
         device_obj = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -355,12 +461,16 @@ def train_pipeline(
     label_to_idx = {c: i for i, c in enumerate(classes)}
     idx_to_label = {i: c for c, i in label_to_idx.items()}
 
-    # Data Augmentation activado exclusivamente en entrenamiento
-    train_ds = AudioDataset(train_df, raw_dir, label_to_idx, is_train=True)
-    val_ds = AudioDataset(val_df, raw_dir, label_to_idx, is_train=False)
-
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, drop_last=False)
-    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
+    # Construcción concurrente y segura de DataLoaders (Productor-Consumidor)
+    train_loader, val_loader = build_dataloaders(
+        train_df=train_df,
+        val_df=val_df,
+        raw_dir=raw_dir,
+        label_to_idx=label_to_idx,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        device=device_obj,
+    )
 
     model = AudioCNN(num_classes=len(classes)).to(device_obj)
     criterion = nn.CrossEntropyLoss()
@@ -381,7 +491,16 @@ def train_pipeline(
 
     print("\nIniciando épocas de entrenamiento con Data Augmentation (Audio + SpecAugment)...", flush=True)
     for epoch in range(1, epochs + 1):
-        tr_loss, tr_acc = train_one_epoch(model, train_loader, criterion, optimizer, device_obj)
+        tr_loss, tr_acc = train_one_epoch(
+            model,
+            train_loader,
+            criterion,
+            optimizer,
+            device_obj,
+            epoch=epoch,
+            total_epochs=epochs,
+            show_progress=True,
+        )
         v_loss, v_acc = evaluate_loss_acc(model, val_loader, criterion, device_obj)
 
         history["train_loss"].append(tr_loss)
@@ -423,11 +542,25 @@ def train_pipeline(
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Entrenar modelo bioacústico F.A.M.A.")
+    parser.add_argument("--epochs", type=int, default=15, help="Número de épocas de entrenamiento")
+    parser.add_argument("--batch-size", type=int, default=16, help="Tamaño del lote")
+    parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
+    parser.add_argument("--workers", type=int, default=4, help="Workers concurrentes para DataLoader")
+    parser.add_argument("--device", type=str, default=None, help="Dispositivo (cuda o cpu)")
+    parser.add_argument("--checkpoint-name", type=str, default="augmented_best.pt", help="Nombre del checkpoint de salida")
+    args = parser.parse_args()
+
     project_root = Path(__file__).resolve().parent.parent
     train_pipeline(
         metadata_csv=project_root / "data" / "metadata.csv",
         raw_dir=project_root / "data" / "raw",
         checkpoint_dir=project_root / "checkpoints",
-        epochs=15,
-        batch_size=16,
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        lr=args.lr,
+        num_workers=args.workers,
+        device=args.device,
+        checkpoint_name=args.checkpoint_name,
     )

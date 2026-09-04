@@ -77,3 +77,8 @@ ENV/
 *.swo
 .DS_Store
 Thumbs.db
+
+# Agent & Tooling artifacts
+.atl/
+.codegraph/
+

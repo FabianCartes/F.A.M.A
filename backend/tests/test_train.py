@@ -4,7 +4,13 @@ import pandas as pd
 import numpy as np
 import pytest
 import soundfile as sf
-from poc.train import AudioCNN, AudioDataset, train_one_epoch, evaluate_loss_acc
+from poc.train import (
+    AudioCNN,
+    AudioDataset,
+    train_one_epoch,
+    evaluate_loss_acc,
+    build_dataloaders,
+)
 
 def test_audiocnn_forward_pass():
     num_classes = 15
@@ -85,9 +91,10 @@ def test_audio_dataset_augmentation_in_train(tmp_path):
         raw_dir=raw_dir,
         label_to_idx=label_to_idx,
         is_train=True,
-        pitch_shift_prob=1.0,  # force augmentations for test
+        time_shift_prob=1.0,
+        gain_prob=1.0,
         noise_prob=1.0,
-        spec_augment_prob=1.0
+        spec_augment_prob=1.0,
     )
     
     tensors = [train_ds[0][0] for _ in range(3)]
@@ -109,10 +116,63 @@ def test_train_and_eval_step():
     loader = torch.utils.data.DataLoader(dataset, batch_size=4)
     
     device = torch.device("cpu")
-    loss, acc = train_one_epoch(model, loader, criterion, optimizer, device)
+    loss, acc = train_one_epoch(
+        model,
+        loader,
+        criterion,
+        optimizer,
+        device,
+        epoch=1,
+        total_epochs=3,
+        show_progress=True,
+    )
     assert loss > 0.0
     assert 0.0 <= acc <= 1.0
     
     val_loss, val_acc = evaluate_loss_acc(model, loader, criterion, device)
     assert val_loss > 0.0
     assert 0.0 <= val_acc <= 1.0
+
+
+def test_build_dataloaders_concurrency_and_seeding(tmp_path):
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+    sp_dir = raw_dir / "chincol"
+    sp_dir.mkdir()
+
+    # Create 4 synthetic audio files
+    for i in range(4):
+        fake_audio = np.random.randn(int(22050 * 1.5)).astype(np.float32)
+        sf.write(str(sp_dir / f"{i}.mp3"), fake_audio, 22050)
+
+    train_df = pd.DataFrame([
+        {"nombre_archivo": "0.mp3", "clase": "Chincol", "xc_id": "0", "recordist": "R1"},
+        {"nombre_archivo": "1.mp3", "clase": "Chincol", "xc_id": "1", "recordist": "R1"},
+    ])
+    val_df = pd.DataFrame([
+        {"nombre_archivo": "2.mp3", "clase": "Chincol", "xc_id": "2", "recordist": "R2"},
+        {"nombre_archivo": "3.mp3", "clase": "Chincol", "xc_id": "3", "recordist": "R2"},
+    ])
+    label_to_idx = {"Chincol": 0}
+
+    train_loader, val_loader = build_dataloaders(
+        train_df=train_df,
+        val_df=val_df,
+        raw_dir=raw_dir,
+        label_to_idx=label_to_idx,
+        batch_size=2,
+        num_workers=2,
+        pin_memory=False,
+    )
+
+    assert train_loader.num_workers == 2
+    assert val_loader.num_workers == 2
+
+    # Verify batch consumption without deadlocks or serialization errors
+    x_tr, y_tr = next(iter(train_loader))
+    assert x_tr.shape == (2, 1, 64, 216)
+    assert y_tr.shape == (2,)
+
+    x_val, y_val = next(iter(val_loader))
+    assert x_val.shape == (2, 1, 64, 216)
+    assert y_val.shape == (2,)
