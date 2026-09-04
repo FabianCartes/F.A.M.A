@@ -77,36 +77,44 @@ Se catalogaron y descargaron **1.205 grabaciones** (calidad A y B) en `data/meta
 
 ---
 
-## 📂 Estructura del Repositorio
+## 📂 Estructura del Proyecto
+
+El repositorio desacopla la arquitectura de servicios y Machine Learning (`backend/`) de la interfaz de usuario (`frontend/`):
 
 ```
 F.A.M.A/
-├── poc/                       # Módulos del pipeline bioacústico
-│   ├── __init__.py
-│   ├── download.py            # Cliente API Xeno-canto v3 + cálculo SHA-256
-│   ├── preprocess.py          # Remuestreo 22050Hz, Ventaneo VAD relativo y Mel-dB
-│   ├── split.py               # Partición agrupada (Zero Recordist Leakage)
-│   ├── train.py               # AudioDataset con caché RAM, AudioCNN, Data Augmentation
-│   ├── evaluate.py            # Evaluación en Test Set y graficación de matriz
-│   ├── confusion_matrix.png   # Matriz de confusión Baseline (44.16%)
-│   └── confusion_matrix_augmented.png # Matriz de confusión Optimizada (61.69%)
-├── tests/                     # Suite de pruebas automatizadas (TDD)
-│   ├── __init__.py
-│   ├── test_download.py       # Pruebas de API, hashing SHA-256 y columnas
-│   ├── test_preprocess.py     # Pruebas de VAD, energía RMS y dimensiones
-│   ├── test_split.py          # Verificación de cero solapamiento de grabadores
-│   ├── test_train.py          # Pruebas de CNN, tensores y determinismo
-│   └── test_evaluate.py       # Pruebas de métricas macro y renderizado
+├── backend/                   # Backend en Python (FastAPI + Pipeline ML / PoC)
+│   ├── app/                   # Aplicación FastAPI (arquitectura en capas)
+│   │   ├── routes/            # Definición de endpoints HTTP
+│   │   ├── controllers/       # Controladores y orquestación
+│   │   ├── services/          # Servicios y lógica de negocio
+│   │   ├── models/            # Modelos de dominio y persistencia
+│   │   ├── middlewares/       # Middlewares de seguridad, CORS y logging
+│   │   └── main.py            # Instancia de FastAPI con endpoint GET /health
+│   ├── poc/                   # Módulos del pipeline bioacústico validado
+│   │   ├── download.py        # Cliente API Xeno-canto v3 + cálculo SHA-256
+│   │   ├── preprocess.py      # Remuestreo 22050Hz, Ventaneo VAD relativo y Mel-dB
+│   │   ├── split.py           # Partición agrupada (Zero Recordist Leakage)
+│   │   ├── train.py           # AudioDataset con caché RAM, AudioCNN, Data Augmentation
+│   │   ├── evaluate.py        # Evaluación en Test Set y graficación de matriz
+│   │   ├── confusion_matrix.png
+│   │   └── confusion_matrix_augmented.png
+│   ├── tests/                 # Suite de pruebas automatizadas (TDD)
+│   ├── data/                  # Datasets locales y metadatos (ignorado en git)
+│   ├── checkpoints/           # Pesos de modelos entrenados (ignorado en git)
+│   ├── requirements.txt       # Dependencias de Python del backend
+│   ├── .env.example           # Plantilla de variables de entorno
+│   └── .env                   # Variables de entorno locales (ignorado en git)
+├── frontend/                  # Aplicación Web Next.js (pendiente de inicialización)
+│   └── README.md              # Documentación de reserva del frontend
 ├── docs/                      # Documentación académica y técnica
 │   ├── VIDA_01_CINF_FINAL_PT_2026_1_CARTES.md  # Documento base de Anteproyecto
 │   ├── 01_primera_prueba_poc.md               # Informe técnico Iteración 1
 │   ├── 02_optimizacion_vad_data_augmentation.md # Informe técnico Iteración 2
 │   ├── confusion_matrix_poc.png
 │   └── confusion_matrix_augmented.png
-├── .env.example               # Plantilla de variables de entorno
-├── .gitignore                 # Reglas de exclusión (ignora .env, audios y modelos)
-├── AGENTS.md                  # Directrices obligatorias de ingeniería y TDD
-└── requirements.txt           # Dependencias fijadas del proyecto
+├── .gitignore                 # Reglas de exclusión (backend/data/, frontend/.next/, etc.)
+└── AGENTS.md                  # Directrices obligatorias de ingeniería y TDD
 ```
 
 ---
@@ -119,8 +127,10 @@ git clone https://github.com/FabianCartes/F.A.M.A.git
 cd F.A.M.A
 ```
 
-### 2. Crear y Activar Entorno Virtual
+### 2. Configurar el Backend (Python 3.12)
 ```bash
+cd backend
+
 # En Windows (PowerShell)
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -128,14 +138,12 @@ python -m venv .venv
 # En Linux / macOS
 python3 -m venv .venv
 source .venv/bin/activate
-```
 
-### 3. Instalar Dependencias
-```bash
+# Instalar dependencias
 pip install -r requirements.txt
 ```
 
-### 4. Configurar Variables de Entorno
+### 3. Configurar Variables de Entorno del Backend
 Copia la plantilla y configura tu clave de API de Xeno-canto:
 ```bash
 cp .env.example .env
@@ -147,37 +155,46 @@ XC_API_KEY=tu_api_key_aqui
 
 ---
 
-## 🧪 Ejecución del Pipeline y Pruebas
+## 🧪 Ejecución del Backend, Pruebas y Pipeline
 
-### Ejecutar Suite Completa de Pruebas Unitarias (TDD)
+Desde el directorio `backend/`:
+
+### 1. Iniciar Servidor de Desarrollo FastAPI
+```bash
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+Verificar salud del servicio:
+```bash
+curl http://localhost:8000/health
+# {"status": "ok"}
+```
+
+### 2. Ejecutar Suite Completa de Pruebas Unitarias (TDD)
 ```bash
 python -m pytest tests/ -v
 ```
 
-### 1. Descarga de Datos (Xeno-canto v3)
+### 3. Ejecutar Pipeline Bioacústico (PoC)
 ```bash
+# Descarga de audios
 python -m poc.download
-```
 
-### 2. Entrenamiento con Data Augmentation y Ventaneo VAD
-```bash
+# Entrenamiento con VAD + Data Augmentation
 python -m poc.train
-```
-*(El checkpoint con mejor precisión en validación se guarda automáticamente en `checkpoints/augmented_best.pt`).*
 
-### 3. Evaluación en Test Set y Generación de Matriz
-```bash
-python -m poc.evaluate --checkpoint augmented_best.pt --output confusion_matrix_augmented.png
+# Evaluación en Test Set
+python -m poc.evaluate --checkpoint checkpoints/augmented_best.pt --output poc/confusion_matrix_augmented.png
 ```
 
 ---
 
-## 🗺️ Próximos Pasos en el Roadmap de F.A.M.A.
+## 🗺️ Próximos Pasos en el Roadmap de F.A.M.A. v1.0
 
 Una vez validado el núcleo de Machine Learning localmente, las siguientes fases de desarrollo corresponden a la arquitectura integral de la plataforma:
 
-1. **Backend REST (FastAPI):** Exposición de endpoints de ingesta, preprocesamiento e inferencia en tiempo real.
+1. **Backend REST (FastAPI):** Endpoints orquestadores de ingesta, entrenamiento de modelos e inferencia bioacústica en tiempo real.
 2. **Infraestructura Cloud:**
    - **Google Cloud Storage (GCS):** Almacenamiento distribuido de espectrogramas y grabaciones de campo.
    - **Cloud SQL (PostgreSQL):** Persistencia relacional de metadatos, usuarios, modelos y métricas de entrenamiento.
 3. **Frontend (Next.js):** Panel de control interactivo para visualización de predicciones bioacústicas y gestión de pipelines.
+

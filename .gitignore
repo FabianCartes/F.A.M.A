@@ -2,10 +2,15 @@
 .env
 .env.*
 !.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
 
 # Datasets and raw media
 data/
 data/**
+backend/data/
+backend/data/**
 *.mp3
 *.wav
 *.flac
@@ -14,6 +19,8 @@ data/**
 # Model checkpoints and weights
 checkpoints/
 checkpoints/**
+backend/checkpoints/
+backend/checkpoints/**
 *.pt
 *.pth
 *.onnx
@@ -43,10 +50,19 @@ wheels/
 
 # Testing & Coverage
 .pytest_cache/
+backend/.pytest_cache/
 .coverage
+backend/.coverage
 htmlcov/
 .tox/
 .nox/
+
+# Frontend (Next.js & Node)
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+node_modules/
+.next/
 
 # Virtual Environments
 venv/
