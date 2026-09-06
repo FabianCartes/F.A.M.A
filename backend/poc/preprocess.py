@@ -3,6 +3,9 @@ from typing import Union, Optional, List
 import numpy as np
 import librosa
 import soundfile as sf
+import torch
+import torch.nn as nn
+import torchaudio.transforms as T
 
 TARGET_SR = 22050
 DURATION_SECONDS = 5.0
@@ -172,3 +175,86 @@ def extract_mel_spectrogram(
     )
     mel_db = librosa.power_to_db(mel, ref=np.max)
     return mel_db.astype(np.float32)
+
+
+class GPUAudioFrontEnd(nn.Module):
+    """
+    Extractor de espectrogramas Mel acelerado en GPU/CPU con torchaudio.
+    Calcula STFT, banco de filtros Mel, conversión a dB y normalización z-score en un solo paso hacia adelante.
+    """
+
+    def __init__(
+        self,
+        sample_rate: int = TARGET_SR,
+        n_fft: int = 1024,
+        hop_length: int = 512,
+        n_mels: int = 128,
+        f_min: float = 800.0,
+        f_max: Optional[float] = 10000.0,
+        top_db: float = 80.0,
+        normalize: bool = True,
+    ):
+        super().__init__()
+        self.normalize = normalize
+        self.mel_spectrogram = T.MelSpectrogram(
+            sample_rate=sample_rate,
+            n_fft=n_fft,
+            hop_length=hop_length,
+            n_mels=n_mels,
+            f_min=f_min,
+            f_max=f_max,
+            power=2.0,
+        )
+        self.amplitude_to_db = T.AmplitudeToDB(top_db=top_db)
+
+    def forward(self, waveform: torch.Tensor) -> torch.Tensor:
+        """
+        Calcula el espectrograma Mel en dB y añade dimensión de canal.
+        Formas aceptadas: [B, T], [B, 1, T] o [T].
+        Retorna: [B, 1, n_mels, time_steps].
+        """
+        if waveform.ndim == 1:
+            waveform = waveform.unsqueeze(0)
+        elif waveform.ndim == 3 and waveform.shape[1] == 1:
+            waveform = waveform.squeeze(1)
+
+        mel = self.mel_spectrogram(waveform)
+        mel_db = self.amplitude_to_db(mel)
+
+        if self.normalize:
+            mean = mel_db.mean(dim=(-2, -1), keepdim=True)
+            std = mel_db.std(dim=(-2, -1), keepdim=True)
+            mel_db = (mel_db - mean) / (std + 1e-6)
+
+        return mel_db.unsqueeze(1)
+
+
+class GPUSpecAugment(nn.Module):
+    """
+    Data Augmentation en GPU para tensores de espectrogramas Mel [B, 1, F, T].
+    Aplica enmascaramiento estocástico de frecuencia y tiempo (Frequency & Time Masking)
+    utilizando transformaciones nativas de torchaudio con máscaras iid por muestra.
+    Opera exclusivamente cuando model.training=True.
+    """
+
+    def __init__(
+        self,
+        freq_mask_param: int = 8,
+        time_mask_param: int = 16,
+        prob: float = 0.5,
+    ):
+        super().__init__()
+        self.freq_mask = T.FrequencyMasking(freq_mask_param=freq_mask_param, iid_masks=True)
+        self.time_mask = T.TimeMasking(time_mask_param=time_mask_param, iid_masks=True)
+        self.prob = prob
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if not self.training or self.prob <= 0.0:
+            return x
+        if torch.rand(1).item() < self.prob:
+            x = self.freq_mask(x)
+            x = self.time_mask(x)
+        return x
+
+
+

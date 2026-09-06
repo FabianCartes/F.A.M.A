@@ -102,3 +102,61 @@ def test_extract_active_windows_safeguard():
     # Safeguard should return at least 1 window (the highest energy one)
     assert len(windows) >= 1
     assert len(windows[0]) == 110250
+
+
+def test_gpu_audio_frontend():
+    import torch
+    from poc.preprocess import GPUAudioFrontEnd
+
+    frontend = GPUAudioFrontEnd(n_mels=128, f_min=800.0, f_max=10000.0)
+    # Batch de 2 audios de 5 segundos a 22050 Hz
+    x = torch.randn(2, 110250)
+    mel = frontend(x)
+
+    assert isinstance(mel, torch.Tensor)
+    assert mel.shape[0] == 2
+    assert mel.shape[1] == 1  # 1 channel
+    assert mel.shape[2] == 128  # 128 mel bins
+    assert mel.ndim == 4  # [B, 1, 128, T]
+    assert not torch.isnan(mel).any()
+    assert not torch.isinf(mel).any()
+
+
+def test_gpu_audio_frontend_normalization():
+    import torch
+    from poc.preprocess import GPUAudioFrontEnd
+
+    frontend = GPUAudioFrontEnd(n_mels=128, normalize=True)
+    x = torch.randn(2, 110250)
+    mel = frontend(x)
+
+    for b in range(2):
+        instance = mel[b, 0]
+        assert torch.isclose(instance.mean(), torch.tensor(0.0), atol=1e-2)
+        assert torch.isclose(instance.std(), torch.tensor(1.0), atol=1e-2)
+
+    frontend_raw = GPUAudioFrontEnd(n_mels=128, normalize=False)
+    mel_raw = frontend_raw(x)
+    assert not torch.isclose(mel_raw.mean(), torch.tensor(0.0), atol=1.0)
+
+
+def test_gpu_spec_augment():
+    import torch
+    from poc.preprocess import GPUSpecAugment
+
+    spec_aug = GPUSpecAugment(freq_mask_param=8, time_mask_param=16, prob=1.0)
+    spec_aug.train()
+    x = torch.ones(2, 1, 128, 216)
+    out = spec_aug(x)
+
+    assert out.shape == x.shape
+    assert out.sum() < x.sum()
+
+    # In eval mode, must not apply any masking
+    spec_aug.eval()
+    out_eval = spec_aug(x)
+    assert torch.equal(out_eval, x)
+
+
+
+
