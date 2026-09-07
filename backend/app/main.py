@@ -133,10 +133,21 @@ predictor_service = AudioPredictorService()
 # ============================================================================
 # ESQUELETO BASE FASTAPI
 # ============================================================================
+from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI(
     title="F.A.M.A. Backend API",
     description="Backend orquestador para monitoreo y clasificación bioacústica de aves chilenas",
     version="1.0.0",
+)
+
+# Configuración de CORS para permitir peticiones desde el frontend (Next.js)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
