@@ -346,6 +346,42 @@ def test_load_checkpoint_model_convnext(tmp_path):
     assert not torch.isnan(out).any()
 
 
+def test_load_checkpoint_model_resnet34d(tmp_path):
+    """Verifica que load_checkpoint_model cargue sin error un checkpoint con model_type='resnet34d'."""
+    from poc.evaluate import load_checkpoint_model
+    from poc.train import BioacousticModel
+
+    classes = [f"Especie_{i}" for i in range(15)]
+    model = BioacousticModel(
+        model_name="resnet34d",
+        num_classes=len(classes),
+        pretrained=False,
+        pool_type="avg",
+    )
+    ckpt_path = tmp_path / "resnet34d_checkpoint.pt"
+    torch.save(
+        {
+            "model_type": "resnet34d",
+            "classes": classes,
+            "pool_type": "avg",
+            "model_state_dict": model.state_dict(),
+        },
+        ckpt_path,
+    )
+
+    device = torch.device("cpu")
+    loaded_model, ckpt_data = load_checkpoint_model(ckpt_path, device)
+
+    assert ckpt_data["model_type"] == "resnet34d"
+    assert ckpt_data["classes"] == classes
+    assert isinstance(loaded_model, BioacousticModel)
+
+    x = torch.randn(2, 1, 128, 216)
+    out = loaded_model(x)
+    assert out.shape == (2, 15)
+    assert not torch.isnan(out).any()
+
+
 def test_predict_audio_tta_micro_batching():
     """Genera un audio largo con 40+ ventanas y verifica que con max_window_batch_size=16
     devuelva idénticas probabilidades que sin micro-batching (o con batch completo)."""

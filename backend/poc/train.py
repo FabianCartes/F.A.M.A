@@ -25,6 +25,7 @@ from poc.preprocess import (
     compute_rms,
     GPUAudioFrontEnd,
     GPUSpecAugment,
+    GeM,
     TARGET_SR,
     DURATION_SECONDS,
 )
@@ -305,9 +306,9 @@ class FocalLoss(nn.Module):
         return focal_loss
 
 
-class BioacousticEfficientNet(nn.Module):
+class BioacousticModel(nn.Module):
     """
-    Arquitectura de clasificación bioacústica profunda basada en EfficientNet (timm).
+    Arquitectura de clasificación bioacústica profunda basada en timm (EfficientNet, ConvNeXt, etc.).
     Soporta opcionalmente extracción directa de espectrogramas Mel en GPU si se reciben
     formas de onda crudas [B, T], o procesa directamente tensores Mel [B, 1, Mels, T].
     """
@@ -320,11 +321,13 @@ class BioacousticEfficientNet(nn.Module):
         in_chans: int = 1,
         drop_rate: float = 0.3,
         use_gpu_frontend: bool = False,
+        pool_type: str = "gem",
     ):
         super().__init__()
         self.model_name = model_name
         self.num_classes = num_classes
         self.use_gpu_frontend = use_gpu_frontend
+        self.pool_type = pool_type.lower() if pool_type else "avg"
 
         if use_gpu_frontend:
             self.frontend = GPUAudioFrontEnd(n_mels=128, f_min=800.0, f_max=10000.0)
@@ -339,6 +342,12 @@ class BioacousticEfficientNet(nn.Module):
             num_classes=num_classes,
         )
 
+        if self.pool_type == "gem":
+            if hasattr(self.backbone, "global_pool") and getattr(self.backbone, "global_pool") is not None:
+                self.backbone.global_pool = GeM(p=3.0, flatten=True)
+            elif hasattr(self.backbone, "head") and hasattr(self.backbone.head, "global_pool"):
+                self.backbone.head.global_pool = GeM(p=3.0, flatten=False)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if x.ndim in (1, 2) or (x.ndim == 3 and x.shape[1] == 1):
             if self.frontend is None:
@@ -350,18 +359,28 @@ class BioacousticEfficientNet(nn.Module):
         """Congela los parámetros del extractor convolucional para la fase de Warmup."""
         for param in self.backbone.parameters():
             param.requires_grad = False
-        classifier = self.backbone.get_classifier()
+        classifier = self.backbone.get_classifier() if hasattr(self.backbone, "get_classifier") else None
         if isinstance(classifier, nn.Module):
             for param in classifier.parameters():
                 param.requires_grad = True
+        elif hasattr(self.backbone, "head") and hasattr(self.backbone.head, "fc"):
+            for param in self.backbone.head.fc.parameters():
+                param.requires_grad = True
         elif hasattr(self.backbone, "classifier"):
             for param in self.backbone.classifier.parameters():
+                param.requires_grad = True
+        elif hasattr(self.backbone, "fc"):
+            for param in self.backbone.fc.parameters():
                 param.requires_grad = True
 
     def unfreeze_backbone(self) -> None:
         """Descongela todos los parámetros del backbone para la fase de Fine-Tuning."""
         for param in self.backbone.parameters():
             param.requires_grad = True
+
+
+# Alias para retrocompatibilidad 100% con pipelines existentes
+BioacousticEfficientNet = BioacousticModel
 
 
 
@@ -599,6 +618,9 @@ def train_pipeline(
     n_mels: int = 128,
     mixup_alpha: float = 0.2,
     mixup_prob: float = 0.5,
+    pitch_shift_bins: int = 2,
+    pitch_shift_prob: float = 0.3,
+    pool_type: str = "gem",
 ) -> Dict[str, Any]:
     """
     Ejecuta el ciclo de entrenamiento completo:
@@ -666,17 +688,24 @@ def train_pipeline(
     )
 
     frontend = GPUAudioFrontEnd(n_mels=n_mels, normalize=True).to(device_obj)
-    spec_augment = GPUSpecAugment(freq_mask_param=8, time_mask_param=16, prob=0.5).to(device_obj)
+    spec_augment = GPUSpecAugment(
+        freq_mask_param=8,
+        time_mask_param=16,
+        prob=0.5,
+        pitch_shift_max_bins=pitch_shift_bins,
+        pitch_shift_prob=pitch_shift_prob,
+    ).to(device_obj)
 
     is_cnn = model_type.lower() in ("audiocnn", "cnn")
     if is_cnn:
         model = AudioCNN(num_classes=len(classes)).to(device_obj)
         optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
     else:
-        model = BioacousticEfficientNet(
+        model = BioacousticModel(
             model_name=model_type,
             num_classes=len(classes),
             pretrained=True,
+            pool_type=pool_type,
         ).to(device_obj)
 
         if warmup_epochs > 0:
@@ -756,9 +785,12 @@ def train_pipeline(
                 {
                     "epoch": epoch,
                     "model_type": model_type,
+                    "pool_type": pool_type,
                     "n_mels": n_mels,
                     "mixup_alpha": mixup_alpha,
                     "mixup_prob": mixup_prob,
+                    "pitch_shift_bins": pitch_shift_bins,
+                    "pitch_shift_prob": pitch_shift_prob,
                     "model_state_dict": model.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
                     "val_acc": v_acc,
@@ -790,12 +822,15 @@ if __name__ == "__main__":
     parser.add_argument("--device", type=str, default=None, help="Dispositivo (cuda o cpu)")
     parser.add_argument("--checkpoint-name", type=str, default="augmented_best.pt", help="Nombre del checkpoint de salida")
     parser.add_argument("--model-type", type=str, default="efficientnet_b0", help="Arquitectura del modelo (efficientnet_b0 o audiocnn)")
+    parser.add_argument("--pool-type", type=str, default="gem", choices=["gem", "avg"], help="Tipo de pooling global para EfficientNet (gem o avg)")
     parser.add_argument("--loss-type", type=str, default="focal", help="Función de pérdida (focal o ce)")
     parser.add_argument("--gamma", type=float, default=2.0, help="Parámetro gamma de Focal Loss")
     parser.add_argument("--warmup-epochs", type=int, default=3, help="Épocas de warmup con backbone congelado")
     parser.add_argument("--n-mels", type=int, default=128, help="Cantidad de bandas Mel")
     parser.add_argument("--mixup-alpha", type=float, default=0.2, help="Parámetro alpha para distribución Beta en Mixup")
     parser.add_argument("--mixup-prob", type=float, default=0.5, help="Probabilidad de aplicar Mixup por batch en entrenamiento")
+    parser.add_argument("--pitch-shift-bins", type=int, default=2, help="Cantidad máxima de bins Mel para Pitch Shift espectral")
+    parser.add_argument("--pitch-shift-prob", type=float, default=0.3, help="Probabilidad de aplicar Pitch Shift espectral por muestra")
     args = parser.parse_args()
 
     project_root = Path(__file__).resolve().parent.parent
@@ -811,11 +846,14 @@ if __name__ == "__main__":
         device=args.device,
         checkpoint_name=args.checkpoint_name,
         model_type=args.model_type,
+        pool_type=args.pool_type,
         loss_type=args.loss_type,
         focal_gamma=args.gamma,
         warmup_epochs=args.warmup_epochs,
         n_mels=args.n_mels,
         mixup_alpha=args.mixup_alpha,
         mixup_prob=args.mixup_prob,
+        pitch_shift_bins=args.pitch_shift_bins,
+        pitch_shift_prob=args.pitch_shift_prob,
     )
 

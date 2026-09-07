@@ -445,3 +445,157 @@ def test_train_and_eval_with_frontend_and_specaugment():
     assert 0.0 <= val_acc <= 1.0
 
 
+def test_bioacoustic_efficientnet_gem_forward():
+    from poc.train import BioacousticEfficientNet
+    from poc.preprocess import GeM
+
+    model = BioacousticEfficientNet(
+        model_name="efficientnet_b0",
+        num_classes=15,
+        pretrained=False,
+        pool_type="gem",
+    )
+    assert isinstance(model.backbone.global_pool, GeM)
+
+    x = torch.randn(2, 1, 128, 216)
+    out = model(x)
+
+    assert out.shape == (2, 15)
+    assert not torch.isnan(out).any()
+
+
+def test_bioacoustic_efficientnet_freeze_lifecycle():
+    from poc.train import BioacousticEfficientNet
+
+    model = BioacousticEfficientNet(
+        model_name="efficientnet_b0",
+        num_classes=15,
+        pretrained=False,
+        pool_type="gem",
+    )
+
+    # Fase 1: Warmup (congelar backbone)
+    model.freeze_backbone()
+    assert model.backbone.global_pool.p.requires_grad is False
+
+    classifier = model.backbone.get_classifier()
+    if isinstance(classifier, torch.nn.Module):
+        for p in classifier.parameters():
+            assert p.requires_grad is True
+
+    # Fase 2: Fine-Tuning (descongelar backbone)
+    model.unfreeze_backbone()
+    assert model.backbone.global_pool.p.requires_grad is True
+
+
+def test_checkpoint_backward_compatibility():
+    from poc.train import BioacousticEfficientNet
+
+    # Modelo con GAP tradicional (pool_type="avg")
+    model_avg = BioacousticEfficientNet(
+        model_name="efficientnet_b0",
+        num_classes=15,
+        pretrained=False,
+        pool_type="avg",
+    )
+    state_dict_avg = model_avg.state_dict()
+    assert "backbone.global_pool.p" not in state_dict_avg
+
+    # Cargar checkpoint con pool_type="avg" sin romper llaves ni generar incompatibilidad
+    loaded_avg = BioacousticEfficientNet(
+        model_name="efficientnet_b0",
+        num_classes=15,
+        pretrained=False,
+        pool_type="avg",
+    )
+    loaded_avg.load_state_dict(state_dict_avg)
+    x = torch.randn(2, 1, 128, 216)
+    out_avg = loaded_avg(x)
+    assert out_avg.shape == (2, 15)
+
+    # Modelo con GeM (pool_type="gem")
+    model_gem = BioacousticEfficientNet(
+        model_name="efficientnet_b0",
+        num_classes=15,
+        pretrained=False,
+        pool_type="gem",
+    )
+    state_dict_gem = model_gem.state_dict()
+    assert "backbone.global_pool.p" in state_dict_gem
+    loaded_gem = BioacousticEfficientNet(
+        model_name="efficientnet_b0",
+        num_classes=15,
+        pretrained=False,
+        pool_type="gem",
+    )
+    loaded_gem.load_state_dict(state_dict_gem)
+    out_gem = loaded_gem(x)
+    assert out_gem.shape == (2, 15)
+
+
+def test_bioacoustic_model_supports_convnext():
+    from poc.train import BioacousticModel
+
+    model = BioacousticModel(
+        model_name="convnext_nano.d1h_in1k",
+        num_classes=15,
+        pretrained=False,
+    )
+    # Forward pass con tensor de entrada [B, 1, 128, 216]
+    x = torch.randn(2, 1, 128, 216)
+    out = model(x)
+    assert out.shape == (2, 15)
+    assert not torch.isnan(out).any()
+
+    # Verificar freeze_backbone()
+    model.freeze_backbone()
+    conv_params = [p for name, p in model.named_parameters() if "fc" not in name and "classifier" not in name]
+    assert len(conv_params) > 0
+    assert all(not p.requires_grad for p in conv_params)
+
+    # Parámetros de la cabeza clasificadora deben estar descongelados
+    classifier = model.backbone.get_classifier() if hasattr(model.backbone, "get_classifier") else None
+    if isinstance(classifier, torch.nn.Module):
+        assert all(p.requires_grad for p in classifier.parameters())
+    elif hasattr(model.backbone, "head") and hasattr(model.backbone.head, "fc"):
+        assert all(p.requires_grad for p in model.backbone.head.fc.parameters())
+
+    # Verificar unfreeze_backbone()
+    model.unfreeze_backbone()
+    assert all(p.requires_grad for p in model.parameters())
+
+
+def test_bioacoustic_model_supports_resnet34d():
+    from poc.train import BioacousticModel
+
+    model = BioacousticModel(
+        model_name="resnet34d",
+        num_classes=15,
+        pretrained=False,
+    )
+    # Forward pass con tensor de entrada [B, 1, 128, 216]
+    x = torch.randn(2, 1, 128, 216)
+    out = model(x)
+    assert out.shape == (2, 15)
+    assert not torch.isnan(out).any()
+
+    # Verificar freeze_backbone()
+    model.freeze_backbone()
+    conv_params = [p for name, p in model.named_parameters() if "fc" not in name and "classifier" not in name]
+    assert len(conv_params) > 0
+    assert all(not p.requires_grad for p in conv_params)
+
+    # Parámetros de la cabeza clasificadora (get_classifier() o .fc) deben estar descongelados
+    classifier = model.backbone.get_classifier() if hasattr(model.backbone, "get_classifier") else None
+    if isinstance(classifier, torch.nn.Module):
+        assert all(p.requires_grad for p in classifier.parameters())
+    elif hasattr(model.backbone, "fc"):
+        assert all(p.requires_grad for p in model.backbone.fc.parameters())
+
+    # Verificar unfreeze_backbone()
+    model.unfreeze_backbone()
+    assert all(p.requires_grad for p in model.parameters())
+
+
+
+

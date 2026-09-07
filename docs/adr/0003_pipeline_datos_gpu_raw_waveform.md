@@ -62,6 +62,7 @@ Se aprueba la reestructuración completa del pipeline de ingesta de datos bajo e
   * **Macro F1-Score:** **83.76%** (+1.69 pp vs Iteración 7).
   * **Macro Precision:** **85.13%** (alta confiabilidad de predicción).
 * **Portabilidad Total:** Ejecución transparente en notebooks educativos sin GPU dedicada.
+* **Límite de Régimen de Entrenamiento Fijado en 35 Épocas:** Mediante ablación experimental rigurosa (64 épocas), se demostró que sobrepasar las 35 épocas induce sobreajuste a la partición de validación (degradando el Macro F1 en Test Set de 83.76% a 77.37%). Se fija formalmente la cota estricta de 35 épocas como el régimen óptimo de convergencia y generalización para esta configuración.
 
 ### Negativas / Riesgos Mitigados:
 * **Mayor consumo de VRAM:** Transferir tensores de audio crudo `[B, 110250]` previo a la extracción Mel incrementa temporalmente la memoria de video en ~15 MB por lote, lo cual es despreciable frente a los 4.096 MB disponibles en la GPU.

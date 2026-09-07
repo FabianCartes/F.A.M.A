@@ -5,6 +5,7 @@ import librosa
 import soundfile as sf
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torchaudio.transforms as T
 
 TARGET_SR = 22050
@@ -80,6 +81,9 @@ def extract_active_windows(
     - min_energy: Umbral absoluto de RMS mínimo para evitar considerar ruido
                   numérico como señal válida.
     """
+    if hop_seconds <= 0:
+        raise ValueError(f"hop_seconds debe ser mayor a 0, recibido: {hop_seconds}")
+
     target_samples = int(target_sr * duration_seconds)
     hop_samples = int(target_sr * hop_seconds)
 
@@ -232,9 +236,11 @@ class GPUAudioFrontEnd(nn.Module):
 class GPUSpecAugment(nn.Module):
     """
     Data Augmentation en GPU para tensores de espectrogramas Mel [B, 1, F, T].
-    Aplica enmascaramiento estocástico de frecuencia y tiempo (Frequency & Time Masking)
-    utilizando transformaciones nativas de torchaudio con máscaras iid por muestra.
-    Opera exclusivamente cuando model.training=True.
+    Aplica:
+    1. Desplazamiento tonal espectral (Spectral Pitch Shift) con zero-padding en los extremos.
+    2. Enmascaramiento estocástico de frecuencia y tiempo (Frequency & Time Masking)
+       utilizando transformaciones nativas de torchaudio con máscaras iid por muestra.
+    Opera exclusivamente cuando model.training=True; en evaluación es un no-op determinista.
     """
 
     def __init__(
@@ -242,19 +248,88 @@ class GPUSpecAugment(nn.Module):
         freq_mask_param: int = 8,
         time_mask_param: int = 16,
         prob: float = 0.5,
+        pitch_shift_max_bins: int = 2,
+        pitch_shift_prob: float = 0.3,
     ):
         super().__init__()
         self.freq_mask = T.FrequencyMasking(freq_mask_param=freq_mask_param, iid_masks=True)
         self.time_mask = T.TimeMasking(time_mask_param=time_mask_param, iid_masks=True)
         self.prob = prob
+        self.pitch_shift_max_bins = int(pitch_shift_max_bins)
+        self.pitch_shift_prob = float(pitch_shift_prob)
+
+    def _apply_pitch_shift(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Aplica traslación discreta a lo largo del eje Mel (dim=-2) con zero-padding en los extremos.
+        Muestrea desplazamientos discretos no nulos uniformemente en [-max_bins, ..., max_bins] excluyendo el 0.
+        """
+        if self.pitch_shift_max_bins <= 0 or self.pitch_shift_prob <= 0.0:
+            return x
+
+        B = x.shape[0]
+        shifts = [s for s in range(-self.pitch_shift_max_bins, self.pitch_shift_max_bins + 1) if s != 0]
+        if not shifts:
+            return x
+
+        shifted_samples = []
+        for i in range(B):
+            if torch.rand(1).item() < self.pitch_shift_prob:
+                s_idx = torch.randint(0, len(shifts), (1,)).item()
+                shift = shifts[s_idx]
+                sample = x[i : i + 1]
+                if shift > 0:
+                    zeros = torch.zeros(*sample.shape[:-2], shift, sample.shape[-1], device=x.device, dtype=x.dtype)
+                    shifted_sample = torch.cat([zeros, sample[..., :-shift, :]], dim=-2)
+                else:
+                    abs_s = abs(shift)
+                    zeros = torch.zeros(*sample.shape[:-2], abs_s, sample.shape[-1], device=x.device, dtype=x.dtype)
+                    shifted_sample = torch.cat([sample[..., abs_s:, :], zeros], dim=-2)
+                shifted_samples.append(shifted_sample)
+            else:
+                shifted_samples.append(x[i : i + 1])
+
+        return torch.cat(shifted_samples, dim=0)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if not self.training or self.prob <= 0.0:
+        if not self.training:
             return x
-        if torch.rand(1).item() < self.prob:
+
+        # 1. Pitch Shift Espectral
+        if self.pitch_shift_max_bins > 0 and self.pitch_shift_prob > 0.0:
+            x = self._apply_pitch_shift(x)
+
+        # 2. SpecAugment Masking
+        if self.prob > 0.0 and torch.rand(1).item() < self.prob:
             x = self.freq_mask(x)
             x = self.time_mask(x)
+
         return x
 
+class GeM(nn.Module):
+    """
+    Generalized Mean Pooling (GeM) para señales bioacústicas.
+    Generaliza Average Pooling (p=1) y Max Pooling (p->inf), permitiendo enfatizar
+    picos de activación diagnósticos de cantos sin diluirlos en el fondo acústico.
+    Cuenta con doble clamping para garantizar estabilidad numérica frente a
+    activaciones negativas provenientes de no-linealidades como SiLU/Swish.
+    """
 
+    def __init__(self, p: float = 3.0, eps: float = 1e-6, p_trainable: bool = True, flatten: bool = True):
+        super().__init__()
+        self.eps = eps
+        self.flatten = flatten
+        if p_trainable:
+            self.p = nn.Parameter(torch.ones(1) * float(p))
+        else:
+            self.register_buffer("p", torch.tensor([float(p)]))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x.clamp(min=self.eps)
+        p_eff = self.p.clamp(min=1.0, max=10.0)
+        x = x.pow(p_eff)
+        x = F.adaptive_avg_pool2d(x, (1, 1))
+        x = x.clamp(min=self.eps).pow(1.0 / p_eff)
+        if self.flatten:
+            x = x.flatten(1)
+        return x
 

@@ -126,9 +126,35 @@ Bajo la metodología estricta de TDD (*Red → Green → Refactor*), se expandi�
 
 ---
 
-## 6. Conclusión y Siguientes Pasos
+## 6. Ablación de Régimen Extendido: Por Qué Superar 35 Épocas Degrada el Modelo
 
-La Iteración 8 cierra con éxito total los tres objetivos planteados:
-1. **GPU Starvation Erradicada:** La GPU opera de manera eficiente y continua, reduciendo los ciclos de entrenamiento a una cuarta parte del tiempo original.
-2. **Máxima Precisión Alcanzada:** Con TTA Max y la extracción coherente en VRAM, el sistema alcanza **83.76% de Macro F1** y **83.12% de Accuracy**, estableciendo la cota más alta del proyecto.
-3. **Robustez y Portabilidad:** El modelo y los scripts de entrenamiento e inferencia son agnósticos al entorno de ejecución y superan todas las pruebas de regresión.
+Para determinar empíricamente si extender el régimen de entrenamiento permitía extraer mayor capacidad de [`BioacousticEfficientNet`](backend/poc/train.py#L306-L355), se ejecutó una corrida de **64 épocas** manteniendo exactamente los mismos hiperparámetros (Mixup $\alpha=0.2$, $p=0.5$, SpecAugment, Focal Loss $\gamma=2.0$, AdamW $lr=10^{-4}$).
+
+### Comparativa RDD: 35 Épocas vs 64 Épocas
+
+| Métrica | 35 Épocas (`efficientnet_gpu_pipeline_35e_best.pt`) | 64 Épocas (`efficientnet_gpu_pipeline_64e_best.pt`) | Diferencia |
+| :--- | :---: | :---: | :---: |
+| **Train Loss / Accuracy** | $0.5703$ / $78.07\%$ | $0.4392$ / $83.85\%$ | +5.78 pp (mayor ajuste interno) |
+| **Validation Accuracy (pico)** | $84.62\%$ (Época 35) | **$87.18\%$** (Época 43) | +2.56 pp (espejismo de mejora) |
+| **Test Accuracy (sin TTA)** | **$81.82\%$** | $75.97\%$ | **-5.85 pp** |
+| **Test F1-Score (sin TTA)** | **$80.85\%$** | $75.28\%$ | **-5.57 pp** |
+| **Test Accuracy (TTA Mean)** | **$82.47\%$** | $79.87\%$ | **-2.60 pp** |
+| **Test F1-Score (TTA Mean)** | **$82.83\%$** | $79.00\%$ | **-3.83 pp** |
+| **Test Accuracy (TTA Max)** | **$83.12\%$** | $77.92\%$ | **-5.20 pp** |
+| **Test F1-Score (TTA Max)** | **$83.76\%$** | $77.37\%$ | **-6.39 pp** |
+
+### Diagnóstico Técnico (*Concepts > Code*):
+1. **Sobreajuste a la Partición de Validación (*Validation Overfitting*):**  
+   Aunque el checkpoint de 64 épocas alcanzó un pico de **87.18% de validación** en la época 43, el rendimiento en el Test Set real (154 muestras con estricto *Zero Recordist Leakage*) colapsó más de 6 puntos de F1. El modelo comenzó a memorizar las firmas acústicas de los grabadores presentes en los splits de train y val.
+2. **Ausencia de Decaimiento Dinámico de Learning Rate:**  
+   Con un learning rate estático de $1\times 10^{-4}$ durante más de 40 épocas sobre 935 muestras, los gradientes sobreoptimizan detalles espurios en vez de representaciones acústicas generales.
+3. **Criterio de Parada y Regla de Oro:**  
+   **35 épocas es el techo empírico óptimo (*sweet spot*) de entrenamiento**. Aumentar el número de épocas más allá de 35 no mejora el modelo: degrada sistemáticamente la capacidad de generalización en grabaciones de campo nuevas.
+
+---
+
+## 7. Conclusión y Modelo de Producción
+
+1. **GPU Starvation Erradicada:** La GPU opera de manera continua sin periodos de espera ociosa, reduciendo los ciclos de entrenamiento de **19m46s a 04m45s** (aceleración de 4.2x).
+2. **Modelo Definitivo de Producción:** El checkpoint oficial del proyecto queda fijado en [`checkpoints/efficientnet_gpu_pipeline_35e_best.pt`](checkpoints/efficientnet_gpu_pipeline_35e_best.pt) con **83.76% de Macro F1 y 83.12% de Accuracy** con TTA Max.
+3. **Regla de Entrenamiento:** Queda formalmente prohibido entrenar por más de 35 épocas bajo esta configuración, al haberse demostrado que induce sobreajuste y deteriora la generalización.

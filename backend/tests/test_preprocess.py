@@ -104,6 +104,42 @@ def test_extract_active_windows_safeguard():
     assert len(windows[0]) == 110250
 
 
+def test_extract_active_windows_dense_hop():
+    """Verifica que densidades de hop 1.25s y 1.0s generen la cantidad exacta de ventanas y desplazamientos."""
+    sr = 22050
+    audio_10s = np.arange(sr * 10, dtype=np.float32)
+
+    # hop_seconds=1.25 genera 5 ventanas candidatas (desplazamientos 0.0, 1.25, 2.5, 3.75, 5.0 s)
+    windows_125 = extract_active_windows(
+        audio_10s, target_sr=sr, duration_seconds=5.0, hop_seconds=1.25, top_db=100.0
+    )
+    assert len(windows_125) == 5
+    hop_samples_125 = int(sr * 1.25)
+    for i, w in enumerate(windows_125):
+        assert len(w) == int(sr * 5.0)
+        assert w[0] == float(i * hop_samples_125)
+
+    # hop_seconds=1.0 genera 6 ventanas candidatas (desplazamientos 0.0, 1.0, 2.0, 3.0, 4.0, 5.0 s)
+    windows_100 = extract_active_windows(
+        audio_10s, target_sr=sr, duration_seconds=5.0, hop_seconds=1.0, top_db=100.0
+    )
+    assert len(windows_100) == 6
+    hop_samples_100 = int(sr * 1.0)
+    for i, w in enumerate(windows_100):
+        assert len(w) == int(sr * 5.0)
+        assert w[0] == float(i * hop_samples_100)
+
+
+def test_extract_active_windows_invalid_hop():
+    """Verifica que hop_seconds <= 0 lance ValueError."""
+    sr = 22050
+    audio = np.ones(sr * 5, dtype=np.float32)
+    with pytest.raises(ValueError, match="hop_seconds debe ser mayor a 0"):
+        extract_active_windows(audio, target_sr=sr, hop_seconds=0.0)
+    with pytest.raises(ValueError, match="hop_seconds debe ser mayor a 0"):
+        extract_active_windows(audio, target_sr=sr, hop_seconds=-1.0)
+
+
 def test_gpu_audio_frontend():
     import torch
     from poc.preprocess import GPUAudioFrontEnd
@@ -156,6 +192,68 @@ def test_gpu_spec_augment():
     spec_aug.eval()
     out_eval = spec_aug(x)
     assert torch.equal(out_eval, x)
+
+
+def test_gpu_spec_augment_pitch_shift_properties():
+    """Verifica que Spectral Pitch Shift conserve forma, sea determinista en eval, desplace energía y preserve gradientes."""
+    import torch
+    from poc.preprocess import GPUSpecAugment
+
+    spec_aug = GPUSpecAugment(
+        freq_mask_param=0,
+        time_mask_param=0,
+        prob=1.0,
+        pitch_shift_max_bins=2,
+        pitch_shift_prob=1.0,
+    )
+
+    B, C, F, T_dim = 2, 1, 128, 216
+    x = torch.zeros(B, C, F, T_dim, requires_grad=True)
+    # Impulso espectral en bin 50
+    x.data[:, :, 50, :] = 10.0
+
+    spec_aug.train()
+    out = spec_aug(x)
+
+    # Conserva forma [B, 1, 128, 216]
+    assert out.shape == (B, C, F, T_dim)
+
+    # Desplaza la energía espectral hacia arriba o abajo
+    for b in range(B):
+        peak_bin = int(torch.argmax(out[b, 0, :, 0]).item())
+        assert peak_bin in (48, 49, 51, 52), f"Pico esperado en 48, 49, 51 o 52, pero fue {peak_bin}"
+        assert peak_bin != 50
+
+    # Gradientes finitos y válidos en .backward()
+    loss = out.sum()
+    loss.backward()
+    assert x.grad is not None
+    assert torch.isfinite(x.grad).all()
+
+    # En modo eval, el tensor de salida debe ser idéntico al de entrada (determinismo)
+    spec_aug.eval()
+    x_eval = torch.randn(B, C, F, T_dim)
+    out_eval = spec_aug(x_eval)
+    assert torch.equal(out_eval, x_eval)
+
+
+def test_gpu_spec_augment_pitch_shift_disabled():
+    """Verifica que con bins=0 o prob=0 no se aplique desplazamiento tonal."""
+    import torch
+    from poc.preprocess import GPUSpecAugment
+
+    spec_aug = GPUSpecAugment(
+        freq_mask_param=0,
+        time_mask_param=0,
+        prob=0.0,
+        pitch_shift_max_bins=0,
+        pitch_shift_prob=0.0,
+    )
+    spec_aug.train()
+    x = torch.randn(2, 1, 128, 216)
+    out = spec_aug(x)
+    assert torch.equal(out, x)
+
 
 
 
