@@ -2,29 +2,65 @@ import sys
 import tempfile
 from pathlib import Path
 from typing import Optional, Tuple, List
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, status
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import torch
+import torch.nn as nn
 import numpy as np
-import librosa
 
-# Asegurar que la carpeta backend esté en sys.path para importar módulos de app y poc
+# ============================================================================
+# RUTEO DE MÓDULOS DEL BACKEND Y ML CORE
+# ============================================================================
 _BACKEND_ROOT = Path(__file__).resolve().parent.parent
 if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
 
-from poc.preprocess import (
-    load_and_fix_length,
-    extract_mel_spectrogram,
-    compute_rms,
-    TARGET_SR,
-    DURATION_SECONDS,
-)
-from poc.train import AudioCNN
+# Importación de componentes de inferencia y modelos desde ml_core (o poc como fallback)
+try:
+    from ml_core.evaluate import (
+        EnsembleClassifier,
+        predict_audio_tta,
+        load_checkpoint_model,
+    )
+    from ml_core.preprocess import (
+        compute_rms,
+        TARGET_SR,
+        DURATION_SECONDS,
+    )
+    from ml_core.train import BioacousticModel
+except ImportError:
+    from poc.evaluate import (
+        EnsembleClassifier,
+        predict_audio_tta,
+        load_checkpoint_model,
+    )
+    from poc.preprocess import (
+        compute_rms,
+        TARGET_SR,
+        DURATION_SECONDS,
+    )
+    from poc.train import BioacousticModel
+
 from app.services.storage import upload_audio_to_gcp
 from app.database import Base, engine, get_db
 from app.models.prediction import Prediccion
+
+
+# ============================================================================
+# CONSTANTES Y CONFIGURACIÓN DEL SUPER-ENSAMBLE TRI-MODELO
+# ============================================================================
+SPECIES_CLASSES: List[str] = [
+    "Canastero", "Chercán", "Chincol", "Chucao", "Churrín de la Mocha",
+    "Churrín del sur", "Colilarga", "Fío-fío", "Picaflor chico", "Rayadito",
+    "Tapaculo", "Tijeral", "Tordo", "Turca", "Zorzal patagónico",
+]
+
+# Ponderaciones oficiales calibradas del Super-Ensamble Tri-Modelo (ADR 0008, ADR 0010)
+# 55% EfficientNet-B0 + 30% ConvNeXt-Nano + 15% ResNet34d
+ENSEMBLE_WEIGHTS: List[float] = [0.55, 0.30, 0.15]
 
 
 # ============================================================================
@@ -38,107 +74,148 @@ except Exception as db_init_err:
 
 
 # ============================================================================
-# SERVICIOS / LÓGICA DE MACHINE LEARNING
-# (A futuro se moverá a app/services/predictor_service.py)
+# SERVICIO DE INFERENCIA: SUPER-ENSAMBLE TRI-MODELO HETEROGÉNEO
 # ============================================================================
-# Priorizar el modelo optimizado con Data Augmentation y VAD (61.69% accuracy)
-_AUGMENTED_CKPT = _BACKEND_ROOT / "checkpoints" / "augmented_best.pt"
-_BASELINE_CKPT = _BACKEND_ROOT / "checkpoints" / "baseline_best.pt"
-CHECKPOINT_PATH = _AUGMENTED_CKPT if _AUGMENTED_CKPT.exists() else _BASELINE_CKPT
-
-# Umbral de planitud espectral: aves reales promedian 0.015 (máx 0.032).
-# Ruido blanco/estática promedia > 0.50. Umbral de 0.15 separa nítidamente ambos.
-SPECTRAL_FLATNESS_NOISE_THRESHOLD = 0.15
-
-
-class AudioPredictorService:
+class SuperEnsembleService:
     """
-    Servicio de inferencia bioacústica con discriminación física de señal:
-    1. Carga preferentemente augmented_best.pt (61.69% accuracy) con fallback a baseline_best.pt.
-    2. Detección de Silencio por energía RMS (VAD): descarta audios sin sonido significativo.
-    3. Detección de Ruido No-Biológico por Planitud Espectral (Spectral Flatness):
-       rechaza estática o ruido blanco antes de ingresar a la CNN.
-    4. Calibración por Escalamiento de Temperatura (Temperature Scaling, T=1.5).
+    Servicio de inferencia bioacústica de alto rendimiento basado en el
+    Super-Ensamble Tri-Modelo Heterogéneo (EfficientNet-B0, ConvNeXt-Nano, ResNet34d).
+    Instanciado una sola vez en el ciclo de vida (lifespan) de FastAPI.
     """
 
-    def __init__(self, checkpoint_path: Path = CHECKPOINT_PATH, temperature: float = 1.5):
+    def __init__(self, checkpoints_dir: Optional[Path] = None):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.checkpoint_path = checkpoint_path
-        self.temperature = temperature
-        self.model: Optional[AudioCNN] = None
-        self.classes: List[str] = []
-        self._load_checkpoint()
+        self.checkpoints_dir = checkpoints_dir or (_BACKEND_ROOT / "checkpoints")
+        self.classes: List[str] = SPECIES_CLASSES
+        self.weights: List[float] = ENSEMBLE_WEIGHTS
+        self.ensemble: Optional[EnsembleClassifier] = None
 
-    def _load_checkpoint(self) -> None:
-        """Carga los pesos entrenados y el mapeo de clases si el archivo existe."""
-        if self.checkpoint_path.exists():
-            checkpoint = torch.load(self.checkpoint_path, map_location=self.device)
-            self.classes = checkpoint.get("classes", [])
-            self.model = AudioCNN(num_classes=len(self.classes))
-            self.model.load_state_dict(checkpoint["model_state_dict"])
-            self.model.to(self.device)
-            self.model.eval()
+    def load_models(self) -> None:
+        """
+        Carga los 3 modelos heterogéneos y construye el EnsembleClassifier global.
+        Si existen checkpoints en disco los carga; si no, inicializa las arquitecturas
+        correspondientes en modo inferencia para garantizar resiliencia operacional.
+        """
+        effnet_ckpt = self.checkpoints_dir / "efficientnet_gpu_pipeline_35e_best.pt"
+        convnext_ckpt = self.checkpoints_dir / "convnext_nano_35e_best.pt"
+        resnet_ckpt = self.checkpoints_dir / "resnet34d_35e_best.pt"
+
+        models: List[nn.Module] = []
+
+        # 1. EfficientNet-B0 (Peso: 0.55)
+        if effnet_ckpt.exists():
+            m_eff, ckpt_data = load_checkpoint_model(effnet_ckpt, self.device)
+            self.classes = ckpt_data.get("classes", self.classes)
+            models.append(m_eff)
+            print(f"[SuperEnsemble] Checkpoint cargado: {effnet_ckpt.name}")
         else:
-            # Respaldo simulado en caso de despliegue sin checkpoints locales
-            self.classes = [
-                "Canastero", "Chercán", "Chincol", "Chucao", "Churrín de la Mocha",
-                "Churrín del sur", "Colilarga", "Fío-fío", "Picaflor chico", "Rayadito",
-                "Tapaculo", "Tijeral", "Tordo", "Turca", "Zorzal patagónico"
-            ]
+            m_eff = BioacousticModel(
+                model_name="efficientnet_b0",
+                num_classes=len(self.classes),
+                pretrained=False,
+                pool_type="gem",
+            )
+            m_eff.to(self.device).eval()
+            models.append(m_eff)
+            print("[SuperEnsemble] Modelo EfficientNet-B0 inicializado (fallback)")
 
-    def predict(self, audio_file_path: Path) -> Tuple[str, float]:
+        # 2. ConvNeXt-Nano (Peso: 0.30)
+        if convnext_ckpt.exists():
+            m_conv, _ = load_checkpoint_model(convnext_ckpt, self.device)
+            models.append(m_conv)
+            print(f"[SuperEnsemble] Checkpoint cargado: {convnext_ckpt.name}")
+        else:
+            m_conv = BioacousticModel(
+                model_name="convnext_nano.d1h_in1k",
+                num_classes=len(self.classes),
+                pretrained=False,
+                pool_type="avg",
+            )
+            m_conv.to(self.device).eval()
+            models.append(m_conv)
+            print("[SuperEnsemble] Modelo ConvNeXt-Nano inicializado (fallback)")
+
+        # 3. ResNet34d (Peso: 0.15)
+        if resnet_ckpt.exists():
+            m_res, _ = load_checkpoint_model(resnet_ckpt, self.device)
+            models.append(m_res)
+            print(f"[SuperEnsemble] Checkpoint cargado: {resnet_ckpt.name}")
+        else:
+            m_res = BioacousticModel(
+                model_name="resnet34d",
+                num_classes=len(self.classes),
+                pretrained=False,
+                pool_type="avg",
+            )
+            m_res.to(self.device).eval()
+            models.append(m_res)
+            print("[SuperEnsemble] Modelo ResNet34d inicializado (fallback)")
+
+        self.ensemble = EnsembleClassifier(models=models, weights=self.weights)
+        self.ensemble.to(self.device).eval()
+        print(f"[SuperEnsemble] Super-Ensamble listo en {self.device} con ponderaciones {self.weights}.")
+
+    def predict(
+        self,
+        audio_file_path: Path,
+        hop_seconds: float = 1.0,
+        max_window_batch_size: int = 32,
+    ) -> Tuple[str, float]:
         """
-        Analiza las propiedades físicas de la señal y, si es una señal bioacústica válida,
-        ejecuta la inferencia en PyTorch retornando la clase y su confianza real.
+        Ejecuta inferencia bioacústica densa TTA con micro-batching sobre el audio temporal:
+        - Ventaneo denso con solapamiento temporal de 1.0 s sobre ventanas de 5.0 s.
+        - Agregación por máxima evidencia acústica (mode='max').
+        - Micro-batching (max_window_batch_size=32) para acotar VRAM a O(1).
         """
-        waveform = load_and_fix_length(
-            audio_file_path, target_sr=TARGET_SR, duration_seconds=DURATION_SECONDS
+        if self.ensemble is None:
+            self.load_models()
+
+        pred_idx, probs = predict_audio_tta(
+            model=self.ensemble,
+            audio_input=audio_file_path,
+            n_mels=128,
+            mode="max",
+            device=self.device,
+            target_sr=TARGET_SR,
+            duration_seconds=DURATION_SECONDS,
+            hop_seconds=hop_seconds,
+            max_window_batch_size=max_window_batch_size,
         )
 
-        # 1. Filtro de Silencio (VAD por RMS energético)
-        energy_rms = compute_rms(waveform)
-        if energy_rms < 1e-4:
-            return "Silencio / No detectado", 0.0
-
-        # 2. Filtro Físico-Acústico: Detección de Ruido Blanco / Señal No-Biológica
-        spectral_flatness = float(np.mean(librosa.feature.spectral_flatness(y=waveform)))
-        if spectral_flatness > SPECTRAL_FLATNESS_NOISE_THRESHOLD:
-            return "Ruido / Señal no biológica", 0.0
-
-        # 3. Extracción de características acústicas (Mel-Spectrogram)
-        mel = extract_mel_spectrogram(waveform, sr=TARGET_SR)
-        mel_tensor = torch.from_numpy(mel).unsqueeze(0).unsqueeze(0).float().to(self.device)
-
-        if self.model is not None:
-            with torch.no_grad():
-                outputs = self.model(mel_tensor)
-
-                # 4. Calibración de probabilidades por Temperatura
-                scaled_logits = outputs / self.temperature
-                probabilities = torch.softmax(scaled_logits, dim=1)
-                confidence, pred_idx = torch.max(probabilities, dim=1)
-
-                predicted_class = self.classes[pred_idx.item()]
-                conf_val = round(float(confidence.item()), 4)
-                return predicted_class, conf_val
-        else:
-            # Simulación de contingencia
-            return "Chincol", 0.8500
+        confidence = float(probs[pred_idx].item())
+        conf_val = round(confidence, 4)
+        predicted_class = self.classes[pred_idx]
+        return predicted_class, conf_val
 
 
-# Instancia del servicio de predicción
-predictor_service = AudioPredictorService()
+# Instancia global del servicio de inferencia
+ensemble_service = SuperEnsembleService()
+
+
+# ============================================================================
+# CICLO DE VIDA (LIFESPAN / STARTUP): CARGA ÚNICA EN MEMORIA
+# ============================================================================
+@asynccontextmanager
+async def lifespan(app_instance: FastAPI):
+    """
+    Carga el Super-Ensamble Tri-Modelo en memoria una única vez al iniciar
+    el servidor FastAPI, evitando recargas redundantes en peticiones HTTP.
+    """
+    try:
+        ensemble_service.load_models()
+    except Exception as init_err:
+        print(f"[Startup Warning] Excepción al inicializar SuperEnsemble: {init_err}")
+    yield
 
 
 # ============================================================================
 # ESQUELETO BASE FASTAPI
 # ============================================================================
-from fastapi.middleware.cors import CORSMiddleware
-
 app = FastAPI(
     title="F.A.M.A. Backend API",
     description="Backend orquestador para monitoreo y clasificación bioacústica de aves chilenas",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # Configuración de CORS para permitir peticiones desde el frontend (Next.js)
@@ -152,7 +229,7 @@ app.add_middleware(
 
 
 # ============================================================================
-# ENDPOINTS DE SALUD
+# ENDPOINTS DE SALUD Y COMPROBACIÓN OPERACIONAL
 # ============================================================================
 @app.get("/", summary="Estado base del Backend F.A.M.A.")
 def root_status():
@@ -167,7 +244,7 @@ def health_check():
 
 
 # ============================================================================
-# ENDPOINT DE PREDICCIÓN BIOACÚSTICA
+# ENDPOINT DE PREDICCIÓN BIOACÚSTICA CON SUPER-ENSAMBLE TRI-MODELO
 # ============================================================================
 @app.post(
     "/api/predict",
@@ -179,12 +256,12 @@ async def predict_audio(
 ):
     """
     Recibe un archivo de audio por HTTP multipart/form-data.
-    1. Valida que la extensión sea estrictamente .wav.
-    2. Sube el archivo a Google Cloud Storage mediante upload_audio_to_gcp (RNF_03).
-    3. Si la subida a GCS es exitosa, ejecuta la inferencia bioacústica.
-    4. Inserta el registro histórico en la tabla 'prediccion' de PostgreSQL.
-    5. Retorna el JSON confirmando la persistencia y la predicción:
-       {"filename": ..., "gcp_upload": True, "db_id": 1, "clase": ..., "confianza": ...}.
+    1. Valida formato .wav.
+    2. Sube a Google Cloud Storage mediante upload_audio_to_gcp (RNF_03).
+    3. Guarda temporalmente en disco usando tempfile para la inferencia densa.
+    4. Infiere con el Super-Ensamble Tri-Modelo (Dense TTA hop=1.0s, mode='max', micro-batch=32).
+    5. Inserta el resultado en la tabla 'prediccion' de PostgreSQL.
+    6. Retorna confirmación JSON con filename, gcp_upload, db_id, clase y confianza real calibrada.
     """
     filename = file.filename or "audio.wav"
 
@@ -213,13 +290,18 @@ async def predict_audio(
                 detail="No fue posible confirmar la subida a Google Cloud Storage.",
             )
 
-        # 3. Procesar audio localmente de forma temporal para la inferencia acústica
+        # 3. Guardado temporal en disco para inferencia densa multi-crop
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_audio:
             tmp_audio.write(audio_bytes)
             tmp_path = Path(tmp_audio.name)
 
         try:
-            clase, confianza = predictor_service.predict(tmp_path)
+            # Inferencia bioacústica con Super-Ensamble Tri-Modelo (Dense TTA + Micro-Batching)
+            clase, confianza = ensemble_service.predict(
+                audio_file_path=tmp_path,
+                hop_seconds=1.0,
+                max_window_batch_size=32,
+            )
         finally:
             if tmp_path.exists():
                 tmp_path.unlink()
@@ -242,7 +324,7 @@ async def predict_audio(
                 detail=f"Fallo al registrar la predicción en PostgreSQL: {db_save_err}",
             )
 
-        # 5. Retorno del formato JSON requerido con gcp_upload y db_id
+        # 5. Retorno del formato JSON requerido
         return {
             "filename": filename,
             "gcp_upload": True,
