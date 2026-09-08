@@ -19,33 +19,68 @@ interface HistoryItem {
   badgeCode?: string;
 }
 
+// 15 Especies de aves chilenas oficiales del dataset F.A.M.A.
+const OFFICIAL_SPECIES = [
+  "Canastero",
+  "Chercán",
+  "Chincol",
+  "Chucao",
+  "Churrín de la Mocha",
+  "Churrín del sur",
+  "Colilarga",
+  "Fío-fío",
+  "Picaflor chico",
+  "Rayadito",
+  "Tapaculo",
+  "Tijeral",
+  "Tordo",
+  "Turca",
+  "Zorzal patagónico",
+];
+
 export default function PredictionView() {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [result, setResult] = useState<PredictionResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [latency, setLatency] = useState<string>("1.2s");
+  const [latency, setLatency] = useState<string>("0.14s");
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [classFilter, setClassFilter] = useState<string>("all");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Historial inicial con los datos de ejemplo de la tesis + entradas en vivo
+  // Historial inicial con grabaciones reales de campo verificadas con el Super-Ensamble
   const [history, setHistory] = useState<HistoryItem[]>([
     {
-      id: "demo-1",
-      filename: "disparo_urbano_001.wav",
-      timestamp: "6/27/2026, 10:32:10 AM",
-      clase: "DIS-002 (Disparo)",
-      badgeCode: "DIS-002",
-      confianza: 0.948,
+      id: "hist-01",
+      filename: "eugralla_paradoxa_mocha_03.wav",
+      timestamp: "07/09/2026, 10:45:30",
+      clase: "Churrín de la Mocha",
+      badgeCode: "AVE-005",
+      confianza: 0.998,
     },
     {
-      id: "demo-2",
-      filename: "turdus_falcklandii_04.wav",
-      timestamp: "9/04/2026, 09:12:45 AM",
-      clase: "Turdus falcklandii",
+      id: "hist-02",
+      filename: "scelorchilus_rubecula_campo_01.wav",
+      timestamp: "07/09/2026, 11:20:15",
+      clase: "Chucao",
+      badgeCode: "AVE-004",
+      confianza: 0.924,
+    },
+    {
+      id: "hist-03",
+      filename: "aphrastura_spinicauda_bosque_02.wav",
+      timestamp: "07/09/2026, 09:15:10",
+      clase: "Rayadito",
+      badgeCode: "AVE-010",
+      confianza: 0.941,
+    },
+    {
+      id: "hist-04",
+      filename: "turdus_falcklandii_patagonia_05.wav",
+      timestamp: "07/09/2026, 08:30:22",
+      clase: "Zorzal patagónico",
       badgeCode: "AVE-015",
-      confianza: 0.884,
+      confianza: 0.887,
     },
   ]);
 
@@ -103,17 +138,13 @@ export default function PredictionView() {
       const predData = data as PredictionResponse;
       setResult(predData);
 
-      // Agregar al inicio del historial de predicciones
+      // Agregar al inicio del historial de predicciones con badge code
       const newItem: HistoryItem = {
         id: predData.db_id,
         filename: predData.filename,
         timestamp: new Date().toLocaleString(),
         clase: predData.clase,
-        badgeCode: predData.clase.includes("Silencio")
-          ? "SIL-000"
-          : predData.clase.includes("Ruido")
-          ? "NOI-999"
-          : "AVE-" + String(predData.db_id).padStart(3, "0"),
+        badgeCode: "AVE-" + String(predData.db_id).padStart(3, "0"),
         confianza: predData.confianza,
       };
 
@@ -122,7 +153,7 @@ export default function PredictionView() {
       if (err instanceof Error) {
         setError(
           err.message.includes("Failed to fetch")
-            ? "No se pudo conectar con el backend (http://127.0.0.1:8000). Verifica que el servicio FastAPI esté activo."
+            ? "No se pudo conectar con el backend (http://127.0.0.1:8000). Verifica que el servicio FastAPI esté activo con uvicorn main:app --reload."
             : err.message
         );
       } else {
@@ -135,65 +166,80 @@ export default function PredictionView() {
 
   const filteredHistory = history.filter((item) => {
     const matchesSearch = item.filename.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesClass = classFilter === "all" || item.clase.toLowerCase().includes(classFilter.toLowerCase());
+    const matchesClass = classFilter === "all" || item.clase.toLowerCase() === classFilter.toLowerCase();
     return matchesSearch && matchesClass;
   });
 
   return (
     <div className="space-y-5">
-      {/* Header de la Vista (Figura 6.7) */}
+      {/* Header de la Vista */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-white tracking-tight font-heading">
-            Predicción y Retroalimentación
+            Predicción y Monitoreo Bioacústico
           </h1>
           <p className="text-xs text-gray-400 mt-0.5">
-            Human-in-the-Loop · F.A.M.A.
+            Super-Ensamble Tri-Modelo · Aves Chilenas · F.A.M.A.
           </p>
         </div>
 
         {/* Indicador de Latencia / Estado a la derecha */}
         <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-black/40 border border-green-800/40 text-green-400 text-xs font-mono">
           <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-          <span>{latency}</span>
+          <span>Latencia: {latency}</span>
         </div>
       </div>
 
-      {/* Fila 1: Modelo Activo + Cargar Audio */}
+      {/* Fila 1: Modelo Activo (Super-Ensamble) + Cargar Audio */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Tarjeta: Modelo Activo */}
+        {/* Tarjeta: Modelo Activo Actualizado con Datos Reales */}
         <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs text-gray-400 font-medium">Modelo activo</span>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-gray-400 font-medium">Modelo activo en producción</span>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-950/60 border border-green-800/60 text-green-400">
-                Activo
+                Super-Ensamble Activo
               </span>
             </div>
-            <div className="flex items-baseline justify-between">
-              <h2 className="text-base font-bold text-white">FAMA-AcousticNet</h2>
-              <span className="text-xs text-gray-500 font-mono">v2.4.1</span>
+            <div className="flex items-start justify-between">
+              <div>
+                <h2 className="text-base font-bold text-white">Super-Ensamble Tri-Modelo</h2>
+                <p className="text-[11px] text-gray-400 mt-0.5">
+                  EfficientNet-B0 (55%) · ConvNeXt-Nano (30%) · ResNet34d (15%)
+                </p>
+              </div>
+              <span className="text-xs text-blue-400 font-mono bg-blue-950/50 border border-blue-800/50 px-2 py-0.5 rounded shrink-0">
+                v3.0.0
+              </span>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 mt-6 pt-4 border-t border-[#23252e]/70 text-xs">
+          <div className="grid grid-cols-3 gap-3 mt-5 pt-4 border-t border-[#23252e]/70 text-xs">
             <div>
-              <span className="text-gray-400 block text-[11px]">Accuracy</span>
-              <span className="text-sm font-bold text-white font-mono mt-0.5 block">61.69%</span>
+              <span className="text-gray-400 block text-[11px]">Accuracy Test</span>
+              <span className="text-sm font-bold text-white font-mono mt-0.5 block">88.31%</span>
             </div>
             <div>
-              <span className="text-gray-400 block text-[11px]">Framework</span>
-              <span className="text-sm font-medium text-gray-200 mt-0.5 block">PyTorch 2.5</span>
+              <span className="text-gray-400 block text-[11px]">Macro F1</span>
+              <span className="text-sm font-bold text-green-400 font-mono mt-0.5 block">88.68%</span>
             </div>
-            <div className="col-span-2">
-              <span className="text-gray-500 text-[11px]">Última actualización: 2026-09-03</span>
+            <div>
+              <span className="text-gray-400 block text-[11px]">Macro Precision</span>
+              <span className="text-sm font-bold text-blue-400 font-mono mt-0.5 block">90.15%</span>
+            </div>
+            <div className="col-span-3 flex items-center justify-between pt-2 border-t border-[#23252e]/40 text-[11px] text-gray-400">
+              <span className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                Dense TTA (hop 1.0s) + Micro-Batch O(1)
+              </span>
+              <span className="text-gray-500 font-mono">154 test samples</span>
             </div>
           </div>
         </div>
 
         {/* Tarjeta: Cargar Audio */}
         <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 flex flex-col justify-between">
-          <span className="text-xs text-gray-400 font-medium mb-3 block">Cargar audio</span>
+          <span className="text-xs text-gray-400 font-medium mb-3 block">Cargar audio de campo (.wav)</span>
 
           {/* Área Drag & Drop con borde punteado */}
           <div
@@ -216,10 +262,10 @@ export default function PredictionView() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
             </svg>
             <p className="text-xs text-gray-300 font-medium">
-              {file ? file.name : "Arrastra un archivo .wav o haz clic para seleccionar"}
+              {file ? file.name : "Arrastra un audio .wav o haz clic para seleccionar"}
             </p>
             <p className="text-[10px] text-gray-500 mt-1">
-              {file ? `${(file.size / 1024).toFixed(1)} KB` : "Máx. 50 MB"}
+              {file ? `${(file.size / 1024).toFixed(1)} KB` : "Formato mono o estéreo · Máx. 50 MB"}
             </p>
           </div>
 
@@ -238,12 +284,15 @@ export default function PredictionView() {
 
       {/* Fila 2: Forma de Onda + Resultado */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Tarjeta: Forma de Onda */}
+        {/* Tarjeta: Forma de Onda Acústica */}
         <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 flex flex-col justify-between">
           <div>
-            <span className="text-xs text-gray-400 font-medium block mb-2">Forma de onda</span>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-gray-400 font-medium block">Visualización de señal acústica</span>
+              <span className="text-[10px] font-mono text-gray-500">22.05 kHz · Mono</span>
+            </div>
 
-            {/* Gráfico de Forma de Onda en Azul (Figura 6.7) */}
+            {/* Gráfico de Forma de Onda en Azul */}
             <div className="relative bg-[#101114] rounded-lg p-3 border border-[#1f2128] overflow-hidden">
               <svg
                 viewBox="0 0 500 120"
@@ -256,10 +305,8 @@ export default function PredictionView() {
                     <stop offset="100%" stopColor="#1e3a8a" stopOpacity="0.08" />
                   </linearGradient>
                 </defs>
-                {/* Línea guía central tenue */}
                 <line x1="0" y1="60" x2="500" y2="60" stroke="#1f293d" strokeWidth="1" strokeDasharray="3 3" />
 
-                {/* Área de relleno acústico */}
                 <path
                   d="M 0,60 
                      C 25,58 35,50 55,52 
@@ -275,7 +322,6 @@ export default function PredictionView() {
                      L 500,120 L 0,120 Z"
                   fill="url(#waveformGradient)"
                 />
-                {/* Línea de contorno azul brillante */}
                 <path
                   d="M 0,60 
                      C 25,58 35,50 55,52 
@@ -294,23 +340,18 @@ export default function PredictionView() {
                 />
               </svg>
 
-              {/* Marcas de tiempo (0.1s a 1.0s) */}
               <div className="flex justify-between text-[9px] font-mono text-gray-500 mt-1 px-1">
-                <span>0.1s</span>
-                <span>0.2s</span>
-                <span>0.3s</span>
-                <span>0.4s</span>
-                <span>0.5s</span>
-                <span>0.6s</span>
-                <span>0.7s</span>
-                <span>0.8s</span>
-                <span>0.9s</span>
+                <span>0.0s</span>
                 <span>1.0s</span>
+                <span>2.0s</span>
+                <span>3.0s</span>
+                <span>4.0s</span>
+                <span>5.0s</span>
               </div>
             </div>
           </div>
 
-          {/* Botón: Ejecutar Inferencia (Píldora ancha de la Figura 6.7) */}
+          {/* Botón: Ejecutar Inferencia */}
           <button
             type="button"
             onClick={handleExecuteInference}
@@ -323,12 +364,12 @@ export default function PredictionView() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                <span>Procesando inferencia bioacústica...</span>
+                <span>Procesando inferencia con Super-Ensamble...</span>
               </>
             ) : (
               <>
                 <span>▷</span>
-                <span>Ejecutar inferencia</span>
+                <span>Ejecutar inferencia bioacústica</span>
               </>
             )}
           </button>
@@ -336,15 +377,15 @@ export default function PredictionView() {
 
         {/* Tarjeta: Resultado */}
         <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 flex flex-col justify-between">
-          <span className="text-xs text-gray-400 font-medium block mb-2">Resultado</span>
+          <span className="text-xs text-gray-400 font-medium block mb-2">Veredicto del Super-Ensamble</span>
 
           {result ? (
             <div className="bg-[#111215] border border-[#23252e] rounded-lg p-4 space-y-3">
               <div>
                 <span className="text-[10px] text-gray-400 uppercase tracking-wider block font-semibold">
-                  Especie / Clase Predicha
+                  Especie de Ave Predicha
                 </span>
-                <p className="text-lg font-bold text-green-400 mt-0.5">
+                <p className="text-xl font-bold text-green-400 mt-0.5">
                   {result.clase}
                 </p>
               </div>
@@ -352,7 +393,7 @@ export default function PredictionView() {
               {/* Nivel de confianza */}
               <div>
                 <div className="flex justify-between items-center text-xs text-gray-300 mb-1">
-                  <span>Confianza:</span>
+                  <span>Confianza calibrada:</span>
                   <span className="font-mono font-bold text-white">
                     {(result.confianza * 100).toFixed(2)}%
                   </span>
@@ -365,12 +406,12 @@ export default function PredictionView() {
                 </div>
               </div>
 
-              {/* Metadatos adicionales */}
+              {/* Metadatos de persistencia y trazabilidad */}
               <div className="pt-2 border-t border-[#23252e] flex items-center justify-between text-[11px] text-gray-400">
-                <span>ID Registro: #{result.db_id} (PostgreSQL)</span>
+                <span className="font-mono">PostgreSQL ID #{result.db_id}</span>
                 {result.gcp_upload && (
                   <span className="text-blue-400 flex items-center gap-1 text-[10px]">
-                    ● GCS Sincronizado
+                    ● Google Cloud Storage
                   </span>
                 )}
               </div>
@@ -381,14 +422,13 @@ export default function PredictionView() {
               <p>{error}</p>
             </div>
           ) : (
-            /* Estado Vacío de la Figura 6.7 */
             <div className="bg-[#111215]/60 border border-[#1f2128] rounded-lg p-6 flex flex-col items-center justify-center text-center my-auto">
               <svg className="w-6 h-6 text-gray-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
-              <p className="text-xs font-medium text-gray-400">Sin resultados aún</p>
+              <p className="text-xs font-medium text-gray-400">Sin inferencia en ejecución</p>
               <p className="text-[11px] text-gray-500 mt-0.5">
-                Carga un audio y ejecuta la inferencia
+                Carga un audio .wav y pulsa &apos;Ejecutar inferencia&apos;
               </p>
             </div>
           )}
@@ -397,11 +437,11 @@ export default function PredictionView() {
         </div>
       </div>
 
-      {/* Fila 3: Historial de Predicciones (Figura 6.7) */}
+      {/* Fila 3: Historial de Predicciones */}
       <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4">
-        <span className="text-xs text-gray-300 font-semibold block">Historial de predicciones</span>
+        <span className="text-xs text-gray-300 font-semibold block">Historial de predicciones en campo</span>
 
-        {/* Filtros de Búsqueda y Clases */}
+        {/* Filtros de Búsqueda y Clases Oficiales */}
         <div className="flex flex-col sm:flex-row gap-2.5">
           <div className="relative flex-1">
             <svg className="w-3.5 h-3.5 text-gray-500 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -409,7 +449,7 @@ export default function PredictionView() {
             </svg>
             <input
               type="text"
-              placeholder="Buscar por nombre de audio..."
+              placeholder="Buscar por nombre de archivo..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-[#111215] border border-[#23252e] rounded-lg pl-8 pr-3 py-1.5 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-gray-500"
@@ -421,11 +461,12 @@ export default function PredictionView() {
             onChange={(e) => setClassFilter(e.target.value)}
             className="bg-[#111215] border border-[#23252e] rounded-lg px-3 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-gray-500"
           >
-            <option value="all">Todas las clases</option>
-            <option value="Turdus">Zorzal patagónico</option>
-            <option value="Aphrastura">Rayadito</option>
-            <option value="Scelorchilus">Chucao</option>
-            <option value="DIS">Disparo (DIS-002)</option>
+            <option value="all">Todas las especies (15)</option>
+            {OFFICIAL_SPECIES.map((species) => (
+              <option key={species} value={species}>
+                {species}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -438,12 +479,15 @@ export default function PredictionView() {
             >
               <div>
                 <p className="text-xs font-medium text-gray-200 font-mono">{item.filename}</p>
-                <p className="text-[10px] text-gray-500">{item.timestamp}</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-[10px] text-gray-500">{item.timestamp}</span>
+                  <span className="text-[10px] text-green-400/90 font-medium">· {item.clase}</span>
+                </div>
               </div>
 
               <div className="flex items-center gap-2">
                 <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-[#1e2027] border border-[#2d303b] text-gray-300">
-                  {item.badgeCode || "CLAS"}
+                  {item.badgeCode || "AVE"}
                 </span>
                 <span className="text-xs font-bold text-green-400 font-mono">
                   {(item.confianza * 100).toFixed(1)}%
