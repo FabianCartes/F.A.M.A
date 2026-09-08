@@ -89,71 +89,66 @@ class SuperEnsembleService:
         self.classes: List[str] = SPECIES_CLASSES
         self.weights: List[float] = ENSEMBLE_WEIGHTS
         self.ensemble: Optional[EnsembleClassifier] = None
+        self.fallback_model: Optional[nn.Module] = None
+        self.is_fallback: bool = False
 
     def load_models(self) -> None:
         """
-        Carga los 3 modelos heterogéneos y construye el EnsembleClassifier global.
-        Si existen checkpoints en disco los carga; si no, inicializa las arquitecturas
-        correspondientes en modo inferencia para garantizar resiliencia operacional.
+        Carga los 3 modelos heterogéneos si los checkpoints .pt existen en disco.
+        Si no existen (por estar en .gitignore), conmuta automáticamente al checkpoint
+        entrenado disponible (augmented_best.pt) para garantizar predicciones reales
+        con alta confianza en lugar de números aleatorios.
         """
         effnet_ckpt = self.checkpoints_dir / "efficientnet_gpu_pipeline_35e_best.pt"
         convnext_ckpt = self.checkpoints_dir / "convnext_nano_35e_best.pt"
         resnet_ckpt = self.checkpoints_dir / "resnet34d_35e_best.pt"
+        augmented_ckpt = self.checkpoints_dir / "augmented_best.pt"
 
-        models: List[nn.Module] = []
+        # Caso 1: Al menos uno o todos los checkpoints del Super-Ensamble existen
+        if effnet_ckpt.exists() or convnext_ckpt.exists() or resnet_ckpt.exists():
+            models: List[nn.Module] = []
+            active_weights: List[float] = []
 
-        # 1. EfficientNet-B0 (Peso: 0.55)
-        if effnet_ckpt.exists():
-            m_eff, ckpt_data = load_checkpoint_model(effnet_ckpt, self.device)
-            self.classes = ckpt_data.get("classes", self.classes)
-            models.append(m_eff)
-            print(f"[SuperEnsemble] Checkpoint cargado: {effnet_ckpt.name}")
-        else:
-            m_eff = BioacousticModel(
-                model_name="efficientnet_b0",
-                num_classes=len(self.classes),
-                pretrained=False,
-                pool_type="gem",
+            if effnet_ckpt.exists():
+                m_eff, ckpt_data = load_checkpoint_model(effnet_ckpt, self.device)
+                self.classes = ckpt_data.get("classes", self.classes)
+                models.append(m_eff)
+                active_weights.append(0.55)
+                print(f"[SuperEnsemble] Checkpoint cargado: {effnet_ckpt.name}")
+
+            if convnext_ckpt.exists():
+                m_conv, _ = load_checkpoint_model(convnext_ckpt, self.device)
+                models.append(m_conv)
+                active_weights.append(0.30)
+                print(f"[SuperEnsemble] Checkpoint cargado: {convnext_ckpt.name}")
+
+            if resnet_ckpt.exists():
+                m_res, _ = load_checkpoint_model(resnet_ckpt, self.device)
+                models.append(m_res)
+                active_weights.append(0.15)
+                print(f"[SuperEnsemble] Checkpoint cargado: {resnet_ckpt.name}")
+
+            self.ensemble = EnsembleClassifier(models=models, weights=active_weights)
+            self.ensemble.to(self.device).eval()
+            self.is_fallback = False
+            print(f"[SuperEnsemble] Super-Ensamble listo en {self.device} con {len(models)} modelo(s).")
+
+        # Caso 2: Checkpoint entrenado disponible en disco (augmented_best.pt)
+        elif augmented_ckpt.exists():
+            from poc.train import AudioCNN
+            ckpt = torch.load(augmented_ckpt, map_location=self.device)
+            self.classes = ckpt.get("classes", self.classes)
+            self.fallback_model = AudioCNN(num_classes=len(self.classes))
+            self.fallback_model.load_state_dict(ckpt["model_state_dict"])
+            self.fallback_model.to(self.device).eval()
+            self.is_fallback = True
+            print(
+                f"[SuperEnsemble] AVISO: Los archivos .pt del tri-modelo no están en disco ({self.checkpoints_dir}). "
+                f"Conmutando a checkpoint entrenado de respaldo '{augmented_ckpt.name}' para predicciones con pesos reales."
             )
-            m_eff.to(self.device).eval()
-            models.append(m_eff)
-            print("[SuperEnsemble] Modelo EfficientNet-B0 inicializado (fallback)")
-
-        # 2. ConvNeXt-Nano (Peso: 0.30)
-        if convnext_ckpt.exists():
-            m_conv, _ = load_checkpoint_model(convnext_ckpt, self.device)
-            models.append(m_conv)
-            print(f"[SuperEnsemble] Checkpoint cargado: {convnext_ckpt.name}")
         else:
-            m_conv = BioacousticModel(
-                model_name="convnext_nano.d1h_in1k",
-                num_classes=len(self.classes),
-                pretrained=False,
-                pool_type="avg",
-            )
-            m_conv.to(self.device).eval()
-            models.append(m_conv)
-            print("[SuperEnsemble] Modelo ConvNeXt-Nano inicializado (fallback)")
-
-        # 3. ResNet34d (Peso: 0.15)
-        if resnet_ckpt.exists():
-            m_res, _ = load_checkpoint_model(resnet_ckpt, self.device)
-            models.append(m_res)
-            print(f"[SuperEnsemble] Checkpoint cargado: {resnet_ckpt.name}")
-        else:
-            m_res = BioacousticModel(
-                model_name="resnet34d",
-                num_classes=len(self.classes),
-                pretrained=False,
-                pool_type="avg",
-            )
-            m_res.to(self.device).eval()
-            models.append(m_res)
-            print("[SuperEnsemble] Modelo ResNet34d inicializado (fallback)")
-
-        self.ensemble = EnsembleClassifier(models=models, weights=self.weights)
-        self.ensemble.to(self.device).eval()
-        print(f"[SuperEnsemble] Super-Ensamble listo en {self.device} con ponderaciones {self.weights}.")
+            self.is_fallback = True
+            print("[SuperEnsemble] AVISO: No se encontraron checkpoints entrenados.")
 
     def predict(
         self,
@@ -162,13 +157,23 @@ class SuperEnsembleService:
         max_window_batch_size: int = 32,
     ) -> Tuple[str, float]:
         """
-        Ejecuta inferencia bioacústica densa TTA con micro-batching sobre el audio temporal:
-        - Ventaneo denso con solapamiento temporal de 1.0 s sobre ventanas de 5.0 s.
-        - Agregación por máxima evidencia acústica (mode='max').
-        - Micro-batching (max_window_batch_size=32) para acotar VRAM a O(1).
+        Ejecuta inferencia bioacústica densa TTA con micro-batching sobre el audio temporal.
         """
-        if self.ensemble is None:
+        if self.ensemble is None and self.fallback_model is None:
             self.load_models()
+
+        if self.is_fallback and self.fallback_model is not None:
+            from poc.preprocess import load_and_fix_length, extract_mel_spectrogram
+            waveform = load_and_fix_length(audio_file_path, target_sr=TARGET_SR, duration_seconds=DURATION_SECONDS)
+            mel = extract_mel_spectrogram(waveform, sr=TARGET_SR, n_mels=64)
+            mel_tensor = torch.from_numpy(mel).unsqueeze(0).unsqueeze(0).float().to(self.device)
+            with torch.no_grad():
+                out = self.fallback_model(mel_tensor)
+                probs = torch.softmax(out / 1.5, dim=1)
+                confidence, pred_idx = torch.max(probs, dim=1)
+                predicted_class = self.classes[pred_idx.item()]
+                conf_val = round(float(confidence.item()), 4)
+                return predicted_class, conf_val
 
         pred_idx, probs = predict_audio_tta(
             model=self.ensemble,
