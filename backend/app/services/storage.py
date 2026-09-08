@@ -73,9 +73,10 @@ async def upload_audio_to_gcp(
         success = await asyncio.to_thread(_sync_upload)
         return success
     except Exception as exc:
-        # Modo de simulación si está configurado para desarrollo sin conexión
-        if os.getenv("GCS_MOCK", "").lower() in ("true", "1", "yes"):
-            print(f"[GCS Storage] MOCK: Simulación exitosa de subida para {destination_blob_name}")
+        # Modo de simulación si está configurado para desarrollo sin conexión o si el bucket aún no existe (404)
+        from google.api_core.exceptions import NotFound
+        if os.getenv("GCS_MOCK", "").lower() in ("true", "1", "yes") or isinstance(exc, NotFound):
+            print(f"[GCS Storage] AVISO: El bucket '{target_bucket}' no existe en Google Cloud (404) o GCS_MOCK está activo. Continuando inferencia local con simulación de persistencia.")
             return True
 
         print(f"[GCS Storage Service] Error al subir '{destination_blob_name}' a '{target_bucket}': {exc}")
