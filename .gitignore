@@ -6,6 +6,18 @@ backend/.env
 backend/.env.*
 !backend/.env.example
 
+# Google Cloud / Service Account keys & credentials (CRITICAL: Never commit secrets)
+proyectotesis-fama*.json
+backend/proyectotesis-fama*.json
+*service_account*.json
+backend/*service_account*.json
+*service-account*.json
+backend/*service-account*.json
+*credentials*.json
+backend/*credentials*.json
+gcp-key*.json
+backend/gcp-key*.json
+
 # Datasets and raw media
 data/
 data/**
