@@ -46,5 +46,5 @@ En la Iteración 14 se implementó y validó el **Desplazamiento Tonal Espectral
 
 ## 3. Artefactos Generados
 
-* Matriz de confusión ConvNeXt-Nano con Pitch Shift: [`docs/cm_convnext_pitchshift_dense_hop100_max.png`](./cm_convnext_pitchshift_dense_hop100_max.png)
-* Matriz de confusión Ensamble Calibrado con Pitch Shift: [`docs/cm_ensemble_calibrated_pitchshift_max.png`](./cm_ensemble_calibrated_pitchshift_max.png)
+* Matriz de confusión ConvNeXt-Nano con Pitch Shift: [`docs/images/cm_convnext_pitchshift_dense_hop100_max.png`](./images/cm_convnext_pitchshift_dense_hop100_max.png)
+* Matriz de confusión Ensamble Calibrado con Pitch Shift: [`docs/images/cm_ensemble_calibrated_pitchshift_max.png`](./images/cm_ensemble_calibrated_pitchshift_max.png)

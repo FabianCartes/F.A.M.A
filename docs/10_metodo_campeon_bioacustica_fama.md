@@ -139,5 +139,5 @@ graph TD
   --checkpoint efficientnet_gpu_pipeline_35e_best.pt \
   --use-tta \
   --tta-mode max \
-  --output docs/cm_gpu_pipeline_35e_tta_max.png
+  --output docs/images/cm_gpu_pipeline_35e_tta_max.png
 ```

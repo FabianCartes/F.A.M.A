@@ -106,6 +106,6 @@ A continuación se contrastan los resultados de la arquitectura EfficientNet-B0 
 ## 6. Matrices de Confusión
 
 Las matrices generadas en la evaluación se encuentran documentadas en:
-* [`docs/cm_gem_35e_no_tta.png`](docs/cm_gem_35e_no_tta.png)
-* [`docs/cm_gem_35e_tta_mean.png`](docs/cm_gem_35e_tta_mean.png)
-* [`docs/cm_gem_35e_tta_max.png`](docs/cm_gem_35e_tta_max.png)
+* [`docs/images/cm_gem_35e_no_tta.png`](images/cm_gem_35e_no_tta.png)
+* [`docs/images/cm_gem_35e_tta_mean.png`](images/cm_gem_35e_tta_mean.png)
+* [`docs/images/cm_gem_35e_tta_max.png`](images/cm_gem_35e_tta_max.png)

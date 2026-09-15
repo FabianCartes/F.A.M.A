@@ -97,11 +97,11 @@ El experimento reveló un fenómeno sistemático en la dinámica de agregación:
 
 ## 5. Matrices de Confusión Generadas
 
-Las matrices de confusión resultantes de la campaña de ablación se almacenaron en `docs/`:
-* `docs/cm_dense_hop_100_tta_max.png` (**Matriz del Nuevo Récord - 84.38% F1**)
-* `docs/cm_dense_hop_100_tta_mean.png`
-* `docs/cm_dense_hop_125_tta_max.png`
-* `docs/cm_dense_hop_125_tta_mean.png`
+Las matrices de confusión resultantes de la campaña de ablación se almacenaron en `docs/images/`:
+* `docs/images/cm_dense_hop_100_tta_max.png` (**Matriz del Nuevo Récord - 84.38% F1**)
+* `docs/images/cm_dense_hop_100_tta_mean.png`
+* `docs/images/cm_dense_hop_125_tta_max.png`
+* `docs/images/cm_dense_hop_125_tta_mean.png`
 
 ---
 

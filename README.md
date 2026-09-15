@@ -108,11 +108,10 @@ F.A.M.A/
 ├── frontend/                  # Aplicación Web Next.js (pendiente de inicialización)
 │   └── README.md              # Documentación de reserva del frontend
 ├── docs/                      # Documentación académica y técnica
-│   ├── VIDA_01_CINF_FINAL_PT_2026_1_CARTES.md  # Documento base de Anteproyecto
-│   ├── 01_primera_prueba_poc.md               # Informe técnico Iteración 1
-│   ├── 02_optimizacion_vad_data_augmentation.md # Informe técnico Iteración 2
-│   ├── confusion_matrix_poc.png
-│   └── confusion_matrix_augmented.png
+│   ├── images/                # Matrices de confusión y gráficos de desempeño
+│   ├── adr/                   # Registros de decisiones arquitectónicas (ADRs)
+│   ├── problemas_conocidos/   # Análisis de errores y límites bioacústicos
+│   └── 01_... a 16_...        # Informes técnicos de iteración y RDD
 ├── .gitignore                 # Reglas de exclusión (backend/data/, frontend/.next/, etc.)
 └── AGENTS.md                  # Directrices obligatorias de ingeniería y TDD
 ```

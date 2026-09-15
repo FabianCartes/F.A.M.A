@@ -115,9 +115,9 @@ Accuracy General                                 86.4%       154
 
 Los siguientes artefactos quedaron generados y versionados en el repositorio:
 1. **Checkpoint ConvNeXt-Nano:** [`checkpoints/convnext_nano_35e_best.pt`](../checkpoints/convnext_nano_35e_best.pt) (172 MB).
-2. **Matriz de Confusión ConvNeXt-Nano Individual:** [`docs/cm_convnext_nano_35e_dense_hop100_max.png`](./cm_convnext_nano_35e_dense_hop100_max.png).
-3. **Matriz de Confusión Ensamble Bi-Modelo Campeón:** [`docs/cm_ensemble_effnet_convnext_max.png`](./cm_ensemble_effnet_convnext_max.png).
-4. **Matriz de Confusión Ensamble Tri-Modelo:** [`docs/cm_ensemble_tri_model_max.png`](./cm_ensemble_tri_model_max.png).
+2. **Matriz de Confusión ConvNeXt-Nano Individual:** [`docs/images/cm_convnext_nano_35e_dense_hop100_max.png`](./images/cm_convnext_nano_35e_dense_hop100_max.png).
+3. **Matriz de Confusión Ensamble Bi-Modelo Campeón:** [`docs/images/cm_ensemble_effnet_convnext_max.png`](./images/cm_ensemble_effnet_convnext_max.png).
+4. **Matriz de Confusión Ensamble Tri-Modelo:** [`docs/images/cm_ensemble_tri_model_max.png`](./images/cm_ensemble_tri_model_max.png).
 5. **Suite de Pruebas Automatizadas:** 63 pruebas unitarias y de integración pasando al 100% (`.venv/bin/pytest backend/tests`).
 
 ---
@@ -130,11 +130,11 @@ Los siguientes artefactos quedaron generados y versionados en el repositorio:
     --checkpoints efficientnet_gpu_pipeline_35e_best.pt convnext_nano_35e_best.pt \
     --weights 0.6 0.4 \
     --use-tta --tta-mode max --hop-seconds 1.0 \
-    --output docs/cm_ensemble_effnet_convnext_max.png
+    --output docs/images/cm_ensemble_effnet_convnext_max.png
 
 # 2. Inferencia ConvNeXt-Nano Individual (87.25% F1)
 .venv/bin/python backend/poc/evaluate.py \
     --checkpoint convnext_nano_35e_best.pt \
     --use-tta --tta-mode max --hop-seconds 1.0 \
-    --output docs/cm_convnext_nano_35e_dense_hop100_max.png
+    --output docs/images/cm_convnext_nano_35e_dense_hop100_max.png
 ```

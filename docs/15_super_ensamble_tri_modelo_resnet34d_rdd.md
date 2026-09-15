@@ -35,9 +35,9 @@ El Super-Ensamble Tri-Modelo Calibrado alcanza un **nuevo r√©cord absoluto hist√
 
 ## 3. Artefactos y Evidencias Visuales
 
-* **Matriz ResNet34d (Individual):** [`docs/cm_resnet34d_35e_dense_hop100_max.png`](file:///home/kevin/Work/fama/docs/cm_resnet34d_35e_dense_hop100_max.png)
-* **Matriz Super-Ensamble Equilibrado [0.50, 0.25, 0.25]:** [`docs/cm_ensemble_tri_model_super_max.png`](file:///home/kevin/Work/fama/docs/cm_ensemble_tri_model_super_max.png)
-* **Matriz Super-Ensamble Calibrado [0.30, 0.55, 0.15]:** [`docs/cm_ensemble_tri_model_calibrated_max.png`](file:///home/kevin/Work/fama/docs/cm_ensemble_tri_model_calibrated_max.png)
+* **Matriz ResNet34d (Individual):** [`docs/images/cm_resnet34d_35e_dense_hop100_max.png`](images/cm_resnet34d_35e_dense_hop100_max.png)
+* **Matriz Super-Ensamble Equilibrado [0.50, 0.25, 0.25]:** [`docs/images/cm_ensemble_tri_model_super_max.png`](images/cm_ensemble_tri_model_super_max.png)
+* **Matriz Super-Ensamble Calibrado [0.30, 0.55, 0.15]:** [`docs/images/cm_ensemble_tri_model_calibrated_max.png`](images/cm_ensemble_tri_model_calibrated_max.png)
 * **Checkpoint Guardado:** `checkpoints/resnet34d_35e_best.pt` (255 MB)
 
 ---
