@@ -14,6 +14,7 @@ class Prediccion(Base):
     ruta_audio_prueba = Column(String(255), nullable=False)
     etiqueta_predicha = Column(String(100), nullable=False)
     confianza = Column(Float, nullable=False)
+    modelo_id = Column(String(100), nullable=True, default="chilean-birds-cnn")
     fecha_prediccion = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
