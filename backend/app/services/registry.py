@@ -2,6 +2,7 @@
 Registro centralizado y catálogo de modelos de predicción bioacústica.
 Permite registrar y resolver dinámicamente instancias de AudioPredictor en tiempo de ejecución.
 """
+from pathlib import Path
 from typing import Dict, List, Optional
 from app.schemas.model_info import ModelMetadata
 from app.services.predictors.base import AudioPredictor
@@ -70,6 +71,33 @@ class ModelRegistry:
         return model_id in self._predictors
 
 
+def discover_and_register_bundles(registry: ModelRegistry, checkpoints_root: Optional[Path] = None) -> int:
+    """
+    Escanea subdirectorios en checkpoints_root buscando manifest.json válidos
+    y los registra automáticamente como BundleAudioPredictor.
+    """
+    if checkpoints_root is None:
+        backend_root = Path(__file__).resolve().parent.parent.parent
+        checkpoints_root = backend_root / "checkpoints"
+
+    checkpoints_root = Path(checkpoints_root)
+    if not checkpoints_root.exists() or not checkpoints_root.is_dir():
+        return 0
+
+    from app.services.predictors.bundle_predictor import BundleAudioPredictor
+    count = 0
+    for child in checkpoints_root.iterdir():
+        if child.is_dir() and (child / "manifest.json").exists():
+            try:
+                predictor = BundleAudioPredictor(bundle_dir=child, lazy_load=True)
+                registry.register(predictor, is_default=predictor.metadata.is_default)
+                count += 1
+            except Exception as err:
+                print(f"[ModelRegistry] Advertencia: omitiendo bundle en {child}: {err}")
+
+    return count
+
+
 def build_default_registry() -> ModelRegistry:
     """Construye y puebla el catálogo con los modelos estándar de F.A.M.A."""
     reg = ModelRegistry()
@@ -81,7 +109,12 @@ def build_default_registry() -> ModelRegistry:
 
     reg.register(cnn, is_default=True)
     reg.register(ensemble, is_default=False)
+
+    # Autodescubrir bundles empaquetados en checkpoints/
+    discover_and_register_bundles(reg)
+
     return reg
+
 
 
 _global_model_registry: Optional[ModelRegistry] = None
