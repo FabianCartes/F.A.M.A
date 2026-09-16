@@ -120,24 +120,48 @@ class BundleAudioPredictor(AudioPredictor):
 
         if self.model is not None:
             try:
-                # Extraer espectrograma Mel básico
-                mel = librosa.feature.melspectrogram(
-                    y=waveform,
-                    sr=target_sr,
-                    n_fft=self.manifest.audio_specs.n_fft,
-                    hop_length=self.manifest.audio_specs.hop_length,
-                    n_mels=self.manifest.audio_specs.n_mels,
-                    fmin=self.manifest.audio_specs.f_min,
-                    fmax=self.manifest.audio_specs.f_max,
-                )
-                mel_db = librosa.power_to_db(mel, ref=np.max)
-                mel_tensor = torch.from_numpy(mel_db).unsqueeze(0).unsqueeze(0).float().to(self.device)
+                # Extraer ventanas para Test-Time Augmentation (TTA) denso si el audio es mayor a duration
+                try:
+                    y_full, _ = librosa.load(audio_file_path, sr=target_sr, mono=True)
+                except Exception:
+                    y_full = waveform
+
+                target_samples = int(target_sr * duration)
+                hop_samples = int(target_sr * 1.0)  # Salto de 1 segundo para cobertura densa
+
+                windows = []
+                if len(y_full) > target_samples:
+                    for start in range(0, len(y_full) - target_samples + 1, hop_samples):
+                        w = y_full[start : start + target_samples].astype(np.float32)
+                        w_rms = float(np.sqrt(np.mean(w ** 2)))
+                        if w_rms >= self.manifest.diagnostics.rms_silence_threshold:
+                            windows.append(w)
+                if not windows:
+                    windows = [waveform]
+
+                mel_list = []
+                for w in windows:
+                    mel = librosa.feature.melspectrogram(
+                        y=w,
+                        sr=target_sr,
+                        n_fft=self.manifest.audio_specs.n_fft,
+                        hop_length=self.manifest.audio_specs.hop_length,
+                        n_mels=self.manifest.audio_specs.n_mels,
+                        fmin=self.manifest.audio_specs.f_min,
+                        fmax=self.manifest.audio_specs.f_max,
+                    )
+                    mel_db = librosa.power_to_db(mel, ref=np.max)
+                    mel_list.append(mel_db)
+
+                mel_tensor = torch.from_numpy(np.array(mel_list)).unsqueeze(1).float().to(self.device)
 
                 with torch.no_grad():
                     outputs = self.model(mel_tensor)
                     temp = self.manifest.diagnostics.default_temperature
                     probs = torch.softmax(outputs / temp, dim=-1)
-                    conf, pred_idx = torch.max(probs, dim=-1)
+                    # Agregación TTA Max por clase entre todas las ventanas activas
+                    agg_probs, _ = torch.max(probs, dim=0)
+                    conf, pred_idx = torch.max(agg_probs, dim=-1)
 
                     pred_class = self.manifest.classes[pred_idx.item()]
                     conf_val = round(float(conf.item()), 4)
@@ -145,7 +169,12 @@ class BundleAudioPredictor(AudioPredictor):
                     return PredictionResult(
                         clase=pred_class,
                         confianza=conf_val,
-                        detalles={"energy_rms": rms, "spectral_flatness": flatness, "status": "bundle_classified"},
+                        detalles={
+                            "energy_rms": rms,
+                            "spectral_flatness": flatness,
+                            "status": "bundle_classified",
+                            "windows_count": len(windows),
+                        },
                     )
             except Exception as err:
                 print(f"[BundleAudioPredictor] Error durante inferencia: {err}")

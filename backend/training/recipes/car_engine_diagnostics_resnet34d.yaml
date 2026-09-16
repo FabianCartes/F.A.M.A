@@ -1,10 +1,10 @@
-# Receta declarativa para entrenamiento de clasificación acústica de vehículos
-# Dataset: Vehicle Sounds Dataset (Kaggle: janboubiabderrahim/vehicle-sounds-dataset)
+# Receta declarativa para entrenamiento de clasificación y diagnóstico acústico de motores
+# Dataset: Car Diagnostics Dataset (13 clases mecánicas: arranque, ralentí, aceite, correas, dirección, encendido)
 
-experiment_id: "exp-vehicles-resnet34d-v1"
-model_id: "vehicle-sounds-resnet34d"
-model_name: "Vehicle Sounds ResNet34d"
-description: "Clasificador acústico de vehículos (8 clases) entrenado con GeM Pooling y Focal Loss"
+experiment_id: "exp-car-engine-diagnostics-resnet34d-v1"
+model_id: "car-engine-diagnostics-resnet34d"
+model_name: "Car Engine Diagnostics ResNet34d"
+description: "Clasificador acústico de fallas y condiciones mecánicas de motor (13 clases) entrenado con GeM Pooling, Focal Loss y Dense TTA"
 epochs: 35
 batch_size: 32
 seed: 42
@@ -19,7 +19,7 @@ architecture:
 
 audio:
   target_sr: 32000
-  duration_seconds: 3.0
+  duration_seconds: 2.0
   n_mels: 128
   n_fft: 1024
   hop_length: 512
@@ -46,11 +46,12 @@ optimizer:
   warmup_epochs: 2
 
 dataset:
-  metadata_csv: "data/vehicles/train_metadata.csv"
-  raw_dir: "data/vehicles"
+  metadata_csv: "data/engine_diagnostics/train_metadata.csv"
+  raw_dir: "data/engine_diagnostics"
   cache_windows: true
   num_workers: 4
   pin_memory: true
+  max_samples_per_class: 300
 
 split:
   train_size: 0.70

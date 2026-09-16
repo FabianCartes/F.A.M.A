@@ -87,3 +87,28 @@ def test_dataset_multilabel_tensor_vector(dummy_audio_df):
 
     _, l1 = ds[1]  # labels: ['sp_a', 'sp_b'] -> [1.0, 1.0]
     assert torch.equal(l1, torch.tensor([1.0, 1.0]))
+
+
+def test_load_and_resample_selects_highest_energy_window(tmp_path):
+    from training.pipelines.dataset import load_and_resample
+
+    sr = 16000
+    duration = 3.0
+    target_samples = int(sr * duration)
+
+    # 6 segundos totales: primeros 3s silencio, siguientes 3s señal fuerte
+    silence = np.zeros(target_samples, dtype=np.float32)
+    loud_signal = (np.sin(2 * np.pi * 440 * np.linspace(0, 3, target_samples))).astype(np.float32) * 0.8
+    full_audio = np.concatenate([silence, loud_signal])
+
+    wav_file = tmp_path / "energy_test.wav"
+    sf.write(wav_file, full_audio, sr)
+
+    # Cargar pidiendo 3.0 segundos
+    result = load_and_resample(wav_file, target_sr=sr, duration_seconds=duration)
+    assert len(result) == target_samples
+
+    rms = np.sqrt(np.mean(result ** 2))
+    # El RMS de la señal fuerte de seno con amplitud 0.8 es ~0.56. Si seleccionó silencio, RMS es 0.0.
+    assert rms > 0.3
+

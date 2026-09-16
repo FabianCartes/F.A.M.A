@@ -99,3 +99,29 @@ def test_discover_bundles_handles_corrupted_manifest_gracefully():
         # No debe lanzar excepción no controlada
         discover_and_register_bundles(registry=registry, checkpoints_root=root)
         assert len(registry.list_models()) == 0
+
+
+def test_engine_diagnostics_bundle_predictor_predicts_audio(tmp_path):
+    import soundfile as sf
+    import numpy as np
+
+    bundle_dir = Path("backend/checkpoints/car-engine-diagnostics-resnet34d")
+    if not bundle_dir.exists():
+        pytest.skip("Car engine diagnostics bundle not found")
+
+    predictor = BundleAudioPredictor(bundle_dir=bundle_dir, lazy_load=False)
+    assert predictor.model_id == "car-engine-diagnostics-resnet34d"
+
+    sr = 32000
+    t = np.linspace(0, 5.0, int(sr * 5.0), endpoint=False)
+    waveform = (0.2 * np.sin(2 * np.pi * 150 * t)).astype(np.float32)
+    wav_path = tmp_path / "engine_sample.wav"
+    sf.write(wav_path, waveform, sr)
+
+    result = predictor.predict(wav_path)
+    assert result.clase in predictor.metadata.classes
+    assert result.confianza > 0.0
+    assert result.detalles["status"] == "bundle_classified"
+    assert result.detalles.get("windows_count", 1) >= 1
+
+

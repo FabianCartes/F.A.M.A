@@ -48,6 +48,19 @@ class GenericModelTrainer:
         num_classes = len(classes)
         label_to_idx = {c: i for i, c in enumerate(classes)}
 
+        # Mitigación opcional de desbalance severo mediante sub-muestreo controlado
+        if self.config.dataset.max_samples_per_class is not None:
+            max_c = self.config.dataset.max_samples_per_class
+            balanced_dfs = []
+            for _, group in train_df.groupby("clase"):
+                if len(group) > max_c:
+                    balanced_dfs.append(group.sample(n=max_c, random_state=self.config.seed))
+                else:
+                    balanced_dfs.append(group)
+            train_df = pd.concat(balanced_dfs, ignore_index=True)
+            if verbose:
+                print(f"[Trainer] Dataset balanceado a max {max_c} muestras/clase (total train: {len(train_df)})")
+
         # 1. Instanciar Datasets y DataLoaders
         train_dataset = GenericAudioDataset(
             df=train_df,
@@ -121,11 +134,17 @@ class GenericModelTrainer:
             use_gpu_frontend=False,  # Manejado externamente en el loop
         ).to(self.device)
 
-        # 3. Función de Coste y Optimizador
+        # 3. Función de Coste y Optimizador con Ponderación de Clases
+        class_counts = train_df["clase"].value_counts()
+        total_samples = len(train_df)
+        weights = [total_samples / (num_classes * max(1, class_counts.get(c, 1))) for c in classes]
+        alpha_tensor = torch.tensor(weights, dtype=torch.float32, device=self.device)
+        alpha_tensor = alpha_tensor / alpha_tensor.mean()
+
         if self.config.loss.name.value == "focal":
-            criterion = FocalLoss(gamma=self.config.loss.gamma)
+            criterion = FocalLoss(gamma=self.config.loss.gamma, alpha=alpha_tensor)
         else:
-            criterion = nn.CrossEntropyLoss()
+            criterion = nn.CrossEntropyLoss(weight=alpha_tensor)
 
         optimizer = torch.optim.AdamW(
             model.parameters(),

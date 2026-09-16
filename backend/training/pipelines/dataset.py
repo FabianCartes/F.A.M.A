@@ -14,21 +14,54 @@ import librosa
 from training.schemas.config import AudioConfig, AugmentationConfig
 
 
-def load_and_resample(file_path: Union[str, Path], target_sr: int, duration_seconds: float) -> np.ndarray:
-    """Carga y ajusta el largo del audio a la tasa de muestreo y duración solicitada."""
+def load_and_resample(
+    file_path: Union[str, Path],
+    target_sr: int,
+    duration_seconds: float,
+    energy_vad: bool = True,
+    hop_seconds: Optional[float] = None,
+) -> np.ndarray:
+    """Carga y ajusta el largo del audio a la tasa de muestreo y duración solicitada con selección por energía RMS."""
     target_samples = int(target_sr * duration_seconds)
     try:
         y, sr = librosa.load(file_path, sr=target_sr, mono=True)
     except Exception:
         return np.zeros(target_samples, dtype=np.float32)
 
-    if len(y) < target_samples:
-        padding = target_samples - len(y)
+    total_samples = len(y)
+    if total_samples < target_samples:
+        padding = target_samples - total_samples
         y = np.pad(y, (0, padding), mode="constant")
-    elif len(y) > target_samples:
-        y = y[:target_samples]
+        return y.astype(np.float32)
+    elif total_samples == target_samples:
+        return y.astype(np.float32)
 
-    return y.astype(np.float32)
+    if not energy_vad:
+        return y[:target_samples].astype(np.float32)
+
+    # Ventaneo por densidad de energía RMS para seleccionar la porción acústicamente activa
+    hop = int(target_sr * (hop_seconds if hop_seconds else min(1.0, duration_seconds / 2.0)))
+    if hop <= 0:
+        hop = target_samples // 2
+
+    best_start = 0
+    best_rms = -1.0
+
+    for start in range(0, total_samples - target_samples + 1, hop):
+        window = y[start : start + target_samples]
+        rms = float(np.sqrt(np.mean(window ** 2)))
+        if rms > best_rms:
+            best_rms = rms
+            best_start = start
+
+    tail_start = total_samples - target_samples
+    if tail_start > best_start:
+        tail_window = y[tail_start:]
+        tail_rms = float(np.sqrt(np.mean(tail_window ** 2)))
+        if tail_rms > best_rms:
+            best_start = tail_start
+
+    return y[best_start : best_start + target_samples].astype(np.float32)
 
 
 class GenericAudioDataset(Dataset):

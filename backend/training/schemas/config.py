@@ -80,6 +80,8 @@ class DatasetConfig(BaseModel):
     cache_windows: bool = True
     num_workers: int = Field(4, ge=0)
     pin_memory: bool = True
+    max_samples_per_class: Optional[int] = Field(None, ge=10, description="Límite superior de muestras por clase para mitigar desbalance")
+
 
 
 class SplitConfig(BaseModel):
