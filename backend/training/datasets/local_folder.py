@@ -52,6 +52,11 @@ class LocalFolderPAMIngestor(DatasetIngestor):
             if file_path.is_file() and file_path.suffix.lower() in SUPPORTED_EXTENSIONS:
                 clase = file_path.parent.name
                 duration, sr = self._get_audio_info(file_path)
+                # Identificar grupo de grabación fuente a partir del nombre (removiendo sufijos numéricos de segmentos)
+                import re
+                source_group = re.sub(r'_\d+$', '', file_path.stem)
+                recordist_id = f"{self.default_recordist_prefix}_{clase}_{source_group}"
+
                 rec = AudioRecordingMetadata(
                     nombre_archivo=file_path.name,
                     file_path=str(file_path.resolve()),
@@ -60,7 +65,7 @@ class LocalFolderPAMIngestor(DatasetIngestor):
                     frecuencia_muestreo=sr,
                     duracion_segundos=duration,
                     tamano_bytes=file_path.stat().st_size,
-                    recordist=f"{self.default_recordist_prefix}_{clase}",
+                    recordist=recordist_id,
                     source_id=file_path.stem,
                 )
                 records.append(rec.model_dump())

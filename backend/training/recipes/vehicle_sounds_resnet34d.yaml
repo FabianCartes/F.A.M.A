@@ -5,8 +5,8 @@ experiment_id: "exp-vehicles-resnet34d-v1"
 model_id: "vehicle-sounds-resnet34d"
 model_name: "Vehicle Sounds ResNet34d"
 description: "Clasificador acústico de vehículos (8 clases) entrenado con GeM Pooling y Focal Loss"
-epochs: 10
-batch_size: 16
+epochs: 35
+batch_size: 32
 seed: 42
 device: "cuda"
 
