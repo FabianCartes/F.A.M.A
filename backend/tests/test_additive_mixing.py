@@ -76,3 +76,42 @@ def test_additive_compound_sampler_builds_synthetic_waveform(tmp_path):
     synth_wave = sampler.sample_synthetic_compound("no oil_serpentine belt")
     assert synth_wave is not None
     assert len(synth_wave) == 32000
+
+
+def test_build_balanced_class_sampler():
+    from training.pipelines.additive_mixing import build_balanced_class_sampler
+    import torch
+
+    df = pd.DataFrame({
+        "file_path": ["a.wav"] * 10 + ["b.wav"] * 2,
+        "clase": ["frequent"] * 10 + ["rare"] * 2,
+    })
+
+    sampler = build_balanced_class_sampler(df, class_col="clase")
+    assert isinstance(sampler, torch.utils.data.WeightedRandomSampler)
+    assert len(sampler) == len(df)
+    # Los pesos de la clase rara deben ser 5 veces mayores que los de la frecuente
+    weights = list(sampler.weights)
+    assert weights[10].item() == pytest.approx(5.0 * weights[0].item(), rel=1e-3)
+
+
+def test_mix_additive_waveforms_balances_rms_power():
+    # Simulamos dos señales con una disparidad energética severa de 50x (ej. low_oil vs power_steering)
+    n = 16000
+    t = np.linspace(0, 1.0, n, dtype=np.float32)
+    w_loud = 0.5 * np.sin(2 * np.pi * 100 * t)   # RMS ~ 0.353
+    w_quiet = 0.01 * np.sin(2 * np.pi * 800 * t) # RMS ~ 0.007 (50 veces menor)
+
+    mixed = mix_additive_waveforms([w_loud, w_quiet], gains=[1.0, 1.0], balance_rms=True)
+
+    assert len(mixed) == n
+    # En el espectro, la señal débil (800 Hz) no debe haber sido ahogada por la señal fuerte (100 Hz)
+    fft_mag = np.abs(np.fft.rfft(mixed))
+    freqs = np.fft.rfftfreq(n, d=1.0/n)
+    idx_100 = int(np.argmin(np.abs(freqs - 100)))
+    idx_800 = int(np.argmin(np.abs(freqs - 800)))
+
+    ratio = fft_mag[idx_100] / max(1e-6, fft_mag[idx_800])
+    # Sin balanceo, el ratio sería ~50. Con balanceo RMS, el ratio debe estar cerca de 1.0 (< 3.0)
+    assert ratio < 3.0
+

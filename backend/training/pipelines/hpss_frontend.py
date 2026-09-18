@@ -119,3 +119,137 @@ class HPSSAudioFrontEnd(nn.Module):
         # 6. Concatenación en 3 canales: [B, 3, n_mels, time_frames]
         out_3ch = torch.stack([log_mel_raw, log_mel_harm, log_mel_perc], dim=1)
         return out_3ch
+
+
+class MultiResolutionHPSSFrontEnd(nn.Module):
+    """
+    Frontend acústico multi-resolución temporal-frecuencial (Dual-STFT) que supera
+    el límite de incertidumbre de Gabor-Heisenberg:
+      - Canal 0: Espectrograma Mel de potencia total de referencia (n_fft_harm=2048, balanceado)
+      - Canal 1: Componente armónica extraída con alta resolución espectral (n_fft_harm=2048, ~64ms)
+                 para resolver armónicos densos y zumbidos tonales finos (correas, bomba hidráulica).
+      - Canal 2: Componente percusiva extraída con alta resolución temporal (n_fft_perc=512, ~16ms)
+                 para aislar transitorios mecánicos ultra-rápidos e impactos (falta de aceite, bielas).
+    Ambos canales utilizan el mismo hop_length para garantizar sincronización temporal perfecta en el eje T.
+    """
+
+    def __init__(
+        self,
+        sample_rate: int = 32000,
+        n_fft_harm: int = 2048,
+        n_fft_perc: int = 1024,
+        hop_length: int = 256,
+        n_mels: int = 128,
+        f_min: float = 20.0,
+        f_max: float = 8000.0,
+        kernel_size: int = 15,
+        power: float = 2.0,
+        eps: float = 1e-6,
+    ):
+        super().__init__()
+        self.sample_rate = sample_rate
+        self.n_fft_harm = n_fft_harm
+        self.n_fft_perc = n_fft_perc
+        self.hop_length = hop_length
+        self.n_mels = n_mels
+        self.f_min = f_min
+        self.f_max = f_max
+        self.kernel_size = kernel_size if kernel_size % 2 == 1 else kernel_size + 1
+        self.power = power
+        self.eps = eps
+
+        # 1. Extractor de Magnitud STFT Armónico (Alta Resolución Frecuencial ~64ms)
+        self.spectrogram_harm = T.Spectrogram(
+            n_fft=n_fft_harm,
+            win_length=n_fft_harm,
+            hop_length=hop_length,
+            power=1.0,
+            center=True,
+            pad_mode="reflect",
+        )
+
+        # 2. Extractor de Magnitud STFT Percusivo (Alta Resolución Temporal ~16ms)
+        self.spectrogram_perc = T.Spectrogram(
+            n_fft=n_fft_perc,
+            win_length=n_fft_perc,
+            hop_length=hop_length,
+            power=1.0,
+            center=True,
+            pad_mode="reflect",
+        )
+
+        # 3. Bancos de filtros Mel emparejados a cada resolución STFT
+        self.mel_scale_harm = T.MelScale(
+            n_mels=n_mels,
+            sample_rate=sample_rate,
+            f_min=f_min,
+            f_max=f_max,
+            n_stft=n_fft_harm // 2 + 1,
+            norm="slaney",
+            mel_scale="slaney",
+        )
+
+        self.mel_scale_perc = T.MelScale(
+            n_mels=n_mels,
+            sample_rate=sample_rate,
+            f_min=f_min,
+            f_max=f_max,
+            n_stft=n_fft_perc // 2 + 1,
+            norm="slaney",
+            mel_scale="slaney",
+        )
+
+    def _median_filter_time(self, x: torch.Tensor, k: int) -> torch.Tensor:
+        """Filtro de mediana en tiempo para capturar armónicos continuos horizontales."""
+        pad = k // 2
+        x_pad = F.pad(x, (pad, pad), mode="reflect")
+        return x_pad.unfold(dimension=2, size=k, step=1).median(dim=-1).values
+
+    def _median_filter_freq(self, x: torch.Tensor, k: int) -> torch.Tensor:
+        """Filtro de mediana en frecuencia para capturar transitorios de impacto verticales."""
+        pad = k // 2
+        x_pad = F.pad(x.unsqueeze(1), (0, 0, pad, pad), mode="reflect").squeeze(1)
+        return x_pad.unfold(dimension=1, size=k, step=1).median(dim=-1).values
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Entrada: Forma de onda cruda [B, T]
+        Salida: Tensor de 3 canales [B, 3, n_mels, time_frames]
+        """
+        if x.ndim == 1:
+            x = x.unsqueeze(0)
+        elif x.ndim == 3 and x.shape[1] == 1:
+            x = x.squeeze(1)
+
+        # 1. Extracción de Magnitud Espectral en ambas resoluciones
+        mag_harm = self.spectrogram_harm(x)  # [B, F_harm, T]
+        mag_perc = self.spectrogram_perc(x)  # [B, F_perc, T]
+
+        # 2. Separación armónica en ventana fina (64ms)
+        h_filter_harm = self._median_filter_time(mag_harm, self.kernel_size)
+        p_filter_harm = self._median_filter_freq(mag_harm, self.kernel_size)
+        h_pow = h_filter_harm.pow(self.power)
+        p_pow_harm = p_filter_harm.pow(self.power)
+        mask_h = h_pow / (h_pow + p_pow_harm + self.eps)
+        spec_harm = mag_harm * mask_h
+
+        # 3. Separación percusiva en ventana rápida (16ms)
+        h_filter_perc = self._median_filter_time(mag_perc, self.kernel_size)
+        p_filter_perc = self._median_filter_freq(mag_perc, self.kernel_size)
+        h_pow_perc = h_filter_perc.pow(self.power)
+        p_pow = p_filter_perc.pow(self.power)
+        mask_p = p_pow / (h_pow_perc + p_pow + self.eps)
+        spec_perc = mag_perc * mask_p
+
+        # 4. Proyección a escala Mel
+        mel_raw = self.mel_scale_harm(mag_harm)
+        mel_harm = self.mel_scale_harm(spec_harm)
+        mel_perc = self.mel_scale_perc(spec_perc)
+
+        # 5. Compresión logarítmica estable
+        log_mel_raw = torch.log(torch.clamp(mel_raw, min=self.eps) + 1.0)
+        log_mel_harm = torch.log(torch.clamp(mel_harm, min=self.eps) + 1.0)
+        log_mel_perc = torch.log(torch.clamp(mel_perc, min=self.eps) + 1.0)
+
+        # 6. Salida de 3 canales [B, 3, n_mels, T]
+        return torch.stack([log_mel_raw, log_mel_harm, log_mel_perc], dim=1)

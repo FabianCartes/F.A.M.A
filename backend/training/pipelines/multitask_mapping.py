@@ -78,10 +78,12 @@ def decode_joint_predictions(
     class_logits: torch.Tensor,
     attr_logits: torch.Tensor,
     alpha_prior: float = 0.3,
-) -> np.ndarray:
+    return_probs: bool = False,
+):
     """
     Decodifica predicciones conjuntas usando compatibilidad de atributos para reforzar clases compuestas.
     P_joint(c) = (1 - alpha) * Softmax(class_logits) + alpha * Compatibility(c, Sigmoid(attr_logits))
+    Si return_probs=True, retorna tupla (preds, fused_probs).
     """
     with torch.no_grad():
         class_probs = torch.softmax(class_logits, dim=-1).cpu().numpy()  # [B, 13]
@@ -109,4 +111,12 @@ def decode_joint_predictions(
         comp_probs = comp_scores / row_sums
 
         fused_probs = (1.0 - alpha_prior) * class_probs + alpha_prior * comp_probs
-        return np.argmax(fused_probs, axis=-1)
+        # Normalizar fused_probs para garantizar suma = 1.0
+        f_sums = fused_probs.sum(axis=1, keepdims=True)
+        f_sums[f_sums == 0] = 1.0
+        fused_probs = fused_probs / f_sums
+
+        preds = np.argmax(fused_probs, axis=-1)
+        if return_probs:
+            return preds, fused_probs
+        return preds

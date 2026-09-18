@@ -89,3 +89,8 @@ def test_decode_joint_predictions_favors_constrained_consistency():
     preds = decode_joint_predictions(class_logits, attr_logits, alpha_prior=0.3)
     assert len(preds) == bsz
     assert 0 <= preds[0] < 13
+
+    preds_with_p, probs = decode_joint_predictions(class_logits, attr_logits, alpha_prior=0.3, return_probs=True)
+    assert np.array_equal(preds, preds_with_p)
+    assert probs.shape == (bsz, 13)
+    assert np.allclose(probs.sum(axis=-1), 1.0, atol=1e-5)

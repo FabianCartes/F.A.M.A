@@ -28,9 +28,12 @@ def mix_additive_waveforms(
     waveforms: List[np.ndarray],
     gains: Optional[List[float]] = None,
     max_shift_samples: int = 0,
+    balance_rms: bool = True,
+    target_rms: float = 0.10,
 ) -> np.ndarray:
     """
     Suma de forma aditiva múltiples señales acústicas unitarias, aplicando ganancias aleatorias,
+    balanceo de potencia acústica RMS para evitar enmascaramiento de fallas sutiles,
     desplazamientos temporales independientes y prevención de recorte digital (clipping).
     """
     if not waveforms:
@@ -49,6 +52,11 @@ def mix_additive_waveforms(
                 w_curr = np.pad(w_curr, (0, target_len - len(w_curr)))
             else:
                 w_curr = w_curr[:target_len]
+
+        if balance_rms:
+            rms = float(np.sqrt(np.mean(w_curr ** 2)))
+            if rms > 1e-5:
+                w_curr = (w_curr / rms) * target_rms
 
         if max_shift_samples > 0:
             shift = random.randint(-max_shift_samples, max_shift_samples)
@@ -115,3 +123,26 @@ class AdditiveCompoundSampler:
         # Desplazamiento máximo de 0.1s para evitar sincronización artificial
         max_shift = int(self.target_sr * 0.10)
         return mix_additive_waveforms(unit_waveforms, max_shift_samples=max_shift)
+
+
+def build_balanced_class_sampler(
+    df: pd.DataFrame,
+    class_col: str = "clase",
+):
+    """
+    Construye un WeightedRandomSampler que balancea de manera uniforme la probabilidad
+    de extracción de cada clase por lote. Al combinarse con AdditiveCompoundSampler,
+    cada extracción de una clase compuesta genera una nueva mezcla física única.
+    """
+    import torch
+    from torch.utils.data import WeightedRandomSampler
+
+    class_counts = df[class_col].value_counts()
+    sample_weights = df[class_col].map(lambda c: 1.0 / float(class_counts[c])).values
+    weights_tensor = torch.tensor(sample_weights, dtype=torch.float)
+    return WeightedRandomSampler(
+        weights=weights_tensor,
+        num_samples=len(df),
+        replacement=True,
+    )
+
