@@ -13,7 +13,7 @@
 - `backend/tests/test_hpss_frontend.py`
 - `backend/tests/test_multitask_model.py`
 - `backend/checkpoints/car-engine-diagnostics-resnet34d-multitask-hpss/weights.pt`
-- `docs/fase1_multitask_hpss_receipt.json`
+- `docs/receipts/fase1_multitask_hpss_receipt.json`
 
 ---
 

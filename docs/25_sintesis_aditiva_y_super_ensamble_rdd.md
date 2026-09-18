@@ -10,7 +10,7 @@
 - `backend/training/pipelines/dataset.py`
 - `backend/tests/test_generic_audio_dataset.py`
 - `backend/checkpoints/car-engine-diagnostics-resnet34d-multitask-hpss-additive/weights.pt`
-- `docs/fase4_additive_mixing_receipt.json`
+- `docs/receipts/fase4_additive_mixing_receipt.json`
 
 ---
 

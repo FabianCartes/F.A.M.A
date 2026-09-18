@@ -8,8 +8,8 @@
 - `backend/tests/test_panns_model.py` (pruebas unitarias TDD añadidas)
 - `backend/train_panns_hpss_additive.py` (entrenamiento GPU con HPSS 3ch, multi-task y síntesis aditiva)
 - `backend/checkpoints/car-engine-diagnostics-panns-cnn14-hpss-additive/weights.pt`
-- `docs/fase6_panns_additive_receipt.json`
-- `docs/fase6_all_additive_super_ensemble_receipt.json`
+- `docs/receipts/fase6_panns_additive_receipt.json`
+- `docs/receipts/fase6_all_additive_super_ensemble_receipt.json`
 
 ---
 

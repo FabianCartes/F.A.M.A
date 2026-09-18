@@ -234,7 +234,7 @@ def main():
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     torch.save(best_state_dict, ckpt_dir / "weights.pt")
 
-    receipt_path = Path("docs/fase8_balanced_additive_receipt.json")
+    receipt_path = Path(\"docs/receipts/fase8_balanced_additive_receipt.json\")
     with open(receipt_path, "w", encoding="utf-8") as f:
         json.dump({
             "model_id": "car-engine-diagnostics-resnet34d-multitask-hpss-balanced-additive",

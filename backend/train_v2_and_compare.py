@@ -144,7 +144,7 @@ def main():
     print("=" * 60)
 
     # Guardar reporte detallado
-    report_file = Path("docs/experiment_v2_receipt.json")
+    report_file = Path(\"docs/receipts/experiment_v2_receipt.json\")
     with open(report_file, "w", encoding="utf-8") as f:
         json.dump({
             "resnet34d_v2": {"accuracy": acc_r2, "f1_macro": f1_r2},

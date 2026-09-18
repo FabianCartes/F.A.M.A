@@ -8,8 +8,8 @@
 - `backend/train_panns_transfer.py`
 - `backend/tests/test_panns_model.py`
 - `backend/checkpoints/car-engine-diagnostics-panns-cnn14-hpss/weights.pt`
-- `docs/fase2_panns_receipt.json`
-- `docs/fase2_3_tri_ensemble_receipt.json`
+- `docs/receipts/fase2_panns_receipt.json`
+- `docs/receipts/fase2_3_tri_ensemble_receipt.json`
 
 ---
 

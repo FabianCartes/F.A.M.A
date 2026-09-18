@@ -8,8 +8,8 @@
 - `backend/tests/test_multitask_model.py` (pruebas unitarias de instanciación y gradiente)
 - `backend/train_efficientnet_hpss_additive.py` (entrenamiento GPU con HPSS 3ch y síntesis aditiva)
 - `backend/checkpoints/car-engine-diagnostics-efficientnet-b0-multitask-hpss-additive/weights.pt`
-- `docs/fase5_efficientnet_additive_receipt.json`
-- `docs/fase5_super_ensemble_receipt.json`
+- `docs/receipts/fase5_efficientnet_additive_receipt.json`
+- `docs/receipts/fase5_super_ensemble_receipt.json`
 
 ---
 

@@ -12,7 +12,7 @@
 - `backend/training/recipes/car_engine_diagnostics_efficientnet_b0_v2.yaml`
 - `backend/train_and_ensemble_engines.py`
 - `backend/train_v2_and_compare.py`
-- `docs/experiment_v2_receipt.json`
+- `docs/receipts/experiment_v2_receipt.json`
 
 ---
 

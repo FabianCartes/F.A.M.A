@@ -12,8 +12,8 @@
 - `backend/checkpoints/car-engine-diagnostics-resnet34d-multitask-hpss-rms-balanced/weights.pt`
 - `backend/checkpoints/car-engine-diagnostics-efficientnet-b0-multitask-hpss-additive/weights.pt`
 - `backend/checkpoints/car-engine-diagnostics-panns-cnn14-hpss-additive/weights.pt`
-- `docs/fase10_rms_balanced_additive_receipt.json`
-- `docs/fase11_super_ensemble_all_rms_balanced_receipt.json`
+- `docs/receipts/fase10_rms_balanced_additive_receipt.json`
+- `docs/receipts/fase11_super_ensemble_all_rms_balanced_receipt.json`
 
 ---
 

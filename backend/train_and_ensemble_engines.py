@@ -196,7 +196,7 @@ def main():
     print("=" * 60)
 
     # Guardar Recibo RDD Fase 0
-    receipt_path = Path("docs/fase0_higiene_receipt.json")
+    receipt_path = Path(\"docs/receipts/fase0_higiene_receipt.json\")
     with open(receipt_path, "w", encoding="utf-8") as f:
         json.dump({
             "test_sha256": FROZEN_ENGINE_TEST_SHA256,

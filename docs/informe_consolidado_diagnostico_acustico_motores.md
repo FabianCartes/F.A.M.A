@@ -52,7 +52,7 @@ El sistema con mayor exactitud, robustez física y capacidad de discriminación 
 * **Exactitud Global (Test Accuracy):** **81.16%** *(+11.59 pp sobre la línea base)*
 * **Macro F1:** **80.33% – 81.21%** *(+12.21 pp sobre la línea base)*
 * **Error de Calibración Esperado (ECE):** **0.0547 – 0.0669** *(Reducción del error de calibración en más del 50%)*
-* **Recibo RDD:** [`docs/fase11_super_ensemble_all_rms_balanced_receipt.json`](file:///home/kevin/Work/fama/docs/fase11_super_ensemble_all_rms_balanced_receipt.json)
+* **Recibo RDD:** [`docs/receipts/fase11_super_ensemble_all_rms_balanced_receipt.json`](file:///home/kevin/Work/fama/docs/receipts/fase11_super_ensemble_all_rms_balanced_receipt.json)
 
 ### Desempeño por Clase en Test Ciego del Modelo Campeón
 
@@ -81,13 +81,13 @@ Todo el desarrollo se rigió bajo **Cero Fuga en Test Set** (*Zero Test Leakage*
 
 | Hito | Arquitectura / Innovación | Accuracy | Macro F1 | Delta F1 vs Base | ECE | Recibo Técnico |
 | :--- | :--- | :---: | :---: | :---: | :---: | :--- |
-| **Fase 0** | Línea Base (ResNet34d + EfficientNet-B0 monovista) | 69.57% | 69.00% | Ref | 0.1246 | [`fase0_higiene_receipt.json`](file:///home/kevin/Work/fama/docs/fase0_higiene_receipt.json) |
+| **Fase 0** | Línea Base (ResNet34d + EfficientNet-B0 monovista) | 69.57% | 69.00% | Ref | 0.1246 | [`fase0_higiene_receipt.json`](file:///home/kevin/Work/fama/docs/receipts/fase0_higiene_receipt.json) |
 | **Fase 1** | Frontend HPSS 3ch + Multi-Task Head (ResNet34d) | 73.91% | 72.80% | +3.80 pp | 0.0892 | ADR Hito 24 |
 | **Fases 2-3**| Tri-Ensamble Calibrado (+ PANNs CNN14 AudioSet) | 76.33% | 75.31% | +6.31 pp | 0.0715 | [`25_...rdd.md`](file:///home/kevin/Work/fama/docs/25_sintesis_aditiva_y_super_ensamble_rdd.md) |
-| **Fase 4** | Síntesis Aditiva Física (`AdditiveCompoundSampler`) | 78.26% | 77.97% | +8.97 pp | 0.0688 | [`fase4_additive_mixing_receipt.json`](file:///home/kevin/Work/fama/docs/fase4_additive_mixing_receipt.json) |
-| **Fase 5** | Super-Ensamble Dual-Aditivo (ResNet + EffNet) | 80.19% | 80.63% | +11.63 pp | 0.0685 | [`fase5_super_ensemble_receipt.json`](file:///home/kevin/Work/fama/docs/fase5_super_ensemble_receipt.json) |
-| **Fase 6** | Homogeneización All-Additive (PANNs MultiTask) | 80.68% | 81.21% | +12.21 pp | 0.0547 | [`fase6_all_additive_super_ensemble_receipt.json`](file:///home/kevin/Work/fama/docs/fase6_all_additive_super_ensemble_receipt.json) |
-| **Fase 11**| **All-RMS-Balanced Super Ensemble (Campeón)** | **81.16%** | **80.33%** | **+11.33 pp** | **0.0669** | [`fase11_super_ensemble_all_rms_balanced_receipt.json`](file:///home/kevin/Work/fama/docs/fase11_super_ensemble_all_rms_balanced_receipt.json) |
+| **Fase 4** | Síntesis Aditiva Física (`AdditiveCompoundSampler`) | 78.26% | 77.97% | +8.97 pp | 0.0688 | [`fase4_additive_mixing_receipt.json`](file:///home/kevin/Work/fama/docs/receipts/fase4_additive_mixing_receipt.json) |
+| **Fase 5** | Super-Ensamble Dual-Aditivo (ResNet + EffNet) | 80.19% | 80.63% | +11.63 pp | 0.0685 | [`fase5_super_ensemble_receipt.json`](file:///home/kevin/Work/fama/docs/receipts/fase5_super_ensemble_receipt.json) |
+| **Fase 6** | Homogeneización All-Additive (PANNs MultiTask) | 80.68% | 81.21% | +12.21 pp | 0.0547 | [`fase6_all_additive_super_ensemble_receipt.json`](file:///home/kevin/Work/fama/docs/receipts/fase6_all_additive_super_ensemble_receipt.json) |
+| **Fase 11**| **All-RMS-Balanced Super Ensemble (Campeón)** | **81.16%** | **80.33%** | **+11.33 pp** | **0.0669** | [`fase11_super_ensemble_all_rms_balanced_receipt.json`](file:///home/kevin/Work/fama/docs/receipts/fase11_super_ensemble_all_rms_balanced_receipt.json) |
 
 ---
 
