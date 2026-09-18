@@ -40,6 +40,7 @@ class PannsCNN14(nn.Module):
         self,
         in_chans: int = 3,
         num_classes: int = 13,
+        num_attributes: Optional[int] = None,
         drop_rate: float = 0.3,
         pool_type: str = "gem",
         freeze_stages: int = 0,
@@ -47,6 +48,7 @@ class PannsCNN14(nn.Module):
         super().__init__()
         self.in_chans = in_chans
         self.num_classes = num_classes
+        self.num_attributes = num_attributes
         self.pool_type = pool_type.lower() if pool_type else "avg"
 
         self.conv_block1 = ConvBlock(in_chans, 64)
@@ -68,6 +70,8 @@ class PannsCNN14(nn.Module):
         self.fc1 = nn.Linear(2048, 2048)
         self.act = nn.ReLU(inplace=True)
         self.fc_class = nn.Linear(2048, num_classes)
+        if self.num_attributes is not None:
+            self.fc_attributes = nn.Linear(2048, num_attributes)
 
         if freeze_stages > 0:
             self.freeze_early_stages(freeze_stages)
@@ -80,12 +84,12 @@ class PannsCNN14(nn.Module):
                 for param in block.parameters():
                     param.requires_grad = False
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         """
         Entrada:
             x: [B, in_chans, n_mels, time_frames]
         Salida:
-            Logits de clasificación [B, num_classes]
+            Logits de clasificación [B, num_classes] o Tuple[class_logits, attr_logits] si num_attributes está definido.
         """
         x = self.conv_block1(x)
         x = self.conv_block2(x)
@@ -98,8 +102,13 @@ class PannsCNN14(nn.Module):
         x = self.dropout(x)
         x = self.act(self.fc1(x))
         x = self.dropout(x)
-        logits = self.fc_class(x)
-        return logits
+        class_logits = self.fc_class(x)
+
+        if self.num_attributes is not None:
+            attr_logits = self.fc_attributes(x)
+            return class_logits, attr_logits
+
+        return class_logits
 
 
 def load_panns_cnn14_pretrained(

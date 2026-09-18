@@ -58,3 +58,22 @@ def test_panns_weight_loading_with_channel_adaptation():
     assert loaded_keys > 50
     # Comprobar que conv_block1.conv1.weight tenga forma [64, 3, 3, 3] adaptada
     assert model.conv_block1.conv1.weight.shape == (64, 3, 3, 3)
+
+
+def test_panns_cnn14_multitask_forward_pass():
+    model = PannsCNN14(
+        in_chans=3,
+        num_classes=13,
+        num_attributes=7,
+        pool_type="gem",
+    )
+
+    bsz = 2
+    x = torch.randn(bsz, 3, 128, 94)
+    out = model(x)
+
+    assert isinstance(out, tuple)
+    class_logits, attr_logits = out
+    assert class_logits.shape == (bsz, 13)
+    assert attr_logits.shape == (bsz, 7)
+
