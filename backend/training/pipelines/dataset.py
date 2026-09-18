@@ -80,6 +80,8 @@ class GenericAudioDataset(Dataset):
         is_train: bool = False,
         multilabel: bool = False,
         return_raw_waveform: bool = True,
+        additive_sampler: Optional[Any] = None,
+        synth_prob: float = 0.5,
     ):
         self.df = df.reset_index(drop=True)
         self.audio_config = audio_config
@@ -89,19 +91,32 @@ class GenericAudioDataset(Dataset):
         self.multilabel = multilabel
         self.return_raw_waveform = return_raw_waveform
         self.num_classes = len(label_to_idx)
+        self.additive_sampler = additive_sampler
+        self.synth_prob = synth_prob
 
     def __len__(self) -> int:
         return len(self.df)
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         row = self.df.iloc[idx]
-        file_path = row.get("file_path", "")
+        clase = str(row.get("clase", "")).strip()
 
-        waveform = load_and_resample(
-            file_path=file_path,
-            target_sr=self.audio_config.target_sr,
-            duration_seconds=self.audio_config.duration_seconds,
-        )
+        waveform = None
+        if (
+            self.is_train
+            and self.additive_sampler is not None
+            and random.random() < self.synth_prob
+            and self.additive_sampler.can_synthesize(clase)
+        ):
+            waveform = self.additive_sampler.sample_synthetic_compound(clase)
+
+        if waveform is None:
+            file_path = row.get("file_path", "")
+            waveform = load_and_resample(
+                file_path=file_path,
+                target_sr=self.audio_config.target_sr,
+                duration_seconds=self.audio_config.duration_seconds,
+            )
 
         # Transformaciones estocásticas SOLO en entrenamiento
         if self.is_train:

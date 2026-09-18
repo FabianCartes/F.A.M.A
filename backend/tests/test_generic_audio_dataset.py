@@ -112,3 +112,39 @@ def test_load_and_resample_selects_highest_energy_window(tmp_path):
     # El RMS de la señal fuerte de seno con amplitud 0.8 es ~0.56. Si seleccionó silencio, RMS es 0.0.
     assert rms > 0.3
 
+
+def test_dataset_with_additive_compound_sampler(tmp_path):
+    from training.pipelines.additive_mixing import AdditiveCompoundSampler
+    import soundfile as sf
+
+    sr = 32000
+    oil_wav = tmp_path / "oil.wav"
+    belt_wav = tmp_path / "belt.wav"
+    sf.write(oil_wav, np.random.randn(sr).astype(np.float32) * 0.1, sr)
+    sf.write(belt_wav, np.random.randn(sr).astype(np.float32) * 0.1, sr)
+
+    df = pd.DataFrame([
+        {"file_path": str(oil_wav), "clase": "low_oil"},
+        {"file_path": str(belt_wav), "clase": "serpentine_belt"},
+        {"file_path": str(oil_wav), "clase": "no oil_serpentine belt"},
+    ])
+
+    sampler = AdditiveCompoundSampler(df, target_sr=sr, duration_seconds=1.0)
+    audio_cfg = AudioConfig(target_sr=sr, duration_seconds=1.0)
+    label_to_idx = {"low_oil": 0, "serpentine_belt": 1, "no oil_serpentine belt": 2}
+
+    ds = GenericAudioDataset(
+        df=df,
+        audio_config=audio_cfg,
+        label_to_idx=label_to_idx,
+        is_train=True,
+        additive_sampler=sampler,
+        synth_prob=1.0,
+    )
+
+    # El índice 2 es la clase compuesta 'no oil_serpentine belt'
+    waveform, label = ds[2]
+    assert len(waveform) == sr
+    assert label.item() == 2
+
+
