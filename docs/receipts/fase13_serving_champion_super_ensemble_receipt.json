@@ -1,0 +1,114 @@
+{
+  "receipt_id": "fase13_serving_champion_super_ensemble",
+  "created_at": "2026-09-21T13:38:00-03:00",
+  "project": "F.A.M.A — Fault Acoustic Monitoring Architecture",
+  "mission": "Empaquetado, Servicio e Inferencia del Modelo Campeón de Diagnóstico Acústico Automotriz",
+  "served_model": {
+    "model_id": "car-engine-diagnostics-super-ensemble",
+    "name": "Super-Ensamble Tri-Modelo All-RMS-Balanced (ResNet34d + EfficientNet-B0 + PANNs CNN14)",
+    "description": "Ensamble tri-modelo ponderado (0.60 ResNet + 0.10 EffNet + 0.30 PANNs) con frontend acústico HPSS de 3 canales y calibración multi-falla (81.16% Acc récord)",
+    "architecture": "Tri-Model Heterogeneous Ensemble (ResNet34d + EfficientNet-B0 + PANNs CNN14)",
+    "target_sr": 32000,
+    "duration_seconds": 2.0,
+    "input_tensor_shape": [1, 3, 128, 251],
+    "classes_count": 13,
+    "classes": [
+      "bad_ignition",
+      "dead_battery",
+      "low_oil",
+      "no oil_serpentine belt",
+      "normal_brakes",
+      "normal_engine_idle",
+      "normal_engine_startup",
+      "power steering combined_no oil",
+      "power steering combined_no oil_serpentine belt",
+      "power steering combined_serpentine belt",
+      "power_steering",
+      "serpentine_belt",
+      "worn_out_brakes"
+    ]
+  },
+  "ensemble_composition": {
+    "optimal_weights": {
+      "resnet34d_rms_balanced": 0.60,
+      "efficientnet_b0_rms_balanced": 0.10,
+      "panns_cnn14_rms_balanced": 0.30
+    },
+    "components": [
+      {
+        "role": "Backbone primario (60%)",
+        "checkpoint": "backend/checkpoints/car-engine-diagnostics-resnet34d-multitask-hpss-rms-balanced/weights.pt",
+        "manifest": "backend/checkpoints/car-engine-diagnostics-resnet34d-multitask-hpss-rms-balanced/manifest.json",
+        "model_id": "car-engine-diagnostics-resnet34d-multitask-hpss-rms-balanced",
+        "standalone_test_acc": 0.7923,
+        "standalone_test_f1": 0.7866
+      },
+      {
+        "role": "Regularizador por profundidad (10%)",
+        "checkpoint": "backend/checkpoints/car-engine-diagnostics-efficientnet-b0-multitask-hpss-additive/weights.pt",
+        "manifest": "backend/checkpoints/car-engine-diagnostics-efficientnet-b0-multitask-hpss-additive/manifest.json",
+        "model_id": "car-engine-diagnostics-efficientnet-b0-multitask-hpss-additive",
+        "standalone_test_acc": 0.7778,
+        "standalone_test_f1": 0.7687
+      },
+      {
+        "role": "Transferencia de AudioSet (30%)",
+        "checkpoint": "backend/checkpoints/car-engine-diagnostics-panns-cnn14-hpss-additive/weights.pt",
+        "manifest": "backend/checkpoints/car-engine-diagnostics-panns-cnn14-hpss-additive/manifest.json",
+        "model_id": "car-engine-diagnostics-panns-cnn14-hpss-additive",
+        "standalone_test_acc": 0.6957,
+        "standalone_test_f1": 0.6734
+      }
+    ]
+  },
+  "champion_benchmark_metrics": {
+    "test_sha256": "9d587189434b41b27d55de43aa86f50312f0b5d300d437b03cc3ecae52c153d2",
+    "test_samples_count": 207,
+    "blind_test_accuracy": 0.8115942028985508,
+    "blind_test_macro_f1": 0.8032696897966543,
+    "blind_test_ece": 0.0669,
+    "source_receipt": "docs/receipts/fase11_super_ensemble_all_rms_balanced_receipt.json"
+  },
+  "serving_architecture": {
+    "predictor_module": "backend/app/services/predictors/engine_ensemble_predictor.py",
+    "predictor_class": "EngineEnsemblePredictor",
+    "base_contract": "AudioPredictor",
+    "lazy_loading": true,
+    "model_registry_integration": {
+      "registry_file": "backend/app/services/registry.py",
+      "registered_in_default_registry": true,
+      "lookup_key": "car-engine-diagnostics-super-ensemble"
+    }
+  },
+  "test_verification": {
+    "methodology": "Strict TDD + RDD",
+    "test_suite_file": "backend/tests/test_engine_ensemble_predictor.py",
+    "total_suite_tests_passed": 147,
+    "total_suite_tests_failed": 0,
+    "execution_time_seconds": 31.90,
+    "test_cases_covered": [
+      "test_engine_ensemble_metadata",
+      "test_engine_ensemble_linear_combination_of_probabilities",
+      "test_engine_ensemble_consensus_high_confidence",
+      "test_engine_ensemble_silence_detection",
+      "test_engine_ensemble_registry_integration",
+      "test_fastapi_models_endpoint_lists_engine_ensemble",
+      "test_fastapi_predict_with_engine_ensemble",
+      "test_engine_ensemble_predict_real_weights"
+    ]
+  },
+  "http_endpoints_verification": {
+    "get_models": {
+      "endpoint": "GET /api/models",
+      "http_status": 200,
+      "verified": true,
+      "result": "El modelo 'car-engine-diagnostics-super-ensemble' es retornado en el catálogo con sus metadatos, 13 clases y métricas oficiales."
+    },
+    "post_predict": {
+      "endpoint": "POST /api/predict?model_id=car-engine-diagnostics-super-ensemble",
+      "http_status": 200,
+      "verified": true,
+      "result": "Inferencia multipart/form-data procesada exitosamente a través del pipeline HPSS [B, 3, 128, 251] y combinación lineal de probabilidades."
+    }
+  }
+}

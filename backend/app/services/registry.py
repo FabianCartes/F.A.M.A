@@ -103,12 +103,15 @@ def build_default_registry() -> ModelRegistry:
     reg = ModelRegistry()
     from app.services.predictors.cnn_predictor import AudioCNNPredictor
     from app.services.predictors.ensemble_predictor import ChileanBirdsEnsemblePredictor
+    from app.services.predictors.engine_ensemble_predictor import EngineEnsemblePredictor
 
     cnn = AudioCNNPredictor()
     ensemble = ChileanBirdsEnsemblePredictor(lazy_load=True)
+    engine_ensemble = EngineEnsemblePredictor(lazy_load=True)
 
     reg.register(cnn, is_default=True)
     reg.register(ensemble, is_default=False)
+    reg.register(engine_ensemble, is_default=False)
 
     # Autodescubrir bundles empaquetados en checkpoints/
     discover_and_register_bundles(reg)
