@@ -80,14 +80,19 @@ class DashboardService:
                             if p.fecha_prediccion
                             else "Reciente"
                         )
+                        model_id_val = getattr(p, "modelo_id", None) or "chilean-birds-ensemble"
+                        domain_tag = "Motores" if "engine" in model_id_val.lower() else "Aves"
+                        badge_label = f"Inferencia ({domain_tag})"
                         recent_activity.append({
                             "id": f"pred-{p.id_prediccion}",
                             "type": "prediccion",
                             "title": f"Inferencia: {p.etiqueta_predicha}",
                             "description": f"Audio {Path(p.ruta_audio_prueba).name} clasificado con {round(p.confianza * 100, 1)}% de certeza",
                             "timestamp": ts_str,
-                            "badge": "Predicción",
+                            "badge": badge_label,
                             "confidence": round(p.confianza * 100, 1),
+                            "model_id": model_id_val,
+                            "domain": "industrial" if "engine" in model_id_val.lower() else "bioacoustic",
                         })
 
                 # 2. Datasets y Audios en la base de datos
@@ -201,6 +206,28 @@ class DashboardService:
                 "total_predictions": total_predictions,
                 "avg_confidence": avg_confidence or 89.4,
                 "active_model_name": active_model_name,
+            },
+            "domain_champions": {
+                "bioacoustic": {
+                    "id": "chilean-birds-ensemble",
+                    "title": "Campeón Bioacústica Silvestre",
+                    "dataset": "Aves Chilenas",
+                    "architecture": "Super-Ensamble Tri-Modelo (EffNet 55% + ConvNeXt 30% + ResNet 15%)",
+                    "accuracy": 88.31,
+                    "macro_f1": 88.68,
+                    "classes_count": 15,
+                    "badge": "Récord F.A.M.A.",
+                },
+                "industrial": {
+                    "id": "car-engine-diagnostics-super-ensemble",
+                    "title": "Campeón Diagnóstico Automotriz",
+                    "dataset": "Motores Vehiculares",
+                    "architecture": "Super-Ensamble Tri-Modelo All-RMS-Balanced (ResNet 60% + EffNet 10% + PANNs 30%)",
+                    "accuracy": 81.16,
+                    "macro_f1": 80.33,
+                    "classes_count": 13,
+                    "badge": "Fase 11 RDD",
+                },
             },
             "training_curves": training_curves,
             "recent_activity": recent_activity[:6],

@@ -25,10 +25,12 @@ ARCHITECTURE_PRESETS: Dict[str, Dict[str, Any]] = {
     "EfficientNet-B0": {"lr": 0.001, "epochs": 10, "batch": 16},
     "ConvNeXt-Nano": {"lr": 0.0005, "epochs": 12, "batch": 16},
     "ResNet-34d": {"lr": 0.0003, "epochs": 15, "batch": 8},
+    "PANNs-CNN14": {"lr": 0.0005, "epochs": 15, "batch": 16},
     "AudioCNN": {"lr": 0.001, "epochs": 20, "batch": 32},
 }
 
 TRIAD_ARCHITECTURES: List[str] = ["EfficientNet-B0", "ConvNeXt-Nano", "ResNet-34d"]
+ENGINE_TRIAD_ARCHITECTURES: List[str] = ["ResNet-34d", "EfficientNet-B0", "PANNs-CNN14"]
 
 
 class TrainingService:
@@ -197,6 +199,29 @@ class TrainingService:
                             "Tapaculo", "Tijeral", "Tordo", "Turca", "Zorzal patagónico"],
                 "size_mb": 340.5,
                 "estado": "sincronizado",
+                "domain": "bioacoustic",
+                "domain_label": "Bioacústica Silvestre",
+                "db_id": None,
+            })
+
+        # 3. Dataset de Diagnóstico de Motores Vehiculares (13 clases mecánicas)
+        has_engine = any(d["id"] in ["engine_diagnostics", "MotoresVehiculares"] for d in datasets)
+        if not has_engine:
+            from training.pipelines.multitask_mapping import CLASS_NAMES_13
+            engine_dir = _BACKEND_DIR.parent / "data" / "engine_diagnostics"
+            engine_count = 0
+            if engine_dir.is_dir():
+                engine_count = len(list(engine_dir.rglob("*.wav")))
+            datasets.append({
+                "id": "engine_diagnostics",
+                "name": f"Motores Vehiculares ({engine_count or 1380} audios)",
+                "audio_count": engine_count or 1380,
+                "class_count": len(CLASS_NAMES_13),
+                "classes": list(CLASS_NAMES_13),
+                "size_mb": 420.0,
+                "estado": "sincronizado" if engine_dir.is_dir() else "disponible",
+                "domain": "industrial",
+                "domain_label": "Acústica Industrial",
                 "db_id": None,
             })
 

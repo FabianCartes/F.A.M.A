@@ -154,6 +154,9 @@ class IngestionService:
                             if f.is_file() and f.suffix.lower() in (".wav", ".mp3", ".flac", ".ogg")
                         ])
 
+            is_ind = any(k in ds_name.lower() for k in ["engine", "motor", "maquinaria", "industrial"])
+            data["domain"] = "industrial" if is_ind else "bioacoustic"
+            data["domain_label"] = "Acústica Industrial" if is_ind else "Bioacústica Silvestre"
             is_synced = (local_file_count >= data["file_count"] and data["file_count"] > 0)
             data["local_file_count"] = local_file_count
             data["is_synced"] = is_synced

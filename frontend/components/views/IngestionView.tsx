@@ -24,6 +24,8 @@ interface DatasetItem {
   last_modified: string | null;
   local_file_count: number;
   is_synced: boolean;
+  domain?: "bioacoustic" | "industrial";
+  domain_label?: string;
 }
 
 interface DatasetFile {
@@ -57,6 +59,22 @@ const CHILEAN_SPECIES_PRESETS = [
   "Tordo",
   "Turca",
   "Zorzal patagónico",
+];
+
+const ENGINE_FAULT_PRESETS = [
+  { id: "bad_ignition", label: "bad_ignition (Falla de Encendido / Combustión Irregular)" },
+  { id: "dead_battery", label: "dead_battery (Batería Agotada / Arranque Lento)" },
+  { id: "low_oil", label: "low_oil (Nivel de Aceite Crítico / Golpeteo)" },
+  { id: "no oil_serpentine belt", label: "no oil_serpentine belt (Falta Aceite + Correa)" },
+  { id: "normal_brakes", label: "normal_brakes (Frenos en Estado Normal)" },
+  { id: "normal_engine_idle", label: "normal_engine_idle (Ralentí Estable Normal)" },
+  { id: "normal_engine_startup", label: "normal_engine_startup (Arranque de Fábrica Normal)" },
+  { id: "power steering combined_no oil", label: "power steering combined_no oil (Dirección + Falta Aceite)" },
+  { id: "power steering combined_no oil_serpentine belt", label: "power steering combined_no oil_serpentine belt (Triple Falla)" },
+  { id: "power steering combined_serpentine belt", label: "power steering combined_serpentine belt (Dirección + Correa)" },
+  { id: "power_steering", label: "power_steering (Bomba de Dirección Hidráulica)" },
+  { id: "serpentine_belt", label: "serpentine_belt (Correa de Accesorios Chirriante)" },
+  { id: "worn_out_brakes", label: "worn_out_brakes (Desgaste de Pastillas de Freno)" },
 ];
 
 
@@ -523,6 +541,8 @@ export default function IngestionView() {
                       setSelectedDatasetOption(val);
                       if (val === "AvesChilenas") {
                         setSelectedClassOption("Chucao");
+                      } else if (val === "engine_diagnostics") {
+                        setSelectedClassOption("bad_ignition");
                       } else {
                         const ds = datasets.find((d) => d.name === val);
                         const validClasses = ds?.classes?.filter((c) => c && c !== "General") || [];
@@ -538,8 +558,11 @@ export default function IngestionView() {
                     <option value="AvesChilenas">
                       AvesChilenas (Dominio Bioacústico Piloto)
                     </option>
+                    <option value="engine_diagnostics">
+                      engine_diagnostics (Dominio Acústico Industrial)
+                    </option>
                     {datasets
-                      .filter((d) => d.name !== "AvesChilenas")
+                      .filter((d) => d.name !== "AvesChilenas" && d.name !== "engine_diagnostics")
                       .map((d) => (
                         <option key={d.id} value={d.name}>
                           {d.name} ({d.file_count} audios, {d.class_count || 1} clases)
@@ -573,6 +596,12 @@ export default function IngestionView() {
                       CHILEAN_SPECIES_PRESETS.map((sp) => (
                         <option key={sp} value={sp}>
                           {sp}
+                        </option>
+                      ))
+                    ) : selectedDatasetOption === "engine_diagnostics" ? (
+                      ENGINE_FAULT_PRESETS.map((ef) => (
+                        <option key={ef.id} value={ef.id}>
+                          {ef.label}
                         </option>
                       ))
                     ) : (
@@ -800,11 +829,26 @@ export default function IngestionView() {
                         className="rounded bg-[#121316] border-[#2d303b] text-emerald-600 focus:ring-0 cursor-pointer"
                       />
                     </td>
-                    <td className="py-2.5 font-medium text-gray-200 flex items-center gap-2">
-                      <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                      </svg>
-                      <span className="font-semibold">{d.name}</span>
+                    <td className="py-2.5 font-medium text-gray-200">
+                      <div className="flex items-center gap-2">
+                        <svg className="w-3.5 h-3.5 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                        </svg>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold">{d.name}</span>
+                          <span
+                            className={`text-[9px] font-mono px-1.5 py-0.2 rounded border ${
+                              d.domain === "industrial" || d.name === "engine_diagnostics"
+                                ? "bg-amber-950/70 border-amber-800/60 text-amber-300"
+                                : "bg-emerald-950/70 border-emerald-800/60 text-emerald-400"
+                            }`}
+                          >
+                            {d.domain === "industrial" || d.name === "engine_diagnostics"
+                              ? "Industrial"
+                              : "Bioacústica"}
+                          </span>
+                        </div>
+                      </div>
                     </td>
                     <td className="py-2.5 text-gray-300">
                       <div className="flex items-center gap-1 flex-wrap max-w-xs">

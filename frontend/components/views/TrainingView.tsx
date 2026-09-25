@@ -79,6 +79,12 @@ const ARCHITECTURE_PRESETS: Record<
     batch: "8",
     desc: "Batches moderados para estabilidad profunda",
   },
+  "PANNs-CNN14": {
+    lr: "0.0005",
+    epochs: "15",
+    batch: "16",
+    desc: "Red pre-entrenada para acústica industrial y patrones armónicos",
+  },
   "AudioCNN": {
     lr: "0.001",
     epochs: "20",
@@ -275,11 +281,12 @@ export default function TrainingView() {
     setMetricsHistory([]);
     setCurrentEpoch(0);
     if (trainingMode === "triad") {
+      const isEngine = selectedDataset === "engine_diagnostics";
       setTriadProgress({
         isTriad: true,
         modelIdx: 1,
         totalModels: 3,
-        currentArch: "EfficientNet-B0",
+        currentArch: isEngine ? "ResNet-34d" : "EfficientNet-B0",
       });
     } else {
       setTriadProgress({
@@ -500,7 +507,9 @@ export default function TrainingView() {
             <span className="text-xs font-semibold text-gray-200 block">Modo de Entrenamiento</span>
             <span className="text-[11px] text-gray-500">
               {trainingMode === "triad"
-                ? "Entrena secuencialmente los 3 modelos (EfficientNet-B0 ➔ ConvNeXt-Nano ➔ ResNet-34d) para habilitar el Super-Ensamble completo."
+                ? selectedDataset === "engine_diagnostics"
+                  ? "Entrena secuencialmente los 3 modelos (ResNet-34d ➔ EfficientNet-B0 ➔ PANNs-CNN14) para habilitar el Super-Ensamble industrial de 13 fallas de motor."
+                  : "Entrena secuencialmente los 3 modelos (EfficientNet-B0 ➔ ConvNeXt-Nano ➔ ResNet-34d) para habilitar el Super-Ensamble bioacústico de aves chilenas."
                 : "Entrena únicamente la arquitectura seleccionada con hiperparámetros personalizados."}
             </span>
           </div>
@@ -531,7 +540,11 @@ export default function TrainingView() {
               <svg className="w-3.5 h-3.5 text-amber-300" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
               </svg>
-              <span>Tríada Completa (Super-Ensamble)</span>
+              <span>
+                {selectedDataset === "engine_diagnostics"
+                  ? "Tríada Completa (Super-Ensamble Motores)"
+                  : "Tríada Completa (Super-Ensamble Aves)"}
+              </span>
             </button>
           </div>
         </div>
@@ -612,6 +625,7 @@ export default function TrainingView() {
               <option value="EfficientNet-B0">EfficientNet-B0 (Transfer Learning · Pitch Shift)</option>
               <option value="ConvNeXt-Nano">ConvNeXt-Nano (Arquitectura Moderna)</option>
               <option value="ResNet-34d">ResNet-34d (ResNet Profunda)</option>
+              <option value="PANNs-CNN14">PANNs-CNN14 (Audio Industrial & Pre-trained CNN)</option>
               <option value="AudioCNN">AudioCNN (Baseline Convolucional FAMA)</option>
             </select>
           </div>

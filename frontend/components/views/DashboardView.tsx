@@ -31,6 +31,8 @@ interface RecentActivityItem {
   timestamp: string;
   badge: string;
   confidence?: number;
+  model_id?: string;
+  domain?: string;
 }
 
 interface TriadModelItem {
@@ -54,12 +56,30 @@ interface SystemHealth {
   device: string;
 }
 
+interface DomainChampionInfo {
+  domain_name: string;
+  champion_model: string;
+  accuracy: number;
+  f1_macro: number;
+  precision: number;
+  status: string;
+  classes_count: number;
+  sample_rate: string;
+  duration: string;
+}
+
+interface DomainChampions {
+  bioacoustics: DomainChampionInfo;
+  industrial: DomainChampionInfo;
+}
+
 interface DashboardStatsResponse {
   kpis: DashboardKpis;
   training_curves: TrainingCurvePoint[];
   recent_activity: RecentActivityItem[];
   super_ensemble: SuperEnsembleSummary;
   system_health: SystemHealth;
+  domain_champions?: DomainChampions;
 }
 
 interface HardwareTelemetry {
@@ -363,6 +383,105 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
         </div>
       </div>
 
+      {/* Modelos Campeones de Producción Multi-Dominio */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+        {/* Campeón Bioacústica */}
+        <div className="bg-[#16171b] border border-emerald-900/40 rounded-xl p-4 flex flex-col justify-between relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none" />
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded font-semibold bg-emerald-950/80 border border-emerald-700/60 text-emerald-300 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Campeón Bioacústica (Aves Chilenas)
+              </span>
+              <span className="text-[10px] font-mono text-gray-400">15 Especies · 5.0s @ 22 kHz</span>
+            </div>
+            <h3 className="text-sm font-bold text-white leading-snug">
+              {stats?.domain_champions?.bioacoustics?.champion_model ||
+                "Tri-Model Super-Ensemble (EfficientNet-B0 + ConvNeXt-Nano + ResNet-34d)"}
+            </h3>
+            <p className="text-[11px] text-gray-400 mt-1">
+              Ponderación bayesiana óptima validada en tesis · Inferencia TTA densa (hop 1.0s)
+            </p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-[#23252e] text-xs">
+            <div>
+              <span className="text-[10px] text-gray-400 block">F1-Macro (Récord)</span>
+              <span className="text-sm font-bold text-emerald-400 font-mono">
+                {stats?.domain_champions?.bioacoustics?.f1_macro
+                  ? `${stats.domain_champions.bioacoustics.f1_macro.toFixed(2)}%`
+                  : "88.68%"}
+              </span>
+            </div>
+            <div>
+              <span className="text-[10px] text-gray-400 block">Precisión Global</span>
+              <span className="text-sm font-bold text-white font-mono">
+                {stats?.domain_champions?.bioacoustics?.accuracy
+                  ? `${stats.domain_champions.bioacoustics.accuracy.toFixed(2)}%`
+                  : "88.31%"}
+              </span>
+            </div>
+            <div>
+              <span className="text-[10px] text-gray-400 block">Precision Macro</span>
+              <span className="text-sm font-bold text-blue-400 font-mono">
+                {stats?.domain_champions?.bioacoustics?.precision
+                  ? `${stats.domain_champions.bioacoustics.precision.toFixed(2)}%`
+                  : "90.15%"}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Campeón Diagnóstico Industrial */}
+        <div className="bg-[#16171b] border border-amber-900/40 rounded-xl p-4 flex flex-col justify-between relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded font-semibold bg-amber-950/80 border border-amber-700/60 text-amber-300 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                Campeón Acústica Industrial (Motores)
+              </span>
+              <span className="text-[10px] font-mono text-gray-400">13 Fallas · 2.0s @ 32 kHz</span>
+            </div>
+            <h3 className="text-sm font-bold text-white leading-snug">
+              {stats?.domain_champions?.industrial?.champion_model ||
+                "Car Engine Diagnostics Super-Ensemble (ResNet-34d + EfficientNet-B0 + PANNs-CNN14)"}
+            </h3>
+            <p className="text-[11px] text-gray-400 mt-1">
+              Ensamble balanceado All-RMS con calibración Softmax · Detección de fallas mecánicas
+            </p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-[#23252e] text-xs">
+            <div>
+              <span className="text-[10px] text-gray-400 block">Exactitud (Test)</span>
+              <span className="text-sm font-bold text-amber-400 font-mono">
+                {stats?.domain_champions?.industrial?.accuracy
+                  ? `${stats.domain_champions.industrial.accuracy.toFixed(2)}%`
+                  : "81.16%"}
+              </span>
+            </div>
+            <div>
+              <span className="text-[10px] text-gray-400 block">Balanced F1</span>
+              <span className="text-sm font-bold text-white font-mono">
+                {stats?.domain_champions?.industrial?.f1_macro
+                  ? `${stats.domain_champions.industrial.f1_macro.toFixed(2)}%`
+                  : "81.44%"}
+              </span>
+            </div>
+            <div>
+              <span className="text-[10px] text-gray-400 block">Balanced Precision</span>
+              <span className="text-sm font-bold text-blue-400 font-mono">
+                {stats?.domain_champions?.industrial?.precision
+                  ? `${stats.domain_champions.industrial.precision.toFixed(2)}%`
+                  : "81.16%"}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Fila 2: Gráfico de Convergencia + Actividad Reciente */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Gráfico de Convergencia del Entrenamiento */}
@@ -561,9 +680,24 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
                   </div>
 
                   <div>
-                    <p className="text-gray-200 font-medium text-[11px] leading-tight">
-                      {item.title}
-                    </p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="text-gray-200 font-medium text-[11px] leading-tight">
+                        {item.title}
+                      </p>
+                      {item.domain && (
+                        <span
+                          className={`text-[9px] px-1 py-0.2 rounded font-mono ${
+                            item.domain === "engine_diagnostics" || item.domain === "industrial"
+                              ? "bg-amber-950/60 text-amber-300 border border-amber-800/40"
+                              : "bg-emerald-950/60 text-emerald-300 border border-emerald-800/40"
+                          }`}
+                        >
+                          {item.domain === "engine_diagnostics" || item.domain === "industrial"
+                            ? "Industrial"
+                            : "Bioacústica"}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-gray-400 text-[10px] mt-0.5">
                       {item.description}
                     </p>
