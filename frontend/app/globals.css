@@ -18,3 +18,27 @@ body {
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-montserrat), sans-serif;
 }
+
+/* ============================================================================
+   TRANSICIONES FLUIDAS DE ACORDEÓN / DESPLIEGUE SUAVE (RF_02 INGESTA)
+   Permite expandir y colapsar paneles desplazando suavemente el contenido inferior
+   ============================================================================ */
+.accordion-grid {
+  display: grid;
+  transition: grid-template-rows 350ms cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 300ms ease,
+              margin 350ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.accordion-grid-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.accordion-grid-closed {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  pointer-events: none;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}

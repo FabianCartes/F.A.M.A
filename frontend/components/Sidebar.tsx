@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Image from "next/image";
 
 export type TabType = "dashboard" | "ingesta" | "entrenamiento" | "prediccion";
@@ -9,7 +10,22 @@ interface SidebarProps {
   onSelectTab: (tab: TabType) => void;
 }
 
+interface HardwareMini {
+  cuda_available: boolean;
+  temperature_c?: number | null;
+}
+
 export default function Sidebar({ activeTab, onSelectTab }: SidebarProps) {
+  const [hw, setHw] = useState<HardwareMini | null>(null);
+
+  useEffect(() => {
+    fetch("http://127.0.0.1:8000/api/training/hardware")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) setHw(data);
+      })
+      .catch(() => null);
+  }, []);
   const navItems: { id: TabType; label: string; icon: React.ReactNode }[] = [
     {
       id: "dashboard",
@@ -129,16 +145,24 @@ export default function Sidebar({ activeTab, onSelectTab }: SidebarProps) {
           </span>
         </div>
 
-        {/* GPU Status */}
+        {/* Cómputo / Hardware Status */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-gray-400">
             <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
             </svg>
-            <span>GPU</span>
+            <span>{hw?.cuda_available ? "GPU" : "Cómputo"}</span>
           </div>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-950/70 border border-emerald-700/60 text-emerald-400">
-            CUDA - 67°C
+          <span
+            className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+              hw?.cuda_available
+                ? "bg-emerald-950/70 border-emerald-700/60 text-emerald-400"
+                : "bg-blue-950/70 border-blue-700/60 text-blue-400"
+            }`}
+          >
+            {hw?.cuda_available
+              ? `CUDA${hw.temperature_c ? ` · ${hw.temperature_c}°C` : ""}`
+              : "CPU Host"}
           </span>
         </div>
 

@@ -89,9 +89,58 @@ def test_predict_success_with_super_ensemble(mock_gcp, client):
     assert data["clase"] in SPECIES_CLASSES
     assert isinstance(data["confianza"], float)
     assert 0.0 <= data["confianza"] <= 1.0
+    assert "modelo" in data
+    assert "is_fallback" in data
+    assert "modelos_activos" in data
 
 
 def test_ensemble_service_weights_and_configuration():
     """Verifica que el servicio tenga calibrados los pesos 0.55, 0.30 y 0.15."""
     assert ensemble_service.weights == [0.55, 0.30, 0.15]
     assert len(ensemble_service.classes) == 15
+
+
+def test_get_model_info(client):
+    """Verifica el endpoint GET /api/model-info para monitoreo de modelos activos."""
+    response = client.get("/api/model-info")
+    assert response.status_code == 200
+    data = response.json()
+    assert "is_fallback" in data
+    assert "model_name" in data
+    assert "active_models" in data
+    assert "total_classes" in data
+    assert data["total_classes"] == 15
+    assert isinstance(data["active_models"], list)
+    assert "triad_status" in data
+    assert "ensemble_ready" in data
+    assert "selected_domain" in data
+    assert len(data["triad_status"]) == 3
+
+
+def test_get_model_info_custom_dataset(client):
+    """Verifica GET /api/model-info con dataset_name para evaluar modelos faltantes."""
+    response = client.get("/api/model-info?dataset_name=MaquinariaMinas")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["selected_domain"] == "MaquinariaMinas"
+    assert "triad_status" in data
+    assert "missing_models" in data
+    assert isinstance(data["missing_models"], list)
+
+
+def test_super_ensemble_service_find_checkpoint(tmp_path):
+    """Verifica que _find_checkpoint busque tanto en directorio explícito como en rutas candidatas."""
+    from app.main import SuperEnsembleService
+
+    # Crear una carpeta alternativa simulando checkpoints de la raíz
+    alt_dir = tmp_path / "root_checkpoints"
+    alt_dir.mkdir()
+    dummy_ckpt = alt_dir / "custom_model.pt"
+    dummy_ckpt.write_bytes(b"dummy")
+
+    service = SuperEnsembleService(checkpoints_dir=tmp_path / "non_existent")
+    # Inyectar alt_dir como una ruta candidata adicional
+    found = service._find_checkpoint("custom_model.pt", extra_dirs=[alt_dir])
+    assert found == dummy_ckpt
+    assert found.exists()
+

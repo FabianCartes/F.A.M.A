@@ -303,7 +303,8 @@ Para profundizar en los fundamentos científicos, análisis matemáticos y decis
 1. [**docs/01_primera_prueba_poc.md**](docs/01_primera_prueba_poc.md): PoC inicial, dataset de 15 especies y baseline en PyTorch (44.16% Acc).
 2. [**docs/02_optimizacion_vad_data_augmentation.md**](docs/02_optimizacion_vad_data_augmentation.md): Segmentación VAD por energía relativa, SpecAugment y mejora sustancial a 61.69% Acc.
 3. [**docs/03_orquestador_fastapi_gcs_postgresql.md**](docs/03_orquestador_fastapi_gcs_postgresql.md): Arquitectura en capas de FastAPI, discriminadores físicos de señal, calibración de confianza, persistencia en Google Cloud Storage y base de datos relacional PostgreSQL.
-4. [**docs/VIDA_01_CINF_FINAL_PT_2026_1_CARTES.md**](docs/VIDA_01_CINF_FINAL_PT_2026_1_CARTES.md): Documento oficial de anteproyecto de titulación.
+4. [**docs/18_modelo_de_producto_despliegue_y_arquitectura_operativa.md**](docs/18_modelo_de_producto_despliegue_y_arquitectura_operativa.md): Modelo de producto, despliegue mediante Docker, concurrencia, gestión de credenciales GCS y roadmap a producción.
+5. [**docs/VIDA_01_CINF_FINAL_PT_2026_1_CARTES.md**](docs/VIDA_01_CINF_FINAL_PT_2026_1_CARTES.md): Documento oficial de anteproyecto de titulación.
 
 ---
 

@@ -26,7 +26,7 @@ if _cred_env:
             os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(_resolved_cred)
 
 # Nombre por defecto del bucket en Google Cloud Storage
-DEFAULT_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME", "fama-audio-bucket")
+DEFAULT_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME", "fama-audio-records-2026")
 
 
 async def upload_audio_to_gcp(
