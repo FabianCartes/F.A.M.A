@@ -96,26 +96,17 @@ El proyecto sigue una estructura desacoplada de monorepo:
 ```text
 F.A.M.A/
 ├── .agents/                    # Directrices de ingeniería de agentes y TDD
-├── docs/                       # Informes técnicos de avance y documentación de arquitectura
-│   ├── 01_primera_prueba_poc.md               # Informe PoC y validación de baseline
-│   ├── 02_optimizacion_vad_data_augmentation.md # Informe optimización VAD y Data Augmentation
-│   ├── 03_orquestador_fastapi_gcs_postgresql.md # Informe backend, GCS y PostgreSQL
-│   ├── VIDA_01_CINF_FINAL_PT_2026_1_CARTES.md   # Anteproyecto formal de título
-│   ├── confusion_matrix_poc.png
-│   └── confusion_matrix_augmented.png
-├── frontend/                   # Interfaz de usuario web (en desarrollo)
-│   └── README.md
 ├── backend/                    # Núcleo de servicios, APIs y modelos de ML
 │   ├── app/                    # Aplicación FastAPI estructurada en capas
 │   │   ├── controllers/        # Controladores de negocio desacoplados
+│   │   ├── database.py         # Configuración del motor y sesiones de SQLAlchemy
+│   │   ├── main.py             # Instancia principal de FastAPI y endpoints
 │   │   ├── middlewares/        # Middlewares de seguridad, CORS y control de errores
 │   │   ├── models/             # Modelos ORM y esquemas relacionales
 │   │   │   └── prediction.py   # Modelo 'Prediccion' (tabla: prediccion)
 │   │   ├── routes/             # Enrutadores modulares de la API
-│   │   ├── services/           # Servicios desacoplados de infraestructura
-│   │   │   └── storage.py      # Servicio asíncrono para Google Cloud Storage
-│   │   ├── database.py         # Configuración del motor y sesiones de SQLAlchemy
-│   │   └── main.py             # Instancia principal de FastAPI y endpoints
+│   │   └── services/           # Servicios desacoplados de infraestructura
+│   │       └── storage.py      # Servicio asíncrono para Google Cloud Storage
 │   ├── poc/                    # Módulos profundos del pipeline bioacústico
 │   │   ├── download.py         # Descarga concurrente desde Xeno-canto v3 + SHA-256
 │   │   ├── preprocess.py       # Remuestreo 22050Hz, VAD relativo (top 25 dB) y Mel-dB
@@ -130,7 +121,15 @@ F.A.M.A/
 │   ├── .env                    # Configuración local (ignorado en Git)
 │   ├── main.py                 # Adaptador raíz para levantar el orquestador
 │   └── database.py             # Adaptador raíz de base de datos
+├── frontend/                   # Aplicación Web Next.js (pendiente de inicialización)
+│   └── README.md               # Documentación de reserva del frontend
+├── docs/                       # Documentación académica y técnica
+│   ├── images/                 # Matrices de confusión y gráficos de desempeño
+│   ├── adr/                    # Registros de decisiones arquitectónicas (ADRs)
+│   ├── problemas_conocidos/    # Análisis de errores y límites bioacústicos
+│   └── 01_... a 16_...         # Informes técnicos de iteración y RDD
 ├── .gitignore                  # Protección estricta de llaves IAM, credenciales y datasets
+├── AGENTS.md                   # Directrices obligatorias de ingeniería y TDD
 └── README.md                   # Esta documentación
 ```
 

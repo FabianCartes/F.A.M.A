@@ -89,7 +89,7 @@ A continuación se compara el rendimiento de las 15 especies entre el baseline h
 
 ## 5. Matriz de Confusión del Modelo Óptimo (TTA Mean)
 
-![Matriz de Confusión TTA Mean](confusion_matrix_tta_mean.png)
+![Matriz de Confusión TTA Mean](images/confusion_matrix_tta_mean.png)
 
 ### Observaciones de la Geometría Latente:
 1. **Cuatro Especies Superan el 90% F1:** *Chucao* (94.1%), *Churrín de la Mocha* (94.1%), *Turca* (94.1%) y *Tapaculo* (90.0%) operan con grado de separación casi absoluto en campo.
@@ -143,7 +143,7 @@ Para descartar cualquier sesgo derivado de la inicialización estocástica (semi
 
 ### 6.4. Matriz de Confusión Promedio del Benchmark
 
-![Matriz de Confusión Promedio Benchmark TTA](benchmark_confusion_matrix_tta.png)
+![Matriz de Confusión Promedio Benchmark TTA](images/benchmark_confusion_matrix_tta.png)
 
 ---
 

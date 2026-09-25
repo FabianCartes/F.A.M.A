@@ -77,7 +77,7 @@ La siguiente tabla refleja la consolidación en el conjunto de prueba, evaluado 
 
 ## 4. Matriz de Confusión del Modelo de 35 Épocas
 
-![Matriz de Confusión Mixup 35e](confusion_matrix_mixup_35e.png)
+![Matriz de Confusión Mixup 35e](images/confusion_matrix_mixup_35e.png)
 
 ### Hallazgos de la Geometría Latente:
 1. **14 de las 15 Especies Superan el 74% de F1:** La consistencia inter-clases es homogénea en todo el árbol taxonómico.

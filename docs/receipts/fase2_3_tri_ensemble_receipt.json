@@ -1,0 +1,33 @@
+{
+  "experiment": "Tri-Model Calibrated Ensemble (MultiTask ResNet34d HPSS + EfficientNet-B0 + PANNs CNN14)",
+  "test_sha256": "9d587189434b41b27d55de43aa86f50312f0b5d300d437b03cc3ecae52c153d2",
+  "models": [
+    {
+      "model_id": "car-engine-diagnostics-resnet34d-multitask-hpss",
+      "architecture": "resnet34d_multitask_hpss",
+      "temperature": 0.9,
+      "weight": 0.42
+    },
+    {
+      "model_id": "car-engine-diagnostics-efficientnet-b0",
+      "architecture": "efficientnet_b0_gem",
+      "temperature": 1.0,
+      "weight": 0.43
+    },
+    {
+      "model_id": "car-engine-diagnostics-panns-cnn14-hpss",
+      "architecture": "panns_cnn14_audioset_transfer",
+      "temperature": 1.1,
+      "weight": 0.15
+    }
+  ],
+  "blind_test_metrics": {
+    "accuracy": 0.7632850241545893,
+    "macro_f1": 0.7530649725968595,
+    "weighted_f1": 0.7569106209590483
+  },
+  "delta_vs_baseline": {
+    "accuracy_pp": 6.76,
+    "macro_f1_pp": 6.31
+  }
+}

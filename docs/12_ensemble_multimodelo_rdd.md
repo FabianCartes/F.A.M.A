@@ -88,7 +88,7 @@ Promedio Macro                 85.7%    85.9%    85.1%       154   NUEVO RÉCORD
 
 ## 5. Artefactos y Conclusiones
 
-1. **Matriz de Confusión Oficial:** Guardada en [`docs/cm_ensemble_gap_gem_dense_hop100_max.png`](./cm_ensemble_gap_gem_dense_hop100_max.png).
+1. **Matriz de Confusión Oficial:** Guardada en [`docs/images/cm_ensemble_gap_gem_dense_hop100_max.png`](./images/cm_ensemble_gap_gem_dense_hop100_max.png).
 2. **Suite de Pruebas Automatizadas:** 61 pruebas unitarias e integración en verde (`.venv/bin/pytest backend/tests`).
 3. **Validación de Principios de Software:** El módulo profundo `EnsembleClassifier` respeta el Principio de Sustitución de Liskov, permitiendo invocarlo de forma transparente desde el CLI:
    ```bash
@@ -96,5 +96,5 @@ Promedio Macro                 85.7%    85.9%    85.1%       154   NUEVO RÉCORD
        --checkpoints efficientnet_gpu_pipeline_35e_best.pt efficientnet_gem_35e_best.pt \
        --weights 0.8 0.2 \
        --use-tta --tta-mode max --hop-seconds 1.0 \
-       --output docs/cm_ensemble_gap_gem_dense_hop100_max.png
+       --output docs/images/cm_ensemble_gap_gem_dense_hop100_max.png
    ```

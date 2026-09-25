@@ -1,0 +1,42 @@
+# openspec/config.yaml
+schema: spec-driven
+
+context: |
+  Tech stack: Python 3.12/3.14 (PyTorch, Torchaudio, FastAPI, SQLAlchemy, Librosa, Timm)
+  Architecture: Hybrid MLOps Framework, Deep Modules, Strategy Pattern, Config-Driven Pipelines
+  Testing: Pytest with strict TDD (Red-Green-Refactor)
+  Persistence: Google Cloud Storage (GCS) + PostgreSQL (SQLAlchemy 2.0)
+
+strict_tdd: true
+
+projects:
+  - path: .
+    stack: Python 3.12/3.14 (PyTorch / FastAPI)
+    test_command: PYTHONPATH=backend /home/kevin/Work/fama/.venv/bin/pytest backend/tests/
+    framework: pytest
+    coverage_command: ""
+
+testing:
+  strict_tdd: true
+  test_command: PYTHONPATH=backend /home/kevin/Work/fama/.venv/bin/pytest backend/tests/
+  test_layers:
+    unit: true
+    integration: true
+    e2e: false
+
+rules:
+  proposal:
+    - Focus on problem statement, architectural impact, and non-goals
+  specs:
+    - Use Given/When/Then scenarios for public interfaces
+    - Follow RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+  design:
+    - Deep Modules: Small interfaces hiding high complexity
+    - Isolate persistence and enforce backward compatibility
+  tasks:
+    - Number hierarchically by phase with explicit test criteria
+  apply:
+    tdd: true
+    test_command: PYTHONPATH=backend /home/kevin/Work/fama/.venv/bin/pytest backend/tests/
+  verify:
+    test_command: PYTHONPATH=backend /home/kevin/Work/fama/.venv/bin/pytest backend/tests/

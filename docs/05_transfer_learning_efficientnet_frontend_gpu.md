@@ -112,7 +112,7 @@ A continuación se detalla la resolución lograda por `BioacousticEfficientNet`:
 
 ## 4. Matriz de Confusión de la Iteración 5
 
-![Matriz de Confusión EfficientNet](confusion_matrix_efficientnet.png)
+![Matriz de Confusión EfficientNet](images/confusion_matrix_efficientnet.png)
 
 ### Observaciones Clave de la Geometría Latente:
 1. **Recuperación Diagonal en Fío-fío y Colilarga:** En el baseline, estas clases exhibían diagonales casi nulas (2 aciertos de 13 y 2.8 de 9). En la matriz actual, ambas recuperaron la concentración en la diagonal principal (8 y 7 aciertos respectivamente).

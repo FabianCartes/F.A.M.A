@@ -108,7 +108,7 @@ Para desplegar o replicar de forma oficial el sistema campeón en cualquier ento
     --use-tta \
     --tta-mode max \
     --hop-seconds 1.0 \
-    --output docs/cm_ensemble_tri_model_calibrated_max.png
+    --output docs/images/cm_ensemble_tri_model_calibrated_max.png
 ```
 
 ### Propiedades Garantizadas del Sistema:

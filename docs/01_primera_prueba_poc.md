@@ -70,7 +70,7 @@ El archivo `data/metadata.csv` respeta exactamente el esquema relacional de la t
 
 Evaluación de las 154 muestras de test (grabadores nunca antes vistos por la red):
 
-![Matriz de Confusión](confusion_matrix_poc.png)
+![Matriz de Confusión](images/confusion_matrix_poc.png)
 
 ### Análisis Acústico de Resultados:
 - **Especies con alta detectabilidad (vocalizaciones muy estereotipadas):**

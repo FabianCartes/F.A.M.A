@@ -4,9 +4,9 @@ from pathlib import Path
 from typing import Optional, Tuple, List
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Form, status
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Form, Query, status
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 import torch
 import torch.nn as nn
@@ -52,6 +52,13 @@ from app.services.dashboard import dashboard_service
 from app.services.feedback import feedback_service
 from app.database import Base, engine, get_db
 from app.models import Prediccion, ConjuntoDatos, Audio, Modelo, MetricaEntrenamiento, Retroalimentacion
+from app.services.registry import get_model_registry, ModelRegistry, ModelNotFoundError
+from app.schemas.model_info import ModelListResponse
+from app.schemas.prediction import PredictionResponse
+from app.services.predictors.cnn_predictor import AudioCNNPredictor
+
+# Alias de compatibilidad retroactiva para scripts o tests previos
+AudioPredictorService = AudioCNNPredictor
 
 
 # ============================================================================
@@ -379,8 +386,8 @@ async def lifespan(app_instance: FastAPI):
 # ============================================================================
 app = FastAPI(
     title="F.A.M.A. Backend API",
-    description="Backend orquestador para monitoreo y clasificación bioacústica de aves chilenas",
-    version="1.0.0",
+    description="Backend orquestador multi-modelo para monitoreo y clasificación bioacústica",
+    version="1.1.0",
     lifespan=lifespan,
 )
 
@@ -443,25 +450,55 @@ def get_dashboard_stats(
 
 
 # ============================================================================
-# ENDPOINT DE PREDICCIÓN BIOACÚSTICA CON SUPER-ENSAMBLE TRI-MODELO
+# CATÁLOGO DE MODELOS DE INFERENCIA
+# ============================================================================
+@app.get(
+    "/api/models",
+    response_model=ModelListResponse,
+    summary="Catálogo de modelos bioacústicos registrados",
+)
+def list_models(
+    registry: ModelRegistry = Depends(get_model_registry),
+):
+    """
+    Retorna la lista de todos los modelos bioacústicos disponibles en el catálogo,
+    sus especificaciones técnicas, clases soportadas y el modelo por defecto.
+    """
+    models = registry.list_models()
+    default_id = registry.get_default_model_id() or "chilean-birds-cnn"
+    return ModelListResponse(
+        models=models,
+        total=len(models),
+        default_model_id=default_id,
+    )
+
+
+# ============================================================================
+# ENDPOINT DE PREDICCIÓN BIOACÚSTICA
 # ============================================================================
 @app.post(
     "/api/predict",
-    summary="Inferencia bioacústica con persistencia en Google Cloud Storage y PostgreSQL",
+    response_model=PredictionResponse,
+    summary="Inferencia bioacústica con selección de modelo, persistencia en Google Cloud Storage y PostgreSQL",
 )
 async def predict_audio(
     file: UploadFile = File(...),
+    model_id: Optional[str] = Query(
+        None,
+        description="Identificador del modelo a utilizar. Si no se especifica, usa el modelo por defecto.",
+    ),
     dataset_name: Optional[str] = Form(None),
     db: Session = Depends(get_db),
+    registry: ModelRegistry = Depends(get_model_registry),
 ):
     """
     Recibe un archivo de audio por HTTP multipart/form-data.
-    1. Valida formato .wav.
-    2. Sube a Google Cloud Storage mediante upload_audio_to_gcp (RNF_03).
-    3. Guarda temporalmente en disco usando tempfile para la inferencia densa.
-    4. Infiere con el Super-Ensamble Tri-Modelo (Dense TTA hop=1.0s, mode='max', micro-batch=32).
-    5. Inserta el resultado en la tabla 'prediccion' de PostgreSQL.
-    6. Retorna confirmación JSON con filename, gcp_upload, db_id, clase y confianza real calibrada.
+    1. Valida que la extensión sea estrictamente .wav.
+    2. Resuelve y valida el modelo solicitado en el ModelRegistry (falla rápido 404 si no existe).
+    3. Sube el archivo a Google Cloud Storage mediante upload_audio_to_gcp (RNF_03).
+    4. Ejecuta la inferencia bioacústica a través del AudioPredictor correspondiente.
+    5. Inserta el registro histórico en la tabla 'prediccion' de PostgreSQL (incluyendo modelo_id).
+    6. Retorna el contrato JSON con la predicción, confirmación de GCS y trazabilidad.
     """
     filename = file.filename or "audio.wav"
 
@@ -472,10 +509,19 @@ async def predict_audio(
             detail="Formato no válido. Solo se permiten archivos de audio con extensión .wav",
         )
 
+    # 2. Validación y resolución temprana del modelo (evita subir a GCS si el modelo no existe)
+    try:
+        predictor = registry.get(model_id)
+    except ModelNotFoundError as err:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(err),
+        )
+
     try:
         audio_bytes = await file.read()
 
-        # 2. Persistencia en la nube: Subida a Google Cloud Storage (RNF_03)
+        # 3. Persistencia en la nube: Subida a Google Cloud Storage (RNF_03)
         try:
             gcp_success = await upload_audio_to_gcp(audio_bytes, filename=filename)
         except Exception as gcp_err:
@@ -490,28 +536,26 @@ async def predict_audio(
                 detail="No fue posible confirmar la subida a Google Cloud Storage.",
             )
 
-        # 3. Guardado temporal en disco para inferencia densa multi-crop
+        # 4. Procesar audio localmente de forma temporal para la inferencia acústica
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_audio:
             tmp_audio.write(audio_bytes)
             tmp_path = Path(tmp_audio.name)
 
         try:
-            # Inferencia bioacústica con Super-Ensamble Tri-Modelo (Dense TTA + Micro-Batching)
-            clase, confianza = ensemble_service.predict(
-                audio_file_path=tmp_path,
-                hop_seconds=1.0,
-                max_window_batch_size=32,
-            )
+            pred_result = predictor.predict(tmp_path)
+            clase = pred_result.clase
+            confianza = float(pred_result.confianza)
         finally:
             if tmp_path.exists():
                 tmp_path.unlink()
 
-        # 4. Persistencia relacional en PostgreSQL (Tabla 'prediccion')
+        # 5. Persistencia relacional en PostgreSQL (Tabla 'prediccion')
         try:
             registro_prediccion = Prediccion(
                 ruta_audio_prueba=filename,
                 etiqueta_predicha=clase,
                 confianza=confianza,
+                modelo_id=predictor.model_id,
             )
             db.add(registro_prediccion)
             db.commit()
@@ -524,7 +568,7 @@ async def predict_audio(
                 detail=f"Fallo al registrar la predicción en PostgreSQL: {db_save_err}",
             )
 
-        # 5. Retorno del formato JSON enriquecido
+        # 6. Retorno del formato JSON enriquecido
         status_info = ensemble_service.get_status(dataset_name=dataset_name, db=db)
         active_labels = [
             f"{m['name']} ({int(round(m['weight'] * 100))}%)"
@@ -536,8 +580,9 @@ async def predict_audio(
             "db_id": db_id,
             "clase": clase,
             "confianza": confianza,
-            "modelo": status_info["model_name"],
-            "is_fallback": status_info["is_fallback"],
+            "modelo_id": predictor.model_id,
+            "modelo": predictor.metadata.name if hasattr(predictor, "metadata") else status_info.get("model_name"),
+            "is_fallback": getattr(predictor, "is_fallback", status_info.get("is_fallback", False)),
             "modelos_activos": active_labels,
         }
 
@@ -721,5 +766,3 @@ def activate_model(model_id: int, db: Session = Depends(get_db)):
     Activa un modelo para inferencias bioacústicas en tiempo real (CU_INV_05).
     """
     return training_service.set_active_model(model_id=model_id, db=db)
-
-

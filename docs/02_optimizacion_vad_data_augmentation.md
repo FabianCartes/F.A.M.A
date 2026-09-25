@@ -49,7 +49,7 @@ Al implementar la estrategia combinada de **Ventaneo Múltiple con VAD de energ�
 
 ## 3. Matriz de Confusión del Modelo Optimizado
 
-![Matriz de Confusión Optimizada](confusion_matrix_augmented.png)
+![Matriz de Confusión Optimizada](images/confusion_matrix_augmented.png)
 
 ### Comparativa de Desempeño por Especie:
 - **Zorzal patagónico (*Turdus falcklandii*):** Pasó de 5 aciertos en el baseline a **11 aciertos** en el modelo optimizado (+120% de mejora).

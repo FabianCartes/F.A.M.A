@@ -1,0 +1,199 @@
+{
+  "model_id": "car-engine-diagnostics-efficientnet-b0-multitask-hpss-additive",
+  "architecture": "efficientnet_b0_multitask_hpss_gem",
+  "technique": "Physics-Guided Additive Mixing + HPSS 3ch",
+  "validation_metrics": {
+    "best_val_macro_f1": 0.8333113547581568,
+    "val_report": {
+      "bad_ignition": {
+        "precision": 0.9,
+        "recall": 1.0,
+        "f1-score": 0.9473684210526315,
+        "support": 9.0
+      },
+      "dead_battery": {
+        "precision": 1.0,
+        "recall": 0.8888888888888888,
+        "f1-score": 0.9411764705882353,
+        "support": 9.0
+      },
+      "low_oil": {
+        "precision": 0.5714285714285714,
+        "recall": 0.5,
+        "f1-score": 0.5333333333333333,
+        "support": 16.0
+      },
+      "no oil_serpentine belt": {
+        "precision": 0.6470588235294118,
+        "recall": 0.6875,
+        "f1-score": 0.6666666666666666,
+        "support": 16.0
+      },
+      "normal_brakes": {
+        "precision": 0.8461538461538461,
+        "recall": 0.9166666666666666,
+        "f1-score": 0.88,
+        "support": 12.0
+      },
+      "normal_engine_idle": {
+        "precision": 0.9285714285714286,
+        "recall": 0.975,
+        "f1-score": 0.9512195121951219,
+        "support": 40.0
+      },
+      "normal_engine_startup": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1-score": 1.0,
+        "support": 9.0
+      },
+      "power steering combined_no oil": {
+        "precision": 0.6470588235294118,
+        "recall": 0.6875,
+        "f1-score": 0.6666666666666666,
+        "support": 16.0
+      },
+      "power steering combined_no oil_serpentine belt": {
+        "precision": 0.631578947368421,
+        "recall": 0.75,
+        "f1-score": 0.6857142857142857,
+        "support": 16.0
+      },
+      "power steering combined_serpentine belt": {
+        "precision": 0.9230769230769231,
+        "recall": 0.7058823529411765,
+        "f1-score": 0.8,
+        "support": 17.0
+      },
+      "power_steering": {
+        "precision": 0.9473684210526315,
+        "recall": 0.9473684210526315,
+        "f1-score": 0.9473684210526315,
+        "support": 19.0
+      },
+      "serpentine_belt": {
+        "precision": 0.9444444444444444,
+        "recall": 1.0,
+        "f1-score": 0.9714285714285714,
+        "support": 17.0
+      },
+      "worn_out_brakes": {
+        "precision": 1.0,
+        "recall": 0.7272727272727273,
+        "f1-score": 0.8421052631578947,
+        "support": 11.0
+      },
+      "accuracy": 0.8357487922705314,
+      "macro avg": {
+        "precision": 0.8451338637811608,
+        "recall": 0.8296983889863145,
+        "f1-score": 0.8333113547581568,
+        "support": 207.0
+      },
+      "weighted avg": {
+        "precision": 0.8410558898466648,
+        "recall": 0.8357487922705314,
+        "f1-score": 0.8348851370033357,
+        "support": 207.0
+      }
+    }
+  },
+  "blind_test_metrics": {
+    "test_accuracy": 0.7777777777777778,
+    "test_macro_f1": 0.7686796422078486,
+    "test_ece": 0.0841773031414419,
+    "test_report": {
+      "bad_ignition": {
+        "precision": 0.8,
+        "recall": 0.8888888888888888,
+        "f1-score": 0.8421052631578947,
+        "support": 9.0
+      },
+      "dead_battery": {
+        "precision": 1.0,
+        "recall": 0.7777777777777778,
+        "f1-score": 0.875,
+        "support": 9.0
+      },
+      "low_oil": {
+        "precision": 0.6153846153846154,
+        "recall": 0.5,
+        "f1-score": 0.5517241379310345,
+        "support": 16.0
+      },
+      "no oil_serpentine belt": {
+        "precision": 0.5384615384615384,
+        "recall": 0.4375,
+        "f1-score": 0.4827586206896552,
+        "support": 16.0
+      },
+      "normal_brakes": {
+        "precision": 0.8,
+        "recall": 1.0,
+        "f1-score": 0.8888888888888888,
+        "support": 12.0
+      },
+      "normal_engine_idle": {
+        "precision": 0.9512195121951219,
+        "recall": 0.975,
+        "f1-score": 0.9629629629629629,
+        "support": 40.0
+      },
+      "normal_engine_startup": {
+        "precision": 0.9,
+        "recall": 1.0,
+        "f1-score": 0.9473684210526315,
+        "support": 9.0
+      },
+      "power steering combined_no oil": {
+        "precision": 0.6,
+        "recall": 0.5625,
+        "f1-score": 0.5806451612903226,
+        "support": 16.0
+      },
+      "power steering combined_no oil_serpentine belt": {
+        "precision": 0.5,
+        "recall": 0.5625,
+        "f1-score": 0.5294117647058824,
+        "support": 16.0
+      },
+      "power steering combined_serpentine belt": {
+        "precision": 0.6666666666666666,
+        "recall": 0.5882352941176471,
+        "f1-score": 0.625,
+        "support": 17.0
+      },
+      "power_steering": {
+        "precision": 0.8421052631578947,
+        "recall": 0.8421052631578947,
+        "f1-score": 0.8421052631578947,
+        "support": 19.0
+      },
+      "serpentine_belt": {
+        "precision": 0.8,
+        "recall": 0.9411764705882353,
+        "f1-score": 0.8648648648648649,
+        "support": 17.0
+      },
+      "worn_out_brakes": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1-score": 1.0,
+        "support": 11.0
+      },
+      "accuracy": 0.7777777777777778,
+      "macro avg": {
+        "precision": 0.7702951996819875,
+        "recall": 0.7750525918869572,
+        "f1-score": 0.7686796422078486,
+        "support": 207.0
+      },
+      "weighted avg": {
+        "precision": 0.7726746487085828,
+        "recall": 0.7777777777777778,
+        "f1-score": 0.772008628017647,
+        "support": 207.0
+      }
+    }
+  }
+}

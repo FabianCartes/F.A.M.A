@@ -120,9 +120,9 @@ Bajo la metodología estricta de TDD (*Red → Green → Refactor*), se expandi�
 | **Iter 8** | `EfficientNet-B0` + GPU Front-End + **TTA Max** | 35 | **04m 45s** | **~8.0s** | **83.12%** | **83.76%** | **85.13%** |
 
 ### Visualizaciones de Desempeño Generadas
-* **Matriz de Confusión Sin TTA:** [`docs/cm_gpu_pipeline_35e_no_tta.png`](docs/cm_gpu_pipeline_35e_no_tta.png)
-* **Matriz de Confusión TTA Mean:** [`docs/cm_gpu_pipeline_35e_tta_mean.png`](docs/cm_gpu_pipeline_35e_tta_mean.png)
-* **Matriz de Confusión TTA Max (Récord):** [`docs/cm_gpu_pipeline_35e_tta_max.png`](docs/cm_gpu_pipeline_35e_tta_max.png)
+* **Matriz de Confusión Sin TTA:** [`docs/images/cm_gpu_pipeline_35e_no_tta.png`](images/cm_gpu_pipeline_35e_no_tta.png)
+* **Matriz de Confusión TTA Mean:** [`docs/images/cm_gpu_pipeline_35e_tta_mean.png`](images/cm_gpu_pipeline_35e_tta_mean.png)
+* **Matriz de Confusión TTA Max (Récord):** [`docs/images/cm_gpu_pipeline_35e_tta_max.png`](images/cm_gpu_pipeline_35e_tta_max.png)
 
 ---
 
