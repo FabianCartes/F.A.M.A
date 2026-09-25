@@ -1,11 +1,12 @@
-# F.A.M.A. — Framework MLOps Híbrido para Clasificación de Audio
+# F.A.M.A. — Framework MLOps Híbrido para Clasificación Acústica Multi-Dominio
 
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
+[![Next.js](https://img.shields.io/badge/Next.js-14+-black.svg)](https://nextjs.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.1+-ee4c2c.svg)](https://pytorch.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16+-336791.svg)](https://www.postgresql.org/)
 [![Google Cloud Storage](https://img.shields.io/badge/GCS-Persistence-4285F4.svg)](https://cloud.google.com/storage)
-[![Tests](https://img.shields.io/badge/tests-22%20passed-success.svg)](backend/tests/)
+[![Tests](https://img.shields.io/badge/tests-174%20passed-success.svg)](backend/tests/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > **Proyecto de Título / Tesis de Grado**  
@@ -16,299 +17,210 @@
 
 ---
 
-## 📌 Descripción General
+## 1. Descripción General
 
-**F.A.M.A.** es un framework MLOps híbrido diseñado para el ciclo de vida completo de modelos de clasificación acústica. Desacopla el preprocesamiento local de señales bioacústicas de la orquestación y el almacenamiento en la nube, optimizando el uso de recursos computacionales antes del despliegue en infraestructura cloud.
+**F.A.M.A.** es un framework MLOps híbrido de nivel productivo para el ciclo de vida integral de modelos de clasificación acústica. Desacopla la ingesta masiva de grabaciones, el preprocesamiento espectral y la orquestación de entrenamientos del consumo en inferencia de baja latencia con persistencia híbrida en la nube (**Google Cloud Storage**) y base de datos relacional (**PostgreSQL**).
 
-El dominio piloto seleccionado corresponde a la **clasificación bioacústica de 15 especies de aves comunes y endémicas de Chile**, utilizando grabaciones de campo de alta calidad (A y B) de la plataforma internacional [Xeno-canto](https://xeno-canto.org/).
+El sistema opera bajo un enfoque **multi-dominio acústico**, soportando simultáneamente:
+1. **Bioacústica (Aves Chilenas):** Monitoreo y clasificación de 15 especies de aves nativas y endémicas de Chile a partir de registros de campo de [Xeno-canto](https://xeno-canto.org/).
+2. **Diagnóstico Industrial (Fallas de Motores):** Detección y diagnóstico temprano de 13 condiciones de falla mecánica automotriz mediante análisis espectral y separación armónico-percusiva.
 
 ---
 
-## 🚀 Estado Actual del Proyecto: Orquestador FastAPI & Persistencia Híbrida
+## 2. Arquitectura del Sistema
 
-El sistema ha superado con éxito la fase de PoC algorítmica y cuenta actualmente con un **Orquestador RESTful (FastAPI)** conectado a almacenamiento en la nube (**Google Cloud Storage**) y persistencia relacional (**PostgreSQL**), conformando el *Minimum Viable Pipeline* de la arquitectura híbrida:
+```text
+                                ARQUITECTURA GENERAL F.A.M.A.
 
+         [ Frontend Next.js / TypeScript ]  <────  RESTful API / SSE  ────>  [ Orquestador FastAPI ]
+         ├── Dashboard (Doble Campeón)                                      ├── Controladores Desacoplados
+         ├── Ingesta (Sincronización GCS)                                   ├── Model Registry Dinámico
+         ├── Entrenamiento (Orquestador Triadas)                            ├── Pipeline Acústico (HPSS + VAD)
+         └── Predicción (Selector Multi-Dominio)                            └── Persistencia Híbrida
+                                                                                      │
+                 ┌────────────────────────────────────────────────────────────────────┴──────────────────────────┐
+                 ▼                                                                                               ▼
+    [ Capa de Almacenamiento Cloud ]                                                            [ Capa de Inferencia Tensorial ]
+    ├── Google Cloud Storage (Bucket)                                                           ├── Tríada Bioacústica (22.05 kHz)
+    │   ├── datasets/{dominio}/{clase}/*.wav                                                    │   ├── EfficientNet-B0
+    │   └── audios_inferencia/{timestamp}.wav                                                   │   ├── ConvNeXt-Nano
+    └── PostgreSQL (fama_db)                                                                    │   └── ResNet-34d
+        ├── datasets, colecciones y audios                                                      └── Tríada Industrial (32.00 kHz)
+        ├── historial_entrenamiento y checkpoints                                                   ├── ResNet-34d
+        └── prediccion y métricas de calibración                                                    ├── EfficientNet-B0
+                                                                                                    └── PANNs-CNN14 (AudioSet)
 ```
-                               ARQUITECTURA DEL SISTEMA F.A.M.A.
-                               
-      [ Cliente Web / Frontend ] ──( Multipart / Form-Data .wav )──┐
-                                                                   ▼
-                                                       [ Orquestador FastAPI ]
-                                                                   │
-                       ┌───────────────────────────────────────────┴───────────────────────────────────────────┐
-                       ▼                                                                                       ▼
-         [ Pipeline Bioacústico ]                                                                  [ Capa de Persistencia ]
-                       │                                                                                       │
-      ┌────────────────┴────────────────┐                                                  ┌───────────────────┴───────────────────┐
-      ▼                                 ▼                                                  ▼                                       ▼
- [ Filtro Físico ]            [ Inferencia CNN PyTorch ]                           [ Google Cloud Storage ]                 [ PostgreSQL (fama_db) ]
- - RMS Silencio (< 1e-4)      - Checkpoint augmented_best.pt                       - Subida asíncrona (RNF_03)              - Tabla: prediccion
- - Planitud Espectral         - Mel-Spectrogram (128 bandas)                       - Bucket audios_inferencia               - ID, ruta, etiqueta,
-   (Flatness > 0.15 = Ruido)  - Calibración Temperature Scaling (T=1.5)            - UUIDv4 único por archivo                 confianza calibrada, UTC
-```
-
-### 📊 Desempeño del Modelo de Inferencia (`augmented_best.pt`)
-
-Evaluado sobre **154 grabaciones independientes de prueba (`test.csv`)** con estricto aislamiento por grabador (*Zero Recordist Leakage*):
-
-| Métrica | Baseline PoC (Corte 5s) | Optimizado (VAD + Data Augmentation) | Impacto / Mejora |
-|:---|:---:|:---:|:---:|
-| **Accuracy en Test** | 44.16% | **61.69%** | **+17.53%** (vs. 6.67% azar) |
-| **Precisión Macro** | 52.18% | **67.13%** | **+14.95%** |
-| **Recall Macro** | 46.44% | **64.26%** | **+17.82%** |
-| **F1-Score Macro** | 44.45% | **63.40%** | **+18.95%** |
-| **Mejor Acc. Validación** | 55.56% | **62.39%** | **+6.83%** |
-
-### 🛡️ Robustecimiento e Inferencia Anti-Alucinación
-
-1. **Discriminación de Silencio (RMS):** Si $\text{RMS} < 10^{-4}$, el audio se descarta de inmediato como `"Silencio / No detectado"` (confianza $0.0$).
-2. **Discriminación de Ruido Blanco (Planitud Espectral):** Si $\text{Flatness} > 0.15$, se clasifica como `"Ruido / Señal no biológica"` (confianza $0.0$), impidiendo que el ruido ambiental forzado sea clasificado erróneamente como un ave.
-3. **Calibración por Temperatura (*Temperature Scaling*):** Aplicación de $T = 1.5$ sobre los logits para devolver probabilidades de confianza suaves y continuas, evitando sobreconfianzas artificiales de Softmax ($0.9999$).
 
 ---
 
-## 🦜 Catálogo de Especies del Dominio Piloto
+## 3. Dominios Soportados y Modelos Campeones
 
-El dataset catalogado en `backend/data/metadata.csv` contiene **1.205 audios** con hash SHA-256 distribuido en 15 especies chilenas:
+### A. Dominio Bioacústico — 15 Especies Chilenas
+- **Parámetros acústicos:** Remuestreo a 22.050 Hz, ventana temporal de 5.0 s, 128 bandas Mel (100 Hz - 11.025 Hz).
+- **Modelo Campeón:** Súper-Ensamble Trimodal con votación ponderada calibrada.
+  - **EfficientNet-B0** (Peso: 0.35)
+  - **ConvNeXt-Nano** (Peso: 0.35)
+  - **ResNet-34d** (Peso: 0.30)
+- **Rendimiento en conjunto de prueba (`test.csv`):**
+  - **F1-Score Macro:** 88.68%
+  - **Accuracy en Test:** 88.31%
+- **Catálogo de especies:**
+  *Zorzal patagónico, Rayadito, Chucao, Chercán, Tordo, Turca (endémica), Fío-fío, Chincol, Churrín de la Mocha, Churrín del sur, Picaflor chico, Canastero, Tijeral, Tapaculo (endémica), Colilarga.*
 
-1. **Zorzal patagónico** (*Turdus falcklandii*) — 174 audios
-2. **Rayadito** (*Aphrastura spinicauda*) — 101 audios
-3. **Chucao** (*Scelorchilus rubecula*) — 92 audios
-4. **Chercán** (*Troglodytes aedon*) — 92 audios
-5. **Tordo** (*Curaeus curaeus*) — 84 audios
-6. **Turca** (*Pteroptochos megapodius*, *endémica*) — 76 audios
-7. **Fío-fío** (*Elaenia chilensis*) — 76 audios
-8. **Chincol** (*Zonotrichia capensis*) — 76 audios
-9. **Churrín de la Mocha** (*Eugralla paradoxa*) — 75 audios
-10. **Churrín del sur** (*Scytalopus magellanicus*) — 68 audios
-11. **Picaflor chico** (*Sephanoides sephaniodes*) — 62 audios
-12. **Canastero** (*Pseudasthenes humicola*) — 62 audios
-13. **Tijeral** (*Leptasthenura aegithaloides*) — 59 audios
-14. **Tapaculo** (*Scelorchilus albicollis*, *endémica*) — 57 audios
-15. **Colilarga** (*Sylviorthorhynchus desmurii*) — 51 audios
+### B. Dominio Industrial — Diagnóstico de Fallas de Motor
+- **Parámetros acústicos:** Remuestreo a 32.000 Hz, ventana temporal de 2.0 s, descomposición armónico-percusiva (HPSS) de 3 canales (Original, Armónico, Percusivo).
+- **Modelo Campeón:** Ensamble Trimodal con optimización de márgenes y representación transferida.
+  - **ResNet-34d** (Especialista en resonancias armónicas y transientes)
+  - **EfficientNet-B0** (Representación espectro-temporal de alta resolución)
+  - **PANNs-CNN14** (Preentrenado en AudioSet para acústica física)
+- **Rendimiento validado:**
+  - **Accuracy en Test:** 81.16%
+  - **F1-Score Balanceado:** 81.44%
+- **Catálogo de 13 condiciones y severidades:**
+  - *Condición Normal (Línea Base / Operación Nominal)*
+  - *Fallas de Encendido y Combustión (Misfire leve y severo, Fuga de Vacío, Desbalance)*
+  - *Fallas Mecánicas y Válvulas (Cadena de Distribución, Luz de Válvulas, Picado de Biela)*
+  - *Fallas de Auxiliares y Rodamientos (Tensor de Correa, Alternador, Bomba de Agua, Aire Acondicionado)*
 
 ---
 
-## 📂 Estructura del Repositorio
+## 4. Filtros Físicos Anti-Alucinación y Calibración
 
-El proyecto sigue una estructura desacoplada de monorepo:
+Para evitar falsos positivos en condiciones reales de campo o taller:
+1. **Detector de Silencio Energético (RMS):** Si el valor RMS es inferior a $10^{-4}$, el registro se etiqueta como `"Silencio / No detectado"` sin consultar a la red neuronal.
+2. **Detector de Ruido No Estructurado (Planitud Espectral):** Si la planitud espectral supera el umbral crítico ($> 0.15$), se clasifica como `"Ruido / Señal no acústica"`, evitando predicciones forzadas sobre viento o interferencia eléctrica.
+3. **Calibración de Confianza (Temperature Scaling):** Calibración post-hoc ($T = 1.5$) sobre los logits que transforma puntuaciones sobreconfiadas en probabilidades continuas y confiables.
+
+---
+
+## 5. Módulos de la Plataforma Web (Frontend)
+
+El frontend está desarrollado con Next.js 14, React y TypeScript, diseñado bajo una estética oscura profesional, sin emojis y utilizando iconos vectoriales SVG con etiquetas de estado:
+
+1. **Dashboard:**
+   - Visualización de KPIs globales y tarjetas dedicadas para los **Dos Modelos Campeones** (Bioacústica e Industrial).
+   - Métricas de exactitud, F1-Score, tasa de certeza y latencia promedio.
+   - Historial de actividad en tiempo real con distintivos de dominio `[Bioacústica]` y `[Industrial]`.
+2. **Ingesta de Datos:**
+   - Catálogo interactivo de datasets almacenados en el Data Lake (Google Cloud Storage) y almacenamiento local.
+   - Modal de subida por lotes con asignación obligatoria de clase/categoría para mantener la jerarquía de entrenamiento.
+   - Sincronización asíncrona bidireccional entre la nube y el servidor local.
+3. **Entrenamiento:**
+   - Configuración individual de hiperparámetros para las 5 arquitecturas base (`AudioCNN`, `EfficientNet-B0`, `ConvNeXt-Nano`, `ResNet-34d`, `PANNs-CNN14`).
+   - Orquestador de **Tríada Completa (Ensamble)** adaptativo: selecciona automáticamente la canalización bioacústica o industrial según el dataset seleccionado.
+   - Gráficos interactivos de evolución de pérdidas (*Loss*) y precisión por época.
+4. **Predicción e Inferencia:**
+   - Selector dinámico de modelos poblado en tiempo real desde el `ModelRegistry`.
+   - Banner de especificaciones técnicas (frecuencia de muestreo, duración de ventana y número de clases).
+   - Desglose de contribución porcentual por modelo individual dentro del ensamble.
+   - Diagnósticos contextuales con niveles de severidad (`Operacional`, `Advertencia`, `Crítica`).
+
+---
+
+## 6. Estructura del Repositorio
 
 ```text
 F.A.M.A/
-├── .agents/                    # Directrices de ingeniería de agentes y TDD
-├── backend/                    # Núcleo de servicios, APIs y modelos de ML
-│   ├── app/                    # Aplicación FastAPI estructurada en capas
-│   │   ├── controllers/        # Controladores de negocio desacoplados
-│   │   ├── database.py         # Configuración del motor y sesiones de SQLAlchemy
-│   │   ├── main.py             # Instancia principal de FastAPI y endpoints
-│   │   ├── middlewares/        # Middlewares de seguridad, CORS y control de errores
-│   │   ├── models/             # Modelos ORM y esquemas relacionales
-│   │   │   └── prediction.py   # Modelo 'Prediccion' (tabla: prediccion)
-│   │   ├── routes/             # Enrutadores modulares de la API
-│   │   └── services/           # Servicios desacoplados de infraestructura
-│   │       └── storage.py      # Servicio asíncrono para Google Cloud Storage
-│   ├── poc/                    # Módulos profundos del pipeline bioacústico
-│   │   ├── download.py         # Descarga concurrente desde Xeno-canto v3 + SHA-256
-│   │   ├── preprocess.py       # Remuestreo 22050Hz, VAD relativo (top 25 dB) y Mel-dB
-│   │   ├── split.py            # Partición agrupada estratificada (Zero Recordist Leakage)
-│   │   ├── train.py            # AudioCNN, SpecAugment, pitch-shift y entrenamiento PyTorch
-│   │   └── evaluate.py         # Evaluación determinista y cálculo de métricas en Test
+├── backend/                    # Servidor de aplicaciones, APIs y pipelines de ML
+│   ├── app/                    # Arquitectura modular FastAPI
+│   │   ├── controllers/        # Lógica de aplicación y endpoints
+│   │   ├── models/             # Modelos de base de datos relacionales (SQLAlchemy)
+│   │   ├── routes/             # Enrutadores API (predict, training, ingestion, dashboard)
+│   │   ├── schemas/            # Validación de contratos Pydantic
+│   │   └── services/           # Servicios profundos (storage, ingestion, training, registry)
+│   ├── checkpoints/            # Pesos de modelos entrenados (*.pt)
+│   ├── data/                   # Índices locales, metadata y particiones de audio
 │   ├── tests/                  # Suite de pruebas unitarias automatizadas (TDD)
-│   ├── checkpoints/            # Pesos entrenados (augmented_best.pt)
-│   ├── data/                   # Metadata e índices de audio locales
 │   ├── requirements.txt        # Dependencias de Python
-│   ├── .env.example            # Plantilla de variables de entorno
-│   ├── .env                    # Configuración local (ignorado en Git)
-│   ├── main.py                 # Adaptador raíz para levantar el orquestador
-│   └── database.py             # Adaptador raíz de base de datos
-├── frontend/                   # Aplicación Web Next.js (pendiente de inicialización)
-│   └── README.md               # Documentación de reserva del frontend
-├── docs/                       # Documentación académica y técnica
-│   ├── images/                 # Matrices de confusión y gráficos de desempeño
-│   ├── adr/                    # Registros de decisiones arquitectónicas (ADRs)
-│   ├── problemas_conocidos/    # Análisis de errores y límites bioacústicos
-│   └── 01_... a 16_...         # Informes técnicos de iteración y RDD
-├── .gitignore                  # Protección estricta de llaves IAM, credenciales y datasets
-├── AGENTS.md                   # Directrices obligatorias de ingeniería y TDD
+│   └── .env.example            # Plantilla de variables de entorno
+├── frontend/                   # Interfaz de usuario Next.js 14
+│   ├── components/
+│   │   ├── ui/                 # Componentes base del sistema de diseño
+│   │   └── views/              # Vistas completas (Dashboard, Ingesta, Entrenamiento, Predicción)
+│   ├── pages/                  # Rutas principales y puntos de entrada
+│   └── package.json            # Dependencias de Node.js
+├── docs/                       # Documentación técnica, ADRs y reportes científicos
+├── .gitignore                  # Exclusión de claves, binarios y datos confidenciales
+├── AGENTS.md                   # Directrices obligatorias de desarrollo y TDD
 └── README.md                   # Esta documentación
 ```
 
 ---
 
-## 🛠️ Requisitos Previos e Instalación
+## 7. Requisitos y Puesta en Marcha
 
-### Requisitos del Sistema
+### Requisitos Previos
 - **Python 3.12+**
-- **PostgreSQL 15+** instalado y en ejecución en `localhost:5432` (o accesible vía red/Docker).
-- **Cuenta de Google Cloud (GCP)** con un bucket en Google Cloud Storage y llave JSON de cuenta de servicio (opcional para pruebas locales sin cloud).
+- **Node.js 18+** y **npm**
+- **PostgreSQL 15+** en ejecución local o en red
+- **Cuenta de Google Cloud** con Bucket de Cloud Storage y clave de Service Account (`.json`)
 
 ---
 
-### Paso a Paso para la Puesta en Marcha
+### Paso 1: Configurar el Backend
 
-#### 1. Clonar el Repositorio
-```bash
-git clone https://github.com/FabianCartes/F.A.M.A.git
-cd F.A.M.A
-```
-
-#### 2. Configurar el Entorno Virtual de Python
 ```bash
 cd backend
 
-# En Windows (PowerShell)
+# Crear y activar entorno virtual
 python -m venv .venv
+# En Windows:
 .\.venv\Scripts\Activate.ps1
-
-# En Linux / macOS
-python3 -m venv .venv
+# En Linux/macOS:
 source .venv/bin/activate
 
-# Instalar dependencias requeridas
+# Instalar dependencias
 pip install -r requirements.txt
-```
 
-#### 3. Configurar la Base de Datos PostgreSQL
-Asegúrate de que el servicio de PostgreSQL esté activo y crea la base de datos `fama_db`:
-
-```bash
-# Ejemplo usando psql (ingresa tu contraseña cuando sea requerida):
-psql -U postgres -h localhost -c "CREATE DATABASE fama_db;"
-```
-*(Nota: Las tablas de la base de datos se crearán automáticamente al iniciar la aplicación FastAPI gracias a SQLAlchemy).*
-
-#### 4. Configurar las Variables de Entorno (`.env`)
-Copia la plantilla de configuración en `backend/.env`:
-```bash
+# Configurar variables de entorno
 cp .env.example .env
 ```
-Edita el archivo `backend/.env` con tus valores locales:
+
+Editar el archivo `backend/.env`:
 ```ini
-# Base de datos PostgreSQL
 DATABASE_URL=postgresql://postgres:tu_password@localhost:5432/fama_db
-
-# Google Cloud Storage (Persistencia Cloud - RNF_03)
-# Coloca tu archivo JSON de cuenta de servicio dentro de /backend (protegido por .gitignore)
-GOOGLE_APPLICATION_CREDENTIALS=backend/tu_llave_servicio.json
-GCS_BUCKET_NAME=nombre-de-tu-bucket-gcs
-
-# API de Xeno-canto (opcional para re-descargar datos)
-XC_API_KEY=tu_api_key_aqui
+GOOGLE_APPLICATION_CREDENTIALS=tu_llave_servicio.json
+GCP_KEY_PATH=tu_llave_servicio.json
+GCS_BUCKET_NAME=fama-audio-records-2026
+XC_API_KEY=tu_api_key_opcional
 ```
 
-> [!WARNING]
-> **Seguridad (RNF_03):** Nunca subas archivos `.env` ni llaves `.json` de Google Cloud al repositorio. Ya están configurados en `.gitignore`.
-
----
-
-## 🧪 Verificación y Pruebas Unitarias (TDD)
-
-El proyecto sigue la metodología **Test-Driven Development**. Para verificar que todos los componentes (preprocesamiento, VAD, división de datos, modelo CNN, entrenamiento y evaluación) funcionan correctamente:
-
+Crear la base de datos en PostgreSQL:
 ```bash
-# Desde la carpeta backend/
+psql -U postgres -h localhost -c "CREATE DATABASE fama_db;"
+```
+
+Validar la suite de pruebas automatizadas:
+```bash
 pytest tests/ -v
-
-# O desde la raíz del proyecto
-pytest backend/tests/ -v
 ```
-*(Resultado esperado: **22 passed** sin errores).*
 
----
-
-## 🚀 Ejecución del Servidor FastAPI
-
-### 1. Iniciar el Orquestador en Modo Desarrollo
-Desde el directorio `backend/`:
+Iniciar el backend en desarrollo:
 ```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-O desde la raíz del proyecto:
-```bash
-uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-### 2. Documentación Interactiva Swagger / OpenAPI
-Una vez iniciado el servidor, abre en tu navegador:
-- **Swagger UI:** [http://localhost:8000/docs](http://localhost:8000/docs)
-- **ReDoc:** [http://localhost:8000/redoc](http://localhost:8000/redoc)
-
----
-
-## 📡 Catálogo de Endpoints y Ejemplos de Uso
-
-### `GET /` — Comprobación de Servicio
-```bash
-curl -X GET http://localhost:8000/
-```
-**Respuesta:**
-```json
-{"status": "F.A.M.A. Backend Operativo"}
-```
-
-### `GET /health` — Liveness Probe / Salud
-```bash
-curl -X GET http://localhost:8000/health
-```
-**Respuesta:**
-```json
-{"status": "ok"}
-```
-
-### `POST /api/predict` — Inferencia Bioacústica
-Envía un archivo `.wav` mediante `multipart/form-data`:
-
-```bash
-# En Linux / macOS / Git Bash
-curl -X POST "http://localhost:8000/api/predict" \
-     -H "accept: application/json" \
-     -H "Content-Type: multipart/form-data" \
-     -F "file=@ruta/a/tu/audio_muestra.wav"
-```
-
-```powershell
-# En Windows (PowerShell)
-Invoke-RestMethod -Uri "http://localhost:8000/api/predict" `
-                  -Method Post `
-                  -Form @{ file = Get-Item "ruta\a\tu\audio_muestra.wav" }
-```
-
-**Respuesta Exitosa (JSON):**
-```json
-{
-  "prediccion": "Turdus falcklandii",
-  "confianza": 0.8412,
-  "id_registro": 1,
-  "gcs_uri": "gs://mi-bucket-fama/audios_inferencia/20260904_120000_a1b2c3d4.wav"
-}
-```
-
-**Respuesta ante Silencio o Ruido No Biológico:**
-```json
-{
-  "prediccion": "Ruido / Señal no biológica",
-  "confianza": 0.0,
-  "id_registro": 2,
-  "gcs_uri": null
-}
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ---
 
-## 📚 Documentación Técnica e Informes de Avance
+### Paso 2: Configurar el Frontend
 
-Para profundizar en los fundamentos científicos, análisis matemáticos y decisiones de arquitectura del proyecto, consulta los informes en el directorio [`docs/`](docs/):
+En una nueva terminal:
+```bash
+cd frontend
 
-1. [**docs/01_primera_prueba_poc.md**](docs/01_primera_prueba_poc.md): PoC inicial, dataset de 15 especies y baseline en PyTorch (44.16% Acc).
-2. [**docs/02_optimizacion_vad_data_augmentation.md**](docs/02_optimizacion_vad_data_augmentation.md): Segmentación VAD por energía relativa, SpecAugment y mejora sustancial a 61.69% Acc.
-3. [**docs/03_orquestador_fastapi_gcs_postgresql.md**](docs/03_orquestador_fastapi_gcs_postgresql.md): Arquitectura en capas de FastAPI, discriminadores físicos de señal, calibración de confianza, persistencia en Google Cloud Storage y base de datos relacional PostgreSQL.
-4. [**docs/18_modelo_de_producto_despliegue_y_arquitectura_operativa.md**](docs/18_modelo_de_producto_despliegue_y_arquitectura_operativa.md): Modelo de producto, despliegue mediante Docker, concurrencia, gestión de credenciales GCS y roadmap a producción.
-5. [**docs/VIDA_01_CINF_FINAL_PT_2026_1_CARTES.md**](docs/VIDA_01_CINF_FINAL_PT_2026_1_CARTES.md): Documento oficial de anteproyecto de titulación.
+# Instalar dependencias
+npm install
+
+# Iniciar servidor de desarrollo
+npm run dev
+```
+
+El panel estará disponible en [http://localhost:3000](http://localhost:3000) y la documentación de la API en [http://localhost:8000/docs](http://localhost:8000/docs).
 
 ---
 
-## 🗺️ Próximos Pasos en el Roadmap
+## 8. Verificación y Calidad de Código (TDD)
 
-1. **Frontend Web (`/frontend`):** Desarrollo del panel interactivo para carga y grabación de audios, visualizador espectral en tiempo real y vista histórica de inferencias.
-2. **Contenerización Completa:** Empaquetado en contenedores Docker y orquestación con `docker-compose` (FastAPI + PostgreSQL + Frontend).
-3. **CI/CD y MLOps Pipelines:** Automatización de re-entrenamiento continuo y versionado de modelos.
+El repositorio se rige estrictamente por la metodología **Test-Driven Development** (TDD) y tipado estricto:
+- **Pruebas en Backend:** 174 pruebas unitarias e integrales aprobadas (`174 passed, 0 failed`).
+- **Verificación en Frontend:** Compilación estricta sin errores de TypeScript (`npx tsc --noEmit` -> Código de salida 0).

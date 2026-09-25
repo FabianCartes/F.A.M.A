@@ -1,18 +1,18 @@
-# F.A.M.A. — Backend de Servicios e Inferencia Bioacústica
+# F.A.M.A. — Backend de Servicios e Inferencia Acústica Multi-Dominio
 
-Este directorio contiene el orquestador **FastAPI**, los modelos de Machine Learning (PyTorch), la integración de almacenamiento en la nube (**Google Cloud Storage**) y la persistencia en base de datos (**PostgreSQL**).
+Este directorio contiene el núcleo del backend de **F.A.M.A.**, implementado en **FastAPI**, que da soporte a los pipelines de inferencia y entrenamiento en PyTorch para bioacústica y acústica industrial automotriz, con persistencia en **PostgreSQL** y **Google Cloud Storage**.
 
 ---
 
-## 🛠️ Requisitos Previos
+## 1. Requisitos Previos
 
 - **Python 3.12+**
 - **PostgreSQL 15+** en ejecución local o accesible vía red.
-- Llave de cuenta de servicio de Google Cloud (`.json`) para operaciones con GCS (opcional para pruebas sin almacenamiento cloud).
+- Llave de cuenta de servicio de Google Cloud (`.json`) para operaciones de persistencia e ingesta en Cloud Storage.
 
 ---
 
-## 🚀 Puesta en Marcha Rápida
+## 2. Puesta en Marcha Rápida
 
 ### 1. Crear y activar el entorno virtual
 ```bash
@@ -40,11 +40,12 @@ Edita `.env` con tus credenciales locales:
 # Base de datos PostgreSQL
 DATABASE_URL=postgresql://postgres:tu_password@localhost:5432/fama_db
 
-# Google Cloud Storage (RNF_03)
-GOOGLE_APPLICATION_CREDENTIALS=tu_archivo_de_credenciales.json
-GCS_BUCKET_NAME=tu-bucket-gcs
+# Google Cloud Storage (Persistencia e Ingesta)
+GOOGLE_APPLICATION_CREDENTIALS=tu_llave_servicio.json
+GCP_KEY_PATH=tu_llave_servicio.json
+GCS_BUCKET_NAME=fama-audio-records-2026
 
-# Xeno-canto (opcional para descarga de dataset)
+# Xeno-canto (opcional para recolección de bioacústica)
 XC_API_KEY=tu_api_key
 ```
 
@@ -57,19 +58,19 @@ psql -U postgres -h localhost -c "CREATE DATABASE fama_db;"
 
 ---
 
-## 🧪 Ejecución de Pruebas Unitarias (TDD)
+## 3. Suite de Pruebas Automatizadas (TDD)
 
-Para validar la suite completa de 22 pruebas automatizadas:
+El backend cuenta con una cobertura integral bajo TDD (174 pruebas unitarias e integrales):
 ```bash
 pytest tests/ -v
 ```
 
 ---
 
-## 🌐 Iniciar el Servidor de Desarrollo
+## 4. Iniciar el Servidor de Desarrollo
 
 ```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 - **Swagger UI:** [http://localhost:8000/docs](http://localhost:8000/docs)
@@ -77,10 +78,13 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ---
 
-## 📡 Endpoints Principales
+## 5. Endpoints Principales de la API
 
 - `GET /`: Comprobación del estado del servicio.
 - `GET /health`: Liveness probe operacional.
-- `POST /api/predict`: Endpoint principal. Recibe un archivo `.wav` (multipart/form-data), ejecuta la inferencia con discriminación física (RMS y Planitud Espectral), sube el archivo a Google Cloud Storage y persiste el resultado en la tabla `prediccion` de PostgreSQL.
-
-Para detalles exhaustivos de arquitectura, consulta la documentación general en [`../docs/`](../docs/).
+- `GET /api/models`: Catálogo de modelos registrados y metadatos de arquitectura.
+- `POST /api/predict?model_id={id}`: Inferencia multi-dominio. Procesa el audio con filtros físicos (RMS y Planitud Espectral), HPSS y votación calibrada, subiendo el registro a Google Cloud Storage y guardando los resultados en PostgreSQL.
+- `GET /api/dashboard/stats`: Estadísticas globales y métricas de los dos modelos campeones.
+- `GET /api/ingestion/datasets`: Listado de datasets en el Data Lake y local.
+- `POST /api/ingestion/sync`: Sincronización asíncrona bidireccional con Google Cloud Storage.
+- `POST /api/training/train`: Inicio y orquestación de entrenamientos (individuales o tríadas completas).
