@@ -51,7 +51,8 @@ from app.services.training import training_service
 from app.services.dashboard import dashboard_service
 from app.services.feedback import feedback_service
 from app.database import Base, engine, get_db
-from app.models import Prediccion, ConjuntoDatos, Audio, Modelo, MetricaEntrenamiento, Retroalimentacion
+from app.models import Prediccion, ConjuntoDatos, Audio, Modelo, MetricaEntrenamiento, Retroalimentacion, Usuario
+from app.routes.auth import router as auth_router
 from app.services.registry import get_model_registry, ModelRegistry, ModelNotFoundError
 from app.schemas.model_info import ModelListResponse
 from app.schemas.prediction import PredictionResponse
@@ -378,6 +379,13 @@ async def lifespan(app_instance: FastAPI):
         ensemble_service.load_models()
     except Exception as init_err:
         print(f"[Startup Warning] Excepción al inicializar SuperEnsemble: {init_err}")
+    try:
+        from app.database import SessionLocal
+        from app.services.auth import seed_initial_admin
+        with SessionLocal() as db_session:
+            seed_initial_admin(db_session)
+    except Exception as seed_err:
+        print(f"[Startup Warning] Excepción al realizar seeding inicial: {seed_err}")
     yield
 
 
@@ -399,6 +407,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Inclusión de enrutadores modulares
+app.include_router(auth_router)
 
 
 # ============================================================================

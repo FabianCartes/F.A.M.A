@@ -1,0 +1,82 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: fama-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-fama_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - fama_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-fama_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - fama-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: fama-backend:latest
+    container_name: fama-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-fama_db}
+      - GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-}
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-}
+      - GCP_KEY_PATH=${GCP_KEY_PATH:-}
+      - XC_API_KEY=${XC_API_KEY:-}
+      - ENVIRONMENT=production
+    volumes:
+      - ./backend/checkpoints:/app/checkpoints
+      - ./backend/data:/app/data
+    # Aceleración GPU NVIDIA (Descomentar si el host cuenta con tarjeta NVIDIA y nvidia-container-toolkit):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    networks:
+      - fama-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    image: fama-frontend:latest
+    container_name: fama-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      - API_URL=http://backend:8000
+    networks:
+      - fama-network
+
+volumes:
+  fama_pgdata:
+    name: fama_pgdata
+
+networks:
+  fama-network:
+    name: fama-network
+    driver: bridge

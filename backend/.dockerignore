@@ -1,0 +1,59 @@
+# Python y temporales
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.venv/
+venv/
+ENV/
+
+# Pruebas y reportes de cobertura
+.pytest_cache/
+.coverage
+htmlcov/
+tests/
+
+# Pesos pesados y checkpoints (montados via volumen en /app/checkpoints)
+checkpoints/*.pt
+checkpoints/*.pth
+checkpoints/**/*.pt
+checkpoints/**/*.pth
+
+# Datos masivos de audio (montados via volumen en /app/data)
+data/
+*.wav
+*.mp3
+*.ogg
+*.flac
+
+# Variables de entorno y credenciales locales
+.env
+.env.*
+*.json.key
+service-account*.json
+gcp-key.json
+
+# Control de versiones e IDEs
+.git
+.gitignore
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
