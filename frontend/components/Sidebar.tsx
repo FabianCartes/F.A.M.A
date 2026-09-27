@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
+import { API_BASE_URL } from "@/lib/api";
 
 export type TabType = "dashboard" | "ingesta" | "entrenamiento" | "prediccion";
 
@@ -19,7 +20,7 @@ export default function Sidebar({ activeTab, onSelectTab }: SidebarProps) {
   const [hw, setHw] = useState<HardwareMini | null>(null);
 
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/api/training/hardware")
+    fetch(`${API_BASE_URL}/api/training/hardware`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data) setHw(data);

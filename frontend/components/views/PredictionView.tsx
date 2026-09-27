@@ -51,7 +51,18 @@ interface PredictionResponse {
   modelo?: string;
   is_fallback?: boolean;
   modelos_activos?: string[];
+  detalles?: {
+    is_mock?: boolean;
+    checkpoint_name?: string;
+    device?: string;
+    latency_ms?: number;
+    energy_rms?: number;
+    spectral_flatness?: number;
+    status?: string;
+    [key: string]: any;
+  };
 }
+
 
 interface HistoryItem {
   id: string | number;
@@ -72,6 +83,7 @@ interface RegisteredModel {
   duration_seconds: number;
   classes: string[];
   is_default: boolean;
+  has_weights?: boolean;
   metrics?: {
     accuracy?: number;
     f1_macro?: number;
@@ -127,7 +139,7 @@ export default function PredictionView() {
   const [modelStatus, setModelStatus] = useState<BackendModelStatus | null>(null);
   const [selectedDomain, setSelectedDomain] = useState<string>("AvesChilenas");
   const [availableModels, setAvailableModels] = useState<RegisteredModel[]>([]);
-  const [selectedModelId, setSelectedModelId] = useState<string>("chilean-birds-ensemble");
+  const [selectedModelId, setSelectedModelId] = useState<string>("");
   const [audioStats, setAudioStats] = useState<AudioWaveformStats | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -148,12 +160,15 @@ export default function PredictionView() {
         if (res.ok) {
           const data = await res.json();
           if (data.models && Array.isArray(data.models)) {
-            setAvailableModels(data.models);
-            const hasBirdEnsemble = data.models.some((m: RegisteredModel) => m.id === "chilean-birds-ensemble");
-            if (hasBirdEnsemble) {
-              setSelectedModelId("chilean-birds-ensemble");
-            } else if (data.default_model_id) {
+            // Eliminar modelos heredados obsoletos que no poseen pesos físicos en disco
+            const validModels = data.models.filter(
+              (m: RegisteredModel) => m.id !== "chilean-birds-ensemble" && m.id !== "chilean-birds-cnn"
+            );
+            setAvailableModels(validModels);
+            if (data.default_model_id && validModels.some((m: RegisteredModel) => m.id === data.default_model_id)) {
               setSelectedModelId(data.default_model_id);
+            } else if (validModels.length > 0) {
+              setSelectedModelId(validModels[0].id);
             }
           }
         }
@@ -166,7 +181,7 @@ export default function PredictionView() {
 
   // Sincronizar automáticamente el dataset/dominio con el modelo seleccionado
   useEffect(() => {
-    if (selectedModelId === "car-engine-diagnostics-super-ensemble") {
+    if (selectedModelId.startsWith("car-engine") || selectedModelId.includes("engine")) {
       setSelectedDomain("engine_diagnostics");
     } else {
       setSelectedDomain("AvesChilenas");
@@ -476,7 +491,8 @@ export default function PredictionView() {
 
   const isEngineModel = useMemo(() => {
     return (
-      selectedModelId === "car-engine-diagnostics-super-ensemble" ||
+      selectedModelId.startsWith("car-engine") ||
+      selectedModelId.includes("engine") ||
       selectedDomain === "engine_diagnostics"
     );
   }, [selectedModelId, selectedDomain]);
@@ -520,7 +536,8 @@ export default function PredictionView() {
       setResult(predData);
 
       const isEngine =
-        selectedModelId === "car-engine-diagnostics-super-ensemble" ||
+        selectedModelId.startsWith("car-engine") ||
+        selectedModelId.includes("engine") ||
         selectedDomain === "engine_diagnostics" ||
         Boolean(ENGINE_FAULT_LABELS[predData.clase]);
 
@@ -593,25 +610,29 @@ export default function PredictionView() {
               className="bg-[#101114] border border-[#2d303b] text-white text-xs font-semibold rounded px-2.5 py-1 focus:outline-none focus:border-blue-500 cursor-pointer"
             >
               {availableModels.length > 0 ? (
-                availableModels.map((m) => (
-                  <option key={m.id} value={m.id} className="bg-[#16171b] text-white">
-                    {m.id === "car-engine-diagnostics-super-ensemble"
-                      ? "Fallas de Motores · Super-Ensamble (81.16% Acc)"
-                      : m.id === "chilean-birds-ensemble"
-                      ? "Aves Chilenas · Super-Ensamble Tri-Modelo (88.68% F1)"
-                      : m.name}
-                  </option>
-                ))
+                availableModels.map((m) => {
+                  const isReady = m.has_weights !== false;
+                  return (
+                    <option
+                      key={m.id}
+                      value={m.id}
+                      disabled={!isReady}
+                      className={`bg-[#16171b] ${isReady ? "text-white" : "text-gray-500"}`}
+                    >
+                      {m.id === "car-engine-diagnostics-super-ensemble"
+                        ? "Fallas de Motores · Super-Ensamble (81.16% Acc)"
+                        : m.name}
+                      {!isReady ? " · [Sin pesos]" : " · [Listo]"}
+                    </option>
+                  );
+                })
               ) : (
                 <>
-                  <option value="chilean-birds-ensemble" className="bg-[#16171b] text-white">
-                    Aves Chilenas · Super-Ensamble Tri-Modelo (88.68% F1)
+                  <option value="fama_trained_model_6" className="bg-[#16171b] text-white">
+                    EfficientNet-B0 (Entrenado #6) · [Listo]
                   </option>
                   <option value="car-engine-diagnostics-super-ensemble" className="bg-[#16171b] text-white">
-                    Fallas de Motores · Super-Ensamble (81.16% Acc)
-                  </option>
-                  <option value="chilean-birds-cnn" className="bg-[#16171b] text-white">
-                    Chilean Birds CNN Baseline (79.2% Acc)
+                    Fallas de Motores · Super-Ensamble · [Listo]
                   </option>
                 </>
               )}
@@ -667,6 +688,17 @@ export default function PredictionView() {
                 }`}
               >
                 {isEngineModel ? "13 Fallas Mecánicas" : "15 Especies Oficiales"}
+              </span>
+              <span
+                className={`text-[10px] font-mono px-2 py-0.5 rounded font-semibold border ${
+                  activeSelectedModel?.has_weights !== false
+                    ? "bg-emerald-950/80 border-emerald-700/60 text-emerald-300"
+                    : "bg-red-950/80 border-red-700/60 text-red-300"
+                }`}
+              >
+                {activeSelectedModel?.has_weights !== false
+                  ? "● Pesos Verificados"
+                  : "○ Sin Pesos en Disco"}
               </span>
             </div>
             <p className="text-[11px] text-gray-300 mt-0.5">
@@ -1231,7 +1263,7 @@ export default function PredictionView() {
                 )}
               </div>
 
-              {/* Indicador del modelo utilizado para la predicción */}
+              {/* Indicador del modelo utilizado para la predicción y telemetría ODD */}
               <div className="bg-[#14151a] rounded-lg p-2.5 border border-[#23252e] space-y-1.5">
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="text-gray-400">Modelo ejecutado:</span>
@@ -1239,9 +1271,31 @@ export default function PredictionView() {
                     {result.modelo ||
                       (isEngineModel
                         ? "Super-Ensamble Acústico de Motores"
-                        : "Super-Ensamble Tri-Modelo")}
+                        : "Modelo Bioacústico Activo")}
                   </span>
                 </div>
+                {result.detalles?.checkpoint_name && (
+                  <div className="flex items-center justify-between text-[11px] pt-1 border-t border-[#23252e]/50 font-mono">
+                    <span className="text-gray-400">Checkpoint:</span>
+                    <span className="text-emerald-400 truncate max-w-[210px]" title={result.detalles.checkpoint_name}>
+                      {result.detalles.checkpoint_name}
+                    </span>
+                  </div>
+                )}
+                {result.detalles?.device && (
+                  <div className="flex items-center justify-between text-[11px] font-mono">
+                    <span className="text-gray-400">Cómputo / Dispositivo:</span>
+                    <span className="text-purple-400 uppercase font-semibold">
+                      {result.detalles.device} {result.detalles.latency_ms ? `· ${result.detalles.latency_ms} ms` : ""}
+                    </span>
+                  </div>
+                )}
+                {result.detalles?.is_mock === false && (
+                  <div className="pt-1 flex items-center gap-1.5 text-[10px] text-emerald-400 font-mono border-t border-[#23252e]/50">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>Inferencia Real Certificada (Sin mocks)</span>
+                  </div>
+                )}
                 {result.modelos_activos && result.modelos_activos.length > 0 && (
                   <div className="flex flex-wrap gap-1 pt-1 border-t border-[#23252e]/70">
                     {result.modelos_activos.map((m, idx) => (
@@ -1255,6 +1309,7 @@ export default function PredictionView() {
                   </div>
                 )}
               </div>
+
 
               {/* Nivel de confianza */}
               <div>

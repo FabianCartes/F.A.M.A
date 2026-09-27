@@ -9,6 +9,7 @@ import numpy as np
 import torch
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 
+from training.paths import get_project_root, get_raw_data_dir
 from training.schemas.config import TrainingConfig
 from training.trainers.standalone_trainer import GenericModelTrainer
 from training.pipelines.dataset import GenericAudioDataset
@@ -20,7 +21,8 @@ from poc.train import BioacousticModel
 
 
 def train_model(recipe_name: str, train_df, val_df, test_df):
-    recipe_path = Path(f"backend/training/recipes/{recipe_name}")
+    project_root = get_project_root()
+    recipe_path = project_root / f"backend/training/recipes/{recipe_name}"
     with open(recipe_path, "r", encoding="utf-8") as f:
         cfg = TrainingConfig.model_validate(yaml.safe_load(f))
 
@@ -28,12 +30,12 @@ def train_model(recipe_name: str, train_df, val_df, test_df):
     print(f"[Train] Iniciando entrenamiento: {cfg.model_name} ({cfg.architecture.type})")
     print("=" * 60)
 
-    trainer = GenericModelTrainer(config=cfg, project_root=Path.cwd())
+    trainer = GenericModelTrainer(config=cfg, project_root=project_root)
     bundle_path, metrics = trainer.train_and_export(
         train_df=train_df,
         val_df=val_df,
         test_df=test_df,
-        output_checkpoints_dir=Path("backend/checkpoints"),
+        output_checkpoints_dir=project_root / "backend" / "checkpoints",
         verbose=True,
     )
     print(f"[Train] Completado: {cfg.model_id} | Test F1={metrics['test_f1_macro']:.4f}")
@@ -89,12 +91,13 @@ def evaluate_ensemble(models, weights, test_df, audio_cfg, device):
 
 
 def main():
-    data_dir = Path("data/engine_diagnostics")
+    project_root = get_project_root()
+    data_dir = get_raw_data_dir("engine_diagnostics")
     train_df = pd.read_csv(data_dir / "train_metadata.csv")
     val_df = pd.read_csv(data_dir / "val_metadata.csv")
     test_df = pd.read_csv(data_dir / "test_metadata.csv")
 
-    checkpoints_dir = Path("backend/checkpoints")
+    checkpoints_dir = project_root / "backend" / "checkpoints"
 
     # 1. Cargar o entrenar ConvNeXt-Nano
     conv_ckpt = checkpoints_dir / "car-engine-diagnostics-convnext-nano"
@@ -102,7 +105,7 @@ def main():
         import json
         with open(conv_ckpt / "manifest.json", "r", encoding="utf-8") as f:
             m_conv = json.load(f).get("metrics", {})
-        recipe_path = Path("backend/training/recipes/car_engine_diagnostics_convnext_nano.yaml")
+        recipe_path = project_root / "backend/training/recipes/car_engine_diagnostics_convnext_nano.yaml"
         with open(recipe_path, "r", encoding="utf-8") as f:
             cfg_conv = TrainingConfig.model_validate(yaml.safe_load(f))
         path_conv = conv_ckpt
@@ -116,7 +119,7 @@ def main():
         import json
         with open(eff_ckpt / "manifest.json", "r", encoding="utf-8") as f:
             m_eff = json.load(f).get("metrics", {})
-        recipe_path = Path("backend/training/recipes/car_engine_diagnostics_efficientnet_b0.yaml")
+        recipe_path = project_root / "backend/training/recipes/car_engine_diagnostics_efficientnet_b0.yaml"
         with open(recipe_path, "r", encoding="utf-8") as f:
             cfg_eff = TrainingConfig.model_validate(yaml.safe_load(f))
         path_eff = eff_ckpt
@@ -196,7 +199,8 @@ def main():
     print("=" * 60)
 
     # Guardar Recibo RDD Fase 0
-    receipt_path = Path(\"docs/receipts/fase0_higiene_receipt.json\")
+    receipt_path = project_root / "docs" / "receipts" / "fase0_higiene_receipt.json"
+    receipt_path.parent.mkdir(parents=True, exist_ok=True)
     with open(receipt_path, "w", encoding="utf-8") as f:
         json.dump({
             "test_sha256": FROZEN_ENGINE_TEST_SHA256,

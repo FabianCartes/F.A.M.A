@@ -14,6 +14,7 @@ class ModelMetadata(BaseModel):
     duration_seconds: float = Field(5.0, description="Duración de ventana de análisis en segundos")
     classes: List[str] = Field(default_factory=list, description="Lista de clases/especies reconocidas")
     is_default: bool = Field(False, description="Indica si es el modelo por defecto del sistema")
+    has_weights: bool = Field(True, description="Indica si los pesos binarios (.pt) existen físicamente en disco y están listos")
     metrics: Optional[Dict[str, Any]] = Field(None, description="Métricas de evaluación conocidas (F1, Accuracy)")
 
 

@@ -119,6 +119,8 @@ class AudioDataset(Dataset):
         candidates = [
             self.raw_dir / species_slug / f"{stem}.wav",
             self.raw_dir / species_slug / f"{xc_id}.wav",
+            self.raw_dir / "processed_wav" / species_slug / f"{stem}.wav",
+            self.raw_dir / "processed_wav" / species_slug / f"{xc_id}.wav",
             self.raw_dir.parent / "processed_wav" / species_slug / f"{stem}.wav",
             self.raw_dir.parent / "processed_wav" / species_slug / f"{xc_id}.wav",
             self.raw_dir / species_slug / filename,
@@ -833,11 +835,13 @@ if __name__ == "__main__":
     parser.add_argument("--pitch-shift-prob", type=float, default=0.3, help="Probabilidad de aplicar Pitch Shift espectral por muestra")
     args = parser.parse_args()
 
-    project_root = Path(__file__).resolve().parent.parent
-    repo_root = project_root if (project_root / "data").exists() else project_root.parent
+    from training.paths import get_project_root, get_raw_data_dir
+
+    repo_root = get_project_root()
+    aves_raw_dir = get_raw_data_dir("AvesChilenas")
     train_pipeline(
-        metadata_csv=repo_root / "data" / "metadata.csv",
-        raw_dir=repo_root / "data" / "raw",
+        metadata_csv=aves_raw_dir / "metadata.csv",
+        raw_dir=aves_raw_dir,
         checkpoint_dir=repo_root / "checkpoints",
         epochs=args.epochs,
         batch_size=args.batch_size,

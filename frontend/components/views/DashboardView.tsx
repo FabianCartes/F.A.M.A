@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { TabType } from "../Sidebar";
+import { API_BASE_URL } from "@/lib/api";
 
 interface DashboardViewProps {
   onNavigate: (tab: TabType) => void;
@@ -109,8 +110,8 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
     if (isManualRefresh) setRefreshing(true);
     try {
       const [resStats, resHw] = await Promise.all([
-        fetch("http://127.0.0.1:8000/api/dashboard/stats").catch(() => null),
-        fetch("http://127.0.0.1:8000/api/training/hardware").catch(() => null),
+        fetch(`${API_BASE_URL}/api/dashboard/stats`).catch(() => null),
+        fetch(`${API_BASE_URL}/api/training/hardware`).catch(() => null),
       ]);
 
       if (resStats && resStats.ok) {

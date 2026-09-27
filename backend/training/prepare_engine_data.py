@@ -3,12 +3,18 @@ backend/training/prepare_engine_data.py
 Script de ingesta y particionamiento estratificado para el dataset de diagnóstico de motores.
 """
 from pathlib import Path
+from typing import Optional
 import pandas as pd
+from training.paths import get_raw_data_dir, get_project_root
 from training.datasets.local_folder import LocalFolderPAMIngestor
 from training.pipelines.split import grouped_stratified_split_dataset
 
 
-def prepare_engine_dataset(source_dir: Path = Path("data/engine_diagnostics")):
+def prepare_engine_dataset(source_dir: Optional[Path] = None):
+    if source_dir is None:
+        source_dir = get_raw_data_dir("engine_diagnostics")
+    else:
+        source_dir = Path(source_dir).resolve()
     print(f"[Ingestor] Procesando directorio: {source_dir}")
     ingestor = LocalFolderPAMIngestor(source_dir=source_dir)
     df = ingestor.ingest()

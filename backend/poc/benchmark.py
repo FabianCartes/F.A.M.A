@@ -328,17 +328,19 @@ if __name__ == "__main__":
     parser.add_argument("--tta-mode", type=str, default="mean", choices=["mean", "max"], help="Estrategia TTA (mean o max, default: mean)")
     args = parser.parse_args()
 
-    project_root = Path(__file__).resolve().parent.parent
-    repo_root = project_root if (project_root / "data").exists() else project_root.parent
+    from training.paths import get_project_root, get_raw_data_dir
+
+    repo_root = get_project_root()
+    aves_raw = get_raw_data_dir("AvesChilenas")
 
     out_path = Path(args.output_dir)
     if not out_path.is_absolute():
         out_path = repo_root / out_path
 
     run_benchmark(
-        metadata_csv=repo_root / "data" / "metadata.csv",
-        raw_dir=repo_root / "data" / "raw",
-        test_csv=repo_root / "data" / "test.csv",
+        metadata_csv=aves_raw / "metadata.csv",
+        raw_dir=aves_raw,
+        test_csv=aves_raw / "test.csv",
         output_dir=out_path,
         num_runs=args.runs,
         epochs=args.epochs,

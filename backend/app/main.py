@@ -55,6 +55,7 @@ from app.models import Prediccion, ConjuntoDatos, Audio, Modelo, MetricaEntrenam
 from app.services.registry import get_model_registry, ModelRegistry, ModelNotFoundError
 from app.schemas.model_info import ModelListResponse
 from app.schemas.prediction import PredictionResponse
+from app.services.predictors.base import ModelWeightsError
 from app.services.predictors.cnn_predictor import AudioCNNPredictor
 
 # Alias de compatibilidad retroactiva para scripts o tests previos
@@ -458,14 +459,15 @@ def get_dashboard_stats(
     summary="Catálogo de modelos bioacústicos registrados",
 )
 def list_models(
+    only_available: bool = Query(False, description="Si es True, retorna solo modelos con pesos físicos verificados en disco"),
     registry: ModelRegistry = Depends(get_model_registry),
 ):
     """
     Retorna la lista de todos los modelos bioacústicos disponibles en el catálogo,
-    sus especificaciones técnicas, clases soportadas y el modelo por defecto.
+    sus especificaciones técnicas, clases soportadas, disponibilidad de pesos y el modelo por defecto.
     """
-    models = registry.list_models()
-    default_id = registry.get_default_model_id() or "chilean-birds-cnn"
+    models = registry.list_models(only_with_weights=only_available)
+    default_id = registry.get_default_model_id() or "fama_trained_model_6"
     return ModelListResponse(
         models=models,
         total=len(models),
@@ -545,6 +547,11 @@ async def predict_audio(
             pred_result = predictor.predict(tmp_path)
             clase = pred_result.clase
             confianza = float(pred_result.confianza)
+        except ModelWeightsError as weights_err:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Modelo '{predictor.model_id}' no disponible para inferencia: {weights_err}",
+            )
         finally:
             if tmp_path.exists():
                 tmp_path.unlink()
@@ -574,6 +581,11 @@ async def predict_audio(
             f"{m['name']} ({int(round(m['weight'] * 100))}%)"
             for m in status_info.get("active_models", [])
         ]
+        detalles = getattr(pred_result, "detalles", None)
+        is_fallback = getattr(predictor, "is_fallback", status_info.get("is_fallback", False))
+        if detalles and detalles.get("is_mock") is False:
+            is_fallback = False
+
         return {
             "filename": filename,
             "gcp_upload": True,
@@ -582,17 +594,24 @@ async def predict_audio(
             "confianza": confianza,
             "modelo_id": predictor.model_id,
             "modelo": predictor.metadata.name if hasattr(predictor, "metadata") else status_info.get("model_name"),
-            "is_fallback": getattr(predictor, "is_fallback", status_info.get("is_fallback", False)),
+            "is_fallback": is_fallback,
             "modelos_activos": active_labels,
+            "detalles": detalles,
         }
 
     except HTTPException:
         raise
+    except ModelWeightsError as weights_err:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Modelo no disponible para inferencia: {weights_err}",
+        )
     except Exception as err:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error durante el procesamiento del audio: {str(err)}",
         )
+
 
 
 # ============================================================================

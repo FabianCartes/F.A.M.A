@@ -19,18 +19,13 @@ from poc.preprocess import (
 from poc.train import AudioCNN
 from app.schemas.model_info import ModelMetadata
 from app.schemas.prediction import PredictionResult
-from app.services.predictors.base import AudioPredictor
+from app.services.predictors.base import (
+    AudioPredictor,
+    ModelWeightsError,
+    DEFAULT_CHILEAN_BIRD_CLASSES,
+    SPECTRAL_FLATNESS_NOISE_THRESHOLD,
+)
 
-# Umbral de planitud espectral: aves reales promedian 0.015 (máx 0.032).
-# Ruido blanco/estática promedia > 0.50. Umbral de 0.15 separa nítidamente ambos.
-SPECTRAL_FLATNESS_NOISE_THRESHOLD = 0.15
-
-# Clases por defecto del dominio piloto de aves chilenas
-DEFAULT_CHILEAN_BIRD_CLASSES = [
-    "Canastero", "Chercán", "Chincol", "Chucao", "Churrín de la Mocha",
-    "Churrín del sur", "Colilarga", "Fío-fío", "Picaflor chico", "Rayadito",
-    "Tapaculo", "Tijeral", "Tordo", "Turca", "Zorzal patagónico"
-]
 
 
 class AudioCNNPredictor(AudioPredictor):
@@ -82,6 +77,10 @@ class AudioCNNPredictor(AudioPredictor):
             self.classes = list(DEFAULT_CHILEAN_BIRD_CLASSES)
 
     @property
+    def has_weights(self) -> bool:
+        return self.checkpoint_path.exists()
+
+    @property
     def metadata(self) -> ModelMetadata:
         return self._metadata
 
@@ -90,6 +89,9 @@ class AudioCNNPredictor(AudioPredictor):
         Analiza las propiedades físicas de la señal y, si es una señal bioacústica válida,
         ejecuta la inferencia en PyTorch retornando la clase y su confianza calibrada.
         """
+        if not audio_file_path.exists():
+            raise FileNotFoundError(f"Archivo de audio no encontrado: {audio_file_path}")
+
         waveform = load_and_fix_length(
             audio_file_path, target_sr=TARGET_SR, duration_seconds=DURATION_SECONDS
         )
@@ -144,9 +146,7 @@ class AudioCNNPredictor(AudioPredictor):
                     },
                 )
         else:
-            # Modo de contingencia si no se cargaron pesos
-            return PredictionResult(
-                clase="Chincol",
-                confianza=0.8500,
-                detalles={"status": "mock_fallback"},
+            raise ModelWeightsError(
+                f"Pesos de AudioCNN no encontrados en {self.checkpoint_path}. Imposible realizar inferencia real sin pesos."
             )
+

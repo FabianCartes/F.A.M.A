@@ -101,6 +101,10 @@ class EngineEnsemblePredictor(AudioPredictor):
             self._ensure_loaded()
 
     @property
+    def has_weights(self) -> bool:
+        return all(p.exists() for p in self.checkpoint_paths.values())
+
+    @property
     def metadata(self) -> ModelMetadata:
         return self._metadata
 

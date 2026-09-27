@@ -20,6 +20,15 @@ from app.database import SessionLocal
 from app.models.dataset import ConjuntoDatos, Audio
 from app.models.training import Modelo, MetricaEntrenamiento
 from app.services.storage import upload_audio_to_gcp
+import pandas as pd
+import gc
+from torch.utils.data import DataLoader
+from poc.preprocess import GPUAudioFrontEnd, GPUSpecAugment
+from poc.train import BioacousticModel, AudioCNN, AudioDataset, FocalLoss
+from poc.split import grouped_stratified_split
+from training.paths import get_raw_data_dir
+from training.schemas.config import AudioConfig
+from training.pipelines.dataset import GenericAudioDataset
 
 ARCHITECTURE_PRESETS: Dict[str, Dict[str, Any]] = {
     "EfficientNet-B0": {"lr": 0.001, "epochs": 10, "batch": 16},
@@ -309,9 +318,11 @@ class TrainingService:
             self.current_job_id = job_id
             self.status = "training"
             self.is_tri_model = is_tri_model
-            self.total_models = len(TRIAD_ARCHITECTURES) if is_tri_model else 1
+            is_engine = dataset_name in ["engine_diagnostics", "MotoresVehiculares"]
+            triad_list = ENGINE_TRIAD_ARCHITECTURES if is_engine else TRIAD_ARCHITECTURES
+            self.total_models = len(triad_list) if is_tri_model else 1
             self.current_model_index = 1
-            self.current_architecture = TRIAD_ARCHITECTURES[0] if is_tri_model else architecture
+            self.current_architecture = triad_list[0] if is_tri_model else architecture
             self.current_epoch = 0
             self.total_epochs = max(1, epochs)
             self.current_train_loss = 0.0
@@ -356,22 +367,43 @@ class TrainingService:
             "message": msg,
         }
 
+    def _build_model_instance(self, arch: str, num_classes: int, device: torch.device) -> torch.nn.Module:
+        arch_lower = arch.lower().replace("-", "_")
+        if "audiocnn" in arch_lower or "audio_cnn" in arch_lower:
+            return AudioCNN(num_classes=num_classes).to(device)
+        elif "panns" in arch_lower:
+            from training.models.panns_cnn14 import PannsCNN14
+            return PannsCNN14(in_chans=1, num_classes=num_classes).to(device)
+        elif "resnet" in arch_lower:
+            target_arch = "resnet34d"
+        elif "convnext" in arch_lower:
+            target_arch = "convnext_nano"
+        elif "efficient" in arch_lower:
+            target_arch = "efficientnet_b0"
+        else:
+            target_arch = arch_lower
+
+        try:
+            return BioacousticModel(model_name=target_arch, num_classes=num_classes, pretrained=True, in_chans=1).to(device)
+        except Exception:
+            return BioacousticModel(model_name=target_arch, num_classes=num_classes, pretrained=False, in_chans=1).to(device)
+
     def _run_training_worker(self, config: Dict[str, Any]) -> None:
         """
-        Worker que ejecuta las épocas de entrenamiento, calcula las métricas,
-        guarda el checkpoint binario y persiste los resultados en PostgreSQL.
-        Soporta ejecución secuencial de la Tríada Completa con limpieza de memoria.
+        Worker que ejecuta las épocas de entrenamiento reales en PyTorch (GPU CUDA / CPU),
+        calcula las métricas reales época a época, guarda el checkpoint binario con pesos
+        y persiste los resultados en PostgreSQL.
         """
-        import math
-        import random
-        import gc
-
         job_id = config["job_id"]
         dataset_name = config["dataset_name"]
         is_tri_model = config.get("is_tri_model", False)
 
-        models_to_train = TRIAD_ARCHITECTURES if is_tri_model else [config["architecture"]]
-        device_str = "cuda" if torch.cuda.is_available() else "cpu"
+        is_engine = dataset_name in ["engine_diagnostics", "MotoresVehiculares"]
+        triad_list = ENGINE_TRIAD_ARCHITECTURES if is_engine else TRIAD_ARCHITECTURES
+        models_to_train = triad_list if is_tri_model else [config["architecture"]]
+
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device_str = device.type
 
         if is_tri_model:
             self._add_log("INFO", f"🚀 Iniciando Pipeline de Tríada Completa para '{dataset_name}' en {device_str.upper()}.")
@@ -380,6 +412,58 @@ class TrainingService:
             self._add_log("INFO", f"Iniciando pipeline en dispositivo: {device_str.upper()}. Arquitectura: {config['architecture']}")
 
         try:
+            # 1. Cargar metadatos y particiones reales
+            if is_engine:
+                raw_dir = get_raw_data_dir("engine_diagnostics")
+                train_csv = raw_dir / "train_metadata.csv"
+                val_csv = raw_dir / "val_metadata.csv"
+                train_df = pd.read_csv(train_csv)
+                val_df = pd.read_csv(val_csv)
+
+                def _fix_engine_path(p: str) -> str:
+                    parts = Path(p).parts
+                    if "engine_diagnostics" in parts:
+                        idx = parts.index("engine_diagnostics")
+                        cand = raw_dir.joinpath(*parts[idx + 1 :])
+                        if cand.exists():
+                            return str(cand)
+                    return p
+
+                train_df["file_path"] = train_df["file_path"].apply(_fix_engine_path)
+                val_df["file_path"] = val_df["file_path"].apply(_fix_engine_path)
+                classes = sorted(train_df["clase"].unique().tolist())
+                label_to_idx = {c: i for i, c in enumerate(classes)}
+                target_sr = 32000
+                duration_seconds = 2.0
+                n_mels = 128
+                n_fft = 1024
+                hop_length = 512
+            else:
+                raw_dir = get_raw_data_dir("AvesChilenas")
+                train_csv = raw_dir / "train.csv"
+                val_csv = raw_dir / "val.csv"
+                if train_csv.exists() and val_csv.exists():
+                    train_df = pd.read_csv(train_csv)
+                    val_df = pd.read_csv(val_csv)
+                else:
+                    metadata_csv = raw_dir / "metadata.csv"
+                    df = pd.read_csv(metadata_csv)
+                    train_df, val_df, _ = grouped_stratified_split(df)
+
+                classes = sorted(train_df["clase"].unique().tolist())
+                label_to_idx = {c: i for i, c in enumerate(classes)}
+                target_sr = 22050
+                duration_seconds = 5.0
+                n_mels = 128
+                n_fft = 2048
+                hop_length = 512
+
+            self._add_log(
+                "INFO",
+                f"Dataset '{dataset_name}' preparado con éxito: {len(train_df)} audios de train, "
+                f"{len(val_df)} audios de val | {len(classes)} clases detectadas."
+            )
+
             for idx, arch in enumerate(models_to_train):
                 if self._stop_requested:
                     break
@@ -400,12 +484,88 @@ class TrainingService:
                 else:
                     self._add_log("INFO", f"Hiperparámetros -> LR: {arch_lr}, Batch: {arch_batch}, Épocas: {arch_epochs}")
 
-                target_max_acc = 84.5 if "convnext" in arch.lower() or "efficient" in arch.lower() else (81.0 if "resnet" in arch.lower() else 68.0)
-                base_acc = 42.0
+                # Instanciar DataLoaders de PyTorch
+                if is_engine:
+                    audio_cfg = AudioConfig(
+                        target_sr=target_sr,
+                        duration_seconds=duration_seconds,
+                        n_mels=n_mels,
+                        n_fft=n_fft,
+                        hop_length=hop_length,
+                    )
+                    train_ds = GenericAudioDataset(
+                        train_df,
+                        audio_config=audio_cfg,
+                        label_to_idx=label_to_idx,
+                        is_train=True,
+                        return_raw_waveform=True,
+                    )
+                    val_ds = GenericAudioDataset(
+                        val_df,
+                        audio_config=audio_cfg,
+                        label_to_idx=label_to_idx,
+                        is_train=False,
+                        return_raw_waveform=True,
+                    )
+                else:
+                    train_ds = AudioDataset(
+                        train_df,
+                        raw_dir=raw_dir,
+                        label_to_idx=label_to_idx,
+                        target_sr=target_sr,
+                        duration_seconds=duration_seconds,
+                        n_mels=n_mels,
+                        is_train=True,
+                        return_raw_waveform=True,
+                    )
+                    val_ds = AudioDataset(
+                        val_df,
+                        raw_dir=raw_dir,
+                        label_to_idx=label_to_idx,
+                        target_sr=target_sr,
+                        duration_seconds=duration_seconds,
+                        n_mels=n_mels,
+                        is_train=False,
+                        return_raw_waveform=True,
+                    )
+
+                train_loader = DataLoader(
+                    train_ds,
+                    batch_size=arch_batch,
+                    shuffle=True,
+                    num_workers=0,
+                    pin_memory=(device.type == "cuda"),
+                )
+                val_loader = DataLoader(
+                    val_ds,
+                    batch_size=arch_batch,
+                    shuffle=False,
+                    num_workers=0,
+                    pin_memory=(device.type == "cuda"),
+                )
+
+                # Frontend espectral y data augmentation en GPU
+                frontend = GPUAudioFrontEnd(
+                    sample_rate=target_sr,
+                    n_mels=n_mels,
+                    n_fft=n_fft,
+                    hop_length=hop_length,
+                ).to(device)
+                spec_augment = GPUSpecAugment(
+                    freq_mask_param=8,
+                    time_mask_param=16,
+                    prob=0.5,
+                ).to(device)
+
+                model = self._build_model_instance(arch, len(classes), device)
+                criterion = FocalLoss(gamma=2.0).to(device)
+                optimizer = torch.optim.AdamW(model.parameters(), lr=arch_lr, weight_decay=1e-2)
+                scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=arch_epochs, eta_min=1e-6)
 
                 checkpoint_filename = f"{job_id}_{arch.lower().replace('-', '_')}_best.pt"
                 checkpoint_path = self.checkpoints_dir / checkpoint_filename
                 best_val_acc = 0.0
+                best_weights = None
 
                 for epoch in range(1, arch_epochs + 1):
                     if self._stop_requested:
@@ -415,17 +575,70 @@ class TrainingService:
                         return
 
                     t_start_epoch = time.time()
-                    progress_ratio = epoch / arch_epochs
-                    tr_loss = max(0.22, round(1.8 * math.exp(-2.2 * progress_ratio) + random.uniform(-0.03, 0.03), 4))
-                    val_loss = max(0.31, round(1.9 * math.exp(-1.9 * progress_ratio) + random.uniform(-0.04, 0.04), 4))
-                    tr_acc = min(96.0, round(base_acc + (target_max_acc - base_acc + 6.0) * (1.0 - math.exp(-2.5 * progress_ratio)) + random.uniform(-1.0, 1.0), 2))
-                    val_acc = min(92.0, round(base_acc + (target_max_acc - base_acc) * (1.0 - math.exp(-2.3 * progress_ratio)) + random.uniform(-1.2, 1.2), 2))
+                    model.train()
+                    tr_loss_total = 0.0
+                    tr_correct = 0
+                    tr_samples = 0
 
-                    time.sleep(0.8)
+                    for x_batch, y_batch in train_loader:
+                        if self._stop_requested:
+                            break
+                        x_batch = x_batch.to(device, non_blocking=True)
+                        y_batch = y_batch.to(device, non_blocking=True)
+
+                        mel_batch = frontend(x_batch)
+                        mel_batch = spec_augment(mel_batch)
+
+                        optimizer.zero_grad()
+                        outputs = model(mel_batch)
+                        loss = criterion(outputs, y_batch)
+                        loss.backward()
+                        optimizer.step()
+
+                        bsz = x_batch.size(0)
+                        tr_loss_total += float(loss.item()) * bsz
+                        preds = torch.argmax(outputs, dim=-1)
+                        tr_correct += int(torch.sum(preds == y_batch).item())
+                        tr_samples += bsz
+
+                    if self._stop_requested:
+                        self._add_log("WARN", f"Entrenamiento interrumpido por el usuario en la época {epoch}.")
+                        with self._lock:
+                            self.status = "stopped"
+                        return
+
+                    scheduler.step()
+                    tr_loss = round(tr_loss_total / max(1, tr_samples), 4)
+                    tr_acc = round((tr_correct / max(1, tr_samples)) * 100.0, 2)
+
+                    # Validación
+                    model.eval()
+                    val_loss_total = 0.0
+                    val_correct = 0
+                    val_samples = 0
+
+                    with torch.no_grad():
+                        for x_batch, y_batch in val_loader:
+                            if self._stop_requested:
+                                break
+                            x_batch = x_batch.to(device, non_blocking=True)
+                            y_batch = y_batch.to(device, non_blocking=True)
+                            mel_batch = frontend(x_batch)
+                            outputs = model(mel_batch)
+                            loss = criterion(outputs, y_batch)
+                            bsz = x_batch.size(0)
+                            val_loss_total += float(loss.item()) * bsz
+                            preds = torch.argmax(outputs, dim=-1)
+                            val_correct += int(torch.sum(preds == y_batch).item())
+                            val_samples += bsz
+
+                    val_loss = round(val_loss_total / max(1, val_samples), 4)
+                    val_acc = round((val_correct / max(1, val_samples)) * 100.0, 2)
                     epoch_time = round(time.time() - t_start_epoch, 2)
 
                     if val_acc > best_val_acc:
                         best_val_acc = val_acc
+                        best_weights = {k: v.cpu() for k, v in model.state_dict().items()}
 
                     metric_entry = {
                         "epoca": epoch,
@@ -451,23 +664,21 @@ class TrainingService:
                         f"Acc: {tr_acc:.1f}% | Val Acc: {val_acc:.1f}% ({epoch_time}s)"
                     )
 
-                # Generar y guardar el binario .pt de pesos (IS_01)
-                dummy_state = {
+                # Guardar el artefacto de pesos real (.pt)
+                saved_state = best_weights if best_weights is not None else {k: v.cpu() for k, v in model.state_dict().items()}
+                checkpoint_payload = {
                     "architecture": arch,
                     "epochs": arch_epochs,
                     "best_val_acc": best_val_acc,
-                    "classes": [
-                        "Canastero", "Chercán", "Chincol", "Chucao", "Churrín de la Mocha",
-                        "Churrín del sur", "Colilarga", "Fío-fío", "Picaflor chico", "Rayadito",
-                        "Tapaculo", "Tijeral", "Tordo", "Turca", "Zorzal patagónico",
-                    ],
+                    "classes": classes,
+                    "state_dict": saved_state,
                     "created_at": datetime.now(timezone.utc).isoformat(),
                 }
-                torch.save(dummy_state, str(checkpoint_path))
+                torch.save(checkpoint_payload, str(checkpoint_path))
                 file_size = checkpoint_path.stat().st_size
                 file_hash = hashlib.sha256(checkpoint_path.read_bytes()).hexdigest()[:16]
 
-                self._add_log("SUCCESS", f"Artefacto del modelo {arch} guardado: {checkpoint_filename} ({file_size} bytes)")
+                self._add_log("SUCCESS", f"Artefacto real del modelo {arch} guardado: {checkpoint_filename} ({file_size} bytes)")
 
                 # Persistencia en PostgreSQL (Tablas 6.6 y 6.7)
                 db: Session = SessionLocal()
@@ -477,7 +688,7 @@ class TrainingService:
 
                     nuevo_modelo = Modelo(
                         id_conjunto_datos=ds_id,
-                        clase_objetivo=f"15 Clases ({dataset_name})",
+                        clase_objetivo=f"{len(classes)} Clases ({dataset_name})",
                         arquitectura=arch,
                         epocas=arch_epochs,
                         tasa_aprendizaje=arch_lr,
@@ -608,7 +819,17 @@ class TrainingService:
                 if target:
                     target.activo = True
                     db.commit()
+
+                    # Sincronizar el ModelRegistry global
+                    try:
+                        from app.services.registry import get_model_registry
+                        reg = get_model_registry()
+                        reg.register_from_db(db)
+                    except Exception as reg_err:
+                        print(f"[TrainingService] Advertencia al sincronizar registry: {reg_err}")
+
                     return {"success": True, "active_model_id": model_id, "architecture": target.arquitectura}
+
             except Exception as exc:
                 db.rollback()
                 return {"success": False, "error": str(exc)}
