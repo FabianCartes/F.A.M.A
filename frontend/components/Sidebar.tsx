@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { API_BASE_URL } from "@/lib/api";
+import { getFeedbackStats } from "@/lib/api/feedbackApi";
 
 export type TabType = "dashboard" | "ingesta" | "entrenamiento" | "prediccion";
 
@@ -18,6 +19,7 @@ interface HardwareMini {
 
 export default function Sidebar({ activeTab, onSelectTab }: SidebarProps) {
   const [hw, setHw] = useState<HardwareMini | null>(null);
+  const [pendingFeedbackCount, setPendingFeedbackCount] = useState<number>(0);
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/api/training/hardware`)
@@ -26,6 +28,18 @@ export default function Sidebar({ activeTab, onSelectTab }: SidebarProps) {
         if (data) setHw(data);
       })
       .catch(() => null);
+
+    const fetchStats = () => {
+      getFeedbackStats()
+        .then((stats) => {
+          setPendingFeedbackCount(stats.pending_curation_count);
+        })
+        .catch(() => null);
+    };
+
+    fetchStats();
+    const interval = setInterval(fetchStats, 10000);
+    return () => clearInterval(interval);
   }, []);
   const navItems: { id: TabType; label: string; icon: React.ReactNode }[] = [
     {
@@ -167,7 +181,7 @@ export default function Sidebar({ activeTab, onSelectTab }: SidebarProps) {
           </span>
         </div>
 
-        {/* Feedback / Notificaciones */}
+        {/* Feedback / Notificaciones (RF_06) */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-gray-400">
             <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -175,8 +189,14 @@ export default function Sidebar({ activeTab, onSelectTab }: SidebarProps) {
             </svg>
             <span>Feedback</span>
           </div>
-          <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-red-950/70 border border-red-700/60 text-red-400">
-            12
+          <span
+            className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold border transition-colors ${
+              pendingFeedbackCount === 0
+                ? "bg-emerald-950/70 border-emerald-700/60 text-emerald-400"
+                : "bg-amber-950/70 border-amber-700/60 text-amber-400"
+            }`}
+          >
+            {pendingFeedbackCount}
           </span>
         </div>
       </div>

@@ -1,0 +1,94 @@
+{
+  "receipt_name": "fase_responsive_shell_foundations_receipt",
+  "generated_at": "2026-09-27T22:28:00Z",
+  "methodology": "TDD + RDD + ODD",
+  "architecture_layer": "Frontend Shell Foundations — App Router document contract (Phases 0 and 1 of the responsive/mobile refactor)",
+  "rdd_mode": "unmanaged",
+  "approval": "not_granted",
+  "causal_invariant": "The root layout emits a device-width viewport contract, so the App Router document scales to the real device viewport instead of inheriting an implicit desktop canvas.",
+  "issue_pr": {
+    "issue": "none — no issue tracker entry exists for this work",
+    "pr": "none — not opened; no commit requested by the maintainer"
+  },
+  "operator_flows": [
+    {
+      "flow": "Open F.A.M.A. on a mobile browser and read any view without pinch-zoom scaling",
+      "entry": "browser -> https://host/",
+      "mode": "production build",
+      "environment": "Next.js 16.3.4 App Router, Turbopack",
+      "expectation": "layout width maps to device-width, initial scale 1",
+      "negative_control": "exporting viewport must not change the server-rendered RootLayout signature or the font CSS variables"
+    },
+    {
+      "flow": "Render on a notched device in landscape",
+      "entry": "browser -> device with safe-area insets",
+      "mode": "production build",
+      "environment": "viewportFit=cover",
+      "expectation": "content is allowed to extend under the notch; no horizontal scrollbar is introduced",
+      "negative_control": "text-size-adjust stays at 100% so iOS landscape does not inflate typography"
+    }
+  ],
+  "journey_runtime_evidence": {
+    "type": "build_and_head_contract",
+    "note": "No CLI or lifecycle flow was added in this phase, so no gentle-ai-bench journey applies. Evidence is the production build plus the exported head contract asserted at the module seam.",
+    "commands": [
+      "npx vitest run -> 4 files, 42 tests, 42 passed, 0 failed (36 pre-existing + 6 new)",
+      "npx tsc --noEmit -> exit 0, 0 errors",
+      "npm run build -> EXIT 0, route / prerendered as static content",
+      "npx eslint -> 11 pre-existing problems, 0 in the files authored by this phase"
+    ]
+  },
+  "seam_under_test": {
+    "seam": "app/layout.tsx module exports (metadata, viewport, default RootLayout) — the contract App Router consumes to emit <head>",
+    "rationale": "Public interface of the module, not an implementation detail. next/font/google is mocked because it is a third-party build-time boundary that is inert outside the Next.js compiler; the first red run failed on that boundary (Montserrat is not a function) rather than on the missing contract, so the mock was required to reach a correct red.",
+    "file": "frontend/app/__tests__/layout.test.ts"
+  },
+  "changed_line_budget": {
+    "limit": 400,
+    "additions": 48,
+    "deletions": 1,
+    "total": 49,
+    "chain_or_exception_required": false,
+    "files": [
+      "frontend/app/layout.tsx (+8/-1) — added Viewport import and the exported viewport object",
+      "frontend/app/globals.css (+5/-0) — added text-size-adjust guards on html",
+      "frontend/app/__tests__/layout.test.ts (+35/-0) — new, the red-green test for the head contract"
+    ]
+  },
+  "tests": {
+    "runner": "vitest 5.0.2, environment jsdom",
+    "new_suite": "frontend/app/__tests__/layout.test.ts (6 tests)",
+    "red_before_green": true,
+    "red_evidence": "4 of 6 tests failed with TypeError: Cannot read properties of undefined (reading 'width'|'initialScale'|'viewportFit'|'themeColor') because the viewport export did not exist",
+    "green_evidence": "6 of 6 passed after adding the viewport export"
+  },
+  "phase_0_gitignore_invariant": {
+    "defect": "root .gitignore rule 'lib/' (unanchored) excluded frontend/lib/ at any depth, leaving lib/api.ts, lib/schemas/*.ts, lib/api/* untracked and invisible; a clean clone could not resolve the @/lib/* imports",
+    "resolved_by": "parallel RF_06 task, which added '!frontend/lib/' at 19:19:23 local on 2026-09-27",
+    "verified": "git check-ignore -v frontend/lib/api.ts exits 1 (not ignored); git status reports '?? frontend/lib/' as visible-untracked",
+    "regression_watch": "the unanchored 'lib/' rule is still present at .gitignore:53 and still matches any future directory named lib at any depth; the negation only rescues frontend/lib exactly. Residual risk accepted to avoid conflicting with the line the parallel task owns.",
+    "action_required_by_maintainer": "git add frontend/lib is still pending — 0 of the lib/ files are tracked"
+  },
+  "odd_observability_features": {},
+  "odd_assessment": "Honest scope note: this phase introduces no new telemetry, state machine, or monitoring surface. ODD yields no additional artifact here because the only new externally observable surface is the <meta name=\"viewport\"> and <meta name=\"theme-color\"> pair asserted in the test suite. The next ODD-bearing phase is the shell drawer state, which will need a breakpoint/visibility contract recorded.",
+  "deferred_out_of_scope": [
+    "Fase 2: DashboardView responsive grids, chart clipping, truncate and flex-wrap defects",
+    "Fase 3: TrainingView log console word-break, table min-width, flex-shrink-0 toggle, td display:flex hazard",
+    "Fase 4: full-suite verification gate",
+    "Fase 5 (deferred by maintainer decision): collapsible sidebar via components/shell/AppShell.tsx plus app/page.tsx h-dvh and main overflow-x containment",
+    "Known mobile defect NOT fixed here: iOS Safari focus-zoom inflates the page because form controls render below 16px. The global fix would raise control font size on mobile and can shift layout inside PredictionView and IngestionView, which are owned by the RF_06 task, so it is deferred to a phase where the affected components can be edited and visually verified.",
+    "Known mobile defect NOT fixed here: Sidebar.tsx fixes w-56 (224px) with no breakpoint, leaving roughly 151px of usable width on a 375px device. This is the single largest mobile blocker and is fully gated behind Fase 5."
+  ],
+  "rollback": {
+    "independent_of_rf06": true,
+    "commands": "git checkout -- frontend/app/layout.tsx frontend/app/globals.css && rm -rf frontend/app/__tests__",
+    "note": "No backend, schema, API, or RF_06-owned file was modified, so reverting this phase cannot disturb the in-flight feedback-curation work."
+  },
+  "unresolved_authority_decisions": [
+    "The RDD kill switch is not present anywhere in this repository, so receipts are authored as project documentation only. This receipt does not claim approval, verification authority, or merge authority, and its status is deliberately not SEALED_AND_VERIFIED.",
+    "Maintainer must decide whether to anchor the .gitignore 'lib/' rule to the repository root to close the residual risk, which would touch a line the RF_06 task owns.",
+    "Maintainer must decide whether to stage and commit frontend/lib/, which is currently untracked.",
+    "Maintainer must decide whether the 9 pre-existing eslint react-hooks/set-state-in-effect errors (DashboardView 133/144, IngestionView 234, PredictionView 196/227/440/531) are fixed in Fase 2, in the RF_06 line, or accepted."
+  ],
+  "verification_status": "AUTHORED_PENDING_MAINTAINER_REVIEW"
+}

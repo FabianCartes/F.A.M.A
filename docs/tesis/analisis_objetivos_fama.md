@@ -98,7 +98,7 @@ Es un **framework MLOps de Arquitectura Híbrida** que resuelve un problema conc
 | **RF_03** | Extraer características matemáticas (espectrogramas, MFCC) | ✅ | [`poc/preprocess.py`](file:///home/kevin/Work/fama/backend/poc/preprocess.py) y `GPUAudioFrontEnd` en CUDA |
 | **RF_04** | Entrenar la red neuronal localmente desde Dashboard | ✅ | [`training.py`](file:///home/kevin/Work/fama/backend/app/services/training.py) — Pipeline PyTorch GPU (CUDA), checkpoints `.pt` y trazabilidad PostgreSQL |
 | **RF_05** | Visualizar predicciones acústicas en tiempo real | ✅ | [`/api/predict`](file:///home/kevin/Work/fama/backend/app/main.py) + [`PredictionView.tsx`](file:///home/kevin/Work/fama/frontend/components/views/PredictionView.tsx) con inferencia real y telemetría ODD |
-| **RF_06** | Retroalimentar predicción errónea | 🟡 Parcial | [`feedback.py`](file:///home/kevin/Work/fama/backend/app/services/feedback.py) y tabla `retroalimentacion` listos en backend; pendiente endpoint HTTP y botones en UI |
+| **RF_06** | Retroalimentar predicción errónea | ✅ | [`feedback.py`](file:///home/kevin/Work/fama/backend/app/services/feedback.py), [`/api/feedback`](file:///home/kevin/Work/fama/backend/app/main.py) y [`PredictionView.tsx`](file:///home/kevin/Work/fama/frontend/components/views/PredictionView.tsx) + Curación en [`IngestionView.tsx`](file:///home/kevin/Work/fama/frontend/components/views/IngestionView.tsx) (ADR 0013) |
 
 ---
 
@@ -124,27 +124,25 @@ Es un **framework MLOps de Arquitectura Híbrida** que resuelve un problema conc
 | 5 | Diseño del Modelo Relacional y Entidad-Relación | 100% | ✅ 100% |
 | 6 | Diseño de Interfaz de Usuario (Guías de estilo y Mockups) | 100% | ✅ 100% |
 | 7 | **Desarrollo del prototipo del Backend (Orquestador FastAPI)** | 0% | 🟢 **100%** |
-| 8 | **Integración bidireccional con GCS y PostgreSQL** | 0% | 🟢 **95%** |
+| 8 | **Integración bidireccional con GCS y PostgreSQL** | 0% | 🟢 **100%** |
 | 9 | **Desarrollo del Frontend interactivo (Dashboard)** | 0% | 🟢 **100%** |
 | 10 | **Integración de pipelines de entrenamiento local e IA** | 0% | 🟢 **100%** |
-| 11 | **Pruebas de integración, telemetría y ciclo de retroalimentación** | 0% | 🟡 **80%** (206 tests pasando; pendiente endpoint RF_06) |
-| 12 | **Despliegue, manuales de usuario y documentación final** | 0% | 🟡 **80%** (listo en rama `feat/deployment-auth-docs`, pendiente de merge) |
+| 11 | **Pruebas de integración, telemetría y ciclo de retroalimentación** | 0% | 🟢 **100%** (229 tests backend + 36 vitest frontend; RF_06 completo) |
+| 12 | **Despliegue, manuales de usuario y documentación final** | 0% | 🟢 **100%** (Docker, RBAC JWT, manuales y ADRs consolidados en main) |
 
 ---
 
-## 🚧 Lo que FALTA por implementar (ordenado por prioridad)
+## 🏆 Hitos y Requerimientos 100% Completados
 
-### 🔴 Prioridad Alta (Último requerimiento funcional pendiente)
-
-1. **RF_06 — Conectar Ciclo de Retroalimentación en API y UI**
-   - Exponer endpoint `POST /api/feedback` en `main.py` delegando en `FeedbackService.record_feedback`.
-   - Añadir botones en [`PredictionView.tsx`](file:///home/kevin/Work/fama/frontend/components/views/PredictionView.tsx) para que el investigador valide o corrija la etiqueta (despachando el audio a GCS en la carpeta de re-entrenamiento).
-   - Escribir pruebas automatizadas con TDD en `backend/tests/test_api_feedback.py`.
-
-### 🟡 Prioridad Media (Integración y Despliegue)
-
-2. **Integrar rama de despliegue y autenticación (`feat/deployment-auth-docs`)**
-   - Fusionar en `main` los contenedores `Dockerfile`, `docker-compose.yml`, el módulo de autenticación RBAC (`backend/app/routes/auth.py`, `backend/app/services/auth.py`), sus pruebas y manuales de operación.
+1. **RF_01 al RF_06:** Todos los requerimientos funcionales del sistema están completamente implementados y probados.
+2. **Ciclo de Retroalimentación Activa (RF_06 / ADR 0013):**
+   - Captura inmediata de validación experta y corrección en [`PredictionView.tsx`](file:///home/kevin/Work/fama/frontend/components/views/PredictionView.tsx).
+   - Zona de cuarentena / staging en Google Cloud Storage y PostgreSQL (`procesado = False`).
+   - Bandeja de curación semi-manual en [`IngestionView.tsx`](file:///home/kevin/Work/fama/frontend/components/views/IngestionView.tsx) para prevenir la contaminación del dataset (*Human-in-the-Loop MLOps*).
+   - Notificación y badge reactivo en [`Sidebar.tsx`](file:///home/kevin/Work/fama/frontend/components/Sidebar.tsx).
+   - Recibo sellado en [`docs/receipts/fase_rf06_feedback_curation_receipt.json`](file:///home/kevin/Work/fama/docs/receipts/fase_rf06_feedback_curation_receipt.json).
+3. **Despliegue y Autenticación en `main`:**
+   - Fusionados exitosamente en `main` los contenedores `Dockerfile`, `docker-compose.yml`, el módulo de autenticación RBAC (`backend/app/routes/auth.py`, `backend/app/services/auth.py`), sus pruebas y manuales de operación.
 
 ---
 
@@ -156,9 +154,8 @@ Es un **framework MLOps de Arquitectura Híbrida** que resuelve un problema conc
 | **Inferencia real GPU de extremo a extremo** | Endpoint `/api/predict` con modelos entrenados reales (100% certeza en pruebas con Chucao) |
 | **Erradicación de Mocks Silenciosos** | El sistema valida pesos en disco y reporta fallos reales vía HTTP 503 en lugar de simular respuestas |
 | **Entrenamiento acelerado en GPU local** | Orquestado desde `TrainingView.tsx` con PyTorch CUDA, checkpoints persistidos y sincronización con PostgreSQL |
-| **Base de datos relacional operativa** | Modelos `prediccion`, `modelo`, `metrica_entrenamiento`, `conjunto_datos`, `audio` y `retroalimentacion` creados y sincronizados |
+| **Base de datos relacional operativa** | Modelos `usuario`, `prediccion`, `modelo`, `metrica_entrenamiento`, `conjunto_datos`, `audio` y `retroalimentacion` creados y sincronizados |
 | **Ingesta masiva conectada con Google Cloud Storage** | Consulta de datasets, conteo de objetos y subida de lotes operativos |
+| **Bucle de retroalimentación activa (RF_06)** | Captura en inferencia y curación semi-manual en ingesta con persistencia en PostgreSQL y cuarentena en GCS |
 | **4 vistas del Frontend completamente conectadas** | Dashboard, Ingesta, Predicción y Entrenamiento operando en tiempo real con Next.js y Turbopack |
-| **Cobertura de pruebas automatizadas** | 206 pruebas en `pytest` y 20 pruebas en `vitest` en verde |
-
-
+| **Cobertura de pruebas automatizadas** | **229 pruebas en `pytest` y 36 pruebas en `vitest` en verde (100% pasando)** |

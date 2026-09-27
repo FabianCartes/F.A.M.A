@@ -1,6 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { API_BASE_URL } from "@/lib/api";
+import {
+  getPendingFeedback,
+  approveFeedback,
+  rejectFeedback,
+} from "@/lib/api/feedbackApi";
+import { PendingFeedbackItem } from "@/lib/schemas/feedback";
 
 // ============================================================================
 // INTERFACES DEL MODELO DE DOMINIO DE INGESTA (RF_02)
@@ -123,6 +130,15 @@ export default function IngestionView() {
   const [datasetFiles, setDatasetFiles] = useState<DatasetFile[]>([]);
   const [isLoadingFiles, setIsLoadingFiles] = useState<boolean>(false);
 
+  // RF_06: Bandeja de Curación Semi-Manual de Feedback (Human-in-the-Loop)
+  const [pendingFeedbacks, setPendingFeedbacks] = useState<PendingFeedbackItem[]>([]);
+  const [isLoadingPendingFeedbacks, setIsLoadingPendingFeedbacks] = useState<boolean>(true);
+  const [processingFeedbackId, setProcessingFeedbackId] = useState<number | null>(null);
+  const [feedbackAlert, setFeedbackAlert] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+
   // Consola de Logs reactiva
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const logsContainerRef = useRef<HTMLDivElement | null>(null);
@@ -149,7 +165,7 @@ export default function IngestionView() {
   const fetchStatus = useCallback(async () => {
     setIsLoadingStatus(true);
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/ingestion/status");
+      const res = await fetch(`${API_BASE_URL}/api/ingestion/status`);
       if (res.ok) {
         const data: StorageStatus = await res.json();
         setStorageStatus(data);
@@ -182,7 +198,7 @@ export default function IngestionView() {
   const fetchDatasets = useCallback(async () => {
     setIsLoadingDatasets(true);
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/ingestion/datasets");
+      const res = await fetch(`${API_BASE_URL}/api/ingestion/datasets`);
       if (res.ok) {
         const data = await res.json();
         setDatasets(data.datasets || []);
@@ -198,11 +214,32 @@ export default function IngestionView() {
     }
   }, [addLog]);
 
+  // Cargar retroalimentación pendiente para la bandeja de curación (Human-in-the-Loop)
+  const fetchPendingFeedbacks = useCallback(async () => {
+    setIsLoadingPendingFeedbacks(true);
+    try {
+      const items = await getPendingFeedback(50);
+      setPendingFeedbacks(items);
+      if (items.length > 0) {
+        addLog(
+          "INFO",
+          `[Curación] ${items.length} audio(s) pendientes de revisión en la bandeja de retroalimentación.`
+        );
+      }
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      addLog("WARN", `Error al cargar bandeja de curación de feedback: ${errMsg}`);
+    } finally {
+      setIsLoadingPendingFeedbacks(false);
+    }
+  }, [addLog]);
+
   useEffect(() => {
     addLog("INFO", "Inicializando módulo de ingesta con arquitectura jerárquica Data Lake...");
     fetchStatus();
     fetchDatasets();
-  }, [fetchStatus, fetchDatasets, addLog]);
+    fetchPendingFeedbacks();
+  }, [fetchStatus, fetchDatasets, fetchPendingFeedbacks, addLog]);
 
   // Manejo de Selección de Datasets
   const toggleSelect = (id: string) => {
@@ -236,7 +273,7 @@ export default function IngestionView() {
     let totalPrep = 0;
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/ingestion/sync", {
+      const res = await fetch(`${API_BASE_URL}/api/ingestion/sync`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -355,7 +392,7 @@ export default function IngestionView() {
     });
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/ingestion/upload", {
+      const res = await fetch(`${API_BASE_URL}/api/ingestion/upload`, {
         method: "POST",
         body: formData,
       });
@@ -388,7 +425,7 @@ export default function IngestionView() {
     setInspectingDataset(datasetName);
     setIsLoadingFiles(true);
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/ingestion/datasets/${datasetName}/files`);
+      const res = await fetch(`${API_BASE_URL}/api/ingestion/datasets/${datasetName}/files`);
       if (res.ok) {
         const data = await res.json();
         setDatasetFiles(data.files || []);
@@ -400,6 +437,66 @@ export default function IngestionView() {
       addLog("WARN", `No fue posible cargar los archivos de ${datasetName}: ${errMsg}`);
     } finally {
       setIsLoadingFiles(false);
+    }
+  };
+
+  // RF_06: Aprobar e incorporar audio curado al dataset de entrenamiento local
+  const handleApproveFeedback = async (
+    idRetroalimentacion: number,
+    datasetName: string = "AvesChilenas"
+  ) => {
+    setProcessingFeedbackId(idRetroalimentacion);
+    try {
+      const res = await approveFeedback(idRetroalimentacion, datasetName);
+      setFeedbackAlert({
+        type: "success",
+        message: `Audio "${res.filename || 'aprobado'}" incorporado exitosamente al dataset.`,
+      });
+      addLog(
+        "SUCCESS",
+        `[Curación] Audio "${res.filename || idRetroalimentacion}" incorporado a '${res.destination_path || datasetName}'. metadata.csv actualizado.`
+      );
+      setPendingFeedbacks((prev) =>
+        prev.filter((item) => item.id_retroalimentacion !== idRetroalimentacion)
+      );
+      await fetchDatasets();
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      setFeedbackAlert({
+        type: "error",
+        message: `Fallo al incorporar audio #${idRetroalimentacion}: ${errMsg}`,
+      });
+      addLog("ERROR", `[Curación] Fallo al incorporar audio #${idRetroalimentacion}: ${errMsg}`);
+    } finally {
+      setProcessingFeedbackId(null);
+    }
+  };
+
+  // RF_06: Descartar audio de retroalimentación de la cola de curación
+  const handleRejectFeedback = async (idRetroalimentacion: number) => {
+    setProcessingFeedbackId(idRetroalimentacion);
+    try {
+      await rejectFeedback(idRetroalimentacion);
+      setFeedbackAlert({
+        type: "success",
+        message: `Audio #${idRetroalimentacion} descartado sin modificar el dataset.`,
+      });
+      addLog(
+        "INFO",
+        `[Curación] Audio #${idRetroalimentacion} descartado sin alterar datasets de entrenamiento.`
+      );
+      setPendingFeedbacks((prev) =>
+        prev.filter((item) => item.id_retroalimentacion !== idRetroalimentacion)
+      );
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      setFeedbackAlert({
+        type: "error",
+        message: `Fallo al descartar audio #${idRetroalimentacion}: ${errMsg}`,
+      });
+      addLog("ERROR", `[Curación] Fallo al descartar audio #${idRetroalimentacion}: ${errMsg}`);
+    } finally {
+      setProcessingFeedbackId(null);
     }
   };
 
@@ -967,6 +1064,195 @@ export default function IngestionView() {
             )}
           </button>
         </div>
+      </div>
+
+      {/* ==================================================================== */}
+      {/* BANDEJA DE CURACIÓN DE FEEDBACK DE CAMPO (HUMAN-IN-THE-LOOP) */}
+      {/* ==================================================================== */}
+      <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#23252e]/60">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              </svg>
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xs font-semibold text-gray-200">
+                  Bandeja de Curación de Feedback de Campo (Human-in-the-Loop)
+                </h2>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
+                    pendingFeedbacks.length > 0
+                      ? "bg-amber-950/70 border-amber-700/60 text-amber-300"
+                      : "bg-emerald-950/70 border-emerald-700/60 text-emerald-300"
+                  }`}
+                >
+                  {pendingFeedbacks.length} pendiente(s)
+                </span>
+              </div>
+              <p className="text-[11px] text-gray-400">
+                Auditoría semi-manual de retroalimentaciones para incorporación controlada al dataset de entrenamiento sin riesgo de contaminación (*Data Poisoning*).
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={fetchPendingFeedbacks}
+            disabled={isLoadingPendingFeedbacks}
+            title="Refrescar bandeja de curación"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-300 bg-[#111215] border border-[#23252e] hover:border-gray-500 hover:text-white transition-colors cursor-pointer self-start sm:self-auto"
+          >
+            <svg
+              className={`w-3.5 h-3.5 ${isLoadingPendingFeedbacks ? "animate-spin text-amber-400" : "text-gray-400"}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>Refrescar</span>
+          </button>
+        </div>
+
+        {/* Alerta de Curación de Feedback */}
+        {feedbackAlert && (
+          <div
+            className={`flex items-center justify-between p-3 rounded-lg text-xs border ${
+              feedbackAlert.type === "success"
+                ? "bg-emerald-950/40 border-emerald-800/60 text-emerald-300"
+                : "bg-red-950/40 border-red-800/60 text-red-300"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {feedbackAlert.type === "success" ? (
+                <svg className="w-4 h-4 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              )}
+              <span>{feedbackAlert.message}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFeedbackAlert(null)}
+              className="text-gray-400 hover:text-gray-200 transition-colors cursor-pointer text-xs ml-2"
+              title="Cerrar notificación"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {/* Contenido de la bandeja */}
+        {isLoadingPendingFeedbacks ? (
+          <div className="py-8 flex flex-col items-center justify-center text-center space-y-2">
+            <span className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-xs text-gray-400">Cargando cola de curación...</p>
+          </div>
+        ) : pendingFeedbacks.length === 0 ? (
+          <div className="bg-[#111215]/60 border border-[#1f2128] rounded-xl p-8 flex flex-col items-center justify-center text-center space-y-2">
+            <div className="w-10 h-10 rounded-full bg-emerald-950/40 border border-emerald-800/50 flex items-center justify-center text-emerald-400">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <p className="text-xs font-semibold text-gray-300">
+              Bandeja de curación limpia. No hay audios pendientes de incorporación
+            </p>
+            <p className="text-[11px] text-gray-500 max-w-md">
+              Todas las observaciones de campo han sido procesadas o descartadas. Nuevas correcciones registradas en la vista de Predicción aparecerán automáticamente aquí.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {pendingFeedbacks.map((item) => {
+              const filename =
+                item.audio_filename ||
+                (item.ruta_audio_prueba ? item.ruta_audio_prueba.split(/[\\/]/).pop() : null) ||
+                `audio_fb_${item.id_retroalimentacion}.wav`;
+              const formattedDate = item.fecha_retroalimentacion
+                ? new Date(item.fecha_retroalimentacion).toLocaleString()
+                : "Reciente";
+              const isProcessing = processingFeedbackId === item.id_retroalimentacion;
+
+              return (
+                <div
+                  key={item.id_retroalimentacion}
+                  className="bg-[#111215] border border-[#1f2128] hover:border-[#2d303b] rounded-xl p-4 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4"
+                >
+                  {/* Detalles del Audio y Predicción vs Corrección */}
+                  <div className="space-y-2 flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-xs font-semibold text-gray-200 truncate">
+                        {filename}
+                      </span>
+                      <span className="text-[10px] text-gray-500 font-mono">
+                        · ID #{item.id_retroalimentacion} (Pred #{item.id_prediccion})
+                      </span>
+                      <span className="text-[10px] text-gray-400">· {formattedDate}</span>
+                    </div>
+
+                    <div className="flex items-center gap-3 flex-wrap text-xs">
+                      {/* Hipótesis del modelo */}
+                      <div className="flex items-center gap-1.5 bg-[#18191e] px-2.5 py-1 rounded-lg border border-[#23252e]">
+                        <span className="text-gray-400 text-[11px]">Modelo predijo:</span>
+                        <span className="font-medium text-amber-400">{item.etiqueta_predicha}</span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-950/70 text-amber-300 border border-amber-800/50">
+                          {(item.confianza * 100).toFixed(1)}%
+                        </span>
+                      </div>
+
+                      <span className="text-gray-500 font-bold">➔</span>
+
+                      {/* Corrección del usuario */}
+                      <div className="flex items-center gap-1.5 bg-emerald-950/30 px-2.5 py-1 rounded-lg border border-emerald-800/50">
+                        <span className="text-gray-400 text-[11px]">Corrección experta:</span>
+                        <span className="font-bold text-emerald-300">
+                          {item.etiqueta_corregida ||
+                            (item.fue_correcta ? "Acierto Confirmado" : "Sin corrección")}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Botones de Acción de Curación */}
+                  <div className="flex items-center gap-2 self-end md:self-center flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleApproveFeedback(item.id_retroalimentacion)}
+                      disabled={isProcessing}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-300 bg-emerald-950/70 border border-emerald-700/60 hover:bg-emerald-900/80 active:bg-emerald-800 transition-colors disabled:opacity-50 cursor-pointer shadow-sm"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span>{isProcessing ? "Procesando..." : "Incorporar al Dataset"}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleRejectFeedback(item.id_retroalimentacion)}
+                      disabled={isProcessing}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-400 bg-red-950/40 border border-red-800/50 hover:bg-red-900/50 active:bg-red-800 transition-colors disabled:opacity-50 cursor-pointer"
+                      title="Descartar audio sin modificar el dataset"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      <span>Descartar</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ==================================================================== */}

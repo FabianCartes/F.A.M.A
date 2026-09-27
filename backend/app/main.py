@@ -56,6 +56,7 @@ from app.routes.auth import router as auth_router
 from app.services.registry import get_model_registry, ModelRegistry, ModelNotFoundError
 from app.schemas.model_info import ModelListResponse
 from app.schemas.prediction import PredictionResponse
+from app.schemas.feedback import FeedbackCreateRequest, ApproveFeedbackResponse
 from app.services.predictors.base import ModelWeightsError
 from app.services.predictors.cnn_predictor import AudioCNNPredictor
 
@@ -796,3 +797,78 @@ def activate_model(model_id: int, db: Session = Depends(get_db)):
     Activa un modelo para inferencias bioacústicas en tiempo real (CU_INV_05).
     """
     return training_service.set_active_model(model_id=model_id, db=db)
+
+
+# ============================================================================
+# ENDPOINTS DE RETROALIMENTACIÓN ACTIVA Y CURACIÓN SEMI-MANUAL (RF_06)
+# ============================================================================
+@app.post("/api/feedback", status_code=status.HTTP_201_CREATED)
+def record_feedback(req: FeedbackCreateRequest, db: Session = Depends(get_db)):
+    """
+    Registra retroalimentación de usuario/experto sobre una inferencia (RF_06, CU_INV_07).
+    Si la predicción fue errónea, valida la etiqueta corregida y respalda en GCS.
+    """
+    feedback_rec = feedback_service.record_feedback(
+        db=db,
+        id_prediccion=req.id_prediccion,
+        fue_correcta=req.fue_correcta,
+        etiqueta_corregida=req.etiqueta_corregida,
+        id_usuario=req.id_usuario or 1,
+    )
+    return {
+        "id_retroalimentacion": feedback_rec.id_retroalimentacion,
+        "id_prediccion": feedback_rec.id_prediccion,
+        "id_usuario": feedback_rec.id_usuario,
+        "fue_correcta": feedback_rec.fue_correcta,
+        "etiqueta_corregida": feedback_rec.etiqueta_corregida,
+        "procesado": feedback_rec.procesado,
+        "fecha_retroalimentacion": (
+            feedback_rec.fecha_retroalimentacion.isoformat()
+            if feedback_rec.fecha_retroalimentacion
+            else None
+        ),
+    }
+
+
+@app.get("/api/feedback/pending")
+def get_pending_feedback(
+    limit: int = Query(50, ge=1, le=500),
+    db: Session = Depends(get_db),
+):
+    """
+    Retorna la lista de retroalimentaciones pendientes de curación semi-manual (procesado == False).
+    """
+    return feedback_service.get_pending_feedback(db=db, limit=limit)
+
+
+@app.post("/api/feedback/{id_retroalimentacion}/approve", response_model=ApproveFeedbackResponse)
+def approve_feedback(
+    id_retroalimentacion: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Aprueba e incorpora el audio de retroalimentación en el dataset de entrenamiento crudo,
+    actualiza metadata.csv y marca el registro como procesado.
+    """
+    return feedback_service.approve_feedback(db=db, id_retroalimentacion=id_retroalimentacion)
+
+
+@app.post("/api/feedback/{id_retroalimentacion}/reject")
+def reject_feedback(
+    id_retroalimentacion: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Descarta la retroalimentación sin alterar los datasets de entrenamiento,
+    marcando el registro como procesado.
+    """
+    return feedback_service.reject_feedback(db=db, id_retroalimentacion=id_retroalimentacion)
+
+
+@app.get("/api/feedback/stats")
+def get_feedback_stats(db: Session = Depends(get_db)):
+    """
+    Retorna la telemetría consolidada del bucle de retroalimentación activa (RF_06)
+    incluyendo conteo de audios pendientes de curación.
+    """
+    return feedback_service.get_feedback_stats(db=db)

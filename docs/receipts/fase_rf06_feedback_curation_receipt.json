@@ -1,0 +1,115 @@
+{
+  "receipt_name": "fase_rf06_feedback_curation_receipt",
+  "generated_at": "2026-09-27T19:20:00Z",
+  "methodology": "TDD + RDD + ODD",
+  "architecture_layer": "Frontend RF_06 Active Feedback Loop & Semi-Manual Curation (Human-in-the-Loop MLOps)",
+  "plan_reference": "/home/kevin/.gemini/antigravity-cli/brain/90de64a1-0ccd-4a2c-abab-635879f537e9/plan_rf06_feedback_curation_tdd_rdd_odd.md",
+  "adr_reference": "docs/adr/0013_bucle_retroalimentacion_curacion_semi_manual_mlops.md",
+  "verified_endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/feedback",
+      "purpose": "Capture field feedback, persist audit row in PostgreSQL with procesado=False, and backup to GCS quarantine",
+      "client_method": "sendFeedback",
+      "status": "VERIFIED"
+    },
+    {
+      "method": "GET",
+      "path": "/api/feedback/pending",
+      "purpose": "Retrieve uncurated feedback records joining prediction metadata for Human-in-the-Loop review",
+      "client_method": "getPendingFeedback",
+      "status": "VERIFIED"
+    },
+    {
+      "method": "POST",
+      "path": "/api/feedback/{id}/approve",
+      "purpose": "Approve feedback recording, move to local dataset raw directory, append metadata.csv, mark procesado=True",
+      "client_method": "approveFeedback",
+      "status": "VERIFIED"
+    },
+    {
+      "method": "POST",
+      "path": "/api/feedback/{id}/reject",
+      "purpose": "Reject feedback recording, mark procesado=True without affecting local dataset",
+      "client_method": "rejectFeedback",
+      "status": "VERIFIED"
+    },
+    {
+      "method": "GET",
+      "path": "/api/feedback/stats",
+      "purpose": "Telemetry and aggregated metrics for active feedback loop and sidebar notification badge",
+      "client_method": "getFeedbackStats",
+      "status": "VERIFIED"
+    }
+  ],
+  "test_suites": {
+    "backend_pytest": {
+      "runner": "pytest 9.1.1 (Python 3.14.7)",
+      "file": "backend/tests/test_api_feedback.py",
+      "total_tests": 11,
+      "passed": 11,
+      "failed": 0,
+      "canonical_naming_tests": [
+        "test_approve_feedback",
+        "test_approve_feedback_canonical_naming_accents_and_spaces"
+      ]
+    },
+    "frontend_vitest": {
+      "runner": "vitest 5.0.2",
+      "feedback_test_file": "frontend/lib/api/__tests__/feedbackApi.test.ts",
+      "feedback_tests": 16,
+      "total_frontend_tests": 42,
+      "passed": 42,
+      "failed": 0
+    }
+  },
+  "canonical_naming_specification": {
+    "pattern": "{target_class_slug}_fb_{id_retroalimentacion}.wav",
+    "normalization_rules": [
+      "NFKD diacritic and accent removal (e.g., 'Churrín' -> 'churrin')",
+      "Case fold to ASCII lowercase",
+      "Replace spaces, hyphens, and non-alphanumerics with single underscores",
+      "Strip leading and trailing underscores"
+    ],
+    "collision_prevention": "Deterministic zero-collision guarantee bounded by relational primary key id_retroalimentacion",
+    "telemetry_logging": "Structured logger.info emitting canonical filename and destination path upon approval",
+    "status": "VERIFIED_AND_ACTIVE"
+  },
+  "build_and_types": {
+    "typescript_check": "npx tsc --noEmit: EXIT 0 (0 errors)",
+    "next_build": "npm run build: EXIT 0 (Turbopack production build succeeded)"
+  },
+  "ui_components_updated": [
+    {
+      "component": "frontend/components/views/PredictionView.tsx",
+      "changes": [
+        "Eliminated all hardcoded http://127.0.0.1:8000 URLs, unified with API_BASE_URL",
+        "Added Bucle de Retroalimentación Activa (RF_06) card below prediction metadata",
+        "Interactive [Validar Acierto ✓] button calling sendFeedback({ fue_correcta: true })",
+        "Interactive [Corregir Etiqueta ✗] button with dynamic domain class selector",
+        "Confirmation state preventing duplicate feedback submission",
+        "Historical prediction table reflecting feedback badges"
+      ]
+    },
+    {
+      "component": "frontend/components/views/IngestionView.tsx",
+      "changes": [
+        "Eliminated all hardcoded http://127.0.0.1:8000 URLs, unified with API_BASE_URL",
+        "Added Bandeja de Curación de Feedback de Campo (Human-in-the-Loop) panel",
+        "Loaded pending feedback items via getPendingFeedback()",
+        "Implemented [✓ Incorporar al Dataset] calling approveFeedback() and refreshing datasets",
+        "Configured feedbackAlert toast displaying canonical filename {target_class_slug}_fb_{id}.wav upon successful curation",
+        "Implemented [🗑 Descartar] calling rejectFeedback()",
+        "Rendered empty state when curation queue is clean"
+      ]
+    },
+    {
+      "component": "frontend/components/Sidebar.tsx",
+      "changes": [
+        "Replaced hardcoded 12 badge with dynamic pending_curation_count from getFeedbackStats()",
+        "Applied emerald/green badge for 0 pending, amber/red badge for > 0 pending"
+      ]
+    }
+  ],
+  "verification_status": "SEALED_AND_VERIFIED"
+}

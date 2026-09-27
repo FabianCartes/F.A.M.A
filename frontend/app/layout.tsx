@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Montserrat, Open_Sans } from "next/font/google";
 import "./globals.css";
 
@@ -19,6 +19,13 @@ const openSans = Open_Sans({
 export const metadata: Metadata = {
   title: "F.A.M.A. | Clasificación Bioacústica",
   description: "Framework MLOps Híbrido para Monitoreo y Análisis de Fauna Acústica",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#030712",
 };
 
 export default function RootLayout({

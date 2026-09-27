@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, ChangeEvent, FormEvent } from "react";
+import { API_BASE_URL } from "@/lib/api";
+import { sendFeedback } from "@/lib/api/feedbackApi";
 
 interface AudioWaveformStats {
   duration: number;
@@ -152,11 +154,20 @@ export default function PredictionView() {
   const timeLabelRef = useRef<HTMLSpanElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // RF_06: Estado del Bucle de Retroalimentación Activa (CU_INV_07)
+  const [submittedFeedback, setSubmittedFeedback] = useState<
+    Record<number, { fue_correcta: boolean; etiqueta_corregida?: string | null }>
+  >({});
+  const [showCorrectionDropdown, setShowCorrectionDropdown] = useState<boolean>(false);
+  const [selectedCorrection, setSelectedCorrection] = useState<string>("");
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState<boolean>(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
+
   // Obtener catálogo de modelos registrados en FastAPI (ModelRegistry)
   useEffect(() => {
     async function fetchModels() {
       try {
-        const res = await fetch("http://127.0.0.1:8000/api/models");
+        const res = await fetch(`${API_BASE_URL}/api/models`);
         if (res.ok) {
           const data = await res.json();
           if (data.models && Array.isArray(data.models)) {
@@ -196,8 +207,8 @@ export default function PredictionView() {
     async function fetchModelStatus() {
       try {
         const url = selectedDomain
-          ? `http://127.0.0.1:8000/api/model-info?dataset_name=${encodeURIComponent(selectedDomain)}`
-          : "http://127.0.0.1:8000/api/model-info";
+          ? `${API_BASE_URL}/api/model-info?dataset_name=${encodeURIComponent(selectedDomain)}`
+          : `${API_BASE_URL}/api/model-info`;
         const res = await fetch(url);
         if (res.ok) {
           const data = (await res.json()) as BackendModelStatus;
@@ -497,6 +508,81 @@ export default function PredictionView() {
     );
   }, [selectedModelId, selectedDomain]);
 
+  // RF_06: Clases del dominio activo para la lista desplegable de corrección
+  const domainClasses = useMemo(() => {
+    const isEngine =
+      isEngineModel || (result ? Boolean(ENGINE_FAULT_LABELS[result.clase]) : false);
+    if (isEngine) {
+      return Object.keys(ENGINE_FAULT_LABELS).map((key) => ({
+        value: key,
+        label: ENGINE_FAULT_LABELS[key] || key,
+      }));
+    }
+    return OFFICIAL_SPECIES.map((sp) => ({
+      value: sp,
+      label: sp,
+    }));
+  }, [isEngineModel, result]);
+
+  // Sincronizar selección de corrección por defecto cuando cambia la predicción o dominio
+  useEffect(() => {
+    if (domainClasses.length > 0) {
+      const altClass = domainClasses.find((c) => c.value !== result?.clase);
+      setSelectedCorrection(altClass ? altClass.value : domainClasses[0].value);
+    }
+  }, [domainClasses, result?.clase]);
+
+  // RF_06: Validar acierto de inferencia
+  const handleValidateFeedback = async () => {
+    if (!result || !result.db_id) return;
+    setIsSubmittingFeedback(true);
+    setFeedbackError(null);
+    try {
+      await sendFeedback({
+        id_prediccion: result.db_id,
+        fue_correcta: true,
+      });
+      setSubmittedFeedback((prev) => ({
+        ...prev,
+        [result.db_id]: { fue_correcta: true, etiqueta_corregida: null },
+      }));
+      setShowCorrectionDropdown(false);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Error al registrar la validación en el servidor.";
+      setFeedbackError(msg);
+    } finally {
+      setIsSubmittingFeedback(false);
+    }
+  };
+
+  // RF_06: Enviar corrección de etiqueta
+  const handleSendCorrection = async () => {
+    if (!result || !result.db_id) return;
+    if (!selectedCorrection) {
+      setFeedbackError("Por favor selecciona una clase válida de corrección.");
+      return;
+    }
+    setIsSubmittingFeedback(true);
+    setFeedbackError(null);
+    try {
+      await sendFeedback({
+        id_prediccion: result.db_id,
+        fue_correcta: false,
+        etiqueta_corregida: selectedCorrection,
+      });
+      setSubmittedFeedback((prev) => ({
+        ...prev,
+        [result.db_id]: { fue_correcta: false, etiqueta_corregida: selectedCorrection },
+      }));
+      setShowCorrectionDropdown(false);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Error al registrar la corrección en el servidor.";
+      setFeedbackError(msg);
+    } finally {
+      setIsSubmittingFeedback(false);
+    }
+  };
+
   const handleExecuteInference = async (e: FormEvent) => {
     e.preventDefault();
     if (!file) {
@@ -507,6 +593,8 @@ export default function PredictionView() {
     setLoading(true);
     setError(null);
     setResult(null);
+    setShowCorrectionDropdown(false);
+    setFeedbackError(null);
     const startTime = performance.now();
 
     try {
@@ -517,7 +605,7 @@ export default function PredictionView() {
       }
 
       const queryParam = selectedModelId ? `?model_id=${encodeURIComponent(selectedModelId)}` : "";
-      const response = await fetch(`http://127.0.0.1:8000/api/predict${queryParam}`, {
+      const response = await fetch(`${API_BASE_URL}/api/predict${queryParam}`, {
         method: "POST",
         body: formData,
       });
@@ -566,7 +654,7 @@ export default function PredictionView() {
       if (err instanceof Error) {
         setError(
           err.message.includes("Failed to fetch")
-            ? "No se pudo conectar con el backend (http://127.0.0.1:8000). Verifica que el servicio FastAPI esté activo con uvicorn main:app --reload."
+            ? `No se pudo conectar con el backend (${API_BASE_URL}). Verifica que el servicio FastAPI esté activo con uvicorn main:app --reload.`
             : err.message
         );
       } else {
@@ -1340,6 +1428,133 @@ export default function PredictionView() {
                   </span>
                 )}
               </div>
+
+              {/* Bucle de Retroalimentación Activa (RF_06) */}
+              <div className="pt-3 border-t border-[#23252e] space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-semibold text-gray-200 block">
+                      Retroalimentación de Campo (RF_06)
+                    </span>
+                    <span className="text-[11px] text-gray-400 block">
+                      ¿Es precisa la clasificación del modelo?
+                    </span>
+                  </div>
+                  {submittedFeedback[result.db_id] && (
+                    <span
+                      className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                        submittedFeedback[result.db_id].fue_correcta
+                          ? "text-emerald-400 bg-emerald-950/60 border-emerald-700/60"
+                          : "text-amber-400 bg-amber-950/60 border-amber-700/60"
+                      }`}
+                    >
+                      {submittedFeedback[result.db_id].fue_correcta
+                        ? "Acierto Confirmado"
+                        : "Corrección Registrada"}
+                    </span>
+                  )}
+                </div>
+
+                {submittedFeedback[result.db_id] ? (
+                  <div
+                    className={`rounded-lg p-3 text-xs flex items-start gap-2.5 border ${
+                      submittedFeedback[result.db_id].fue_correcta
+                        ? "bg-emerald-950/40 border-emerald-800/60 text-emerald-300"
+                        : "bg-amber-950/40 border-amber-800/60 text-amber-300"
+                    }`}
+                  >
+                    <span className="text-base font-bold flex-shrink-0 mt-0.5">
+                      {submittedFeedback[result.db_id].fue_correcta ? "✓" : "✎"}
+                    </span>
+                    <div className="space-y-1 min-w-0">
+                      <span className="font-semibold block text-[12px]">
+                        {submittedFeedback[result.db_id].fue_correcta
+                          ? "● Validación experta confirmada en PostgreSQL"
+                          : `● Corrección registrada y despachada a cuarentena (GCS): ${
+                              ENGINE_FAULT_LABELS[
+                                submittedFeedback[result.db_id].etiqueta_corregida || ""
+                              ] || submittedFeedback[result.db_id].etiqueta_corregida
+                            }`}
+                      </span>
+                      <p className="text-[11px] text-gray-400 leading-relaxed">
+                        {submittedFeedback[result.db_id].fue_correcta
+                          ? "La inferencia ha sido corroborada por el investigador para la telemetría del modelo."
+                          : "El archivo ha sido indexado en la cola de curación semi-manual de Ingesta para su auditoría antes del reentrenamiento."}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={handleValidateFeedback}
+                        disabled={isSubmittingFeedback}
+                        className="flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold text-emerald-300 bg-emerald-950/60 border border-emerald-700/60 hover:bg-emerald-900/60 transition-colors disabled:opacity-50 cursor-pointer"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span>Validar Acierto</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowCorrectionDropdown((prev) => !prev);
+                          setFeedbackError(null);
+                        }}
+                        disabled={isSubmittingFeedback}
+                        className={`flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold border transition-colors disabled:opacity-50 cursor-pointer ${
+                          showCorrectionDropdown
+                            ? "bg-amber-900/70 border-amber-500 text-amber-200"
+                            : "bg-amber-950/60 border-amber-700/60 text-amber-300 hover:bg-amber-900/60"
+                        }`}
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        <span>Corregir Etiqueta</span>
+                      </button>
+                    </div>
+
+                    {showCorrectionDropdown && (
+                      <div className="bg-[#111215] border border-amber-900/60 rounded-lg p-3 space-y-2">
+                        <label className="text-[11px] font-medium text-amber-300 block">
+                          Selecciona la clase acústica real:
+                        </label>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <select
+                            value={selectedCorrection}
+                            onChange={(e) => setSelectedCorrection(e.target.value)}
+                            className="flex-1 bg-[#18191e] border border-[#2e323e] rounded-md px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-amber-500"
+                          >
+                            {domainClasses.map((item) => (
+                              <option key={item.value} value={item.value}>
+                                {item.label}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={handleSendCorrection}
+                            disabled={isSubmittingFeedback}
+                            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-medium text-xs rounded-md transition-colors disabled:opacity-50 cursor-pointer flex-shrink-0"
+                          >
+                            {isSubmittingFeedback ? "Enviando..." : "Enviar Corrección"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {feedbackError && (
+                      <div className="text-[11px] text-red-400 bg-red-950/50 border border-red-800/60 rounded px-2.5 py-1.5">
+                        {feedbackError}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           ) : error ? (
             <div className="bg-red-950/60 border border-red-800/80 rounded-lg p-4 text-xs text-red-300 space-y-1">
@@ -1422,6 +1637,23 @@ export default function PredictionView() {
                   {item.modelo && (
                     <span className="text-[9px] text-blue-400/80 bg-blue-950/40 px-1.5 py-0.2 rounded border border-blue-900/40 font-mono">
                       {item.modelo}
+                    </span>
+                  )}
+                  {submittedFeedback[Number(item.id)] && (
+                    <span
+                      className={`text-[9px] px-1.5 py-0.2 rounded font-mono border ${
+                        submittedFeedback[Number(item.id)].fue_correcta
+                          ? "text-emerald-400 bg-emerald-950/50 border-emerald-800/60"
+                          : "text-amber-400 bg-amber-950/50 border-amber-800/60"
+                      }`}
+                    >
+                      {submittedFeedback[Number(item.id)].fue_correcta
+                        ? "✓ Validado"
+                        : `✎ Corregido: ${
+                            ENGINE_FAULT_LABELS[
+                              submittedFeedback[Number(item.id)].etiqueta_corregida || ""
+                            ] || submittedFeedback[Number(item.id)].etiqueta_corregida
+                          }`}
                     </span>
                   )}
                 </div>
