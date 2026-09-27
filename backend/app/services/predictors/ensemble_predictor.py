@@ -11,11 +11,13 @@ import numpy as np
 from poc.preprocess import TARGET_SR, DURATION_SECONDS
 from app.schemas.model_info import ModelMetadata
 from app.schemas.prediction import PredictionResult
-from app.services.predictors.base import AudioPredictor
-from app.services.predictors.cnn_predictor import (
+from app.services.predictors.base import (
+    AudioPredictor,
+    ModelWeightsError,
     DEFAULT_CHILEAN_BIRD_CLASSES,
     SPECTRAL_FLATNESS_NOISE_THRESHOLD,
 )
+
 
 DEFAULT_ENSEMBLE_WEIGHTS = [0.50, 0.25, 0.25]
 
@@ -64,6 +66,10 @@ class ChileanBirdsEnsemblePredictor(AudioPredictor):
             self._ensure_loaded()
 
     @property
+    def has_weights(self) -> bool:
+        return all(p.exists() for p in self.checkpoint_paths)
+
+    @property
     def metadata(self) -> ModelMetadata:
         return self._metadata
 
@@ -101,11 +107,7 @@ class ChileanBirdsEnsemblePredictor(AudioPredictor):
         import librosa
 
         if not audio_file_path.exists():
-            return PredictionResult(
-                clase="Chincol",
-                confianza=0.8868,
-                detalles={"status": "mock_fallback"},
-            )
+            raise FileNotFoundError(f"Archivo de audio no encontrado: {audio_file_path}")
 
         waveform = load_and_fix_length(
             audio_file_path, target_sr=TARGET_SR, duration_seconds=DURATION_SECONDS
@@ -157,8 +159,7 @@ class ChileanBirdsEnsemblePredictor(AudioPredictor):
                 },
             )
         else:
-            return PredictionResult(
-                clase="Chincol",
-                confianza=0.8868,
-                detalles={"status": "mock_fallback"},
+            raise ModelWeightsError(
+                f"Pesos del Super-Ensamble no disponibles. Checkpoints requeridos: {[str(p) for p in self.checkpoint_paths]}"
             )
+

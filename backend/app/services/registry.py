@@ -3,9 +3,9 @@ Registro centralizado y catálogo de modelos de predicción bioacústica.
 Permite registrar y resolver dinámicamente instancias de AudioPredictor en tiempo de ejecución.
 """
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from app.schemas.model_info import ModelMetadata
-from app.services.predictors.base import AudioPredictor
+from app.services.predictors.base import AudioPredictor, ModelWeightsError
 
 
 class ModelNotFoundError(Exception):
@@ -33,7 +33,26 @@ class ModelRegistry:
         model_id = predictor.model_id
         self._predictors[model_id] = predictor
         if is_default or self._default_model_id is None:
-            self._default_model_id = model_id
+            self.set_default_model(model_id)
+
+    def set_default_model(self, model_id: str) -> None:
+        """Establece un modelo registrado como el modelo por defecto y actualiza metadatos."""
+        if model_id not in self._predictors:
+            raise ModelNotFoundError(
+                f"No se puede establecer como default: modelo '{model_id}' no registrado."
+            )
+        self._default_model_id = model_id
+        for pred in set(self._predictors.values()):
+            is_def = (pred.model_id == model_id)
+            if hasattr(pred, "is_default"):
+                pred.is_default = is_def
+            if hasattr(pred, "_metadata") and pred._metadata:
+                pred._metadata.is_default = is_def
+
+
+    def get_active_predictor(self) -> AudioPredictor:
+        """Retorna el predictor activo actual (modelo por defecto)."""
+        return self.get(self._default_model_id)
 
     def get(self, model_id: Optional[str] = None) -> AudioPredictor:
         """
@@ -53,14 +72,34 @@ class ModelRegistry:
 
         return self._predictors[target_id]
 
-    def list_models(self) -> List[ModelMetadata]:
-        """Retorna la lista de metadatos de todos los modelos registrados."""
+    def list_models(self, only_with_weights: bool = False) -> List[ModelMetadata]:
+        """Retorna la lista de metadatos de todos los modelos registrados de forma única."""
         models = []
+        seen_ids = set()
         for predictor in self._predictors.values():
+            if predictor.model_id in seen_ids:
+                continue
+            seen_ids.add(predictor.model_id)
             meta = predictor.metadata.model_copy()
             meta.is_default = (predictor.model_id == self._default_model_id)
+            meta.has_weights = getattr(predictor, "has_weights", True)
+            if only_with_weights and not meta.has_weights:
+                continue
             models.append(meta)
         return models
+
+    def unregister(self, model_id: str) -> bool:
+        """Elimina un modelo del registro por su ID o alias."""
+        removed = False
+        keys_to_remove = [k for k, v in self._predictors.items() if k == model_id or v.model_id == model_id]
+        for k in keys_to_remove:
+            del self._predictors[k]
+            removed = True
+
+        if self._default_model_id == model_id:
+            self._default_model_id = next(iter(self._predictors.keys()), None)
+
+        return removed
 
     def get_default_model_id(self) -> Optional[str]:
         """Retorna el identificador del modelo por defecto."""
@@ -69,6 +108,130 @@ class ModelRegistry:
     def has_model(self, model_id: str) -> bool:
         """Verifica si un modelo específico está registrado."""
         return model_id in self._predictors
+
+    def register_from_db(
+        self,
+        db: Any,
+        checkpoints_root: Optional[Path] = None,
+    ) -> Optional[AudioPredictor]:
+        """
+        Sincroniza y registra los modelos entrenados presentes en PostgreSQL.
+        Busca los modelos ordenados de forma descendente, asocia sus checkpoints y
+        marca como default el modelo activo.
+        """
+        if checkpoints_root is None:
+            backend_root = Path(__file__).resolve().parent.parent.parent
+            checkpoints_root = backend_root / "checkpoints"
+        else:
+            checkpoints_root = Path(checkpoints_root)
+
+        from app.models.training import Modelo
+        from app.services.predictors.trained_predictor import TrainedModelPredictor
+
+        db_models = db.query(Modelo).order_by(Modelo.id_modelo.desc()).all()
+        active_predictor = None
+
+        for m in db_models:
+            ckpt_name = Path(m.ruta_binario_gcp).name
+            candidate_paths = [
+                checkpoints_root / ckpt_name,
+                checkpoints_root.parent / "checkpoints" / ckpt_name,
+            ]
+            ckpt_file = next((p for p in candidate_paths if p.exists()), None)
+            # Solo registrar si el archivo existe físicamente y contiene pesos reales (> 10KB)
+            if ckpt_file and ckpt_file.stat().st_size > 10000:
+                try:
+                    model_key = f"fama_trained_model_{m.id_modelo}"
+                    pred = TrainedModelPredictor(
+                        checkpoint_path=ckpt_file,
+                        model_id=model_key,
+                        name=f"{m.arquitectura} (Entrenado #{m.id_modelo})",
+                        is_default=bool(m.activo),
+                        lazy_load=False,
+                    )
+                    self.register(pred, is_default=bool(m.activo))
+                    # Registrar alias útiles para consultas directas
+                    self._predictors[ckpt_file.name] = pred
+                    self._predictors[ckpt_file.stem] = pred
+                    self._predictors[str(m.id_modelo)] = pred
+
+                    if m.activo:
+                        active_predictor = pred
+                        self.set_default_model(model_key)
+                except Exception as err:
+                    print(f"[ModelRegistry] Advertencia al registrar modelo #{m.id_modelo} ({ckpt_name}): {err}")
+
+        return active_predictor
+
+
+def discover_and_register_checkpoints(
+    registry: ModelRegistry,
+    checkpoints_root: Optional[Path] = None,
+    db: Optional[Any] = None,
+) -> int:
+    """
+    Descubre y registra modelos entrenados binarios (.pt).
+    1. Si hay base de datos disponible, sincroniza mediante register_from_db.
+    2. Si no se estableció un modelo por defecto tras la DB, escanea checkpoints_root
+       buscando fama_*_best.pt mayores a 1MB y los registra.
+    """
+    if checkpoints_root is None:
+        backend_root = Path(__file__).resolve().parent.parent.parent
+        checkpoints_root = backend_root / "checkpoints"
+    checkpoints_root = Path(checkpoints_root)
+
+    count = 0
+    active_found = False
+
+    # 1. Intentar sincronización con Base de Datos
+    if db is not None:
+        try:
+            active_pred = registry.register_from_db(db, checkpoints_root=checkpoints_root)
+            if active_pred is not None:
+                active_found = True
+                count += 1
+        except Exception as db_err:
+            print(f"[ModelRegistry] Advertencia al sincronizar con BD: {db_err}")
+    else:
+        try:
+            from app.database import SessionLocal
+            session = SessionLocal()
+            try:
+                active_pred = registry.register_from_db(session, checkpoints_root=checkpoints_root)
+                if active_pred is not None:
+                    active_found = True
+                    count += 1
+            finally:
+                session.close()
+        except Exception:
+            pass
+
+    # 2. Respaldo por escaneo directo en checkpoints/
+    if not active_found and checkpoints_root.exists() and checkpoints_root.is_dir():
+        from app.services.predictors.trained_predictor import TrainedModelPredictor
+        fama_checkpoints = sorted(
+            [p for p in checkpoints_root.glob("fama_*_best.pt") if p.is_file() and p.stat().st_size > 1000000],
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        for ckpt in fama_checkpoints:
+            try:
+                pred = TrainedModelPredictor(
+                    checkpoint_path=ckpt,
+                    model_id=ckpt.stem,
+                    name=f"Modelo Entrenado ({ckpt.stem})",
+                    is_default=(not active_found),
+                    lazy_load=False,
+                )
+                registry.register(pred, is_default=(not active_found))
+                count += 1
+                if not active_found:
+                    active_found = True
+                    registry.set_default_model(ckpt.stem)
+            except Exception as err:
+                print(f"[ModelRegistry] Error al registrar checkpoint {ckpt}: {err}")
+
+    return count
 
 
 def discover_and_register_bundles(registry: ModelRegistry, checkpoints_root: Optional[Path] = None) -> int:
@@ -116,8 +279,10 @@ def build_default_registry() -> ModelRegistry:
     # Autodescubrir bundles empaquetados en checkpoints/
     discover_and_register_bundles(reg)
 
-    return reg
+    # Autodescubrir y registrar modelos entrenados desde BD y checkpoints/
+    discover_and_register_checkpoints(reg)
 
+    return reg
 
 
 _global_model_registry: Optional[ModelRegistry] = None
@@ -135,4 +300,3 @@ def set_global_model_registry(registry: Optional[ModelRegistry]) -> None:
     """Permite sobrescribir el registro global para propósitos de prueba."""
     global _global_model_registry
     _global_model_registry = registry
-

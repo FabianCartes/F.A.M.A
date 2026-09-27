@@ -50,6 +50,11 @@ class BundleAudioPredictor(AudioPredictor):
             self._ensure_loaded()
 
     @property
+    def has_weights(self) -> bool:
+        weights_file = self.bundle_dir / self.manifest.model_specs.weights_file
+        return weights_file.exists()
+
+    @property
     def metadata(self) -> ModelMetadata:
         return self._metadata
 

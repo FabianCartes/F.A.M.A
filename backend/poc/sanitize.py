@@ -9,6 +9,12 @@ import soundfile as sf
 import librosa
 from tqdm import tqdm
 
+_BACKEND_ROOT = Path(__file__).resolve().parent.parent
+if str(_BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_ROOT))
+
+from training.paths import get_raw_data_dir, get_processed_data_dir, PathResolver
+
 
 def sanitize_audio_file(
     src: Path,
@@ -136,16 +142,17 @@ def sanitize_dataset(
 
 if __name__ == "__main__":
     import argparse
+    default_raw = get_raw_data_dir("AvesChilenas")
+    default_out = get_processed_data_dir("AvesChilenas") / "processed_wav"
     parser = argparse.ArgumentParser(description="Sanitizar dataset MP3 a WAV PCM_16 estándar")
-    parser.add_argument("--raw-dir", type=str, default="data/raw", help="Directorio de audios crudos")
-    parser.add_argument("--output-dir", type=str, default="data/processed_wav", help="Directorio de destino WAV")
+    parser.add_argument("--raw-dir", type=str, default=str(default_raw), help="Directorio de audios crudos")
+    parser.add_argument("--output-dir", type=str, default=str(default_out), help="Directorio de destino WAV")
     parser.add_argument("--sr", type=int, default=22050, help="Frecuencia de muestreo")
     parser.add_argument("--workers", type=int, default=4, help="Número de workers concurrentes")
     args = parser.parse_args()
 
-    project_root = Path(__file__).resolve().parent.parent
-    raw_path = project_root / args.raw_dir
-    out_path = project_root / args.output_dir
+    raw_path = Path(args.raw_dir)
+    out_path = Path(args.output_dir)
 
     print(f"Iniciando saneamiento de {raw_path} -> {out_path}...")
     stats = sanitize_dataset(raw_path, out_path, target_sr=args.sr, num_workers=args.workers, show_progress=True)

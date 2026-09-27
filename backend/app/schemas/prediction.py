@@ -23,3 +23,5 @@ class PredictionResponse(BaseModel):
     modelo: Optional[str] = Field(None, description="Nombre descriptivo del modelo activo")
     is_fallback: Optional[bool] = Field(None, description="Indica si opera en modo fallback")
     modelos_activos: Optional[list] = Field(None, description="Lista de modelos activos con ponderaciones")
+    detalles: Optional[Dict[str, Any]] = Field(None, description="Telemetría y diagnósticos de inferencia (is_mock, latency_ms, device, checkpoint)")
+

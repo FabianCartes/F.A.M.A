@@ -1,0 +1,135 @@
+{
+  "receipt_name": "fase_frontend_training_connection_receipt",
+  "generated_at": "2026-09-27T18:58:45Z",
+  "methodology": "TDD + RDD + ODD",
+  "architecture_layer": "Frontend UI/API Connection to FastAPI Training Worker",
+  "plan_reference": "/home/kevin/.gemini/antigravity-cli/brain/90de64a1-0ccd-4a2c-abab-635879f537e9/plan_conexion_entrenamiento_tdd_rdd_odd.md",
+  "verified_endpoints": [
+    {
+      "method": "GET",
+      "path": "/api/training/hardware",
+      "purpose": "GPU/CPU telemetry, VRAM/RAM allocation, and temperature monitoring",
+      "client_method": "getHardwareStatus",
+      "status": "VERIFIED"
+    },
+    {
+      "method": "GET",
+      "path": "/api/training/datasets",
+      "purpose": "List datasets available for bioacoustic and industrial training",
+      "client_method": "getDatasets",
+      "status": "VERIFIED"
+    },
+    {
+      "method": "POST",
+      "path": "/api/training/start",
+      "purpose": "Launch decoupled training background thread",
+      "client_method": "startTraining",
+      "status": "VERIFIED"
+    },
+    {
+      "method": "GET",
+      "path": "/api/training/progress",
+      "purpose": "Real-time training metrics, epoch progress, and log streaming",
+      "client_method": "getProgress",
+      "status": "VERIFIED"
+    },
+    {
+      "method": "POST",
+      "path": "/api/training/stop",
+      "purpose": "Graceful and cooperative training interruption",
+      "client_method": "stopTraining",
+      "status": "VERIFIED"
+    },
+    {
+      "method": "GET",
+      "path": "/api/training/history",
+      "purpose": "Retrieve historical saved model checkpoints catalog",
+      "client_method": "getHistory",
+      "status": "VERIFIED"
+    },
+    {
+      "method": "POST",
+      "path": "/api/training/models/{model_id}/activate",
+      "purpose": "Mark selected model checkpoint as active for real-time inference",
+      "client_method": "activateModel",
+      "status": "VERIFIED"
+    }
+  ],
+  "test_suites": {
+    "frontend_vitest": {
+      "runner": "vitest 5.0.2",
+      "environment": "jsdom",
+      "total_files": 2,
+      "passed_files": 2,
+      "total_tests": 20,
+      "passed_tests": 20,
+      "failed_tests": 0,
+      "files": [
+        {
+          "file": "frontend/lib/api/__tests__/trainingApi.test.ts",
+          "tests": 16,
+          "status": "PASSED"
+        },
+        {
+          "file": "frontend/hooks/__tests__/useTrainingLifecycle.test.ts",
+          "tests": 4,
+          "status": "PASSED"
+        }
+      ]
+    },
+    "backend_pytest": {
+      "runner": "pytest 9.1.1 (Python 3.14.7)",
+      "total_tests": 5,
+      "passed_tests": 5,
+      "failed_tests": 0,
+      "tests": [
+        "test_get_training_hardware",
+        "test_get_training_datasets",
+        "test_training_lifecycle",
+        "test_get_training_history",
+        "test_training_lifecycle_triad"
+      ],
+      "status": "PASSED"
+    }
+  },
+  "build_and_typecheck": {
+    "typescript_noEmit": "PASSED (0 errors)",
+    "next_build": "PASSED (Static route optimization completed successfully)",
+    "eslint_training_layer": "PASSED (0 errors, 0 warnings)"
+  },
+  "odd_observability_features": {
+    "connection_state_machine": ["online", "reconnecting", "offline"],
+    "backoff_strategy": "Exponential backoff: base * (1.5 ^ consecutive_errors) capped at 30s",
+    "polling_intervals": {
+      "training_ms": 1000,
+      "idle_ms": 5000
+    },
+    "circular_log_buffer_limit": 500,
+    "user_feedback_delivery": "Contextual banners and inline alerts (native browser alert() eliminated)",
+    "domain_dataset_support": [
+      {
+        "domain": "bioacoustic",
+        "dataset": "AvesChilenas",
+        "classes": 15,
+        "triad": ["EfficientNet-B0", "ConvNeXt-Nano", "ResNet-34d"]
+      },
+      {
+        "domain": "industrial",
+        "dataset": "engine_diagnostics",
+        "classes": 13,
+        "triad": ["ResNet-34d", "EfficientNet-B0", "PANNs-CNN14"]
+      }
+    ]
+  },
+  "artifact_hashes": {
+    "frontend/lib/schemas/training.ts": "bc64ae6b40e26b3a7cf1b9fa02f08b0c7170e1d9b2db9a98d2033e78e501ea3a",
+    "frontend/lib/api/trainingApi.ts": "23c56637c23b46e37434e2e3f64fd9d175540a32cc33c12b4acb97d3513b81bb",
+    "frontend/hooks/useTrainingLifecycle.ts": "dd0a54fac37925f7e88ba15c0814ffbe1c9a14a8c4488b8e5f8e53e610252604",
+    "frontend/components/views/TrainingView.tsx": "2feea80d32cfe4a36e26bda8af342923b921e57c7fc0babb71c005eb5b070b02",
+    "backend/tests/test_api_training.py": "dc92b82e8925dbeadd8d5f4df0444a5c0bd97e7075ab46c17e61151515f12f2f"
+  },
+  "hardcoded_urls_eliminated": true,
+  "real_pytorch_gpu_execution": true,
+  "execution_engine": "Native PyTorch 2.5 CUDA on NVIDIA RTX 2050 (GPUAudioFrontEnd + FocalLoss)",
+  "status": "APPROVED"
+}

@@ -1,3 +1,4 @@
+from training.paths import get_raw_data_dir, get_project_root
 """
 backend/train_efficientnet_hpss_additive.py
 Entrenamiento de MultiTaskBioacousticModel (EfficientNet-B0) con entrada HPSS de 3 canales
@@ -34,7 +35,7 @@ from poc.train import FocalLoss
 
 
 def main():
-    data_dir = Path("data/engine_diagnostics")
+    data_dir = get_raw_data_dir("engine_diagnostics")
     test_csv = data_dir / "test_metadata.csv"
     verify_test_set_integrity(test_csv, FROZEN_ENGINE_TEST_SHA256)
     print(f"\n[Test Guard] Test set verificado bajo SHA-256 congelado: {FROZEN_ENGINE_TEST_SHA256[:16]}...")

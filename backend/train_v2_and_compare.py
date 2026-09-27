@@ -11,6 +11,7 @@ import torch
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, classification_report
 from torch.utils.data import DataLoader
 
+from training.paths import get_project_root, get_raw_data_dir
 from training.schemas.config import TrainingConfig
 from training.trainers.standalone_trainer import GenericModelTrainer
 from training.pipelines.dataset import GenericAudioDataset
@@ -19,7 +20,8 @@ from poc.train import BioacousticModel
 
 
 def train_recipe(recipe_filename: str, train_df, val_df, test_df):
-    recipe_path = Path(f"backend/training/recipes/{recipe_filename}")
+    project_root = get_project_root()
+    recipe_path = project_root / f"backend/training/recipes/{recipe_filename}"
     with open(recipe_path, "r", encoding="utf-8") as f:
         cfg = TrainingConfig.model_validate(yaml.safe_load(f))
 
@@ -27,12 +29,12 @@ def train_recipe(recipe_filename: str, train_df, val_df, test_df):
     print(f"[Train] Iniciando: {cfg.model_name} ({cfg.architecture.type})")
     print("=" * 60)
 
-    trainer = GenericModelTrainer(config=cfg, project_root=Path.cwd())
+    trainer = GenericModelTrainer(config=cfg, project_root=project_root)
     bundle_path, metrics = trainer.train_and_export(
         train_df=train_df,
         val_df=val_df,
         test_df=test_df,
-        output_checkpoints_dir=Path("backend/checkpoints"),
+        output_checkpoints_dir=project_root / "backend" / "checkpoints",
         verbose=True,
     )
     print(f"[Train] Completado: {cfg.model_id} | Test Acc={metrics['test_accuracy']*100:.2f}%, F1={metrics['test_f1_macro']*100:.2f}%")
@@ -89,7 +91,7 @@ def evaluate_models(models, weights, test_df, audio_cfg, device):
 
 
 def main():
-    data_dir = Path("data/engine_diagnostics")
+    data_dir = get_raw_data_dir("engine_diagnostics")
     train_df = pd.read_csv(data_dir / "train_metadata.csv")
     val_df = pd.read_csv(data_dir / "val_metadata.csv")
     test_df = pd.read_csv(data_dir / "test_metadata.csv")

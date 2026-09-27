@@ -1,7 +1,9 @@
 import pytest
 from pathlib import Path
+import numpy as np
+import soundfile as sf
 from app.services.predictors.ensemble_predictor import ChileanBirdsEnsemblePredictor
-from app.schemas.prediction import PredictionResult
+from app.services.predictors.trained_predictor import ModelWeightsError
 
 
 def test_ensemble_predictor_metadata():
@@ -14,12 +16,19 @@ def test_ensemble_predictor_metadata():
     assert len(meta.classes) == 15
 
 
-def test_ensemble_predictor_predict_mock_fallback():
-    # Instanciar con rutas inexistentes para validar el fallback seguro de contingencia
+def test_ensemble_predictor_predict_fails_when_checkpoint_missing(tmp_path):
+    # Instanciar con rutas inexistentes para validar que no haya mocks silenciosos
     pred = ChileanBirdsEnsemblePredictor(
         checkpoint_paths=[Path("/tmp/fake1.pt"), Path("/tmp/fake2.pt")],
         lazy_load=False,
     )
-    result = pred.predict(Path("/tmp/non_existent.wav"))
-    assert isinstance(result, PredictionResult)
-    assert result.confianza >= 0.0
+    # Audio sintético válido que no sea silencio ni ruido
+    dummy_wav = tmp_path / "valid_signal.wav"
+    sr = 22050
+    t = np.linspace(0, 1.0, sr, endpoint=False, dtype=np.float32)
+    waveform = 0.5 * np.sin(2 * np.pi * 1000.0 * t)
+    sf.write(dummy_wav, waveform, sr)
+
+    with pytest.raises(ModelWeightsError):
+        pred.predict(dummy_wav)
+

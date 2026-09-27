@@ -1,62 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { useTrainingLifecycle } from "@/hooks/useTrainingLifecycle";
 
 // ============================================================================
-// INTERFACES DEL DOMINIO DE ENTRENAMIENTO (RF_04, CU_INV_02, CU_INV_03)
+// CONFIGURACIÓN DE PRESETS DE ARQUITECTURAS
 // ============================================================================
-interface HardwareStatus {
-  cuda_available: boolean;
-  device_name: string;
-  vram_total_gb: number;
-  vram_used_gb: number;
-  vram_percent: number;
-  cpu_percent?: number;
-  load_status?: string;
-  load_level?: "normal" | "warning" | "danger";
-  temperature_c?: number;
-  status: string;
-}
-
-interface TrainingDataset {
-  id: string;
-  name: string;
-  audio_count: number;
-  class_count?: number;
-  classes?: string[];
-  size_mb?: number;
-  estado?: string;
-  db_id?: number | null;
-}
-
-interface MetricPoint {
-  epoca: number;
-  train_loss: number;
-  val_loss: number;
-  train_acc: number;
-  val_acc: number;
-  tiempo_epoca: number;
-}
-
-interface LogEntry {
-  id: string;
-  timestamp: string;
-  level: string;
-  message: string;
-}
-
-interface ModelHistoryItem {
-  id: number;
-  architecture: string;
-  epochs: number;
-  accuracy: number;
-  loss: number;
-  active: boolean;
-  status: string;
-  filename: string;
-  created_at: string | null;
-}
-
 const ARCHITECTURE_PRESETS: Record<
   string,
   { lr: string; epochs: string; batch: string; desc: string }
@@ -94,7 +43,34 @@ const ARCHITECTURE_PRESETS: Record<
 };
 
 export default function TrainingView() {
-  // 1. Estado de Configuración (IE_03)
+  // 1. Hook Reactivo de Ciclo de Vida y Observabilidad (ODD)
+  const {
+    connectionStatus,
+    lastError,
+    hardware,
+    datasets,
+    history,
+    isTraining,
+    isStopping,
+    currentEpoch,
+    totalEpochs,
+    currentTrainLoss,
+    currentValLoss,
+    currentTrainAcc,
+    currentValAcc,
+    metricsHistory,
+    logs,
+    triadProgress,
+    activatingId,
+    start,
+    stop,
+    activate,
+    refreshHardware,
+    refreshHistory,
+    clearError,
+  } = useTrainingLifecycle();
+
+  // 2. Estado del Formulario de Configuración (IE_03)
   const [selectedDataset, setSelectedDataset] = useState<string>("AvesChilenas");
   const [learningRate, setLearningRate] = useState<string>("0.001");
   const [epochs, setEpochs] = useState<string>("10");
@@ -102,47 +78,22 @@ export default function TrainingView() {
   const [framework, setFramework] = useState<string>("pytorch");
   const [architecture, setArchitecture] = useState<string>("EfficientNet-B0");
   const [trainingMode, setTrainingMode] = useState<"single" | "triad">("single");
-  const [triadProgress, setTriadProgress] = useState<{
-    isTriad: boolean;
-    modelIdx: number;
-    totalModels: number;
-    currentArch: string;
-  }>({
-    isTriad: false,
-    modelIdx: 1,
-    totalModels: 1,
-    currentArch: "",
-  });
-
-  // 2. Telemetría de Hardware y Datasets
-  const [hardware, setHardware] = useState<HardwareStatus | null>(null);
-  const [datasets, setDatasets] = useState<TrainingDataset[]>([]);
-  const currentDataset = datasets.find((d) => d.id === selectedDataset) || datasets[0] || {
-    id: "AvesChilenas",
-    name: "AvesChilenas (1211 audios)",
-    audio_count: 1211,
-    class_count: 15,
-    size_mb: 340.5,
-  };
-
-  // 3. Ciclo de Vida del Entrenamiento (RF_04 / CU_INV_03)
-  const [isTraining, setIsTraining] = useState<boolean>(false);
-  const [isStopping, setIsStopping] = useState<boolean>(false);
-  const [trainingJobId, setTrainingJobId] = useState<string | null>(null);
-  const [currentEpoch, setCurrentEpoch] = useState<number>(0);
-  const [totalEpochs, setTotalEpochs] = useState<number>(10);
-  const [currentTrainLoss, setCurrentTrainLoss] = useState<number>(0.0);
-  const [currentValLoss, setCurrentValLoss] = useState<number>(0.0);
-  const [currentTrainAcc, setCurrentTrainAcc] = useState<number>(0.0);
-  const [currentValAcc, setCurrentValAcc] = useState<number>(0.0);
-  const [metricsHistory, setMetricsHistory] = useState<MetricPoint[]>([]);
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-
-  // 4. Historial de Modelos (CU_INV_04 / CU_INV_05)
-  const [history, setHistory] = useState<ModelHistoryItem[]>([]);
-  const [activatingId, setActivatingId] = useState<number | null>(null);
 
   const logsContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Obtener información del dataset seleccionado actualmente
+  const currentDataset = useMemo(() => {
+    return (
+      datasets.find((d) => d.id === selectedDataset) ||
+      datasets[0] || {
+        id: "AvesChilenas",
+        name: "AvesChilenas (1211 audios)",
+        audio_count: 1211,
+        class_count: 15,
+        size_mb: 340.5,
+      }
+    );
+  }, [datasets, selectedDataset]);
 
   // Cambio dinámico de arquitectura con auto-rellenado de hiperparámetros recomendados
   const handleArchitectureChange = (newArch: string) => {
@@ -174,182 +125,36 @@ export default function TrainingView() {
     return `~${hours}h ${remMin}m`;
   }, [currentDataset, batchSize, epochs, hardware, trainingMode]);
 
-  // Cargar telemetría de hardware
-  const fetchHardware = useCallback(async () => {
-    try {
-      const res = await fetch("http://127.0.0.1:8000/api/training/hardware");
-      if (res.ok) {
-        const data = await res.json();
-        setHardware(data);
-      }
-    } catch {
-      // Si el backend no está disponible temporalmente
-    }
-  }, []);
-
-  // Cargar datasets disponibles
-  const fetchDatasets = useCallback(async () => {
-    try {
-      const res = await fetch("http://127.0.0.1:8000/api/training/datasets");
-      if (res.ok) {
-        const data = await res.json();
-        setDatasets(data.datasets || []);
-      }
-    } catch {
-      // Silenciar error transitorio
-    }
-  }, []);
-
-  // Cargar historial de modelos desde PostgreSQL
-  const fetchHistory = useCallback(async () => {
-    try {
-      const res = await fetch("http://127.0.0.1:8000/api/training/history");
-      if (res.ok) {
-        const data = await res.json();
-        setHistory(data.history || []);
-      }
-    } catch {
-      // Silenciar error transitorio
-    }
-  }, []);
-
-  // Inicialización de datos
-  useEffect(() => {
-    fetchHardware();
-    fetchDatasets();
-    fetchHistory();
-  }, [fetchHardware, fetchDatasets, fetchHistory]);
-
-  // Autoscroll de consola
+  // Autoscroll de consola cuando ingresan nuevos logs
   useEffect(() => {
     if (logsContainerRef.current) {
       logsContainerRef.current.scrollTop = logsContainerRef.current.scrollHeight;
     }
   }, [logs]);
 
-  // Sondeo de progreso en vivo mientras se entrena
-  useEffect(() => {
-    let timer: NodeJS.Timeout | null = null;
-
-    if (isTraining) {
-      timer = setInterval(async () => {
-        try {
-          const res = await fetch("http://127.0.0.1:8000/api/training/progress");
-          if (res.ok) {
-            const data = await res.json();
-            setCurrentEpoch(data.epoch || 0);
-            setTotalEpochs(data.total_epochs || parseInt(epochs) || 10);
-            setCurrentTrainLoss(data.train_loss || 0.0);
-            setCurrentValLoss(data.val_loss || 0.0);
-            setCurrentTrainAcc(data.train_acc || 0.0);
-            setCurrentValAcc(data.val_acc || 0.0);
-            setMetricsHistory(data.metrics_history || []);
-            setLogs(data.logs || []);
-
-            if (data.is_tri_model) {
-              setTriadProgress({
-                isTriad: true,
-                modelIdx: data.current_model_index || 1,
-                totalModels: data.total_models || 3,
-                currentArch: data.current_architecture || architecture,
-              });
-            }
-
-            if (data.status === "completed" || data.status === "failed" || data.status === "stopped") {
-              setIsTraining(false);
-              setIsStopping(false);
-              fetchHistory();
-              fetchHardware();
-            }
-          }
-        } catch {
-          // Reintento en próximo ciclo
-        }
-      }, 1000);
-    }
-
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  }, [isTraining, epochs, architecture, fetchHistory, fetchHardware]);
-
   // Iniciar Entrenamiento (CU_INV_03)
   const handleStartTraining = async () => {
     if (isTraining) return;
-    setIsTraining(true);
-    setIsStopping(false);
-    setMetricsHistory([]);
-    setCurrentEpoch(0);
-    if (trainingMode === "triad") {
-      const isEngine = selectedDataset === "engine_diagnostics";
-      setTriadProgress({
-        isTriad: true,
-        modelIdx: 1,
-        totalModels: 3,
-        currentArch: isEngine ? "ResNet-34d" : "EfficientNet-B0",
-      });
-    } else {
-      setTriadProgress({
-        isTriad: false,
-        modelIdx: 1,
-        totalModels: 1,
-        currentArch: architecture,
-      });
-    }
-
-    try {
-      const res = await fetch("http://127.0.0.1:8000/api/training/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          dataset_name: selectedDataset,
-          architecture,
-          epochs: parseInt(epochs) || 10,
-          learning_rate: parseFloat(learningRate) || 0.001,
-          batch_size: parseInt(batchSize) || 16,
-          framework,
-          is_tri_model: trainingMode === "triad",
-        }),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || `Error HTTP ${res.status}`);
-      }
-
-      const data = await res.json();
-      setTrainingJobId(data.job_id);
-    } catch (err: unknown) {
-      setIsTraining(false);
-      const msg = err instanceof Error ? err.message : String(err);
-      alert(`No fue posible iniciar el entrenamiento: ${msg}`);
-    }
+    await start({
+      dataset_name: currentDataset.id,
+      architecture,
+      epochs: parseInt(epochs, 10) || 10,
+      learning_rate: parseFloat(learningRate) || 0.001,
+      batch_size: parseInt(batchSize, 10) || 16,
+      framework,
+      is_tri_model: trainingMode === "triad",
+    });
   };
 
   // Detener Entrenamiento (CU_INV_03 Paso 2.a)
   const handleStopTraining = async () => {
     if (!isTraining || isStopping) return;
-    setIsStopping(true);
-    try {
-      await fetch("http://127.0.0.1:8000/api/training/stop", { method: "POST" });
-    } catch {
-      setIsStopping(false);
-    }
+    await stop();
   };
 
   // Activar Modelo para Inferencia (CU_INV_05)
   const handleActivateModel = async (modelId: number) => {
-    setActivatingId(modelId);
-    try {
-      const res = await fetch(`http://127.0.0.1:8000/api/training/models/${modelId}/activate`, {
-        method: "POST",
-      });
-      if (res.ok) {
-        await fetchHistory();
-      }
-    } finally {
-      setActivatingId(null);
-    }
+    await activate(modelId);
   };
 
   return (
@@ -374,8 +179,29 @@ export default function TrainingView() {
           </div>
         </div>
 
-        {/* Indicador de Hardware / Dispositivo */}
-        <div className="flex items-center gap-2">
+        {/* Indicadores de Estado y Hardware */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Badge de Conectividad ODD */}
+          {connectionStatus === "online" && (
+            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-950/70 border border-emerald-700/60 text-emerald-300 font-mono text-xs shadow-sm">
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              Backend En línea
+            </span>
+          )}
+          {connectionStatus === "reconnecting" && (
+            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-950/70 border border-amber-700/60 text-amber-300 font-mono text-xs shadow-sm animate-pulse">
+              <span className="w-2 h-2 rounded-full bg-amber-400" />
+              Reconectando...
+            </span>
+          )}
+          {connectionStatus === "offline" && (
+            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-950/70 border border-rose-700/60 text-rose-300 font-mono text-xs shadow-sm">
+              <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+              Desconectado
+            </span>
+          )}
+
+          {/* Indicador de Hardware / Dispositivo */}
           {hardware?.cuda_available ? (
             <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-950/70 border border-cyan-700/60 text-cyan-300 font-mono text-xs shadow-sm">
               <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
@@ -384,14 +210,58 @@ export default function TrainingView() {
           ) : (
             <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-950/70 border border-blue-700/60 text-blue-300 font-mono text-xs shadow-sm">
               <span className="w-2 h-2 rounded-full bg-blue-400" />
-              Host: {hardware?.device_name || "Nodo de Cómputo CPU"}
+              Host: {hardware?.device_name || "Nodo CPU"}
             </span>
           )}
         </div>
       </div>
 
       {/* ==================================================================== */}
-      {/* 2. FILA 1: SELECCIONAR DATASET + MONITOR GPU/HARDWARE (Figura 6.8) */}
+      {/* 2. BANNERS DE OBSERVABILIDAD Y CONTROL DE ERRORES (ODD) */}
+      {/* ==================================================================== */}
+      {connectionStatus === "offline" && (
+        <div className="p-3.5 rounded-xl bg-rose-950/80 border border-rose-700/70 text-rose-200 text-xs flex items-center justify-between shadow-lg">
+          <div className="flex items-center gap-2.5">
+            <svg className="w-5 h-5 text-rose-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div>
+              <p className="font-semibold text-rose-100">Servidor backend no disponible</p>
+              <p className="text-rose-300 text-[11px]">
+                No fue posible conectar con el servidor FastAPI. El sistema está aplicando retroceso exponencial para reintentar la conexión.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => refreshHardware()}
+            className="px-3 py-1.5 rounded-lg bg-rose-900/90 hover:bg-rose-800 text-white font-medium text-xs border border-rose-600 transition-colors flex-shrink-0"
+          >
+            Reintentar ahora
+          </button>
+        </div>
+      )}
+
+      {lastError && connectionStatus !== "offline" && (
+        <div className="p-3 rounded-xl bg-amber-950/70 border border-amber-700/60 text-amber-200 text-xs flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-2">
+            <svg className="w-4 h-4 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="font-mono text-[11px]">{lastError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={clearError}
+            className="text-amber-400 hover:text-amber-200 text-xs px-2 py-0.5 rounded transition-colors"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* 3. FILA 1: SELECCIONAR DATASET + MONITOR GPU/HARDWARE (Figura 6.8) */}
       {/* ==================================================================== */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Tarjeta: Seleccionar Dataset */}
@@ -415,7 +285,7 @@ export default function TrainingView() {
               Dataset para Entrenamiento
             </label>
             <select
-              value={selectedDataset}
+              value={currentDataset.id}
               onChange={(e) => setSelectedDataset(e.target.value)}
               disabled={isTraining}
               className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-emerald-600 font-mono"
@@ -425,7 +295,7 @@ export default function TrainingView() {
               ) : (
                 datasets.map((d) => (
                   <option key={d.id} value={d.id}>
-                    {d.name}
+                    {d.name} {d.domain_label ? `[${d.domain_label}]` : ""}
                   </option>
                 ))
               )}
@@ -434,7 +304,9 @@ export default function TrainingView() {
 
           <div className="flex items-center justify-between text-[11px] text-gray-400 pt-1 border-t border-[#23252e]/60">
             <span>Clases objetivo: <strong className="text-gray-200">{currentDataset?.class_count || 15} clases detectadas</strong></span>
-            <span className="text-emerald-400 font-mono">Partición Grouped / Stratified</span>
+            <span className="text-emerald-400 font-mono">
+              {currentDataset?.domain === "industrial" ? "Monitoreo Acústico Industrial" : "Partición Grouped / Stratified"}
+            </span>
           </div>
         </div>
 
@@ -487,7 +359,8 @@ export default function TrainingView() {
       </div>
 
       {/* ==================================================================== */}
-      {/* 3. CONFIGURACIÓN DE ENTRENAMIENTO */}
+      {/* 4. CONFIGURACIÓN DE ENTRENAMIENTO */}
+      {/* ==================================================================== */}
       <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4 shadow-sm">
         <div className="flex items-center justify-between">
           <span className="text-xs text-gray-300 font-semibold flex items-center gap-1.5">
@@ -497,7 +370,7 @@ export default function TrainingView() {
             Hiperparámetros de Modelado
           </span>
           <span className="text-[10px] text-gray-500 font-mono">
-            PyTorch 2.5 con GeM Pooling y Focal Loss
+            PyTorch con GeM Pooling y Focal Loss
           </span>
         </div>
 
@@ -604,7 +477,7 @@ export default function TrainingView() {
               onChange={(e) => setFramework(e.target.value)}
               className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-blue-500 font-mono disabled:opacity-60"
             >
-              <option value="pytorch">PyTorch 2.5 (Nativo C++/CUDA)</option>
+              <option value="pytorch">PyTorch (Nativo C++/CUDA)</option>
               <option value="tensorflow" disabled>TensorFlow 2.16 (Deshabilitado)</option>
             </select>
           </div>
@@ -653,7 +526,7 @@ export default function TrainingView() {
           <button
             type="button"
             onClick={handleStartTraining}
-            disabled={isTraining}
+            disabled={isTraining || connectionStatus === "offline"}
             className={`flex-1 py-2.5 rounded-lg text-white font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-40 disabled:cursor-not-allowed ${
               trainingMode === "triad"
                 ? "bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 shadow-emerald-950/40"
@@ -703,7 +576,7 @@ export default function TrainingView() {
       </div>
 
       {/* ==================================================================== */}
-      {/* 4. FILA 2: MÉTRICAS EN TIEMPO REAL + CONSOLA (Figura 6.8 / IS_02) */}
+      {/* 5. FILA 2: MÉTRICAS EN TIEMPO REAL + CONSOLA (Figura 6.8 / IS_02) */}
       {/* ==================================================================== */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Tarjeta: Curvas y Métricas en Tiempo Real (IS_02) */}
@@ -714,7 +587,7 @@ export default function TrainingView() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
               </svg>
               Curvas de Precisión y Pérdida en Tiempo Real
-          </span>
+            </span>
             <span className="text-[10px] text-gray-500 font-mono">
               Época {currentEpoch} de {totalEpochs}
             </span>
@@ -788,7 +661,6 @@ export default function TrainingView() {
                         points={metricsHistory
                           .map((m, idx) => {
                             const x = (idx / (totalEpochs - 1 || 1)) * 300;
-                            // Normalizar acc de 0 a 100 en altura de 100px invertida
                             const y = 95 - (m.val_acc / 100) * 85;
                             return `${x},${y}`;
                           })
@@ -806,7 +678,6 @@ export default function TrainingView() {
                         points={metricsHistory
                           .map((m, idx) => {
                             const x = (idx / (totalEpochs - 1 || 1)) * 300;
-                            // Normalizar loss de 0 a 2.0 en altura de 100px invertida
                             const y = Math.max(5, Math.min(95, (m.val_loss / 2.0) * 90));
                             return `${x},${y}`;
                           })
@@ -876,7 +747,7 @@ export default function TrainingView() {
       </div>
 
       {/* ==================================================================== */}
-      {/* 5. HISTORIAL DE ENTRENAMIENTOS (CU_INV_04 / CU_INV_05 / Tabla 6.6) */}
+      {/* 6. HISTORIAL DE ENTRENAMIENTOS (CU_INV_04 / CU_INV_05 / Tabla 6.6) */}
       {/* ==================================================================== */}
       <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4 shadow-sm">
         <div className="flex items-center justify-between">
@@ -891,7 +762,7 @@ export default function TrainingView() {
 
           <button
             type="button"
-            onClick={fetchHistory}
+            onClick={refreshHistory}
             className="text-[11px] text-gray-400 hover:text-gray-200 transition-colors flex items-center gap-1"
           >
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -924,10 +795,10 @@ export default function TrainingView() {
                   </td>
                   <td className="py-3 text-gray-400 font-mono">{item.epochs}</td>
                   <td className="py-3 text-emerald-400 font-mono font-semibold">
-                    {item.accuracy ? `${item.accuracy.toFixed(2)}%` : "—"}
+                    {item.accuracy != null ? `${item.accuracy.toFixed(2)}%` : "—"}
                   </td>
                   <td className="py-3 text-gray-400 font-mono">
-                    {item.loss ? item.loss.toFixed(4) : "—"}
+                    {item.loss != null ? item.loss.toFixed(4) : "—"}
                   </td>
                   <td className="py-3 text-gray-400 font-mono text-[11px]">
                     {item.filename}
@@ -962,8 +833,8 @@ export default function TrainingView() {
                       <button
                         type="button"
                         onClick={() => handleActivateModel(item.id)}
-                        disabled={activatingId === item.id}
-                        className="text-[11px] text-gray-300 hover:text-white px-2.5 py-1 rounded bg-[#1c1e24] hover:bg-emerald-950/60 border border-[#2d303b] hover:border-emerald-700/60 transition-colors"
+                        disabled={activatingId === item.id || connectionStatus === "offline"}
+                        className="text-[11px] text-gray-300 hover:text-white px-2.5 py-1 rounded bg-[#1c1e24] hover:bg-emerald-950/60 border border-[#2d303b] hover:border-emerald-700/60 transition-colors disabled:opacity-50"
                       >
                         {activatingId === item.id ? "Activando..." : "Activar"}
                       </button>

@@ -26,8 +26,14 @@ if _cred_env:
             os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(_resolved_cred)
 
 DEFAULT_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME", "fama-audio-records-2026")
-DEFAULT_LOCAL_RAW_DIR = _BACKEND_DIR / "data" / "raw"
-DEFAULT_LOCAL_PROCESSED_DIR = _BACKEND_DIR / "data" / "processed"
+
+try:
+    from training.paths import get_raw_data_dir, get_processed_data_dir
+    DEFAULT_LOCAL_RAW_DIR = get_raw_data_dir()
+    DEFAULT_LOCAL_PROCESSED_DIR = get_processed_data_dir()
+except ImportError:
+    DEFAULT_LOCAL_RAW_DIR = _BACKEND_DIR / "data" / "raw"
+    DEFAULT_LOCAL_PROCESSED_DIR = _BACKEND_DIR / "data" / "processed"
 
 
 class IngestionService:

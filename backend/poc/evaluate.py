@@ -29,6 +29,7 @@ from poc.preprocess import (
     TARGET_SR,
     DURATION_SECONDS,
 )
+from training.paths import PathResolver, get_raw_data_dir, get_project_root
 
 
 
@@ -351,8 +352,8 @@ def evaluate_test_set(
 
 def run_evaluation(
     checkpoint_path: Optional[Union[str, Path]] = None,
-    test_csv: Path = Path("data/test.csv"),
-    raw_dir: Path = Path("data/raw"),
+    test_csv: Optional[Path] = None,
+    raw_dir: Optional[Path] = None,
     output_image_path: Path = Path("confusion_matrix.png"),
     device: Optional[str] = None,
     use_tta: bool = True,
@@ -363,6 +364,15 @@ def run_evaluation(
     max_window_batch_size: int = 32,
 ) -> Dict[str, Any]:
     """Carga uno o más checkpoints y ejecuta la evaluación oficial en el conjunto de prueba (con soporte para Ensamble)."""
+    if test_csv is None:
+        test_csv = get_raw_data_dir("AvesChilenas") / "test.csv"
+    else:
+        test_csv = Path(test_csv)
+    if raw_dir is None:
+        raw_dir = get_raw_data_dir("AvesChilenas")
+    else:
+        raw_dir = Path(raw_dir)
+
     if device is None:
         device_obj = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     else:
@@ -481,7 +491,8 @@ if __name__ == "__main__":
     use_tta = False if args.no_tta else (args.use_tta if args.use_tta is not None else True)
 
     project_root = Path(__file__).resolve().parent.parent
-    repo_root = project_root if (project_root / "data").exists() else project_root.parent
+    repo_root = get_project_root()
+    aves_raw = get_raw_data_dir("AvesChilenas")
 
     ckpt_dir = repo_root / "checkpoints"
     suffix = f"_tta_{args.tta_mode}" if use_tta else ""
@@ -492,8 +503,8 @@ if __name__ == "__main__":
         run_evaluation(
             checkpoints=ckpt_paths,
             weights=args.weights,
-            test_csv=repo_root / "data" / "test.csv",
-            raw_dir=repo_root / "data" / "raw",
+            test_csv=aves_raw / "test.csv",
+            raw_dir=aves_raw,
             output_image_path=project_root / "poc" / out_name,
             use_tta=use_tta,
             tta_mode=args.tta_mode,
@@ -513,8 +524,8 @@ if __name__ == "__main__":
 
         run_evaluation(
             checkpoint_path=ckpt_path,
-            test_csv=repo_root / "data" / "test.csv",
-            raw_dir=repo_root / "data" / "raw",
+            test_csv=aves_raw / "test.csv",
+            raw_dir=aves_raw,
             output_image_path=project_root / "poc" / out_name,
             use_tta=use_tta,
             tta_mode=args.tta_mode,

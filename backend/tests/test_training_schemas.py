@@ -128,3 +128,18 @@ def test_model_manifest_validation():
     assert manifest.audio_specs.target_sr == 32000
     assert len(manifest.classes) == 2
     assert manifest.model_specs.backbone == "convnext_nano"
+
+
+def test_dataset_config_path_resolution():
+    from training.paths import get_project_root, get_raw_data_dir
+
+    ds = DatasetConfig(
+        metadata_csv=Path("backend/data/raw/engine_diagnostics/train_metadata.csv"),
+        raw_dir=Path("backend/data/raw/engine_diagnostics"),
+    )
+
+    assert ds.metadata_csv.is_absolute()
+    assert ds.raw_dir.is_absolute()
+    assert ds.raw_dir == get_raw_data_dir("engine_diagnostics")
+    assert ds.metadata_csv == get_raw_data_dir("engine_diagnostics") / "train_metadata.csv"
+

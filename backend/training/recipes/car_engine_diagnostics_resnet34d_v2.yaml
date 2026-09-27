@@ -46,8 +46,8 @@ optimizer:
   warmup_epochs: 2
 
 dataset:
-  metadata_csv: "data/engine_diagnostics/train_metadata.csv"
-  raw_dir: "data/engine_diagnostics"
+  metadata_csv: "backend/data/raw/engine_diagnostics/train_metadata.csv"
+  raw_dir: "backend/data/raw/engine_diagnostics"
   cache_windows: true
   num_workers: 4
   pin_memory: true

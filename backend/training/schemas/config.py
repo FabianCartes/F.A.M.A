@@ -82,6 +82,16 @@ class DatasetConfig(BaseModel):
     pin_memory: bool = True
     max_samples_per_class: Optional[int] = Field(None, ge=10, description="Límite superior de muestras por clase para mitigar desbalance")
 
+    @model_validator(mode="after")
+    def resolve_dataset_paths(self) -> "DatasetConfig":
+        from training.paths import get_project_root
+        root = get_project_root()
+        if not self.metadata_csv.is_absolute():
+            self.metadata_csv = (root / self.metadata_csv).resolve()
+        if not self.raw_dir.is_absolute():
+            self.raw_dir = (root / self.raw_dir).resolve()
+        return self
+
 
 
 class SplitConfig(BaseModel):

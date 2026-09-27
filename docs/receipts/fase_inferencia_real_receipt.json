@@ -1,0 +1,89 @@
+{
+  "receipt_name": "fase_inferencia_real_receipt",
+  "generated_at": "2026-09-27T20:50:00Z",
+  "methodology": "TDD + RDD + ODD",
+  "architecture_layer": "Bioacoustic Real Inference Pipeline, FastAPI Engine, and Next.js UI",
+  "plan_reference": "/home/kevin/.gemini/antigravity-cli/brain/90de64a1-0ccd-4a2c-abab-635879f537e9/plan_reparacion_inferencia_real_tdd_rdd_odd.md",
+  "verified_checkpoint": {
+    "file_path": "backend/checkpoints/fama_efficientnet_b0_1790539191_efficientnet_b0_best.pt",
+    "architecture": "EfficientNet-B0",
+    "classes_count": 15,
+    "size_bytes": 16402672,
+    "database_record": {
+      "table": "modelo",
+      "id_modelo": 6,
+      "activo": true,
+      "ruta_binario_gcp": "models/fama_efficientnet_b0_1790539191_efficientnet_b0_best.pt"
+    }
+  },
+  "verified_inference": {
+    "audio_path": "/home/kevin/Downloads/audio_prueba.wav",
+    "predicted_class": "Chucao",
+    "calibrated_confidence": 1.0,
+    "device": "cuda",
+    "is_mock": false,
+    "latency_ms": 176.27,
+    "energy_rms": 0.007543,
+    "spectral_flatness": 0.013492,
+    "database_persisted_id": 5
+  },
+  "seams_verified": [
+    {
+      "seam_id": "Seam 1: TrainedModelPredictor",
+      "component": "backend/app/services/predictors/trained_predictor.py",
+      "contract": "TrainedModelPredictor.predict(audio_path) -> PredictionResult",
+      "invariant": "Fail-fast with ModelWeightsError on missing/corrupt weights; no silent mock fallback",
+      "status": "VERIFIED"
+    },
+    {
+      "seam_id": "Seam 2: ModelRegistry DB Sync",
+      "component": "backend/app/services/registry.py",
+      "contract": "ModelRegistry.register_from_db(db) & training_service.set_active_model()",
+      "invariant": "Resolves active model (id_modelo=6) from PostgreSQL and establishes it as default predictor",
+      "status": "VERIFIED"
+    },
+    {
+      "seam_id": "Seam 3: Fail-Fast Predict Endpoint",
+      "component": "backend/app/main.py",
+      "contract": "POST /api/predict",
+      "invariant": "Returns HTTP 503 on missing checkpoint weights; returns real inference + telemetry on active model",
+      "status": "VERIFIED"
+    },
+    {
+      "seam_id": "Seam 4: Dynamic Frontend Alignment",
+      "component": "frontend/components/views/PredictionView.tsx",
+      "contract": "PredictionView dynamic default_model_id synchronization",
+      "invariant": "Avoids hardcoded chilean-birds-ensemble fallback; displays active checkpoint badge and GPU/CPU device",
+      "status": "VERIFIED"
+    }
+  ],
+  "silent_mocks_eliminated": [
+    {
+      "component": "backend/app/services/predictors/cnn_predictor.py",
+      "previous_behavior": "Returned Chincol 0.8500 mock fallback when model is None",
+      "new_behavior": "Raises ModelWeightsError explicitly"
+    },
+    {
+      "component": "backend/app/services/predictors/ensemble_predictor.py",
+      "previous_behavior": "Returned Chincol 0.8868 mock fallback when ensemble_model is None or audio missing",
+      "new_behavior": "Raises FileNotFoundError for missing audio and ModelWeightsError for missing checkpoints"
+    }
+  ],
+  "test_suites": {
+    "backend_pytest": {
+      "runner": "/home/kevin/Work/fama/.venv/bin/pytest",
+      "total_tests": 203,
+      "passed": 203,
+      "failed": 0,
+      "warnings": 2,
+      "execution_time_seconds": 38.23,
+      "status": "PASSED"
+    },
+    "frontend_next_build": {
+      "command": "npm --prefix frontend run build",
+      "compilation_time_ms": 739,
+      "typecheck_status": "PASSED",
+      "status": "PASSED"
+    }
+  }
+}

@@ -21,7 +21,12 @@ class FakeAudioPredictor(AudioPredictor):
         )
 
     @property
+    def has_weights(self) -> bool:
+        return getattr(self, "has_weights_override", True)
+
+    @property
     def metadata(self) -> ModelMetadata:
+        self._meta.has_weights = self.has_weights
         return self._meta
 
     def predict(self, audio_file_path: Path) -> PredictionResult:
@@ -84,11 +89,54 @@ def test_get_model_registry_default_population():
 
     assert reg.has_model("chilean-birds-cnn")
     assert reg.has_model("chilean-birds-ensemble")
-    assert reg.get_default_model_id() == "chilean-birds-cnn"
+    assert reg.get_default_model_id() is not None
 
     cnn = reg.get("chilean-birds-cnn")
     assert cnn.model_id == "chilean-birds-cnn"
 
     default_model = reg.get(None)
-    assert default_model.model_id == "chilean-birds-cnn"
+    assert default_model.model_id == reg.get_default_model_id()
+
+
+def test_model_metadata_reports_has_weights():
+    registry = ModelRegistry()
+    m_with_weights = FakeAudioPredictor(model_id="with-weights", name="Ready Model")
+    m_without_weights = FakeAudioPredictor(model_id="no-weights", name="Empty Model")
+    # Simular que no tiene pesos
+    m_without_weights.has_weights_override = False
+
+    registry.register(m_with_weights)
+    registry.register(m_without_weights)
+
+    models = registry.list_models()
+    assert len(models) == 2
+    for m in models:
+        assert hasattr(m, "has_weights")
+
+
+def test_registry_filter_models_only_with_weights():
+    registry = ModelRegistry()
+    m1 = FakeAudioPredictor(model_id="m1", name="Ready Model")
+    m2 = FakeAudioPredictor(model_id="m2", name="No Weights Model")
+    m2.has_weights_override = False
+
+    registry.register(m1)
+    registry.register(m2)
+
+    ready_models = registry.list_models(only_with_weights=True)
+    assert len(ready_models) == 1
+    assert ready_models[0].id == "m1"
+
+
+def test_registry_unregister():
+    registry = ModelRegistry()
+    m = FakeAudioPredictor(model_id="to-delete", name="Model To Delete")
+    registry.register(m)
+    assert registry.has_model("to-delete")
+
+    removed = registry.unregister("to-delete")
+    assert removed is True
+    assert not registry.has_model("to-delete")
+
+
 

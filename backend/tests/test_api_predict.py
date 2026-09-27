@@ -144,3 +144,38 @@ def test_super_ensemble_service_find_checkpoint(tmp_path):
     assert found == dummy_ckpt
     assert found.exists()
 
+
+@patch("app.main.upload_audio_to_gcp", new_callable=AsyncMock)
+def test_predict_endpoint_uses_active_model_and_never_returns_mock_fallback(mock_gcp, client):
+    """
+    Verifica que el endpoint /api/predict:
+    1. Utilice el modelo real activo.
+    2. Entregue 'Chucao' en audio_prueba.wav.
+    3. Incluya telemetría con is_mock == False.
+    4. Si se solicita un modelo sin pesos (p. ej. chilean-birds-ensemble sin ckpts), falle con 503 en vez de retornar un mock.
+    """
+    mock_gcp.return_value = True
+    audio_path = Path("/home/kevin/Downloads/audio_prueba.wav")
+    if not audio_path.exists():
+        pytest.skip(f"Audio de prueba no disponible en {audio_path}")
+
+    audio_bytes = audio_path.read_bytes()
+    files = {"file": ("audio_prueba.wav", audio_bytes, "audio/wav")}
+
+    # Petición al modelo por defecto (activo)
+    response = client.post("/api/predict", files=files)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["clase"] == "Chucao"
+    assert data["confianza"] >= 0.95
+    assert data.get("is_fallback") is False
+    assert "detalles" in data
+    assert data["detalles"].get("is_mock") is False
+
+    # Petición a un modelo registrado cuyos pesos no están en disco
+    files_missing = {"file": ("audio_prueba.wav", audio_bytes, "audio/wav")}
+    res_missing = client.post("/api/predict?model_id=chilean-birds-ensemble", files=files_missing)
+    # Debe fallar explícitamente con 503 Service Unavailable, NUNCA responder 200 con mock
+    assert res_missing.status_code == 503
+
+

@@ -1,3 +1,4 @@
+from training.paths import get_raw_data_dir, get_project_root
 """
 backend/train_multitask_hpss_asl.py
 Entrenamiento de MultiTaskBioacousticModel (ResNet34d) con:
@@ -36,7 +37,7 @@ from poc.train import FocalLoss
 
 
 def main():
-    data_dir = Path("data/engine_diagnostics")
+    data_dir = get_raw_data_dir("engine_diagnostics")
     test_csv = data_dir / "test_metadata.csv"
     verify_test_set_integrity(test_csv, FROZEN_ENGINE_TEST_SHA256)
     print(f"\n[Test Guard] Test set verificado bajo SHA-256 congelado: {FROZEN_ENGINE_TEST_SHA256[:16]}...")

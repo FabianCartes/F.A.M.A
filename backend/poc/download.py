@@ -9,8 +9,14 @@ from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 import pandas as pd
 from tqdm import tqdm
-import soundfile as sf
 import dotenv
+import sys
+
+_BACKEND_ROOT = Path(__file__).resolve().parent.parent
+if str(_BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_ROOT))
+
+from training.paths import get_raw_data_dir, PathResolver
 
 EXPECTED_COLUMNS = [
     "nombre_archivo",
@@ -218,12 +224,12 @@ def download_file(
 
 
 def run_download_pipeline(
-    data_dir: Path,
+    data_dir: Optional[Path] = None,
     api_key: Optional[str] = None,
     species_list: Optional[List[tuple[str, str]]] = None,
     max_per_species: Optional[int] = None,
 ) -> pd.DataFrame:
-    """Ejecuta la descarga masiva y persistencia continua de data/metadata.csv."""
+    """Ejecuta la descarga masiva y persistencia continua de metadata.csv."""
     if api_key is None:
         dotenv.load_dotenv()
         api_key = os.getenv("XC_API_KEY")
@@ -233,9 +239,19 @@ def run_download_pipeline(
     if species_list is None:
         species_list = APPROVED_SPECIES
 
-    raw_dir = data_dir / "raw"
+    if data_dir is None:
+        raw_dir = get_raw_data_dir("AvesChilenas")
+        metadata_file = raw_dir / "metadata.csv"
+    else:
+        data_path = Path(data_dir)
+        if (data_path / "raw").is_dir():
+            raw_dir = data_path / "raw"
+            metadata_file = data_path / "metadata.csv"
+        else:
+            raw_dir = data_path
+            metadata_file = data_path / "metadata.csv"
+
     raw_dir.mkdir(parents=True, exist_ok=True)
-    metadata_file = data_dir / "metadata.csv"
 
     session = create_resilient_session()
 
@@ -306,6 +322,5 @@ def run_download_pipeline(
 
 
 if __name__ == "__main__":
-    project_root = Path(__file__).resolve().parent.parent
-    data_directory = project_root / "data"
+    data_directory = get_raw_data_dir("AvesChilenas")
     run_download_pipeline(data_dir=data_directory)
