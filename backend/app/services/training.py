@@ -448,7 +448,7 @@ class TrainingService:
         device_str = device.type
 
         if is_ensemble:
-            self._add_log("INFO", f"🚀 Iniciando Pipeline de Ensamble ({len(models_to_train)} modelos) para '{dataset_name}' en {device_str.upper()}.")
+            self._add_log("INFO", f"Iniciando Pipeline de Ensamble ({len(models_to_train)} modelos) para '{dataset_name}' en {device_str.upper()}.")
             self._add_log("INFO", f"Plan de ejecución secuencial: {' -> '.join(models_to_train)}")
         else:
             self._add_log("INFO", f"Iniciando pipeline en dispositivo: {device_str.upper()}. Arquitectura: {config['architecture']}")
@@ -567,7 +567,7 @@ class TrainingService:
                     self.total_epochs = arch_epochs
 
                 if is_ensemble:
-                    self._add_log("INFO", f"▶ [Paso {idx+1}/{len(models_to_train)}] Entrenando {arch} (LR: {arch_lr}, Batch: {arch_batch}, Épocas: {arch_epochs}, Peso: {model_weights.get(arch, 1.0):.2f})...")
+                    self._add_log("INFO", f"[Paso {idx+1}/{len(models_to_train)}] Entrenando {arch} (LR: {arch_lr}, Batch: {arch_batch}, Épocas: {arch_epochs}, Peso: {model_weights.get(arch, 1.0):.2f})...")
                 else:
                     self._add_log("INFO", f"Hiperparámetros -> LR: {arch_lr}, Batch: {arch_batch}, Épocas: {arch_epochs}")
 
@@ -868,7 +868,7 @@ class TrainingService:
                 with self._lock:
                     self.status = "completed"
                 if is_ensemble:
-                    self._add_log("SUCCESS", f"🎉 ¡Ensamble de {len(models_to_train)} modelos finalizado con éxito! Todos los modelos han sido registrados en PostgreSQL.")
+                    self._add_log("SUCCESS", f"Ensamble de {len(models_to_train)} modelos finalizado con éxito. Todos los modelos han sido registrados en PostgreSQL.")
                 else:
                     self._add_log("SUCCESS", f"Pipeline de modelado finalizado exitosamente. Mejor Val Acc: {best_val_acc:.2f}%")
 
