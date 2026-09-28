@@ -580,8 +580,8 @@ export default function PredictionView() {
   return (
     <div className="space-y-5">
       {/* Header de la Vista */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="min-w-0">
           <h1 className="text-xl font-bold text-white tracking-tight font-heading">
             Predicción y Monitoreo Acústico
           </h1>
@@ -590,14 +590,17 @@ export default function PredictionView() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 w-full lg:w-auto">
           {/* Selector de Modelo Acústico Registrado */}
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#16171b] border border-[#23252e]">
-            <span className="text-[11px] text-gray-400 font-medium">Modelo:</span>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#16171b] border border-[#23252e] flex-1 sm:flex-initial min-w-0 max-w-full">
+            <label htmlFor="model-select" className="text-[11px] text-gray-400 font-medium shrink-0">
+              Modelo:
+            </label>
             <select
+              id="model-select"
               value={selectedModelId}
               onChange={(e) => setSelectedModelId(e.target.value)}
-              className="bg-[#101114] border border-[#2d303b] text-white text-xs font-semibold rounded px-2.5 py-1 focus:outline-none focus:border-blue-500 cursor-pointer"
+              className="bg-[#101114] border border-[#2d303b] text-white text-xs font-semibold rounded px-2.5 py-1 focus:outline-none focus:border-blue-500 cursor-pointer min-w-0 w-full sm:w-auto max-w-[240px] sm:max-w-[340px] truncate"
             >
               {availableModels.length > 0 ? (
                 availableModels.map((m) => (
@@ -626,8 +629,11 @@ export default function PredictionView() {
           </div>
 
           {/* Indicador de Latencia / Estado a la derecha */}
-          <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-full bg-black/40 border border-green-800/40 text-green-400 text-xs font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+          <div
+            className="flex items-center gap-2 px-2.5 py-1.5 rounded-full bg-black/40 border border-green-800/40 text-green-400 text-xs font-mono shrink-0 whitespace-nowrap"
+            title={`Latencia de inferencia: ${latency}`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0" />
             <span>Latencia: {latency}</span>
           </div>
         </div>
