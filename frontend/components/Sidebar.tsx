@@ -114,9 +114,9 @@ export default function Sidebar({
       : "bg-amber-950/70 border-amber-700/60 text-amber-400";
 
   return (
-    <aside className="w-full h-full min-w-0 bg-[#121316] border-r border-[#1f2128] flex flex-col justify-between select-none">
+    <aside className="w-full h-full min-w-0 bg-[#121316] border-r border-[#1f2128] flex flex-col justify-between select-none overflow-x-hidden">
       {/* Top Section: Logo & Nav */}
-      <div className="min-w-0 min-h-0 overflow-y-auto">
+      <div className="min-w-0 min-h-0 overflow-y-auto overflow-x-hidden">
         {/* Cabecera de la barra lateral con Logo F.A.M.A. y Botón de Colapso */}
         <div
           className={`border-b border-[#1f2128] transition-all ${
@@ -163,14 +163,6 @@ export default function Sidebar({
             <span className={isCollapsed ? "md:sr-only" : "sr-only"}>
               {isCollapsed ? "Expandir" : "Colapsar"}
             </span>
-            {isCollapsed && (
-              <span
-                aria-hidden="true"
-                className="hidden md:block pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md border border-[#2e323e] bg-[#1d1f26] px-2 py-1 text-[11px] text-gray-100 opacity-0 shadow-lg transition-opacity md:group-hover:opacity-100"
-              >
-                Expandir
-              </span>
-            )}
           </button>
         </div>
 
@@ -188,6 +180,7 @@ export default function Sidebar({
                 type="button"
                 aria-current={isActive ? "page" : undefined}
                 onClick={() => onSelectTab(item.id)}
+                title={isCollapsed ? item.label : undefined}
                 className={`group relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium cursor-pointer transition-all ${
                   isCollapsed ? "md:gap-0 md:justify-center md:px-0" : ""
                 } ${
@@ -200,14 +193,6 @@ export default function Sidebar({
                   {item.icon}
                 </span>
                 <span className={isCollapsed ? "md:sr-only" : ""}>{item.label}</span>
-                {isCollapsed && (
-                  <span
-                    aria-hidden="true"
-                    className="hidden md:block pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md border border-[#2e323e] bg-[#1d1f26] px-2 py-1 text-[11px] text-gray-100 opacity-0 shadow-lg transition-opacity md:group-hover:opacity-100"
-                  >
-                    {item.label}
-                  </span>
-                )}
               </button>
             );
           })}
@@ -281,8 +266,11 @@ export default function Sidebar({
         </div>
 
         {/* Feedback / Notificaciones (RF_06) */}
-        <div className={`flex items-center justify-between ${isCollapsed ? "md:justify-center" : ""}`}>
-          <div className="relative flex items-center text-gray-400">
+        <div
+          className={`flex items-center justify-between ${isCollapsed ? "md:justify-center md:gap-1.5" : ""}`}
+          title={isCollapsed ? `Feedback: ${pendingFeedbackCount} pendientes` : undefined}
+        >
+          <div className={`flex items-center text-gray-400 ${isCollapsed ? "md:gap-0" : ""}`}>
             <svg
               className="w-3.5 h-3.5 text-gray-400 shrink-0"
               fill="none"
@@ -296,13 +284,11 @@ export default function Sidebar({
                 d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
               />
             </svg>
-            <span className={`ml-1.5 ${isCollapsed ? "md:ml-0 md:sr-only" : ""}`}>Feedback</span>
+            <span className={`ml-1.5 ${isCollapsed ? "md:sr-only" : ""}`}>Feedback</span>
           </div>
           <span
             className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold border transition-colors ${feedbackBadgeClass} ${
-              isCollapsed
-                ? "md:absolute md:top-1/2 md:-right-2.5 md:-translate-y-1/2 md:min-w-[16px] md:px-1 md:py-0 md:text-[9px] md:leading-4 md:text-center"
-                : ""
+              isCollapsed ? "md:px-1 md:py-0 md:text-[9px] md:leading-tight" : ""
             }`}
           >
             {pendingFeedbackCount}

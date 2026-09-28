@@ -101,7 +101,7 @@ export default function AppShell({ sidebar, onNavigate, children }: AppShellProp
 
       <div
         id="app-sidebar"
-        className={`fixed inset-y-0 left-0 z-50 shrink-0 h-full transition-[width,transform] duration-200 ease-out md:relative md:z-10 md:transition-[width] ${
+        className={`fixed inset-y-0 left-0 z-50 shrink-0 h-full overflow-x-hidden transition-[width,transform] duration-200 ease-out md:relative md:z-10 md:transition-[width] ${
           isSidebarCollapsed ? "w-56 md:w-16" : "w-56"
         } ${
           isSidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
