@@ -24,7 +24,7 @@ import pandas as pd
 import gc
 from torch.utils.data import DataLoader
 from poc.preprocess import GPUAudioFrontEnd, GPUSpecAugment
-from poc.train import BioacousticModel, AudioCNN, AudioDataset, FocalLoss
+from poc.train import BioacousticModel, AudioCNN, AudioDataset, FocalLoss, apply_mixup
 from poc.split import grouped_stratified_split
 from training.paths import get_raw_data_dir
 from training.schemas.config import AudioConfig
@@ -306,10 +306,14 @@ class TrainingService:
         framework: str = "pytorch",
         is_tri_model: bool = False,
         models: Optional[List[Any]] = None,
+        audio_config: Optional[Any] = None,
+        windowing_config: Optional[Any] = None,
+        regularization_config: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
         Inicia un nuevo ciclo de entrenamiento bioacústico en un hilo desacoplado.
-        Soporta modo individual, pipeline secuencial de la Tríada Completa o Ensamble Dinámico (1 a 3 modelos).
+        Soporta modo individual, pipeline secuencial de la Tríada Completa o Ensamble Dinámico (1 a 3 modelos),
+        y parametrización universal multi-dominio de audio, ventaneo y regularización.
         """
         with self._lock:
             if self.status == "training":
@@ -370,6 +374,9 @@ class TrainingService:
             "framework": framework,
             "is_tri_model": self.is_tri_model,
             "models": resolved_models,
+            "audio_config": audio_config,
+            "windowing_config": windowing_config,
+            "regularization_config": regularization_config,
         }
 
         # Lanzar en hilo de fondo para no bloquear el servidor FastAPI
@@ -473,6 +480,8 @@ class TrainingService:
                 n_mels = 128
                 n_fft = 1024
                 hop_length = 512
+                f_min = 50.0
+                f_max = 16000.0
             else:
                 raw_dir = get_raw_data_dir("AvesChilenas")
                 train_csv = raw_dir / "train.csv"
@@ -492,6 +501,48 @@ class TrainingService:
                 n_mels = 128
                 n_fft = 2048
                 hop_length = 512
+                f_min = 800.0
+                f_max = 10000.0
+
+            # Desacoplamiento universal: sobreescribir física acústica si se suministra audio_config
+            audio_cfg_dict = config.get("audio_config")
+            if audio_cfg_dict:
+                if isinstance(audio_cfg_dict, dict):
+                    target_sr = audio_cfg_dict.get("target_sr", target_sr)
+                    duration_seconds = audio_cfg_dict.get("duration_seconds", duration_seconds)
+                    f_min = float(audio_cfg_dict.get("f_min", f_min))
+                    f_max = float(audio_cfg_dict.get("f_max", f_max))
+                    n_mels = audio_cfg_dict.get("n_mels", n_mels)
+                    n_fft = audio_cfg_dict.get("n_fft", n_fft)
+                    hop_length = audio_cfg_dict.get("hop_length", hop_length)
+                else:
+                    target_sr = getattr(audio_cfg_dict, "target_sr", target_sr)
+                    duration_seconds = getattr(audio_cfg_dict, "duration_seconds", duration_seconds)
+                    f_min = float(getattr(audio_cfg_dict, "f_min", f_min))
+                    f_max = float(getattr(audio_cfg_dict, "f_max", f_max))
+                    n_mels = getattr(audio_cfg_dict, "n_mels", n_mels)
+                    n_fft = getattr(audio_cfg_dict, "n_fft", n_fft)
+                    hop_length = getattr(audio_cfg_dict, "hop_length", hop_length)
+
+                if "file_path" not in train_df.columns:
+                    def _resolve_candidate_path(row):
+                        clase_val = str(row.get("clase", ""))
+                        species_slug = clase_val.lower().replace(" ", "_").replace("/", "_")
+                        filename_val = str(row.get("nombre_archivo", ""))
+                        stem_val = Path(filename_val).stem
+                        candidates = [
+                            raw_dir / species_slug / f"{stem_val}.wav",
+                            raw_dir / species_slug / filename_val,
+                            raw_dir / "processed_wav" / species_slug / f"{stem_val}.wav",
+                            raw_dir / "processed_wav" / species_slug / filename_val,
+                        ]
+                        for cand in candidates:
+                            if cand.exists():
+                                return str(cand)
+                        return str(raw_dir / species_slug / filename_val)
+
+                    train_df["file_path"] = train_df.apply(_resolve_candidate_path, axis=1)
+                    val_df["file_path"] = val_df.apply(_resolve_candidate_path, axis=1)
 
             self._add_log(
                 "INFO",
@@ -522,13 +573,15 @@ class TrainingService:
 
 
                 # Instanciar DataLoaders de PyTorch
-                if is_engine:
+                if is_engine or config.get("audio_config") is not None:
                     audio_cfg = AudioConfig(
                         target_sr=target_sr,
                         duration_seconds=duration_seconds,
                         n_mels=n_mels,
                         n_fft=n_fft,
                         hop_length=hop_length,
+                        f_min=f_min,
+                        f_max=f_max,
                     )
                     train_ds = GenericAudioDataset(
                         train_df,
@@ -587,6 +640,8 @@ class TrainingService:
                     n_mels=n_mels,
                     n_fft=n_fft,
                     hop_length=hop_length,
+                    f_min=f_min,
+                    f_max=f_max,
                 ).to(device)
                 spec_augment = GPUSpecAugment(
                     freq_mask_param=8,
@@ -594,8 +649,31 @@ class TrainingService:
                     prob=0.5,
                 ).to(device)
 
+                # Configuración de Regularización y Función de Pérdida
+                reg_cfg_input = config.get("regularization_config")
+                loss_type = "focal"
+                focal_gamma = 2.0
+                mixup_enabled = False
+                mixup_alpha = 0.2
+
+                if reg_cfg_input:
+                    if isinstance(reg_cfg_input, dict):
+                        loss_type = reg_cfg_input.get("loss_type", "focal")
+                        focal_gamma = float(reg_cfg_input.get("focal_gamma", 2.0))
+                        mixup_enabled = bool(reg_cfg_input.get("mixup_enabled", False))
+                        mixup_alpha = float(reg_cfg_input.get("mixup_alpha", 0.2))
+                    else:
+                        loss_type = getattr(reg_cfg_input, "loss_type", "focal")
+                        focal_gamma = float(getattr(reg_cfg_input, "focal_gamma", 2.0))
+                        mixup_enabled = bool(getattr(reg_cfg_input, "mixup_enabled", False))
+                        mixup_alpha = float(getattr(reg_cfg_input, "mixup_alpha", 0.2))
+
                 model = self._build_model_instance(arch, len(classes), device)
-                criterion = FocalLoss(gamma=2.0).to(device)
+                if loss_type == "cross_entropy":
+                    criterion = torch.nn.CrossEntropyLoss().to(device)
+                else:
+                    criterion = FocalLoss(gamma=focal_gamma).to(device)
+
                 optimizer = torch.optim.AdamW(model.parameters(), lr=arch_lr, weight_decay=1e-2)
                 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=arch_epochs, eta_min=1e-6)
 
@@ -626,9 +704,19 @@ class TrainingService:
                         mel_batch = frontend(x_batch)
                         mel_batch = spec_augment(mel_batch)
 
-                        optimizer.zero_grad()
-                        outputs = model(mel_batch)
-                        loss = criterion(outputs, y_batch)
+                        if mixup_enabled and mixup_alpha > 0.0:
+                            mel_batch, y_a, y_b, lam = apply_mixup(mel_batch, y_batch, alpha=mixup_alpha, prob=1.0)
+                            optimizer.zero_grad()
+                            outputs = model(mel_batch)
+                            if lam < 1.0:
+                                loss = lam * criterion(outputs, y_a) + (1.0 - lam) * criterion(outputs, y_b)
+                            else:
+                                loss = criterion(outputs, y_batch)
+                        else:
+                            optimizer.zero_grad()
+                            outputs = model(mel_batch)
+                            loss = criterion(outputs, y_batch)
+
                         loss.backward()
                         optimizer.step()
 
@@ -710,6 +798,9 @@ class TrainingService:
                     "classes": classes,
                     "ensemble_weight": model_weights.get(arch, 1.0),
                     "ensemble_models": config.get("models"),
+                    "audio_config": config.get("audio_config"),
+                    "windowing_config": config.get("windowing_config"),
+                    "regularization_config": config.get("regularization_config"),
                     "state_dict": saved_state,
                     "created_at": datetime.now(timezone.utc).isoformat(),
                 }

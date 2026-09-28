@@ -52,6 +52,40 @@ export const ModelEnsembleItemSchema = z.object({
 });
 export type ModelEnsembleItem = z.infer<typeof ModelEnsembleItemSchema>;
 
+export const AudioConfigSchema = z.object({
+  target_sr: z.number().int().min(8000).max(48000).default(22050),
+  duration_seconds: z.number().min(0.5).max(30.0).default(5.0),
+  f_min: z.number().min(0.0).default(0.0),
+  f_max: z.number().min(100.0).default(10000.0),
+  n_mels: z.number().int().min(32).max(256).default(128),
+  n_fft: z.number().int().min(256).default(2048),
+  hop_length: z.number().int().min(64).default(512),
+}).refine((data) => data.f_max <= data.target_sr / 2, {
+  message: "Violación de Nyquist: f_max no puede superar target_sr / 2",
+  path: ["f_max"],
+}).refine((data) => data.f_min < data.f_max, {
+  message: "f_min debe ser estrictamente menor que f_max",
+  path: ["f_min"],
+});
+export type AudioConfig = z.infer<typeof AudioConfigSchema>;
+
+export const WindowingConfigSchema = z.object({
+  hop_seconds: z.number().positive().default(1.0),
+  aggregation_mode: z.enum(["max", "mean"]).default("max"),
+  gem_p: z.number().min(1.0).max(10.0).default(3.0),
+  vad_threshold: z.number().min(0.0).max(1.0).default(0.0),
+});
+export type WindowingConfig = z.infer<typeof WindowingConfigSchema>;
+
+export const RegularizationConfigSchema = z.object({
+  loss_type: z.enum(["focal", "cross_entropy"]).default("focal"),
+  focal_gamma: z.number().min(0.0).default(2.0),
+  mixup_enabled: z.boolean().default(false),
+  mixup_alpha: z.number().min(0.0).default(0.2),
+  pitch_shift_enabled: z.boolean().default(false),
+});
+export type RegularizationConfig = z.infer<typeof RegularizationConfigSchema>;
+
 export const StartTrainingRequestSchema = z.object({
   dataset_name: z.string().min(1, "Dataset name is required"),
   architecture: z.string().optional().default("EfficientNet-B0"),
@@ -61,6 +95,9 @@ export const StartTrainingRequestSchema = z.object({
   framework: z.string().default("pytorch"),
   is_tri_model: z.boolean().optional().default(false),
   models: z.array(ModelEnsembleItemSchema).min(1).max(3).optional(),
+  audio_config: AudioConfigSchema.optional(),
+  windowing_config: WindowingConfigSchema.optional(),
+  regularization_config: RegularizationConfigSchema.optional(),
 });
 export type StartTrainingRequest = z.infer<typeof StartTrainingRequestSchema>;
 

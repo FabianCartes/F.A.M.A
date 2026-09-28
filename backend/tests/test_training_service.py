@@ -107,3 +107,126 @@ def test_start_training_worker_executes_dynamic_models_sequentially(training_ser
         assert training_service.status == "completed"
         assert training_service.total_models == 2
         assert training_service.current_model_index == 2
+
+
+def test_start_training_worker_with_custom_audio_physics(training_service):
+    """
+    Verifica que al proveer un audio_config personalizado (ej: 16000 Hz, 2.0 s, f_min=50, f_max=4000),
+    el worker utilice GenericAudioDataset y GPUAudioFrontEnd con dichos parámetros en lugar de los cableados.
+    """
+    config = {
+        "job_id": "test_custom_physics_job",
+        "dataset_name": "AvesChilenas",
+        "architecture": "EfficientNet-B0",
+        "epochs": 1,
+        "learning_rate": 0.001,
+        "batch_size": 16,
+        "framework": "pytorch",
+        "is_tri_model": False,
+        "models": [{"architecture": "EfficientNet-B0", "weight": 1.0}],
+        "audio_config": {
+            "target_sr": 16000,
+            "duration_seconds": 2.0,
+            "f_min": 50.0,
+            "f_max": 4000.0,
+            "n_mels": 128,
+            "n_fft": 1024,
+            "hop_length": 256,
+        },
+    }
+
+    mock_model = MagicMock()
+    mock_model.parameters.return_value = []
+    mock_model.state_dict.return_value = {}
+
+    with patch.object(training_service, "_build_model_instance", return_value=mock_model), \
+         patch("app.services.training.GenericAudioDataset") as mock_generic_ds, \
+         patch("app.services.training.GPUAudioFrontEnd") as mock_frontend, \
+         patch("app.services.training.DataLoader", return_value=[]), \
+         patch("app.services.training.torch.save"), \
+         patch("app.services.training.SessionLocal"):
+
+        training_service._run_training_worker(config)
+
+        # Verificar que GenericAudioDataset fue llamado con AudioConfig personalizado
+        assert mock_generic_ds.called
+        created_audio_cfg = mock_generic_ds.call_args_list[0].kwargs.get("audio_config")
+        assert created_audio_cfg is not None
+        assert created_audio_cfg.target_sr == 16000
+        assert created_audio_cfg.duration_seconds == 2.0
+        assert created_audio_cfg.f_min == 50.0
+        assert created_audio_cfg.f_max == 4000.0
+        assert created_audio_cfg.n_fft == 1024
+        assert created_audio_cfg.hop_length == 256
+
+        # Verificar que GPUAudioFrontEnd fue configurado con los mismos parámetros
+        assert mock_frontend.called
+        frontend_kwargs = mock_frontend.call_args.kwargs
+        assert frontend_kwargs.get("sample_rate") == 16000
+        assert frontend_kwargs.get("f_min") == 50.0
+        assert frontend_kwargs.get("f_max") == 4000.0
+        assert frontend_kwargs.get("n_fft") == 1024
+        assert frontend_kwargs.get("hop_length") == 256
+
+
+def test_start_training_worker_with_regularization_loss_config(training_service):
+    """
+    Verifica que el worker configure FocalLoss con el gamma especificado o CrossEntropyLoss
+    según regularization_config.
+    """
+    mock_model = MagicMock()
+    mock_model.parameters.return_value = []
+    mock_model.state_dict.return_value = {}
+
+    # Caso 1: CrossEntropyLoss
+    ce_config = {
+        "job_id": "test_ce_job",
+        "dataset_name": "AvesChilenas",
+        "architecture": "EfficientNet-B0",
+        "epochs": 1,
+        "learning_rate": 0.001,
+        "batch_size": 16,
+        "framework": "pytorch",
+        "is_tri_model": False,
+        "models": [{"architecture": "EfficientNet-B0", "weight": 1.0}],
+        "regularization_config": {
+            "loss_type": "cross_entropy",
+        },
+    }
+
+    with patch.object(training_service, "_build_model_instance", return_value=mock_model), \
+         patch("app.services.training.DataLoader", return_value=[]), \
+         patch("app.services.training.torch.save"), \
+         patch("app.services.training.SessionLocal"), \
+         patch("app.services.training.torch.nn.CrossEntropyLoss") as mock_ce:
+
+        training_service._run_training_worker(ce_config)
+        assert mock_ce.called
+
+    # Caso 2: FocalLoss con gamma=3.5
+    focal_config = {
+        "job_id": "test_focal_job",
+        "dataset_name": "AvesChilenas",
+        "architecture": "EfficientNet-B0",
+        "epochs": 1,
+        "learning_rate": 0.001,
+        "batch_size": 16,
+        "framework": "pytorch",
+        "is_tri_model": False,
+        "models": [{"architecture": "EfficientNet-B0", "weight": 1.0}],
+        "regularization_config": {
+            "loss_type": "focal",
+            "focal_gamma": 3.5,
+        },
+    }
+
+    with patch.object(training_service, "_build_model_instance", return_value=mock_model), \
+         patch("app.services.training.DataLoader", return_value=[]), \
+         patch("app.services.training.torch.save"), \
+         patch("app.services.training.SessionLocal"), \
+         patch("app.services.training.FocalLoss") as mock_focal:
+
+        training_service._run_training_worker(focal_config)
+        assert mock_focal.called
+        assert mock_focal.call_args.kwargs.get("gamma") == 3.5
+

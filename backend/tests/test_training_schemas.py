@@ -147,7 +147,14 @@ def test_dataset_config_path_resolution():
 # ============================================================================
 # TESTS: Selector Dinámico de Ensamble (DTOs y Validación de Schemas)
 # ============================================================================
-from app.schemas.training import ModelEnsembleItem, StartTrainingRequest, VALID_ARCHITECTURES
+from app.schemas.training import (
+    ModelEnsembleItem,
+    StartTrainingRequest,
+    VALID_ARCHITECTURES,
+    AudioConfigSchema,
+    WindowingConfigSchema,
+    RegularizationConfigSchema,
+)
 
 
 def test_model_ensemble_item_valid():
@@ -279,5 +286,214 @@ def test_start_training_request_backward_compatibility():
         "PANNs-CNN14",
     ]
     assert sum(m.weight for m in req_triad_eng.models) == pytest.approx(1.0, abs=1e-3)
+
+
+# ============================================================================
+# TESTS: Parametrización Universal Multi-Dominio (Slice 1)
+# ============================================================================
+
+def test_audio_config_schema_valid():
+    cfg = AudioConfigSchema(
+        target_sr=16000,
+        duration_seconds=2.0,
+        f_min=50.0,
+        f_max=4000.0,
+        n_mels=128,
+        n_fft=1024,
+        hop_length=256,
+    )
+    assert cfg.target_sr == 16000
+    assert cfg.duration_seconds == 2.0
+    assert cfg.f_min == 50.0
+    assert cfg.f_max == 4000.0
+    assert cfg.n_mels == 128
+    assert cfg.n_fft == 1024
+    assert cfg.hop_length == 256
+
+
+def test_audio_config_schema_nyquist_violation_raises():
+    # f_max > target_sr / 2 (ej: 9000 > 16000 / 2 = 8000)
+    with pytest.raises(ValidationError) as exc:
+        AudioConfigSchema(
+            target_sr=16000,
+            duration_seconds=2.0,
+            f_min=50.0,
+            f_max=9000.0,
+        )
+    assert "Nyquist" in str(exc.value)
+
+
+def test_audio_config_schema_fmin_ge_fmax_raises():
+    with pytest.raises(ValidationError):
+        AudioConfigSchema(
+            target_sr=22050,
+            duration_seconds=3.0,
+            f_min=5000.0,
+            f_max=4000.0,
+        )
+
+    with pytest.raises(ValidationError):
+        AudioConfigSchema(
+            target_sr=22050,
+            duration_seconds=3.0,
+            f_min=4000.0,
+            f_max=4000.0,
+        )
+
+
+def test_audio_config_schema_hop_greater_than_nfft_raises():
+    with pytest.raises(ValidationError):
+        AudioConfigSchema(
+            target_sr=22050,
+            duration_seconds=3.0,
+            n_fft=512,
+            hop_length=1024,
+            f_min=100.0,
+            f_max=8000.0,
+        )
+
+
+def test_audio_config_schema_bounds_validation():
+    # target_sr bounds: ge=8000, le=48000
+    with pytest.raises(ValidationError):
+        AudioConfigSchema(target_sr=4000)
+    with pytest.raises(ValidationError):
+        AudioConfigSchema(target_sr=96000)
+
+    # duration_seconds bounds: ge=0.5, le=30.0
+    with pytest.raises(ValidationError):
+        AudioConfigSchema(duration_seconds=0.2)
+    with pytest.raises(ValidationError):
+        AudioConfigSchema(duration_seconds=35.0)
+
+    # n_mels bounds: ge=32, le=256
+    with pytest.raises(ValidationError):
+        AudioConfigSchema(n_mels=16)
+    with pytest.raises(ValidationError):
+        AudioConfigSchema(n_mels=512)
+
+    # n_fft ge=256
+    with pytest.raises(ValidationError):
+        AudioConfigSchema(n_fft=128)
+
+    # hop_length ge=64
+    with pytest.raises(ValidationError):
+        AudioConfigSchema(hop_length=32)
+
+    # f_min ge=0.0
+    with pytest.raises(ValidationError):
+        AudioConfigSchema(f_min=-10.0)
+
+    # f_max ge=100.0
+    with pytest.raises(ValidationError):
+        AudioConfigSchema(f_max=50.0)
+
+
+def test_windowing_config_schema_valid_and_bounds():
+    win = WindowingConfigSchema(
+        hop_seconds=0.5,
+        aggregation_mode="max",
+        gem_p=3.0,
+        vad_threshold=0.05,
+    )
+    assert win.hop_seconds == 0.5
+    assert win.aggregation_mode == "max"
+    assert win.gem_p == 3.0
+    assert win.vad_threshold == 0.05
+
+    # hop_seconds <= 0.0 raises
+    with pytest.raises(ValidationError):
+        WindowingConfigSchema(hop_seconds=0.0)
+    with pytest.raises(ValidationError):
+        WindowingConfigSchema(hop_seconds=-0.5)
+
+    # aggregation_mode invalid
+    with pytest.raises(ValidationError):
+        WindowingConfigSchema(aggregation_mode="median")
+
+    # gem_p bounds: ge=1.0, le=10.0
+    with pytest.raises(ValidationError):
+        WindowingConfigSchema(gem_p=0.5)
+    with pytest.raises(ValidationError):
+        WindowingConfigSchema(gem_p=12.0)
+
+    # vad_threshold bounds: ge=0.0, le=1.0
+    with pytest.raises(ValidationError):
+        WindowingConfigSchema(vad_threshold=-0.1)
+    with pytest.raises(ValidationError):
+        WindowingConfigSchema(vad_threshold=1.5)
+
+
+def test_regularization_config_schema_valid_and_bounds():
+    reg = RegularizationConfigSchema(
+        loss_type="focal",
+        focal_gamma=2.5,
+        mixup_enabled=True,
+        mixup_alpha=0.4,
+        pitch_shift_enabled=False,
+    )
+    assert reg.loss_type == "focal"
+    assert reg.focal_gamma == 2.5
+    assert reg.mixup_enabled is True
+    assert reg.mixup_alpha == 0.4
+    assert reg.pitch_shift_enabled is False
+
+    # loss_type invalid
+    with pytest.raises(ValidationError):
+        RegularizationConfigSchema(loss_type="dice")
+
+    # focal_gamma < 0.0
+    with pytest.raises(ValidationError):
+        RegularizationConfigSchema(focal_gamma=-1.0)
+
+    # mixup_alpha < 0.0
+    with pytest.raises(ValidationError):
+        RegularizationConfigSchema(mixup_alpha=-0.2)
+
+
+def test_start_training_request_with_multi_domain_configs():
+    audio = AudioConfigSchema(
+        target_sr=16000,
+        duration_seconds=2.0,
+        f_min=50.0,
+        f_max=4000.0,
+        n_mels=128,
+        n_fft=1024,
+        hop_length=256,
+    )
+    windowing = WindowingConfigSchema(
+        hop_seconds=0.5,
+        aggregation_mode="max",
+        gem_p=3.0,
+        vad_threshold=0.0,
+    )
+    regularization = RegularizationConfigSchema(
+        loss_type="focal",
+        focal_gamma=2.0,
+        mixup_enabled=False,
+        pitch_shift_enabled=False,
+    )
+
+    req = StartTrainingRequest(
+        dataset_name="medical_cough",
+        audio_config=audio,
+        windowing_config=windowing,
+        regularization_config=regularization,
+    )
+
+    assert req.audio_config is not None
+    assert req.audio_config.target_sr == 16000
+    assert req.audio_config.f_max == 4000.0
+    assert req.windowing_config is not None
+    assert req.windowing_config.hop_seconds == 0.5
+    assert req.regularization_config is not None
+    assert req.regularization_config.loss_type == "focal"
+
+    # Retrocompatibilidad: si no se proveen, son None
+    req_default = StartTrainingRequest(dataset_name="AvesChilenas")
+    assert req_default.audio_config is None
+    assert req_default.windowing_config is None
+    assert req_default.regularization_config is None
+
 
 

@@ -138,4 +138,60 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     const totalWeight = payload.models.reduce((acc: number, m: any) => acc + m.weight, 0);
     expect(totalWeight).toBeCloseTo(1.0, 2);
   });
+
+  it("renders audio physics panel with domain presets and sends multi-domain config in payload", async () => {
+    await act(async () => {
+      render(<TrainingView />);
+    });
+
+    // Panel exists
+    expect(screen.getByText("Física de Audio y Adaptación al Dominio")).toBeDefined();
+    expect(screen.getByText("Tos Médica")).toBeDefined();
+    expect(screen.getByText("Diagnóstico Industrial")).toBeDefined();
+
+    // Click Tos Médica preset
+    const coughBtn = screen.getByText("Tos Médica");
+    await act(async () => {
+      fireEvent.click(coughBtn);
+    });
+
+    // Verify sample rate input value is 16000
+    const srInput = screen.getByLabelText(/Tasa de Muestreo/i) as HTMLInputElement;
+    expect(srInput.value).toBe("16000");
+
+    // Start training
+    const startBtn = screen.getByText("Iniciar Entrenamiento Local (1 Modelo)");
+    await act(async () => {
+      fireEvent.click(startBtn);
+    });
+
+    const postCall = (global.fetch as any).mock.calls.find(
+      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    );
+    expect(postCall).toBeDefined();
+    const payload = JSON.parse(postCall[1].body);
+
+    expect(payload.audio_config).toBeDefined();
+    expect(payload.audio_config.target_sr).toBe(16000);
+    expect(payload.audio_config.f_max).toBe(4000);
+    expect(payload.windowing_config).toBeDefined();
+    expect(payload.windowing_config.hop_seconds).toBe(0.5);
+    expect(payload.regularization_config).toBeDefined();
+    expect(payload.regularization_config.loss_type).toBe("focal");
+  });
+
+  it("displays Nyquist warning when f_max > target_sr / 2", async () => {
+    await act(async () => {
+      render(<TrainingView />);
+    });
+
+    const fMaxInput = screen.getByLabelText(/Frecuencia Máxima/i) as HTMLInputElement;
+    await act(async () => {
+      fireEvent.change(fMaxInput, { target: { value: "15000" } });
+    });
+
+    // Target SR default is 22050 -> Nyquist is 11025. 15000 > 11025, should show warning
+    expect(screen.getByText(/Violación de Nyquist/i)).toBeDefined();
+  });
 });
+

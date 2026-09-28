@@ -755,6 +755,12 @@ def start_training_pipeline(req: StartTrainingRequest):
         }
         if getattr(req, "_explicit_models", False) and req.models is not None:
             kwargs["models"] = [m.model_dump() for m in req.models]
+        if req.audio_config is not None:
+            kwargs["audio_config"] = req.audio_config.model_dump()
+        if req.windowing_config is not None:
+            kwargs["windowing_config"] = req.windowing_config.model_dump()
+        if req.regularization_config is not None:
+            kwargs["regularization_config"] = req.regularization_config.model_dump()
 
         result = training_service.start_training(**kwargs)
         return result

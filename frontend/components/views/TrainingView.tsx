@@ -3,6 +3,11 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { API_BASE_URL } from "@/lib/api";
 import { rebalanceWeights } from "@/lib/utils/ensembleWeights";
+import {
+  AUDIO_DOMAIN_PRESETS,
+  AudioDomainPresetKey,
+  validateAudioPhysics,
+} from "@/lib/utils/audioDomainPresets";
 
 // ============================================================================
 // INTERFACES DEL DOMINIO DE ENTRENAMIENTO (RF_04, CU_INV_02, CU_INV_03)
@@ -122,6 +127,61 @@ export default function TrainingView() {
     totalModels: 1,
     currentArch: "",
   });
+
+  // Estado de Física Acústica Multi-Dominio, Ventaneo Denso y Regularización
+  const [isPhysicsExpanded, setIsPhysicsExpanded] = useState<boolean>(true);
+  const [domainPreset, setDomainPreset] = useState<AudioDomainPresetKey>("bioacoustics");
+  const [targetSr, setTargetSr] = useState<number>(22050);
+  const [durationSeconds, setDurationSeconds] = useState<number>(5.0);
+  const [fMin, setFMin] = useState<number>(800);
+  const [fMax, setFMax] = useState<number>(10000);
+  const [nMels, setNMels] = useState<number>(128);
+  const [nFft, setNFft] = useState<number>(2048);
+  const [hopLength, setHopLength] = useState<number>(512);
+
+  // Ventaneo Denso y Captura de Eventos Breves
+  const [hopSeconds, setHopSeconds] = useState<number>(1.0);
+  const [aggregationMode, setAggregationMode] = useState<"max" | "mean">("max");
+  const [gemP, setGemP] = useState<number>(3.0);
+  const [vadThreshold, setVadThreshold] = useState<number>(0.0);
+
+  // Regularización y Función de Pérdida
+  const [lossType, setLossType] = useState<"focal" | "cross_entropy">("focal");
+  const [focalGamma, setFocalGamma] = useState<number>(2.0);
+  const [mixupEnabled, setMixupEnabled] = useState<boolean>(true);
+  const [mixupAlpha, setMixupAlpha] = useState<number>(0.2);
+  const [pitchShiftEnabled, setPitchShiftEnabled] = useState<boolean>(false);
+
+  const handleApplyPreset = (key: AudioDomainPresetKey) => {
+    setDomainPreset(key);
+    const cfg = AUDIO_DOMAIN_PRESETS[key];
+    if (key !== "custom") {
+      setTargetSr(cfg.target_sr);
+      setDurationSeconds(cfg.duration_seconds);
+      setFMin(cfg.f_min);
+      setFMax(cfg.f_max);
+      setNMels(cfg.n_mels);
+      setNFft(cfg.n_fft);
+      setHopLength(cfg.hop_length);
+      setHopSeconds(cfg.hop_seconds);
+      setAggregationMode(cfg.aggregation_mode);
+      setGemP(cfg.gem_p);
+      setVadThreshold(cfg.vad_threshold);
+      setLossType(cfg.loss_type);
+      setFocalGamma(cfg.focal_gamma);
+      setMixupEnabled(cfg.mixup);
+      setMixupAlpha(cfg.mixup_alpha);
+      setPitchShiftEnabled(cfg.pitch_shift);
+    }
+  };
+
+  const physicsValidation = useMemo(() => {
+    return validateAudioPhysics({
+      target_sr: targetSr,
+      f_min: fMin,
+      f_max: fMax,
+    });
+  }, [targetSr, fMin, fMax]);
 
   const handleEnsembleSizeChange = (newSize: 1 | 2 | 3) => {
     setEnsembleSize(newSize);
@@ -351,6 +411,11 @@ export default function TrainingView() {
 
   // Iniciar Entrenamiento (CU_INV_03)
   const handleStartTraining = async () => {
+    if (!physicsValidation.valid) {
+      alert(`Parámetros acústicos inválidos: ${physicsValidation.error}`);
+      return;
+    }
+
     if (isTraining) return;
     setIsTraining(true);
     setIsStopping(false);
@@ -398,6 +463,28 @@ export default function TrainingView() {
           framework,
           is_tri_model: ensembleSize === 3,
           models: normalizedEnsemble,
+          audio_config: {
+            target_sr: targetSr,
+            duration_seconds: durationSeconds,
+            f_min: fMin,
+            f_max: fMax,
+            n_mels: nMels,
+            n_fft: nFft,
+            hop_length: hopLength,
+          },
+          windowing_config: {
+            hop_seconds: hopSeconds,
+            aggregation_mode: aggregationMode,
+            gem_p: gemP,
+            vad_threshold: vadThreshold,
+          },
+          regularization_config: {
+            loss_type: lossType,
+            focal_gamma: focalGamma,
+            mixup_enabled: mixupEnabled,
+            mixup_alpha: mixupAlpha,
+            pitch_shift_enabled: pitchShiftEnabled,
+          },
         }),
       });
 
@@ -573,6 +660,353 @@ export default function TrainingView() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* ==================================================================== */}
+      {/* 2.5. PANEL DE FÍSICA DE AUDIO Y ADAPTACIÓN AL DOMINIO */}
+      {/* ==================================================================== */}
+      <div className="bg-[#16171b] border border-[#23252e] rounded-xl overflow-hidden shadow-sm transition-all">
+        {/* Encabezado colapsable */}
+        <button
+          type="button"
+          onClick={() => setIsPhysicsExpanded(!isPhysicsExpanded)}
+          className="w-full p-4 px-5 flex items-center justify-between text-left hover:bg-[#1a1b20] transition-colors"
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-400">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+              </svg>
+            </div>
+            <div>
+              <span className="text-xs font-semibold text-gray-200 block">
+                Física de Audio y Adaptación al Dominio
+              </span>
+              <span className="text-[11px] text-gray-400">
+                Espectrograma Mel ({targetSr} Hz, {durationSeconds}s, {fMin}-{fMax} Hz) · Ventaneo denso · Regularización
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {!physicsValidation.valid && (
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-rose-950/70 border border-rose-800 text-rose-300">
+                Física Inválida
+              </span>
+            )}
+            <svg
+              className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${
+                isPhysicsExpanded ? "rotate-180" : ""
+              }`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </button>
+
+        {isPhysicsExpanded && (
+          <div className="p-5 pt-1 space-y-4 border-t border-[#23252e]">
+            {/* Presets Rápidos de 1-Clic */}
+            <div className="space-y-1.5">
+              <span className="text-[11px] text-gray-400 font-medium block">
+                Presets de Dominio Acústico (1-Clic)
+              </span>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {(
+                  [
+                    { key: "bioacoustics", label: "Bioacústica (Aves)", badge: "22.05 kHz · 5.0s" },
+                    { key: "industrial", label: "Diagnóstico Industrial", badge: "32 kHz · 1.5s" },
+                    { key: "medical_cough", label: "Tos Médica", badge: "16 kHz · 2.0s" },
+                    { key: "custom", label: "Personalizado", badge: "Manual" },
+                  ] as const
+                ).map((p) => {
+                  const isActive = domainPreset === p.key;
+                  return (
+                    <button
+                      key={p.key}
+                      type="button"
+                      disabled={isTraining}
+                      onClick={() => handleApplyPreset(p.key)}
+                      className={`p-2.5 rounded-lg border text-left transition-all flex flex-col justify-between ${
+                        isActive
+                          ? "bg-teal-950/40 border-teal-500/70 text-teal-200 shadow-sm"
+                          : "bg-[#111215] border-[#23252e] text-gray-400 hover:text-gray-200 hover:border-gray-700"
+                      }`}
+                    >
+                      <span className="text-xs font-semibold block">{p.label}</span>
+                      <span className="text-[10px] font-mono text-gray-400 block mt-1">{p.badge}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Alerta de Validación Acústica Reactiva */}
+            {!physicsValidation.valid && (
+              <div className="p-3 rounded-lg bg-rose-950/80 border border-rose-800 text-rose-300 text-xs flex items-center gap-2">
+                <svg className="w-4 h-4 flex-shrink-0 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <span>{physicsValidation.error}</span>
+              </div>
+            )}
+
+            {/* Grid 1: Física Espectral */}
+            <div>
+              <span className="text-[11px] text-gray-400 font-semibold block mb-2">
+                1. Física del Audio y Espectrograma
+              </span>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <label htmlFor="target_sr" className="text-[11px] text-gray-400 block mb-1 font-medium">
+                    Tasa de Muestreo (Hz)
+                  </label>
+                  <input
+                    id="target_sr"
+                    type="number"
+                    value={targetSr}
+                    disabled={isTraining}
+                    min={8000}
+                    max={48000}
+                    step={100}
+                    onChange={(e) => {
+                      setDomainPreset("custom");
+                      setTargetSr(parseInt(e.target.value, 10) || 8000);
+                    }}
+                    className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="duration_seconds" className="text-[11px] text-gray-400 block mb-1 font-medium">
+                    Duración de Ventana (s)
+                  </label>
+                  <input
+                    id="duration_seconds"
+                    type="number"
+                    value={durationSeconds}
+                    disabled={isTraining}
+                    min={0.5}
+                    max={30.0}
+                    step={0.5}
+                    onChange={(e) => {
+                      setDomainPreset("custom");
+                      setDurationSeconds(parseFloat(e.target.value) || 0.5);
+                    }}
+                    className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="f_min" className="text-[11px] text-gray-400 block mb-1 font-medium">
+                    Frecuencia Mínima (Hz)
+                  </label>
+                  <input
+                    id="f_min"
+                    type="number"
+                    value={fMin}
+                    disabled={isTraining}
+                    min={0}
+                    step={10}
+                    onChange={(e) => {
+                      setDomainPreset("custom");
+                      setFMin(parseFloat(e.target.value) || 0);
+                    }}
+                    className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="f_max" className="text-[11px] text-gray-400 block mb-1 font-medium">
+                    Frecuencia Máxima (Hz)
+                  </label>
+                  <input
+                    id="f_max"
+                    type="number"
+                    value={fMax}
+                    disabled={isTraining}
+                    min={100}
+                    step={100}
+                    onChange={(e) => {
+                      setDomainPreset("custom");
+                      setFMax(parseFloat(e.target.value) || 100);
+                    }}
+                    className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Grid 2: Ventaneo Denso y Captura de Eventos Breves */}
+            <div>
+              <span className="text-[11px] text-gray-400 font-semibold block mb-2">
+                2. Ventaneo Denso y Agregación Temporal
+              </span>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <label htmlFor="hop_seconds" className="text-[11px] text-gray-400 block mb-1 font-medium">
+                    Salto Temporal (s)
+                  </label>
+                  <input
+                    id="hop_seconds"
+                    type="number"
+                    value={hopSeconds}
+                    disabled={isTraining}
+                    min={0.1}
+                    max={10.0}
+                    step={0.1}
+                    onChange={(e) => {
+                      setDomainPreset("custom");
+                      setHopSeconds(parseFloat(e.target.value) || 0.1);
+                    }}
+                    className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="aggregation_mode" className="text-[11px] text-gray-400 block mb-1 font-medium">
+                    Agregación Temporal
+                  </label>
+                  <select
+                    id="aggregation_mode"
+                    value={aggregationMode}
+                    disabled={isTraining}
+                    onChange={(e) => {
+                      setDomainPreset("custom");
+                      setAggregationMode(e.target.value as "max" | "mean");
+                    }}
+                    className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500"
+                  >
+                    <option value="max">Max-Pooling (Eventos Breves)</option>
+                    <option value="mean">Mean-Pooling (Fondo Continuo)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="gem_p" className="text-[11px] text-gray-400 block mb-1 font-medium">
+                    Exponente GeM (p)
+                  </label>
+                  <input
+                    id="gem_p"
+                    type="number"
+                    value={gemP}
+                    disabled={isTraining}
+                    min={1.0}
+                    max={10.0}
+                    step={0.5}
+                    onChange={(e) => {
+                      setDomainPreset("custom");
+                      setGemP(parseFloat(e.target.value) || 1.0);
+                    }}
+                    className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="vad_threshold" className="text-[11px] text-gray-400 block mb-1 font-medium">
+                    Umbral VAD Energético
+                  </label>
+                  <input
+                    id="vad_threshold"
+                    type="number"
+                    value={vadThreshold}
+                    disabled={isTraining}
+                    min={0.0}
+                    max={1.0}
+                    step={0.01}
+                    onChange={(e) => {
+                      setDomainPreset("custom");
+                      setVadThreshold(parseFloat(e.target.value) || 0.0);
+                    }}
+                    className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Grid 3: Regularización y Pérdida */}
+            <div>
+              <span className="text-[11px] text-gray-400 font-semibold block mb-2">
+                3. Regularización y Función de Pérdida
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label htmlFor="loss_type" className="text-[11px] text-gray-400 block mb-1 font-medium">
+                    Función de Pérdida
+                  </label>
+                  <select
+                    id="loss_type"
+                    value={lossType}
+                    disabled={isTraining}
+                    onChange={(e) => {
+                      setDomainPreset("custom");
+                      setLossType(e.target.value as "focal" | "cross_entropy");
+                    }}
+                    className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500"
+                  >
+                    <option value="focal">Focal Loss (Desbalance de Clases)</option>
+                    <option value="cross_entropy">Cross Entropy (Estándar)</option>
+                  </select>
+                </div>
+
+                {lossType === "focal" && (
+                  <div>
+                    <label htmlFor="focal_gamma" className="text-[11px] text-gray-400 block mb-1 font-medium">
+                      Parámetro Gamma (Focal)
+                    </label>
+                    <input
+                      id="focal_gamma"
+                      type="number"
+                      value={focalGamma}
+                      disabled={isTraining}
+                      min={0.0}
+                      max={10.0}
+                      step={0.5}
+                      onChange={(e) => {
+                        setDomainPreset("custom");
+                        setFocalGamma(parseFloat(e.target.value) || 0.0);
+                      }}
+                      className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500"
+                    />
+                  </div>
+                )}
+
+                <div className="flex items-center gap-4 pt-4 sm:pt-6">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-300">
+                    <input
+                      type="checkbox"
+                      checked={mixupEnabled}
+                      disabled={isTraining}
+                      onChange={(e) => {
+                        setDomainPreset("custom");
+                        setMixupEnabled(e.target.checked);
+                      }}
+                      className="rounded bg-[#111215] border-[#23252e] text-teal-500 focus:ring-0"
+                    />
+                    <span>Mixup</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-300">
+                    <input
+                      type="checkbox"
+                      checked={pitchShiftEnabled}
+                      disabled={isTraining}
+                      onChange={(e) => {
+                        setDomainPreset("custom");
+                        setPitchShiftEnabled(e.target.checked);
+                      }}
+                      className="rounded bg-[#111215] border-[#23252e] text-teal-500 focus:ring-0"
+                    />
+                    <span>Pitch Shift</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ==================================================================== */}

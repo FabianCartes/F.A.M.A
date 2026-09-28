@@ -165,3 +165,54 @@ def test_training_lifecycle_dynamic_ensemble(client):
             ],
         )
 
+
+def test_start_training_api_passes_multi_domain_configs(client):
+    """Verifica que POST /api/training/start pase audio_config, windowing_config y regularization_config al servicio."""
+    with patch("app.services.training.training_service.start_training") as mock_start:
+        mock_start.return_value = {
+            "status": "started",
+            "job_id": "fama_multidomain_123",
+            "message": "Pipeline Multi-Dominio iniciado.",
+        }
+        payload = {
+            "dataset_name": "medical_cough",
+            "architecture": "ResNet-34d",
+            "epochs": 15,
+            "learning_rate": 0.0003,
+            "batch_size": 8,
+            "audio_config": {
+                "target_sr": 16000,
+                "duration_seconds": 2.0,
+                "f_min": 50.0,
+                "f_max": 4000.0,
+                "n_mels": 128,
+                "n_fft": 1024,
+                "hop_length": 256,
+            },
+            "windowing_config": {
+                "hop_seconds": 0.5,
+                "aggregation_mode": "max",
+                "gem_p": 3.0,
+                "vad_threshold": 0.05,
+            },
+            "regularization_config": {
+                "loss_type": "focal",
+                "focal_gamma": 2.5,
+                "mixup_enabled": True,
+                "mixup_alpha": 0.3,
+                "pitch_shift_enabled": False,
+            },
+        }
+        res = client.post("/api/training/start", json=payload)
+        assert res.status_code == 200
+        assert res.json()["status"] == "started"
+        mock_start.assert_called_once()
+        call_kwargs = mock_start.call_args.kwargs
+        assert call_kwargs["dataset_name"] == "medical_cough"
+        assert call_kwargs["audio_config"]["target_sr"] == 16000
+        assert call_kwargs["audio_config"]["f_max"] == 4000.0
+        assert call_kwargs["windowing_config"]["hop_seconds"] == 0.5
+        assert call_kwargs["regularization_config"]["loss_type"] == "focal"
+        assert call_kwargs["regularization_config"]["focal_gamma"] == 2.5
+
+
