@@ -80,7 +80,7 @@ describe("Sidebar destinations", () => {
     expect(await screen.findByText("3")).toBeDefined();
   });
 
-  it("renders GCP status dot indicator and CUDA badge in collapsed mode", async () => {
+  it("renders GCP status dot indicator and GPU badge in collapsed mode", async () => {
     global.fetch = vi.fn().mockImplementation((url: string) => {
       if (url.includes("/api/training/hardware")) {
         return Promise.resolve({
@@ -93,7 +93,8 @@ describe("Sidebar destinations", () => {
 
     renderSidebar(true);
     expect(screen.getByLabelText(/GCP Conectado/i)).toBeDefined();
-    expect(await screen.findByText("CUDA")).toBeDefined();
+    const badge = await screen.findByTestId("hardware-badge-collapsed");
+    expect(badge.textContent).toBe("GPU");
   });
 
   it("renders CPU badge in collapsed mode when CUDA is not available", async () => {
@@ -108,6 +109,7 @@ describe("Sidebar destinations", () => {
     });
 
     renderSidebar(true);
-    expect(await screen.findByText("CPU")).toBeDefined();
+    const badge = await screen.findByTestId("hardware-badge-collapsed");
+    expect(badge.textContent).toBe("CPU");
   });
 });

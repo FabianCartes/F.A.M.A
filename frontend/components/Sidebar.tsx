@@ -267,7 +267,7 @@ export default function Sidebar({
             isCollapsed
               ? `Cómputo: ${
                   hw?.cuda_available
-                    ? `CUDA${hw.temperature_c ? ` · ${hw.temperature_c}°C` : ""}`
+                    ? `GPU${hw.temperature_c ? ` · ${hw.temperature_c}°C` : ""}`
                     : "CPU Host"
                 }`
               : undefined
@@ -293,13 +293,14 @@ export default function Sidebar({
           </div>
           {isCollapsed ? (
             <span
+              data-testid="hardware-badge-collapsed"
               className={`hidden md:inline-block px-1 py-0.2 rounded text-[9px] font-bold tracking-tight border ${
                 hw?.cuda_available
                   ? "bg-emerald-950/70 border-emerald-700/60 text-emerald-400"
                   : "bg-blue-950/70 border-blue-700/60 text-blue-400"
               }`}
             >
-              {hw?.cuda_available ? "CUDA" : "CPU"}
+              {hw?.cuda_available ? "GPU" : "CPU"}
             </span>
           ) : (
             <span
@@ -310,7 +311,7 @@ export default function Sidebar({
               }`}
             >
               {hw?.cuda_available
-                ? `CUDA${hw.temperature_c ? ` · ${hw.temperature_c}°C` : ""}`
+                ? `GPU${hw.temperature_c ? ` · ${hw.temperature_c}°C` : ""}`
                 : "CPU Host"}
             </span>
           )}
