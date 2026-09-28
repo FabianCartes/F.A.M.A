@@ -296,7 +296,7 @@ export default function Sidebar({
               data-testid="hardware-badge-collapsed"
               className={`hidden md:inline-block px-1 py-0.2 rounded text-[9px] font-bold tracking-tight border ${
                 hw?.cuda_available
-                  ? "bg-emerald-950/70 border-emerald-700/60 text-emerald-400"
+                  ? "bg-cyan-950/70 border-cyan-700/60 text-cyan-400"
                   : "bg-blue-950/70 border-blue-700/60 text-blue-400"
               }`}
             >
@@ -306,7 +306,7 @@ export default function Sidebar({
             <span
               className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
                 hw?.cuda_available
-                  ? "bg-emerald-950/70 border-emerald-700/60 text-emerald-400"
+                  ? "bg-cyan-950/70 border-cyan-700/60 text-cyan-400"
                   : "bg-blue-950/70 border-blue-700/60 text-blue-400"
               }`}
             >

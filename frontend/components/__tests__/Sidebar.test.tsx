@@ -95,6 +95,7 @@ describe("Sidebar destinations", () => {
     expect(screen.getByLabelText(/GCP Conectado/i)).toBeDefined();
     const badge = await screen.findByTestId("hardware-badge-collapsed");
     expect(badge.textContent).toBe("GPU");
+    expect(badge.className).toContain("text-cyan-400");
   });
 
   it("renders CPU badge in collapsed mode when CUDA is not available", async () => {
