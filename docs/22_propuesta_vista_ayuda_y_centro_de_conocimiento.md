@@ -89,8 +89,10 @@ La vista se organizará modularmente en 4 secciones accesibles mediante navegaci
    - Carga y validación de archivos .wav (detección de clipping, frecuencia y duración).
    - **Bandeja de Curación de Feedback (RF_06):** Cómo evaluar correcciones de campo, aprobarlas (incorporación canónica al dataset) o descartarlas.
 3. **Entrenamiento de Modelos:**
-   - Selección de dataset y modo (Modelo Individual vs. Tríada Completa).
+   - Selección de dataset y modo (Modelo Individual vs. Dúo vs. Tríada Completa).
    - Ajuste de hiperparámetros (Batch size, Epochs, Learning Rate, Framework PyTorch).
+   - **Física de Audio y Espectrograma:** Explicación de tasa de muestreo ($f_s$), duración de ventana, límites espectrales ($f_{\text{min}}, f_{\text{max}}$ y Nyquist), resolución Mel/STFT, ventaneo denso (`hop_seconds`), exponente GeM Pooling ($p$) y regularizaciones (Mixup, Pitch Shift).
+   - **Ayudas Contextuales (Tooltips In-App):** Iconos de interrogación `(?)` junto al nombre de cada parámetro acústico que muestran en *hover/focus* un resumen didáctico de su función y un enlace para profundizar en el Centro de Ayuda.
    - Monitor de telemetría de hardware (temperatura, uso de VRAM y CPU).
 4. **Predicción y Monitoreo:**
    - Selector dinámico de modelo con agrupación semántica (`<optgroup>`).
@@ -126,3 +128,5 @@ La vista se organizará modularmente en 4 secciones accesibles mediante navegaci
 * **Tarea 2:** Integrar opción `Ayuda` en [`Sidebar.tsx`](file:///home/kevin/Work/fama/frontend/components/Sidebar.tsx) y conectar estado de vista en [`AppShell.tsx`](file:///home/kevin/Work/fama/frontend/components/shell/AppShell.tsx) / [`page.tsx`](file:///home/kevin/Work/fama/frontend/app/page.tsx).
 * **Tarea 3:** Desarrollar suite de pruebas TDD en `frontend/components/views/__tests__/HelpView.test.tsx` (asegurando renderizado de las 4 secciones y navegación sin errores).
 * **Tarea 4:** Validar accesibilidad (`aria-selected`, navegación por teclado) y diseño responsivo móvil/escritorio.
+* **Tarea 5:** Implementar componente de ayuda contextual (`TooltipHelp` / icono `?`) junto a cada parámetro del panel de Física de Audio en `TrainingView.tsx`, con explicación concisa en hover y enlace al Centro de Ayuda.
+
