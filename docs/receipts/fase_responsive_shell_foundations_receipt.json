@@ -1,94 +1,175 @@
 {
   "receipt_name": "fase_responsive_shell_foundations_receipt",
-  "generated_at": "2026-09-27T22:28:00Z",
+  "generated_at": "2026-09-27T23:20:00Z",
   "methodology": "TDD + RDD + ODD",
-  "architecture_layer": "Frontend Shell Foundations — App Router document contract (Phases 0 and 1 of the responsive/mobile refactor)",
+  "architecture_layer": "Frontend Responsive Shell — off-canvas mobile navigation, icon-only desktop collapse, and mobile-first view layout",
   "rdd_mode": "unmanaged",
-  "approval": "not_granted",
-  "causal_invariant": "The root layout emits a device-width viewport contract, so the App Router document scales to the real device viewport instead of inheriting an implicit desktop canvas.",
+  "approval": "collapsible_sidebar_requested_explicitly_by_maintainer; other units not approved",
+  "chain": {
+    "required": true,
+    "reason": "the cumulative change is 720 authored lines against a 400-line hard limit, and it mixes two independent invariants with different rollback boundaries",
+    "recommendation": "land as two commits, newest last",
+    "unit_1": "responsive shell: off-canvas navigation below md, mobile-first grids, word breaking, table min-widths, document viewport contract",
+    "unit_2": "icon-only collapsible sidebar on desktop, with persisted preference",
+    "caveat": "frontend/components/Sidebar.tsx contains hunks from both units, so splitting it needs a manual hunk split rather than a path split",
+    "commits_made": "none — the maintainer has not asked for a commit"
+  },
+  "causal_invariants": [
+    {
+      "id": "INV-1",
+      "statement": "On a viewport narrower than 768px the operator can reach every navigation destination and no view forces horizontal scrolling, because the sidebar is off-canvas below md and no fixed-width chrome or unbreakable content exceeds the viewport.",
+      "unit": 1
+    },
+    {
+      "id": "INV-2",
+      "statement": "On a viewport of 768px or wider the operator can reclaim the full content width by collapsing the sidebar to icons, and the choice survives a reload.",
+      "unit": 2
+    }
+  ],
   "issue_pr": {
     "issue": "none — no issue tracker entry exists for this work",
     "pr": "none — not opened; no commit requested by the maintainer"
   },
   "operator_flows": [
     {
-      "flow": "Open F.A.M.A. on a mobile browser and read any view without pinch-zoom scaling",
-      "entry": "browser -> https://host/",
-      "mode": "production build",
-      "environment": "Next.js 16.3.4 App Router, Turbopack",
-      "expectation": "layout width maps to device-width, initial scale 1",
-      "negative_control": "exporting viewport must not change the server-rendered RootLayout signature or the font CSS variables"
+      "unit": 1,
+      "flow": "Open the platform on a phone and reach a view from the navigation",
+      "entry": "browser -> https://host/ (width < 768px)",
+      "expectation": "sidebar starts off-canvas, aria-expanded=false on the toggle; activating it reveals the navigation",
+      "negative_control": "navigation and main content both stay in the DOM; collapsing never unmounts a destination"
     },
     {
-      "flow": "Render on a notched device in landscape",
-      "entry": "browser -> device with safe-area insets",
-      "mode": "production build",
-      "environment": "viewportFit=cover",
-      "expectation": "content is allowed to extend under the notch; no horizontal scrollbar is introduced",
-      "negative_control": "text-size-adjust stays at 100% so iOS landscape does not inflate typography"
+      "unit": 1,
+      "flow": "Pick a destination on a phone and read the resulting view",
+      "entry": "toggle -> tap Dashboard",
+      "expectation": "navigation collapses, aria-expanded=false, onNavigate fired exactly once",
+      "negative_control": "scrim tap and Escape also collapse it"
+    },
+    {
+      "unit": 1,
+      "flow": "Read a long GCS path in the training log or the ingestion target preview",
+      "entry": "TrainingView ODD console, IngestionView upload dropzone",
+      "expectation": "unbreakable paths wrap instead of forcing horizontal scroll inside a vertical scroller",
+      "negative_control": "the console keeps its own vertical scrolling; wrapping adds no second scrollbar"
+    },
+    {
+      "unit": 1,
+      "flow": "Focus a form control on iOS Safari",
+      "entry": "tap a select or input below the md breakpoint",
+      "expectation": "the viewport does not zoom in on focus and stay zoomed",
+      "negative_control": "at 768px and above the 16px floor does not apply, so desktop density is unchanged"
+    },
+    {
+      "unit": 2,
+      "flow": "Reclaim content width on a desktop window",
+      "entry": "activate the panel control in the sidebar header",
+      "expectation": "the panel narrows to icons only and reports aria-expanded=false; a second activation restores the labels",
+      "negative_control": "every destination keeps its accessible name while collapsed, so a screen reader can still identify each icon"
+    },
+    {
+      "unit": 2,
+      "flow": "Return to the platform after collapsing the panel",
+      "entry": "reload the page",
+      "expectation": "the collapsed preference is restored",
+      "negative_control": "an expanded preference is remembered as expanded; the off-canvas drawer state is unaffected by the collapse preference"
     }
   ],
   "journey_runtime_evidence": {
-    "type": "build_and_head_contract",
-    "note": "No CLI or lifecycle flow was added in this phase, so no gentle-ai-bench journey applies. Evidence is the production build plus the exported head contract asserted at the module seam.",
+    "type": "black_box_contract_tests_plus_build_artifact_inspection",
+    "note": "No gentle-ai-bench journey applies: this work adds no CLI or lifecycle flow. The drawer and collapse states are observable through the ARIA contract, so they are covered by real rendering tests rather than style assertions. Visual verification at 375px and at a collapsed desktop width was NOT performed — no browser automation is available here — so breakpoint appearance is reasoned from the emitted CSS, not observed.",
     "commands": [
-      "npx vitest run -> 4 files, 42 tests, 42 passed, 0 failed (36 pre-existing + 6 new)",
+      "npx vitest run -> 6 files, 65 tests, 65 passed, 0 failed",
       "npx tsc --noEmit -> exit 0, 0 errors",
+      "npx eslint -> 9 pre-existing react-hooks/set-state-in-effect errors, count unchanged, 0 in files authored here",
       "npm run build -> EXIT 0, route / prerendered as static content",
-      "npx eslint -> 11 pre-existing problems, 0 in the files authored by this phase"
+      "grep meta in .next/server/app/index.html -> viewport width=device-width, initial-scale=1, viewport-fit=cover; theme-color #030712",
+      "grep generated CSS (escaped form, fixed-string) -> h-dvh, md\\:hidden, md\\:w-16, md\\:inline, md\\:px-0, md\\:justify-center, md\\:inline-flex, transition-\\[width\\,transform\\], md\\:transition-\\[width\\], min-w-\\[640px\\], min-w-\\[880px\\], min-w-\\[15px\\], .-top-1\\.5, .-right-2\\.5, break-words, text-size-adjust, font-size:16px all emitted; zero dead classes introduced"
     ]
   },
-  "seam_under_test": {
-    "seam": "app/layout.tsx module exports (metadata, viewport, default RootLayout) — the contract App Router consumes to emit <head>",
-    "rationale": "Public interface of the module, not an implementation detail. next/font/google is mocked because it is a third-party build-time boundary that is inert outside the Next.js compiler; the first red run failed on that boundary (Montserrat is not a function) rather than on the missing contract, so the mock was required to reach a correct red.",
-    "file": "frontend/app/__tests__/layout.test.ts"
-  },
+  "seams_under_test": [
+    {
+      "seam": "app/layout.tsx module exports (metadata, viewport, RootLayout) — the contract App Router consumes to emit <head>",
+      "file": "frontend/app/__tests__/layout.test.ts",
+      "tests": 6
+    },
+    {
+      "seam": "AppShell component — the operator-visible navigation contract expressed as ARIA: the mobile toggle aria-expanded and aria-controls, the collapse control aria-expanded, and the notification that navigation happened",
+      "file": "frontend/components/shell/__tests__/AppShell.test.tsx",
+      "tests": 17,
+      "note": "The seam is the ARIA state, not a CSS class, so the tests survive a restyle. Deliberately no test asserts a Tailwind class name anywhere."
+    },
+    {
+      "seam": "Sidebar destinations — every destination must stay nameable by assistive technology in both the expanded and the icon-only state, and the panel control must report the current state",
+      "file": "frontend/components/__tests__/Sidebar.test.tsx",
+      "tests": 6,
+      "note": "This seam exists because collapsing to icons is the change most likely to silently destroy an accessible name: the visible label is hidden, and only the icon would remain."
+    }
+  ],
   "changed_line_budget": {
     "limit": 400,
-    "additions": 48,
-    "deletions": 1,
-    "total": 49,
-    "chain_or_exception_required": false,
+    "authored_lines_excluding_receipt": 720,
+    "receipt_lines": 100,
+    "total_working_tree": 820,
+    "chain_or_exception_required": true,
+    "exception_basis": "the maintainer explicitly requested the collapsible sidebar; the remaining overrun is handled by the chain recommendation above",
     "files": [
-      "frontend/app/layout.tsx (+8/-1) — added Viewport import and the exported viewport object",
-      "frontend/app/globals.css (+5/-0) — added text-size-adjust guards on html",
-      "frontend/app/__tests__/layout.test.ts (+35/-0) — new, the red-green test for the head contract"
+      "frontend/components/shell/AppShell.tsx (new, 134) — owns off-canvas state, scrim, Escape, breakpoint reset, mobile app bar, and the icon-only collapse store",
+      "frontend/components/shell/__tests__/AppShell.test.tsx (new, 181) — drawer and collapse contract",
+      "frontend/components/__tests__/Sidebar.test.tsx (new, 74) — destination naming and panel control",
+      "frontend/components/Sidebar.tsx (+82/-24) — icon-only rendering, panel control, nav aria-label/aria-current, h-full",
+      "frontend/app/page.tsx (+19/-12) — composition root wiring the shell actions",
+      "frontend/components/views/DashboardView.tsx (+22/-16) — KPI grid base column, triplet grids, chart clipping and axis legibility, activity row wrapping",
+      "frontend/components/views/TrainingView.tsx (+21/-17) — log console word breaking, table min-width, td display:flex removal, mode toggle and banners",
+      "frontend/components/views/PredictionView.tsx (+26/-15) — model select width, triplet grid, waveform time labels, filename truncation, mobile dropzone copy",
+      "frontend/components/views/IngestionView.tsx (+7/-7) — 9-column table min-width, path word breaking, modal title truncation",
+      "frontend/app/globals.css (+10/-0) — viewport text-size-adjust guard and the 16px mobile form-control floor"
     ]
   },
   "tests": {
     "runner": "vitest 5.0.2, environment jsdom",
-    "new_suite": "frontend/app/__tests__/layout.test.ts (6 tests)",
+    "new_suites": [
+      "frontend/app/__tests__/layout.test.ts (6 tests)",
+      "frontend/components/shell/__tests__/AppShell.test.tsx (17 tests)",
+      "frontend/components/__tests__/Sidebar.test.tsx (6 tests)"
+    ],
     "red_before_green": true,
-    "red_evidence": "4 of 6 tests failed with TypeError: Cannot read properties of undefined (reading 'width'|'initialScale'|'viewportFit'|'themeColor') because the viewport export did not exist",
-    "green_evidence": "6 of 6 passed after adding the viewport export"
+    "red_evidence": "AppShell drawer: suite failed to resolve the module. Layout: 4 of 6 failed reading 'width'/'initialScale'/'viewportFit'/'themeColor' of undefined. Collapse: all 15 Sidebar/AppShell collapse tests failed because no collapse control existed. Preference: 'remembers a panel the operator had already collapsed' failed until the preference store existed.",
+    "green_evidence": "29 new tests pass; full suite 65/65",
+    "harness_defects_found_and_fixed": [
+      "window.matchMedia is undefined under this jsdom, which proved the shell capability guard is load-bearing rather than decorative",
+      "a media-query notification inside a test needs act() or the assertion runs before React flushes",
+      "the persisted collapse preference leaked across tests, so the AppShell suite now clears localStorage in beforeEach",
+      "the feedback counter arrives through a promise, so the assertion must use findByText rather than getByText"
+    ],
+    "product_defect_caught_by_a_test": "The first collapse implementation read localStorage and called setState inside an effect, which introduced a new react-hooks/set-state-in-effect error. It was replaced with useSyncExternalStore over localStorage rather than suppressed, which also removed a ref-based write guard and added cross-tab synchronization through the storage event.",
+    "not_tested_and_why": "No test asserts a Tailwind class name. Verifying a className tests implementation, not behavior. Instead every class authored here was verified to be emitted in the built CSS, which catches typos and dead utilities without coupling tests to styling. Note that grepping the built CSS requires the escaped class form and fixed-string matching, or valid utilities appear to be missing."
   },
   "phase_0_gitignore_invariant": {
-    "defect": "root .gitignore rule 'lib/' (unanchored) excluded frontend/lib/ at any depth, leaving lib/api.ts, lib/schemas/*.ts, lib/api/* untracked and invisible; a clean clone could not resolve the @/lib/* imports",
-    "resolved_by": "parallel RF_06 task, which added '!frontend/lib/' at 19:19:23 local on 2026-09-27",
-    "verified": "git check-ignore -v frontend/lib/api.ts exits 1 (not ignored); git status reports '?? frontend/lib/' as visible-untracked",
-    "regression_watch": "the unanchored 'lib/' rule is still present at .gitignore:53 and still matches any future directory named lib at any depth; the negation only rescues frontend/lib exactly. Residual risk accepted to avoid conflicting with the line the parallel task owns.",
-    "action_required_by_maintainer": "git add frontend/lib is still pending — 0 of the lib/ files are tracked"
+    "defect": "root .gitignore rule 'lib/' (unanchored) excluded frontend/lib/ at any depth, leaving the API clients and schemas untracked",
+    "resolved_by": "the RF_06 task, merged as commit 0bda3bb",
+    "verified": "git check-ignore -v frontend/lib/api.ts exits 1; git ls-files frontend/lib returns all 7 files",
+    "residual_risk": "the unanchored 'lib/' rule still matches any future directory named lib at any depth; the negation only rescues frontend/lib exactly"
   },
-  "odd_observability_features": {},
-  "odd_assessment": "Honest scope note: this phase introduces no new telemetry, state machine, or monitoring surface. ODD yields no additional artifact here because the only new externally observable surface is the <meta name=\"viewport\"> and <meta name=\"theme-color\"> pair asserted in the test suite. The next ODD-bearing phase is the shell drawer state, which will need a breakpoint/visibility contract recorded.",
-  "deferred_out_of_scope": [
-    "Fase 2: DashboardView responsive grids, chart clipping, truncate and flex-wrap defects",
-    "Fase 3: TrainingView log console word-break, table min-width, flex-shrink-0 toggle, td display:flex hazard",
-    "Fase 4: full-suite verification gate",
-    "Fase 5 (deferred by maintainer decision): collapsible sidebar via components/shell/AppShell.tsx plus app/page.tsx h-dvh and main overflow-x containment",
-    "Known mobile defect NOT fixed here: iOS Safari focus-zoom inflates the page because form controls render below 16px. The global fix would raise control font size on mobile and can shift layout inside PredictionView and IngestionView, which are owned by the RF_06 task, so it is deferred to a phase where the affected components can be edited and visually verified.",
-    "Known mobile defect NOT fixed here: Sidebar.tsx fixes w-56 (224px) with no breakpoint, leaving roughly 151px of usable width on a 375px device. This is the single largest mobile blocker and is fully gated behind Fase 5."
-  ],
-  "rollback": {
-    "independent_of_rf06": true,
-    "commands": "git checkout -- frontend/app/layout.tsx frontend/app/globals.css && rm -rf frontend/app/__tests__",
-    "note": "No backend, schema, API, or RF_06-owned file was modified, so reverting this phase cannot disturb the in-flight feedback-curation work."
+  "odd_observability_features": {
+    "navigation_state_contract": "aria-expanded on the mobile toggle and on the panel control are the single source of truth for reachability, asserted at the component seam",
+    "collapse_triggers": ["mobile toggle", "scrim tap", "destination selection", "Escape key", "viewport crossing to md"],
+    "preference_persistence": "localStorage key fama:sidebar-collapsed, read through useSyncExternalStore so a second browser tab follows the change via the storage event",
+    "resilience_observability": "the shell degrades to a usable layout where window.matchMedia is unavailable, and to an expanded panel where localStorage throws",
+    "note": "The TrainingView banners, connection state machine and exponential backoff were left untouched."
   },
   "unresolved_authority_decisions": [
-    "The RDD kill switch is not present anywhere in this repository, so receipts are authored as project documentation only. This receipt does not claim approval, verification authority, or merge authority, and its status is deliberately not SEALED_AND_VERIFIED.",
-    "Maintainer must decide whether to anchor the .gitignore 'lib/' rule to the repository root to close the residual risk, which would touch a line the RF_06 task owns.",
-    "Maintainer must decide whether to stage and commit frontend/lib/, which is currently untracked.",
-    "Maintainer must decide whether the 9 pre-existing eslint react-hooks/set-state-in-effect errors (DashboardView 133/144, IngestionView 234, PredictionView 196/227/440/531) are fixed in Fase 2, in the RF_06 line, or accepted."
+    "No visual verification was performed at 375px or at a collapsed desktop width; no browser automation is available. A maintainer should eyeball both states on a real device before shipping.",
+    "The 16px mobile form-control floor in globals.css is a global change that inflates every control below 768px. It is the correct fix for the iOS focus zoom, but it shifts layout in tight rows and needs a device check.",
+    "Sidebar.tsx mixes hunks from both chain units, so the split needs a manual hunk split.",
+    "IngestionView still uses animate-in and zoom-in-95, confirmed dead in the built CSS because tailwindcss-animate is not installed. Pre-existing, untouched.",
+    "PredictionView and IngestionView dropzones advertise drag and drop but have no onDragOver or onDrop handler, only onClick, so drag and drop cannot work on touch devices. Pre-existing and out of scope.",
+    "The 9 pre-existing react-hooks/set-state-in-effect errors (DashboardView 133/144, IngestionView 238, PredictionView 196/227/440/531) were deliberately left alone; they are state-shape problems, not layout problems, and deserve their own work unit."
   ],
+  "rollback": {
+    "unit_1": "git checkout -- frontend/app frontend/components/views && restore Sidebar.tsx and page.tsx to pre-chain state",
+    "unit_2": "the collapse is a single self-contained slice: revert Sidebar.tsx icon-only rendering, the two collapse fields in AppShell, the two new props wired in page.tsx, and localStorage key fama:sidebar-collapsed is then unused",
+    "data_migration": "none",
+    "schema_migration": "none"
+  },
   "verification_status": "AUTHORED_PENDING_MAINTAINER_REVIEW"
 }

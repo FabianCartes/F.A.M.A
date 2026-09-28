@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { TabType } from "../Sidebar";
 import { API_BASE_URL } from "@/lib/api";
+import { TabType } from "../Sidebar";
 
 interface DashboardViewProps {
   onNavigate: (tab: TabType) => void;
@@ -106,8 +106,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
   const [hoveredEpoch, setHoveredEpoch] = useState<number | null>(null);
   const [revealProgress, setRevealProgress] = useState<number>(0);
 
-  const fetchDashboardData = useCallback(async (isManualRefresh = false) => {
-    if (isManualRefresh) setRefreshing(true);
+  const fetchDashboardData = useCallback(async () => {
     try {
       const [resStats, resHw] = await Promise.all([
         fetch(`${API_BASE_URL}/api/dashboard/stats`).catch(() => null),
@@ -124,29 +123,64 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
       }
     } catch (err) {
       console.warn("Aviso al consultar datos del dashboard:", err);
-    } finally {
-      if (isManualRefresh) setRefreshing(false);
     }
   }, []);
 
-  useEffect(() => {
-    fetchDashboardData();
-    const interval = setInterval(() => {
-      fetchDashboardData();
-    }, 15000);
-    return () => clearInterval(interval);
+  const handleManualRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await fetchDashboardData();
+    } finally {
+      setRefreshing(false);
+    }
   }, [fetchDashboardData]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadInitialData() {
+      try {
+        const [resStats, resHw] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/dashboard/stats`).catch(() => null),
+          fetch(`${API_BASE_URL}/api/training/hardware`).catch(() => null),
+        ]);
+
+        if (isCancelled) return;
+
+        if (resStats && resStats.ok) {
+          const data = (await resStats.json()) as DashboardStatsResponse;
+          setStats(data);
+        }
+        if (resHw && resHw.ok) {
+          const hwData = (await resHw.json()) as HardwareTelemetry;
+          setHardware(hwData);
+        }
+      } catch (err) {
+        console.warn("Aviso al consultar datos del dashboard:", err);
+      }
+    }
+
+    loadInitialData();
+    const interval = setInterval(loadInitialData, 15000);
+    return () => {
+      isCancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
 
   // Animación progresiva de las líneas del gráfico de izquierda a derecha sin elementos artificiales al frente
   useEffect(() => {
     if (!stats?.training_curves || stats.training_curves.length === 0) return;
 
-    setRevealProgress(0);
-
     const durationMs = 2200; // Velocidad pausada y suave para apreciar el trazado progresivo
-    const startTime = performance.now();
+    let startTime: number | null = null;
+    let animId: number;
 
     const animate = (now: number) => {
+      if (startTime === null) {
+        startTime = now;
+        setRevealProgress(0);
+      }
       const elapsed = now - startTime;
       const linear = Math.min(1, elapsed / durationMs);
       // Easing suave (easeInOutQuad) para un avance fluido y natural de principio a fin
@@ -157,13 +191,13 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
       setRevealProgress(eased);
 
       if (linear < 1) {
-        requestAnimationFrame(animate);
+        animId = requestAnimationFrame(animate);
       } else {
         setRevealProgress(1);
       }
     };
 
-    const animId = requestAnimationFrame(animate);
+    animId = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(animId);
   }, [stats?.training_curves]);
 
@@ -267,7 +301,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
           {/* Botón de Actualizar Datos */}
           <button
             type="button"
-            onClick={() => fetchDashboardData(true)}
+            onClick={handleManualRefresh}
             disabled={refreshing}
             className="p-1.5 rounded-lg bg-[#16171b] hover:bg-[#20222a] border border-[#2b2d39] text-gray-400 hover:text-white transition-colors cursor-pointer"
             title="Actualizar métricas en tiempo real"

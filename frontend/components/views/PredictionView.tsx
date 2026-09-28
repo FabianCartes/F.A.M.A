@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef, ChangeEvent, FormEvent } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback, ChangeEvent, FormEvent } from "react";
 import { API_BASE_URL } from "@/lib/api";
-import { sendFeedback } from "@/lib/api/feedbackApi";
 
 interface AudioWaveformStats {
   duration: number;
@@ -53,18 +52,7 @@ interface PredictionResponse {
   modelo?: string;
   is_fallback?: boolean;
   modelos_activos?: string[];
-  detalles?: {
-    is_mock?: boolean;
-    checkpoint_name?: string;
-    device?: string;
-    latency_ms?: number;
-    energy_rms?: number;
-    spectral_flatness?: number;
-    status?: string;
-    [key: string]: any;
-  };
 }
-
 
 interface HistoryItem {
   id: string | number;
@@ -77,6 +65,14 @@ interface HistoryItem {
   domain?: string;
 }
 
+export interface ModelEvaluationMetrics {
+  accuracy?: number;
+  f1_macro?: number;
+  precision_macro?: number;
+  ece?: number;
+  [key: string]: number | string | boolean | undefined;
+}
+
 interface RegisteredModel {
   id: string;
   name: string;
@@ -85,14 +81,7 @@ interface RegisteredModel {
   duration_seconds: number;
   classes: string[];
   is_default: boolean;
-  has_weights?: boolean;
-  metrics?: {
-    accuracy?: number;
-    f1_macro?: number;
-    precision_macro?: number;
-    ece?: number;
-    [key: string]: any;
-  };
+  metrics?: ModelEvaluationMetrics;
 }
 
 const ENGINE_FAULT_LABELS: Record<string, string> = {
@@ -139,9 +128,8 @@ export default function PredictionView() {
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [classFilter, setClassFilter] = useState<string>("all");
   const [modelStatus, setModelStatus] = useState<BackendModelStatus | null>(null);
-  const [selectedDomain, setSelectedDomain] = useState<string>("AvesChilenas");
   const [availableModels, setAvailableModels] = useState<RegisteredModel[]>([]);
-  const [selectedModelId, setSelectedModelId] = useState<string>("");
+  const [selectedModelId, setSelectedModelId] = useState<string>("chilean-birds-ensemble");
   const [audioStats, setAudioStats] = useState<AudioWaveformStats | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -154,14 +142,11 @@ export default function PredictionView() {
   const timeLabelRef = useRef<HTMLSpanElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // RF_06: Estado del Bucle de Retroalimentación Activa (CU_INV_07)
-  const [submittedFeedback, setSubmittedFeedback] = useState<
-    Record<number, { fue_correcta: boolean; etiqueta_corregida?: string | null }>
-  >({});
-  const [showCorrectionDropdown, setShowCorrectionDropdown] = useState<boolean>(false);
-  const [selectedCorrection, setSelectedCorrection] = useState<string>("");
-  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState<boolean>(false);
-  const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const selectedDomain = useMemo(() => {
+    return selectedModelId === "car-engine-diagnostics-super-ensemble"
+      ? "engine_diagnostics"
+      : "AvesChilenas";
+  }, [selectedModelId]);
 
   // Obtener catálogo de modelos registrados en FastAPI (ModelRegistry)
   useEffect(() => {
@@ -171,15 +156,12 @@ export default function PredictionView() {
         if (res.ok) {
           const data = await res.json();
           if (data.models && Array.isArray(data.models)) {
-            // Eliminar modelos heredados obsoletos que no poseen pesos físicos en disco
-            const validModels = data.models.filter(
-              (m: RegisteredModel) => m.id !== "chilean-birds-ensemble" && m.id !== "chilean-birds-cnn"
-            );
-            setAvailableModels(validModels);
-            if (data.default_model_id && validModels.some((m: RegisteredModel) => m.id === data.default_model_id)) {
+            setAvailableModels(data.models);
+            const hasBirdEnsemble = data.models.some((m: RegisteredModel) => m.id === "chilean-birds-ensemble");
+            if (hasBirdEnsemble) {
+              setSelectedModelId("chilean-birds-ensemble");
+            } else if (data.default_model_id) {
               setSelectedModelId(data.default_model_id);
-            } else if (validModels.length > 0) {
-              setSelectedModelId(validModels[0].id);
             }
           }
         }
@@ -189,19 +171,6 @@ export default function PredictionView() {
     }
     fetchModels();
   }, []);
-
-  // Sincronizar automáticamente el dataset/dominio con el modelo seleccionado
-  useEffect(() => {
-    if (selectedModelId.startsWith("car-engine") || selectedModelId.includes("engine")) {
-      setSelectedDomain("engine_diagnostics");
-    } else {
-      setSelectedDomain("AvesChilenas");
-    }
-  }, [selectedModelId]);
-
-  const activeSelectedModel = useMemo(() => {
-    return availableModels.find((m) => m.id === selectedModelId) || null;
-  }, [availableModels, selectedModelId]);
 
   useEffect(() => {
     async function fetchModelStatus() {
@@ -221,24 +190,17 @@ export default function PredictionView() {
     fetchModelStatus();
   }, [selectedDomain]);
 
-  // Decodificación y extracción de forma de onda (oscilograma) en el navegador
   useEffect(() => {
-    if (!file) {
-      setAudioStats(null);
+    return () => {
       if (audioUrl) {
         URL.revokeObjectURL(audioUrl);
-        setAudioUrl(null);
       }
-      setIsPlaying(false);
-      setCurrentTime(0);
-      return;
-    }
+    };
+  }, [audioUrl]);
 
-    const objectUrl = URL.createObjectURL(file);
-    setAudioUrl(objectUrl);
-    setIsPlaying(false);
-    setCurrentTime(0);
-    setIsDecodingAudio(true);
+  // Decodificación y extracción de forma de onda (oscilograma) en el navegador
+  useEffect(() => {
+    if (!file) return;
 
     let isCancelled = false;
 
@@ -409,7 +371,7 @@ export default function PredictionView() {
   }, [currentTime, audioStats]);
 
   // Animación progresiva de barrido de izquierda a derecha (efecto osciloscopio bioacústico)
-  const triggerRevealAnimation = () => {
+  const triggerRevealAnimation = useCallback(() => {
     if (!audioStats) return;
     setIsRevealing(true);
     setRevealProgress(0);
@@ -433,16 +395,15 @@ export default function PredictionView() {
     };
 
     requestAnimationFrame(animate);
-  };
+  }, [audioStats]);
 
   useEffect(() => {
-    if (audioStats) {
+    if (!audioStats) return;
+    const animId = requestAnimationFrame(() => {
       triggerRevealAnimation();
-    } else {
-      setRevealProgress(0);
-      setIsRevealing(false);
-    }
-  }, [audioStats]);
+    });
+    return () => cancelAnimationFrame(animId);
+  }, [audioStats, triggerRevealAnimation]);
 
   // Historial inicial con grabaciones reales de campo verificadas con el Super-Ensamble
   const [history, setHistory] = useState<HistoryItem[]>([
@@ -480,108 +441,52 @@ export default function PredictionView() {
     },
   ]);
 
+  const handleFileSelection = useCallback(
+    (selectedFile: File | null) => {
+      setError(null);
+      setResult(null);
+
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+        setAudioUrl(null);
+      }
+      setAudioStats(null);
+      setIsPlaying(false);
+      setCurrentTime(0);
+      setRevealProgress(0);
+      setIsRevealing(false);
+
+      if (!selectedFile) {
+        setFile(null);
+        return;
+      }
+
+      if (!selectedFile.name.toLowerCase().endsWith(".wav")) {
+        setError("Formato inválido. Por favor selecciona exclusivamente un archivo .wav.");
+        setFile(null);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        return;
+      }
+
+      const nextUrl = URL.createObjectURL(selectedFile);
+      setFile(selectedFile);
+      setAudioUrl(nextUrl);
+      setIsDecodingAudio(true);
+    },
+    [audioUrl]
+  );
+
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    setError(null);
-    setResult(null);
-
-    const selectedFile = e.target.files?.[0];
-    if (!selectedFile) {
-      setFile(null);
-      return;
-    }
-
-    if (!selectedFile.name.toLowerCase().endsWith(".wav")) {
-      setError("Formato inválido. Por favor selecciona exclusivamente un archivo .wav.");
-      setFile(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      return;
-    }
-
-    setFile(selectedFile);
+    const selectedFile = e.target.files?.[0] || null;
+    handleFileSelection(selectedFile);
   };
 
   const isEngineModel = useMemo(() => {
     return (
-      selectedModelId.startsWith("car-engine") ||
-      selectedModelId.includes("engine") ||
+      selectedModelId === "car-engine-diagnostics-super-ensemble" ||
       selectedDomain === "engine_diagnostics"
     );
   }, [selectedModelId, selectedDomain]);
-
-  // RF_06: Clases del dominio activo para la lista desplegable de corrección
-  const domainClasses = useMemo(() => {
-    const isEngine =
-      isEngineModel || (result ? Boolean(ENGINE_FAULT_LABELS[result.clase]) : false);
-    if (isEngine) {
-      return Object.keys(ENGINE_FAULT_LABELS).map((key) => ({
-        value: key,
-        label: ENGINE_FAULT_LABELS[key] || key,
-      }));
-    }
-    return OFFICIAL_SPECIES.map((sp) => ({
-      value: sp,
-      label: sp,
-    }));
-  }, [isEngineModel, result]);
-
-  // Sincronizar selección de corrección por defecto cuando cambia la predicción o dominio
-  useEffect(() => {
-    if (domainClasses.length > 0) {
-      const altClass = domainClasses.find((c) => c.value !== result?.clase);
-      setSelectedCorrection(altClass ? altClass.value : domainClasses[0].value);
-    }
-  }, [domainClasses, result?.clase]);
-
-  // RF_06: Validar acierto de inferencia
-  const handleValidateFeedback = async () => {
-    if (!result || !result.db_id) return;
-    setIsSubmittingFeedback(true);
-    setFeedbackError(null);
-    try {
-      await sendFeedback({
-        id_prediccion: result.db_id,
-        fue_correcta: true,
-      });
-      setSubmittedFeedback((prev) => ({
-        ...prev,
-        [result.db_id]: { fue_correcta: true, etiqueta_corregida: null },
-      }));
-      setShowCorrectionDropdown(false);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Error al registrar la validación en el servidor.";
-      setFeedbackError(msg);
-    } finally {
-      setIsSubmittingFeedback(false);
-    }
-  };
-
-  // RF_06: Enviar corrección de etiqueta
-  const handleSendCorrection = async () => {
-    if (!result || !result.db_id) return;
-    if (!selectedCorrection) {
-      setFeedbackError("Por favor selecciona una clase válida de corrección.");
-      return;
-    }
-    setIsSubmittingFeedback(true);
-    setFeedbackError(null);
-    try {
-      await sendFeedback({
-        id_prediccion: result.db_id,
-        fue_correcta: false,
-        etiqueta_corregida: selectedCorrection,
-      });
-      setSubmittedFeedback((prev) => ({
-        ...prev,
-        [result.db_id]: { fue_correcta: false, etiqueta_corregida: selectedCorrection },
-      }));
-      setShowCorrectionDropdown(false);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Error al registrar la corrección en el servidor.";
-      setFeedbackError(msg);
-    } finally {
-      setIsSubmittingFeedback(false);
-    }
-  };
 
   const handleExecuteInference = async (e: FormEvent) => {
     e.preventDefault();
@@ -593,8 +498,6 @@ export default function PredictionView() {
     setLoading(true);
     setError(null);
     setResult(null);
-    setShowCorrectionDropdown(false);
-    setFeedbackError(null);
     const startTime = performance.now();
 
     try {
@@ -624,8 +527,7 @@ export default function PredictionView() {
       setResult(predData);
 
       const isEngine =
-        selectedModelId.startsWith("car-engine") ||
-        selectedModelId.includes("engine") ||
+        selectedModelId === "car-engine-diagnostics-super-ensemble" ||
         selectedDomain === "engine_diagnostics" ||
         Boolean(ENGINE_FAULT_LABELS[predData.clase]);
 
@@ -698,29 +600,25 @@ export default function PredictionView() {
               className="bg-[#101114] border border-[#2d303b] text-white text-xs font-semibold rounded px-2.5 py-1 focus:outline-none focus:border-blue-500 cursor-pointer"
             >
               {availableModels.length > 0 ? (
-                availableModels.map((m) => {
-                  const isReady = m.has_weights !== false;
-                  return (
-                    <option
-                      key={m.id}
-                      value={m.id}
-                      disabled={!isReady}
-                      className={`bg-[#16171b] ${isReady ? "text-white" : "text-gray-500"}`}
-                    >
-                      {m.id === "car-engine-diagnostics-super-ensemble"
-                        ? "Fallas de Motores · Super-Ensamble (81.16% Acc)"
-                        : m.name}
-                      {!isReady ? " · [Sin pesos]" : " · [Listo]"}
-                    </option>
-                  );
-                })
+                availableModels.map((m) => (
+                  <option key={m.id} value={m.id} className="bg-[#16171b] text-white">
+                    {m.id === "car-engine-diagnostics-super-ensemble"
+                      ? "Fallas de Motores · Super-Ensamble (81.16% Acc)"
+                      : m.id === "chilean-birds-ensemble"
+                      ? "Aves Chilenas · Super-Ensamble Tri-Modelo (88.68% F1)"
+                      : m.name}
+                  </option>
+                ))
               ) : (
                 <>
-                  <option value="fama_trained_model_6" className="bg-[#16171b] text-white">
-                    EfficientNet-B0 (Entrenado #6) · [Listo]
+                  <option value="chilean-birds-ensemble" className="bg-[#16171b] text-white">
+                    Aves Chilenas · Super-Ensamble Tri-Modelo (88.68% F1)
                   </option>
                   <option value="car-engine-diagnostics-super-ensemble" className="bg-[#16171b] text-white">
-                    Fallas de Motores · Super-Ensamble · [Listo]
+                    Fallas de Motores · Super-Ensamble (81.16% Acc)
+                  </option>
+                  <option value="chilean-birds-cnn" className="bg-[#16171b] text-white">
+                    Chilean Birds CNN Baseline (79.2% Acc)
                   </option>
                 </>
               )}
@@ -776,17 +674,6 @@ export default function PredictionView() {
                 }`}
               >
                 {isEngineModel ? "13 Fallas Mecánicas" : "15 Especies Oficiales"}
-              </span>
-              <span
-                className={`text-[10px] font-mono px-2 py-0.5 rounded font-semibold border ${
-                  activeSelectedModel?.has_weights !== false
-                    ? "bg-emerald-950/80 border-emerald-700/60 text-emerald-300"
-                    : "bg-red-950/80 border-red-700/60 text-red-300"
-                }`}
-              >
-                {activeSelectedModel?.has_weights !== false
-                  ? "● Pesos Verificados"
-                  : "○ Sin Pesos en Disco"}
               </span>
             </div>
             <p className="text-[11px] text-gray-300 mt-0.5">
@@ -1025,6 +912,18 @@ export default function PredictionView() {
           {/* Área Drag & Drop con borde punteado */}
           <div
             onClick={() => fileInputRef.current?.click()}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const f = e.dataTransfer.files?.[0];
+              if (f && f.name.toLowerCase().endsWith(".wav")) {
+                handleFileSelection(f);
+              }
+            }}
             className="border-2 border-dashed border-[#2d303b] hover:border-gray-500 transition-colors rounded-lg p-6 flex flex-col items-center justify-center text-center cursor-pointer bg-[#121316]/50"
           >
             <input
@@ -1351,7 +1250,7 @@ export default function PredictionView() {
                 )}
               </div>
 
-              {/* Indicador del modelo utilizado para la predicción y telemetría ODD */}
+              {/* Indicador del modelo utilizado para la predicción */}
               <div className="bg-[#14151a] rounded-lg p-2.5 border border-[#23252e] space-y-1.5">
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="text-gray-400">Modelo ejecutado:</span>
@@ -1359,31 +1258,9 @@ export default function PredictionView() {
                     {result.modelo ||
                       (isEngineModel
                         ? "Super-Ensamble Acústico de Motores"
-                        : "Modelo Bioacústico Activo")}
+                        : "Super-Ensamble Tri-Modelo")}
                   </span>
                 </div>
-                {result.detalles?.checkpoint_name && (
-                  <div className="flex items-center justify-between text-[11px] pt-1 border-t border-[#23252e]/50 font-mono">
-                    <span className="text-gray-400">Checkpoint:</span>
-                    <span className="text-emerald-400 truncate max-w-[210px]" title={result.detalles.checkpoint_name}>
-                      {result.detalles.checkpoint_name}
-                    </span>
-                  </div>
-                )}
-                {result.detalles?.device && (
-                  <div className="flex items-center justify-between text-[11px] font-mono">
-                    <span className="text-gray-400">Cómputo / Dispositivo:</span>
-                    <span className="text-purple-400 uppercase font-semibold">
-                      {result.detalles.device} {result.detalles.latency_ms ? `· ${result.detalles.latency_ms} ms` : ""}
-                    </span>
-                  </div>
-                )}
-                {result.detalles?.is_mock === false && (
-                  <div className="pt-1 flex items-center gap-1.5 text-[10px] text-emerald-400 font-mono border-t border-[#23252e]/50">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    <span>Inferencia Real Certificada (Sin mocks)</span>
-                  </div>
-                )}
                 {result.modelos_activos && result.modelos_activos.length > 0 && (
                   <div className="flex flex-wrap gap-1 pt-1 border-t border-[#23252e]/70">
                     {result.modelos_activos.map((m, idx) => (
@@ -1397,7 +1274,6 @@ export default function PredictionView() {
                   </div>
                 )}
               </div>
-
 
               {/* Nivel de confianza */}
               <div>
@@ -1426,133 +1302,6 @@ export default function PredictionView() {
                   <span className="text-blue-400 flex items-center gap-1 text-[10px]">
                     ● Google Cloud Storage
                   </span>
-                )}
-              </div>
-
-              {/* Bucle de Retroalimentación Activa (RF_06) */}
-              <div className="pt-3 border-t border-[#23252e] space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <span className="text-xs font-semibold text-gray-200 block">
-                      Retroalimentación de Campo (RF_06)
-                    </span>
-                    <span className="text-[11px] text-gray-400 block">
-                      ¿Es precisa la clasificación del modelo?
-                    </span>
-                  </div>
-                  {submittedFeedback[result.db_id] && (
-                    <span
-                      className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
-                        submittedFeedback[result.db_id].fue_correcta
-                          ? "text-emerald-400 bg-emerald-950/60 border-emerald-700/60"
-                          : "text-amber-400 bg-amber-950/60 border-amber-700/60"
-                      }`}
-                    >
-                      {submittedFeedback[result.db_id].fue_correcta
-                        ? "Acierto Confirmado"
-                        : "Corrección Registrada"}
-                    </span>
-                  )}
-                </div>
-
-                {submittedFeedback[result.db_id] ? (
-                  <div
-                    className={`rounded-lg p-3 text-xs flex items-start gap-2.5 border ${
-                      submittedFeedback[result.db_id].fue_correcta
-                        ? "bg-emerald-950/40 border-emerald-800/60 text-emerald-300"
-                        : "bg-amber-950/40 border-amber-800/60 text-amber-300"
-                    }`}
-                  >
-                    <span className="text-base font-bold flex-shrink-0 mt-0.5">
-                      {submittedFeedback[result.db_id].fue_correcta ? "✓" : "✎"}
-                    </span>
-                    <div className="space-y-1 min-w-0">
-                      <span className="font-semibold block text-[12px]">
-                        {submittedFeedback[result.db_id].fue_correcta
-                          ? "● Validación experta confirmada en PostgreSQL"
-                          : `● Corrección registrada y despachada a cuarentena (GCS): ${
-                              ENGINE_FAULT_LABELS[
-                                submittedFeedback[result.db_id].etiqueta_corregida || ""
-                              ] || submittedFeedback[result.db_id].etiqueta_corregida
-                            }`}
-                      </span>
-                      <p className="text-[11px] text-gray-400 leading-relaxed">
-                        {submittedFeedback[result.db_id].fue_correcta
-                          ? "La inferencia ha sido corroborada por el investigador para la telemetría del modelo."
-                          : "El archivo ha sido indexado en la cola de curación semi-manual de Ingesta para su auditoría antes del reentrenamiento."}
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={handleValidateFeedback}
-                        disabled={isSubmittingFeedback}
-                        className="flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold text-emerald-300 bg-emerald-950/60 border border-emerald-700/60 hover:bg-emerald-900/60 transition-colors disabled:opacity-50 cursor-pointer"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                        </svg>
-                        <span>Validar Acierto</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowCorrectionDropdown((prev) => !prev);
-                          setFeedbackError(null);
-                        }}
-                        disabled={isSubmittingFeedback}
-                        className={`flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold border transition-colors disabled:opacity-50 cursor-pointer ${
-                          showCorrectionDropdown
-                            ? "bg-amber-900/70 border-amber-500 text-amber-200"
-                            : "bg-amber-950/60 border-amber-700/60 text-amber-300 hover:bg-amber-900/60"
-                        }`}
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                        <span>Corregir Etiqueta</span>
-                      </button>
-                    </div>
-
-                    {showCorrectionDropdown && (
-                      <div className="bg-[#111215] border border-amber-900/60 rounded-lg p-3 space-y-2">
-                        <label className="text-[11px] font-medium text-amber-300 block">
-                          Selecciona la clase acústica real:
-                        </label>
-                        <div className="flex flex-col sm:flex-row gap-2">
-                          <select
-                            value={selectedCorrection}
-                            onChange={(e) => setSelectedCorrection(e.target.value)}
-                            className="flex-1 bg-[#18191e] border border-[#2e323e] rounded-md px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-amber-500"
-                          >
-                            {domainClasses.map((item) => (
-                              <option key={item.value} value={item.value}>
-                                {item.label}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            type="button"
-                            onClick={handleSendCorrection}
-                            disabled={isSubmittingFeedback}
-                            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-medium text-xs rounded-md transition-colors disabled:opacity-50 cursor-pointer flex-shrink-0"
-                          >
-                            {isSubmittingFeedback ? "Enviando..." : "Enviar Corrección"}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {feedbackError && (
-                      <div className="text-[11px] text-red-400 bg-red-950/50 border border-red-800/60 rounded px-2.5 py-1.5">
-                        {feedbackError}
-                      </div>
-                    )}
-                  </div>
                 )}
               </div>
             </div>
@@ -1637,23 +1386,6 @@ export default function PredictionView() {
                   {item.modelo && (
                     <span className="text-[9px] text-blue-400/80 bg-blue-950/40 px-1.5 py-0.2 rounded border border-blue-900/40 font-mono">
                       {item.modelo}
-                    </span>
-                  )}
-                  {submittedFeedback[Number(item.id)] && (
-                    <span
-                      className={`text-[9px] px-1.5 py-0.2 rounded font-mono border ${
-                        submittedFeedback[Number(item.id)].fue_correcta
-                          ? "text-emerald-400 bg-emerald-950/50 border-emerald-800/60"
-                          : "text-amber-400 bg-amber-950/50 border-amber-800/60"
-                      }`}
-                    >
-                      {submittedFeedback[Number(item.id)].fue_correcta
-                        ? "✓ Validado"
-                        : `✎ Corregido: ${
-                            ENGINE_FAULT_LABELS[
-                              submittedFeedback[Number(item.id)].etiqueta_corregida || ""
-                            ] || submittedFeedback[Number(item.id)].etiqueta_corregida
-                          }`}
                     </span>
                   )}
                 </div>

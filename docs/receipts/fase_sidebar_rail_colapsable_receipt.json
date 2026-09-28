@@ -1,0 +1,208 @@
+{
+  "receipt_name": "fase_sidebar_rail_colapsable_receipt",
+  "generated_at": "2026-09-28T00:32:00Z",
+  "methodology": "TDD + RDD + ODD",
+  "architecture_layer": "Frontend Navigation Rail — collapsible icon-only sidebar and the delivery regressions found alongside it",
+  "rdd_mode": "unmanaged",
+  "approval": "not_granted",
+  "supersedes": "fase_responsive_shell_foundations_receipt, whose phases 2 and 3 were reverted in the working tree and are not restored by this receipt",
+  "causal_invariant": "Below the md breakpoint the navigation is reachable through a full-width off-canvas drawer; from md upward the operator can collapse the panel to a 64px icon-only rail that frees 160px of the main column, the collapse control is never pushed out of reach, and no part of the navigation can paint over the main content column.",
+  "issue_pr": {
+    "issue": "none — no issue tracker entry exists for this work",
+    "pr": "none — not opened; no commit requested by the maintainer"
+  },
+  "root_cause_of_the_reported_overlap": {
+    "symptom": "main content painted over by the sidebar once the panel was collapsed",
+    "mechanism": "the width was animated on one box while the content lived in another. AppShell animated the wrapper to w-16 while the inner aside stayed hardcoded at w-56 with shrink-0, so 160px of sidebar spilled out of a 64px box; the aside was sticky with z-20 while main had no z-index, so the spill won the paint order. md:z-auto also left the sidebar with no explicit stacking layer, which is what let any positioned element in a view compete with it.",
+    "fix": "the aside is now w-full h-full and owns no width, height or z-index of its own, so the shell's animated box is the only thing that decides geometry. The wrapper additionally carries md:relative md:z-10 as an explicit stacking layer.",
+    "why_not_overflow_hidden": "the rail's tooltips render at left-full so they can escape the 64px box; overflow-hidden on the wrapper would clip them. The no-overlap guarantee comes from w-full plus min-w-0 on the aside content, not from clipping."
+  },
+  "operator_flows": [
+    {
+      "flow": "Collapse the panel on a desktop window and keep navigating by icon",
+      "entry": "sidebar collapse control",
+      "mode": "production build",
+      "environment": "Sidebar isCollapsed, AppShell useSyncExternalStore preference",
+      "expectation": "panel narrows to 64px, only icons remain, every destination is still reachable, aria-expanded=false on the control",
+      "negative_control": "the panel height, background and border must not change, and the off-canvas drawer state must be independent of the collapse state"
+    },
+    {
+      "flow": "Identify a destination while only icons are visible",
+      "entry": "hover or keyboard traversal of the collapsed rail",
+      "mode": "production build",
+      "environment": "sr-only label plus aria-hidden hover tooltip",
+      "expectation": "every destination keeps its accessible name when collapsed; the tooltip is pointer-only decoration and never the accessible name",
+      "negative_control": "if the tooltip and the sr-only label both carried the same text the accessible name would duplicate and break the by-role query, so the tooltip is aria-hidden"
+    },
+    {
+      "flow": "Reload and find the panel as the operator left it",
+      "entry": "localStorage key fama:sidebar-collapsed",
+      "mode": "production build",
+      "environment": "true and false both round-trip; storage blocked degrades to session-only",
+      "expectation": "collapse preference survives a reload in both directions",
+      "negative_control": "with Storage.prototype throwing, the panel must still toggle for the session instead of crashing"
+    },
+    {
+      "flow": "Build the frontend container image",
+      "entry": "docker build of the frontend/Dockerfile",
+      "mode": "release",
+      "environment": "next.config.ts output standalone, Dockerfile lines 55-56 and CMD node server.js",
+      "expectation": ".next/standalone/server.js exists after next build and the COPY steps succeed",
+      "negative_control": "verified by inspecting the build artifact, not by running the container"
+    },
+    {
+      "flow": "Collapse the rail on a desktop window, then open the app on a phone",
+      "entry": "localStorage fama:sidebar-collapsed=true, viewport below 768px",
+      "mode": "production build",
+      "environment": "md-scoped collapsed presentation in Sidebar, w-56 drawer in AppShell",
+      "expectation": "the drawer renders the full labelled panel; the persisted desktop collapse does not shrink the mobile drawer or blank 160px of it",
+      "negative_control": "the collapse control is not offered below md, because the drawer is already the compact form and the control would be a no-op there"
+    },
+    {
+      "flow": "Find and use the collapse control on a desktop window",
+      "entry": "viewport at or above 768px",
+      "mode": "production build",
+      "environment": "Sidebar collapse control, display:flex!important inside the md media query",
+      "expectation": "the control is rendered and visible, and activating it collapses the rail",
+      "negative_control": "below 768px the control is not rendered, because the off-canvas drawer is already the compact form"
+    }
+  ],
+  "journey_runtime_evidence": {
+    "type": "red_green_contract_tests_plus_build_artifact_inspection",
+    "note": "The collapse contract was already specified in the working tree by 6 red tests in components/__tests__/Sidebar.test.tsx, so this work was driven by those tests rather than by new ones. No visual check at 768px or 375px was possible: there is no browser automation in this environment. Two class-name greps in this pass returned false negatives before being re-checked in escaped form: a utility whose selector escapes a slash, such as md:top-1/2 emitted as md\\:top-1\\/2, and a comma, as in transition-[width,transform] emitted as transition-\\[width\\,transform\\]. Both were confirmed present. A zero count from a plain grep over the built stylesheet is not evidence of a missing utility.",
+    "commands": [
+      "npm test -> 6 files, 66 tests, 66 passed, 0 failed",
+      "npx tsc --noEmit -> exit 0, 0 errors",
+      "npx eslint -> 0 problems in Sidebar.tsx, AppShell.tsx and app/page.tsx; the 9 pre-existing react-hooks/set-state-in-effect errors in the four views are untouched",
+      "npm run build -> EXIT 0; .next/standalone/server.js present",
+      "grep built stylesheet -> zero md\\:static, one md\\:relative, and all 24 md-scoped rail utilities emitted, including md\\:sr-only{...}, md\\:top-1\\/2{top:50%} and md\\:-translate-y-1\\/2{--tw-translate-y:...}",
+      "cascade analysis of the built stylesheet -> display resolved by (media applies, then important, then source order): the collapse control resolves to display:flex above 768px and display:none below it, and the tooltip resolves to display:block above 768px and display:none below it"
+    ],
+    "tooling_limitations_discovered": [
+      "A plain grep of the built stylesheet cannot settle which of two competing display utilities wins; it only proves both were emitted. The media query must be located, the rule offsets compared, and importance taken into account.",
+      "Tailwind v4 escapes the important marker in selectors as a backslash-bang, so the class is .md\\:\\!flex in the stylesheet. A search for .md\\:!flex does not find it and reports a false negative.",
+      "Tailwind v4 emits max-* variants as @media not all and (min-width:48rem) rather than @media (width < 48rem). A cascade checker that only understands the latter form silently ignores every max-* rule, which is what made the first attempt at this fix unverifiable."
+    ]
+  },
+  "seams_under_test": [
+    {
+      "seam": "Sidebar as a component — the operator-visible contract: every destination keeps its accessible name in both states, the current destination is marked for assistive technology, the collapse control reports aria-expanded, and the pending-curation count stays readable when collapsed to icons",
+      "file": "frontend/components/__tests__/Sidebar.test.tsx",
+      "tests": 6,
+      "red_before_green": true,
+      "red_evidence": "6 of 6 failed, all at the missing collapse control; the component did not accept isCollapsed or onToggleCollapsed and had no aria-current",
+      "green_evidence": "6 of 6 pass",
+      "note": "The count is rendered by exactly one element in each state. An earlier iteration rendered it twice when collapsed and the by-text query correctly reported multiple matches, which is why the count switches presentation on a single node. Scope limit: the md-scoping of the collapsed presentation and the hidden-below-md collapse control are CSS-level facts that jsdom cannot observe, because no stylesheet is applied in these tests. They are verified in the built stylesheet instead, exactly as the Tailwind class names are.",
+      "state_on_arrival": "red on arrival, green after the first pass, and still green while the control it asserts was display:none at every viewport. This suite cannot detect that class of failure: jsdom applies no stylesheet, so getByRole finds the control even when a real browser hides it. The six Sidebar tests are trustworthy for structure, semantics and state, and untrustworthy for anything visual."
+    },
+    {
+      "seam": "AppShell as a component — drawer state and the persisted collapse preference, both expressed as ARIA rather than as class names",
+      "file": "frontend/components/shell/__tests__/AppShell.test.tsx",
+      "tests": 18,
+      "state_on_arrival": "already green; the state machine and localStorage handling were not rewritten by this work"
+    },
+    {
+      "seam": "app/layout.tsx module exports — the App Router head contract",
+      "file": "frontend/app/__tests__/layout.test.ts",
+      "tests": 6,
+      "state_on_arrival": "red, because the viewport export had been reverted; restored in this work"
+    }
+  ],
+  "changed_line_budget": {
+    "limit": 400,
+    "additions": 178,
+    "deletions": 110,
+    "total": 288,
+    "chain_or_exception_required": false,
+    "note": "counted for this work unit only: Sidebar.tsx, app/page.tsx, package.json and the one-line AppShell stacking change. It excludes the pre-existing reverts of the four view files and globals.css that were already in the working tree when this work started.",
+    "files": [
+      "frontend/components/Sidebar.tsx (+142/-96) — every collapsed presentation is scoped to the md breakpoint so the persisted desktop collapse cannot leak into the mobile drawer; top section min-h-0 overflow-y-auto and bottom section shrink-0 so the collapse control is never pushed out of reach; collapse control hidden below md; hover tooltip limited to md",
+      "frontend/components/shell/AppShell.tsx (+1/-1) — md:static removed so md:relative is the single live position declaration and md:z-10 finally applies",
+      "frontend/app/page.tsx — unchanged in this pass, already reconnecting the shell",
+      "frontend/package.json, frontend/next.config.ts, frontend/app/layout.tsx — unchanged in this pass, already repaired"
+    ]
+  },
+  "regressions_repaired": [
+    {
+      "regression": "next.config.ts had lost output: \"standalone\"",
+      "impact": "frontend/Dockerfile lines 55-56 copy /app/.next/standalone and CMD runs node server.js. Without the flag that directory is never generated, so the frontend image build fails at the COPY step.",
+      "proof": ".next/standalone/server.js verified present after next build",
+      "repaired": true
+    },
+    {
+      "regression": "package.json had lost vitest, vite, @testing-library/dom, @testing-library/react, jsdom and the test script",
+      "impact": "the test suite was unrunnable on any fresh clone: npm install would not fetch the runner and npm test did not exist. The binaries survived only because node_modules was not reinstalled, so the 6 failing Sidebar tests were passing locally in a way nobody else could reproduce.",
+      "proof": "npm test runs 6 files and 66 tests",
+      "repaired": true
+    },
+    {
+      "regression": "app/page.tsx no longer imported AppShell",
+      "impact": "the shell was orphaned. There was no off-canvas drawer on mobile and the collapse state machine, its localStorage preference and all 18 of its tests exercised a component that shipped to no user.",
+      "proof": "grep confirmed the only importer had been removed; the shell is reachable again from the composition root",
+      "repaired": true
+    }
+  ],
+  "odd_observability_features": {
+    "collapse_state_contract": "aria-expanded on the collapse control is the single source of truth for panel state and is asserted at the component seam",
+    "destination_observability": "aria-current=page marks the active destination, so the current location survives the loss of visible labels in the rail",
+    "curation_count_observability": "the pending-curation count stays rendered and queryable in the icon-only rail, so the RF_06 signal is not lost when the panel is compressed",
+    "degradation_observability": "the shell degrades to session-only collapse when Storage throws, and to a permanent usable layout when matchMedia is unavailable",
+    "collapse_control_reachability": "The collapse control lives in a shrink-0 footer fed by a min-h-0 scrollable body, so its availability does not depend on window height. A navigation affordance that disappears on short viewports is an observability gap as much as a usability one.",
+    "breakpoint_scoped_presentation": "The persisted collapse preference is a desktop concern only. Scoping its presentation to md keeps one source of truth for the state while preventing it from contradicting the mobile layout."
+  },
+  "known_deficiencies": [
+    "The hover tooltip is pointer-only. Keyboard and screen-reader users get the destination name from the sr-only span, not from the tooltip. A focus-triggered tooltip would need a real dependency and is out of scope.",
+    "shadcn is NOT in this project and was not added: there is no components.json, no components/ui, no Radix, and the runtime dependencies are only next, react and react-dom. The rail follows the style the codebase already uses, which is hand-inlined SVG and template-literal class composition.",
+    "The collapsed width is 64px. The panel is compressed by dropping the logo, the labels and the status text, not by squeezing the 24px icon, because 48px would clip the curation badge and push the touch target below 44px.",
+    "The logo is hidden in the rail because the only asset is a 185x40 horizontal PNG; there is no square mark to show at 40px.",
+    "No device verification was performed. Appearance at 375px and 768px is reasoned from the emitted CSS and the ARIA contract, not observed.",
+    "The md-scoping means a desktop collapse changes nothing visible on a phone, by design. If the operator expects the phone drawer to inherit the compact rail, that is a different feature and would need a second, layout-specific preference.",
+    "The whole test suite is blind to CSS visibility. A control can be asserted present by role and still be invisible in a browser. Until a browser-level check exists, visibility claims for this shell rest on stylesheet inspection, not on the green suite.",
+    "Still no visual verification at 768px or 375px; there is no browser automation in this environment. The two visibility claims above are derived from the cascade, not observed on screen."
+  ],
+  "out_of_scope_and_still_reverted": [
+    "Phases 2 and 3 of the earlier responsive plan are still absent from the working tree: no viewport-independent min-width on the 8 and 9 column tables, no word breaking in the ODD log consoles of TrainingView or IngestionView, no truncate on checkpoint or dataset filenames, no mobile-first grid bases in DashboardView, and no chart clipping fix. Maintainer deferred these.",
+    "app/globals.css no longer carries the text-size-adjust guard or the 16px mobile form-control floor. The viewport export was restored only because a test in the tree demanded it; the CSS guards have no test forcing them and stay reverted. The iOS focus-zoom defect is therefore still open.",
+    "IngestionView still references the dead utilities animate-in and zoom-in-95, confirmed to emit no CSS because tailwindcss-animate is not installed.",
+    "The prediction and ingestion dropzones still advertise drag and drop with no onDragOver or onDrop handler, only onClick, which is unreachable on touch.",
+    "The 9 pre-existing react-hooks/set-state-in-effect errors in the four views remain; they are state-shape problems, not layout problems."
+  ],
+  "rollback": {
+    "independent_of_rf06": true,
+    "commands": "git checkout -- frontend/components/Sidebar.tsx frontend/app/page.tsx frontend/app/layout.tsx frontend/next.config.ts frontend/package.json frontend/app/globals.css && rm -rf frontend/components/shell frontend/components/__tests__",
+    "note": "No backend, schema or API contract was modified. Reverting returns the tree to the state this work found, which is not the same as the last commit: the four view files and globals.css were already reverted before this work started and this receipt does not restore them.",
+    "data_migration": "none",
+    "schema_migration": "none"
+  },
+  "verification_status": "AUTHORED_PENDING_MAINTAINER_REVIEW",
+  "defects_found_and_repaired_this_pass": [
+    {
+      "defect": "md:static and md:relative were both applied to the sidebar wrapper",
+      "mechanism": "both utilities emit a position declaration with identical specificity, so source order in the generated stylesheet decides the winner, not class order in the attribute. .md\\:static was emitted at offset 75428 and .md\\:relative at 75396, so static won and the wrapper stayed unpositioned.",
+      "impact": "z-index does not apply to a static element, so the md:z-10 stacking layer added in the previous pass was inert. The width collapse still worked because width is a different property, which is why the symptom looked correct while the protection did not exist.",
+      "fix": "md:static removed; the wrapper is fixed below md and md:relative md:z-10 from md upward, which is one coherent position declaration with a live z-index.",
+      "proof": "grep of the rebuilt stylesheet reports zero occurrences of md\\:static and one of md\\:relative"
+    },
+    {
+      "defect": "the collapse control could be pushed out of the viewport and become unreachable",
+      "mechanism": "the aside is a flex column with justify-between, so on a short window the bottom status block was pushed past the visible edge, taking the only collapse affordance with it. That is literally the reported 'the bar cannot be collapsed'.",
+      "fix": "the top section is min-h-0 overflow-y-auto so it absorbs the shortfall, and the bottom section is shrink-0 so the collapse control is always on screen",
+      "proof": "structural; not observable in jsdom, verified by reading the emitted flexbox contract"
+    },
+    {
+      "defect": "a persisted desktop collapse leaked into the mobile drawer and left 160px of empty panel",
+      "mechanism": "the drawer is always w-56, but the collapsed presentation was applied from the isCollapsed prop alone. Collapse the rail on a desktop, then open the app on a phone, and the 224px drawer rendered a 64px icon column plus 160px of blank background.",
+      "fix": "every collapsed presentation is now scoped to the md breakpoint, so isCollapsed only restyles the desktop rail and the mobile drawer always renders the full labelled panel. As a consequence the collapse control is hidden below md, because the off-canvas drawer is already the compact form there and the control would be a no-op.",
+      "proof": "all md\\: variants present in the rebuilt stylesheet, including md\\:sr-only, md\\:hidden, md\\:justify-center, md\\:absolute, md\\:rotate-180, md\\:group-hover\\:opacity-100 and md\\:w-16"
+    },
+    {
+      "defect": "the collapse control and the hover tooltip were both display:none at every viewport, so the desktop rail could not be collapsed by any user",
+      "reported_by": "the maintainer, after manual testing, as 'in the desktop view there is still no button to compress the bar'",
+      "mechanism": "the previous pass authored 'hidden md:flex' on the control and 'hidden md:block' on the tooltip. Both utilities declare the display property. Tailwind emits the hidden utility last within the display group, so .hidden{display:none} lands after .md\\:flex and wins the cascade at equal specificity, at every width. The md variant was inert.",
+      "impact": "the only affordance for collapsing the rail was invisible on desktop and on mobile, and the tooltips never appeared. This is the second instance of the same class of bug as the md:static/md:relative collision, and it was shipped green.",
+      "fix": "the md variant is now marked important, md:!flex and md:!block, so the display override no longer depends on source order. An important declaration beats every normal declaration regardless of specificity or position, which makes the result deterministic instead of an accident of Tailwind's emission order.",
+      "proof": "inside @media (min-width:48rem) the rebuilt stylesheet contains .md\\:\\!block{display:block!important} at offset 75328, .md\\:\\!flex{display:flex!important} at offset 75365, .md\\:hidden{display:none} at offset 75412, and the top-level .hidden{display:none} is a normal declaration. Below 768px the media query does not match, so only .hidden applies and the control is hidden; at 768px and above the important declaration wins and the control is visible.",
+      "deliberate_use_of_important": "This is a scoped, documented use of !important to break a specificity tie deterministically. The alternative, restructuring the DOM or splitting the element per breakpoint, is worse. It is confined to the two display overrides on this component."
+    }
+  ]
+}
