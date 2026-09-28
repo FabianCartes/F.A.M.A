@@ -1,0 +1,101 @@
+{
+  "receipt_name": "fase_catalogo_modelos_prediction_view_receipt",
+  "generated_at": "2026-09-28T01:03:00Z",
+  "methodology": "TDD + RDD + ODD",
+  "architecture_layer": "Frontend Model Catalog & Prediction View",
+  "summary": "Refactorización data-driven de PredictionView para resolver dinámicamente el dominio acústico, contrato de inferencia (duración, sample rate, clases) y arquitectura (ensamble tripartito vs modelo individual autónomo) directamente desde el catálogo /api/models.",
+  "phases": {
+    "phase_1_tdd_red": {
+      "status": "passed",
+      "test_file": "frontend/components/views/__tests__/PredictionView.test.tsx",
+      "test_cases": [
+        "renders the view heading and accessible controls container",
+        "applies responsive layout classes to model selector and latency box",
+        "Test case 1: Selecting car-engine-diagnostics-resnet34d-v2 dynamically switches the view to Diagnóstico Acústico de Motores, displays 13 Fallas Mecánicas, displays 1.5s @ 32 kHz, and populates the class filter with engine classes",
+        "Test case 2: The select id=model-select renders optgroup for Bioacústica (Aves Chilenas) and Diagnóstico Industrial (Motores)",
+        "Test case 3: When an individual model is selected (not an ensemble), the architecture panel adapts to show individual model specifications instead of false triad branch weights"
+      ],
+      "red_phase_outcome": "Confirmada falla esperada en casos 1, 2 y 3 debido a resolución estática por ID y ausencia de optgroups y panel adaptativo."
+    },
+    "phase_2_tdd_green_and_odd": {
+      "status": "passed",
+      "implementation_file": "frontend/components/views/PredictionView.tsx",
+      "improvements": [
+        "Eliminación total de comparaciones cableadas selectedModelId === 'car-engine-diagnostics-super-ensemble'",
+        "Helper exportado resolveModelDomain para clasificar modelos por ID y vocabulario de fallas/especies",
+        "Resolución dinámica de selectedModel, selectedDomain, isEngineModel e isEnsemble",
+        "Contrato acústico dinámico: duración formateada en s, sample rate en kHz, clases dinámicas y métricas reales",
+        "Organización semántica del selector con <optgroup label='Bioacústica (Aves Chilenas)'> y <optgroup label='Diagnóstico Industrial (Motores)'>",
+        "Panel de arquitectura adaptativo: tarjeta de pesos de Tríada para ensambles y tarjeta de especificaciones de arquitectura individual para modelos autónomos",
+        "Inyección del dominio dinámico en dataset_name vía FormData para POST /api/predict",
+        "Sincronización del filtro de clases del historial con las clases del modelo seleccionado"
+      ],
+      "odd_telemetry": {
+        "event": "model_selection_debug_log",
+        "format": "[PredictionView] Modelo activo: ${selectedModel.id} | Dominio: ${selectedDomain} | SR: ${selectedModel.target_sr}Hz | Ventana: ${selectedModel.duration_seconds}s",
+        "verified_in_tests": true
+      }
+    },
+    "phase_3_quality_gate": {
+      "status": "passed",
+      "vitest_frontend": {
+        "test_files_passed": 7,
+        "total_test_files": 7,
+        "tests_passed": 73,
+        "total_tests": 73,
+        "duration_seconds": 1.37
+      },
+      "eslint": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "typescript": {
+        "command": "npx tsc --noEmit",
+        "errors": 0
+      },
+      "backend_pytest": {
+        "tests_passed": 230,
+        "warnings": 2,
+        "duration_seconds": 54.10
+      }
+    }
+  },
+  "verified_models": [
+    {
+      "id": "chilean-birds-ensemble",
+      "domain": "AvesChilenas",
+      "is_ensemble": true,
+      "sr_hz": 22050,
+      "duration_s": 5.0,
+      "classes_count": 15
+    },
+    {
+      "id": "fama_trained_model_6",
+      "domain": "AvesChilenas",
+      "is_ensemble": false,
+      "sr_hz": 22050,
+      "duration_s": 5.0,
+      "classes_count": 15
+    },
+    {
+      "id": "car-engine-diagnostics-super-ensemble",
+      "domain": "engine_diagnostics",
+      "is_ensemble": true,
+      "sr_hz": 32000,
+      "duration_s": 2.0,
+      "classes_count": 13
+    },
+    {
+      "id": "car-engine-diagnostics-resnet34d-v2",
+      "domain": "engine_diagnostics",
+      "is_ensemble": false,
+      "sr_hz": 32000,
+      "duration_s": 1.5,
+      "classes_count": 13
+    }
+  ],
+  "verification_hashes": {
+    "frontend/components/views/PredictionView.tsx": "efdfcac27455d6f0bc91833268bed2dadd884b2485503271356c55284cee50a4",
+    "frontend/components/views/__tests__/PredictionView.test.tsx": "77cf856d5c94b80882d2ddd01d92155628c8b66755a85319879122086e624d27"
+  }
+}

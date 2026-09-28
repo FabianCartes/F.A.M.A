@@ -73,7 +73,7 @@ export interface ModelEvaluationMetrics {
   [key: string]: number | string | boolean | undefined;
 }
 
-interface RegisteredModel {
+export interface RegisteredModel {
   id: string;
   name: string;
   description: string;
@@ -81,8 +81,24 @@ interface RegisteredModel {
   duration_seconds: number;
   classes: string[];
   is_default: boolean;
+  has_weights?: boolean;
   metrics?: ModelEvaluationMetrics;
 }
+
+export function resolveModelDomain(
+  model?: RegisteredModel,
+  modelId?: string
+): "engine_diagnostics" | "AvesChilenas" {
+  const id = model?.id || modelId || "";
+  if (id.includes("engine") || id.includes("motor")) {
+    return "engine_diagnostics";
+  }
+  if (model?.classes && model.classes.some((c) => c in ENGINE_FAULT_LABELS)) {
+    return "engine_diagnostics";
+  }
+  return "AvesChilenas";
+}
+
 
 const ENGINE_FAULT_LABELS: Record<string, string> = {
   bad_ignition: "Falla de Encendido / Combustión Irregular",
@@ -142,11 +158,69 @@ export default function PredictionView() {
   const timeLabelRef = useRef<HTMLSpanElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  const selectedModel = useMemo(() => {
+    return availableModels.find((m) => m.id === selectedModelId);
+  }, [availableModels, selectedModelId]);
+
   const selectedDomain = useMemo(() => {
-    return selectedModelId === "car-engine-diagnostics-super-ensemble"
-      ? "engine_diagnostics"
-      : "AvesChilenas";
+    return resolveModelDomain(selectedModel, selectedModelId);
+  }, [selectedModel, selectedModelId]);
+
+  const isEngineModel = useMemo(() => {
+    return selectedDomain === "engine_diagnostics";
+  }, [selectedDomain]);
+
+  const isEnsemble = useMemo(() => {
+    return (selectedModelId || "").toLowerCase().includes("ensemble");
   }, [selectedModelId]);
+
+  const currentClasses = useMemo(() => {
+    if (selectedModel?.classes && selectedModel.classes.length > 0) {
+      return selectedModel.classes;
+    }
+    if (isEngineModel) {
+      return Object.keys(ENGINE_FAULT_LABELS);
+    }
+    return OFFICIAL_SPECIES;
+  }, [selectedModel, isEngineModel]);
+
+  const classesCount = currentClasses.length;
+
+  const durationSeconds = selectedModel?.duration_seconds ?? (isEngineModel ? 2.0 : 5.0);
+  const formattedDuration = `${durationSeconds.toFixed(1)}s`;
+
+  const targetSr = selectedModel?.target_sr ?? (isEngineModel ? 32000 : 22050);
+  const formattedSr = `${(targetSr / 1000).toFixed(0)} kHz`;
+
+  const formattedMetric = useMemo(() => {
+    if (selectedModel?.metrics) {
+      if (selectedModel.metrics.f1_macro != null) {
+        return `${(Number(selectedModel.metrics.f1_macro) * 100).toFixed(2)}% F1`;
+      }
+      if (selectedModel.metrics.accuracy != null) {
+        return `${(Number(selectedModel.metrics.accuracy) * 100).toFixed(2)}% Acc`;
+      }
+    }
+    return isEngineModel ? "81.16% Acc" : "88.68% F1";
+  }, [selectedModel, isEngineModel]);
+
+  const bioModels = useMemo(() => {
+    return availableModels.filter((m) => resolveModelDomain(m, m.id) === "AvesChilenas");
+  }, [availableModels]);
+
+  const engineModels = useMemo(() => {
+    return availableModels.filter((m) => resolveModelDomain(m, m.id) === "engine_diagnostics");
+  }, [availableModels]);
+
+  // ODD: Telemetría estructurada al conmutar modelo activo
+  useEffect(() => {
+    if (selectedModel) {
+      console.log(
+        `[PredictionView] Modelo activo: ${selectedModel.id} | Dominio: ${selectedDomain} | SR: ${selectedModel.target_sr}Hz | Ventana: ${selectedModel.duration_seconds}s`
+      );
+    }
+  }, [selectedModel, selectedDomain]);
+
 
   // Obtener catálogo de modelos registrados en FastAPI (ModelRegistry)
   useEffect(() => {
@@ -481,13 +555,6 @@ export default function PredictionView() {
     handleFileSelection(selectedFile);
   };
 
-  const isEngineModel = useMemo(() => {
-    return (
-      selectedModelId === "car-engine-diagnostics-super-ensemble" ||
-      selectedDomain === "engine_diagnostics"
-    );
-  }, [selectedModelId, selectedDomain]);
-
   const handleExecuteInference = async (e: FormEvent) => {
     e.preventDefault();
     if (!file) {
@@ -527,8 +594,7 @@ export default function PredictionView() {
       setResult(predData);
 
       const isEngine =
-        selectedModelId === "car-engine-diagnostics-super-ensemble" ||
-        selectedDomain === "engine_diagnostics" ||
+        isEngineModel ||
         Boolean(ENGINE_FAULT_LABELS[predData.clase]);
 
       // Agregar al inicio del historial de predicciones con badge code y modelo utilizado
@@ -543,6 +609,7 @@ export default function PredictionView() {
         confianza: predData.confianza,
         modelo:
           predData.modelo ||
+          selectedModel?.name ||
           (isEngine
             ? "Super-Ensamble Acústico de Motores"
             : predData.is_fallback
@@ -603,26 +670,41 @@ export default function PredictionView() {
               className="bg-[#101114] border border-[#2d303b] text-white text-xs font-semibold rounded px-2.5 py-1 focus:outline-none focus:border-blue-500 cursor-pointer min-w-0 w-full sm:w-auto max-w-[240px] sm:max-w-[340px] truncate"
             >
               {availableModels.length > 0 ? (
-                availableModels.map((m) => (
-                  <option key={m.id} value={m.id} className="bg-[#16171b] text-white">
-                    {m.id === "car-engine-diagnostics-super-ensemble"
-                      ? "Fallas de Motores · Super-Ensamble (81.16% Acc)"
-                      : m.id === "chilean-birds-ensemble"
-                      ? "Aves Chilenas · Super-Ensamble Tri-Modelo (88.68% F1)"
-                      : m.name}
-                  </option>
-                ))
+                <>
+                  {bioModels.length > 0 && (
+                    <optgroup label="Bioacústica (Aves Chilenas)">
+                      {bioModels.map((m) => (
+                        <option key={m.id} value={m.id} className="bg-[#16171b] text-white">
+                          {m.name || m.id}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {engineModels.length > 0 && (
+                    <optgroup label="Diagnóstico Industrial (Motores)">
+                      {engineModels.map((m) => (
+                        <option key={m.id} value={m.id} className="bg-[#16171b] text-white">
+                          {m.name || m.id}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </>
               ) : (
                 <>
-                  <option value="chilean-birds-ensemble" className="bg-[#16171b] text-white">
-                    Aves Chilenas · Super-Ensamble Tri-Modelo (88.68% F1)
-                  </option>
-                  <option value="car-engine-diagnostics-super-ensemble" className="bg-[#16171b] text-white">
-                    Fallas de Motores · Super-Ensamble (81.16% Acc)
-                  </option>
-                  <option value="chilean-birds-cnn" className="bg-[#16171b] text-white">
-                    Chilean Birds CNN Baseline (79.2% Acc)
-                  </option>
+                  <optgroup label="Bioacústica (Aves Chilenas)">
+                    <option value="chilean-birds-ensemble" className="bg-[#16171b] text-white">
+                      Aves Chilenas · Super-Ensamble Tri-Modelo (88.68% F1)
+                    </option>
+                    <option value="chilean-birds-cnn" className="bg-[#16171b] text-white">
+                      Chilean Birds CNN Baseline (79.2% Acc)
+                    </option>
+                  </optgroup>
+                  <optgroup label="Diagnóstico Industrial (Motores)">
+                    <option value="car-engine-diagnostics-super-ensemble" className="bg-[#16171b] text-white">
+                      Fallas de Motores · Super-Ensamble (81.16% Acc)
+                    </option>
+                  </optgroup>
                 </>
               )}
             </select>
@@ -679,156 +761,239 @@ export default function PredictionView() {
                     : "bg-emerald-950/80 border-emerald-700/60 text-emerald-300"
                 }`}
               >
-                {isEngineModel ? "13 Fallas Mecánicas" : "15 Especies Oficiales"}
+                {isEngineModel ? `${classesCount} Fallas Mecánicas` : `${classesCount} Especies Oficiales`}
               </span>
             </div>
             <p className="text-[11px] text-gray-300 mt-0.5">
               {isEngineModel
-                ? "Contrato de inferencia: Audios de 2.0s a 32.000 Hz · Ensamble balanceado All-RMS (ResNet34d + EffNet + PANNs)"
-                : "Contrato de inferencia: Audios de 5.0s a 22.050 Hz · Ensamble bayesiano óptimo (EffNet-B0 + ConvNeXt + ResNet34d)"}
+                ? `Contrato de inferencia: Audios de ${formattedDuration} a ${targetSr.toLocaleString()} Hz · ${isEnsemble ? "Ensamble balanceado All-RMS (ResNet34d + EffNet + PANNs)" : selectedModel?.name || "Modelo individual"}`
+                : `Contrato de inferencia: Audios de ${formattedDuration} a ${targetSr.toLocaleString()} Hz · ${isEnsemble ? "Ensamble bayesiano óptimo (EffNet-B0 + ConvNeXt + ResNet34d)" : selectedModel?.name || "Modelo individual"}`}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 font-mono text-[11px] shrink-0 self-end sm:self-auto">
           <span className="bg-[#111215] px-2.5 py-1 rounded border border-[#23252e]">
-            {isEngineModel ? "2.0s @ 32 kHz" : "5.0s @ 22 kHz"}
+            {formattedDuration} @ {formattedSr}
           </span>
           <span className="bg-[#111215] px-2.5 py-1 rounded border border-[#23252e] text-emerald-400 font-semibold">
-            {isEngineModel ? "81.16% Acc" : "88.68% F1"}
+            {formattedMetric}
           </span>
         </div>
       </div>
 
-      {/* Panel de Estado y Preparación de la Tríada (Super-Ensemble Readiness Panel) */}
-      <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#23252e]">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-lg bg-blue-950/50 border border-blue-800/40 text-blue-400">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-bold text-white">
+      {/* Panel de Estado y Preparación de la Tríada o Especificaciones Individuales */}
+      {isEnsemble ? (
+        <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#23252e]">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-lg bg-blue-950/50 border border-blue-800/40 text-blue-400">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-bold text-white">
+                    {isEngineModel
+                      ? "Estado del Super-Ensamble Acústico de Motores"
+                      : "Estado del Super-Ensamble Tri-Modelo Bioacústico"}
+                  </h2>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-950/80 border border-emerald-800/80 text-emerald-400 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Tríada Completa Habilitada (3/3)
+                  </span>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-0.5">
                   {isEngineModel
-                    ? "Estado del Super-Ensamble Acústico de Motores"
-                    : "Estado del Super-Ensamble Tri-Modelo Bioacústico"}
-                </h2>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-950/80 border border-emerald-800/80 text-emerald-400 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Tríada Completa Habilitada (3/3)
-                </span>
+                    ? "Ponderación balanceada All-RMS: ResNet-34d (40%) + EfficientNet-B0 (35%) + PANNs-CNN14 (25%)"
+                    : "Ponderación balanceada óptima de tesis: EfficientNet-B0 (55%) + ConvNeXt-Nano (30%) + ResNet-34d (15%)"}
+                </p>
               </div>
-              <p className="text-[11px] text-gray-400 mt-0.5">
-                {isEngineModel
-                  ? "Ponderación balanceada All-RMS: ResNet-34d (40%) + EfficientNet-B0 (35%) + PANNs-CNN14 (25%)"
-                  : "Ponderación bayesiana óptima de tesis: EfficientNet-B0 (55%) + ConvNeXt-Nano (30%) + ResNet-34d (15%)"}
-              </p>
+            </div>
+
+            <div className="text-[11px] text-gray-400 flex items-center gap-2 font-mono">
+              <span className="bg-[#101114] px-2 py-1 rounded border border-[#23252e]">
+                Dispositivo: {modelStatus?.device || "CPU"}
+              </span>
+              <span className="bg-[#101114] px-2 py-1 rounded border border-[#23252e]">
+                {classesCount} {isEngineModel ? "fallas mecánicas" : "especies"}
+              </span>
             </div>
           </div>
 
-          <div className="text-[11px] text-gray-400 flex items-center gap-2 font-mono">
-            <span className="bg-[#101114] px-2 py-1 rounded border border-[#23252e]">
-              Dispositivo: {modelStatus?.device || "CPU"}
-            </span>
-            <span className="bg-[#101114] px-2 py-1 rounded border border-[#23252e]">
-              {isEngineModel ? "13 fallas mecánicas" : `${modelStatus?.total_classes || 15} especies`}
-            </span>
+          {/* Las 3 tarjetas de arquitectura de la Tríada */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {(isEngineModel
+              ? [
+                  {
+                    name: "ResNet-34d",
+                    weight: 0.4,
+                    is_ready: true,
+                    accuracy: 80.9,
+                    checkpoint: "resnet34d_engine_rms.pt",
+                  },
+                  {
+                    name: "EfficientNet-B0",
+                    weight: 0.35,
+                    is_ready: true,
+                    accuracy: 81.3,
+                    checkpoint: "efficientnet_b0_engine_rms.pt",
+                  },
+                  {
+                    name: "PANNs-CNN14",
+                    weight: 0.25,
+                    is_ready: true,
+                    accuracy: 79.5,
+                    checkpoint: "panns_cnn14_engine_rms.pt",
+                  },
+                ]
+              : modelStatus?.triad_status || [
+                  {
+                    name: "EfficientNet-B0",
+                    weight: 0.55,
+                    is_ready: true,
+                    accuracy: 88.31,
+                    checkpoint: "efficientnet_b0_aves.pt",
+                  },
+                  {
+                    name: "ConvNeXt-Nano",
+                    weight: 0.3,
+                    is_ready: true,
+                    accuracy: 87.15,
+                    checkpoint: "convnext_nano_aves.pt",
+                  },
+                  {
+                    name: "ResNet-34d",
+                    weight: 0.15,
+                    is_ready: true,
+                    accuracy: 85.4,
+                    checkpoint: "resnet34d_aves.pt",
+                  },
+                ]
+            ).map((model) => (
+              <div
+                key={model.name}
+                className="rounded-lg p-3.5 border transition-all bg-[#111215] border-[#252834]"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-white font-mono">{model.name}</span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-950/60 border border-blue-800/50 text-blue-300 font-semibold">
+                    Peso: {Math.round(model.weight * 100)}%
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] mb-2">
+                  <span className="text-gray-400">Estado:</span>
+                  <span className="text-emerald-400 font-medium flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                    Entrenado y Operativo
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#1e2028] text-[10px]">
+                  <div>
+                    <span className="text-gray-500 block">Precisión (Test)</span>
+                    <span className="font-mono font-semibold text-white">
+                      {model.accuracy != null ? `${Number(model.accuracy).toFixed(1)}%` : "—"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block">Checkpoint</span>
+                    <span
+                      className="font-mono text-gray-300 truncate block"
+                      title={model.checkpoint || "No generado"}
+                    >
+                      {model.checkpoint ? model.checkpoint : "—"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
-
-        {/* Las 3 tarjetas de arquitectura de la Tríada */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {(isEngineModel
-            ? [
-                {
-                  name: "ResNet-34d",
-                  weight: 0.4,
-                  is_ready: true,
-                  accuracy: 80.9,
-                  checkpoint: "resnet34d_engine_rms.pt",
-                },
-                {
-                  name: "EfficientNet-B0",
-                  weight: 0.35,
-                  is_ready: true,
-                  accuracy: 81.3,
-                  checkpoint: "efficientnet_b0_engine_rms.pt",
-                },
-                {
-                  name: "PANNs-CNN14",
-                  weight: 0.25,
-                  is_ready: true,
-                  accuracy: 79.5,
-                  checkpoint: "panns_cnn14_engine_rms.pt",
-                },
-              ]
-            : modelStatus?.triad_status || [
-                {
-                  name: "EfficientNet-B0",
-                  weight: 0.55,
-                  is_ready: true,
-                  accuracy: 88.31,
-                  checkpoint: "efficientnet_b0_aves.pt",
-                },
-                {
-                  name: "ConvNeXt-Nano",
-                  weight: 0.3,
-                  is_ready: true,
-                  accuracy: 87.15,
-                  checkpoint: "convnext_nano_aves.pt",
-                },
-                {
-                  name: "ResNet-34d",
-                  weight: 0.15,
-                  is_ready: true,
-                  accuracy: 85.4,
-                  checkpoint: "resnet34d_aves.pt",
-                },
-              ]
-          ).map((model) => (
-            <div
-              key={model.name}
-              className="rounded-lg p-3.5 border transition-all bg-[#111215] border-[#252834]"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-white font-mono">{model.name}</span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-950/60 border border-blue-800/50 text-blue-300 font-semibold">
-                  Peso: {Math.round(model.weight * 100)}%
-                </span>
+      ) : (
+        <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#23252e]">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-lg bg-blue-950/50 border border-blue-800/40 text-blue-400">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                </svg>
               </div>
-
-              <div className="flex items-center justify-between text-[11px] mb-2">
-                <span className="text-gray-400">Estado:</span>
-                <span className="text-emerald-400 font-medium flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                  Entrenado y Operativo
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#1e2028] text-[10px]">
-                <div>
-                  <span className="text-gray-500 block">Precisión (Test)</span>
-                  <span className="font-mono font-semibold text-white">
-                    {model.accuracy != null ? `${Number(model.accuracy).toFixed(1)}%` : "—"}
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-bold text-white">
+                    Especificaciones del Modelo Individual Activo
+                  </h2>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-950/80 border border-blue-800/80 text-blue-400 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                    Modelo Autónomo Standalone
                   </span>
                 </div>
-                <div>
-                  <span className="text-gray-500 block">Checkpoint</span>
-                  <span
-                    className="font-mono text-gray-300 truncate block"
-                    title={model.checkpoint || "No generado"}
-                  >
-                    {model.checkpoint ? model.checkpoint : "—"}
-                  </span>
-                </div>
+                <p className="text-[11px] text-gray-400 mt-0.5">
+                  {selectedModel?.description || "Inferencia individual con parámetros acústicos dedicados"}
+                </p>
               </div>
             </div>
-          ))}
+
+            <div className="text-[11px] text-gray-400 flex items-center gap-2 font-mono">
+              <span className="bg-[#101114] px-2 py-1 rounded border border-[#23252e]">
+                Dispositivo: {modelStatus?.device || "CPU"}
+              </span>
+              <span className="bg-[#101114] px-2 py-1 rounded border border-[#23252e]">
+                {classesCount} {isEngineModel ? "fallas mecánicas" : "especies"}
+              </span>
+            </div>
+          </div>
+
+          {/* Tarjetas de Especificaciones Individuales */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="rounded-lg p-3.5 border bg-[#111215] border-[#252834]">
+              <span className="text-[10px] text-gray-500 block uppercase font-mono">Arquitectura / Backbone</span>
+              <span className="text-xs font-bold text-white font-mono mt-1 block truncate" title={selectedModel?.name || selectedModelId}>
+                {selectedModel?.name || selectedModelId}
+              </span>
+              <span className="text-[10px] text-gray-400 mt-1 block truncate">
+                ID: {selectedModelId}
+              </span>
+            </div>
+
+            <div className="rounded-lg p-3.5 border bg-[#111215] border-[#252834]">
+              <span className="text-[10px] text-gray-500 block uppercase font-mono">Estado de Pesos</span>
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <span className="text-xs font-semibold text-emerald-400">
+                  {selectedModel?.has_weights !== false ? "Pesos Verificados" : "No inicializado"}
+                </span>
+              </div>
+              <span className="text-[10px] text-gray-400 mt-1 block">
+                Contrato: {formattedDuration} @ {formattedSr}
+              </span>
+            </div>
+
+            <div className="rounded-lg p-3.5 border bg-[#111215] border-[#252834]">
+              <span className="text-[10px] text-gray-500 block uppercase font-mono">Clases Soportadas</span>
+              <span className="text-xs font-bold text-white font-mono mt-1 block">
+                {classesCount} {isEngineModel ? "Fallas" : "Especies"}
+              </span>
+              <span className="text-[10px] text-gray-400 mt-1 block">
+                Vocabulario {isEngineModel ? "industrial" : "bioacústico"}
+              </span>
+            </div>
+
+            <div className="rounded-lg p-3.5 border bg-[#111215] border-[#252834]">
+              <span className="text-[10px] text-gray-500 block uppercase font-mono">Rendimiento / Métrica</span>
+              <span className="text-xs font-bold text-emerald-400 font-mono mt-1 block">
+                {formattedMetric}
+              </span>
+              <span className="text-[10px] text-gray-400 mt-1 block">
+                Evaluación en test set
+              </span>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Fila 1: Modelo Activo (Super-Ensamble) + Cargar Audio */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -839,24 +1004,27 @@ export default function PredictionView() {
               <span className="text-xs text-gray-400 font-medium">Modelo activo en producción</span>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-950/60 border border-green-800/60 text-green-400 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                Super-Ensamble Activo (3/3)
+                {isEnsemble ? "Super-Ensamble Activo (3/3)" : "Modelo Individual Activo (1/1)"}
               </span>
             </div>
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="text-base font-bold text-white">
-                  {isEngineModel
-                    ? "Super-Ensamble Acústico de Motores"
-                    : modelStatus
-                    ? modelStatus.model_name
-                    : "Super-Ensamble Tri-Modelo"}
+                  {selectedModel?.name ||
+                    (isEngineModel
+                      ? "Super-Ensamble Acústico de Motores"
+                      : modelStatus
+                      ? modelStatus.model_name
+                      : "Super-Ensamble Tri-Modelo")}
                 </h2>
                 <p className="text-[11px] text-gray-400 mt-0.5">
-                  {isEngineModel
-                    ? "ResNet-34d (40%) · EfficientNet-B0 (35%) · PANNs-CNN14 (25%)"
-                    : modelStatus?.is_fallback
-                    ? "AudioCNN Baseline (augmented_best.pt)"
-                    : "EfficientNet-B0 (55%) · ConvNeXt-Nano (30%) · ResNet34d (15%)"}
+                  {isEnsemble
+                    ? isEngineModel
+                      ? "ResNet-34d (40%) · EfficientNet-B0 (35%) · PANNs-CNN14 (25%)"
+                      : modelStatus?.is_fallback
+                      ? "AudioCNN Baseline (augmented_best.pt)"
+                      : "EfficientNet-B0 (55%) · ConvNeXt-Nano (30%) · ResNet34d (15%)"
+                    : selectedModel?.description || "Inferencia individual autónoma"}
                 </p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
@@ -874,7 +1042,11 @@ export default function PredictionView() {
             <div>
               <span className="text-gray-400 block text-[11px]">Accuracy Test</span>
               <span className="text-sm font-bold text-white font-mono mt-0.5 block">
-                {isEngineModel ? "81.16%" : "88.31%"}
+                {selectedModel?.metrics?.accuracy != null
+                  ? `${(Number(selectedModel.metrics.accuracy) * 100).toFixed(2)}%`
+                  : isEngineModel
+                  ? "81.16%"
+                  : "88.31%"}
               </span>
             </div>
             <div>
@@ -882,7 +1054,11 @@ export default function PredictionView() {
                 {isEngineModel ? "Balanced F1" : "Macro F1"}
               </span>
               <span className="text-sm font-bold text-green-400 font-mono mt-0.5 block">
-                {isEngineModel ? "81.44%" : "88.68%"}
+                {selectedModel?.metrics?.f1_macro != null
+                  ? `${(Number(selectedModel.metrics.f1_macro) * 100).toFixed(2)}%`
+                  : isEngineModel
+                  ? "81.44%"
+                  : "88.68%"}
               </span>
             </div>
             <div>
@@ -890,18 +1066,24 @@ export default function PredictionView() {
                 {isEngineModel ? "Precision" : "Macro Precision"}
               </span>
               <span className="text-sm font-bold text-blue-400 font-mono mt-0.5 block">
-                {isEngineModel ? "81.16%" : "90.15%"}
+                {selectedModel?.metrics?.precision_macro != null
+                  ? `${(Number(selectedModel.metrics.precision_macro) * 100).toFixed(2)}%`
+                  : isEngineModel
+                  ? "81.16%"
+                  : "90.15%"}
               </span>
             </div>
             <div className="col-span-3 flex items-center justify-between pt-2 border-t border-[#23252e]/40 text-[11px] text-gray-400">
               <span className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                {isEngineModel
-                  ? "Balanceo All-RMS + Calibración Softmax"
-                  : "Dense TTA (hop 1.0s) + Micro-Batch O(1)"}
+                {isEnsemble
+                  ? isEngineModel
+                    ? "Balanceo All-RMS + Calibración Softmax"
+                    : "Dense TTA (hop 1.0s) + Micro-Batch O(1)"
+                  : `Inferencia Standalone · Contrato ${formattedDuration} @ ${formattedSr}`}
               </span>
               <span className="text-gray-500 font-mono">
-                {isEngineModel ? "1,000+ muestras de falla" : "154 test samples"}
+                {isEngineModel ? `${classesCount} fallas mecánicas` : `${classesCount} especies`}
               </span>
             </div>
           </div>
@@ -953,11 +1135,10 @@ export default function PredictionView() {
             <p className="text-[10px] text-gray-500 mt-1">
               {file
                 ? `${(file.size / 1024).toFixed(1)} KB`
-                : isEngineModel
-                ? "Audio mecánico recomendado: 2.0s @ 32 kHz · .wav mono/estéreo"
-                : "Audio bioacústico recomendado: 5.0s @ 22 kHz · .wav mono/estéreo"}
+                : `Audio ${isEngineModel ? "mecánico" : "bioacústico"} recomendado: ${formattedDuration} @ ${formattedSr} · .wav mono/estéreo`}
             </p>
           </div>
+
 
           <button
             type="button"
@@ -1215,12 +1396,12 @@ export default function PredictionView() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                <span>Procesando inferencia con Super-Ensamble...</span>
+                <span>Procesando inferencia con {isEnsemble ? "Super-Ensamble" : (selectedModel?.name || "modelo")}...</span>
               </>
             ) : (
               <>
                 <span>▷</span>
-                <span>Ejecutar inferencia bioacústica</span>
+                <span>{isEngineModel ? "Ejecutar inferencia de motores" : "Ejecutar inferencia bioacústica"}</span>
               </>
             )}
           </button>
@@ -1228,7 +1409,9 @@ export default function PredictionView() {
 
         {/* Tarjeta: Resultado */}
         <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 flex flex-col justify-between">
-          <span className="text-xs text-gray-400 font-medium block mb-2">Veredicto del Super-Ensamble</span>
+          <span className="text-xs text-gray-400 font-medium block mb-2">
+            {isEnsemble ? "Veredicto del Super-Ensamble" : "Veredicto del Modelo"}
+          </span>
 
           {result ? (
             <div className="bg-[#111215] border border-[#23252e] rounded-lg p-4 space-y-3">
@@ -1262,6 +1445,7 @@ export default function PredictionView() {
                   <span className="text-gray-400">Modelo ejecutado:</span>
                   <span className="text-blue-400 font-mono font-semibold">
                     {result.modelo ||
+                      selectedModel?.name ||
                       (isEngineModel
                         ? "Super-Ensamble Acústico de Motores"
                         : "Super-Ensamble Tri-Modelo")}
@@ -1358,16 +1542,16 @@ export default function PredictionView() {
           >
             <option value="all">
               {isEngineModel
-                ? "Todas las clases mecánicas (13)"
-                : "Todas las especies de aves (15)"}
+                ? `Todas las clases mecánicas (${classesCount})`
+                : `Todas las especies de aves (${classesCount})`}
             </option>
             {isEngineModel
-              ? Object.entries(ENGINE_FAULT_LABELS).map(([k, v]) => (
-                  <option key={k} value={k}>
-                    {v}
+              ? currentClasses.map((cls) => (
+                  <option key={cls} value={cls}>
+                    {ENGINE_FAULT_LABELS[cls] || cls}
                   </option>
                 ))
-              : OFFICIAL_SPECIES.map((species) => (
+              : currentClasses.map((species) => (
                   <option key={species} value={species}>
                     {species}
                   </option>
