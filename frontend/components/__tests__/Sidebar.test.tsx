@@ -79,4 +79,35 @@ describe("Sidebar destinations", () => {
     renderSidebar(true);
     expect(await screen.findByText("3")).toBeDefined();
   });
+
+  it("renders GCP status dot indicator and CUDA badge in collapsed mode", async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes("/api/training/hardware")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ cuda_available: true, temperature_c: 45 }),
+        });
+      }
+      return Promise.resolve({ ok: false });
+    });
+
+    renderSidebar(true);
+    expect(screen.getByLabelText(/GCP Conectado/i)).toBeDefined();
+    expect(await screen.findByText("CUDA")).toBeDefined();
+  });
+
+  it("renders CPU badge in collapsed mode when CUDA is not available", async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes("/api/training/hardware")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ cuda_available: false }),
+        });
+      }
+      return Promise.resolve({ ok: false });
+    });
+
+    renderSidebar(true);
+    expect(await screen.findByText("CPU")).toBeDefined();
+  });
 });

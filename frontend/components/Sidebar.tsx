@@ -26,11 +26,18 @@ export default function Sidebar({
   onToggleCollapsed,
 }: SidebarProps) {
   const [hw, setHw] = useState<HardwareMini | null>(null);
+  const [isGcpConnected, setIsGcpConnected] = useState<boolean>(true);
   const [pendingFeedbackCount, setPendingFeedbackCount] = useState<number>(0);
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/api/training/hardware`)
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => {
+        if (res.ok) {
+          setIsGcpConnected(true);
+          return res.json();
+        }
+        return null;
+      })
       .then((data) => {
         if (data) setHw(data);
       })
@@ -206,7 +213,10 @@ export default function Sidebar({
         }`}
       >
         {/* GCP Status */}
-        <div className={`flex items-center justify-between ${isCollapsed ? "md:justify-center" : ""}`}>
+        <div
+          className={`flex items-center justify-between ${isCollapsed ? "md:justify-center md:gap-1.5" : ""}`}
+          title={isCollapsed ? `GCP: ${isGcpConnected ? "Conectado" : "Desconectado"}` : undefined}
+        >
           <div className={`flex items-center text-gray-400 gap-1.5 ${isCollapsed ? "md:gap-0" : ""}`}>
             <svg
               className="w-3.5 h-3.5 text-gray-400 shrink-0"
@@ -223,17 +233,46 @@ export default function Sidebar({
             </svg>
             <span className={isCollapsed ? "md:sr-only" : ""}>GCP</span>
           </div>
-          <span
-            className={`px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-950/70 border border-green-700/60 text-green-400 ${
-              isCollapsed ? "md:sr-only" : ""
-            }`}
-          >
-            Conectado
-          </span>
+          {isCollapsed ? (
+            <span
+              className={`hidden md:inline-block w-2 h-2 rounded-full shrink-0 ${
+                isGcpConnected
+                  ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.7)]"
+                  : "bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.7)]"
+              }`}
+              aria-label={isGcpConnected ? "GCP Conectado" : "GCP Desconectado"}
+            />
+          ) : (
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-semibold flex items-center gap-1.5 border ${
+                isGcpConnected
+                  ? "bg-green-950/70 border-green-700/60 text-green-400"
+                  : "bg-red-950/70 border-red-700/60 text-red-400"
+              }`}
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  isGcpConnected ? "bg-green-400" : "bg-red-400"
+                }`}
+              />
+              {isGcpConnected ? "Conectado" : "Desconectado"}
+            </span>
+          )}
         </div>
 
         {/* Cómputo / Hardware Status */}
-        <div className={`flex items-center justify-between ${isCollapsed ? "md:justify-center" : ""}`}>
+        <div
+          className={`flex items-center justify-between ${isCollapsed ? "md:justify-center md:gap-1.5" : ""}`}
+          title={
+            isCollapsed
+              ? `Cómputo: ${
+                  hw?.cuda_available
+                    ? `CUDA${hw.temperature_c ? ` · ${hw.temperature_c}°C` : ""}`
+                    : "CPU Host"
+                }`
+              : undefined
+          }
+        >
           <div className={`flex items-center text-gray-400 gap-1.5 ${isCollapsed ? "md:gap-0" : ""}`}>
             <svg
               className="w-3.5 h-3.5 text-gray-400 shrink-0"
@@ -252,17 +291,29 @@ export default function Sidebar({
               {hw?.cuda_available ? "GPU" : "Cómputo"}
             </span>
           </div>
-          <span
-            className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-              hw?.cuda_available
-                ? "bg-emerald-950/70 border-emerald-700/60 text-emerald-400"
-                : "bg-blue-950/70 border-blue-700/60 text-blue-400"
-            } ${isCollapsed ? "md:sr-only" : ""}`}
-          >
-            {hw?.cuda_available
-              ? `CUDA${hw.temperature_c ? ` · ${hw.temperature_c}°C` : ""}`
-              : "CPU Host"}
-          </span>
+          {isCollapsed ? (
+            <span
+              className={`hidden md:inline-block px-1 py-0.2 rounded text-[9px] font-bold tracking-tight border ${
+                hw?.cuda_available
+                  ? "bg-emerald-950/70 border-emerald-700/60 text-emerald-400"
+                  : "bg-blue-950/70 border-blue-700/60 text-blue-400"
+              }`}
+            >
+              {hw?.cuda_available ? "CUDA" : "CPU"}
+            </span>
+          ) : (
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                hw?.cuda_available
+                  ? "bg-emerald-950/70 border-emerald-700/60 text-emerald-400"
+                  : "bg-blue-950/70 border-blue-700/60 text-blue-400"
+              }`}
+            >
+              {hw?.cuda_available
+                ? `CUDA${hw.temperature_c ? ` · ${hw.temperature_c}°C` : ""}`
+                : "CPU Host"}
+            </span>
+          )}
         </div>
 
         {/* Feedback / Notificaciones (RF_06) */}
