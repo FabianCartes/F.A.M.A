@@ -117,21 +117,61 @@ export default function Sidebar({
     <aside className="w-full h-full min-w-0 bg-[#121316] border-r border-[#1f2128] flex flex-col justify-between select-none">
       {/* Top Section: Logo & Nav */}
       <div className="min-w-0 min-h-0 overflow-y-auto">
-        {/* Logo F.A.M.A. Header — the only asset is a 185x40 horizontal PNG, so the rail drops it */}
+        {/* Cabecera de la barra lateral con Logo F.A.M.A. y Botón de Colapso */}
         <div
-          className={`px-4 pt-4 pb-4 border-b border-[#1f2128]/60 ${isCollapsed ? "md:hidden" : ""}`}
+          className={`border-b border-[#1f2128] transition-all ${
+            isCollapsed
+              ? "flex items-center justify-center p-3 h-14"
+              : "flex items-center justify-between px-3 py-3"
+          }`}
         >
-          <div className="flex items-center justify-center">
+          <div className={`flex items-center min-w-0 pl-1 ${isCollapsed ? "md:hidden" : "block"}`}>
             <Image
               src="/F.A.M.A-sinFondoBlanco.png"
               alt="Logo F.A.M.A."
-              width={185}
-              height={40}
+              width={140}
+              height={32}
               unoptimized
               priority
-              className="w-full max-w-[185px] h-auto object-contain"
+              className="h-7 w-auto object-contain"
             />
           </div>
+          <button
+            type="button"
+            onClick={onToggleCollapsed}
+            aria-label={isCollapsed ? "Expandir panel lateral" : "Colapsar panel lateral"}
+            aria-expanded={!isCollapsed}
+            title={isCollapsed ? "Expandir panel lateral" : "Colapsar panel lateral"}
+            className={`group relative hidden md:flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-[#18191e] transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-500 ${
+              isCollapsed ? "h-9 w-9" : "h-8 w-8 shrink-0"
+            }`}
+          >
+            <svg
+              className="w-4 h-4 shrink-0 transition-transform"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d={isCollapsed ? "M9 5l7 7-7 7" : "M15 19l-7-7 7-7"}
+              />
+            </svg>
+            <span className={isCollapsed ? "md:sr-only" : "sr-only"}>
+              {isCollapsed ? "Expandir" : "Colapsar"}
+            </span>
+            {isCollapsed && (
+              <span
+                aria-hidden="true"
+                className="hidden md:block pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md border border-[#2e323e] bg-[#1d1f26] px-2 py-1 text-[11px] text-gray-100 opacity-0 shadow-lg transition-opacity md:group-hover:opacity-100"
+              >
+                Expandir
+              </span>
+            )}
+          </button>
         </div>
 
         {/* Navigation Items */}
@@ -268,44 +308,6 @@ export default function Sidebar({
             {pendingFeedbackCount}
           </span>
         </div>
-
-        {/* Control de colapso del panel lateral — solo desde md, donde el rail es el modo compacto.
-            En móvil el drawer off-canvas ya es la presentación comprimida, así que el control sería inerte. */}
-        <button
-          type="button"
-          onClick={onToggleCollapsed}
-          aria-label={isCollapsed ? "Expandir panel lateral" : "Colapsar panel lateral"}
-          aria-expanded={!isCollapsed}
-          className={`group relative hidden md:flex w-full items-center gap-2 px-2 py-1.5 rounded-lg text-gray-400 hover:text-gray-100 hover:bg-[#18191e] transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-500 ${
-            isCollapsed ? "md:justify-center md:gap-0 md:px-0 md:py-2" : ""
-          }`}
-        >
-          <svg
-            className="w-3.5 h-3.5 shrink-0 transition-transform"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d={isCollapsed ? "M9 5l7 7-7 7" : "M15 19l-7-7 7-7"}
-            />
-          </svg>
-          <span className={isCollapsed ? "md:sr-only" : ""}>
-            {isCollapsed ? "Expandir" : "Colapsar"}
-          </span>
-          {isCollapsed && (
-            <span
-              aria-hidden="true"
-              className="hidden md:block pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md border border-[#2e323e] bg-[#1d1f26] px-2 py-1 text-[11px] text-gray-100 opacity-0 shadow-lg transition-opacity md:group-hover:opacity-100"
-            >
-              Expandir
-            </span>
-          )}
-        </button>
       </div>
     </aside>
   );
