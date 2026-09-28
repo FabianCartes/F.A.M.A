@@ -180,5 +180,20 @@ describe("PredictionView responsive header and controls", () => {
     expect(screen.queryByText(/15%/)).toBeNull();
     expect(screen.queryByText(/Tríada Completa Habilitada/i)).toBeNull();
   });
+
+  it("Test case 4: Renders deterministic inference contract text (22.050 Hz and 32.000 Hz) avoiding SSR hydration mismatch", async () => {
+    render(<PredictionView />);
+    // By default (chilean birds), should render 22.050 Hz deterministically
+    expect(screen.getByText(/Audios de 5\.0s a 22\.050 Hz/i)).toBeDefined();
+
+    // After switching to engine model (32000 Hz), should render 32.000 Hz deterministically
+    const modelSelect = (await screen.findByLabelText(/Modelo:/i)) as HTMLSelectElement;
+    await act(async () => {
+      fireEvent.change(modelSelect, {
+        target: { value: "car-engine-diagnostics-resnet34d-v2" },
+      });
+    });
+    expect(screen.getByText(/Audios de 1\.5s a 32\.000 Hz/i)).toBeDefined();
+  });
 });
 

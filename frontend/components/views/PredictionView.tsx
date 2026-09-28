@@ -191,6 +191,7 @@ export default function PredictionView() {
 
   const targetSr = selectedModel?.target_sr ?? (isEngineModel ? 32000 : 22050);
   const formattedSr = `${(targetSr / 1000).toFixed(0)} kHz`;
+  const formattedSrHz = `${targetSr.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")} Hz`;
 
   const formattedMetric = useMemo(() => {
     if (selectedModel?.metrics) {
@@ -766,8 +767,8 @@ export default function PredictionView() {
             </div>
             <p className="text-[11px] text-gray-300 mt-0.5">
               {isEngineModel
-                ? `Contrato de inferencia: Audios de ${formattedDuration} a ${targetSr.toLocaleString()} Hz · ${isEnsemble ? "Ensamble balanceado All-RMS (ResNet34d + EffNet + PANNs)" : selectedModel?.name || "Modelo individual"}`
-                : `Contrato de inferencia: Audios de ${formattedDuration} a ${targetSr.toLocaleString()} Hz · ${isEnsemble ? "Ensamble bayesiano óptimo (EffNet-B0 + ConvNeXt + ResNet34d)" : selectedModel?.name || "Modelo individual"}`}
+                ? `Contrato de inferencia: Audios de ${formattedDuration} a ${formattedSrHz} · ${isEnsemble ? "Ensamble balanceado All-RMS (ResNet34d + EffNet + PANNs)" : selectedModel?.name || "Modelo individual"}`
+                : `Contrato de inferencia: Audios de ${formattedDuration} a ${formattedSrHz} · ${isEnsemble ? "Ensamble bayesiano óptimo (EffNet-B0 + ConvNeXt + ResNet34d)" : selectedModel?.name || "Modelo individual"}`}
             </p>
           </div>
         </div>
