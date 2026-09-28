@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { API_BASE_URL } from "@/lib/api";
+import { rebalanceWeights } from "@/lib/utils/ensembleWeights";
 
 // ============================================================================
 // INTERFACES DEL DOMINIO DE ENTRENAMIENTO (RF_04, CU_INV_02, CU_INV_03)
@@ -102,7 +103,14 @@ export default function TrainingView() {
   const [batchSize, setBatchSize] = useState<string>("16");
   const [framework, setFramework] = useState<string>("pytorch");
   const [architecture, setArchitecture] = useState<string>("EfficientNet-B0");
-  const [trainingMode, setTrainingMode] = useState<"single" | "triad">("single");
+  const [ensembleSize, setEnsembleSize] = useState<1 | 2 | 3>(1);
+  const [ensembleModels, setEnsembleModels] = useState<
+    Array<{ architecture: string; weight: number }>
+  >([
+    { architecture: "EfficientNet-B0", weight: 1.0 },
+    { architecture: "ConvNeXt-Nano", weight: 0.5 },
+    { architecture: "ResNet-34d", weight: 0.33 },
+  ]);
   const [triadProgress, setTriadProgress] = useState<{
     isTriad: boolean;
     modelIdx: number;
@@ -114,6 +122,48 @@ export default function TrainingView() {
     totalModels: 1,
     currentArch: "",
   });
+
+  const handleEnsembleSizeChange = (newSize: 1 | 2 | 3) => {
+    setEnsembleSize(newSize);
+    if (newSize === 1) {
+      setEnsembleModels((prev) => [
+        { architecture: prev[0]?.architecture || architecture, weight: 1.0 },
+        { architecture: prev[1]?.architecture || "ConvNeXt-Nano", weight: 0.5 },
+        { architecture: prev[2]?.architecture || "ResNet-34d", weight: 0.33 },
+      ]);
+    } else if (newSize === 2) {
+      setEnsembleModels((prev) => [
+        { architecture: prev[0]?.architecture || "EfficientNet-B0", weight: 0.5 },
+        { architecture: prev[1]?.architecture || "ConvNeXt-Nano", weight: 0.5 },
+        { architecture: prev[2]?.architecture || "ResNet-34d", weight: 0.33 },
+      ]);
+    } else {
+      setEnsembleModels((prev) => [
+        { architecture: prev[0]?.architecture || "EfficientNet-B0", weight: 0.34 },
+        { architecture: prev[1]?.architecture || "ConvNeXt-Nano", weight: 0.33 },
+        { architecture: prev[2]?.architecture || "ResNet-34d", weight: 0.33 },
+      ]);
+    }
+  };
+
+  const handleWeightChange = (index: number, newWeight: number) => {
+    const currentWeights = ensembleModels.slice(0, ensembleSize).map((m) => m.weight);
+    const updatedWeights = rebalanceWeights(currentWeights, index, newWeight);
+    setEnsembleModels((prev) =>
+      prev.map((m, idx) =>
+        idx < ensembleSize ? { ...m, weight: updatedWeights[idx] } : m
+      )
+    );
+  };
+
+  const handleModelArchChange = (index: number, newArch: string) => {
+    setEnsembleModels((prev) =>
+      prev.map((m, idx) => (idx === index ? { ...m, architecture: newArch } : m))
+    );
+    if (index === 0) {
+      handleArchitectureChange(newArch);
+    }
+  };
 
   // 2. Telemetría de Hardware y Datasets
   const [hardware, setHardware] = useState<HardwareStatus | null>(null);
@@ -169,7 +219,7 @@ export default function TrainingView() {
     const isCuda = hardware?.cuda_available ?? false;
     const msPerStep = isCuda ? 25 : 150;
     const singleSec = (stepsPerEpoch * numEpochs * msPerStep) / 1000;
-    const totalSec = trainingMode === "triad" ? singleSec * 3 : singleSec;
+    const totalSec = singleSec * ensembleSize;
 
     if (totalSec < 60) return `~${Math.ceil(totalSec)} seg`;
     const minutes = Math.round(totalSec / 60);
@@ -177,7 +227,8 @@ export default function TrainingView() {
     const hours = Math.floor(minutes / 60);
     const remMin = minutes % 60;
     return `~${hours}h ${remMin}m`;
-  }, [currentDataset, batchSize, epochs, hardware, trainingMode]);
+  }, [currentDataset, batchSize, epochs, hardware, ensembleSize]);
+
 
   // Cargar telemetría de hardware
   const fetchHardware = useCallback(async () => {
@@ -270,11 +321,12 @@ export default function TrainingView() {
             setMetricsHistory(data.metrics_history || []);
             setLogs(data.logs || []);
 
-            if (data.is_tri_model) {
+            const total = data.total_models || (data.is_tri_model ? 3 : 1);
+            if (total > 1 || data.is_tri_model) {
               setTriadProgress({
                 isTriad: true,
                 modelIdx: data.current_model_index || 1,
-                totalModels: data.total_models || 3,
+                totalModels: total,
                 currentArch: data.current_architecture || architecture,
               });
             }
@@ -304,20 +356,32 @@ export default function TrainingView() {
     setIsStopping(false);
     setMetricsHistory([]);
     setCurrentEpoch(0);
-    if (trainingMode === "triad") {
-      const isEngine = selectedDataset === "engine_diagnostics";
+
+    const currentEnsemble = ensembleModels.slice(0, ensembleSize);
+    const sumW = currentEnsemble.reduce((acc, m) => acc + m.weight, 0) || 1.0;
+    const normalizedEnsemble = currentEnsemble.map((m) => ({
+      architecture: m.architecture,
+      weight: Math.round((m.weight / sumW) * 1000) / 1000,
+    }));
+    const normSum = normalizedEnsemble.reduce((acc, m) => acc + m.weight, 0);
+    if (normalizedEnsemble.length > 0 && Math.abs(normSum - 1.0) > 1e-4) {
+      normalizedEnsemble[0].weight =
+        Math.round((normalizedEnsemble[0].weight + (1.0 - normSum)) * 1000) / 1000;
+    }
+
+    if (ensembleSize > 1) {
       setTriadProgress({
         isTriad: true,
         modelIdx: 1,
-        totalModels: 3,
-        currentArch: isEngine ? "ResNet-34d" : "EfficientNet-B0",
+        totalModels: ensembleSize,
+        currentArch: normalizedEnsemble[0]?.architecture || architecture,
       });
     } else {
       setTriadProgress({
         isTriad: false,
         modelIdx: 1,
         totalModels: 1,
-        currentArch: architecture,
+        currentArch: normalizedEnsemble[0]?.architecture || architecture,
       });
     }
 
@@ -327,14 +391,16 @@ export default function TrainingView() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           dataset_name: selectedDataset,
-          architecture,
+          architecture: normalizedEnsemble[0]?.architecture || architecture,
           epochs: parseInt(epochs) || 10,
           learning_rate: parseFloat(learningRate) || 0.001,
           batch_size: parseInt(batchSize) || 16,
           framework,
-          is_tri_model: trainingMode === "triad",
+          is_tri_model: ensembleSize === 3,
+          models: normalizedEnsemble,
         }),
       });
+
 
       if (!res.ok) {
         const errData = await res.json();
@@ -524,16 +590,16 @@ export default function TrainingView() {
           </span>
         </div>
 
-        {/* Selector de Modo: Individual vs Tríada Completa */}
+        {/* Selector Dinámico de Ensamble (1 a 3 Modelos) */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg bg-[#111215] border border-[#23252e]">
           <div>
-            <span className="text-xs font-semibold text-gray-200 block">Modo de Entrenamiento</span>
+            <span className="text-xs font-semibold text-gray-200 block">Topología del Modelo / Ensamble</span>
             <span className="text-[11px] text-gray-500">
-              {trainingMode === "triad"
-                ? selectedDataset === "engine_diagnostics"
-                  ? "Entrena secuencialmente los 3 modelos (ResNet-34d ➔ EfficientNet-B0 ➔ PANNs-CNN14) para habilitar el Super-Ensamble industrial de 13 fallas de motor."
-                  : "Entrena secuencialmente los 3 modelos (EfficientNet-B0 ➔ ConvNeXt-Nano ➔ ResNet-34d) para habilitar el Super-Ensamble bioacústico de aves chilenas."
-                : "Entrena únicamente la arquitectura seleccionada con hiperparámetros personalizados."}
+              {ensembleSize === 1
+                ? "Entrena únicamente 1 arquitectura con hiperparámetros personalizados."
+                : ensembleSize === 2
+                ? "Dúo Ensamble: Entrena secuencialmente 2 redes seleccionadas con ponderaciones calibradas (menor costo de cómputo y VRAM)."
+                : "Tri Ensamble: Entrena la tríada completa de 3 modelos con ponderaciones calibradas para máxima capacidad generalizadora."}
             </span>
           </div>
 
@@ -541,21 +607,33 @@ export default function TrainingView() {
             <button
               type="button"
               disabled={isTraining}
-              onClick={() => setTrainingMode("single")}
+              onClick={() => handleEnsembleSizeChange(1)}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                trainingMode === "single"
+                ensembleSize === 1
                   ? "bg-blue-600 text-white shadow-sm font-semibold"
                   : "text-gray-400 hover:text-gray-200"
               }`}
             >
-              Modelo Individual
+              1 Modelo (Individual)
             </button>
             <button
               type="button"
               disabled={isTraining}
-              onClick={() => setTrainingMode("triad")}
+              onClick={() => handleEnsembleSizeChange(2)}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                ensembleSize === 2
+                  ? "bg-cyan-600 text-white shadow-sm font-semibold"
+                  : "text-gray-400 hover:text-gray-200"
+              }`}
+            >
+              2 Modelos (Dúo)
+            </button>
+            <button
+              type="button"
+              disabled={isTraining}
+              onClick={() => handleEnsembleSizeChange(3)}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
-                trainingMode === "triad"
+                ensembleSize === 3
                   ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-sm font-semibold"
                   : "text-gray-400 hover:text-gray-200"
               }`}
@@ -563,11 +641,7 @@ export default function TrainingView() {
               <svg className="w-3.5 h-3.5 text-amber-300" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
               </svg>
-              <span>
-                {selectedDataset === "engine_diagnostics"
-                  ? "Tríada Completa (Super-Ensamble Motores)"
-                  : "Tríada Completa (Super-Ensamble Aves)"}
-              </span>
+              <span>3 Modelos (Tríada)</span>
             </button>
           </div>
         </div>
@@ -581,7 +655,7 @@ export default function TrainingView() {
             <input
               type="text"
               value={learningRate}
-              disabled={isTraining || trainingMode === "triad"}
+              disabled={isTraining || ensembleSize > 1}
               onChange={(e) => setLearningRate(e.target.value)}
               className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-blue-500 disabled:opacity-60"
             />
@@ -594,7 +668,7 @@ export default function TrainingView() {
             <input
               type="number"
               value={epochs}
-              disabled={isTraining || trainingMode === "triad"}
+              disabled={isTraining || ensembleSize > 1}
               min="1"
               max="100"
               onChange={(e) => setEpochs(e.target.value)}
@@ -609,7 +683,7 @@ export default function TrainingView() {
             <input
               type="number"
               value={batchSize}
-              disabled={isTraining || trainingMode === "triad"}
+              disabled={isTraining || ensembleSize > 1}
               min="4"
               max="128"
               onChange={(e) => setBatchSize(e.target.value)}
@@ -618,6 +692,7 @@ export default function TrainingView() {
           </div>
         </div>
 
+        {/* Selección de Framework */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="text-[11px] text-gray-400 block mb-1 font-medium">Framework</label>
@@ -632,27 +707,109 @@ export default function TrainingView() {
             </select>
           </div>
 
-          <div>
-            <label className="text-[11px] text-gray-400 block mb-1 font-medium flex items-center justify-between">
-              <span>Arquitectura de Red Neuronal</span>
-              <span className="text-[10px] text-emerald-400 font-normal">
-                {ARCHITECTURE_PRESETS[architecture]?.desc || "Calibrado"}
-              </span>
-            </label>
-            <select
-              value={architecture}
-              disabled={isTraining || trainingMode === "triad"}
-              onChange={(e) => handleArchitectureChange(e.target.value)}
-              className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-blue-500 font-mono disabled:opacity-60"
-            >
-              <option value="EfficientNet-B0">EfficientNet-B0 (Transfer Learning · Pitch Shift)</option>
-              <option value="ConvNeXt-Nano">ConvNeXt-Nano (Arquitectura Moderna)</option>
-              <option value="ResNet-34d">ResNet-34d (ResNet Profunda)</option>
-              <option value="PANNs-CNN14">PANNs-CNN14 (Audio Industrial & Pre-trained CNN)</option>
-              <option value="AudioCNN">AudioCNN (Baseline Convolucional FAMA)</option>
-            </select>
-          </div>
+          {ensembleSize === 1 && (
+            <div>
+              <label className="text-[11px] text-gray-400 block mb-1 font-medium flex items-center justify-between">
+                <span>Arquitectura de Red Neuronal</span>
+                <span className="text-[10px] text-emerald-400 font-normal">
+                  {ARCHITECTURE_PRESETS[architecture]?.desc || "Calibrado"}
+                </span>
+              </label>
+              <select
+                value={architecture}
+                disabled={isTraining}
+                onChange={(e) => handleArchitectureChange(e.target.value)}
+                className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-blue-500 font-mono disabled:opacity-60"
+              >
+                <option value="EfficientNet-B0">EfficientNet-B0 (Transfer Learning · Pitch Shift)</option>
+                <option value="ConvNeXt-Nano">ConvNeXt-Nano (Arquitectura Moderna)</option>
+                <option value="ResNet-34d">ResNet-34d (ResNet Profunda)</option>
+                <option value="PANNs-CNN14">PANNs-CNN14 (Audio Industrial & Pre-trained CNN)</option>
+                <option value="AudioCNN">AudioCNN (Baseline Convolucional FAMA)</option>
+              </select>
+            </div>
+          )}
         </div>
+
+        {/* Configuración Detallada de Miembros del Ensamble con Sliders Auto-Rebalanceados */}
+        {ensembleSize > 1 && (
+          <div className="space-y-3 pt-2 border-t border-[#23252e]/60">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
+                <svg className="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+                Composición y Ponderación del Ensamble ({ensembleSize} Modelos)
+              </span>
+              <span className="text-[10px] text-emerald-400 font-mono bg-emerald-950/60 border border-emerald-800/50 px-2 py-0.5 rounded flex items-center gap-1">
+                <svg className="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                &Sigma; w<sub>i</sub> = 100% (Normalizado)
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2.5">
+              {ensembleModels.slice(0, ensembleSize).map((m, idx) => (
+                <div
+                  key={idx}
+                  className="p-3 rounded-lg bg-[#111215] border border-[#23252e] space-y-2 hover:border-[#2f323e] transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-300 text-[10px] font-mono font-bold flex items-center justify-center">
+                        {idx + 1}
+                      </span>
+                      <span className="text-xs font-semibold text-gray-200">
+                        Modelo #{idx + 1}: {m.architecture}
+                      </span>
+                    </div>
+                    <span className="text-[11px] font-mono text-cyan-300 font-semibold bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-800/40">
+                      {(m.weight * 100).toFixed(0)}% (w = {m.weight.toFixed(2)})
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                    <div>
+                      <label className="text-[10px] text-gray-400 block mb-1 font-medium">Arquitectura Pre-entrenada</label>
+                      <select
+                        value={m.architecture}
+                        disabled={isTraining}
+                        onChange={(e) => handleModelArchChange(idx, e.target.value)}
+                        className="w-full bg-[#16171b] border border-[#23252e] rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-cyan-500 font-mono disabled:opacity-60"
+                      >
+                        <option value="EfficientNet-B0">EfficientNet-B0 (Transfer Learning)</option>
+                        <option value="ConvNeXt-Nano">ConvNeXt-Nano (Arquitectura Moderna)</option>
+                        <option value="ResNet-34d">ResNet-34d (ResNet Profunda)</option>
+                        <option value="PANNs-CNN14">PANNs-CNN14 (Audio Industrial CNN)</option>
+                        <option value="AudioCNN">AudioCNN (Baseline Convolucional)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-[10px] text-gray-400 font-medium">Ponderación en Inferencia (w<sub>{idx + 1}</sub>)</label>
+                        <span className="text-[10px] font-mono text-gray-400">
+                          {(m.weight * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="1"
+                        value={Math.round(m.weight * 100)}
+                        disabled={isTraining}
+                        onChange={(e) => handleWeightChange(idx, parseInt(e.target.value, 10) / 100)}
+                        className="w-full h-1.5 bg-[#23252e] rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Estimación de Tiempo de Cómputo */}
         <div className="flex items-center justify-between pt-1 text-xs text-gray-400 border-t border-[#23252e]/60">
@@ -667,7 +824,9 @@ export default function TrainingView() {
           </div>
 
           <span className="text-[11px] text-gray-500 font-mono">
-            {trainingMode === "triad" ? "3 modelos secuenciales (Pipeline MLOps)" : "1 modelo seleccionado"}
+            {ensembleSize === 1
+              ? "1 modelo seleccionado"
+              : `${ensembleSize} modelos secuenciales (Pipeline MLOps Ensamble)`}
           </span>
         </div>
 
@@ -678,8 +837,10 @@ export default function TrainingView() {
             onClick={handleStartTraining}
             disabled={isTraining}
             className={`flex-1 py-2.5 rounded-lg text-white font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-40 disabled:cursor-not-allowed ${
-              trainingMode === "triad"
+              ensembleSize === 3
                 ? "bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 shadow-emerald-950/40"
+                : ensembleSize === 2
+                ? "bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 shadow-cyan-950/40"
                 : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-blue-950/40"
             }`}
           >
@@ -691,7 +852,7 @@ export default function TrainingView() {
                 </svg>
                 <span>
                   {triadProgress.isTriad
-                    ? `Tríada [${triadProgress.modelIdx}/3 ${triadProgress.currentArch}] · Época ${currentEpoch}/${totalEpochs}...`
+                    ? `Ensamble [${triadProgress.modelIdx}/${triadProgress.totalModels} ${triadProgress.currentArch}] · Época ${currentEpoch}/${totalEpochs}...`
                     : `Entrenando Época ${currentEpoch} / ${totalEpochs}...`}
                 </span>
               </>
@@ -701,13 +862,16 @@ export default function TrainingView() {
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
                 </svg>
                 <span>
-                  {trainingMode === "triad"
-                    ? "Iniciar Pipeline de Tríada Completa (3 Modelos)"
-                    : "Iniciar Entrenamiento Local"}
+                  {ensembleSize === 1
+                    ? "Iniciar Entrenamiento Local (1 Modelo)"
+                    : ensembleSize === 2
+                    ? "Iniciar Pipeline Dúo Ensamble (2 Modelos)"
+                    : "Iniciar Pipeline de Tri Ensamble (3 Modelos)"}
                 </span>
               </>
             )}
           </button>
+
 
           {isTraining && (
             <button

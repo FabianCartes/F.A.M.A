@@ -126,3 +126,42 @@ def test_training_lifecycle_triad(client):
             framework="pytorch",
             is_tri_model=True,
         )
+
+
+def test_training_lifecycle_dynamic_ensemble(client):
+    """Verifica que POST /api/training/start procese modelos dinámicos con ponderaciones."""
+    with patch("app.services.training.training_service.start_training") as mock_start:
+        mock_start.return_value = {
+            "status": "started",
+            "job_id": "fama_ensemble_123",
+            "message": "Pipeline de Ensamble iniciado.",
+        }
+        payload = {
+            "dataset_name": "AvesChilenas",
+            "models": [
+                {"architecture": "ConvNeXt-Nano", "weight": 0.6},
+                {"architecture": "EfficientNet-B0", "weight": 0.4},
+            ],
+            "epochs": 12,
+            "learning_rate": 0.0005,
+            "batch_size": 16,
+            "framework": "pytorch",
+        }
+        res = client.post("/api/training/start", json=payload)
+        assert res.status_code == 200
+        data = res.json()
+        assert data["status"] == "started"
+        mock_start.assert_called_once_with(
+            dataset_name="AvesChilenas",
+            architecture="EfficientNet-B0",
+            epochs=12,
+            learning_rate=0.0005,
+            batch_size=16,
+            framework="pytorch",
+            is_tri_model=False,
+            models=[
+                {"architecture": "ConvNeXt-Nano", "weight": 0.6},
+                {"architecture": "EfficientNet-B0", "weight": 0.4},
+            ],
+        )
+

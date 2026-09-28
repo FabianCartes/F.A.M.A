@@ -21,5 +21,10 @@ __all__ = [
     "PendingFeedbackItem",
     "FeedbackStatsResponse",
     "ApproveFeedbackResponse",
+    "ModelEnsembleItem",
+    "StartTrainingRequest",
 ]
+
+from app.schemas.training import ModelEnsembleItem, StartTrainingRequest
+
 

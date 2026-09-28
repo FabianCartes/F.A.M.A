@@ -272,6 +272,7 @@ class TrainingService:
                 "current_model_index": getattr(self, "current_model_index", 1),
                 "total_models": getattr(self, "total_models", 1),
                 "current_architecture": getattr(self, "current_architecture", ""),
+                "models_config": getattr(self, "models_config", []),
                 "epoch": self.current_epoch,
                 "total_epochs": self.total_epochs,
                 "train_loss": self.current_train_loss,
@@ -304,25 +305,49 @@ class TrainingService:
         batch_size: int = 16,
         framework: str = "pytorch",
         is_tri_model: bool = False,
+        models: Optional[List[Any]] = None,
     ) -> Dict[str, Any]:
         """
         Inicia un nuevo ciclo de entrenamiento bioacústico en un hilo desacoplado.
-        Soporta modo individual o pipeline secuencial de la Tríada Completa (Super-Ensamble).
+        Soporta modo individual, pipeline secuencial de la Tríada Completa o Ensamble Dinámico (1 a 3 modelos).
         """
         with self._lock:
             if self.status == "training":
                 raise RuntimeError("Ya existe un proceso de entrenamiento en ejecución.")
 
-            mode_tag = "triad" if is_tri_model else architecture.lower().replace('-', '_')
+            is_engine = dataset_name in ["engine_diagnostics", "MotoresVehiculares"]
+            triad_list = ENGINE_TRIAD_ARCHITECTURES if is_engine else TRIAD_ARCHITECTURES
+
+            if models is not None and len(models) > 0:
+                resolved_models = []
+                for m in models:
+                    if isinstance(m, dict):
+                        resolved_models.append({
+                            "architecture": m["architecture"],
+                            "weight": float(m.get("weight", 1.0)),
+                        })
+                    else:
+                        resolved_models.append({
+                            "architecture": getattr(m, "architecture"),
+                            "weight": float(getattr(m, "weight", 1.0)),
+                        })
+                is_ensemble = len(resolved_models) > 1
+            elif is_tri_model:
+                resolved_models = [{"architecture": a, "weight": 1.0 / len(triad_list)} for a in triad_list]
+                is_ensemble = True
+            else:
+                resolved_models = [{"architecture": architecture, "weight": 1.0}]
+                is_ensemble = False
+
+            mode_tag = "ensemble" if is_ensemble else resolved_models[0]["architecture"].lower().replace('-', '_')
             job_id = f"fama_{mode_tag}_{int(time.time())}"
             self.current_job_id = job_id
             self.status = "training"
-            self.is_tri_model = is_tri_model
-            is_engine = dataset_name in ["engine_diagnostics", "MotoresVehiculares"]
-            triad_list = ENGINE_TRIAD_ARCHITECTURES if is_engine else TRIAD_ARCHITECTURES
-            self.total_models = len(triad_list) if is_tri_model else 1
+            self.is_tri_model = is_tri_model or (len(resolved_models) == 3)
+            self.models_config = resolved_models
+            self.total_models = len(resolved_models)
             self.current_model_index = 1
-            self.current_architecture = triad_list[0] if is_tri_model else architecture
+            self.current_architecture = resolved_models[0]["architecture"]
             self.current_epoch = 0
             self.total_epochs = max(1, epochs)
             self.current_train_loss = 0.0
@@ -343,7 +368,8 @@ class TrainingService:
             "learning_rate": learning_rate,
             "batch_size": batch_size,
             "framework": framework,
-            "is_tri_model": is_tri_model,
+            "is_tri_model": self.is_tri_model,
+            "models": resolved_models,
         }
 
         # Lanzar en hilo de fondo para no bloquear el servidor FastAPI
@@ -355,17 +381,18 @@ class TrainingService:
         )
         thread.start()
 
-        msg = (
-            f"Pipeline de Tríada Completa (Super-Ensamble: EfficientNet-B0 -> ConvNeXt-Nano -> ResNet-34d) iniciado."
-            if is_tri_model
-            else f"Entrenamiento de {architecture} iniciado para {self.total_epochs} épocas."
-        )
+        if is_ensemble:
+            arch_summary = " -> ".join([m["architecture"] for m in resolved_models])
+            msg = f"Pipeline de Ensamble ({len(resolved_models)} modelos: {arch_summary}) iniciado."
+        else:
+            msg = f"Entrenamiento de {resolved_models[0]['architecture']} iniciado para {self.total_epochs} épocas."
 
         return {
             "status": "started",
             "job_id": job_id,
             "message": msg,
         }
+
 
     def _build_model_instance(self, arch: str, num_classes: int, device: torch.device) -> torch.nn.Module:
         arch_lower = arch.lower().replace("-", "_")
@@ -397,16 +424,24 @@ class TrainingService:
         job_id = config["job_id"]
         dataset_name = config["dataset_name"]
         is_tri_model = config.get("is_tri_model", False)
-
         is_engine = dataset_name in ["engine_diagnostics", "MotoresVehiculares"]
-        triad_list = ENGINE_TRIAD_ARCHITECTURES if is_engine else TRIAD_ARCHITECTURES
-        models_to_train = triad_list if is_tri_model else [config["architecture"]]
+
+        if "models" in config and config["models"]:
+            models_to_train = [m["architecture"] for m in config["models"]]
+            model_weights = {m["architecture"]: m.get("weight", 1.0) for m in config["models"]}
+        else:
+            triad_list = ENGINE_TRIAD_ARCHITECTURES if is_engine else TRIAD_ARCHITECTURES
+            models_to_train = triad_list if is_tri_model else [config["architecture"]]
+            model_weights = {a: 1.0 / len(models_to_train) for a in models_to_train}
+
+
+        is_ensemble = len(models_to_train) > 1
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         device_str = device.type
 
-        if is_tri_model:
-            self._add_log("INFO", f"🚀 Iniciando Pipeline de Tríada Completa para '{dataset_name}' en {device_str.upper()}.")
+        if is_ensemble:
+            self._add_log("INFO", f"🚀 Iniciando Pipeline de Ensamble ({len(models_to_train)} modelos) para '{dataset_name}' en {device_str.upper()}.")
             self._add_log("INFO", f"Plan de ejecución secuencial: {' -> '.join(models_to_train)}")
         else:
             self._add_log("INFO", f"Iniciando pipeline en dispositivo: {device_str.upper()}. Arquitectura: {config['architecture']}")
@@ -469,20 +504,22 @@ class TrainingService:
                     break
 
                 preset = ARCHITECTURE_PRESETS.get(arch, {})
-                arch_epochs = preset.get("epochs", config["epochs"]) if is_tri_model else config["epochs"]
-                arch_lr = preset.get("lr", config["learning_rate"]) if is_tri_model else config["learning_rate"]
-                arch_batch = preset.get("batch", config["batch_size"]) if is_tri_model else config["batch_size"]
+                arch_epochs = preset.get("epochs", config["epochs"]) if is_ensemble else config["epochs"]
+                arch_lr = preset.get("lr", config["learning_rate"]) if is_ensemble else config["learning_rate"]
+                arch_batch = preset.get("batch", config["batch_size"]) if is_ensemble else config["batch_size"]
 
                 with self._lock:
                     self.current_model_index = idx + 1
+                    self.total_models = len(models_to_train)
                     self.current_architecture = arch
                     self.current_epoch = 0
                     self.total_epochs = arch_epochs
 
-                if is_tri_model:
-                    self._add_log("INFO", f"▶ [Paso {idx+1}/{len(models_to_train)}] Entrenando {arch} (LR: {arch_lr}, Batch: {arch_batch}, Épocas: {arch_epochs})...")
+                if is_ensemble:
+                    self._add_log("INFO", f"▶ [Paso {idx+1}/{len(models_to_train)}] Entrenando {arch} (LR: {arch_lr}, Batch: {arch_batch}, Épocas: {arch_epochs}, Peso: {model_weights.get(arch, 1.0):.2f})...")
                 else:
                     self._add_log("INFO", f"Hiperparámetros -> LR: {arch_lr}, Batch: {arch_batch}, Épocas: {arch_epochs}")
+
 
                 # Instanciar DataLoaders de PyTorch
                 if is_engine:
@@ -657,7 +694,7 @@ class TrainingService:
                         self.current_val_acc = val_acc
                         self.metrics_history.append(metric_entry)
 
-                    prefix = f"[{arch}] " if is_tri_model else ""
+                    prefix = f"[{arch}] " if is_ensemble else ""
                     self._add_log(
                         "SUCCESS",
                         f"{prefix}Época {epoch}/{arch_epochs} -> Loss: {tr_loss:.4f} | Val Loss: {val_loss:.4f} | "
@@ -671,14 +708,17 @@ class TrainingService:
                     "epochs": arch_epochs,
                     "best_val_acc": best_val_acc,
                     "classes": classes,
+                    "ensemble_weight": model_weights.get(arch, 1.0),
+                    "ensemble_models": config.get("models"),
                     "state_dict": saved_state,
                     "created_at": datetime.now(timezone.utc).isoformat(),
                 }
                 torch.save(checkpoint_payload, str(checkpoint_path))
-                file_size = checkpoint_path.stat().st_size
-                file_hash = hashlib.sha256(checkpoint_path.read_bytes()).hexdigest()[:16]
+                file_size = checkpoint_path.stat().st_size if checkpoint_path.exists() else 0
+                file_hash = hashlib.sha256(checkpoint_path.read_bytes()).hexdigest()[:16] if checkpoint_path.exists() else "0000000000000000"
 
                 self._add_log("SUCCESS", f"Artefacto real del modelo {arch} guardado: {checkpoint_filename} ({file_size} bytes)")
+
 
                 # Persistencia en PostgreSQL (Tablas 6.6 y 6.7)
                 db: Session = SessionLocal()
@@ -698,7 +738,7 @@ class TrainingService:
                         ruta_binario_gcp=f"models/{checkpoint_filename}",
                         tamano_bytes=file_size,
                         hash_binario=file_hash,
-                        activo=(idx == 0 and not is_tri_model),
+                        activo=(idx == 0 and not is_ensemble),
                         estado="entrenado",
                     )
                     db.add(nuevo_modelo)
@@ -728,16 +768,17 @@ class TrainingService:
                     torch.cuda.empty_cache()
                 gc.collect()
 
-                if is_tri_model and idx < len(models_to_train) - 1:
+                if is_ensemble and idx < len(models_to_train) - 1:
                     self._add_log("INFO", f"Memoria liberada exitosamente. Pasando al siguiente modelo ({models_to_train[idx+1]})...")
 
             if not self._stop_requested:
                 with self._lock:
                     self.status = "completed"
-                if is_tri_model:
-                    self._add_log("SUCCESS", "🎉 ¡Tríada Completa finalizada con éxito! Los 3 modelos han sido registrados en PostgreSQL y están listos para el Super-Ensamble.")
+                if is_ensemble:
+                    self._add_log("SUCCESS", f"🎉 ¡Ensamble de {len(models_to_train)} modelos finalizado con éxito! Todos los modelos han sido registrados en PostgreSQL.")
                 else:
                     self._add_log("SUCCESS", f"Pipeline de modelado finalizado exitosamente. Mejor Val Acc: {best_val_acc:.2f}%")
+
 
         except Exception as exc:
             with self._lock:

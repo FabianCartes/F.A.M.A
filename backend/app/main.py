@@ -717,15 +717,7 @@ async def upload_ingestion_files(
 
 # ============================================================================
 # ENDPOINTS DE ENTRENAMIENTO Y MÉTRICAS (RF_04, CU_INV_03, CU_INV_04, CU_INV_05)
-# ============================================================================
-class StartTrainingRequest(BaseModel):
-    dataset_name: str = "AvesChilenas"
-    architecture: str = "EfficientNet-B0"
-    epochs: int = 10
-    learning_rate: float = 0.001
-    batch_size: int = 16
-    framework: str = "pytorch"
-    is_tri_model: bool = False
+from app.schemas.training import StartTrainingRequest
 
 
 @app.get("/api/training/hardware")
@@ -749,21 +741,26 @@ def get_training_datasets(db: Session = Depends(get_db)):
 def start_training_pipeline(req: StartTrainingRequest):
     """
     Inicia un entrenamiento en segundo plano utilizando PyTorch (CU_INV_03).
-    Soporta modelo individual o pipeline secuencial de la Tríada Completa.
+    Soporta modelo individual, pipeline secuencial de la Tríada Completa o Ensamble Dinámico.
     """
     try:
-        result = training_service.start_training(
-            dataset_name=req.dataset_name,
-            architecture=req.architecture,
-            epochs=req.epochs,
-            learning_rate=req.learning_rate,
-            batch_size=req.batch_size,
-            framework=req.framework,
-            is_tri_model=req.is_tri_model,
-        )
+        kwargs = {
+            "dataset_name": req.dataset_name,
+            "architecture": req.architecture,
+            "epochs": req.epochs,
+            "learning_rate": req.learning_rate,
+            "batch_size": req.batch_size,
+            "framework": req.framework,
+            "is_tri_model": req.is_tri_model,
+        }
+        if getattr(req, "_explicit_models", False) and req.models is not None:
+            kwargs["models"] = [m.model_dump() for m in req.models]
+
+        result = training_service.start_training(**kwargs)
         return result
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
 
 
 @app.get("/api/training/progress")

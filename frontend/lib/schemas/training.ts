@@ -46,16 +46,24 @@ export type DatasetsResponse = z.infer<typeof DatasetsResponseSchema>;
 // ============================================================================
 // TRAINING LIFECYCLE SCHEMAS (CU_INV_03)
 // ============================================================================
+export const ModelEnsembleItemSchema = z.object({
+  architecture: z.string(),
+  weight: z.number().min(0).max(1),
+});
+export type ModelEnsembleItem = z.infer<typeof ModelEnsembleItemSchema>;
+
 export const StartTrainingRequestSchema = z.object({
   dataset_name: z.string().min(1, "Dataset name is required"),
-  architecture: z.string().default("EfficientNet-B0"),
+  architecture: z.string().optional().default("EfficientNet-B0"),
   epochs: z.number().int().positive().default(10),
   learning_rate: z.number().positive().default(0.001),
   batch_size: z.number().int().positive().default(16),
   framework: z.string().default("pytorch"),
   is_tri_model: z.boolean().optional().default(false),
+  models: z.array(ModelEnsembleItemSchema).min(1).max(3).optional(),
 });
 export type StartTrainingRequest = z.infer<typeof StartTrainingRequestSchema>;
+
 
 export const StartTrainingResponseSchema = z.object({
   status: z.string(),
