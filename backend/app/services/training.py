@@ -767,6 +767,8 @@ class TrainingService:
 
                     metric_entry = {
                         "epoca": epoch,
+                        "architecture": arch,
+                        "model_index": idx + 1,
                         "train_loss": tr_loss,
                         "val_loss": val_loss,
                         "train_acc": tr_acc,

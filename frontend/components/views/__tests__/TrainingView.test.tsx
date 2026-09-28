@@ -193,5 +193,38 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     // Target SR default is 22050 -> Nyquist is 11025. 15000 > 11025, should show warning
     expect(screen.getByText(/Violación de Nyquist/i)).toBeDefined();
   });
+
+  it("renders model filter pills in chart when Duo Ensemble is selected", async () => {
+    await act(async () => {
+      render(<TrainingView />);
+    });
+
+    const duoBtn = screen.getByText("2 Modelos (Dúo)");
+    await act(async () => {
+      fireEvent.click(duoBtn);
+    });
+
+    // Chart should show filter pills
+    expect(screen.getByRole("button", { name: "Modelo Actual" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Modelo 1" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Modelo 2" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Todos" })).toBeDefined();
+
+    // Toggle to Modelo 1
+    const m1Btn = screen.getByRole("button", { name: "Modelo 1" });
+    await act(async () => {
+      fireEvent.click(m1Btn);
+    });
+    expect(m1Btn.className).toContain("bg-cyan-600");
+
+    // Toggle to Todos
+    const allBtn = screen.getByRole("button", { name: "Todos" });
+    await act(async () => {
+      fireEvent.click(allBtn);
+    });
+    expect(allBtn.className).toContain("bg-emerald-600");
+  });
 });
+
+
 

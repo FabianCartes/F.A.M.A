@@ -8,6 +8,7 @@ import {
   AudioDomainPresetKey,
   validateAudioPhysics,
 } from "@/lib/utils/audioDomainPresets";
+import { getChartPaths, ChartOptions } from "@/lib/utils/trainingChart";
 
 // ============================================================================
 // INTERFACES DEL DOMINIO DE ENTRENAMIENTO (RF_04, CU_INV_02, CU_INV_03)
@@ -43,6 +44,8 @@ interface MetricPoint {
   train_acc: number;
   val_acc: number;
   tiempo_epoca: number;
+  architecture?: string;
+  model_index?: number;
 }
 
 interface LogEntry {
@@ -252,6 +255,98 @@ export default function TrainingView() {
   const [currentValAcc, setCurrentValAcc] = useState<number>(0.0);
   const [metricsHistory, setMetricsHistory] = useState<MetricPoint[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [chartModelFilter, setChartModelFilter] = useState<"current" | "all" | number>("current");
+
+  // Modelos disponibles para el filtro del gráfico en ensambles
+  const availableChartModels = useMemo(() => {
+    const modelsInHistory = Array.from(
+      new Set(metricsHistory.map((m) => m.model_index ?? 1))
+    ).sort((a, b) => a - b);
+
+    if (modelsInHistory.length > 1) {
+      return modelsInHistory.map((idx) => {
+        const point = metricsHistory.find((m) => (m.model_index ?? 1) === idx);
+        const arch =
+          point?.architecture ||
+          ensembleModels[idx - 1]?.architecture ||
+          `Modelo ${idx}`;
+        return { index: idx, architecture: arch };
+      });
+    }
+
+    if (ensembleSize > 1 || triadProgress.totalModels > 1) {
+      const total = Math.max(ensembleSize, triadProgress.totalModels);
+      return Array.from({ length: total }, (_, i) => ({
+        index: i + 1,
+        architecture: ensembleModels[i]?.architecture || `Modelo ${i + 1}`,
+      }));
+    }
+
+    return [];
+  }, [metricsHistory, ensembleSize, triadProgress.totalModels, ensembleModels]);
+
+  // Cálculo desacoplado y reactivo de curvas y coordenadas SVG
+  const chartOptions: ChartOptions = useMemo(() => {
+    return {
+      width: 300,
+      height: 100,
+      paddingTop: 14,
+      paddingBottom: 14,
+      totalEpochs: totalEpochs,
+      activeModelFilter: chartModelFilter,
+      currentModelIndex: triadProgress.modelIdx,
+      modelsConfig: ensembleModels
+        .slice(0, Math.max(ensembleSize, triadProgress.totalModels))
+        .map((m) => ({
+          architecture: m.architecture,
+          epochs: parseInt(
+            ARCHITECTURE_PRESETS[m.architecture]?.epochs || epochs,
+            10
+          ),
+        })),
+    };
+  }, [
+    totalEpochs,
+    chartModelFilter,
+    triadProgress.modelIdx,
+    ensembleModels,
+    ensembleSize,
+    triadProgress.totalModels,
+    epochs,
+  ]);
+
+  const chartData = useMemo(() => {
+    return getChartPaths(metricsHistory, chartOptions);
+  }, [metricsHistory, chartOptions]);
+
+  const displayMetrics = useMemo(() => {
+    if (
+      typeof chartModelFilter === "number" &&
+      chartData.filteredMetrics.length > 0
+    ) {
+      const last =
+        chartData.filteredMetrics[chartData.filteredMetrics.length - 1];
+      return {
+        trainLoss: last.train_loss,
+        valLoss: last.val_loss,
+        trainAcc: last.train_acc,
+        valAcc: last.val_acc,
+      };
+    }
+    return {
+      trainLoss: currentTrainLoss,
+      valLoss: currentValLoss,
+      trainAcc: currentTrainAcc,
+      valAcc: currentValAcc,
+    };
+  }, [
+    chartModelFilter,
+    chartData.filteredMetrics,
+    currentTrainLoss,
+    currentValLoss,
+    currentTrainAcc,
+    currentValAcc,
+  ]);
 
   // 4. Historial de Modelos (CU_INV_04 / CU_INV_05)
   const [history, setHistory] = useState<ModelHistoryItem[]>([]);
@@ -1329,42 +1424,84 @@ export default function TrainingView() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Tarjeta: Curvas y Métricas en Tiempo Real (IS_02) */}
         <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-3 shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <span className="text-xs text-gray-300 font-semibold flex items-center gap-1.5">
               <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
               </svg>
               Curvas de Precisión y Pérdida en Tiempo Real
-          </span>
+            </span>
             <span className="text-[10px] text-gray-500 font-mono">
               Época {currentEpoch} de {totalEpochs}
             </span>
           </div>
+
+          {/* Selector de Pestañas / Pills por Modelo en Ensambles */}
+          {availableChartModels.length > 1 && (
+            <div className="flex flex-wrap items-center gap-1.5 p-1 bg-[#111215] border border-[#23252e] rounded-lg">
+              <button
+                type="button"
+                onClick={() => setChartModelFilter("current")}
+                className={`px-2 py-1 rounded text-[10px] font-mono transition-all ${
+                  chartModelFilter === "current"
+                    ? "bg-blue-600 text-white font-semibold shadow-sm"
+                    : "text-gray-400 hover:text-gray-200"
+                }`}
+              >
+                Modelo Actual
+              </button>
+              {availableChartModels.map((m) => (
+                <button
+                  key={`filter-${m.index}`}
+                  type="button"
+                  onClick={() => setChartModelFilter(m.index)}
+                  className={`px-2 py-1 rounded text-[10px] font-mono transition-all ${
+                    chartModelFilter === m.index
+                      ? "bg-cyan-600 text-white font-semibold shadow-sm"
+                      : "text-gray-400 hover:text-gray-200"
+                  }`}
+                >
+                  Modelo {m.index}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setChartModelFilter("all")}
+                className={`px-2 py-1 rounded text-[10px] font-mono transition-all ${
+                  chartModelFilter === "all"
+                    ? "bg-emerald-600 text-white font-semibold shadow-sm"
+                    : "text-gray-400 hover:text-gray-200"
+                }`}
+              >
+                Todos
+              </button>
+            </div>
+          )}
 
           {/* Tarjetas de Métricas Actuales */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <div className="bg-[#111215] border border-[#23252e] rounded-lg p-2 text-center">
               <span className="text-[10px] text-gray-500 block">Train Loss</span>
               <span className="text-xs font-mono font-bold text-amber-400">
-                {currentTrainLoss ? currentTrainLoss.toFixed(4) : "—"}
+                {displayMetrics.trainLoss ? displayMetrics.trainLoss.toFixed(4) : "—"}
               </span>
             </div>
             <div className="bg-[#111215] border border-[#23252e] rounded-lg p-2 text-center">
               <span className="text-[10px] text-gray-500 block">Val Loss</span>
               <span className="text-xs font-mono font-bold text-rose-400">
-                {currentValLoss ? currentValLoss.toFixed(4) : "—"}
+                {displayMetrics.valLoss ? displayMetrics.valLoss.toFixed(4) : "—"}
               </span>
             </div>
             <div className="bg-[#111215] border border-[#23252e] rounded-lg p-2 text-center">
               <span className="text-[10px] text-gray-500 block">Train Acc</span>
               <span className="text-xs font-mono font-bold text-blue-400">
-                {currentTrainAcc ? `${currentTrainAcc.toFixed(1)}%` : "—"}
+                {displayMetrics.trainAcc ? `${displayMetrics.trainAcc.toFixed(1)}%` : "—"}
               </span>
             </div>
             <div className="bg-[#111215] border border-[#23252e] rounded-lg p-2 text-center">
               <span className="text-[10px] text-gray-500 block">Val Acc</span>
               <span className="text-xs font-mono font-bold text-emerald-400">
-                {currentValAcc ? `${currentValAcc.toFixed(1)}%` : "—"}
+                {displayMetrics.valAcc ? `${displayMetrics.valAcc.toFixed(1)}%` : "—"}
               </span>
             </div>
           </div>
@@ -1386,10 +1523,10 @@ export default function TrainingView() {
                       <span className="w-2 h-0.5 bg-emerald-400 inline-block" /> Val Acc (%)
                     </span>
                     <span className="flex items-center gap-1 text-rose-400">
-                      <span className="w-2 h-0.5 bg-rose-400 inline-block" /> Val Loss
+                      <span className="w-2 h-0.5 bg-rose-400 inline-block" /> Val Loss (escala {chartData.maxLoss.toFixed(1)})
                     </span>
                   </div>
-                  <span className="font-mono">Punto {metricsHistory.length}/{totalEpochs}</span>
+                  <span className="font-mono">Punto {chartData.totalPoints}/{chartData.maxPoints}</span>
                 </div>
 
                 {/* SVG Curves */}
@@ -1400,47 +1537,81 @@ export default function TrainingView() {
                     <line x1="0" y1="50" x2="300" y2="50" stroke="#1f2128" strokeDasharray="3 3" />
                     <line x1="0" y1="80" x2="300" y2="80" stroke="#1f2128" strokeDasharray="3 3" />
 
-                    {/* Curva de Accuracy (Verde) */}
-                    {metricsHistory.length > 1 && (
-                      <polyline
-                        fill="none"
-                        stroke="#10b981"
-                        strokeWidth="2.5"
-                        points={metricsHistory
-                          .map((m, idx) => {
-                            const x = (idx / (totalEpochs - 1 || 1)) * 300;
-                            // Normalizar acc de 0 a 100 en altura de 100px invertida
-                            const y = 95 - (m.val_acc / 100) * 85;
-                            return `${x},${y}`;
-                          })
-                          .join(" ")}
-                      />
-                    )}
+                    {/* Separadores entre modelos en ensamble */}
+                    {chartData.separators.map((sep) => (
+                      <g key={`sep-${sep.modelIndex}`}>
+                        <line
+                          x1={sep.x}
+                          y1={10}
+                          x2={sep.x}
+                          y2={90}
+                          stroke="#374151"
+                          strokeWidth="1.5"
+                          strokeDasharray="2 2"
+                        />
+                        <text
+                          x={sep.x + 3}
+                          y={20}
+                          fill="#9ca3af"
+                          fontSize="8"
+                          fontFamily="monospace"
+                        >
+                          {sep.label}
+                        </text>
+                      </g>
+                    ))}
 
-                    {/* Curva de Loss (Rosa/Rojo) */}
-                    {metricsHistory.length > 1 && (
-                      <polyline
-                        fill="none"
-                        stroke="#f43f5e"
-                        strokeWidth="2"
-                        strokeDasharray="2 2"
-                        points={metricsHistory
-                          .map((m, idx) => {
-                            const x = (idx / (totalEpochs - 1 || 1)) * 300;
-                            // Normalizar loss de 0 a 2.0 en altura de 100px invertida
-                            const y = Math.max(5, Math.min(95, (m.val_loss / 2.0) * 90));
-                            return `${x},${y}`;
-                          })
-                          .join(" ")}
-                      />
-                    )}
+                    {/* Segmentos de Curvas por Modelo */}
+                    {chartData.segments.map((seg) => (
+                      <g key={`segment-${seg.modelIndex}`}>
+                        {/* Curva de Accuracy (Verde) */}
+                        {seg.points.length > 1 && (
+                          <polyline
+                            fill="none"
+                            stroke="#10b981"
+                            strokeWidth="2.5"
+                            points={seg.accPolyline}
+                          />
+                        )}
 
-                    {/* Puntos de Época */}
-                    {metricsHistory.map((m, idx) => {
-                      const x = (idx / (totalEpochs - 1 || 1)) * 300;
-                      const y = 95 - (m.val_acc / 100) * 85;
-                      return <circle key={idx} cx={x} cy={y} r="3" fill="#10b981" />;
-                    })}
+                        {/* Curva de Loss (Rosa/Rojo punteada) */}
+                        {seg.points.length > 1 && (
+                          <polyline
+                            fill="none"
+                            stroke="#f43f5e"
+                            strokeWidth="2"
+                            strokeDasharray="2 2"
+                            points={seg.lossPolyline}
+                          />
+                        )}
+
+                        {/* Puntos de Accuracy */}
+                        {seg.points.map((p, pIdx) => (
+                          <circle
+                            key={`acc-${seg.modelIndex}-${pIdx}`}
+                            cx={p.x}
+                            cy={p.yAcc}
+                            r="3"
+                            fill="#10b981"
+                          >
+                            <title>{`[${seg.architecture}] Época ${p.metric.epoca}: Val Acc ${p.metric.val_acc}%`}</title>
+                          </circle>
+                        ))}
+
+                        {/* Puntos de Loss */}
+                        {seg.points.map((p, pIdx) => (
+                          <circle
+                            key={`loss-${seg.modelIndex}-${pIdx}`}
+                            cx={p.x}
+                            cy={p.yLoss}
+                            r="2.5"
+                            fill="#f43f5e"
+                          >
+                            <title>{`[${seg.architecture}] Época ${p.metric.epoca}: Val Loss ${p.metric.val_loss}`}</title>
+                          </circle>
+                        ))}
+                      </g>
+                    ))}
                   </svg>
                 </div>
               </div>

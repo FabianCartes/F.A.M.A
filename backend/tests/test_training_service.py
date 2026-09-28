@@ -108,6 +108,19 @@ def test_start_training_worker_executes_dynamic_models_sequentially(training_ser
         assert training_service.total_models == 2
         assert training_service.current_model_index == 2
 
+        # Verificar que cada entrada en metrics_history incluya architecture y model_index
+        assert len(training_service.metrics_history) == 22
+        for entry in training_service.metrics_history[:12]:
+            assert entry.get("architecture") == "ConvNeXt-Nano"
+            assert entry.get("model_index") == 1
+        for entry in training_service.metrics_history[12:]:
+            assert entry.get("architecture") == "EfficientNet-B0"
+            assert entry.get("model_index") == 2
+
+        progress = training_service.get_progress()
+        assert progress["metrics_history"][0].get("architecture") == "ConvNeXt-Nano"
+        assert progress["metrics_history"][0].get("model_index") == 1
+
 
 def test_start_training_worker_with_custom_audio_physics(training_service):
     """
