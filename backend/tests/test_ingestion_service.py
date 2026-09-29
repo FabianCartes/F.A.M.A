@@ -33,8 +33,8 @@ def test_get_storage_status_connected():
         assert status["total_bytes"] == 3072
 
 
-def test_list_datasets_empty_bucket():
-    """Verifica que retorne lista vacía si no hay datasets en GCS."""
+def test_list_datasets_empty_bucket(tmp_path):
+    """Verifica que retorne lista vacía si no hay datasets en GCS ni en local."""
     from app.services.ingestion import IngestionService
 
     with patch("google.cloud.storage.Client") as mock_client_cls:
@@ -42,13 +42,13 @@ def test_list_datasets_empty_bucket():
         mock_client_cls.return_value = mock_client
         mock_client.list_blobs.return_value = []
 
-        service = IngestionService(bucket_name="test-bucket")
+        service = IngestionService(bucket_name="test-bucket", local_base_dir=tmp_path)
         datasets = service.list_datasets()
 
         assert datasets == []
 
 
-def test_list_datasets_two_level_hierarchy():
+def test_list_datasets_two_level_hierarchy(tmp_path):
     """Verifica agrupación por dataset_name y extracción de clases: datasets/{dataset}/{class}/{audio}.wav"""
     from app.services.ingestion import IngestionService
 
@@ -68,7 +68,7 @@ def test_list_datasets_two_level_hierarchy():
 
         mock_client.list_blobs.return_value = [blob1, blob2, blob3, blob4]
 
-        service = IngestionService(bucket_name="test-bucket")
+        service = IngestionService(bucket_name="test-bucket", local_base_dir=tmp_path)
         datasets = service.list_datasets()
 
         assert len(datasets) == 2
@@ -230,5 +230,59 @@ def test_sync_dataset_with_preprocess_trigger(tmp_path):
         assert res["downloaded"] == 1
         assert res["preprocessed"] == 1
         mock_prep.assert_called_once_with("ChucaoDS")
+
+
+def test_list_datasets_gracefully_falls_back_to_local_when_gcs_unavailable():
+    """
+    Verifica que si GCS arroja DefaultCredentialsError o error de red,
+    list_datasets() degrada grácilmente a los datasets locales descubiertos en DEFAULT_LOCAL_RAW_DIR
+    (AvesChilenas, engine_diagnostics) con metadata completa:
+    id, name, classes, file_count, total_size_bytes, source='local', gcs_available=False.
+    """
+    from google.auth.exceptions import DefaultCredentialsError
+    from app.services.ingestion import IngestionService
+
+    service = IngestionService(bucket_name="test-bucket")
+    with patch.object(service, "_get_client", side_effect=DefaultCredentialsError("No credentials")):
+        datasets = service.list_datasets()
+
+        assert len(datasets) >= 2
+        dataset_names = [d["name"] for d in datasets]
+        assert "AvesChilenas" in dataset_names
+        assert "engine_diagnostics" in dataset_names
+
+        for d in datasets:
+            assert "id" in d
+            assert "name" in d
+            assert "classes" in d
+            assert isinstance(d["classes"], list)
+            assert d["class_count"] == len(d["classes"])
+            assert "file_count" in d
+            assert d["file_count"] > 0
+            assert "total_size_bytes" in d
+            assert d["total_size_bytes"] > 0
+            assert d["source"] == "local"
+            assert d["gcs_available"] is False
+
+
+def test_list_dataset_files_falls_back_to_local():
+    """
+    Verifica que si GCS no está disponible, list_dataset_files() liste
+    los archivos locales del dataset con name, class_name, size_bytes y metadata.
+    """
+    from app.services.ingestion import IngestionService
+
+    service = IngestionService(bucket_name="test-bucket")
+    with patch.object(service, "_get_client", side_effect=Exception("Network error")):
+        files = service.list_dataset_files("AvesChilenas")
+
+        assert len(files) > 0
+        first_file = files[0]
+        assert "name" in first_file
+        assert first_file["name"].endswith((".wav", ".mp3", ".flac", ".ogg"))
+        assert "class_name" in first_file
+        assert "size_bytes" in first_file
+        assert first_file["size_bytes"] > 0
+
 
 

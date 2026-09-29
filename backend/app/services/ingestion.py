@@ -17,13 +17,22 @@ else:
     load_dotenv()
 
 # Asegurar ruta absoluta a credenciales IAM
-_cred_env = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+_cred_env = os.getenv("GOOGLE_APPLICATION_CREDENTIALS") or os.getenv("GCP_KEY_PATH")
 if _cred_env:
     _cred_path = Path(_cred_env)
     if not _cred_path.is_absolute():
-        _resolved_cred = (_BACKEND_DIR / _cred_path).resolve()
-        if _resolved_cred.exists():
-            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(_resolved_cred)
+        for _candidate in [
+            _cred_path,
+            _BACKEND_DIR / _cred_path,
+            Path("/app") / _cred_path,
+            Path.cwd() / _cred_path,
+            Path.cwd() / "backend" / _cred_path,
+        ]:
+            if _candidate.exists():
+                _resolved_cred = _candidate.resolve()
+                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(_resolved_cred)
+                os.environ["GCP_KEY_PATH"] = str(_resolved_cred)
+                break
 
 DEFAULT_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME", "fama-audio-records-2026")
 
@@ -84,14 +93,85 @@ class IngestionService:
                 "error": str(exc),
             }
 
+    def list_local_datasets(self, gcs_available: bool = False) -> List[Dict[str, Any]]:
+        """
+        Escanea self.local_base_dir (DEFAULT_LOCAL_RAW_DIR), agrupa clases por subdirectorio,
+        cuenta archivos de audio (.wav, .mp3, .flac, .ogg), calcula el tamaño total en bytes
+        y retorna la lista de datasets locales estructurados con metadatos completos.
+        """
+        if not self.local_base_dir.exists() or not self.local_base_dir.is_dir():
+            return []
+
+        SUPPORTED_EXTS = {".wav", ".mp3", ".flac", ".ogg"}
+        local_datasets = []
+
+        for entry in sorted(self.local_base_dir.iterdir()):
+            if not entry.is_dir() or entry.name.startswith(".") or entry.name.startswith("__"):
+                continue
+
+            ds_name = entry.name
+            classes_set = set()
+            file_count = 0
+            total_size_bytes = 0
+            latest_mtime = 0.0
+
+            for f in sorted(entry.rglob("*")):
+                if f.is_file() and f.suffix.lower() in SUPPORTED_EXTS:
+                    rel_parents = f.relative_to(entry).parts[:-1]
+                    if rel_parents:
+                        class_name = rel_parents[-1]
+                    else:
+                        class_name = "General"
+
+                    classes_set.add(class_name)
+                    file_count += 1
+                    try:
+                        stat = f.stat()
+                        total_size_bytes += stat.st_size
+                        if stat.st_mtime > latest_mtime:
+                            latest_mtime = stat.st_mtime
+                    except OSError:
+                        pass
+
+            if file_count > 0:
+                is_ind = any(k in ds_name.lower() for k in ["engine", "motor", "maquinaria", "industrial"])
+                classes_list = sorted(list(classes_set))
+                last_mod_iso = (
+                    datetime.fromtimestamp(latest_mtime, tz=timezone.utc).isoformat()
+                    if latest_mtime > 0
+                    else None
+                )
+
+                local_datasets.append({
+                    "id": ds_name,
+                    "name": ds_name,
+                    "classes": classes_list,
+                    "class_count": len(classes_list),
+                    "file_count": file_count,
+                    "local_file_count": file_count,
+                    "total_size_bytes": total_size_bytes,
+                    "last_modified": last_mod_iso,
+                    "is_synced": True,
+                    "source": "local",
+                    "gcs_available": gcs_available,
+                    "domain": "industrial" if is_ind else "bioacoustic",
+                    "domain_label": "Acústica Industrial" if is_ind else "Bioacústica Silvestre",
+                })
+
+        return local_datasets
+
     def list_datasets(self) -> List[Dict[str, Any]]:
         """
         Lista los datasets almacenados en GCS organizados bajo la jerarquía:
         datasets/{dataset_name}/{class_label}/{audio_file.wav}
         Reporta clases/categorías contenidas, conteo de archivos, tamaño y estado de sincronización local.
+        Si GCS no está disponible o falla la conexión, degrada grácilmente a los datasets locales (offline-first).
         """
-        client = self._get_client()
-        blobs = list(client.list_blobs(self.bucket_name, prefix="datasets/"))
+        try:
+            client = self._get_client()
+            blobs = list(client.list_blobs(self.bucket_name, prefix="datasets/"))
+        except Exception:
+            return self.list_local_datasets(gcs_available=False)
 
         # Agrupar por dataset_name
         datasets_map: Dict[str, Dict[str, Any]] = {}
@@ -166,38 +246,92 @@ class IngestionService:
             is_synced = (local_file_count >= data["file_count"] and data["file_count"] > 0)
             data["local_file_count"] = local_file_count
             data["is_synced"] = is_synced
+            data["source"] = "gcs"
+            data["gcs_available"] = True
             result.append(data)
+
+        # Si GCS está conectado, fusionar los datasets de GCS con los locales
+        local_datasets = self.list_local_datasets(gcs_available=True)
+        gcs_names = {d["name"] for d in result}
+        for loc_ds in local_datasets:
+            if loc_ds["name"] not in gcs_names:
+                result.append(loc_ds)
 
         return result
 
+    def list_local_dataset_files(self, dataset_name: str) -> List[Dict[str, Any]]:
+        """
+        Lista los archivos locales dentro de un dataset específico en DEFAULT_LOCAL_RAW_DIR.
+        """
+        SUPPORTED_EXTS = {".wav", ".mp3", ".flac", ".ogg"}
+        target_dir = self.local_base_dir / dataset_name
+        if not target_dir.is_dir():
+            slug_dir = self.local_base_dir / dataset_name.lower().replace(" ", "_")
+            if slug_dir.is_dir():
+                target_dir = slug_dir
+
+        if not target_dir.is_dir():
+            return []
+
+        files = []
+        for f in sorted(target_dir.rglob("*")):
+            if f.is_file() and f.suffix.lower() in SUPPORTED_EXTS:
+                rel_parents = f.relative_to(target_dir).parts[:-1]
+                class_name = rel_parents[-1] if rel_parents else "General"
+
+                try:
+                    stat = f.stat()
+                    size_bytes = stat.st_size
+                    mod_iso = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
+                except OSError:
+                    size_bytes = 0
+                    mod_iso = None
+
+                files.append({
+                    "name": f.name,
+                    "class_name": class_name,
+                    "path": f"datasets/{dataset_name}/{class_name}/{f.name}",
+                    "size_bytes": size_bytes,
+                    "updated": mod_iso,
+                    "source": "local",
+                })
+        return files
+
     def list_dataset_files(self, dataset_name: str) -> List[Dict[str, Any]]:
         """
-        Lista todos los archivos de audio dentro de un dataset específico en GCS,
-        incluyendo la etiqueta de clase/categoría.
+        Lista todos los archivos de audio dentro de un dataset específico.
+        Intenta consultar GCS; si GCS no está disponible o falla, degrada grácilmente a los archivos locales.
         """
-        client = self._get_client()
-        prefix = f"datasets/{dataset_name}/"
-        blobs = client.list_blobs(self.bucket_name, prefix=prefix)
-        files = []
-        for blob in blobs:
-            parts = blob.name.split("/")
-            if len(parts) >= 4 and parts[3]:
-                class_name = parts[2]
-                filename = parts[3]
-            elif len(parts) == 3 and parts[2]:
-                class_name = "General"
-                filename = parts[2]
-            else:
-                continue
+        try:
+            client = self._get_client()
+            prefix = f"datasets/{dataset_name}/"
+            blobs = list(client.list_blobs(self.bucket_name, prefix=prefix))
+            files = []
+            for blob in blobs:
+                parts = blob.name.split("/")
+                if len(parts) >= 4 and parts[3]:
+                    class_name = parts[2]
+                    filename = parts[3]
+                elif len(parts) == 3 and parts[2]:
+                    class_name = "General"
+                    filename = parts[2]
+                else:
+                    continue
 
-            files.append({
-                "name": filename,
-                "class_name": class_name,
-                "path": blob.name,
-                "size_bytes": blob.size or 0,
-                "updated": blob.updated.isoformat() if blob.updated else None,
-            })
-        return files
+                files.append({
+                    "name": filename,
+                    "class_name": class_name,
+                    "path": blob.name,
+                    "size_bytes": blob.size or 0,
+                    "updated": blob.updated.isoformat() if blob.updated else None,
+                    "source": "gcs",
+                })
+
+            if not files:
+                return self.list_local_dataset_files(dataset_name)
+            return files
+        except Exception:
+            return self.list_local_dataset_files(dataset_name)
 
     def preprocess_dataset_to_tensors(self, dataset_name: str) -> Dict[str, Any]:
         """

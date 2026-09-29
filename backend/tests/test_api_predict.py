@@ -54,7 +54,13 @@ def mock_db_session():
 
 @pytest.fixture
 def client(mock_db_session):
-    """Cliente de prueba de FastAPI con dependencia de DB sobreescrita."""
+    """Cliente de prueba de FastAPI con dependencia de DB sobreescrita y modelo activo restablecido."""
+    from app.services.registry import get_model_registry, build_default_registry
+    fresh_registry = build_default_registry()
+    global_reg = get_model_registry()
+    global_reg._predictors = fresh_registry._predictors
+    global_reg._default_model_id = fresh_registry._default_model_id
+
     app.dependency_overrides[get_db] = lambda: mock_db_session
     with TestClient(app) as test_client:
         yield test_client

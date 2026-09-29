@@ -20,9 +20,16 @@ def test_registry_resolves_active_trained_model():
     default_id = registry.get_default_model_id()
     assert default_id is not None
 
+    db = SessionLocal()
+    try:
+        active_rec = db.query(Modelo).filter_by(activo=True).first()
+        expected_name = Path(active_rec.ruta_binario_gcp).name if (active_rec and active_rec.ruta_binario_gcp) else CHECKPOINT_NAME
+    finally:
+        db.close()
+
     default_predictor = registry.get()
     assert isinstance(default_predictor, TrainedModelPredictor)
-    assert default_predictor.checkpoint_path.name == CHECKPOINT_NAME
+    assert default_predictor.checkpoint_path.name == expected_name
     assert default_predictor.metadata.is_default is True
 
 
@@ -52,9 +59,12 @@ def test_training_service_set_active_model_refreshes_registry():
         res = training_service.set_active_model(6, db=db)
         assert res.get("success") is True
 
+        active_rec = db.query(Modelo).filter_by(id_modelo=6).first()
+        expected_name = Path(active_rec.ruta_binario_gcp).name if (active_rec and active_rec.ruta_binario_gcp) else CHECKPOINT_NAME
+
         global_reg = get_model_registry()
         active_predictor = global_reg.get()
         assert isinstance(active_predictor, TrainedModelPredictor)
-        assert active_predictor.checkpoint_path.name == CHECKPOINT_NAME
+        assert active_predictor.checkpoint_path.name == expected_name
     finally:
         db.close()

@@ -17,13 +17,22 @@ else:
     load_dotenv()
 
 # Asegurar que la ruta a las credenciales IAM sea absoluta si se especificó relativa
-_cred_env = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+_cred_env = os.getenv("GOOGLE_APPLICATION_CREDENTIALS") or os.getenv("GCP_KEY_PATH")
 if _cred_env:
     _cred_path = Path(_cred_env)
     if not _cred_path.is_absolute():
-        _resolved_cred = (_BACKEND_DIR / _cred_path).resolve()
-        if _resolved_cred.exists():
-            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(_resolved_cred)
+        for _candidate in [
+            _cred_path,
+            _BACKEND_DIR / _cred_path,
+            Path("/app") / _cred_path,
+            Path.cwd() / _cred_path,
+            Path.cwd() / "backend" / _cred_path,
+        ]:
+            if _candidate.exists():
+                _resolved_cred = _candidate.resolve()
+                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(_resolved_cred)
+                os.environ["GCP_KEY_PATH"] = str(_resolved_cred)
+                break
 
 # Nombre por defecto del bucket en Google Cloud Storage
 DEFAULT_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME", "fama-audio-records-2026")

@@ -27,7 +27,22 @@ export default function Home() {
     >
       {activeTab === "prediccion" && <PredictionView />}
       {activeTab === "dashboard" && <DashboardView onNavigate={setActiveTab} />}
-      {activeTab === "ingesta" && <IngestionView />}
+      {activeTab === "ingesta" && (
+        <IngestionView
+          onNavigate={(view) => {
+            if (view === "predict") {
+              setActiveTab("prediccion");
+            } else if (
+              view === "dashboard" ||
+              view === "ingesta" ||
+              view === "entrenamiento" ||
+              view === "prediccion"
+            ) {
+              setActiveTab(view);
+            }
+          }}
+        />
+      )}
       {activeTab === "entrenamiento" && <TrainingView />}
     </AppShell>
   );

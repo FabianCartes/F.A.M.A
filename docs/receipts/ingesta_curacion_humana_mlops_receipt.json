@@ -1,0 +1,97 @@
+{
+  "receipt_name": "ingesta_curacion_humana_mlops_receipt",
+  "generated_at": "2026-09-29T00:00:00Z",
+  "methodology": "TDD + RDD + ODD",
+  "architecture_layer": "Frontend UI & MLOps Feedback Loop (RF_06 / ADR 0013 / Human-in-the-Loop Curation Tray)",
+  "rdd_mode": "unmanaged",
+  "approval": "not_granted",
+  "supersedes": "none",
+  "causal_invariant": "En estricto cumplimiento de ADR 0013 y el requerimiento RF_06 (Human-in-the-Loop MLOps), se elimina por completo la vía de inyección ciega y directa de archivos de audio al Data Lake (#panel-carga-audios y dropzone de archivos no inferidos) para prevenir envenenamiento de datos (data poisoning) y desbalance artificial. En su lugar, se incorpora inmediatamente después de la tabla de Datasets la 'Bandeja de Curación e Incorporación de Audios al Dataset' (#seccion-curacion-feedback) conectada con feedbackApi (getPendingFeedback, approveFeedback, rejectFeedback). Cuando la cola de curación está vacía (0 audios pendientes), la vista renderiza un recuadro de estado vacío accesible (data-testid='curation-queue-empty', role='status', aria-live='polite') con llamada a la acción para redirigir a Inferencia Acústica (onNavigate('predict')). Cuando existen audios con retroalimentación de campo, se exponen sus metadatos (ID, archivo, hipótesis de predicción, etiqueta validada o corregida, confianza del modelo), permitiendo la incorporación supervisada con approveFeedback(id) o su descarte seguro con rejectFeedback(id), refrescando datasets y la cola de trabajo.",
+  "issue_pr": {
+    "issue": "ADR 0013 / RF_06 / Rediseño IngestionView para Curación Supervisada",
+    "pr": "none — verificado en local con TDD y suites integrales de backend y frontend"
+  },
+  "slices": [
+    {
+      "slice": "Slice 1: Eliminación del Panel de Carga Ciega Directa",
+      "description": "Remoción de #panel-carga-audios, estados y dropzones asociados a la subida ciega de archivos .wav no clasificados. Retiro del botón de subida directa en el header y actualización del mensaje en estado vacío de datasets."
+    },
+    {
+      "slice": "Slice 2: Bandeja de Curación Supervisada Human-in-the-Loop (RF_06 / ADR 0013)",
+      "description": "Implementación de la sección #seccion-curacion-feedback situada inmediatamente después de la tabla de Datasets. Conexión reactiva con feedbackApi (getPendingFeedback, approveFeedback, rejectFeedback) y soporte de la prop opcional onNavigate?: (view: string) => void en IngestionViewProps."
+    },
+    {
+      "slice": "Slice 3: Estado Vacío Accesible y Navegación a Inferencia",
+      "description": "Renderizado del contenedor data-testid='curation-queue-empty' con role='status' y aria-live='polite' cuando pendingFeedbacks.length === 0, incluyendo textos descriptivos y botón 'Ir a Inferencia Acústica' que dispara onNavigate('predict')."
+    },
+    {
+      "slice": "Slice 4: Acciones de Aprobación e Incorporación y Descarte de Audios",
+      "description": "Renderizado de la tabla de audios pendientes de curación con desglose de ID, grabación, etiqueta predicha, etiqueta corregida o validada, confianza, botón [Aprobar e Incorporar al Dataset] (que invoca approveFeedback y actualiza datasets y feedback) y botón [Descartar] (que invoca rejectFeedback)."
+    },
+    {
+      "slice": "Slice 5: Verificación TDD Red-Green y Consistencia de Tipos",
+      "description": "Diseño de la suite IngestionView.test.tsx con mocks rigurosos de feedbackApi, verificación en fase RED (4 fallos esperados) y fase GREEN (5 tests pasando al 100%), 0 errores de TypeScript con tsc --noEmit y 100% de la suite de backend pasando."
+    }
+  ],
+  "seams_under_test": [
+    {
+      "seam": "Eliminación del formulario de subida ciega directa (#panel-carga-audios)",
+      "file": "frontend/components/views/__tests__/IngestionView.test.tsx::d) verifies blind direct upload form (#panel-carga-audios or direct input) no longer exists",
+      "tests": 1,
+      "red_before_green": true,
+      "red_evidence": "Fase RED: Falló porque #panel-carga-audios e input[type='file'] aún existían en el DOM.",
+      "green_evidence": "Fase GREEN: Aprobado. #panel-carga-audios e input[type='file'] no existen en el DOM, y los textos de subida ciega fueron eliminados."
+    },
+    {
+      "seam": "Ubicación de la sección #seccion-curacion-feedback inmediatamente tras la tabla de datasets",
+      "file": "frontend/components/views/__tests__/IngestionView.test.tsx::a) renders curation section #seccion-curacion-feedback located after datasets table",
+      "tests": 1,
+      "red_before_green": true,
+      "red_evidence": "Fase RED: Falló con TestingLibraryElementError porque #seccion-curacion-feedback no existía.",
+      "green_evidence": "Fase GREEN: Aprobado. La sección está presente y precede en orden de documento tras la tabla de datasets (compareDocumentPosition DOCUMENT_POSITION_FOLLOWING)."
+    },
+    {
+      "seam": "Renderizado del estado vacío accesible con botón de navegación a inferencia",
+      "file": "frontend/components/views/__tests__/IngestionView.test.tsx::b) renders curation-queue-empty indicator when queue is empty and calls onNavigate('predict')",
+      "tests": 1,
+      "red_before_green": true,
+      "red_evidence": "Fase RED: Falló con TestingLibraryElementError: Unable to find an element by [data-testid='curation-queue-empty'].",
+      "green_evidence": "Fase GREEN: Aprobado. data-testid='curation-queue-empty' está presente con role='status', aria-live='polite', textos de contrato y el clic en 'Ir a Inferencia Acústica' invoca onNavigate('predict')."
+    },
+    {
+      "seam": "Listado de audios pendientes de curación e invocación de approveFeedback y rejectFeedback",
+      "file": "frontend/components/views/__tests__/IngestionView.test.tsx::c) renders pending feedback list and invokes approveFeedback and rejectFeedback",
+      "tests": 1,
+      "red_before_green": true,
+      "red_evidence": "Fase RED: Falló porque no se renderizaban los items pendientes ni los botones de aprobación/descarte.",
+      "green_evidence": "Fase GREEN: Aprobado. Se renderizan los audios pendientes con etiquetas corregidas y confianza, el botón de aprobación invoca approveFeedback(42, ...) y refresca datasets/cola, y el botón de descarte invoca rejectFeedback(43)."
+    }
+  ],
+  "journey_runtime_evidence": {
+    "type": "tdd_red_green_plus_full_verification",
+    "commands": [
+      "vitest run IngestionView.test.tsx (RED) -> 4 fallos esperados",
+      "vitest run IngestionView.test.tsx (GREEN) -> 5 tests pasados (100% éxito)",
+      "npm test en frontend/ -> 14 suites, 120 tests pasados, 0 fallos",
+      "npx tsc --noEmit en frontend/ -> 0 errores de tipos",
+      "pytest backend/tests/ -> 269 tests pasados, 0 fallos"
+    ]
+  },
+  "odd_observability_features": [
+    {
+      "feature": "Contenedor de estado vacío de curación accesible",
+      "implementation": "data-testid='curation-queue-empty', role='status', aria-live='polite' en IngestionView.tsx",
+      "purpose": "Permite a tecnologías asistivas y pruebas automatizadas verificar el estado en tiempo real de la cola de curación."
+    },
+    {
+      "feature": "Insignia de telemetría de cola pendiente",
+      "implementation": "Badge con '{pendingFeedbacks.length} pendiente(s)' y botón de actualización reactiva",
+      "purpose": "Visibilidad instantánea del backlog de grabaciones que requieren intervención de expertos."
+    },
+    {
+      "feature": "Logs reactivos de eventos de curación en consola de IngestionView",
+      "implementation": "addLog('SUCCESS', 'Audio #id (...) aprobado e incorporado al dataset...') y addLog('INFO', 'Audio #id descartado...')",
+      "purpose": "Trazabilidad operacional en tiempo real de las decisiones Human-in-the-Loop para auditoría de MLOps."
+    }
+  ]
+}

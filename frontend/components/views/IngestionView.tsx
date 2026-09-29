@@ -2,11 +2,20 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { API_BASE_URL } from "@/lib/api";
+import {
+  getPendingFeedback,
+  approveFeedback,
+  rejectFeedback,
+} from "@/lib/api/feedbackApi";
+import { PendingFeedbackItem } from "@/lib/schemas/feedback";
 
 // ============================================================================
-// INTERFACES DEL MODELO DE DOMINIO DE INGESTA (RF_02)
-// Jerarquía: datasets/{dataset_name}/{class_label}/{audio_file.wav}
+// INTERFACES DEL MODELO DE DOMINIO DE INGESTA (RF_02 / RF_06 / ADR 0013)
 // ============================================================================
+export interface IngestionViewProps {
+  onNavigate?: (view: string) => void;
+}
+
 interface StorageStatus {
   connected: boolean;
   bucket: string;
@@ -27,6 +36,8 @@ interface DatasetItem {
   is_synced: boolean;
   domain?: "bioacoustic" | "industrial";
   domain_label?: string;
+  source?: "gcs" | "local";
+  gcs_available?: boolean;
 }
 
 interface DatasetFile {
@@ -44,42 +55,6 @@ interface LogEntry {
   message: string;
 }
 
-const CHILEAN_SPECIES_PRESETS = [
-  "Chucao",
-  "Canastero",
-  "Chercán",
-  "Chincol",
-  "Churrín de la Mocha",
-  "Churrín del sur",
-  "Colilarga",
-  "Fío-fío",
-  "Picaflor chico",
-  "Rayadito",
-  "Tapaculo",
-  "Tijeral",
-  "Tordo",
-  "Turca",
-  "Zorzal patagónico",
-];
-
-const ENGINE_FAULT_PRESETS = [
-  { id: "bad_ignition", label: "bad_ignition (Falla de Encendido / Combustión Irregular)" },
-  { id: "dead_battery", label: "dead_battery (Batería Agotada / Arranque Lento)" },
-  { id: "low_oil", label: "low_oil (Nivel de Aceite Crítico / Golpeteo)" },
-  { id: "no oil_serpentine belt", label: "no oil_serpentine belt (Falta Aceite + Correa)" },
-  { id: "normal_brakes", label: "normal_brakes (Frenos en Estado Normal)" },
-  { id: "normal_engine_idle", label: "normal_engine_idle (Ralentí Estable Normal)" },
-  { id: "normal_engine_startup", label: "normal_engine_startup (Arranque de Fábrica Normal)" },
-  { id: "power steering combined_no oil", label: "power steering combined_no oil (Dirección + Falta Aceite)" },
-  { id: "power steering combined_no oil_serpentine belt", label: "power steering combined_no oil_serpentine belt (Triple Falla)" },
-  { id: "power steering combined_serpentine belt", label: "power steering combined_serpentine belt (Dirección + Correa)" },
-  { id: "power_steering", label: "power_steering (Bomba de Dirección Hidráulica)" },
-  { id: "serpentine_belt", label: "serpentine_belt (Correa de Accesorios Chirriante)" },
-  { id: "worn_out_brakes", label: "worn_out_brakes (Desgaste de Pastillas de Freno)" },
-];
-
-
-
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
   const k = 1024;
@@ -88,7 +63,7 @@ function formatBytes(bytes: number): string {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
 }
 
-export default function IngestionView() {
+export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
   // Estado de almacenamiento GCS
   const [storageStatus, setStorageStatus] = useState<StorageStatus | null>(null);
   const [isLoadingStatus, setIsLoadingStatus] = useState<boolean>(true);
@@ -109,15 +84,10 @@ export default function IngestionView() {
     total: number;
   }>({ downloaded: 0, skipped: 0, failed: 0, preprocessed: 0, total: 0 });
 
-  // Subida de audios (Local -> GCS) con Jerarquía Dataset/Clase
-  const [showUploadModal, setShowUploadModal] = useState<boolean>(false);
-  const [selectedDatasetOption, setSelectedDatasetOption] = useState<string>("AvesChilenas");
-  const [customDatasetName, setCustomDatasetName] = useState<string>("");
-  const [selectedClassOption, setSelectedClassOption] = useState<string>("Chucao");
-  const [customClassName, setCustomClassName] = useState<string>("");
-  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
-  const [isUploading, setIsUploading] = useState<boolean>(false);
-  const [uploadProgressMsg, setUploadProgressMsg] = useState<string>("");
+  // Curación Supervisada Human-in-the-Loop (RF_06 / ADR 0013)
+  const [pendingFeedbacks, setPendingFeedbacks] = useState<PendingFeedbackItem[]>([]);
+  const [isLoadingFeedback, setIsLoadingFeedback] = useState<boolean>(true);
+  const [processingFeedbackId, setProcessingFeedbackId] = useState<number | null>(null);
 
   // Explorador de archivos de un dataset
   const [inspectingDataset, setInspectingDataset] = useState<string | null>(null);
@@ -130,11 +100,10 @@ export default function IngestionView() {
       id: "initial-log-lake",
       timestamp: new Date().toISOString(),
       level: "INFO",
-      message: "Inicializando módulo de ingesta con arquitectura jerárquica Data Lake...",
+      message: "Inicializando módulo de ingesta y bandeja de curación supervisada (ADR 0013)...",
     },
   ]);
   const logsContainerRef = useRef<HTMLDivElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const addLog = useCallback((level: LogEntry["level"], message: string) => {
     const newEntry: LogEntry = {
@@ -153,7 +122,7 @@ export default function IngestionView() {
     }
   }, [logs]);
 
-  // Cargar estado de almacenamiento y datasets al montar
+  // Cargar estado de almacenamiento y datasets
   const fetchStatus = useCallback(async () => {
     setIsLoadingStatus(true);
     try {
@@ -194,7 +163,7 @@ export default function IngestionView() {
       if (res.ok) {
         const data = await res.json();
         setDatasets(data.datasets || []);
-        addLog("INFO", `Se listaron ${data.datasets?.length || 0} dataset(s) en Google Cloud Storage.`);
+        addLog("INFO", `Se listaron ${data.datasets?.length || 0} dataset(s) disponibles.`);
       } else {
         throw new Error(`HTTP ${res.status}`);
       }
@@ -206,20 +175,34 @@ export default function IngestionView() {
     }
   }, [addLog]);
 
+  const fetchPendingFeedbacks = useCallback(async () => {
+    setIsLoadingFeedback(true);
+    try {
+      const items = await getPendingFeedback();
+      setPendingFeedbacks(items || []);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      addLog("WARN", `Error al consultar la cola de curación: ${errMsg}`);
+    } finally {
+      setIsLoadingFeedback(false);
+    }
+  }, [addLog]);
+
   useEffect(() => {
     let isCancelled = false;
 
     async function initializeIngestion() {
       try {
-        const [resStatus, resDatasets] = await Promise.all([
+        const [statusResult, datasetsResult, feedbackResult] = await Promise.allSettled([
           fetch(`${API_BASE_URL}/api/ingestion/status`),
           fetch(`${API_BASE_URL}/api/ingestion/datasets`),
+          getPendingFeedback(),
         ]);
 
         if (isCancelled) return;
 
-        if (resStatus.ok) {
-          const data: StorageStatus = await resStatus.json();
+        if (statusResult.status === "fulfilled" && statusResult.value.ok) {
+          const data: StorageStatus = await statusResult.value.json();
           setStorageStatus(data);
           if (data.connected) {
             addLog(
@@ -227,14 +210,34 @@ export default function IngestionView() {
               `GCS conectado con éxito al bucket: ${data.bucket} (${data.total_objects} objetos, ${formatBytes(data.total_bytes)})`
             );
           } else {
-            addLog("ERROR", `Fallo al verificar bucket GCS: ${data.error || "Desconocido"}`);
+            addLog("WARN", `Data Lake operando en modo local (GCS desconectado): ${data.error || "Sin conexión"}`);
           }
+        } else if (
+          statusResult.status === "rejected" ||
+          (statusResult.status === "fulfilled" && !statusResult.value.ok)
+        ) {
+          setStorageStatus({
+            connected: false,
+            bucket: "fama-audio-records-2026",
+            total_objects: 0,
+            total_bytes: 0,
+            error: "No fue posible conectar con el servicio de almacenamiento GCS",
+          });
+          addLog("WARN", "Fallo al consultar estado de GCS. Data Lake operando en modo local.");
         }
 
-        if (resDatasets.ok) {
-          const dsData = await resDatasets.json();
+        if (datasetsResult.status === "fulfilled" && datasetsResult.value.ok) {
+          const dsData = await datasetsResult.value.json();
           setDatasets(dsData.datasets || []);
-          addLog("INFO", `Se listaron ${dsData.datasets?.length || 0} dataset(s) en Google Cloud Storage.`);
+          addLog("INFO", `Se listaron ${dsData.datasets?.length || 0} dataset(s) disponibles.`);
+        } else if (datasetsResult.status === "rejected") {
+          addLog("WARN", "Error de red al consultar datasets.");
+        }
+
+        if (feedbackResult.status === "fulfilled") {
+          setPendingFeedbacks(feedbackResult.value || []);
+        } else {
+          addLog("WARN", "No fue posible cargar la cola inicial de curación.");
         }
       } catch (err: unknown) {
         if (!isCancelled) {
@@ -245,6 +248,7 @@ export default function IngestionView() {
         if (!isCancelled) {
           setIsLoadingStatus(false);
           setIsLoadingDatasets(false);
+          setIsLoadingFeedback(false);
         }
       }
     }
@@ -315,7 +319,6 @@ export default function IngestionView() {
         total: totalDownload + totalSkip + totalFail,
       });
 
-      // Detallar logs por dataset
       for (const item of data.results || []) {
         if (item.failed > 0) {
           addLog("ERROR", `Dataset '${item.dataset}': ${item.failed} error(es) en la descarga.`);
@@ -343,7 +346,6 @@ export default function IngestionView() {
         `Sincronización completada: ${totalDownload} archivo(s) descargados, ${totalSkip} omitidos, ${totalPrep} tensores procesados.`
       );
 
-      // Refrescar lista de datasets para actualizar contadores locales
       await fetchDatasets();
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -354,88 +356,39 @@ export default function IngestionView() {
     }
   };
 
-  // Subida de Archivos a GCS con Jerarquía Dataset/Clase
-  const handleFilesDrop = (files: FileList | null) => {
-    if (!files) return;
-    const filesArray = Array.from(files);
-    const validFiles = filesArray.filter((f) =>
-      f.name.toLowerCase().endsWith(".wav")
-    );
-    setUploadFiles(validFiles);
-    if (validFiles.length < filesArray.length) {
-      addLog("WARN", "Algunos archivos no tenían formato .wav y fueron omitidos.");
-    }
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    handleFilesDrop(e.target.files);
-  };
-
-  const getTargetDatasetName = (): string => {
-    if (selectedDatasetOption === "custom") {
-      return customDatasetName.trim();
-    }
-    return selectedDatasetOption;
-  };
-
-  const getTargetClassName = (): string => {
-    if (selectedClassOption === "custom") {
-      return customClassName.trim();
-    }
-    return selectedClassOption;
-  };
-
-  const handleUploadToGCS = async () => {
-    const targetDataset = getTargetDatasetName();
-    const targetClass = getTargetClassName() || "General";
-
-    if (!targetDataset) {
-      addLog("WARN", "Debe especificar un nombre de dataset válido.");
-      return;
-    }
-    if (uploadFiles.length === 0) {
-      addLog("WARN", "Seleccione al menos un archivo .wav para subir.");
-      return;
-    }
-
-    setIsUploading(true);
-    const destPath = `datasets/${targetDataset}/${targetClass}/`;
-    setUploadProgressMsg(`Subiendo ${uploadFiles.length} archivo(s) a ${destPath}...`);
-    addLog("INFO", `Subiendo ${uploadFiles.length} archivo(s) a ${destPath} en GCS...`);
-
-    const formData = new FormData();
-    formData.append("dataset_name", targetDataset);
-    formData.append("class_label", targetClass);
-    uploadFiles.forEach((file) => {
-      formData.append("files", file);
-    });
-
+  // Acciones de Curación Human-in-the-Loop (RF_06 / ADR 0013)
+  const handleApprove = async (item: PendingFeedbackItem) => {
+    setProcessingFeedbackId(item.id_retroalimentacion);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/ingestion/upload`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}: Fallo al subir archivos.`);
-      }
-
-      const data = await res.json();
+      const datasetName = "AvesChilenas";
+      const res = await approveFeedback(item.id_retroalimentacion, datasetName);
       addLog(
         "SUCCESS",
-        `Subida exitosa: ${data.uploaded} archivo(s) almacenados en '${destPath}' en GCS.`
+        `Audio #${item.id_retroalimentacion} (${item.audio_filename || item.ruta_audio_prueba}) aprobado e incorporado al dataset '${datasetName}' (Clase: ${res.clase || item.etiqueta_corregida || item.etiqueta_predicha}).`
       );
-      setUploadFiles([]);
-      setShowUploadModal(false);
-      // Refrescar estado de GCS y datasets
-      await fetchStatus();
-      await fetchDatasets();
+      await Promise.all([fetchDatasets(), fetchPendingFeedbacks()]);
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      addLog("ERROR", `Error durante la subida a GCS: ${errMsg}`);
+      addLog("ERROR", `Error al aprobar retroalimentación #${item.id_retroalimentacion}: ${errMsg}`);
     } finally {
-      setIsUploading(false);
-      setUploadProgressMsg("");
+      setProcessingFeedbackId(null);
+    }
+  };
+
+  const handleReject = async (idRetroalimentacion: number) => {
+    setProcessingFeedbackId(idRetroalimentacion);
+    try {
+      const res = await rejectFeedback(idRetroalimentacion);
+      addLog(
+        "INFO",
+        `Audio #${idRetroalimentacion} descartado sin modificar los datasets (${res.message || "Descartado"}).`
+      );
+      await fetchPendingFeedbacks();
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      addLog("ERROR", `Error al descartar audio #${idRetroalimentacion}: ${errMsg}`);
+    } finally {
+      setProcessingFeedbackId(null);
     }
   };
 
@@ -488,8 +441,9 @@ export default function IngestionView() {
             onClick={() => {
               fetchStatus();
               fetchDatasets();
+              fetchPendingFeedbacks();
             }}
-            title="Refrescar estado de GCS"
+            title="Refrescar estado de GCS y datos"
             className="p-1.5 rounded-lg text-gray-400 hover:text-white bg-[#16171b] border border-[#23252e] hover:border-[#373a46] transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -518,282 +472,39 @@ export default function IngestionView() {
               GCP: Desconectado
             </span>
           )}
-
-          {/* Botón Acción: Subir a GCS */}
-          <button
-            type="button"
-            onClick={() => setShowUploadModal(!showUploadModal)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-300 shadow-sm ${
-              showUploadModal
-                ? "text-gray-300 bg-[#1e2129] hover:bg-[#282c37] border border-[#3a4050]"
-                : "text-emerald-300 bg-emerald-950/50 hover:bg-emerald-900/60 border border-emerald-700/60"
-            }`}
-          >
-            <svg
-              className={`w-3.5 h-3.5 transition-transform duration-300 ${
-                showUploadModal ? "rotate-90 text-gray-400" : "text-emerald-400"
-              }`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              {showUploadModal ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-              )}
-            </svg>
-            <span>{showUploadModal ? "Cerrar Panel" : "Subir audios a GCS"}</span>
-          </button>
         </div>
       </div>
 
-      {/* ==================================================================== */}
-      {/* 2. PANEL DE CARGA MASIVA CON JERARQUÍA DATASET / CLASE */}
-      {/* ==================================================================== */}
-      <div
-        className={`accordion-grid ${
-          showUploadModal ? "accordion-grid-open" : "accordion-grid-closed"
-        }`}
-      >
-        <div className="overflow-hidden">
-          <div
-            className={`transition-all duration-350 ease-out transform ${
-              showUploadModal
-                ? "translate-y-0 opacity-100 scale-100 pb-1"
-                : "-translate-y-3 opacity-0 scale-[0.99]"
-            }`}
-          >
-            <div className="bg-[#14161c] border border-emerald-900/40 rounded-xl p-5 space-y-4 shadow-xl">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#23252e] pb-3">
-                <div className="flex items-center gap-2">
-                  <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  <div>
-                    <span className="text-xs font-semibold text-white block">
-                      Carga Jerárquica al Data Lake (Cloud Storage)
-                    </span>
-                    <span className="text-[11px] text-gray-400 font-mono">
-                      Estructura: datasets / &lt;Dataset&gt; / &lt;Clase&gt; / &lt;audio.wav&gt;
-                    </span>
-                  </div>
-                </div>
-                <span className="text-[11px] text-gray-400 font-mono">
-                  Bucket: {storageStatus?.bucket || "fama-audio-records-2026"}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                {/* 1. Selección de Dataset Dinámico (detecta datasets reales en el bucket) */}
-                <div className="space-y-1.5">
-                  <label className="text-gray-300 font-medium block">
-                    1. Dataset de Destino (Colección):
-                  </label>
-                  <select
-                    value={selectedDatasetOption}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setSelectedDatasetOption(val);
-                      if (val === "AvesChilenas") {
-                        setSelectedClassOption("Chucao");
-                      } else if (val === "engine_diagnostics") {
-                        setSelectedClassOption("bad_ignition");
-                      } else {
-                        const ds = datasets.find((d) => d.name === val);
-                        const validClasses = ds?.classes?.filter((c) => c && c !== "General") || [];
-                        if (validClasses.length > 0) {
-                          setSelectedClassOption(validClasses[0]);
-                        } else {
-                          setSelectedClassOption("General");
-                        }
-                      }
-                    }}
-                    className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-emerald-600 font-mono"
-                  >
-                    <option value="AvesChilenas">
-                      AvesChilenas (Dominio Bioacústico Piloto)
-                    </option>
-                    <option value="engine_diagnostics">
-                      engine_diagnostics (Dominio Acústico Industrial)
-                    </option>
-                    {datasets
-                      .filter((d) => d.name !== "AvesChilenas" && d.name !== "engine_diagnostics")
-                      .map((d) => (
-                        <option key={d.id} value={d.name}>
-                          {d.name} ({d.file_count} audios, {d.class_count || 1} clases)
-                        </option>
-                      ))}
-                    <option value="__custom__">+ Crear Nueva Colección / Dataset...</option>
-                  </select>
-
-                  {selectedDatasetOption === "__custom__" && (
-                    <input
-                      type="text"
-                      placeholder="Ej. Murcielagos_Chile o BioacusticaUrbana"
-                      value={customDatasetName}
-                      onChange={(e) => setCustomDatasetName(e.target.value)}
-                      className="w-full bg-[#111215] border border-emerald-700/60 rounded-lg px-3 py-1.5 text-xs text-emerald-300 placeholder-gray-500 focus:outline-none focus:border-emerald-500 font-mono mt-1"
-                    />
-                  )}
-                </div>
-
-                {/* 2. Selección de Clase o Categoría */}
-                <div className="space-y-1.5">
-                  <label className="text-gray-300 font-medium block">
-                    2. Etiqueta de Clase (Especie / Categoría):
-                  </label>
-                  <select
-                    value={selectedClassOption}
-                    onChange={(e) => setSelectedClassOption(e.target.value)}
-                    className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-emerald-600 font-mono"
-                  >
-                    {selectedDatasetOption === "AvesChilenas" ? (
-                      CHILEAN_SPECIES_PRESETS.map((sp) => (
-                        <option key={sp} value={sp}>
-                          {sp}
-                        </option>
-                      ))
-                    ) : selectedDatasetOption === "engine_diagnostics" ? (
-                      ENGINE_FAULT_PRESETS.map((ef) => (
-                        <option key={ef.id} value={ef.id}>
-                          {ef.label}
-                        </option>
-                      ))
-                    ) : (
-                      <>
-                        <option value="General">General (Sin clasificar)</option>
-                        {datasets
-                          .find((d) => d.name === selectedDatasetOption)
-                          ?.classes?.filter((c) => c && c !== "General")
-                          .map((c) => (
-                            <option key={c} value={c}>
-                              {c}
-                            </option>
-                          ))}
-                      </>
-                    )}
-                    <option value="__custom_class__">+ Definir Nueva Clase...</option>
-                  </select>
-
-                  {selectedClassOption === "__custom_class__" && (
-                    <input
-                      type="text"
-                      placeholder="Ej. Elaenia_albiceps o Canto_Alarma"
-                      value={customClassName}
-                      onChange={(e) => setCustomClassName(e.target.value)}
-                      className="w-full bg-[#111215] border border-emerald-700/60 rounded-lg px-3 py-1.5 text-xs text-emerald-300 placeholder-gray-500 focus:outline-none focus:border-emerald-500 font-mono mt-1"
-                    />
-                  )}
-                </div>
-              </div>
-
-              {/* 3. Dropzone de Archivos .wav */}
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleFilesDrop(e.dataTransfer.files);
-                }}
-                className="border-2 border-dashed border-[#2d303b] hover:border-emerald-600/70 transition-colors rounded-xl p-5 text-center bg-[#111215]/60 cursor-pointer"
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept=".wav,audio/wav"
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
-                <div className="flex flex-col items-center justify-center space-y-1.5 pointer-events-none">
-                  <svg className="w-8 h-8 text-emerald-400/80 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                  </svg>
-                  <p className="text-xs font-semibold text-gray-200">
-                    Arrastra o haz clic para seleccionar grabaciones .wav
-                  </p>
-                  <p className="text-[11px] text-gray-500">
-                    Destino: <span className="font-mono text-emerald-400">datasets/{selectedDatasetOption === "__custom__" ? customDatasetName || "MiDataset" : selectedDatasetOption}/{selectedClassOption === "__custom_class__" ? customClassName || "MiClase" : selectedClassOption}/</span>
-                  </p>
-                </div>
-              </div>
-
-              {/* Archivos seleccionados en cola */}
-              {uploadFiles.length > 0 && (
-                <div className="bg-[#101114] border border-[#23252e] rounded-lg p-3 space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-gray-300">
-                      Archivos en cola ({uploadFiles.length}):
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setUploadFiles([])}
-                      className="text-[11px] text-red-400 hover:underline"
-                    >
-                      Limpiar lista
-                    </button>
-                  </div>
-                  <div className="max-h-28 overflow-y-auto space-y-1 pr-1">
-                    {uploadFiles.map((f, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between text-[11px] font-mono bg-[#16171b] px-2.5 py-1 rounded text-gray-300"
-                      >
-                        <span className="truncate max-w-xs">{f.name}</span>
-                        <span className="text-gray-500">{formatBytes(f.size)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between pt-2 border-t border-[#23252e]">
-                <span className="text-[11px] text-gray-400">
-                  {uploadFiles.length > 0 &&
-                    `Tamaño total a transferir: ${formatBytes(
-                      uploadFiles.reduce((acc, f) => acc + f.size, 0)
-                    )}`}
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowUploadModal(false)}
-                    className="px-3 py-1.5 rounded-lg text-xs text-gray-400 hover:text-white bg-transparent border border-transparent hover:border-[#2d303b] transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleUploadToGCS}
-                    disabled={isUploading || uploadFiles.length === 0}
-                    className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-md flex items-center gap-1.5"
-                  >
-                    {isUploading ? (
-                      <>
-                        <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                        </svg>
-                        <span>{uploadProgressMsg || "Subiendo a GCS..."}</span>
-                      </>
-                    ) : (
-                      <span>Subir al Data Lake</span>
-                    )}
-                  </button>
-                </div>
-              </div>
+      {/* Banner Informativo de Modo Offline / Local */}
+      {storageStatus && !storageStatus.connected && (
+        <div
+          data-testid="offline-mode-banner"
+          role="status"
+          className="bg-amber-950/40 border border-amber-800/60 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg"
+        >
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 mt-0.5 sm:mt-0">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-amber-300">
+                Data Lake en modo local (Offline-First)
+              </p>
+              <p className="text-[11px] text-amber-200/80">
+                Google Cloud Storage no está disponible o las credenciales no están configuradas. Los datos mostrados provienen del disco local (<span className="font-mono">data/raw/</span>).
+              </p>
             </div>
           </div>
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-900/60 border border-amber-700/60 text-amber-300 self-start sm:self-auto shrink-0">
+            Almacenamiento Local Activo
+          </span>
         </div>
-      </div>
+      )}
 
       {/* ==================================================================== */}
-      {/* 3. TABLA DE DATASETS REALES EN GCS (RF_02) */}
+      {/* 2. TABLA DE DATASETS REALES EN GCS (RF_02) */}
       {/* ==================================================================== */}
       <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4 shadow-sm">
         <div className="flex items-center justify-between">
@@ -868,18 +579,20 @@ export default function IngestionView() {
                         No hay datasets cargados bajo el prefijo &apos;datasets/&apos;
                       </p>
                       <p className="text-xs text-gray-500">
-                        Sube audios para crear tu primera colección organizada por especie o categoría acústica.
+                        Realiza inferencias y valida grabaciones en el clasificador acústico para incorporar audios curados al dataset.
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => setShowUploadModal(true)}
-                        className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-400 bg-emerald-950/40 border border-emerald-800/60 hover:bg-emerald-900/50 transition-colors"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                        Cargar primer dataset ahora
-                      </button>
+                      {onNavigate && (
+                        <button
+                          type="button"
+                          onClick={() => onNavigate("predict")}
+                          className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-400 bg-emerald-950/40 border border-emerald-800/60 hover:bg-emerald-900/50 transition-colors cursor-pointer"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                          </svg>
+                          <span>Ir a Inferencia Acústica</span>
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -911,6 +624,15 @@ export default function IngestionView() {
                             {d.domain === "industrial" || d.name === "engine_diagnostics"
                               ? "Industrial"
                               : "Bioacústica"}
+                          </span>
+                          <span
+                            className={`text-[9px] font-mono px-1.5 py-0.2 rounded border ${
+                              d.source === "local" || d.gcs_available === false
+                                ? "bg-slate-800/80 border-slate-600/60 text-slate-300"
+                                : "bg-sky-950/70 border-sky-800/60 text-sky-400"
+                            }`}
+                          >
+                            {d.source === "local" || d.gcs_available === false ? "Local" : "Cloud GCS"}
                           </span>
                         </div>
                       </div>
@@ -1033,6 +755,197 @@ export default function IngestionView() {
           </button>
         </div>
       </div>
+
+      {/* ==================================================================== */}
+      {/* 3. BANDEJA DE CURACIÓN E INCORPORACIÓN DE AUDIOS AL DATASET (RF_06 / ADR 0013) */}
+      {/* ==================================================================== */}
+      <section
+        id="seccion-curacion-feedback"
+        aria-label="Bandeja de Curación e Incorporación de Audios al Dataset"
+        className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4 shadow-sm"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#23252e] pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-white tracking-tight">
+                Bandeja de Curación e Incorporación de Audios al Dataset (RF_06 / ADR 0013)
+              </h2>
+              <p className="text-[11px] text-gray-400">
+                Auditoría supervisada Human-in-the-Loop para incorporar grabaciones de inferencia sin envenenar el entrenamiento.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#1c1e24] text-emerald-400 border border-emerald-800/40">
+              {pendingFeedbacks.length} pendiente(s)
+            </span>
+            <button
+              type="button"
+              onClick={fetchPendingFeedbacks}
+              disabled={isLoadingFeedback}
+              className="text-[11px] text-gray-400 hover:text-gray-200 transition-colors flex items-center gap-1 p-1 rounded hover:bg-[#1f2128]"
+              title="Actualizar cola de curación"
+            >
+              <svg className={`w-3.5 h-3.5 ${isLoadingFeedback ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* CONTENIDO DE LA BANDEJA: ESTADO DE CARGA / VACÍA / LISTADO */}
+        {isLoadingFeedback ? (
+          <div className="py-8 text-center text-gray-400">
+            <div className="flex items-center justify-center gap-2">
+              <svg className="w-4 h-4 animate-spin text-emerald-400" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+              <span className="text-xs">Consultando audios pendientes de curación...</span>
+            </div>
+          </div>
+        ) : pendingFeedbacks.length === 0 ? (
+          <div
+            data-testid="curation-queue-empty"
+            role="status"
+            aria-live="polite"
+            className="bg-[#101114]/70 border border-dashed border-[#23252e] rounded-xl p-6 text-center space-y-3"
+          >
+            <div className="w-10 h-10 mx-auto rounded-full bg-emerald-950/40 border border-emerald-800/40 flex items-center justify-center text-emerald-400">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-gray-200">
+                Cola de curación vacía (0 audios pendientes de incorporación)
+              </p>
+              <p className="text-[11px] text-gray-400 max-w-lg mx-auto">
+                Todos los audios clasificados han sido procesados. Para incorporar nuevas grabaciones con validación de modelo, realiza inferencias en el clasificador acústico.
+              </p>
+            </div>
+            <div>
+              <button
+                type="button"
+                onClick={() => onNavigate?.("predict")}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-400 bg-emerald-950/40 border border-emerald-800/60 hover:bg-emerald-900/50 transition-colors cursor-pointer shadow-sm"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+                <span>Ir a Inferencia Acústica</span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-[#23252e] text-gray-400">
+                  <th className="pb-2.5 font-medium">ID / Grabación</th>
+                  <th className="pb-2.5 font-medium">Etiqueta Predicha</th>
+                  <th className="pb-2.5 font-medium">Etiqueta Validada / Corregida</th>
+                  <th className="pb-2.5 font-medium">Confianza</th>
+                  <th className="pb-2.5 font-medium text-right pr-2">Acciones Human-in-the-Loop</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#23252e]/60">
+                {pendingFeedbacks.map((item) => {
+                  const filename =
+                    item.audio_filename ||
+                    item.ruta_audio_prueba.split("/").pop() ||
+                    item.ruta_audio_prueba;
+                  const label = item.etiqueta_corregida || item.etiqueta_predicha;
+                  const isCorrected = !item.fue_correcta && Boolean(item.etiqueta_corregida);
+                  const isProcessing = processingFeedbackId === item.id_retroalimentacion;
+
+                  return (
+                    <tr key={item.id_retroalimentacion} className="hover:bg-[#1c1e24]/40 transition-colors">
+                      <td className="py-3 font-medium text-gray-200">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-emerald-400 text-[11px] font-semibold">
+                            #{item.id_retroalimentacion}
+                          </span>
+                          <span className="font-mono text-gray-300 text-xs truncate max-w-xs" title={filename}>
+                            {filename}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-gray-500 font-mono block mt-0.5">
+                          Predicción #{item.id_prediccion}
+                        </span>
+                      </td>
+                      <td className="py-3 text-gray-400 font-mono text-xs">
+                        {item.etiqueta_predicha}
+                      </td>
+                      <td className="py-3">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[11px] font-mono font-medium border ${
+                              isCorrected
+                                ? "bg-amber-950/70 text-amber-300 border-amber-800/60"
+                                : "bg-emerald-950/70 text-emerald-400 border-emerald-800/60"
+                            }`}
+                          >
+                            {label}
+                          </span>
+                          {isCorrected && (
+                            <span className="text-[10px] text-amber-400 font-sans">
+                              (Corrección Humana)
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3 font-mono text-gray-300 text-xs">
+                        {(item.confianza * 100).toFixed(1)}%
+                      </td>
+                      <td className="py-3 text-right pr-2">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleApprove(item)}
+                            disabled={isProcessing}
+                            className="px-2.5 py-1 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 transition-colors shadow-sm flex items-center gap-1 cursor-pointer"
+                          >
+                            {isProcessing ? (
+                              <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                              </svg>
+                            ) : (
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                            <span>Aprobar e Incorporar al Dataset</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleReject(item.id_retroalimentacion)}
+                            disabled={isProcessing}
+                            className="px-2.5 py-1 rounded-lg text-xs font-semibold text-red-400 hover:text-red-300 bg-red-950/40 hover:bg-red-900/50 border border-red-800/60 disabled:opacity-40 transition-colors flex items-center gap-1 cursor-pointer"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                            <span>Descartar</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       {/* ==================================================================== */}
       {/* 4. MODAL EXPLORADOR DE ARCHIVOS POR CLASE */}

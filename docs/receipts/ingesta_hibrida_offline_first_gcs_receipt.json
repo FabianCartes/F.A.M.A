@@ -1,0 +1,86 @@
+{
+  "receipt_name": "ingesta_hibrida_offline_first_gcs_receipt",
+  "generated_at": "2026-09-28T23:38:00Z",
+  "methodology": "TDD + RDD + ODD",
+  "architecture_layer": "Backend Services & Frontend UI / Ingestion & Data Lake (RF_02 Ingestion, RF_03 Preprocessing, RNF_03 Security & Containerization) — Ingesta Híbrida Offline-First con Degradação Grácil y Configuración Unificada GCS en Docker",
+  "rdd_mode": "unmanaged",
+  "approval": "not_granted",
+  "supersedes": "none",
+  "causal_invariant": "El sistema de ingesta opera bajo un contrato offline-first resiliente y de única fuente de verdad (SSOT): (1) Las credenciales de GCP y parámetros de base de datos están unificados en .env raíz y se resuelven de forma agnóstica tanto en contenedor Docker (/app/proyectotesis-fama-de4426cc102e.json) como en el host local (backend/proyectotesis-fama-de4426cc102e.json). (2) En caso de indisponibilidad de GCS o ausencia de credenciales IAM en tiempo de ejecución, el backend jamás propaga excepciones hacia la API ni interrumpe el flujo del operador; en su lugar, degrada grácilmente escaneando los datasets locales en DEFAULT_LOCAL_RAW_DIR (AvesChilenas, engine_diagnostics) con su jerarquía de clases, conteo de audios y cálculo de volumen, marcando source='local' y gcs_available=False. Cuando GCS está disponible, fusiona los datasets remotos con los locales no sincronizados. (3) El frontend IngestionView utiliza Promise.allSettled para tolerar fallos independientes de red/credenciales, renderiza insignias semánticas ('Local' vs 'Cloud GCS') para cada colección y despliega un banner informativo de modo local manteniendo la interfaz 100% operativa.",
+  "issue_pr": {
+    "issue": "none — solución arquitectónica integral para la ingesta híbrida offline-first y configuración de GCS en Docker",
+    "pr": "none — verificado en local con suites integrales de backend y frontend"
+  },
+  "slices": [
+    {
+      "slice": "Slice 1: Configuración Global Unificada (.env y Docker Compose)",
+      "description": "Unificación de .env en la raíz del repositorio con variables SSOT (XC_API_KEY, GCS_BUCKET_NAME, GOOGLE_APPLICATION_CREDENTIALS, GCP_KEY_PATH, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, DATABASE_URL). Montaje del archivo de credenciales en docker-compose.yml (./backend/proyectotesis-fama-de4426cc102e.json:/app/proyectotesis-fama-de4426cc102e.json:ro) y resolución agnóstica de rutas relativas en backend/app/services/storage.py y backend/app/services/ingestion.py."
+    },
+    {
+      "slice": "Slice 2: Backend Offline-First / Graceful Degradation (TDD)",
+      "description": "Implementación de IngestionService.list_local_datasets() y list_local_dataset_files(). Envoltorio con captura de excepciones en list_datasets() y list_dataset_files(), con fusión de datasets remotos y locales. Pruebas unitarias de degradación grácil ante DefaultCredentialsError o fallos de red en backend/tests/test_ingestion_service.py."
+    },
+    {
+      "slice": "Slice 3: Frontend IngestionView Resiliencia & Tolerancia a Fallos (TDD)",
+      "description": "Uso de Promise.allSettled en initializeIngestion(), renderizado de insignia de origen (Local / Cloud GCS) en cada fila de la tabla de colecciones, y despliegue condicional de banner informativo data-testid='offline-mode-banner' cuando GCS reporta connected=false. Pruebas unitarias de renderizado offline en frontend/components/views/__tests__/IngestionView.test.tsx."
+    },
+    {
+      "slice": "Slice 4: Receipt RDD + ODD",
+      "description": "Formalización del recibo con contratos, invariantes, trazabilidad Red/Green y telemetría de verificación."
+    }
+  ],
+  "seams_under_test": [
+    {
+      "seam": "Degradación grácil de list_datasets() a datasets locales cuando GCS no está disponible",
+      "file": "backend/tests/test_ingestion_service.py::test_list_datasets_gracefully_falls_back_to_local_when_gcs_unavailable",
+      "tests": 1,
+      "red_before_green": true,
+      "red_evidence": "Fase RED: Falló con DefaultCredentialsError no capturado en IngestionService.list_datasets().",
+      "green_evidence": "Fase GREEN: Aprobado. Retorna datasets locales ('AvesChilenas' y 'engine_diagnostics') con metadatos completos (id, name, classes, file_count, total_size_bytes, source='local', gcs_available=False)."
+    },
+    {
+      "seam": "Listado de archivos locales de dataset en list_dataset_files() ante desconexión de GCS",
+      "file": "backend/tests/test_ingestion_service.py::test_list_dataset_files_falls_back_to_local",
+      "tests": 1,
+      "red_before_green": true,
+      "red_evidence": "Fase RED: Falló con Exception('Network error') no capturada en IngestionService.list_dataset_files().",
+      "green_evidence": "Fase GREEN: Aprobado. Retorna archivos de audio descubiertos localmente en el subdirectorio del dataset con sus clases correspondientes y tamaño en bytes."
+    },
+    {
+      "seam": "Tolerancia a fallos y renderizado de datasets locales con insignia 'Local' y banner en IngestionView",
+      "file": "frontend/components/views/__tests__/IngestionView.test.tsx::handles GCS disconnected status gracefully and displays local datasets with Local badge and informational banner",
+      "tests": 1,
+      "red_before_green": true,
+      "red_evidence": "Fase RED: TestingLibraryElementError: Unable to find an element with the text: /Data Lake en modo local/i.",
+      "green_evidence": "Fase GREEN: Aprobado. Se renderiza el banner informativo de modo local, la tabla muestra AvesChilenas y engine_diagnostics, las insignias 'Local' están visibles y los controles de selección son interactivos."
+    }
+  ],
+  "journey_runtime_evidence": {
+    "type": "tdd_red_green_plus_full_verification",
+    "commands": [
+      "pytest backend/tests/test_ingestion_service.py (RED) -> 2 fallos esperados",
+      "pytest backend/tests/test_ingestion_service.py (GREEN) -> 9 tests pasados (100% éxito)",
+      "vitest run IngestionView.test.tsx (RED) -> 1 fallo esperado por ausencia de banner local",
+      "vitest run IngestionView.test.tsx (GREEN) -> 5 tests pasados (100% éxito)",
+      "npm test en frontend/ -> 14 suites, 120 tests pasados, 0 fallos",
+      "pytest backend/tests/ -> 269 tests pasados, 0 fallos"
+    ]
+  },
+  "odd_observability_features": [
+    {
+      "feature": "Banner de advertencia y estado de Data Lake en Modo Local",
+      "implementation": "data-testid='offline-mode-banner', role='status' en IngestionView.tsx",
+      "purpose": "Informa de forma inequívoca al operador humano y herramientas de monitoreo que el Data Lake opera en modo local sin conectividad a GCP."
+    },
+    {
+      "feature": "Insignia semántica de procedencia del dataset (Local / Cloud GCS)",
+      "implementation": "Badges coloreados ('Local' vs 'Cloud GCS') según metadata del backend (source, gcs_available)",
+      "purpose": "Claridad absoluta sobre la procedencia de cada conjunto de datos en la tabla de colecciones."
+    },
+    {
+      "feature": "Logs estructurados de resiliencia en IngestionView",
+      "implementation": "addLog('WARN', 'Data Lake operando en modo local (GCS desconectado)...')",
+      "purpose": "Trazabilidad en tiempo real en la consola de eventos del frontend sin generar excepciones bloqueantes."
+    }
+  ]
+}

@@ -41,14 +41,15 @@ services:
       start_period: 20s
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-fama_db}
-      - GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-}
-      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-}
-      - GCP_KEY_PATH=${GCP_KEY_PATH:-}
+      - GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-fama-audio-records-2026}
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-proyectotesis-fama-de4426cc102e.json}
+      - GCP_KEY_PATH=${GCP_KEY_PATH:-proyectotesis-fama-de4426cc102e.json}
       - XC_API_KEY=${XC_API_KEY:-}
       - ENVIRONMENT=production
     volumes:
       - ./backend/checkpoints:/app/checkpoints
       - ./backend/data:/app/data
+      - ./backend/proyectotesis-fama-de4426cc102e.json:/app/proyectotesis-fama-de4426cc102e.json:ro
     # Aceleración GPU NVIDIA (Descomentar si el host cuenta con tarjeta NVIDIA y nvidia-container-toolkit):
     # deploy:
     #   resources:
