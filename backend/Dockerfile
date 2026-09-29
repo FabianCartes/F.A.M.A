@@ -33,12 +33,17 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copiar el código fuente del backend
 COPY . .
 
+# Argumento para URL de API con default para orquestación en red interna
+ARG API_URL=http://backend:8000
+ENV API_URL=${API_URL}
+
 # Exponer el puerto del servidor API FastAPI
 EXPOSE 8000
 
 # Healthcheck interno del contenedor
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
-    CMD curl -f http://localhost:8000/docs || exit 1
+    CMD curl -f http://localhost:8000/health || exit 1
 
 # Comando por defecto para iniciar FastAPI
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+

@@ -84,12 +84,29 @@ class DatasetConfig(BaseModel):
 
     @model_validator(mode="after")
     def resolve_dataset_paths(self) -> "DatasetConfig":
-        from training.paths import get_project_root
+        from training.paths import get_project_root, get_raw_data_dir
+
         root = get_project_root()
-        if not self.metadata_csv.is_absolute():
-            self.metadata_csv = (root / self.metadata_csv).resolve()
-        if not self.raw_dir.is_absolute():
-            self.raw_dir = (root / self.raw_dir).resolve()
+        raw_base = get_raw_data_dir()
+
+        def _resolve_path(p: Path) -> Path:
+            if p.is_absolute():
+                return p
+            p_str = p.as_posix()
+            if p_str == "backend/data/raw":
+                return raw_base.resolve()
+            if p_str.startswith("backend/data/raw/"):
+                sub = p_str[len("backend/data/raw/"):]
+                return (raw_base / sub).resolve()
+            if p_str == "data/raw":
+                return raw_base.resolve()
+            if p_str.startswith("data/raw/"):
+                sub = p_str[len("data/raw/"):]
+                return (raw_base / sub).resolve()
+            return (root / p).resolve()
+
+        self.metadata_csv = _resolve_path(self.metadata_csv)
+        self.raw_dir = _resolve_path(self.raw_dir)
         return self
 
 

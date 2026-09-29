@@ -144,6 +144,41 @@ def test_dataset_config_path_resolution():
     assert ds.metadata_csv == get_raw_data_dir("engine_diagnostics") / "train_metadata.csv"
 
 
+def test_dataset_config_path_resolution_docker_root(monkeypatch, tmp_path):
+    """
+    Verifica que en entornos de contenedor donde get_project_root() es /app
+    (sin carpeta /app/backend), rutas relativas con prefijo 'backend/data/raw'
+    o 'data/raw' resuelvan canónicamente a get_raw_data_dir() en vez de /app/backend/data/raw.
+    """
+    from training.paths import get_raw_data_dir
+
+    fake_app = tmp_path / "app"
+    fake_raw = fake_app / "data" / "raw"
+    fake_raw.mkdir(parents=True)
+
+    monkeypatch.setattr("training.paths.get_project_root", lambda: fake_app)
+    monkeypatch.setattr(
+        "training.paths.get_raw_data_dir",
+        lambda dataset_name=None: (fake_raw / dataset_name) if dataset_name else fake_raw,
+    )
+
+    ds = DatasetConfig(
+        metadata_csv=Path("backend/data/raw/engine_diagnostics/train_metadata.csv"),
+        raw_dir=Path("backend/data/raw/engine_diagnostics"),
+    )
+
+    assert ds.raw_dir == fake_raw / "engine_diagnostics"
+    assert ds.metadata_csv == fake_raw / "engine_diagnostics" / "train_metadata.csv"
+
+    # También con prefijo data/raw
+    ds2 = DatasetConfig(
+        metadata_csv=Path("data/raw/engine_diagnostics/train_metadata.csv"),
+        raw_dir=Path("data/raw/engine_diagnostics"),
+    )
+    assert ds2.raw_dir == fake_raw / "engine_diagnostics"
+    assert ds2.metadata_csv == fake_raw / "engine_diagnostics" / "train_metadata.csv"
+
+
 # ============================================================================
 # TESTS: Selector Dinámico de Ensamble (DTOs y Validación de Schemas)
 # ============================================================================

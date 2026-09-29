@@ -1,0 +1,111 @@
+{
+  "receipt_name": "fase1_operacion_red_docker_receipt",
+  "generated_at": "2026-09-28T23:52:00Z",
+  "methodology": "TDD + RDD + ODD",
+  "architecture_layer": "Docker & Network Infrastructure / MLOps Orchestration",
+  "rdd_mode": "unmanaged",
+  "approval": "granted",
+  "supersedes": "none — primer receipt formal de estabilización de red y runtime Docker en Fase 1",
+  "causal_invariants": [
+    {
+      "name": "Canonical Path Resolution Invariant",
+      "statement": "Cualquier especificación de ruta en DatasetConfig con prefijos canónicos 'backend/data/raw' o 'data/raw' resuelve deterministamente al directorio físico de datos devuelto por get_raw_data_dir(), sin importar si el entorno de ejecución es el host (raíz del repo) o el contenedor Docker (/app sin carpeta /app/backend)."
+    },
+    {
+      "name": "Same-Origin Proxy Invariant",
+      "statement": "Cuando NEXT_PUBLIC_API_URL no está configurada o es vacía, el cliente web construye URLs de API relativas ('/api/...'), garantizando que cualquier navegador en LAN o WAN utilice el proxy inverso de Next.js (rewrites hacia http://backend:8000) sin intentar conectarse a 127.0.0.1 del host del cliente."
+    },
+    {
+      "name": "Service Health & IPC Allocation Invariant",
+      "statement": "El backend provee memoria compartida suficiente (shm_size: 2gb) para prevenir caídas por SIGBUS en DataLoader multi-worker de PyTorch, expone una sonda liviana en /health sin sobrecarga de documentación, y el frontend solo inicia su tráfico una vez que el backend reporta estado healthy en Docker Compose."
+    }
+  ],
+  "defects_addressed": [
+    {
+      "slice": "Slice 1: Resolución canónica de rutas en DatasetConfig (Backend)",
+      "target_file": "backend/training/schemas/config.py",
+      "symptom": "En recetas de entrenamiento (car_engine_diagnostics_*.yaml) y configuraciones declarativas, metadata_csv y raw_dir especificaban 'backend/data/raw/...'. En Docker, el root es /app; al concatenar root / metadata_csv se producía '/backend/data/raw/...' inexistente, provocando FileNotFoundError al instanciar DataLoaders.",
+      "mechanism": "DatasetConfig.resolve_dataset_paths concatenaba ciegamente get_project_root() con rutas relativas sin comprobar si ya incluían el prefijo canónico del backend.",
+      "fix": "Se implementó _resolve_path para detectar prefijos 'backend/data/raw' o 'data/raw' y redirigir la resolución a get_raw_data_dir(), preservando compatibilidad tanto en el host como en Docker /app.",
+      "red_evidence": "test_dataset_config_path_resolution_docker_root falló con AssertionError: PosixPath('/tmp/.../app/backend/data/raw/engine_diagnostics') != PosixPath('/tmp/.../app/data/raw/engine_diagnostics')",
+      "green_evidence": "22 de 22 tests pasaron en backend/tests/test_training_schemas.py y test_recipes.py pasó 100%."
+    },
+    {
+      "slice": "Slice 2: URLs relativas y activación de Next.js rewrites (Frontend)",
+      "target_file": "frontend/lib/api.ts",
+      "symptom": "Peticiones de red desde navegadores externos en LAN fallaban con ERR_CONNECTION_REFUSED hacia http://127.0.0.1:8000.",
+      "mechanism": "frontend/lib/api.ts forzaba 'http://127.0.0.1:8000' como fallback cuando NEXT_PUBLIC_API_URL estaba indefinida o vacía. Además, frontend/.env.local contenía un espacio inicial no intencional (' NEXT_PUBLIC_API_URL').",
+      "fix": "API_BASE_URL ahora resuelve a cadena vacía ('') cuando NEXT_PUBLIC_API_URL no se especifica o está vacía/espacios. Esto convierte las llamadas en rutas relativas (/api/...) que Next.js reescribe internamente hacia http://backend:8000. Se saneó el espacio en frontend/.env.local.",
+      "red_evidence": "lib/__tests__/api.test.ts falló 4 de 5 tests con AssertionError: expected 'http://127.0.0.1:8000' to be ''",
+      "green_evidence": "5 de 5 tests pasaron en lib/__tests__/api.test.ts y la suite completa de 13 archivos / 115 tests en frontend pasó exitosamente."
+    },
+    {
+      "slice": "Slice 3: Estabilidad y Healthchecks en Docker Compose",
+      "target_files": ["docker-compose.yml", "backend/Dockerfile", "frontend/Dockerfile"],
+      "symptom": "Riesgo de SIGBUS en DataLoaders por shm insuficiente (64MB default de Docker); sonda de salud costosa en /docs que generaba parsing innecesario de esquemas OpenAPI; frontend arrancando antes de que el backend estuviera listo para aceptar tráfico.",
+      "mechanism": "Ausencia de directiva shm_size en docker-compose.yml; healthcheck del backend apuntando a /docs; frontend depends_on sin condición service_healthy.",
+      "fix": "Se configuró shm_size: '2gb' en servicio backend; se agregó healthcheck con curl a /health en docker-compose y Dockerfile; se condicionó depends_on de frontend a service_healthy; se agregaron valores por defecto seguros a ARG API_URL=http://backend:8000 en Dockerfile y compose.",
+      "red_evidence": "docker compose config reportaba backend sin shm_size, sin healthcheck explícito en servicio y frontend con arranque inmediato.",
+      "green_evidence": "docker compose config validó exitosamente con shm_size: 2147483648, healthcheck en /health y depends_on condicional."
+    }
+  ],
+  "seams_under_test": [
+    {
+      "seam": "Backend DatasetConfig path resolution under container emulation",
+      "file": "backend/tests/test_training_schemas.py",
+      "test_name": "test_dataset_config_path_resolution_docker_root",
+      "red_before_green": true
+    },
+    {
+      "seam": "Frontend API base URL resolution contract and reverse proxy compatibility",
+      "file": "frontend/lib/__tests__/api.test.ts",
+      "test_name": "API_BASE_URL configuration and contract",
+      "red_before_green": true
+    },
+    {
+      "seam": "Declarative recipes dataset paths validation",
+      "file": "backend/tests/test_recipes.py",
+      "test_name": "test_car_engine_recipes_use_ssot_raw_data_dir",
+      "red_before_green": false
+    },
+    {
+      "seam": "Docker toolchain and base image consistency",
+      "file": "frontend/toolchain/__tests__/dependency-contract.test.ts",
+      "test_name": "dependency contract of the committed release toolchain",
+      "red_before_green": false
+    }
+  ],
+  "operator_flows": [
+    {
+      "flow": "Despliegue estándar con orquestación unificada",
+      "entrypoint": "./iniciar_fama.sh (docker compose up -d --build)",
+      "validation": "PostgreSQL reporta healthy (puerto 5432) -> Backend inicia, verifica DB y reporta healthy en /health (puerto 8000) -> Frontend inicia tras backend healthy (puerto 3000)"
+    },
+    {
+      "flow": "Acceso web desde cliente en red local (LAN)",
+      "entrypoint": "http://<IP-LAN>:3000 desde navegador externo",
+      "validation": "Peticiones a /api/... son despachadas como relativas al puerto 3000 y el proxy inverso de Next.js las reenvía a http://backend:8000 sin error de CORS ni Connection Refused"
+    },
+    {
+      "flow": "Entrenamiento de recetas bioacústicas / industriales en contenedor",
+      "entrypoint": "Invocación de training pipeline dentro de contenedor Docker",
+      "validation": "DatasetConfig resuelve rutas canónicas contra /app/data/raw; PyTorch DataLoader utiliza los 2GB de memoria compartida sin errores SIGBUS"
+    }
+  ],
+  "journey_runtime_evidence": {
+    "test_commands": [
+      ".venv/bin/pytest backend/tests/test_training_schemas.py -> 22 passed",
+      ".venv/bin/pytest backend/tests/test_recipes.py -> 1 passed",
+      "npm test in frontend/ -> 13 files, 115 tests passed",
+      "docker compose config -> exit 0, validated shm_size 2GB, healthchecks and network bindings"
+    ]
+  },
+  "rollback_plan": {
+    "strategy": "Git atomic revert",
+    "commands": [
+      "git checkout HEAD -- backend/training/schemas/config.py backend/tests/test_training_schemas.py",
+      "git checkout HEAD -- frontend/lib/api.ts frontend/lib/__tests__/api.test.ts frontend/.env.local",
+      "git checkout HEAD -- docker-compose.yml backend/Dockerfile frontend/Dockerfile"
+    ]
+  }
+}

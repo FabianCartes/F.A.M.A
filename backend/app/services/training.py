@@ -217,7 +217,7 @@ class TrainingService:
         has_engine = any(d["id"] in ["engine_diagnostics", "MotoresVehiculares"] for d in datasets)
         if not has_engine:
             from training.pipelines.multitask_mapping import CLASS_NAMES_13
-            engine_dir = _BACKEND_DIR.parent / "data" / "engine_diagnostics"
+            engine_dir = get_raw_data_dir("engine_diagnostics")
             engine_count = 0
             if engine_dir.is_dir():
                 engine_count = len(list(engine_dir.rglob("*.wav")))
