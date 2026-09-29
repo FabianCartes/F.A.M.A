@@ -264,7 +264,7 @@ describe("trainingApi (TDD Contract Tests)", () => {
       expect(callBody.models[1].epochs).toBe(10);
     });
 
-    it("throws ValidationError when model epochs is non-positive or exceeds 100", async () => {
+    it("throws ValidationError when model epochs is non-positive or exceeds 1000", async () => {
       const invalidZeroEpochs = {
         ...validParams,
         models: [{ architecture: "ResNet-34d", weight: 1.0, epochs: 0 }],
@@ -273,9 +273,25 @@ describe("trainingApi (TDD Contract Tests)", () => {
 
       const invalidExcessiveEpochs = {
         ...validParams,
-        models: [{ architecture: "ResNet-34d", weight: 1.0, epochs: 120 }],
+        models: [{ architecture: "ResNet-34d", weight: 1.0, epochs: 1001 }],
       };
       await expect(startTraining(invalidExcessiveEpochs)).rejects.toThrow(ValidationError);
+
+      // 1000 epochs is allowed
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          job_id: "fama_max_epochs_1000",
+          status: "started",
+          message: "Training started",
+        }),
+      });
+      const validMaxEpochs = {
+        ...validParams,
+        models: [{ architecture: "ResNet-34d", weight: 1.0, epochs: 1000 }],
+      };
+      await expect(startTraining(validMaxEpochs)).resolves.toBeDefined();
     });
   });
 

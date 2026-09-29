@@ -49,7 +49,7 @@ export type DatasetsResponse = z.infer<typeof DatasetsResponseSchema>;
 export const ModelEnsembleItemSchema = z.object({
   architecture: z.string(),
   weight: z.number().min(0).max(1),
-  epochs: z.number().int().min(1, "Model epochs must be at least 1").max(100, "Model epochs must be at most 100").optional(),
+  epochs: z.number().int().min(1, "Model epochs must be at least 1").max(1000, "Model epochs must be at most 1000").optional(),
 });
 export type ModelEnsembleItem = z.infer<typeof ModelEnsembleItemSchema>;
 
@@ -90,7 +90,7 @@ export type RegularizationConfig = z.infer<typeof RegularizationConfigSchema>;
 export const StartTrainingRequestSchema = z.object({
   dataset_name: z.string().min(1, "Dataset name is required"),
   architecture: z.string().optional().default("EfficientNet-B0"),
-  epochs: z.number().int().positive().default(10),
+  epochs: z.number().int().min(1, "Epochs must be at least 1").max(1000, "Epochs must be at most 1000").default(10),
   learning_rate: z.number().positive().default(0.001),
   weight_decay: z.number().min(0, "Weight decay must be non-negative").max(1, "Weight decay must be at most 1.0").optional().default(0.01),
   batch_size: z.number().int().positive().default(16),

@@ -564,9 +564,12 @@ def test_model_ensemble_item_epochs_validation():
     with pytest.raises(ValidationError):
         ModelEnsembleItem(architecture="ConvNeXt-Nano", weight=0.5, epochs=0)
 
-    # 4. epochs > 100 debe fallar
+    # 4. epochs hasta 1000 es valido, > 1000 debe fallar
+    item_max = ModelEnsembleItem(architecture="ConvNeXt-Nano", weight=0.5, epochs=1000)
+    assert item_max.epochs == 1000
+
     with pytest.raises(ValidationError):
-        ModelEnsembleItem(architecture="ConvNeXt-Nano", weight=0.5, epochs=101)
+        ModelEnsembleItem(architecture="ConvNeXt-Nano", weight=0.5, epochs=1001)
 
 
 def test_start_training_request_preserves_model_epochs():

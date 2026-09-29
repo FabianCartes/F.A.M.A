@@ -678,6 +678,29 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     );
     expect(postCall).toBeUndefined();
   });
+
+  it("allows setting epochs up to 1000 and displays inline error if greater than 1000", async () => {
+    await act(async () => {
+      render(<TrainingView />);
+    });
+
+    const epochsInput = screen.getByLabelText("Épocas de Entrenamiento") as HTMLInputElement;
+    expect(epochsInput).toBeDefined();
+
+    // 1. Configurar en 1000: válido, sin error
+    await act(async () => {
+      fireEvent.change(epochsInput, { target: { value: "1000" } });
+    });
+    expect(epochsInput.className).not.toContain("border-red-500");
+    expect(screen.queryByText(/El campo 'Épocas de Entrenamiento' debe ser entre 1 y 1000/i)).toBeNull();
+
+    // 2. Configurar en 1001: fuera de rango, error inline inmediato
+    await act(async () => {
+      fireEvent.change(epochsInput, { target: { value: "1001" } });
+    });
+    expect(epochsInput.className).toContain("border-red-500");
+    expect(screen.getByText("El campo 'Épocas de Entrenamiento' debe ser entre 1 y 1000.")).toBeDefined();
+  });
 });
 
 

@@ -69,7 +69,7 @@ class ModelEnsembleItem(BaseModel):
     """
     architecture: str
     weight: float = Field(ge=0.0, le=1.0)
-    epochs: Optional[int] = Field(default=None, ge=1, le=100, description="Épocas de entrenamiento individuales para este modelo")
+    epochs: Optional[int] = Field(default=None, ge=1, le=1000, description="Épocas de entrenamiento individuales para este modelo")
 
     @field_validator("architecture")
     @classmethod
@@ -89,7 +89,7 @@ class StartTrainingRequest(BaseModel):
     """
     dataset_name: str = "AvesChilenas"
     architecture: Optional[str] = "EfficientNet-B0"
-    epochs: int = 10
+    epochs: int = Field(default=10, ge=1, le=1000, description="Épocas de entrenamiento")
     learning_rate: float = 0.001
     weight_decay: float = Field(default=0.01, ge=0.0, le=1.0, description="Decaimiento de pesos (regularización L2) para AdamW")
     batch_size: int = 16

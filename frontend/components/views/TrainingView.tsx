@@ -255,7 +255,7 @@ export default function TrainingView() {
         if (isNaN(num) || num < 1) error = "El campo 'Batch Size' debe ser un número entero mayor a 0.";
         break;
       case "epochs":
-        if (isNaN(num) || num < 1 || num > 100) error = "El campo 'Épocas de Entrenamiento' debe ser entre 1 y 100.";
+        if (isNaN(num) || num < 1 || num > 1000) error = "El campo 'Épocas de Entrenamiento' debe ser entre 1 y 1000.";
         break;
       case "target_sr":
         if (isNaN(num) || num < 8000 || num > 48000) error = "Tasa de Muestreo: Debe estar entre 8.000 Hz y 48.000 Hz.";
@@ -741,8 +741,8 @@ export default function TrainingView() {
       const numEpochs = parseInt(String(epochs), 10);
       if (String(epochs).trim() === "" || isNaN(numEpochs)) {
         errors.epochs = "El campo 'Épocas de Entrenamiento' no puede estar vacío.";
-      } else if (numEpochs < 1 || numEpochs > 100) {
-        errors.epochs = "El campo 'Épocas de Entrenamiento' debe ser entre 1 y 100.";
+      } else if (numEpochs < 1 || numEpochs > 1000) {
+        errors.epochs = "El campo 'Épocas de Entrenamiento' debe ser entre 1 y 1000.";
       }
     }
 
@@ -871,8 +871,8 @@ export default function TrainingView() {
 
         const epStr = String(m.epochs ?? "").trim();
         const ep = parseInt(epStr, 10);
-        if (epStr === "" || isNaN(ep) || ep < 1 || ep > 100) {
-          errors[`model_epochs_${idx}`] = `El campo 'Épocas del Modelo #${idx + 1}' debe ser entre 1 y 100.`;
+        if (epStr === "" || isNaN(ep) || ep < 1 || ep > 1000) {
+          errors[`model_epochs_${idx}`] = `El campo 'Épocas del Modelo #${idx + 1}' debe ser entre 1 y 1000.`;
         }
       });
 
