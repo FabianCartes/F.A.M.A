@@ -1,0 +1,161 @@
+{
+  "receipt_name": "toolchain_contrato_dependencias_frontend_receipt",
+  "generated_at": "2026-09-28T22:11:49Z",
+  "methodology": "TDD + RDD + ODD",
+  "architecture_layer": "Frontend Release Toolchain — dependency graph of the committed lockfile and the Node runtime the image ships, audited before any build is attempted",
+  "rdd_mode": "unmanaged",
+  "approval": "not_granted",
+  "supersedes": "none — no prior receipt covers the frontend build toolchain; the nearest one, fase_sidebar_rail_colapsable_receipt, recorded a successful frontend image build under a tree that was already inconsistent",
+  "causal_invariant": "A fresh clone of the repository produces a frontend image: every peer dependency declared in the committed lockfile resolves to a version that satisfies its range, every package that is actually installed on the build platform accepts the Node major the image targets, and the declared @types/node describes that same Node major. An empty violation list is the only acceptable state and it is enforced by a test that reads committed files, not a developer's node_modules.",
+  "issue_pr": {
+    "issue": "none — no issue tracker entry exists for this work",
+    "pr": "none — not opened; no commit requested by the maintainer"
+  },
+  "reported_defect": {
+    "symptom": "docker compose up -d --build failed at frontend/Dockerfile line 14, RUN npm ci, with npm error code ERESOLVE, aborting the whole stack. The backend stage appeared as CANCELED, which was cascade damage and not an independent fault.",
+    "mechanism": "frontend/package.json pinned @types/node to ^20, which the lockfile resolved to 20.19.43. vitest@5.0.2 declares a peer dependency of @types/node ^22.0.0 || >=24.0.0. npm install tolerates an unsatisfied peer by relaxing the tree and recording whatever it produced, so the local node_modules was installed with that violation baked in. npm ci performs no resolution at all: it reads the lockfile verbatim and asserts that every peer is satisfied, so it refused the same tree that npm run dev had been happily serving.",
+    "why_it_was_invisible": "npm run dev never validates peers, and npm test never does either. The only command in the project that would have surfaced the conflict was npm ci, which existed solely inside the Dockerfile, so the defect had no observable symptom until someone ran the documented startup script. Confirmed locally: npm ls reported @types/node@20.19.43 as invalid against vitest's range, and npm install --save-dev failed with the same ERESOLVE as the container.",
+    "compounding_fault": "vitest@5.0.2 declares engines.node ^22.12.0 || ^24.0.0 || >=26.0.0 and the Dockerfile targeted node:20-alpine in all three stages. npm does not enforce engines unless engine-strict is set, and next build does not invoke vitest, so this second fault was latent. It was not theoretical: next.config.ts sets no typescript.ignoreBuildErrors and tsconfig.json includes **/*.mts, so next build typechecks vitest.config.mts against a runtime the image could not host.",
+    "fix": "@types/node moved to ^22.0.0 with the lockfile regenerated, and all three Dockerfile stages moved from node:20-alpine to node:22-alpine. semver and @types/semver were added as devDependencies to evaluate version ranges rather than hand-rolling a range matcher."
+  },
+  "seams_under_test": [
+    {
+      "seam": "The committed dependency contract — package-lock.json, package.json and the Dockerfile are read as committed artifacts, and the audit is a pure function of their content",
+      "file": "frontend/toolchain/__tests__/dependency-contract.test.ts",
+      "tests": 5,
+      "red_before_green": true,
+      "red_evidence": "First run failed at import resolution, which is not a valid red. After the module existed the run failed on assertions: 3 of 5 failed, reporting vitest, undici, whatwg-url, html-encoding-sniffer, jsdom, w3c-xmlserializer and @asamuzakjp/* as excluding Node 20, plus @types/node 22 contradicting a Node 20 image. The peer test was already green at that point, which is the correct outcome for a vertical slice: the @types/node bump had fixed exactly that rule and nothing else.",
+      "green_evidence": "5 of 5 pass",
+      "note": "The seam is the committed files, not node_modules. A test that ran npm ls or read the installed tree would have produced a false green on a fresh clone, where node_modules does not exist yet and the assertion would trivially pass. That is the reason this seam is a pure function over the lockfile."
+    },
+    {
+      "seam": "The three build stages agree on one Node base image",
+      "file": "frontend/toolchain/__tests__/dependency-contract.test.ts",
+      "tests": 1,
+      "red_before_green": false,
+      "red_evidence": "Green on arrival. The three stages were already consistent at node:20-alpine; the defect was that the agreed major was wrong, not that they disagreed. This test guards the shape of a future edit that bumps one stage and forgets the others.",
+      "green_evidence": "1 of 1 pass"
+    }
+  ],
+  "operator_flows": [
+    {
+      "flow": "Start the whole stack from the documented entry point",
+      "entry": "./iniciar_fama.sh, which runs docker compose up -d --build",
+      "mode": "release",
+      "environment": "frontend/Dockerfile deps stage, npm ci against the committed package-lock.json",
+      "expectation": "the frontend image builds and all three services reach a running state",
+      "negative_control": "on arrival this flow died at Dockerfile line 14 with ERESOLVE and took the backend stage down with it"
+    },
+    {
+      "flow": "Install dependencies on a workstation from the committed lockfile",
+      "entry": "npm install or npm ci in frontend/",
+      "mode": "development",
+      "environment": "local Node 26.8.2 with npm 11.19.1, no Docker involved",
+      "expectation": "the peer graph resolves without relaxation, so the lockfile records a tree that npm ci will accept",
+      "negative_control": "verified that this flow failed on arrival too, with the same ERESOLVE, which is what proved the fault was in the committed lockfile and not in the container"
+    },
+    {
+      "flow": "Build and run the production frontend image",
+      "entry": "docker compose build frontend, then docker run of fama-frontend:latest",
+      "mode": "production build",
+      "environment": "runner stage, next.config.ts output standalone, CMD node server.js, HEALTHCHECK on port 3000",
+      "expectation": "the image serves the application and the Node inside it is new enough for every engines.node floor in the lockfile",
+      "negative_control": "host ports 3000 and 8000 were already held by leftover manual dev servers, so the image was exercised on an unused port rather than by killing the maintainer's processes; the rewritten /api path was therefore not exercised against a live backend"
+    },
+    {
+      "flow": "Run the test suite on a fresh clone",
+      "entry": "npm test in frontend/",
+      "mode": "development",
+      "environment": "vitest 5.0.2 with jsdom 30.1.1, 12 test files",
+      "expectation": "the dependency-contract test runs on a clone that has never run a build, because it reads committed files only",
+      "negative_control": "jsdom@30.1.1 declares engines.node ^22.22.2 || ^24.15.0 || >=26.0.0, so the test runner itself cannot start on the Node 20 image the project previously shipped; this is why the engines rule had teeth even before the peer rule was written"
+    }
+  ],
+  "journey_runtime_evidence": {
+    "type": "red_green_contract_tests_plus_mutation_probes_plus_real_image_build",
+    "note": "Every rule was mutation-checked, because a contract test that cannot fail proves nothing. Each of the four rules was made to fire by mutating exactly one input, and each fired with the correct rule and no collateral findings. One real bug in the audit itself was found this way and fixed: the first node_modules walk stepped two path segments at a time, which never reached the tree root from a scoped package such as node_modules/@testing-library/react, so it reported react, eslint, typescript and @types/react as uninstalled. Nineteen false positives, all of them the test being wrong rather than the tree being wrong. The walk now splits on the node_modules separator, which handles scoped and unscoped paths alike. Two other false-positive sources were removed on evidence rather than on judgement: a missing peer is only a violation when the peer is not declared optional, matching npm's own resolver, and a package whose lockfile entry is gated to another os or cpu is not installed by this build and is therefore not audited. The sharp win32 and darwin prebuilt binaries declare engines.node ^20.9.0, which excludes Node 22, and were being reported as faults; they cannot execute inside a linux/x64 container. The linux variant of the same binaries, which is what this build installs, is still audited and passes. No browser automation exists in this environment, so the rendered application was not inspected visually; reachability was proven with an HTTP status code instead.",
+    "commands": [
+      "npx vitest run toolchain/__tests__/dependency-contract.test.ts before the module existed -> failed at import resolution, discarded as an invalid red",
+      "npx vitest run toolchain/__tests__/dependency-contract.test.ts with the module, before any fix -> 3 of 5 failed: 6 packages reported as excluding Node 20 and @types/node 22 reported as contradicting a Node 20 image; the peer test was already green because the @types/node bump had landed",
+      "npx vitest run toolchain/__tests__/dependency-contract.test.ts after the peer fix but before the Dockerfile fix -> 2 of 5 failed, isolating the engines and coherence rules",
+      "mutation, Dockerfile reverted to node:20-alpine -> 3 of 5 failed with the original violation set, proving the suite is sensitive to the exact defect it was written for",
+      "mutation, locked @types/node version set to 20.19.43 in memory -> peer rule reported @types/node@20.19.43 does not satisfy ^22.0.0 || >=24.0.0, and no other rule fired",
+      "mutation, vitest engines.node set to ^20.0.0 in memory -> engine rule fired alone",
+      "mutation, one FROM stage changed to node:20-alpine in memory -> engine rule reported build stages target different Node majors: 22, 20",
+      "mutation, declared @types/node set to ^20 in memory -> coherence rule reported declared ^20 targets Node 20, image targets Node 22",
+      "mutation, unmutated control -> 0 violations, confirming the four mutations above are not the default state",
+      "npm test -> 12 files, 110 tests, 110 passed, 0 failed",
+      "npx tsc --noEmit -> exit 0, 0 errors",
+      "npx eslint toolchain/ -> exit 0, 0 problems",
+      "npx eslint -> 5 errors and 1 warning, all pre-existing in TrainingView.test.tsx and audioDomainPresets.test.ts, neither touched by this work",
+      "docker compose build frontend -> exit 0; npm ci succeeded at Dockerfile line 14 and fama-frontend:latest was produced",
+      "docker run fama-frontend:latest on an unused host port -> HTTP 200 from /, container log shows Next.js 16.3.4 Ready, healthcheck transitioning",
+      "docker exec into the built image, node -v -> v22.23.3",
+      "docker run --rm node:22-alpine node -v -> v22.23.3",
+      "piso de patch real dentro de la linea 22 deduced del lockfile -> 22.22.2, exigido por jsdom@30.1.1, w3c-xmlserializer@6.0.0, @asamuzakjp/css-color@7.1.2 y @asamuzakjp/dom-selector@9.2.2. La etiqueta flotante node:22-alpine resuelve hoy a 22.23.3 y lo satisface con 0.1.3 de margen"
+    ]
+  },
+  "odd_observability_features": [
+    {
+      "feature": "El contrato de dependencias es observable antes de construir",
+      "detail": "npm test responde en 2.4 segundos y declara si el árbol commiteado contradice el runtime de la imagen. Antes de este cambio el único oráculo era un fallo de ERESOLVE tras varios minutos de descarga de capas de imagen, y solo dentro de Docker. El coste de detectar esta clase de defecto baja de minutos a segundos, y de requerir Docker a ninguno."
+    },
+    {
+      "feature": "El veredicto nombra la regla, el sujeto y el detalle",
+      "detail": "Cada violación es un objeto con rule, subject y detail, no un booleano. Un fallo dice literalmente vitest@5.0.2 declares engines.node ^22.12.0 || ^24.0.0 || >=24.0.0 excludes Node 20, con la versión, el rango y el major en la misma línea. La accion correctora es legible sin abrir el lockfile."
+    },
+    {
+      "feature": "La incoherencia entre etapas es una violación con nombre propio",
+      "detail": "Cuando las tres etapas dejan de coincidir, la auditoría devuelve build stages target different Node majors: 22, 20 en lugar de reportar un síntoma confuso. Un Dockerfile con una etapa bumpeada y dos olvidadas es el error más probable de la siguiente edición, y ahora es el primer mensaje que se ve."
+    },
+    {
+      "feature": "El piso de patch es visible como uneven",
+      "detail": "La auditoría resuelve el major de la etiqueta flotante, no el patch, y esa limitación está escrita en el propio JSDoc de readNodeMajor en lugar de estar implícita. La razón por la que es aceptable es que el suelo de 22.22.2 exigido por jsdom está registrado en la evidencia de runtime, con la etiqueta flotante resuelta a 22.23.3. Un test que afirmara conocer el patch de una etiqueta flotante estaría mintiendo."
+    },
+    {
+      "feature": "Los binarios precompilados de otra plataforma dejan de ser ruido",
+      "detail": "Las imagenes de sharp declaran os y cpu en el lockfile. Al filtrar por plataforma, los 20 binarios win32, darwin y freebsd que declaran engines.node ^20.9.0 y excluirían Node 22 desaparecieron del reporte, y la variante linux-x64 que este build sí instala sigue auditándose. Un reporte con 20 falsos positivos entrena al equipo a ignorar el reporte."
+    }
+  ],
+  "changed_line_budget": {
+    "limit": 400,
+    "authored_additions": 305,
+    "authored_deletions": 10,
+    "generated_additions": 107,
+    "generated_deletions": 10,
+    "authored_total": 315,
+    "absolute_total_including_generated": 422,
+    "chain_or_exception_required": false,
+    "note": "Authored: frontend/toolchain/dependency-contract.ts 243 new, frontend/toolchain/__tests__/dependency-contract.test.ts 52 new, frontend/Dockerfile 3 additions and 3 deletions, frontend/package.json 4 additions and 1 deletion. Generated: frontend/package-lock.json 107 additions and 10 deletions, rewritten by npm rather than hand-edited. The authored figure of 315 is under the 400 limit. The absolute figure of 422 is over it, and the difference is entirely the regenerated lockfile. This distinction is stated rather than assumed: if maintainer policy counts generated lockfile churn against the budget, this work unit needs an explicit exception or a chain, and that call belongs to the maintainer, not to this receipt.",
+    "files": [
+      "frontend/Dockerfile (+3/-3) — node:20-alpine to node:22-alpine in all three stages: deps, builder and runner. A single-stage bump was rejected because it would reintroduce the incoherence the third rule is written to catch.",
+      "frontend/package.json (+4/-1) — @types/node ^20 to ^22.0.0; semver ^7.8.5 and @types/semver ^7.8.0 added as devDependencies.",
+      "frontend/package-lock.json (+107/-10) — regenerated by npm, not hand-edited. @types/node 20.19.43 becomes 22.20.4 and the vitest peer conflict disappears from the tree.",
+      "frontend/toolchain/dependency-contract.ts (243 new) — pure audit over the committed lockfile, package.json and Dockerfile. Exports auditDependencyContract as the single entry point plus readBaseImages and readNodeMajor. No I/O, no subprocess, no network, so it is fast and deterministic on a fresh clone.",
+      "frontend/toolchain/__tests__/dependency-contract.test.ts (52 new) — reads the real committed files and asserts an empty violation list, plus a stage-agreement test."
+    ]
+  },
+  "known_deficiencies": [
+    "The engines rule resolves the Node major from a floating tag, never the patch. node:22-alpine could in principle resolve to 22.0.0 and fail jsdom's ^22.22.2 while the test still passed. The test therefore asserts a structural invariant, and the patch floor is proven once by the recorded runtime probe rather than on every run. Pinning the image to a digest would close this properly and was not done because a digest pin needs a deliberate update cadence that this repository has not defined.",
+    "The peer rule reads the lockfile and does not run npm's own resolver, so it validates recorded peer ranges but not npm's full resolution algorithm, which also considers peerDependenciesMeta nesting, overrides and legacy trees. The authoritative check remains the real npm ci at the start of the image build, which passed.",
+    "Adding semver to fix a dependency conflict is a real cost and is not free of irony. It was accepted over a hand-rolled range matcher because a wrong matcher produces a false green, and a false green is more expensive than one small devDependency. If the peer set ever outgrows the range grammar in use, the matcher should be deleted rather than extended.",
+    "The audit is not run inside the image. It runs in the developer test suite, so a container build performed on a machine that skipped npm test still has no contract check, only npm ci's own refusal.",
+    "The rewritten /api path in next.config.ts was not exercised against a live backend, because host ports 3000 and 8000 were held by leftover manual dev servers and the maintainer's processes were not terminated without asking. The frontend rewrite depends on API_URL=http://backend:8000, which this change did not touch.",
+    "No visual verification of the application was performed. There is no browser automation in this environment. Reachability is proven by an HTTP 200 and by the container log, not by looking at the page.",
+    "Five eslint errors and one warning remain in TrainingView.test.tsx and audioDomainPresets.test.ts. They predate this work and are untouched. toolchain/ is clean.",
+    "No ADR was written. The reasoning here is a dependency-graph fact rather than a design choice with alternatives worth memorialising, and an ADR for it would be ceremony. The receipt carries the evidence instead."
+  ],
+  "unresolved_authority_decisions": [
+    "Line budget: authored 315 is within the 400 limit, absolute 422 is not, and the 107-line difference is regenerated lockfile churn. Whether generated lockfile churn counts against the budget is maintainer policy. If it does, this work unit needs a chain or an explicit exception before merge.",
+    "The image tag is left floating at node:22-alpine. The patch floor of 22.22.2 is met today with 0.1.3 of margin, and a future base image bump is the only thing that can break it silently. Whether to pin to a digest is a delivery-policy decision this receipt does not make.",
+    "Port 3000 and 8000 are occupied by manual dev servers started from the README's option B. Whether those should be stopped, or whether the documented startup path should be the only supported way to run the stack, is unresolved and was not decided here."
+  ],
+  "rollback": {
+    "independent_of_backend": true,
+    "commands": "git checkout -- frontend/Dockerfile frontend/package.json frontend/package-lock.json && rm -rf frontend/toolchain",
+    "note": "No backend file, database, schema or API contract was modified. Reverting returns the frontend toolchain to the state this work found, which is the state that cannot complete a build: reverting the Dockerfile alone reinstates node:20-alpine, which excludes the engines floor of six locked packages. Reverting package.json and the lockfile reinstates the ERESOLVE failure. The revert is therefore a restoration of a known-broken state, not a return to a working one.",
+    "data_migration": "none",
+    "schema_migration": "none"
+  },
+  "verification_status": "AUTHORED_PENDING_MAINTAINER_REVIEW"
+}
