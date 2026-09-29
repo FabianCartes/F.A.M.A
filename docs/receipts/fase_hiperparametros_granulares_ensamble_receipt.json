@@ -1,0 +1,73 @@
+{
+  "receipt_name": "fase_hiperparametros_granulares_ensamble_receipt",
+  "generated_at": "2026-09-29T19:27:00Z",
+  "methodology": "TDD + RDD + ODD",
+  "architecture_layer": "Training & Modeling Domain (CU_INV_03 / RF_04 / Granular Ensemble Hyperparameters)",
+  "rdd_mode": "unmanaged",
+  "approval": "not_granted",
+  "causal_invariant": "En configuraciones de ensamble multi-modelo (Dúo y Tríada), los investigadores requieren controlar individualmente la tasa de aprendizaje (learning_rate: float in (0.0, 1.0]) y el tamaño de lote (batch_size: int in [1, 512]) para cada arquitectura independiente, además de las épocas y ponderaciones ya existentes. Como el pipeline secuencial en el worker entrena cada red en serie instanciando su propio DataLoader y optimizador AdamW, cada modelo puede parametrizar de forma desacoplada su régimen de convergencia. Toda la superficie de validación sigue la Opción B híbrida: validación reactiva onChange para violaciones de límites numéricos/físicos y onBlur para campos vacíos, señalizados con bordes rojos e inline error messages específicos sin banners intrusivos.",
+  "issue_pr": {
+    "issue": "Soporte de hiperparámetros granulares de learning rate y batch size por modelo en topología de ensamble con validación híbrida Opción B",
+    "pr": "none — validado localmente con suites completas de pruebas unitarias y de integración"
+  },
+  "slices": [
+    {
+      "slice": "Slice 1: Backend Schemas & Training Worker (TDD)",
+      "description": "Se extienden los esquemas Pydantic ModelEnsembleItem con learning_rate y batch_size opcionales y validados. Se preservan en StartTrainingRequest.normalize_models() y se extraen en TrainingService.start_training() y _run_training_worker() para configurar arch_lr y arch_batch independientemente en cada iteración del bucle secuencial."
+    },
+    {
+      "slice": "Slice 2: Frontend Schemas & API Client (TDD)",
+      "description": "Se actualiza ModelEnsembleItemSchema en frontend/lib/schemas/training.ts para validar learning_rate y batch_size con Zod. Se agregan pruebas de contrato en trainingApi.test.ts verificando que el cliente API preserve y serialice ambos campos en el payload."
+    },
+    {
+      "slice": "Slice 3: Frontend UI & Option B Hybrid Validation (TDD)",
+      "description": "Se actualiza TrainingView.tsx para renderizar los inputs de Learning Rate y Batch Size en cada tarjeta de modelo del ensamble (grid lg:grid-cols-5), con handlers onChange/onBlur dedicados, limpieza en cambio de topología, y validación exhaustiva previa al despacho de la orden de entrenamiento."
+    }
+  ],
+  "seams_under_test": [
+    {
+      "seam": "ModelEnsembleItem Pydantic schema validation & normalization",
+      "file": "backend/tests/test_training_schemas.py::test_model_ensemble_item_custom_learning_rate_and_batch_size",
+      "tests": 2,
+      "red_before_green": true,
+      "red_evidence": "Fase RED: ModelEnsembleItem no aceptaba learning_rate ni batch_size, arrojando ValidationError por campos no definidos.",
+      "green_evidence": "Fase GREEN: Aprobado. 27/27 tests en test_training_schemas.py pasando."
+    },
+    {
+      "seam": "Frontend Zod schema validation & API client serialization",
+      "file": "frontend/lib/api/__tests__/trainingApi.test.ts::preserves custom learning_rate and batch_size in ensemble models",
+      "tests": 2,
+      "red_before_green": true,
+      "red_evidence": "Fase RED: ModelEnsembleItemSchema eliminaba por striping learning_rate y batch_size del payload serializado.",
+      "green_evidence": "Fase GREEN: Aprobado. 22/22 tests en trainingApi.test.ts pasando."
+    },
+    {
+      "seam": "Ensemble model card inputs, dispatch payload, and Option B hybrid validation in TrainingView",
+      "file": "frontend/components/views/__tests__/TrainingView.test.tsx::allows setting custom learning_rate and batch_size per model in ensemble and sends them in start payload",
+      "tests": 2,
+      "red_before_green": true,
+      "red_evidence": "Fase RED: TestingLibraryElementError al buscar los labels 'Learning Rate del Modelo #1' y 'Batch Size del Modelo #1'.",
+      "green_evidence": "Fase GREEN: Aprobado. 25/25 tests en TrainingView.test.tsx pasando."
+    }
+  ],
+  "journey_runtime_evidence": {
+    "type": "tdd_red_green_plus_full_verification",
+    "commands": [
+      "pytest backend/tests/test_training_schemas.py -> 27 tests pasados",
+      "pytest backend/tests/test_training_service.py -> 11 tests pasados",
+      "npm test -- lib/api/__tests__/trainingApi.test.ts -> 22 tests pasados",
+      "npm test -- components/views/__tests__/TrainingView.test.tsx -> 25 tests pasados",
+      "npm test en frontend/ -> 14 suites, 148 tests pasados, 0 fallos",
+      "npx tsc --noEmit en frontend/ -> 0 errores de tipos",
+      "npm run build en frontend/ -> Compilación de producción limpia con Turbopack"
+    ],
+    "verification_summary": "100% de pruebas unitarias y de integración pasando en frontend (148 tests) y backend (38 tests). Tipos estrictos sin regresiones y artefactos alineados."
+  },
+  "rollback_strategy": {
+    "strategy": "Git atomic revert",
+    "commands": [
+      "git restore backend/app/schemas/training.py backend/app/services/training.py",
+      "git restore frontend/components/views/TrainingView.tsx frontend/lib/schemas/training.ts"
+    ]
+  }
+}

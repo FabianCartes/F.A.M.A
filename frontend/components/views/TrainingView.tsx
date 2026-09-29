@@ -140,11 +140,17 @@ export default function TrainingView() {
   const [architecture, setArchitecture] = useState<string>("EfficientNet-B0");
   const [ensembleSize, setEnsembleSize] = useState<1 | 2 | 3>(1);
   const [ensembleModels, setEnsembleModels] = useState<
-    Array<{ architecture: string; weight: number | string; epochs?: number | string }>
+    Array<{
+      architecture: string;
+      weight: number | string;
+      epochs?: number | string;
+      learning_rate?: number | string;
+      batch_size?: number | string;
+    }>
   >([
-    { architecture: "EfficientNet-B0", weight: 100, epochs: 10 },
-    { architecture: "ConvNeXt-Nano", weight: 50, epochs: 12 },
-    { architecture: "ResNet-34d", weight: 33, epochs: 15 },
+    { architecture: "EfficientNet-B0", weight: 100, epochs: 10, learning_rate: "0.001", batch_size: 16 },
+    { architecture: "ConvNeXt-Nano", weight: 50, epochs: 12, learning_rate: "0.0005", batch_size: 16 },
+    { architecture: "ResNet-34d", weight: 33, epochs: 15, learning_rate: "0.0003", batch_size: 8 },
   ]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const clearFieldError = useCallback((key: string) => {
@@ -195,6 +201,14 @@ export default function TrainingView() {
 
   const handleApplyPreset = (key: AudioDomainPresetKey) => {
     setDomainPreset(key);
+    clearFieldError("target_sr");
+    clearFieldError("duration_seconds");
+    clearFieldError("f_min");
+    clearFieldError("f_max");
+    clearFieldError("hop_seconds");
+    clearFieldError("gem_p");
+    clearFieldError("vad_threshold");
+    clearFieldError("focal_gamma");
     const cfg = AUDIO_DOMAIN_PRESETS[key];
     if (key !== "custom") {
       setTargetSr(cfg.target_sr);
@@ -238,6 +252,12 @@ export default function TrainingView() {
         if (field.startsWith("model_epochs_")) {
           const idx = parseInt(field.replace("model_epochs_", ""), 10);
           label = `Épocas del Modelo #${idx + 1}`;
+        } else if (field.startsWith("model_lr_")) {
+          const idx = parseInt(field.replace("model_lr_", ""), 10);
+          label = `Learning Rate del Modelo #${idx + 1}`;
+        } else if (field.startsWith("model_batch_")) {
+          const idx = parseInt(field.replace("model_batch_", ""), 10);
+          label = `Batch Size del Modelo #${idx + 1}`;
         }
         setFieldErrors((prev) => ({ ...prev, [field]: `El campo '${label}' no puede estar vacío.` }));
       } else {
@@ -262,7 +282,27 @@ export default function TrainingView() {
         if (isNaN(num) || num < 1 || num > 1000) error = "El campo 'Épocas de Entrenamiento' debe ser entre 1 y 1000.";
         break;
       case "target_sr":
-        if (isNaN(num) || num < 8000 || num > 48000) error = "Tasa de Muestreo: Debe estar entre 8.000 Hz y 48.000 Hz.";
+        if (isNaN(num) || num < 8000 || num > 48000) {
+          error = "Tasa de Muestreo: Debe estar entre 8.000 Hz y 48.000 Hz.";
+        } else {
+          // Revalidar f_max reactivamente contra la nueva tasa de muestreo
+          const numMax = typeof fMax === "number" ? fMax : parseFloat(String(fMax));
+          if (!isNaN(numMax)) {
+            if (numMax > num / 2) {
+              setFieldErrors((prev) => ({
+                ...prev,
+                f_max: `Violación de Nyquist: La Frecuencia Máxima (${numMax.toLocaleString("es-CL")} Hz) supera la mitad de la Tasa de Muestreo (${(num / 2).toLocaleString("es-CL")} Hz).`,
+              }));
+            } else {
+              setFieldErrors((prev) => {
+                if (!prev.f_max?.includes("Nyquist")) return prev;
+                const next = { ...prev };
+                delete next.f_max;
+                return next;
+              });
+            }
+          }
+        }
         break;
       case "duration_seconds":
         if (isNaN(num) || num <= 0) error = "Duración de Ventana: No puede ser 0 segundos ni negativa (mínimo 0.5 s).";
@@ -288,6 +328,13 @@ export default function TrainingView() {
             const numMin = typeof fMin === "number" ? fMin : parseFloat(String(fMin));
             if (!isNaN(numMin) && num <= numMin) {
               error = `Rango Espectral: La Frecuencia Mínima (${numMin.toLocaleString("es-CL")} Hz) debe ser estrictamente menor que la Frecuencia Máxima (${num.toLocaleString("es-CL")} Hz).`;
+            } else if (!isNaN(numMin) && num > numMin) {
+              setFieldErrors((prev) => {
+                if (!prev.f_min?.includes("Rango Espectral")) return prev;
+                const next = { ...prev };
+                delete next.f_min;
+                return next;
+              });
             }
           }
         }
@@ -309,6 +356,16 @@ export default function TrainingView() {
           const idx = parseInt(field.replace("model_epochs_", ""), 10);
           if (isNaN(num) || num < 1 || num > 1000) {
             error = `El campo 'Épocas del Modelo #${idx + 1}' debe ser entre 1 y 1000.`;
+          }
+        } else if (field.startsWith("model_lr_")) {
+          const idx = parseInt(field.replace("model_lr_", ""), 10);
+          if (isNaN(num) || num <= 0 || num > 1) {
+            error = `El campo 'Learning Rate del Modelo #${idx + 1}' debe ser un número entre 0 y 1.`;
+          }
+        } else if (field.startsWith("model_batch_")) {
+          const idx = parseInt(field.replace("model_batch_", ""), 10);
+          if (isNaN(num) || num < 1 || num > 512) {
+            error = `El campo 'Batch Size del Modelo #${idx + 1}' debe ser un número entero entre 1 y 512.`;
           }
         }
         break;
@@ -363,6 +420,12 @@ export default function TrainingView() {
       if (field.startsWith("model_epochs_")) {
         const idx = parseInt(field.replace("model_epochs_", ""), 10);
         label = `Épocas del Modelo #${idx + 1}`;
+      } else if (field.startsWith("model_lr_")) {
+        const idx = parseInt(field.replace("model_lr_", ""), 10);
+        label = `Learning Rate del Modelo #${idx + 1}`;
+      } else if (field.startsWith("model_batch_")) {
+        const idx = parseInt(field.replace("model_batch_", ""), 10);
+        label = `Batch Size del Modelo #${idx + 1}`;
       }
       setFieldErrors((prev) => ({
         ...prev,
@@ -408,6 +471,8 @@ export default function TrainingView() {
         if (idx >= newSize) {
           delete copy[`model_epochs_${idx}`];
           delete copy[`model_weight_${idx}`];
+          delete copy[`model_lr_${idx}`];
+          delete copy[`model_batch_${idx}`];
         }
       });
       return copy;
@@ -415,21 +480,21 @@ export default function TrainingView() {
 
     if (newSize === 1) {
       setEnsembleModels((prev) => [
-        { architecture: prev[0]?.architecture || architecture, weight: 100, epochs: prev[0]?.epochs ?? 10 },
-        { architecture: prev[1]?.architecture || "ConvNeXt-Nano", weight: 50, epochs: prev[1]?.epochs ?? 12 },
-        { architecture: prev[2]?.architecture || "ResNet-34d", weight: 33, epochs: prev[2]?.epochs ?? 15 },
+        { ...prev[0], weight: 100 },
+        { ...prev[1], weight: 50 },
+        { ...prev[2], weight: 33 },
       ]);
     } else if (newSize === 2) {
       setEnsembleModels((prev) => [
-        { architecture: prev[0]?.architecture || "EfficientNet-B0", weight: 50, epochs: prev[0]?.epochs ?? 10 },
-        { architecture: prev[1]?.architecture || "ConvNeXt-Nano", weight: 50, epochs: prev[1]?.epochs ?? 12 },
-        { architecture: prev[2]?.architecture || "ResNet-34d", weight: 33, epochs: prev[2]?.epochs ?? 15 },
+        { ...prev[0], weight: 50 },
+        { ...prev[1], weight: 50 },
+        { ...prev[2], weight: 33 },
       ]);
     } else {
       setEnsembleModels((prev) => [
-        { architecture: prev[0]?.architecture || "EfficientNet-B0", weight: 34, epochs: prev[0]?.epochs ?? 10 },
-        { architecture: prev[1]?.architecture || "ConvNeXt-Nano", weight: 33, epochs: prev[1]?.epochs ?? 12 },
-        { architecture: prev[2]?.architecture || "ResNet-34d", weight: 33, epochs: prev[2]?.epochs ?? 15 },
+        { ...prev[0], weight: 34 },
+        { ...prev[1], weight: 33 },
+        { ...prev[2], weight: 33 },
       ]);
     }
   };
@@ -457,8 +522,20 @@ export default function TrainingView() {
 
   const handleModelArchChange = (index: number, newArch: string) => {
     const defaultEpochs = parseInt(ARCHITECTURE_PRESETS[newArch]?.epochs || "10", 10);
+    const defaultLr = ARCHITECTURE_PRESETS[newArch]?.lr || "0.001";
+    const defaultBatch = parseInt(ARCHITECTURE_PRESETS[newArch]?.batch || "16", 10);
     setEnsembleModels((prev) =>
-      prev.map((m, idx) => (idx === index ? { ...m, architecture: newArch, epochs: defaultEpochs } : m))
+      prev.map((m, idx) =>
+        idx === index
+          ? {
+              ...m,
+              architecture: newArch,
+              epochs: defaultEpochs,
+              learning_rate: defaultLr,
+              batch_size: defaultBatch,
+            }
+          : m
+      )
     );
     if (index === 0) {
       handleArchitectureChange(newArch);
@@ -470,6 +547,20 @@ export default function TrainingView() {
       prev.map((m, idx) => (idx === index ? { ...m, epochs: newEpochs } : m))
     );
     validateFieldOnChange(`model_epochs_${index}`, newEpochs);
+  };
+
+  const handleModelLrChange = (index: number, newLr: number | string) => {
+    setEnsembleModels((prev) =>
+      prev.map((m, idx) => (idx === index ? { ...m, learning_rate: newLr } : m))
+    );
+    validateFieldOnChange(`model_lr_${index}`, newLr);
+  };
+
+  const handleModelBatchChange = (index: number, newBatch: number | string) => {
+    setEnsembleModels((prev) =>
+      prev.map((m, idx) => (idx === index ? { ...m, batch_size: newBatch } : m))
+    );
+    validateFieldOnChange(`model_batch_${index}`, newBatch);
   };
 
   // 2. Telemetría de Hardware y Datasets
@@ -912,6 +1003,24 @@ export default function TrainingView() {
         if (epStr === "" || isNaN(ep) || ep < 1 || ep > 1000) {
           errors[`model_epochs_${idx}`] = `El campo 'Épocas del Modelo #${idx + 1}' debe ser entre 1 y 1000.`;
         }
+
+        const lrStr = String(m.learning_rate ?? "").trim();
+        const lrVal = parseFloat(lrStr);
+        if (lrStr === "" || isNaN(lrVal) || lrVal <= 0 || lrVal > 1) {
+          errors[`model_lr_${idx}`] =
+            lrStr === ""
+              ? `El campo 'Learning Rate del Modelo #${idx + 1}' no puede estar vacío.`
+              : `El campo 'Learning Rate del Modelo #${idx + 1}' debe ser un número entre 0 y 1.`;
+        }
+
+        const bStr = String(m.batch_size ?? "").trim();
+        const bVal = parseInt(bStr, 10);
+        if (bStr === "" || isNaN(bVal) || bVal < 1 || bVal > 512) {
+          errors[`model_batch_${idx}`] =
+            bStr === ""
+              ? `El campo 'Batch Size del Modelo #${idx + 1}' no puede estar vacío.`
+              : `El campo 'Batch Size del Modelo #${idx + 1}' debe ser un número entero entre 1 y 512.`;
+        }
       });
 
       if (Math.abs(sumW - 100) > 0.01 && !Object.keys(errors).some((k) => k.startsWith("model_weight_"))) {
@@ -938,6 +1047,14 @@ export default function TrainingView() {
       architecture: m.architecture,
       weight: Math.round(((parseFloat(String(m.weight)) || 0) / sumW) * 1000) / 1000,
       epochs: m.epochs ? parseInt(String(m.epochs), 10) : undefined,
+      learning_rate:
+        m.learning_rate !== undefined && String(m.learning_rate).trim() !== ""
+          ? parseFloat(String(m.learning_rate))
+          : undefined,
+      batch_size:
+        m.batch_size !== undefined && String(m.batch_size).trim() !== ""
+          ? parseInt(String(m.batch_size), 10)
+          : undefined,
     }));
     const normSum = normalizedEnsemble.reduce((acc, m) => acc + m.weight, 0);
     if (normalizedEnsemble.length > 0 && Math.abs(normSum - 1.0) > 1e-4) {
@@ -1872,7 +1989,10 @@ export default function TrainingView() {
                 <div
                   key={idx}
                   className={`p-3 rounded-lg bg-[#111215] border ${
-                    fieldErrors[`model_weight_${idx}`] || fieldErrors[`model_epochs_${idx}`]
+                    fieldErrors[`model_weight_${idx}`] ||
+                    fieldErrors[`model_epochs_${idx}`] ||
+                    fieldErrors[`model_lr_${idx}`] ||
+                    fieldErrors[`model_batch_${idx}`]
                       ? "border-red-500/70 bg-red-950/10"
                       : "border-[#23252e]"
                   } space-y-2 hover:border-[#2f323e] transition-colors`}
@@ -1891,7 +2011,7 @@ export default function TrainingView() {
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-start">
                     <div>
                       <label className="text-[10px] text-gray-400 block mb-1 font-medium">Arquitectura Pre-entrenada</label>
                       <select
@@ -1931,6 +2051,60 @@ export default function TrainingView() {
                       {fieldErrors[`model_epochs_${idx}`] && (
                         <span className="text-[10px] text-red-400 mt-1 block">
                           {fieldErrors[`model_epochs_${idx}`]}
+                        </span>
+                      )}
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor={`model-lr-${idx}`}
+                        className="text-[10px] text-gray-400 block mb-1 font-medium"
+                      >
+                        Learning Rate del Modelo #{idx + 1}
+                      </label>
+                      <input
+                        id={`model-lr-${idx}`}
+                        type="text"
+                        value={m.learning_rate !== undefined ? m.learning_rate : ""}
+                        disabled={isTraining}
+                        onChange={(e) => handleModelLrChange(idx, e.target.value)}
+                        onBlur={(e) => validateFieldOnBlur(`model_lr_${idx}`, e.target.value)}
+                        className={`w-full bg-[#16171b] border ${
+                          fieldErrors[`model_lr_${idx}`]
+                            ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200"
+                            : "border-[#23252e]"
+                        } rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-cyan-500 font-mono disabled:opacity-60`}
+                      />
+                      {fieldErrors[`model_lr_${idx}`] && (
+                        <span className="text-[10px] text-red-400 mt-1 block">
+                          {fieldErrors[`model_lr_${idx}`]}
+                        </span>
+                      )}
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor={`model-batch-${idx}`}
+                        className="text-[10px] text-gray-400 block mb-1 font-medium"
+                      >
+                        Batch Size del Modelo #{idx + 1}
+                      </label>
+                      <input
+                        id={`model-batch-${idx}`}
+                        type="text"
+                        value={m.batch_size !== undefined ? m.batch_size : ""}
+                        disabled={isTraining}
+                        onChange={(e) => handleModelBatchChange(idx, e.target.value)}
+                        onBlur={(e) => validateFieldOnBlur(`model_batch_${idx}`, e.target.value)}
+                        className={`w-full bg-[#16171b] border ${
+                          fieldErrors[`model_batch_${idx}`]
+                            ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200"
+                            : "border-[#23252e]"
+                        } rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-cyan-500 font-mono disabled:opacity-60`}
+                      />
+                      {fieldErrors[`model_batch_${idx}`] && (
+                        <span className="text-[10px] text-red-400 mt-1 block">
+                          {fieldErrors[`model_batch_${idx}`]}
                         </span>
                       )}
                     </div>

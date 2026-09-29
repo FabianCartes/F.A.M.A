@@ -328,17 +328,25 @@ class TrainingService:
                 for m in models:
                     if isinstance(m, dict):
                         m_epochs = m.get("epochs")
+                        m_lr = m.get("learning_rate")
+                        m_batch = m.get("batch_size")
                         resolved_models.append({
                             "architecture": m["architecture"],
                             "weight": float(m.get("weight", 1.0)),
                             "epochs": int(m_epochs) if m_epochs is not None else None,
+                            "learning_rate": float(m_lr) if m_lr is not None else None,
+                            "batch_size": int(m_batch) if m_batch is not None else None,
                         })
                     else:
                         m_epochs = getattr(m, "epochs", None)
+                        m_lr = getattr(m, "learning_rate", None)
+                        m_batch = getattr(m, "batch_size", None)
                         resolved_models.append({
                             "architecture": getattr(m, "architecture"),
                             "weight": float(getattr(m, "weight", 1.0)),
                             "epochs": int(m_epochs) if m_epochs is not None else None,
+                            "learning_rate": float(m_lr) if m_lr is not None else None,
+                            "batch_size": int(m_batch) if m_batch is not None else None,
                         })
                 is_ensemble = len(resolved_models) > 1
             elif is_tri_model:
@@ -443,11 +451,15 @@ class TrainingService:
             models_to_train = [m["architecture"] for m in config["models"]]
             model_weights = {m["architecture"]: m.get("weight", 1.0) for m in config["models"]}
             model_epochs_list = [m.get("epochs") for m in config["models"]]
+            model_lr_list = [m.get("learning_rate") for m in config["models"]]
+            model_batch_list = [m.get("batch_size") for m in config["models"]]
         else:
             triad_list = ENGINE_TRIAD_ARCHITECTURES if is_engine else TRIAD_ARCHITECTURES
             models_to_train = triad_list if is_tri_model else [config["architecture"]]
             model_weights = {a: 1.0 / len(models_to_train) for a in models_to_train}
             model_epochs_list = [None for _ in models_to_train]
+            model_lr_list = [None for _ in models_to_train]
+            model_batch_list = [None for _ in models_to_train]
 
 
         is_ensemble = len(models_to_train) > 1
@@ -570,8 +582,21 @@ class TrainingService:
                     arch_epochs = preset.get("epochs", config["epochs"])
                 else:
                     arch_epochs = config["epochs"]
-                arch_lr = preset.get("lr", config["learning_rate"]) if is_ensemble else config["learning_rate"]
-                arch_batch = preset.get("batch", config["batch_size"]) if is_ensemble else config["batch_size"]
+                custom_lr = model_lr_list[idx] if idx < len(model_lr_list) else None
+                if custom_lr is not None:
+                    arch_lr = float(custom_lr)
+                elif is_ensemble:
+                    arch_lr = preset.get("lr", config["learning_rate"])
+                else:
+                    arch_lr = config["learning_rate"]
+
+                custom_batch = model_batch_list[idx] if idx < len(model_batch_list) else None
+                if custom_batch is not None:
+                    arch_batch = int(custom_batch)
+                elif is_ensemble:
+                    arch_batch = preset.get("batch", config["batch_size"])
+                else:
+                    arch_batch = config["batch_size"]
 
                 with self._lock:
                     self.current_model_index = idx + 1

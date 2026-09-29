@@ -262,6 +262,31 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     expect(fMaxInput.className).toContain("border-red-500");
   });
 
+  it("clears Nyquist warning on f_max when target_sr is subsequently increased to 32000 Hz", async () => {
+    await act(async () => {
+      render(<TrainingView />);
+    });
+
+    const fMaxInput = screen.getByLabelText(/Frecuencia Máxima/i) as HTMLInputElement;
+    const targetSrInput = screen.getByLabelText(/Tasa de Muestreo/i) as HTMLInputElement;
+
+    // 1. Configurar f_max en 16000 Hz con target_sr en 22050 Hz (Nyquist: 11025 Hz -> Alerta)
+    await act(async () => {
+      fireEvent.change(fMaxInput, { target: { value: "16000" } });
+    });
+
+    expect(screen.getAllByText(/Violación de Nyquist/i).length).toBeGreaterThanOrEqual(1);
+    expect(fMaxInput.className).toContain("border-red-500");
+
+    // 2. Incrementar target_sr a 32000 Hz (Nyquist: 16000 Hz -> Válido)
+    await act(async () => {
+      fireEvent.change(targetSrInput, { target: { value: "32000" } });
+    });
+
+    expect(screen.queryByText(/Violación de Nyquist/i)).toBeNull();
+    expect(fMaxInput.className).not.toContain("border-red-500");
+  });
+
   it("renders model filter pills in chart when Duo Ensemble is selected", async () => {
     await act(async () => {
       render(<TrainingView />);
@@ -762,6 +787,88 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     });
     expect(modelEpochs0.className).toContain("border-red-500");
     expect(screen.getByText("El campo 'Épocas del Modelo #1' no puede estar vacío.")).toBeDefined();
+  });
+
+  it("allows setting custom learning_rate and batch_size per model in ensemble and sends them in start payload", async () => {
+    await act(async () => {
+      render(<TrainingView />);
+    });
+
+    // Cambiar a Dúo
+    const duoBtn = screen.getByText("2 Modelos (Dúo)");
+    await act(async () => {
+      fireEvent.click(duoBtn);
+    });
+
+    const modelLr0 = screen.getByLabelText("Learning Rate del Modelo #1") as HTMLInputElement;
+    const modelBatch0 = screen.getByLabelText("Batch Size del Modelo #1") as HTMLInputElement;
+    const modelLr1 = screen.getByLabelText("Learning Rate del Modelo #2") as HTMLInputElement;
+    const modelBatch1 = screen.getByLabelText("Batch Size del Modelo #2") as HTMLInputElement;
+
+    expect(modelLr0).toBeDefined();
+    expect(modelBatch0).toBeDefined();
+    expect(modelLr1).toBeDefined();
+    expect(modelBatch1).toBeDefined();
+
+    await act(async () => {
+      fireEvent.change(modelLr0, { target: { value: "0.0008" } });
+      fireEvent.change(modelBatch0, { target: { value: "32" } });
+      fireEvent.change(modelLr1, { target: { value: "0.0002" } });
+      fireEvent.change(modelBatch1, { target: { value: "8" } });
+    });
+
+    const startBtn = screen.getByText("Iniciar Pipeline Dúo Ensamble (2 Modelos)");
+    await act(async () => {
+      fireEvent.click(startBtn);
+    });
+
+    const postCall = (global.fetch as any).mock.calls.find(
+      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    );
+    expect(postCall).toBeDefined();
+    const payload = JSON.parse(postCall[1].body);
+    expect(payload.models[0].learning_rate).toBe(0.0008);
+    expect(payload.models[0].batch_size).toBe(32);
+    expect(payload.models[1].learning_rate).toBe(0.0002);
+    expect(payload.models[1].batch_size).toBe(8);
+  });
+
+  it("applies Option B hybrid validation to ensemble model learning_rate and batch_size inputs", async () => {
+    await act(async () => {
+      render(<TrainingView />);
+    });
+
+    const duoBtn = screen.getByText("2 Modelos (Dúo)");
+    await act(async () => {
+      fireEvent.click(duoBtn);
+    });
+
+    const modelLr0 = screen.getByLabelText("Learning Rate del Modelo #1") as HTMLInputElement;
+    const modelBatch0 = screen.getByLabelText("Batch Size del Modelo #1") as HTMLInputElement;
+
+    // 1. Learning Rate inválido (<= 0 o > 1) en onChange
+    await act(async () => {
+      fireEvent.change(modelLr0, { target: { value: "0" } });
+    });
+    expect(modelLr0.className).toContain("border-red-500");
+    expect(screen.getByText("El campo 'Learning Rate del Modelo #1' debe ser un número entre 0 y 1.")).toBeDefined();
+
+    // 2. Batch Size inválido (< 1 o > 512) en onChange
+    await act(async () => {
+      fireEvent.change(modelBatch0, { target: { value: "600" } });
+    });
+    expect(modelBatch0.className).toContain("border-red-500");
+    expect(screen.getByText("El campo 'Batch Size del Modelo #1' debe ser un número entero entre 1 y 512.")).toBeDefined();
+
+    // 3. Dejar vacíos y hacer onBlur
+    await act(async () => {
+      fireEvent.change(modelLr0, { target: { value: "" } });
+      fireEvent.blur(modelLr0);
+      fireEvent.change(modelBatch0, { target: { value: "" } });
+      fireEvent.blur(modelBatch0);
+    });
+    expect(screen.getByText("El campo 'Learning Rate del Modelo #1' no puede estar vacío.")).toBeDefined();
+    expect(screen.getByText("El campo 'Batch Size del Modelo #1' no puede estar vacío.")).toBeDefined();
   });
 });
 

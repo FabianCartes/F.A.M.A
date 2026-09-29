@@ -293,6 +293,51 @@ describe("trainingApi (TDD Contract Tests)", () => {
       };
       await expect(startTraining(validMaxEpochs)).resolves.toBeDefined();
     });
+
+    it("validates and sends model learning_rate and batch_size in payload when ensemble specifies them", async () => {
+      const mockStartResponse = {
+        status: "started",
+        job_id: "fama_ensemble_custom_params",
+        message: "Entrenamiento iniciado",
+      };
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => mockStartResponse,
+      });
+
+      const paramsWithModelHyperparams = {
+        ...validParams,
+        models: [
+          { architecture: "ResNet-34d", weight: 0.6, epochs: 35, learning_rate: 0.0007, batch_size: 32 },
+          { architecture: "EfficientNet-B0", weight: 0.4, epochs: 10, learning_rate: 0.001, batch_size: 16 },
+        ],
+      };
+
+      const res = await startTraining(paramsWithModelHyperparams);
+      expect(res.status).toBe("started");
+
+      const callBody = JSON.parse((global.fetch as any).mock.calls[0][1].body);
+      expect(callBody.models[0].learning_rate).toBe(0.0007);
+      expect(callBody.models[0].batch_size).toBe(32);
+      expect(callBody.models[1].learning_rate).toBe(0.001);
+      expect(callBody.models[1].batch_size).toBe(16);
+    });
+
+    it("throws ValidationError when model learning_rate or batch_size is out of range", async () => {
+      const invalidLr = {
+        ...validParams,
+        models: [{ architecture: "ResNet-34d", weight: 1.0, learning_rate: 0 }],
+      };
+      await expect(startTraining(invalidLr)).rejects.toThrow(ValidationError);
+
+      const invalidBatch = {
+        ...validParams,
+        models: [{ architecture: "ResNet-34d", weight: 1.0, batch_size: 0 }],
+      };
+      await expect(startTraining(invalidBatch)).rejects.toThrow(ValidationError);
+    });
   });
 
   describe("getProgress", () => {

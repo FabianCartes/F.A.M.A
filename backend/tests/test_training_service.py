@@ -495,6 +495,43 @@ def test_start_training_dynamic_ensemble_preserves_custom_epochs(training_servic
         assert passed_config["models"][1]["epochs"] == 10
 
 
+def test_start_training_dynamic_ensemble_preserves_custom_hyperparameters(training_service):
+    """
+    Verifica que si los modelos del ensamble definen learning_rate y batch_size individuales,
+    se capturen y propaguen dentro de la configuración del worker.
+    """
+    with patch.object(training_service, "_run_training_worker") as mock_worker:
+        res = training_service.start_training(
+            dataset_name="AvesChilenas",
+            models=[
+                {
+                    "architecture": "ResNet-34d",
+                    "weight": 0.6,
+                    "epochs": 35,
+                    "learning_rate": 0.0007,
+                    "batch_size": 32,
+                },
+                {
+                    "architecture": "EfficientNet-B0",
+                    "weight": 0.4,
+                    "epochs": 10,
+                    "learning_rate": 0.001,
+                    "batch_size": 16,
+                },
+            ],
+        )
+
+        assert res["status"] == "started"
+        mock_worker.assert_called_once()
+        passed_config = mock_worker.call_args[0][0]
+        assert "models" in passed_config
+        assert passed_config["models"][0]["learning_rate"] == 0.0007
+        assert passed_config["models"][0]["batch_size"] == 32
+        assert passed_config["models"][1]["learning_rate"] == 0.001
+        assert passed_config["models"][1]["batch_size"] == 16
+
+
+
 
 
 

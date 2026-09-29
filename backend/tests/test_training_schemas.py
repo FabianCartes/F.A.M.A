@@ -583,6 +583,48 @@ def test_start_training_request_preserves_model_epochs():
     assert req.models[1].epochs == 10
 
 
+def test_model_ensemble_item_hyperparameters_validation():
+    # 1. Por defecto son None
+    item = ModelEnsembleItem(architecture="ResNet-34d", weight=0.5)
+    assert item.learning_rate is None
+    assert item.batch_size is None
+
+    # 2. Valores válidos
+    item_valid = ModelEnsembleItem(
+        architecture="ResNet-34d", weight=0.5, learning_rate=0.0007, batch_size=32
+    )
+    assert item_valid.learning_rate == 0.0007
+    assert item_valid.batch_size == 32
+
+    # 3. learning_rate inválido (<= 0 o > 1)
+    with pytest.raises(ValidationError):
+        ModelEnsembleItem(architecture="ResNet-34d", weight=0.5, learning_rate=0.0)
+    with pytest.raises(ValidationError):
+        ModelEnsembleItem(architecture="ResNet-34d", weight=0.5, learning_rate=1.5)
+
+    # 4. batch_size inválido (< 1 o > 512)
+    with pytest.raises(ValidationError):
+        ModelEnsembleItem(architecture="ResNet-34d", weight=0.5, batch_size=0)
+    with pytest.raises(ValidationError):
+        ModelEnsembleItem(architecture="ResNet-34d", weight=0.5, batch_size=1024)
+
+
+def test_start_training_request_preserves_model_hyperparameters():
+    req = StartTrainingRequest(
+        models=[
+            {"architecture": "ResNet-34d", "weight": 0.6, "epochs": 35, "learning_rate": 0.0007, "batch_size": 32},
+            {"architecture": "PANNs-CNN14", "weight": 0.3, "epochs": 35, "learning_rate": 0.0005, "batch_size": 16},
+            {"architecture": "EfficientNet-B0", "weight": 0.1, "epochs": 35, "learning_rate": 0.001, "batch_size": 16},
+        ]
+    )
+    assert req.models[0].learning_rate == 0.0007
+    assert req.models[0].batch_size == 32
+    assert req.models[1].learning_rate == 0.0005
+    assert req.models[1].batch_size == 16
+    assert req.models[2].learning_rate == 0.001
+    assert req.models[2].batch_size == 16
+
+
 
 
 

@@ -50,6 +50,8 @@ export const ModelEnsembleItemSchema = z.object({
   architecture: z.string(),
   weight: z.number().min(0).max(1),
   epochs: z.number().int().min(1, "Model epochs must be at least 1").max(1000, "Model epochs must be at most 1000").optional(),
+  learning_rate: z.number().positive("Model learning rate must be positive").max(1, "Model learning rate must be at most 1.0").optional(),
+  batch_size: z.number().int().min(1, "Model batch size must be at least 1").max(512, "Model batch size must be at most 512").optional(),
 });
 export type ModelEnsembleItem = z.infer<typeof ModelEnsembleItemSchema>;
 

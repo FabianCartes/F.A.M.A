@@ -70,6 +70,8 @@ class ModelEnsembleItem(BaseModel):
     architecture: str
     weight: float = Field(ge=0.0, le=1.0)
     epochs: Optional[int] = Field(default=None, ge=1, le=1000, description="Épocas de entrenamiento individuales para este modelo")
+    learning_rate: Optional[float] = Field(default=None, gt=0.0, le=1.0, description="Tasa de aprendizaje individual para este modelo")
+    batch_size: Optional[int] = Field(default=None, ge=1, le=512, description="Tamaño de lote individual para este modelo")
 
     @field_validator("architecture")
     @classmethod
@@ -127,6 +129,8 @@ class StartTrainingRequest(BaseModel):
                         architecture=item.architecture,
                         weight=item.weight / total_weight,
                         epochs=item.epochs,
+                        learning_rate=item.learning_rate,
+                        batch_size=item.batch_size,
                     )
                 )
             self.models = normalized_models
