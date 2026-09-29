@@ -3,6 +3,7 @@ import {
   AUDIO_DOMAIN_PRESETS,
   validateNyquist,
   validateFrequencyRange,
+  validateWindowDuration,
   validateAudioPhysics,
   AudioDomainPresetKey,
 } from "../audioDomainPresets";
@@ -80,15 +81,47 @@ describe("Audio Domain Presets and Physics Validation", () => {
     });
   });
 
+  describe("Window Duration Validation", () => {
+    it("validates sampling window duration between 0.5 and 30 seconds", () => {
+      expect(validateWindowDuration(1.5)).toBe(true);
+      expect(validateWindowDuration(0.5)).toBe(true);
+      expect(validateWindowDuration(30.0)).toBe(true);
+      expect(validateWindowDuration(0)).toBe(false);
+      expect(validateWindowDuration(-1)).toBe(false);
+      expect(validateWindowDuration(0.2)).toBe(false);
+      expect(validateWindowDuration(35.0)).toBe(false);
+    });
+  });
+
   describe("Combined Physics Validation", () => {
     it("returns error details when constraints are violated", () => {
       const validRes = validateAudioPhysics({
         target_sr: 22050,
         f_min: 800,
         f_max: 10000,
+        duration_seconds: 5.0,
       });
       expect(validRes.valid).toBe(true);
       expect(validRes.error).toBeUndefined();
+
+      const zeroDuration = validateAudioPhysics({
+        target_sr: 22050,
+        f_min: 800,
+        f_max: 10000,
+        duration_seconds: 0,
+      });
+      expect(zeroDuration.valid).toBe(false);
+      expect(zeroDuration.field).toBe("duration_seconds");
+      expect(zeroDuration.error).toContain("0 segundos");
+
+      const negativeDuration = validateAudioPhysics({
+        target_sr: 22050,
+        f_min: 800,
+        f_max: 10000,
+        duration_seconds: -2.0,
+      });
+      expect(negativeDuration.valid).toBe(false);
+      expect(negativeDuration.field).toBe("duration_seconds");
 
       const nyquistViolation = validateAudioPhysics({
         target_sr: 16000,
@@ -108,3 +141,4 @@ describe("Audio Domain Presets and Physics Validation", () => {
     });
   });
 });
+

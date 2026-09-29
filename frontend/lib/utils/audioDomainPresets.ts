@@ -123,24 +123,84 @@ export function validateFrequencyRange(f_min: number, f_max: number): boolean {
 }
 
 /**
+ * Valida que la duración de la ventana de análisis esté en un rango físico válido (> 0 y entre 0.5 y 30.0 s).
+ */
+export function validateWindowDuration(duration_seconds: number): boolean {
+  return (
+    typeof duration_seconds === "number" &&
+    !isNaN(duration_seconds) &&
+    duration_seconds >= 0.5 &&
+    duration_seconds <= 30.0
+  );
+}
+
+/**
+ * Valida que el exponente GeM esté en un rango físicamente estable (1.0 <= p <= 10.0). No puede ser 0.
+ */
+export function validateGemP(p: number): boolean {
+  return typeof p === "number" && !isNaN(p) && p >= 1.0 && p <= 10.0;
+}
+
+/**
+ * Valida que el salto temporal del ventaneo esté en un rango válido (0.1 <= hop <= 10.0 s). No puede ser 0.
+ */
+export function validateHopSeconds(hop: number): boolean {
+  return typeof hop === "number" && !isNaN(hop) && hop >= 0.1 && hop <= 10.0;
+}
+
+/**
+ * Valida que el umbral VAD energético esté en el rango [0.0, 1.0].
+ */
+export function validateVadThreshold(threshold: number): boolean {
+  return typeof threshold === "number" && !isNaN(threshold) && threshold >= 0.0 && threshold <= 1.0;
+}
+
+/**
+ * Valida que el parámetro focal gamma esté en el rango [0.0, 5.0].
+ */
+export function validateFocalGamma(gamma: number): boolean {
+  return typeof gamma === "number" && !isNaN(gamma) && gamma >= 0.0 && gamma <= 5.0;
+}
+
+/**
  * Valida de forma combinada los invariantes de física acústica.
  */
 export function validateAudioPhysics(config: {
   target_sr: number;
   f_min: number;
   f_max: number;
-}): { valid: boolean; error?: string } {
+  duration_seconds?: number;
+}): { valid: boolean; error?: string; field?: "f_max" | "f_min" | "target_sr" | "duration_seconds" } {
+  if (config.duration_seconds !== undefined) {
+    if (config.duration_seconds <= 0) {
+      return {
+        valid: false,
+        field: "duration_seconds",
+        error: "Duración de Ventana: No puede ser 0 segundos ni negativa (mínimo 0.5 s).",
+      };
+    }
+    if (config.duration_seconds < 0.5 || config.duration_seconds > 30.0) {
+      return {
+        valid: false,
+        field: "duration_seconds",
+        error: "Duración de Ventana: Debe estar en el rango de 0.5 s a 30.0 s.",
+      };
+    }
+  }
   if (!validateNyquist(config.f_max, config.target_sr)) {
     return {
       valid: false,
-      error: `Violación de Nyquist: f_max (${config.f_max} Hz) supera target_sr / 2 (${config.target_sr / 2} Hz).`,
+      field: "f_max",
+      error: `Violación de Nyquist: La Frecuencia Máxima (${config.f_max.toLocaleString("es-CL")} Hz) supera la mitad de la Tasa de Muestreo (${(config.target_sr / 2).toLocaleString("es-CL")} Hz).`,
     };
   }
   if (!validateFrequencyRange(config.f_min, config.f_max)) {
     return {
       valid: false,
-      error: `f_min (${config.f_min} Hz) debe ser estrictamente menor que f_max (${config.f_max} Hz).`,
+      field: "f_min",
+      error: `Rango Espectral: La Frecuencia Mínima (${config.f_min.toLocaleString("es-CL")} Hz) debe ser estrictamente menor que la Frecuencia Máxima (${config.f_max.toLocaleString("es-CL")} Hz).`,
     };
   }
   return { valid: true };
 }
+

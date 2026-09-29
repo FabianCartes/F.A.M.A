@@ -65,7 +65,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`05_restriccion_formato_audio_y_captura_microfono.md`](./limites/05_restriccion_formato_audio_y_captura_microfono.md): Restricción estricta de formato PCM .wav y pipeline de captura por micrófono web.
 
 ### 5. [`docs/adr/`](./adr/) — Architectural Decision Records
-Registro de las 12 decisiones de arquitectura fundamentales del sistema:
+Registro de las 14 decisiones de arquitectura fundamentales del sistema:
 * `ADR 0001`: Migración de AudioCNN a EfficientNet-B0.
 * `ADR 0002`: Particionamiento Estratificado a Nivel de Grabador (Zero Leakage).
 * `ADR 0003`: Adopción de Focal Loss frente a Cross-Entropy estándar.
@@ -78,3 +78,5 @@ Registro de las 12 decisiones de arquitectura fundamentales del sistema:
 * `ADR 0010`: Homogeneización de Hiperparámetros de la Tríada.
 * `ADR 0011`: Soporte Multi-Modelo con Patrón Strategy y ModelRegistry.
 * `ADR 0012`: Unificación de Fuente de Datos Raw.
+* `ADR 0013`: Bucle de Retroalimentación Activa (RF_06) con Curación Semi-Manual Human-in-the-Loop.
+* `ADR 0014`: Delimitación de Parámetros Configurables en Frontend bajo Principios de Deep Modules y Presets de Dominio.

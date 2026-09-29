@@ -258,7 +258,8 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     });
 
     // Target SR default is 22050 -> Nyquist is 11025. 15000 > 11025, should show warning
-    expect(screen.getByText(/Violación de Nyquist/i)).toBeDefined();
+    expect(screen.getAllByText(/Violación de Nyquist/i).length).toBeGreaterThanOrEqual(1);
+    expect(fMaxInput.className).toContain("border-red-500");
   });
 
   it("renders model filter pills in chart when Duo Ensemble is selected", async () => {
@@ -436,7 +437,206 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     expect(within(modal).getByText("Arquitectura:")).toBeDefined();
     expect(within(modal).getAllByText("EfficientNet-B0").length).toBeGreaterThan(0);
   });
+
+  it("allows setting custom epochs per model in Duo/Trio ensemble and sends them in payload", async () => {
+    await act(async () => {
+      render(<TrainingView />);
+    });
+
+    // 1. Switch to Duo Ensemble
+    const duoBtn = screen.getByText("2 Modelos (Dúo)");
+    await act(async () => {
+      fireEvent.click(duoBtn);
+    });
+
+    // 2. Locate epochs input for Model #1 and Model #2
+    const model1Epochs = screen.getByLabelText("Épocas del Modelo #1") as HTMLInputElement;
+    const model2Epochs = screen.getByLabelText("Épocas del Modelo #2") as HTMLInputElement;
+
+    expect(model1Epochs).toBeDefined();
+    expect(model2Epochs).toBeDefined();
+
+    // 3. Set Model #1 epochs to 35 and Model #2 epochs to 20
+    await act(async () => {
+      fireEvent.change(model1Epochs, { target: { value: "35" } });
+      fireEvent.change(model2Epochs, { target: { value: "20" } });
+    });
+
+    expect(model1Epochs.value).toBe("35");
+    expect(model2Epochs.value).toBe("20");
+
+    // 4. Start training
+    const startBtn = screen.getByText("Iniciar Pipeline Dúo Ensamble (2 Modelos)");
+    await act(async () => {
+      fireEvent.click(startBtn);
+    });
+
+    const postCall = (global.fetch as any).mock.calls.find(
+      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    );
+    expect(postCall).toBeDefined();
+    const payload = JSON.parse(postCall[1].body);
+
+    expect(payload.models[0].epochs).toBe(35);
+    expect(payload.models[1].epochs).toBe(20);
+  });
+
+  it("allows setting arbitrary percentage combination 60%, 30%, 10% in Trio Ensemble without shifting other values", async () => {
+    await act(async () => {
+      render(<TrainingView />);
+    });
+
+    const trioBtn = screen.getByText("3 Modelos (Tríada)");
+    await act(async () => {
+      fireEvent.click(trioBtn);
+    });
+
+    const weight1 = screen.getByLabelText("Ponderación del Modelo #1") as HTMLInputElement;
+    const weight2 = screen.getByLabelText("Ponderación del Modelo #2") as HTMLInputElement;
+    const weight3 = screen.getByLabelText("Ponderación del Modelo #3") as HTMLInputElement;
+
+    await act(async () => {
+      fireEvent.change(weight1, { target: { value: "60" } });
+      fireEvent.change(weight2, { target: { value: "30" } });
+      fireEvent.change(weight3, { target: { value: "10" } });
+    });
+
+    expect(weight1.value).toBe("60");
+    expect(weight2.value).toBe("30");
+    expect(weight3.value).toBe("10");
+
+    expect(screen.getByText(/Total: 100%/)).toBeDefined();
+
+    const startBtn = screen.getByText(/Iniciar Pipeline.*Tri Ensamble \(3 Modelos\)/i);
+    await act(async () => {
+      fireEvent.click(startBtn);
+    });
+
+    const postCall = (global.fetch as any).mock.calls.find(
+      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    );
+    expect(postCall).toBeDefined();
+    const payload = JSON.parse(postCall[1].body);
+
+    expect(payload.models[0].weight).toBeCloseTo(0.6, 2);
+    expect(payload.models[1].weight).toBeCloseTo(0.3, 2);
+    expect(payload.models[2].weight).toBeCloseTo(0.1, 2);
+  });
+
+  it("allows completely clearing input fields to empty string and highlights them on validation with natural language message", async () => {
+    await act(async () => {
+      render(<TrainingView />);
+    });
+
+    const epochsInput = screen.getByLabelText("Épocas de Entrenamiento") as HTMLInputElement;
+
+    await act(async () => {
+      fireEvent.change(epochsInput, { target: { value: "" } });
+    });
+
+    expect(epochsInput.value).toBe("");
+
+    const startBtn = screen.getByText("Iniciar Entrenamiento Local (1 Modelo)");
+    await act(async () => {
+      fireEvent.click(startBtn);
+    });
+
+    expect(epochsInput.className).toContain("border-red-500");
+    expect(
+      screen.getAllByText(/El campo 'Épocas de Entrenamiento' no puede estar vacío/i).length
+    ).toBeGreaterThanOrEqual(1);
+  });
+
+  it("highlights sampling window duration in red when set to 0 seconds and prevents training", async () => {
+    await act(async () => {
+      render(<TrainingView />);
+    });
+
+    const durationInput = screen.getByLabelText("Duración de Ventana (s)") as HTMLInputElement;
+    expect(durationInput).toBeDefined();
+
+    // Cambiar duración a 0 segundos
+    await act(async () => {
+      fireEvent.change(durationInput, { target: { value: "0" } });
+    });
+
+    expect(durationInput.value).toBe("0");
+
+    // Verificar que la casilla se destaca en rojo reactivamente
+    expect(durationInput.className).toContain("border-red-500");
+    expect(screen.getAllByText(/No puede ser 0 segundos ni negativa/i).length).toBeGreaterThanOrEqual(1);
+
+    // Intentar iniciar entrenamiento
+    const startBtn = screen.getByText("Iniciar Entrenamiento Local (1 Modelo)");
+    await act(async () => {
+      fireEvent.click(startBtn);
+    });
+
+    // La llamada al API no debe haberse realizado
+    const postCall = (global.fetch as any).mock.calls.find(
+      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    );
+    expect(postCall).toBeUndefined();
+  });
+
+  it("validates hop_seconds, gem_p, vad_threshold and focal_gamma inline without top banner when empty or out of range", async () => {
+    await act(async () => {
+      render(<TrainingView />);
+    });
+
+    const hopInput = screen.getByLabelText("Salto Temporal (s)") as HTMLInputElement;
+    const gemInput = screen.getByLabelText("Exponente GeM (p)") as HTMLInputElement;
+    const vadInput = screen.getByLabelText("Umbral VAD Energético") as HTMLInputElement;
+    const gammaInput = screen.getByLabelText("Parámetro Gamma (Focal)") as HTMLInputElement;
+
+    // 1. Dejar campos vacíos
+    await act(async () => {
+      fireEvent.change(hopInput, { target: { value: "" } });
+      fireEvent.change(gemInput, { target: { value: "" } });
+      fireEvent.change(vadInput, { target: { value: "" } });
+      fireEvent.change(gammaInput, { target: { value: "" } });
+    });
+
+    expect(hopInput.value).toBe("");
+    expect(gemInput.value).toBe("");
+    expect(vadInput.value).toBe("");
+    expect(gammaInput.value).toBe("");
+
+    // Intentar iniciar entrenamiento
+    const startBtn = screen.getByText("Iniciar Entrenamiento Local (1 Modelo)");
+    await act(async () => {
+      fireEvent.click(startBtn);
+    });
+
+    // Verificar que los errores se muestran inline debajo de cada casilla
+    expect(screen.getByText("El campo 'Salto Temporal' no puede estar vacío.")).toBeDefined();
+    expect(screen.getByText("El campo 'Exponente GeM (p)' no puede estar vacío.")).toBeDefined();
+    expect(screen.getByText("El campo 'Umbral VAD Energético' no puede estar vacío.")).toBeDefined();
+    expect(screen.getByText("El campo 'Parámetro Gamma (Focal)' no puede estar vacío.")).toBeDefined();
+
+    // Comprobar que NO existe ningún banner grande superior con múltiples errores
+    expect(screen.queryByTestId("physics-validation-banner")).toBeNull();
+
+    // 2. Probar valores fuera de rango: GeM = 0 (no permitido), hop = 0, vad = 2, gamma = 10
+    await act(async () => {
+      fireEvent.change(hopInput, { target: { value: "0" } });
+      fireEvent.change(gemInput, { target: { value: "0" } });
+      fireEvent.change(vadInput, { target: { value: "2" } });
+      fireEvent.change(gammaInput, { target: { value: "10" } });
+    });
+
+    await act(async () => {
+      fireEvent.click(startBtn);
+    });
+
+    expect(screen.getByText(/Salto Temporal: Debe ser entre 0.1 s y 10.0 s/i)).toBeDefined();
+    expect(screen.getByText(/Exponente GeM: Debe estar entre 1.0 y 10.0 \(no puede ser 0\)/i)).toBeDefined();
+    expect(screen.getByText(/Umbral VAD: Debe estar entre 0.0 y 1.0/i)).toBeDefined();
+    expect(screen.getByText(/Parámetro Gamma: Debe estar entre 0.0 y 5.0/i)).toBeDefined();
+  });
 });
+
+
 
 
 

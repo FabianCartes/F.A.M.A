@@ -65,3 +65,44 @@ export function getInitialWeights(count: number): number[] {
   const share = 1.0 / count;
   return Array.from({ length: count }, () => share);
 }
+
+/**
+ * Suma valores de ponderación numéricos o en cadena tolerando estados vacíos.
+ */
+export function sumWeights(weights: (number | string)[]): number {
+  return weights.reduce((acc: number, w) => {
+    const val = typeof w === "number" ? w : parseFloat(w);
+    return acc + (isNaN(val) ? 0 : val);
+  }, 0);
+}
+
+/**
+ * Normaliza una lista de porcentajes para que su suma sea exactamente 100%.
+ */
+export function normalizeWeightsTo100(weights: (number | string)[]): number[] {
+  const count = weights.length;
+  if (count <= 0) return [];
+  if (count === 1) return [100];
+
+  const numeric = weights.map((w) => {
+    const val = typeof w === "number" ? w : parseFloat(w);
+    return isNaN(val) || val < 0 ? 0 : val;
+  });
+
+  const sum = numeric.reduce((acc, v) => acc + v, 0);
+  if (sum === 0) {
+    const share = Math.floor(100 / count);
+    const res = Array(count).fill(share);
+    const diff = 100 - share * count;
+    res[0] += diff;
+    return res;
+  }
+
+  const normalized = numeric.map((v) => Math.round((v / sum) * 100));
+  const newSum = normalized.reduce((acc, v) => acc + v, 0);
+  if (newSum !== 100 && normalized.length > 0) {
+    normalized[0] += 100 - newSum;
+  }
+  return normalized;
+}
+

@@ -193,7 +193,7 @@ describe("PredictionView responsive header and controls", () => {
         target: { value: "car-engine-diagnostics-resnet34d-v2" },
       });
     });
-    expect(screen.getByText(/Audios de 1\.5s a 32\.000 Hz/i)).toBeDefined();
+    expect(await screen.findByText(/Audios de 1\.5s a 32\.000 Hz/i)).toBeDefined();
   });
 });
 

@@ -236,6 +236,47 @@ describe("trainingApi (TDD Contract Tests)", () => {
       const invalidExcessive = { ...validParams, weight_decay: 1.5 };
       await expect(startTraining(invalidExcessive)).rejects.toThrow(ValidationError);
     });
+
+    it("validates and sends model epochs in payload when ensemble specifies them", async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          status: "started",
+          job_id: "fama_ensemble_epochs_123",
+          message: "Entrenamiento iniciado",
+        }),
+      });
+
+      const paramsWithModelEpochs = {
+        ...validParams,
+        models: [
+          { architecture: "ResNet-34d", weight: 0.6, epochs: 35 },
+          { architecture: "EfficientNet-B0", weight: 0.4, epochs: 10 },
+        ],
+      };
+
+      const res = await startTraining(paramsWithModelEpochs);
+      expect(res.status).toBe("started");
+
+      const callBody = JSON.parse((global.fetch as any).mock.calls[0][1].body);
+      expect(callBody.models[0].epochs).toBe(35);
+      expect(callBody.models[1].epochs).toBe(10);
+    });
+
+    it("throws ValidationError when model epochs is non-positive or exceeds 100", async () => {
+      const invalidZeroEpochs = {
+        ...validParams,
+        models: [{ architecture: "ResNet-34d", weight: 1.0, epochs: 0 }],
+      };
+      await expect(startTraining(invalidZeroEpochs)).rejects.toThrow(ValidationError);
+
+      const invalidExcessiveEpochs = {
+        ...validParams,
+        models: [{ architecture: "ResNet-34d", weight: 1.0, epochs: 120 }],
+      };
+      await expect(startTraining(invalidExcessiveEpochs)).rejects.toThrow(ValidationError);
+    });
   });
 
   describe("getProgress", () => {

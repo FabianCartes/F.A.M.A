@@ -162,8 +162,8 @@ def test_training_lifecycle_dynamic_ensemble(client):
             framework="pytorch",
             is_tri_model=False,
             models=[
-                {"architecture": "ConvNeXt-Nano", "weight": 0.6},
-                {"architecture": "EfficientNet-B0", "weight": 0.4},
+                {"architecture": "ConvNeXt-Nano", "weight": 0.6, "epochs": None},
+                {"architecture": "EfficientNet-B0", "weight": 0.4, "epochs": None},
             ],
         )
 
@@ -241,6 +241,31 @@ def test_start_training_api_passes_weight_decay(client):
         call_kwargs = mock_start.call_args.kwargs
         assert "weight_decay" in call_kwargs
         assert call_kwargs["weight_decay"] == 0.05
+
+
+def test_start_training_api_passes_model_epochs(client):
+    """Verifica que POST /api/training/start propague epochs individuales de cada modelo."""
+    with patch("app.services.training.training_service.start_training") as mock_start:
+        mock_start.return_value = {
+            "status": "started",
+            "job_id": "fama_ensemble_epochs_123",
+            "message": "Ensamble iniciado con épocas por modelo.",
+        }
+        payload = {
+            "dataset_name": "AvesChilenas",
+            "models": [
+                {"architecture": "ResNet-34d", "weight": 0.6, "epochs": 35},
+                {"architecture": "EfficientNet-B0", "weight": 0.4, "epochs": 10},
+            ],
+            "epochs": 15,
+        }
+        res = client.post("/api/training/start", json=payload)
+        assert res.status_code == 200
+        call_kwargs = mock_start.call_args.kwargs
+        assert "models" in call_kwargs
+        assert call_kwargs["models"][0]["epochs"] == 35
+        assert call_kwargs["models"][1]["epochs"] == 10
+
 
 
 

@@ -327,14 +327,18 @@ class TrainingService:
                 resolved_models = []
                 for m in models:
                     if isinstance(m, dict):
+                        m_epochs = m.get("epochs")
                         resolved_models.append({
                             "architecture": m["architecture"],
                             "weight": float(m.get("weight", 1.0)),
+                            "epochs": int(m_epochs) if m_epochs is not None else None,
                         })
                     else:
+                        m_epochs = getattr(m, "epochs", None)
                         resolved_models.append({
                             "architecture": getattr(m, "architecture"),
                             "weight": float(getattr(m, "weight", 1.0)),
+                            "epochs": int(m_epochs) if m_epochs is not None else None,
                         })
                 is_ensemble = len(resolved_models) > 1
             elif is_tri_model:
@@ -438,10 +442,12 @@ class TrainingService:
         if "models" in config and config["models"]:
             models_to_train = [m["architecture"] for m in config["models"]]
             model_weights = {m["architecture"]: m.get("weight", 1.0) for m in config["models"]}
+            model_epochs_list = [m.get("epochs") for m in config["models"]]
         else:
             triad_list = ENGINE_TRIAD_ARCHITECTURES if is_engine else TRIAD_ARCHITECTURES
             models_to_train = triad_list if is_tri_model else [config["architecture"]]
             model_weights = {a: 1.0 / len(models_to_train) for a in models_to_train}
+            model_epochs_list = [None for _ in models_to_train]
 
 
         is_ensemble = len(models_to_train) > 1
@@ -557,7 +563,13 @@ class TrainingService:
                     break
 
                 preset = ARCHITECTURE_PRESETS.get(arch, {})
-                arch_epochs = preset.get("epochs", config["epochs"]) if is_ensemble else config["epochs"]
+                custom_epochs = model_epochs_list[idx] if idx < len(model_epochs_list) else None
+                if custom_epochs is not None:
+                    arch_epochs = int(custom_epochs)
+                elif is_ensemble:
+                    arch_epochs = preset.get("epochs", config["epochs"])
+                else:
+                    arch_epochs = config["epochs"]
                 arch_lr = preset.get("lr", config["learning_rate"]) if is_ensemble else config["learning_rate"]
                 arch_batch = preset.get("batch", config["batch_size"]) if is_ensemble else config["batch_size"]
 

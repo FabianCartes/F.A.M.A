@@ -473,5 +473,28 @@ def test_start_training_worker_receives_weight_decay(training_service):
         assert passed_config["weight_decay"] == 0.05
 
 
+def test_start_training_dynamic_ensemble_preserves_custom_epochs(training_service):
+    """
+    Verifica que si los modelos del ensamble definen epochs individuales,
+    se capturen y propaguen dentro de la configuración del worker.
+    """
+    with patch.object(training_service, "_run_training_worker") as mock_worker:
+        res = training_service.start_training(
+            dataset_name="AvesChilenas",
+            models=[
+                {"architecture": "ResNet-34d", "weight": 0.6, "epochs": 35},
+                {"architecture": "EfficientNet-B0", "weight": 0.4, "epochs": 10},
+            ],
+        )
+
+        assert res["status"] == "started"
+        mock_worker.assert_called_once()
+        passed_config = mock_worker.call_args[0][0]
+        assert "models" in passed_config
+        assert passed_config["models"][0]["epochs"] == 35
+        assert passed_config["models"][1]["epochs"] == 10
+
+
+
 
 

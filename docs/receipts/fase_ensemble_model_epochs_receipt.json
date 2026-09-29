@@ -1,0 +1,67 @@
+{
+  "receipt_name": "fase_ensemble_model_epochs_receipt",
+  "generated_at": "2026-09-29T17:35:00Z",
+  "methodology": "TDD + RDD + ODD",
+  "frameworks": {
+    "tdd": "Test-Driven Development (Red-Green-Refactor loop)",
+    "rdd": "Receipt-Driven Development (Machine-readable verifiable delivery)",
+    "odd": "Organic-Driven Development (Adaptive real-time telemetry and domain feedback)"
+  },
+  "architecture_layer": "Dynamic Ensemble Training Pipeline (FastAPI PyTorch Service & Next.js React UI)",
+  "plan_reference": "/home/kevin/.gemini/antigravity-cli/brain/d19db34d-1b00-4711-8b5b-9687587bd6b0/plan_ensemble_epochs_per_model_tdd_rdd_odd.md",
+  "summary": "Implementación desacoplada y tipada del selector individual de épocas por modelo en ensambles dinámicos (Dúo/Tríada). Resuelve la asimetría de convergencia entre redes livianas (EfficientNet-B0) y profundas (ResNet-34d) con retrocompatibilidad completa y observabilidad SVG desacoplada.",
+  "contracts": {
+    "backend_pydantic": {
+      "file": "backend/app/schemas/training.py",
+      "schema": "ModelEnsembleItem",
+      "field": "epochs",
+      "type": "Optional[int]",
+      "default": null,
+      "bounds": [1, 100],
+      "status": "VERIFIED"
+    },
+    "frontend_zod": {
+      "file": "frontend/lib/schemas/training.ts",
+      "schema": "ModelEnsembleItemSchema",
+      "field": "epochs",
+      "type": "z.number().int().min(1).max(100).optional()",
+      "default": null,
+      "bounds": [1, 100],
+      "status": "VERIFIED"
+    }
+  },
+  "verified_endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/training/start",
+      "purpose": "Launch ensemble training worker thread passing custom per-model epochs or falling back to preset/global epochs",
+      "status": "VERIFIED"
+    }
+  ],
+  "test_suites": {
+    "backend_pytest": {
+      "runner": "pytest 9.1.1 (Python 3.14.7)",
+      "command": ".venv/bin/pytest backend/tests/test_training_schemas.py backend/tests/test_api_training.py backend/tests/test_training_service.py",
+      "total_tests": 44,
+      "passed": 44,
+      "failed": 0,
+      "duration_seconds": 9.58,
+      "status": "PASSED"
+    },
+    "frontend_vitest": {
+      "runner": "vitest 5.0.2",
+      "command": "npm test",
+      "total_tests": 131,
+      "passed": 131,
+      "failed": 0,
+      "duration_seconds": 2.90,
+      "status": "PASSED"
+    }
+  },
+  "odd_observability_features": [
+    "Structured log emitted on each ensemble branch training worker start: [INFO] Iniciando entrenamiento de rama {idx}/{total}: {arch} ({epochs} épocas)",
+    "Adaptive pre-computation duration estimator in UI accurately sums individual model epochs when ensembleSize > 1",
+    "SVG Training Chart automatically calibrates horizontal intervals and epoch partitions according to each individual model's epoch budget",
+    "Individual model cards in Duo and Trio ensembles provide dedicated numeric input bounded to [1, 100] with architecture-aware presets (10 for EfficientNet, 12 for ConvNeXt, 15 for ResNet/PANNs, 20 for AudioCNN)"
+  ]
+}

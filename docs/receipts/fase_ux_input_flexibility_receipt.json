@@ -1,0 +1,60 @@
+{
+  "receipt_name": "fase_ux_input_flexibility_receipt",
+  "generated_at": "2026-09-29T20:25:00Z",
+  "methodology": "TDD + RDD + ODD",
+  "frameworks": {
+    "tdd": "Test-Driven Development (Red-Green-Refactor loop)",
+    "rdd": "Receipt-Driven Development (Machine-readable verifiable delivery)",
+    "odd": "Organic-Driven Development (Adaptive real-time telemetry and domain feedback)"
+  },
+  "architecture_layer": "Frontend User Experience & Resilient Form Validation Layer (Next.js React UI)",
+  "plan_reference": "/home/kevin/.gemini/antigravity-cli/brain/d19db34d-1b00-4711-8b5b-9687587bd6b0/plan_ux_input_flexibility_and_weights.md",
+  "summary": "Eliminación del rebalanceo forzado en sliders de ensamble reemplazándolos por campos directos independientes de porcentaje (0-100%), tolerancia completa a estados vacíos temporales en inputs numéricos durante la edición, y validación contextual con destacado visual en rojo y mensajes en lenguaje natural con los nombres de la interfaz.",
+  "contracts": {
+    "frontend_ensemble_weights": {
+      "file": "frontend/lib/utils/ensembleWeights.ts",
+      "functions": [
+        "sumWeights",
+        "normalizeWeightsTo100",
+        "rebalanceWeights"
+      ],
+      "status": "VERIFIED"
+    },
+    "frontend_audio_physics": {
+      "file": "frontend/lib/utils/audioDomainPresets.ts",
+      "functions": [
+        "validateAudioPhysics",
+        "validateNyquist",
+        "validateFrequencyRange"
+      ],
+      "status": "VERIFIED"
+    }
+  },
+  "test_suites": {
+    "frontend_vitest": {
+      "runner": "vitest 5.0.2",
+      "command": "npm test",
+      "total_tests": 136,
+      "passed": 136,
+      "failed": 0,
+      "duration_seconds": 3.24,
+      "status": "PASSED"
+    },
+    "backend_pytest": {
+      "runner": "pytest 9.1.1 (Python 3.14.7)",
+      "command": ".venv/bin/pytest backend/tests/test_training_schemas.py backend/tests/test_api_training.py backend/tests/test_training_service.py",
+      "total_tests": 44,
+      "passed": 44,
+      "failed": 0,
+      "duration_seconds": 9.92,
+      "status": "PASSED"
+    }
+  },
+  "odd_observability_and_ux_features": [
+    "Campos numéricos de ensamble independientes: permite ingresar exactamente cualquier combinación como 60%, 30% y 10% sin mutar los otros modelos al escribir.",
+    "Totalizador reactivo en cabecera: confirma '✓ Total: 100%' en verde o calcula la diferencia en ámbar con botón de un clic 'Ajustar a 100%'.",
+    "Tolerancia a borrado completo: los inputs admiten cadena vacía ('') durante la edición sin disparar autorellenado forzado con valores por defecto.",
+    "Destacado visual de errores: borde rojo 'border-red-500 ring-1 ring-red-500/50 bg-red-950/20' para cualquier casilla con datos inválidos o ausentes.",
+    "Mensajes en lenguaje natural: errores redactados con nombres de interfaz ('Épocas de Entrenamiento', 'Frecuencia Máxima', 'Tasa de Muestreo') eliminando identificadores internos crudos."
+  ]
+}

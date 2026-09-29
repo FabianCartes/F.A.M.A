@@ -550,5 +550,36 @@ def test_start_training_request_weight_decay():
         StartTrainingRequest(dataset_name="AvesChilenas", weight_decay=1.5)
 
 
+def test_model_ensemble_item_epochs_validation():
+    # 1. Por defecto, epochs es None (retrocompatibilidad)
+    item_default = ModelEnsembleItem(architecture="EfficientNet-B0", weight=0.5)
+    assert hasattr(item_default, "epochs")
+    assert item_default.epochs is None
+
+    # 2. epochs explícito válido
+    item_custom = ModelEnsembleItem(architecture="ResNet-34d", weight=0.5, epochs=35)
+    assert item_custom.epochs == 35
+
+    # 3. epochs <= 0 debe fallar
+    with pytest.raises(ValidationError):
+        ModelEnsembleItem(architecture="ConvNeXt-Nano", weight=0.5, epochs=0)
+
+    # 4. epochs > 100 debe fallar
+    with pytest.raises(ValidationError):
+        ModelEnsembleItem(architecture="ConvNeXt-Nano", weight=0.5, epochs=101)
+
+
+def test_start_training_request_preserves_model_epochs():
+    req = StartTrainingRequest(
+        models=[
+            {"architecture": "ResNet-34d", "weight": 0.6, "epochs": 35},
+            {"architecture": "EfficientNet-B0", "weight": 0.4, "epochs": 10},
+        ]
+    )
+    assert req.models[0].epochs == 35
+    assert req.models[1].epochs == 10
+
+
+
 
 

@@ -1,0 +1,64 @@
+{
+  "receipt_name": "fase_validacion_inline_parametros_acusticos_receipt",
+  "generated_at": "2026-09-29T21:20:00Z",
+  "methodology": "TDD + RDD + ODD",
+  "frameworks": {
+    "tdd": "Test-Driven Development (Red-Green-Refactor cycle)",
+    "rdd": "Receipt-Driven Development (Verifiable evidence of operational contracts)",
+    "odd": "Organic-Driven Development (Real-time feedback and inline physics validation)"
+  },
+  "architecture_layer": "Frontend UI Validation & Acoustic Physics Guardrails (TrainingView & audioDomainPresets)",
+  "summary": "Implementación de validación granular inline debajo de cada campo numérico, eliminación de banners acumulativos redundantes superiores y de pie de página, límites matemáticos rigurosos para GeM (1.0 <= p <= 10.0, prohibiendo 0 por división por cero), hop_seconds (0.1 a 10.0s), umbral VAD (0.0 a 1.0) y parámetro gamma focal (0.0 a 5.0), con feedback reactivo ante campos vacíos y bloqueo en el envío.",
+  "contracts": {
+    "frontend_audio_physics_validators": {
+      "file": "frontend/lib/utils/audioDomainPresets.ts",
+      "validators": [
+        "validateGemP",
+        "validateHopSeconds",
+        "validateVadThreshold",
+        "validateFocalGamma"
+      ],
+      "status": "VERIFIED"
+    },
+    "frontend_training_view_inline_feedback": {
+      "file": "frontend/components/views/TrainingView.tsx",
+      "features": [
+        "Real-time inline error message beneath each input field",
+        "Red highlight borders without shifting panel layout",
+        "Removal of top banner and bottom summary list",
+        "Empty string tolerance during editing with submit guardrails"
+      ],
+      "status": "VERIFIED"
+    }
+  },
+  "test_suites": {
+    "frontend_vitest": {
+      "runner": "vitest 5.0.2",
+      "command": "npm test -- --run",
+      "test_files": 14,
+      "total_tests": 139,
+      "passed": 139,
+      "failed": 0,
+      "status": "PASSED"
+    },
+    "backend_pytest": {
+      "runner": "pytest 9.1.1 (Python 3.14.7)",
+      "command": ".venv/bin/pytest backend/tests/",
+      "total_tests": 279,
+      "passed": 279,
+      "failed": 0,
+      "status": "PASSED"
+    },
+    "frontend_build": {
+      "command": "npm run build",
+      "compiler": "Next.js 16.3.4 (Turbopack) with strict TypeScript",
+      "status": "PASSED"
+    }
+  },
+  "mathematical_and_physics_invariants": [
+    "GeM Pooling: p=0 generaría división por cero (1/p) y overflow asintótico; se restringe formalmente a [1.0, 10.0].",
+    "Salto Temporal (hop_seconds): debe ser estrictamente positivo para evitar loops infinitos o ventanas colapsadas; rango [0.1, 10.0] s.",
+    "Umbral VAD Energético: probabilidad/energía normalizada en rango [0.0, 1.0].",
+    "Parámetro Gamma Focal: modula el factor de enfoque para desbalance de clases, acotado a [0.0, 5.0]."
+  ]
+}

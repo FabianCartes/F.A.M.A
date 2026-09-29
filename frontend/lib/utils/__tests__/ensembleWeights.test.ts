@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { rebalanceWeights } from "../ensembleWeights";
+import { rebalanceWeights, sumWeights, normalizeWeightsTo100 } from "../ensembleWeights";
 
 describe("rebalanceWeights", () => {
   it("always returns [1.0] when there is only 1 model", () => {
@@ -62,3 +62,28 @@ describe("rebalanceWeights", () => {
     expect(resultOverflow[1]).toBeCloseTo(0.0, 4);
   });
 });
+
+describe("sumWeights", () => {
+  it("sums numeric and string weights accurately", () => {
+    expect(sumWeights([60, 30, 10])).toBe(100);
+    expect(sumWeights(["60", "30", "10"])).toBe(100);
+    expect(sumWeights([50, ""])).toBe(50);
+    expect(sumWeights(["", ""])).toBe(0);
+  });
+});
+
+describe("normalizeWeightsTo100", () => {
+  it("normalizes an arbitrary combination of percentages to exactly 100", () => {
+    const res = normalizeWeightsTo100([60, 30, 20]); // sum 110
+    const sum = res.reduce((a, b) => a + b, 0);
+    expect(sum).toBe(100);
+  });
+
+  it("handles zero or empty weights by distributing equally", () => {
+    const res = normalizeWeightsTo100([0, 0, 0]);
+    const sum = res.reduce((a, b) => a + b, 0);
+    expect(sum).toBe(100);
+    expect(res).toEqual([34, 33, 33]);
+  });
+});
+

@@ -65,10 +65,11 @@ class RegularizationConfigSchema(BaseModel):
 
 class ModelEnsembleItem(BaseModel):
     """
-    Especificación de un modelo miembro del ensamble con su respectiva ponderación.
+    Especificación de un modelo miembro del ensamble con su respectiva ponderación y épocas dedicadas.
     """
     architecture: str
     weight: float = Field(ge=0.0, le=1.0)
+    epochs: Optional[int] = Field(default=None, ge=1, le=100, description="Épocas de entrenamiento individuales para este modelo")
 
     @field_validator("architecture")
     @classmethod
@@ -125,6 +126,7 @@ class StartTrainingRequest(BaseModel):
                     ModelEnsembleItem(
                         architecture=item.architecture,
                         weight=item.weight / total_weight,
+                        epochs=item.epochs,
                     )
                 )
             self.models = normalized_models

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { API_BASE_URL } from "@/lib/api";
-import { rebalanceWeights } from "@/lib/utils/ensembleWeights";
+import { rebalanceWeights, sumWeights, normalizeWeightsTo100 } from "@/lib/utils/ensembleWeights";
 import {
   AUDIO_DOMAIN_PRESETS,
   AudioDomainPresetKey,
@@ -140,12 +140,21 @@ export default function TrainingView() {
   const [architecture, setArchitecture] = useState<string>("EfficientNet-B0");
   const [ensembleSize, setEnsembleSize] = useState<1 | 2 | 3>(1);
   const [ensembleModels, setEnsembleModels] = useState<
-    Array<{ architecture: string; weight: number }>
+    Array<{ architecture: string; weight: number | string; epochs?: number | string }>
   >([
-    { architecture: "EfficientNet-B0", weight: 1.0 },
-    { architecture: "ConvNeXt-Nano", weight: 0.5 },
-    { architecture: "ResNet-34d", weight: 0.33 },
+    { architecture: "EfficientNet-B0", weight: 100, epochs: 10 },
+    { architecture: "ConvNeXt-Nano", weight: 50, epochs: 12 },
+    { architecture: "ResNet-34d", weight: 33, epochs: 15 },
   ]);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const clearFieldError = useCallback((key: string) => {
+    setFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }, []);
   const [triadProgress, setTriadProgress] = useState<{
     isTriad: boolean;
     modelIdx: number;
@@ -161,25 +170,25 @@ export default function TrainingView() {
   // Estado de Física Acústica Multi-Dominio, Ventaneo Denso y Regularización
   const [isPhysicsExpanded, setIsPhysicsExpanded] = useState<boolean>(true);
   const [domainPreset, setDomainPreset] = useState<AudioDomainPresetKey>("bioacoustics");
-  const [targetSr, setTargetSr] = useState<number>(22050);
-  const [durationSeconds, setDurationSeconds] = useState<number>(5.0);
-  const [fMin, setFMin] = useState<number>(800);
-  const [fMax, setFMax] = useState<number>(10000);
-  const [nMels, setNMels] = useState<number>(128);
-  const [nFft, setNFft] = useState<number>(2048);
-  const [hopLength, setHopLength] = useState<number>(512);
+  const [targetSr, setTargetSr] = useState<number | string>(22050);
+  const [durationSeconds, setDurationSeconds] = useState<number | string>(5.0);
+  const [fMin, setFMin] = useState<number | string>(800);
+  const [fMax, setFMax] = useState<number | string>(10000);
+  const [nMels, setNMels] = useState<number | string>(128);
+  const [nFft, setNFft] = useState<number | string>(2048);
+  const [hopLength, setHopLength] = useState<number | string>(512);
 
   // Ventaneo Denso y Captura de Eventos Breves
-  const [hopSeconds, setHopSeconds] = useState<number>(1.0);
+  const [hopSeconds, setHopSeconds] = useState<number | string>(1.0);
   const [aggregationMode, setAggregationMode] = useState<"max" | "mean">("max");
-  const [gemP, setGemP] = useState<number>(3.0);
-  const [vadThreshold, setVadThreshold] = useState<number>(0.0);
+  const [gemP, setGemP] = useState<number | string>(3.0);
+  const [vadThreshold, setVadThreshold] = useState<number | string>(0.0);
 
   // Regularización y Función de Pérdida
   const [lossType, setLossType] = useState<"focal" | "cross_entropy">("focal");
-  const [focalGamma, setFocalGamma] = useState<number>(2.0);
+  const [focalGamma, setFocalGamma] = useState<number | string>(2.0);
   const [mixupEnabled, setMixupEnabled] = useState<boolean>(true);
-  const [mixupAlpha, setMixupAlpha] = useState<number>(0.2);
+  const [mixupAlpha, setMixupAlpha] = useState<number | string>(0.2);
   const [pitchShiftEnabled, setPitchShiftEnabled] = useState<boolean>(false);
 
   const handleApplyPreset = (key: AudioDomainPresetKey) => {
@@ -206,53 +215,103 @@ export default function TrainingView() {
   };
 
   const physicsValidation = useMemo(() => {
+    const numSr = typeof targetSr === "number" ? targetSr : parseInt(String(targetSr), 10);
+    const numFMin = typeof fMin === "number" ? fMin : parseFloat(String(fMin));
+    const numFMax = typeof fMax === "number" ? fMax : parseFloat(String(fMax));
+    const durStr = String(durationSeconds).trim();
+    const numDur = typeof durationSeconds === "number" ? durationSeconds : parseFloat(durStr);
+
+    if (durStr !== "") {
+      if (isNaN(numDur) || numDur <= 0) {
+        return {
+          valid: false,
+          field: "duration_seconds" as const,
+          error: "Duración de Ventana: No puede ser 0 segundos ni negativa (mínimo 0.5 s).",
+        };
+      }
+      if (numDur < 0.5 || numDur > 30.0) {
+        return {
+          valid: false,
+          field: "duration_seconds" as const,
+          error: "Duración de Ventana: Debe estar en el rango de 0.5 s a 30.0 s.",
+        };
+      }
+    }
+
+    if (isNaN(numSr) || isNaN(numFMin) || isNaN(numFMax)) {
+      return {
+        valid: false,
+        error: "Los parámetros de Tasa de Muestreo (SR), Frecuencia Mínima y Máxima deben ser números válidos.",
+      };
+    }
     return validateAudioPhysics({
-      target_sr: targetSr,
-      f_min: fMin,
-      f_max: fMax,
+      target_sr: numSr,
+      f_min: numFMin,
+      f_max: numFMax,
+      duration_seconds: durStr !== "" ? numDur : undefined,
     });
-  }, [targetSr, fMin, fMax]);
+  }, [targetSr, fMin, fMax, durationSeconds]);
 
   const handleEnsembleSizeChange = (newSize: 1 | 2 | 3) => {
     setEnsembleSize(newSize);
+    clearFieldError("ensemble_weights");
     if (newSize === 1) {
       setEnsembleModels((prev) => [
-        { architecture: prev[0]?.architecture || architecture, weight: 1.0 },
-        { architecture: prev[1]?.architecture || "ConvNeXt-Nano", weight: 0.5 },
-        { architecture: prev[2]?.architecture || "ResNet-34d", weight: 0.33 },
+        { architecture: prev[0]?.architecture || architecture, weight: 100, epochs: prev[0]?.epochs ?? 10 },
+        { architecture: prev[1]?.architecture || "ConvNeXt-Nano", weight: 50, epochs: prev[1]?.epochs ?? 12 },
+        { architecture: prev[2]?.architecture || "ResNet-34d", weight: 33, epochs: prev[2]?.epochs ?? 15 },
       ]);
     } else if (newSize === 2) {
       setEnsembleModels((prev) => [
-        { architecture: prev[0]?.architecture || "EfficientNet-B0", weight: 0.5 },
-        { architecture: prev[1]?.architecture || "ConvNeXt-Nano", weight: 0.5 },
-        { architecture: prev[2]?.architecture || "ResNet-34d", weight: 0.33 },
+        { architecture: prev[0]?.architecture || "EfficientNet-B0", weight: 50, epochs: prev[0]?.epochs ?? 10 },
+        { architecture: prev[1]?.architecture || "ConvNeXt-Nano", weight: 50, epochs: prev[1]?.epochs ?? 12 },
+        { architecture: prev[2]?.architecture || "ResNet-34d", weight: 33, epochs: prev[2]?.epochs ?? 15 },
       ]);
     } else {
       setEnsembleModels((prev) => [
-        { architecture: prev[0]?.architecture || "EfficientNet-B0", weight: 0.34 },
-        { architecture: prev[1]?.architecture || "ConvNeXt-Nano", weight: 0.33 },
-        { architecture: prev[2]?.architecture || "ResNet-34d", weight: 0.33 },
+        { architecture: prev[0]?.architecture || "EfficientNet-B0", weight: 34, epochs: prev[0]?.epochs ?? 10 },
+        { architecture: prev[1]?.architecture || "ConvNeXt-Nano", weight: 33, epochs: prev[1]?.epochs ?? 12 },
+        { architecture: prev[2]?.architecture || "ResNet-34d", weight: 33, epochs: prev[2]?.epochs ?? 15 },
       ]);
     }
   };
 
-  const handleWeightChange = (index: number, newWeight: number) => {
-    const currentWeights = ensembleModels.slice(0, ensembleSize).map((m) => m.weight);
-    const updatedWeights = rebalanceWeights(currentWeights, index, newWeight);
+  const handleWeightChange = (index: number, newWeight: number | string) => {
+    clearFieldError(`model_weight_${index}`);
+    clearFieldError("ensemble_weights");
     setEnsembleModels((prev) =>
-      prev.map((m, idx) =>
-        idx < ensembleSize ? { ...m, weight: updatedWeights[idx] } : m
-      )
+      prev.map((m, idx) => (idx === index ? { ...m, weight: newWeight } : m))
     );
   };
 
-  const handleModelArchChange = (index: number, newArch: string) => {
+  const handleNormalizeWeights = () => {
+    clearFieldError("ensemble_weights");
+    const activeWeights = ensembleModels.slice(0, ensembleSize).map((m) => m.weight);
+    const normalized = normalizeWeightsTo100(activeWeights);
     setEnsembleModels((prev) =>
-      prev.map((m, idx) => (idx === index ? { ...m, architecture: newArch } : m))
+      prev.map((m, idx) => (idx < ensembleSize ? { ...m, weight: normalized[idx] } : m))
+    );
+  };
+
+  const activeWeightsSum = useMemo(() => {
+    return sumWeights(ensembleModels.slice(0, ensembleSize).map((m) => m.weight));
+  }, [ensembleModels, ensembleSize]);
+
+  const handleModelArchChange = (index: number, newArch: string) => {
+    const defaultEpochs = parseInt(ARCHITECTURE_PRESETS[newArch]?.epochs || "10", 10);
+    setEnsembleModels((prev) =>
+      prev.map((m, idx) => (idx === index ? { ...m, architecture: newArch, epochs: defaultEpochs } : m))
     );
     if (index === 0) {
       handleArchitectureChange(newArch);
     }
+  };
+
+  const handleModelEpochsChange = (index: number, newEpochs: number | string) => {
+    clearFieldError(`model_epochs_${index}`);
+    setEnsembleModels((prev) =>
+      prev.map((m, idx) => (idx === index ? { ...m, epochs: newEpochs } : m))
+    );
   };
 
   // 2. Telemetría de Hardware y Datasets
@@ -326,10 +385,13 @@ export default function TrainingView() {
         .slice(0, Math.max(ensembleSize, triadProgress.totalModels))
         .map((m) => ({
           architecture: m.architecture,
-          epochs: parseInt(
-            ARCHITECTURE_PRESETS[m.architecture]?.epochs || epochs,
-            10
-          ),
+          epochs:
+            m.epochs !== undefined && m.epochs !== ""
+              ? parseInt(String(m.epochs), 10) || 10
+              : parseInt(
+                  ARCHITECTURE_PRESETS[m.architecture]?.epochs || String(epochs),
+                  10
+                ) || 10,
         })),
     };
   }, [
@@ -403,12 +465,24 @@ export default function TrainingView() {
   const estimatedDuration = useMemo(() => {
     const audios = currentDataset?.audio_count || 1211;
     const numBatch = parseInt(batchSize, 10) || 16;
-    const numEpochs = parseInt(epochs, 10) || 10;
     const stepsPerEpoch = Math.max(1, Math.ceil(audios / Math.max(1, numBatch)));
     const isCuda = hardware?.cuda_available ?? false;
     const msPerStep = isCuda ? 25 : 150;
-    const singleSec = (stepsPerEpoch * numEpochs * msPerStep) / 1000;
-    const totalSec = singleSec * ensembleSize;
+
+    let totalSec = 0;
+    if (ensembleSize > 1) {
+      const activeEnsemble = ensembleModels.slice(0, ensembleSize);
+      const totalEpochsSum = activeEnsemble.reduce(
+        (acc, m) =>
+          acc +
+          (parseInt(String(m.epochs ?? epochs), 10) || 10),
+        0
+      );
+      totalSec = (stepsPerEpoch * totalEpochsSum * msPerStep) / 1000;
+    } else {
+      const numEpochs = parseInt(String(epochs), 10) || 10;
+      totalSec = (stepsPerEpoch * numEpochs * msPerStep) / 1000;
+    }
 
     if (totalSec < 60) return `~${Math.ceil(totalSec)} seg`;
     const minutes = Math.round(totalSec / 60);
@@ -416,7 +490,7 @@ export default function TrainingView() {
     const hours = Math.floor(minutes / 60);
     const remMin = minutes % 60;
     return `~${hours}h ${remMin}m`;
-  }, [currentDataset, batchSize, epochs, hardware, ensembleSize]);
+  }, [currentDataset, batchSize, epochs, hardware, ensembleSize, ensembleModels]);
 
 
   // Cargar telemetría de hardware
@@ -540,10 +614,121 @@ export default function TrainingView() {
 
   // Iniciar Entrenamiento (CU_INV_03)
   const handleStartTraining = async () => {
+    const errors: Record<string, string> = {};
+
+    // 1. Validar épocas (en modo individual)
+    if (ensembleSize === 1) {
+      const numEpochs = parseInt(String(epochs), 10);
+      if (String(epochs).trim() === "" || isNaN(numEpochs)) {
+        errors.epochs = "El campo 'Épocas de Entrenamiento' no puede estar vacío.";
+      } else if (numEpochs < 1 || numEpochs > 100) {
+        errors.epochs = "El campo 'Épocas de Entrenamiento' debe ser entre 1 y 100.";
+      }
+    }
+
+    // 2. Validar Tasa de Aprendizaje
+    const numLr = parseFloat(String(learningRate));
+    if (String(learningRate).trim() === "" || isNaN(numLr) || numLr <= 0) {
+      errors.learning_rate = "El campo 'Tasa de Aprendizaje' debe ser un número mayor a 0.";
+    }
+
+    // 3. Validar Weight Decay
+    const numWd = parseFloat(String(weightDecay));
+    if (String(weightDecay).trim() === "" || isNaN(numWd) || numWd < 0 || numWd > 1) {
+      errors.weight_decay = "El campo 'Weight Decay (AdamW L2)' debe ser un número entre 0 y 1.";
+    }
+
+    // 4. Validar Batch Size
+    const numBatch = parseInt(String(batchSize), 10);
+    if (String(batchSize).trim() === "" || isNaN(numBatch) || numBatch < 1) {
+      errors.batch_size = "El campo 'Batch Size' debe ser un número entero mayor a 0.";
+    }
+
+    // 5. Validar Duración de Ventana
+    const numDur = parseFloat(String(durationSeconds));
+    if (String(durationSeconds).trim() === "" || isNaN(numDur)) {
+      errors.duration_seconds = "El campo 'Duración de Ventana' no puede estar vacío.";
+    } else if (numDur <= 0) {
+      errors.duration_seconds = "El campo 'Duración de Ventana' no puede ser 0 segundos ni negativo (mínimo 0.5 s).";
+    } else if (numDur < 0.5 || numDur > 30.0) {
+      errors.duration_seconds = "El campo 'Duración de Ventana' debe ser entre 0.5 y 30.0 segundos.";
+    }
+
+    // 6. Validar Física Acústica
     if (!physicsValidation.valid) {
-      alert(`Parámetros acústicos inválidos: ${physicsValidation.error}`);
+      if (physicsValidation.field) {
+        errors[physicsValidation.field] = physicsValidation.error || "Parámetro acústico inválido.";
+      } else {
+        errors.physics = physicsValidation.error || "Parámetros acústicos inválidos.";
+      }
+    }
+
+    // 7. Validar Ventaneo Denso y Regularización (hop_seconds, gem_p, vad_threshold, focal_gamma)
+    const hopStr = String(hopSeconds).trim();
+    const numHop = parseFloat(hopStr);
+    if (hopStr === "" || isNaN(numHop)) {
+      errors.hop_seconds = "El campo 'Salto Temporal' no puede estar vacío.";
+    } else if (numHop < 0.1 || numHop > 10.0) {
+      errors.hop_seconds = "Salto Temporal: Debe ser entre 0.1 s y 10.0 s.";
+    }
+
+    const gemStr = String(gemP).trim();
+    const numGem = parseFloat(gemStr);
+    if (gemStr === "" || isNaN(numGem)) {
+      errors.gem_p = "El campo 'Exponente GeM (p)' no puede estar vacío.";
+    } else if (numGem < 1.0 || numGem > 10.0) {
+      errors.gem_p = "Exponente GeM: Debe estar entre 1.0 y 10.0 (no puede ser 0).";
+    }
+
+    const vadStr = String(vadThreshold).trim();
+    const numVad = parseFloat(vadStr);
+    if (vadStr === "" || isNaN(numVad)) {
+      errors.vad_threshold = "El campo 'Umbral VAD Energético' no puede estar vacío.";
+    } else if (numVad < 0.0 || numVad > 1.0) {
+      errors.vad_threshold = "Umbral VAD: Debe estar entre 0.0 y 1.0.";
+    }
+
+    if (lossType === "focal") {
+      const gammaStr = String(focalGamma).trim();
+      const numGamma = parseFloat(gammaStr);
+      if (gammaStr === "" || isNaN(numGamma)) {
+        errors.focal_gamma = "El campo 'Parámetro Gamma (Focal)' no puede estar vacío.";
+      } else if (numGamma < 0.0 || numGamma > 5.0) {
+        errors.focal_gamma = "Parámetro Gamma: Debe estar entre 0.0 y 5.0.";
+      }
+    }
+
+    // 8. Validar Ensamble si aplica
+    if (ensembleSize > 1) {
+      const activeEnsemble = ensembleModels.slice(0, ensembleSize);
+      let sumW = 0;
+      activeEnsemble.forEach((m, idx) => {
+        const wStr = String(m.weight).trim();
+        const w = parseFloat(wStr);
+        if (wStr === "" || isNaN(w) || w < 0) {
+          errors[`model_weight_${idx}`] = `El campo 'Ponderación del Modelo #${idx + 1}' no puede estar vacío.`;
+        } else {
+          sumW += w;
+        }
+
+        const epStr = String(m.epochs ?? "").trim();
+        const ep = parseInt(epStr, 10);
+        if (epStr === "" || isNaN(ep) || ep < 1 || ep > 100) {
+          errors[`model_epochs_${idx}`] = `El campo 'Épocas del Modelo #${idx + 1}' debe ser entre 1 y 100.`;
+        }
+      });
+
+      if (Math.abs(sumW - 100) > 0.01 && !Object.keys(errors).some((k) => k.startsWith("model_weight_"))) {
+        errors.ensemble_weights = `La suma de ponderaciones de los modelos es ${sumW}%. Debe sumar exactamente 100%.`;
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       return;
     }
+
+    setFieldErrors({});
 
     if (isTraining) return;
     setIsTraining(true);
@@ -552,10 +737,11 @@ export default function TrainingView() {
     setCurrentEpoch(0);
 
     const currentEnsemble = ensembleModels.slice(0, ensembleSize);
-    const sumW = currentEnsemble.reduce((acc, m) => acc + m.weight, 0) || 1.0;
+    const sumW = currentEnsemble.reduce((acc, m) => acc + (parseFloat(String(m.weight)) || 0), 0) || 100;
     const normalizedEnsemble = currentEnsemble.map((m) => ({
       architecture: m.architecture,
-      weight: Math.round((m.weight / sumW) * 1000) / 1000,
+      weight: Math.round(((parseFloat(String(m.weight)) || 0) / sumW) * 1000) / 1000,
+      epochs: m.epochs ? parseInt(String(m.epochs), 10) : undefined,
     }));
     const normSum = normalizedEnsemble.reduce((acc, m) => acc + m.weight, 0);
     if (normalizedEnsemble.length > 0 && Math.abs(normSum - 1.0) > 1e-4) {
@@ -586,33 +772,33 @@ export default function TrainingView() {
         body: JSON.stringify({
           dataset_name: selectedDataset,
           architecture: normalizedEnsemble[0]?.architecture || architecture,
-          epochs: parseInt(epochs) || 10,
-          learning_rate: parseFloat(learningRate) || 0.001,
-          weight_decay: parseFloat(weightDecay) || 0.01,
-          batch_size: parseInt(batchSize) || 16,
+          epochs: parseInt(String(epochs), 10) || 10,
+          learning_rate: parseFloat(String(learningRate)) || 0.001,
+          weight_decay: parseFloat(String(weightDecay)) || 0.01,
+          batch_size: parseInt(String(batchSize), 10) || 16,
           framework,
           is_tri_model: ensembleSize === 3,
           models: normalizedEnsemble,
           audio_config: {
-            target_sr: targetSr,
-            duration_seconds: durationSeconds,
-            f_min: fMin,
-            f_max: fMax,
-            n_mels: nMels,
-            n_fft: nFft,
-            hop_length: hopLength,
+            target_sr: typeof targetSr === "number" ? targetSr : parseInt(String(targetSr), 10) || 22050,
+            duration_seconds: typeof durationSeconds === "number" ? durationSeconds : parseFloat(String(durationSeconds)) || 5.0,
+            f_min: typeof fMin === "number" ? fMin : parseFloat(String(fMin)) || 800,
+            f_max: typeof fMax === "number" ? fMax : parseFloat(String(fMax)) || 10000,
+            n_mels: typeof nMels === "number" ? nMels : parseInt(String(nMels), 10) || 128,
+            n_fft: typeof nFft === "number" ? nFft : parseInt(String(nFft), 10) || 2048,
+            hop_length: typeof hopLength === "number" ? hopLength : parseInt(String(hopLength), 10) || 512,
           },
           windowing_config: {
-            hop_seconds: hopSeconds,
+            hop_seconds: typeof hopSeconds === "number" ? hopSeconds : parseFloat(String(hopSeconds)) || 1.0,
             aggregation_mode: aggregationMode,
-            gem_p: gemP,
-            vad_threshold: vadThreshold,
+            gem_p: typeof gemP === "number" ? gemP : parseFloat(String(gemP)) || 3.0,
+            vad_threshold: typeof vadThreshold === "number" ? vadThreshold : parseFloat(String(vadThreshold)) || 0.0,
           },
           regularization_config: {
             loss_type: lossType,
-            focal_gamma: focalGamma,
+            focal_gamma: typeof focalGamma === "number" ? focalGamma : parseFloat(String(focalGamma)) || 2.0,
             mixup_enabled: mixupEnabled,
-            mixup_alpha: mixupAlpha,
+            mixup_alpha: typeof mixupAlpha === "number" ? mixupAlpha : parseFloat(String(mixupAlpha)) || 0.2,
             pitch_shift_enabled: pitchShiftEnabled,
           },
         }),
@@ -863,16 +1049,6 @@ export default function TrainingView() {
               </div>
             </div>
 
-            {/* Alerta de Validación Acústica Reactiva */}
-            {!physicsValidation.valid && (
-              <div className="p-3 rounded-lg bg-rose-950/80 border border-rose-800 text-rose-300 text-xs flex items-center gap-2">
-                <svg className="w-4 h-4 flex-shrink-0 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <span>{physicsValidation.error}</span>
-              </div>
-            )}
-
             {/* Grid 1: Física Espectral */}
             <div>
               <span className="text-[11px] text-gray-400 font-semibold block mb-2">
@@ -893,10 +1069,20 @@ export default function TrainingView() {
                     step={100}
                     onChange={(e) => {
                       setDomainPreset("custom");
-                      setTargetSr(parseInt(e.target.value, 10) || 8000);
+                      clearFieldError("target_sr");
+                      setTargetSr(e.target.value);
                     }}
-                    className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500"
+                    className={`w-full bg-[#111215] border ${
+                      fieldErrors.target_sr || (!physicsValidation.valid && physicsValidation.field === "target_sr")
+                        ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200"
+                        : "border-[#23252e]"
+                    } rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500`}
                   />
+                  {(fieldErrors.target_sr || (!physicsValidation.valid && physicsValidation.field === "target_sr" ? physicsValidation.error : null)) && (
+                    <span className="text-[10px] text-red-400 mt-1 block">
+                      {fieldErrors.target_sr || physicsValidation.error}
+                    </span>
+                  )}
                 </div>
 
                 <div>
@@ -913,10 +1099,20 @@ export default function TrainingView() {
                     step={0.5}
                     onChange={(e) => {
                       setDomainPreset("custom");
-                      setDurationSeconds(parseFloat(e.target.value) || 0.5);
+                      clearFieldError("duration_seconds");
+                      setDurationSeconds(e.target.value);
                     }}
-                    className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500"
+                    className={`w-full bg-[#111215] border ${
+                      fieldErrors.duration_seconds || (!physicsValidation.valid && physicsValidation.field === "duration_seconds")
+                        ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200"
+                        : "border-[#23252e]"
+                    } rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500`}
                   />
+                  {(fieldErrors.duration_seconds || (!physicsValidation.valid && physicsValidation.field === "duration_seconds" ? physicsValidation.error : null)) && (
+                    <span className="text-[10px] text-red-400 mt-1 block">
+                      {fieldErrors.duration_seconds || physicsValidation.error}
+                    </span>
+                  )}
                 </div>
 
                 <div>
@@ -932,10 +1128,20 @@ export default function TrainingView() {
                     step={10}
                     onChange={(e) => {
                       setDomainPreset("custom");
-                      setFMin(parseFloat(e.target.value) || 0);
+                      clearFieldError("f_min");
+                      setFMin(e.target.value);
                     }}
-                    className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500"
+                    className={`w-full bg-[#111215] border ${
+                      fieldErrors.f_min || (!physicsValidation.valid && physicsValidation.field === "f_min")
+                        ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200"
+                        : "border-[#23252e]"
+                    } rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500`}
                   />
+                  {(fieldErrors.f_min || (!physicsValidation.valid && physicsValidation.field === "f_min" ? physicsValidation.error : null)) && (
+                    <span className="text-[10px] text-red-400 mt-1 block">
+                      {fieldErrors.f_min || physicsValidation.error}
+                    </span>
+                  )}
                 </div>
 
                 <div>
@@ -951,10 +1157,20 @@ export default function TrainingView() {
                     step={100}
                     onChange={(e) => {
                       setDomainPreset("custom");
-                      setFMax(parseFloat(e.target.value) || 100);
+                      clearFieldError("f_max");
+                      setFMax(e.target.value);
                     }}
-                    className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500"
+                    className={`w-full bg-[#111215] border ${
+                      fieldErrors.f_max || (!physicsValidation.valid && physicsValidation.field === "f_max")
+                        ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200"
+                        : "border-[#23252e]"
+                    } rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500`}
                   />
+                  {(fieldErrors.f_max || (!physicsValidation.valid && physicsValidation.field === "f_max" ? physicsValidation.error : null)) && (
+                    <span className="text-[10px] text-red-400 mt-1 block">
+                      {fieldErrors.f_max || physicsValidation.error}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -979,10 +1195,18 @@ export default function TrainingView() {
                     step={0.1}
                     onChange={(e) => {
                       setDomainPreset("custom");
-                      setHopSeconds(parseFloat(e.target.value) || 0.1);
+                      clearFieldError("hop_seconds");
+                      setHopSeconds(e.target.value);
                     }}
-                    className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500"
+                    className={`w-full bg-[#111215] border ${
+                      fieldErrors.hop_seconds ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200" : "border-[#23252e]"
+                    } rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500`}
                   />
+                  {fieldErrors.hop_seconds && (
+                    <span className="text-[10px] text-red-400 mt-1 block">
+                      {fieldErrors.hop_seconds}
+                    </span>
+                  )}
                 </div>
 
                 <div>
@@ -1018,10 +1242,18 @@ export default function TrainingView() {
                     step={0.5}
                     onChange={(e) => {
                       setDomainPreset("custom");
-                      setGemP(parseFloat(e.target.value) || 1.0);
+                      clearFieldError("gem_p");
+                      setGemP(e.target.value);
                     }}
-                    className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500"
+                    className={`w-full bg-[#111215] border ${
+                      fieldErrors.gem_p ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200" : "border-[#23252e]"
+                    } rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500`}
                   />
+                  {fieldErrors.gem_p && (
+                    <span className="text-[10px] text-red-400 mt-1 block">
+                      {fieldErrors.gem_p}
+                    </span>
+                  )}
                 </div>
 
                 <div>
@@ -1038,10 +1270,18 @@ export default function TrainingView() {
                     step={0.01}
                     onChange={(e) => {
                       setDomainPreset("custom");
-                      setVadThreshold(parseFloat(e.target.value) || 0.0);
+                      clearFieldError("vad_threshold");
+                      setVadThreshold(e.target.value);
                     }}
-                    className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500"
+                    className={`w-full bg-[#111215] border ${
+                      fieldErrors.vad_threshold ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200" : "border-[#23252e]"
+                    } rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500`}
                   />
+                  {fieldErrors.vad_threshold && (
+                    <span className="text-[10px] text-red-400 mt-1 block">
+                      {fieldErrors.vad_threshold}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -1082,14 +1322,22 @@ export default function TrainingView() {
                       value={focalGamma}
                       disabled={isTraining}
                       min={0.0}
-                      max={10.0}
+                      max={5.0}
                       step={0.5}
                       onChange={(e) => {
                         setDomainPreset("custom");
-                        setFocalGamma(parseFloat(e.target.value) || 0.0);
+                        clearFieldError("focal_gamma");
+                        setFocalGamma(e.target.value);
                       }}
-                      className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500"
+                      className={`w-full bg-[#111215] border ${
+                        fieldErrors.focal_gamma ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200" : "border-[#23252e]"
+                      } rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500`}
                     />
+                    {fieldErrors.focal_gamma && (
+                      <span className="text-[10px] text-red-400 mt-1 block">
+                        {fieldErrors.focal_gamma}
+                      </span>
+                    )}
                   </div>
                 )}
 
@@ -1210,9 +1458,21 @@ export default function TrainingView() {
               type="text"
               value={learningRate}
               disabled={isTraining || ensembleSize > 1}
-              onChange={(e) => setLearningRate(e.target.value)}
-              className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-blue-500 disabled:opacity-60"
+              onChange={(e) => {
+                clearFieldError("learning_rate");
+                setLearningRate(e.target.value);
+              }}
+              className={`w-full bg-[#111215] border ${
+                fieldErrors.learning_rate
+                  ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200"
+                  : "border-[#23252e]"
+              } rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-blue-500 disabled:opacity-60`}
             />
+            {fieldErrors.learning_rate && (
+              <span className="text-[11px] text-red-400 mt-1 block">
+                {fieldErrors.learning_rate}
+              </span>
+            )}
           </div>
 
           <div>
@@ -1224,10 +1484,22 @@ export default function TrainingView() {
               type="text"
               value={weightDecay}
               disabled={isTraining}
-              onChange={(e) => setWeightDecay(e.target.value)}
+              onChange={(e) => {
+                clearFieldError("weight_decay");
+                setWeightDecay(e.target.value);
+              }}
               placeholder="0.01"
-              className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-blue-500 disabled:opacity-60"
+              className={`w-full bg-[#111215] border ${
+                fieldErrors.weight_decay
+                  ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200"
+                  : "border-[#23252e]"
+              } rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-blue-500 disabled:opacity-60`}
             />
+            {fieldErrors.weight_decay && (
+              <span className="text-[11px] text-red-400 mt-1 block">
+                {fieldErrors.weight_decay}
+              </span>
+            )}
           </div>
 
           <div>
@@ -1236,14 +1508,24 @@ export default function TrainingView() {
             </label>
             <input
               id="epochs-input"
-              type="number"
+              type="text"
               value={epochs}
               disabled={isTraining || ensembleSize > 1}
-              min="1"
-              max="100"
-              onChange={(e) => setEpochs(e.target.value)}
-              className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-blue-500 disabled:opacity-60"
+              onChange={(e) => {
+                clearFieldError("epochs");
+                setEpochs(e.target.value);
+              }}
+              className={`w-full bg-[#111215] border ${
+                fieldErrors.epochs
+                  ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200"
+                  : "border-[#23252e]"
+              } rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-blue-500 disabled:opacity-60`}
             />
+            {fieldErrors.epochs && (
+              <span className="text-[11px] text-red-400 mt-1 block">
+                {fieldErrors.epochs}
+              </span>
+            )}
           </div>
 
           <div>
@@ -1252,14 +1534,24 @@ export default function TrainingView() {
             </label>
             <input
               id="batch-size-input"
-              type="number"
+              type="text"
               value={batchSize}
               disabled={isTraining || ensembleSize > 1}
-              min="4"
-              max="128"
-              onChange={(e) => setBatchSize(e.target.value)}
-              className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-blue-500 disabled:opacity-60"
+              onChange={(e) => {
+                clearFieldError("batch_size");
+                setBatchSize(e.target.value);
+              }}
+              className={`w-full bg-[#111215] border ${
+                fieldErrors.batch_size
+                  ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200"
+                  : "border-[#23252e]"
+              } rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-blue-500 disabled:opacity-60`}
             />
+            {fieldErrors.batch_size && (
+              <span className="text-[11px] text-red-400 mt-1 block">
+                {fieldErrors.batch_size}
+              </span>
+            )}
           </div>
         </div>
 
@@ -1304,29 +1596,67 @@ export default function TrainingView() {
           )}
         </div>
 
-        {/* Configuración Detallada de Miembros del Ensamble con Sliders Auto-Rebalanceados */}
+        {/* Configuración Detallada de Miembros del Ensamble con Porcentajes Directos */}
         {ensembleSize > 1 && (
           <div className="space-y-3 pt-2 border-t border-[#23252e]/60">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <span className="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
                 <svg className="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                 </svg>
                 Composición y Ponderación del Ensamble ({ensembleSize} Modelos)
               </span>
-              <span className="text-[10px] text-emerald-400 font-mono bg-emerald-950/60 border border-emerald-800/50 px-2 py-0.5 rounded flex items-center gap-1">
-                <svg className="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                &Sigma; w<sub>i</sub> = 100% (Normalizado)
-              </span>
+              <div className="flex items-center gap-2">
+                <div
+                  className={`px-2.5 py-0.5 rounded text-xs font-mono font-medium border flex items-center gap-1.5 ${
+                    activeWeightsSum === 100
+                      ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-400"
+                      : "bg-amber-950/60 border-amber-500/40 text-amber-400"
+                  }`}
+                >
+                  {activeWeightsSum === 100 ? (
+                    <span>✓ Total: 100%</span>
+                  ) : (
+                    <span>
+                      Total: {activeWeightsSum}% (
+                      {activeWeightsSum < 100
+                        ? `Faltan ${100 - activeWeightsSum}%`
+                        : `Sobran ${activeWeightsSum - 100}%`}
+                      )
+                    </span>
+                  )}
+                </div>
+                {activeWeightsSum !== 100 && (
+                  <button
+                    type="button"
+                    disabled={isTraining}
+                    onClick={handleNormalizeWeights}
+                    className="text-[11px] text-cyan-400 hover:text-cyan-300 bg-cyan-950/60 hover:bg-cyan-900/60 border border-cyan-800/60 rounded px-2 py-0.5 font-medium transition-colors"
+                  >
+                    Ajustar a 100%
+                  </button>
+                )}
+              </div>
             </div>
+
+            {fieldErrors.ensemble_weights && (
+              <div className="p-2.5 rounded-lg bg-amber-950/50 border border-amber-600/50 text-amber-300 text-xs flex items-center gap-2">
+                <svg className="w-4 h-4 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <span>{fieldErrors.ensemble_weights}</span>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 gap-2.5">
               {ensembleModels.slice(0, ensembleSize).map((m, idx) => (
                 <div
                   key={idx}
-                  className="p-3 rounded-lg bg-[#111215] border border-[#23252e] space-y-2 hover:border-[#2f323e] transition-colors"
+                  className={`p-3 rounded-lg bg-[#111215] border ${
+                    fieldErrors[`model_weight_${idx}`] || fieldErrors[`model_epochs_${idx}`]
+                      ? "border-red-500/70 bg-red-950/10"
+                      : "border-[#23252e]"
+                  } space-y-2 hover:border-[#2f323e] transition-colors`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -1338,11 +1668,11 @@ export default function TrainingView() {
                       </span>
                     </div>
                     <span className="text-[11px] font-mono text-cyan-300 font-semibold bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-800/40">
-                      {(m.weight * 100).toFixed(0)}% (w = {m.weight.toFixed(2)})
+                      {m.weight}% (w = {((parseFloat(String(m.weight)) || 0) / 100).toFixed(2)})
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
                     <div>
                       <label className="text-[10px] text-gray-400 block mb-1 font-medium">Arquitectura Pre-entrenada</label>
                       <select
@@ -1360,22 +1690,67 @@ export default function TrainingView() {
                     </div>
 
                     <div>
+                      <label
+                        htmlFor={`model-epochs-${idx}`}
+                        className="text-[10px] text-gray-400 block mb-1 font-medium"
+                      >
+                        Épocas del Modelo #{idx + 1}
+                      </label>
+                      <input
+                        id={`model-epochs-${idx}`}
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={m.epochs !== undefined ? m.epochs : ""}
+                        disabled={isTraining}
+                        onChange={(e) => handleModelEpochsChange(idx, e.target.value)}
+                        className={`w-full bg-[#16171b] border ${
+                          fieldErrors[`model_epochs_${idx}`]
+                            ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200"
+                            : "border-[#23252e]"
+                        } rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-cyan-500 font-mono disabled:opacity-60`}
+                      />
+                      {fieldErrors[`model_epochs_${idx}`] && (
+                        <span className="text-[10px] text-red-400 mt-1 block">
+                          {fieldErrors[`model_epochs_${idx}`]}
+                        </span>
+                      )}
+                    </div>
+
+                    <div>
                       <div className="flex justify-between items-center mb-1">
-                        <label className="text-[10px] text-gray-400 font-medium">Ponderación en Inferencia (w<sub>{idx + 1}</sub>)</label>
+                        <label
+                          htmlFor={`model-weight-${idx}`}
+                          className="text-[10px] text-gray-400 font-medium"
+                        >
+                          Ponderación del Modelo #{idx + 1}
+                        </label>
                         <span className="text-[10px] font-mono text-gray-400">
-                          {(m.weight * 100).toFixed(1)}%
+                          {m.weight}%
                         </span>
                       </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="1"
-                        value={Math.round(m.weight * 100)}
-                        disabled={isTraining}
-                        onChange={(e) => handleWeightChange(idx, parseInt(e.target.value, 10) / 100)}
-                        className="w-full h-1.5 bg-[#23252e] rounded-lg appearance-none cursor-pointer accent-cyan-400"
-                      />
+                      <div className="relative flex items-center">
+                        <input
+                          id={`model-weight-${idx}`}
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={m.weight}
+                          disabled={isTraining}
+                          onChange={(e) => handleWeightChange(idx, e.target.value)}
+                          className={`w-full bg-[#16171b] border ${
+                            fieldErrors[`model_weight_${idx}`] || fieldErrors.ensemble_weights
+                              ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200"
+                              : "border-[#23252e]"
+                          } rounded-lg px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-cyan-500 font-mono disabled:opacity-60 pr-7`}
+                        />
+                        <span className="absolute right-2.5 text-xs text-gray-400 font-mono pointer-events-none">%</span>
+                      </div>
+                      {fieldErrors[`model_weight_${idx}`] && (
+                        <span className="text-[10px] text-red-400 mt-1 block">
+                          {fieldErrors[`model_weight_${idx}`]}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1402,6 +1777,7 @@ export default function TrainingView() {
               : `${ensembleSize} modelos secuenciales (Pipeline MLOps Ensamble)`}
           </span>
         </div>
+
 
         {/* Botones de Acción (Entrenar / Detener) */}
         <div className="flex items-center gap-3 pt-1">

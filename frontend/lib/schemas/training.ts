@@ -49,6 +49,7 @@ export type DatasetsResponse = z.infer<typeof DatasetsResponseSchema>;
 export const ModelEnsembleItemSchema = z.object({
   architecture: z.string(),
   weight: z.number().min(0).max(1),
+  epochs: z.number().int().min(1, "Model epochs must be at least 1").max(100, "Model epochs must be at most 100").optional(),
 });
 export type ModelEnsembleItem = z.infer<typeof ModelEnsembleItemSchema>;
 
