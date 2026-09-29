@@ -384,6 +384,10 @@ export default function TrainingView() {
   // Cambio dinámico de arquitectura con auto-rellenado de hiperparámetros recomendados
   const handleArchitectureChange = (newArch: string) => {
     setArchitecture(newArch);
+    setEnsembleModels((prev) => [
+      { ...prev[0], architecture: newArch },
+      ...prev.slice(1),
+    ]);
     const preset = ARCHITECTURE_PRESETS[newArch];
     if (preset) {
       setLearningRate(preset.lr);
@@ -684,7 +688,7 @@ export default function TrainingView() {
       {/* ==================================================================== */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Tarjeta: Seleccionar Dataset */}
-        <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-3 shadow-sm">
+        <div data-testid="dataset-selection-card" className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-3 shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs text-gray-300 font-semibold flex items-center gap-1.5">
               <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -721,9 +725,11 @@ export default function TrainingView() {
             </select>
           </div>
 
-          <div className="flex items-center justify-between text-[11px] text-gray-400 pt-1 border-t border-[#23252e]/60">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-gray-400 pt-1 border-t border-[#23252e]/60">
             <span>Clases objetivo: <strong className="text-gray-200">{currentDataset?.class_count || 15} clases detectadas</strong></span>
-            <span className="text-emerald-400 font-mono">Partición Grouped / Stratified</span>
+            <span className="text-cyan-400 font-mono text-[10px] bg-cyan-950/40 border border-cyan-800/40 px-2 py-0.5 rounded inline-flex items-center gap-1 self-start sm:self-auto">
+              <span className="text-gray-400">Arquitectura:</span> {ensembleSize === 1 ? architecture : `${ensembleSize} Modelos Ensamble`}
+            </span>
           </div>
         </div>
 
@@ -1274,13 +1280,15 @@ export default function TrainingView() {
 
           {ensembleSize === 1 && (
             <div>
-              <label className="text-[11px] text-gray-400 block mb-1 font-medium flex items-center justify-between">
+              <label htmlFor="architecture-select" className="text-[11px] text-gray-400 block mb-1 font-medium flex items-center justify-between">
                 <span>Arquitectura de Red Neuronal</span>
                 <span className="text-[10px] text-emerald-400 font-normal">
                   {ARCHITECTURE_PRESETS[architecture]?.desc || "Calibrado"}
                 </span>
               </label>
               <select
+                id="architecture-select"
+                data-testid="architecture-select"
                 value={architecture}
                 disabled={isTraining}
                 onChange={(e) => handleArchitectureChange(e.target.value)}
@@ -1926,6 +1934,12 @@ export default function TrainingView() {
                       <span className="text-gray-400 block mb-0.5">Archivo binario (.pt):</span>
                       <span className="text-cyan-300 font-mono text-[10px] break-all block">
                         {selectedModelModal.filename}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center gap-2 pt-1">
+                      <span className="text-gray-400">Arquitectura:</span>
+                      <span className="text-blue-300 font-mono font-medium text-right">
+                        {selectedModelModal.architecture}
                       </span>
                     </div>
                     <div className="flex justify-between pt-1">

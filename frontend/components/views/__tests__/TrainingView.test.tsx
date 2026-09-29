@@ -383,6 +383,59 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     const payload = JSON.parse(postCall[1].body);
     expect(payload.weight_decay).toBe(0.05);
   });
+
+  it("synchronizes architecture when changing to PANNs-CNN14 and sends PANNs-CNN14 in start payload", async () => {
+    await act(async () => {
+      render(<TrainingView />);
+    });
+
+    // Cambiar la arquitectura a PANNs-CNN14 en el desplegable individual
+    const archSelect = screen.getByTestId("architecture-select") as HTMLSelectElement;
+    expect(archSelect).toBeDefined();
+
+    await act(async () => {
+      fireEvent.change(archSelect, { target: { value: "PANNs-CNN14" } });
+    });
+    expect(archSelect.value).toBe("PANNs-CNN14");
+
+    // Verificar que la tarjeta de selección de dataset refleja la arquitectura seleccionada
+    const datasetCard = screen.getByTestId("dataset-selection-card");
+    expect(datasetCard).toBeDefined();
+    expect(within(datasetCard).getByText(/PANNs-CNN14/i)).toBeDefined();
+
+    // Iniciar entrenamiento individual
+    const startBtn = screen.getByText("Iniciar Entrenamiento Local (1 Modelo)");
+    await act(async () => {
+      fireEvent.click(startBtn);
+    });
+
+    const postCall = (global.fetch as any).mock.calls.find(
+      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    );
+    expect(postCall).toBeDefined();
+    const payload = JSON.parse(postCall[1].body);
+    expect(payload.architecture).toBe("PANNs-CNN14");
+    expect(payload.models[0].architecture).toBe("PANNs-CNN14");
+  });
+
+  it("displays architecture utilized in the technical sheet modal specifications", async () => {
+    await act(async () => {
+      render(<TrainingView />);
+    });
+
+    // Abrir modal de ficha técnica del modelo histórico #1
+    const fichaButtons = screen.getAllByRole("button", { name: /Ficha Técnica/i });
+    await act(async () => {
+      fireEvent.click(fichaButtons[0]);
+    });
+
+    const modal = screen.getByTestId("modal-ficha-tecnica");
+    expect(modal).toBeDefined();
+
+    // Verificar que dentro de la ficha técnica se muestra la arquitectura utilizada
+    expect(within(modal).getByText("Arquitectura:")).toBeDefined();
+    expect(within(modal).getAllByText("EfficientNet-B0").length).toBeGreaterThan(0);
+  });
 });
 
 

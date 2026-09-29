@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "receipt_id": "fase_sincronizacion_arquitectura_ficha_tecnica_receipt",
+  "timestamp": "2026-09-29T13:31:00-03:00",
+  "methodology": "TDD + RDD + ODD",
+  "feature": "Sincronización de arquitectura en entrenamiento individual y visualización en ficha de dataset y técnica",
+  "causal_invariants": [
+    "Al seleccionar una arquitectura en el desplegable individual (ej. PANNs-CNN14), la configuración del modelo de entrenamiento enviado en el payload (architecture y models[0].architecture) debe reflejar exactamente dicha selección y no mantenerse estancada en EfficientNet-B0.",
+    "La tarjeta de selección de dataset debe exhibir dinámicamente la arquitectura de red neuronal configurada para el entrenamiento en curso.",
+    "El modal de ficha técnica detallada debe incluir la fila explícita 'Arquitectura' en las especificaciones del artefacto binario persistido."
+  ],
+  "defects_identified": [
+    {
+      "id": "DEFECT_ARCH_DESYNC",
+      "location": "frontend/components/views/TrainingView.tsx:385,584",
+      "cause": "handleArchitectureChange actualizaba el estado independiente 'architecture' pero no sincronizaba 'ensembleModels[0].architecture'. Como handleStartTraining priorizaba 'normalizedEnsemble[0].architecture', siempre se despachaba 'EfficientNet-B0' al backend.",
+      "red_evidence": "Test unitario 'synchronizes architecture when changing to PANNs-CNN14 and sends PANNs-CNN14 in start payload' falló porque el payload inicial mantenía la arquitectura previa.",
+      "green_evidence": "Sincronización en handleArchitectureChange de ensembleModels[0] con la nueva arquitectura elegida."
+    },
+    {
+      "id": "DEFECT_DATASET_CARD_MISSING_ARCH",
+      "location": "frontend/components/views/TrainingView.tsx:724-730",
+      "cause": "La tarjeta de selección de dataset no exhibía la arquitectura seleccionada, dejando ciego al operador sobre la red configurada para ese dataset.",
+      "red_evidence": "Test unitario exigiendo el badge 'Arquitectura: PANNs-CNN14' en dataset-selection-card.",
+      "green_evidence": "Agregado de badge con testid en el pie de la tarjeta del dataset indicando la arquitectura seleccionada o cantidad de miembros en ensamble."
+    },
+    {
+      "id": "DEFECT_TECHNICAL_MODAL_MISSING_ARCH_FIELD",
+      "location": "frontend/components/views/TrainingView.tsx:1936-1945",
+      "cause": "La tarjeta de especificaciones del artefacto en el modal de ficha técnica exhibía tamaño, archivo y clases, pero omitía la fila explícita 'Arquitectura:'.",
+      "red_evidence": "Test unitario buscando 'Arquitectura:' dentro del modal de ficha técnica falló.",
+      "green_evidence": "Incorporación de la fila 'Arquitectura:' con tipografía font-mono y color distintivo dentro del modal."
+    }
+  ],
+  "verification_results": {
+    "vitest_suite": "14/14 suites pasando (128/128 tests)",
+    "typescript_build": "next build completado exitosamente sin advertencias de tipos",
+    "regression": "Cero regresiones en vistas de predicción, ingesta y shell responsive"
+  },
+  "rollback_plan": "git checkout HEAD~1 -- frontend/components/views/TrainingView.tsx frontend/components/views/__tests__/TrainingView.test.tsx"
+}
