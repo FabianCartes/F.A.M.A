@@ -139,4 +139,116 @@ def test_registry_unregister():
     assert not registry.has_model("to-delete")
 
 
+def test_registry_register_from_db_inactive_models_lazy_loaded(tmp_path):
+    """
+    Verifica que al registrar modelos desde la base de datos (register_from_db),
+    los modelos no activos (is_default=False) se inicialicen con lazy_load=True,
+    garantizando que su atributo model sea None para preservar RAM/VRAM.
+    """
+    import torch
+    from unittest.mock import MagicMock
+    from app.services.registry import ModelRegistry
+    from app.services.predictors.trained_predictor import TrainedModelPredictor
+
+    from poc.train import AudioCNN
+
+    sample_model = AudioCNN(num_classes=2)
+    state_dict = sample_model.state_dict()
+
+    # Crear checkpoint sintético válido (> 10KB)
+    ckpt_file = tmp_path / "fama_test_checkpoint_best.pt"
+    torch.save(
+        {
+            "state_dict": state_dict,
+            "architecture": "AudioCNN",
+            "classes": ["Especie 1", "Especie 2"],
+            "best_val_acc": 85.0,
+            "padding": torch.zeros(5000),
+        },
+        ckpt_file,
+    )
+    assert ckpt_file.stat().st_size > 10000
+
+    # Crear modelos mock: m_active y m_inactive
+    m_active = MagicMock()
+    m_active.id_modelo = 101
+    m_active.arquitectura = "AudioCNN"
+    m_active.activo = True
+    m_active.ruta_binario_gcp = f"models/{ckpt_file.name}"
+
+    m_inactive = MagicMock()
+    m_inactive.id_modelo = 102
+    m_inactive.arquitectura = "AudioCNN"
+    m_inactive.activo = False
+    m_inactive.ruta_binario_gcp = f"models/{ckpt_file.name}"
+
+    mock_db = MagicMock()
+    mock_db.query.return_value.order_by.return_value.all.return_value = [m_active, m_inactive]
+
+    registry = ModelRegistry()
+    registry.register_from_db(mock_db, checkpoints_root=tmp_path)
+
+    active_pred = registry.get("fama_trained_model_101")
+    inactive_pred = registry.get("fama_trained_model_102")
+
+    assert isinstance(active_pred, TrainedModelPredictor)
+    assert isinstance(inactive_pred, TrainedModelPredictor)
+    assert active_pred.metadata.is_default is True
+    assert inactive_pred.metadata.is_default is False
+
+    # El modelo no activo debe tener lazy_load=True (model is None)
+    assert inactive_pred.model is None
+
+
+def test_discover_and_register_checkpoints_inactive_models_lazy_loaded(tmp_path):
+    """
+    Verifica que al descubrir checkpoints en disco sin BD activa,
+    el primer checkpoint sea default (activo) y los subsiguientes sean lazy_loaded (model is None).
+    """
+    import torch
+    import os
+    from poc.train import AudioCNN
+    from app.services.registry import ModelRegistry, discover_and_register_checkpoints
+    from app.services.predictors.trained_predictor import TrainedModelPredictor
+
+    sample_model = AudioCNN(num_classes=2)
+    state_dict = sample_model.state_dict()
+
+    # Crear dos checkpoints > 1MB
+    payload = {
+        "state_dict": state_dict,
+        "architecture": "AudioCNN",
+        "classes": ["Especie 1", "Especie 2"],
+        "best_val_acc": 80.0,
+        "padding": torch.zeros(300000),  # Aumenta el tamaño > 1MB
+    }
+
+    ckpt_path_1 = tmp_path / "fama_arch1_100_best.pt"
+    ckpt_path_2 = tmp_path / "fama_arch2_200_best.pt"
+
+    torch.save(payload, ckpt_path_1)
+    torch.save(payload, ckpt_path_2)
+
+    # Ajustar timestamps para garantizar orden determinista
+    os.utime(ckpt_path_1, (2000, 2000))
+    os.utime(ckpt_path_2, (1000, 1000))
+
+    registry = ModelRegistry()
+    count = discover_and_register_checkpoints(registry, checkpoints_root=tmp_path, db=None)
+    assert count == 2
+
+    # ckpt_path_1 es el más reciente -> default
+    pred1 = registry.get(ckpt_path_1.stem)
+    pred2 = registry.get(ckpt_path_2.stem)
+
+    assert isinstance(pred1, TrainedModelPredictor)
+    assert isinstance(pred2, TrainedModelPredictor)
+    assert pred1.metadata.is_default is True
+    assert pred2.metadata.is_default is False
+
+    # El modelo no activo debe ser lazy_loaded (model is None)
+    assert pred2.model is None
+
+
+
 

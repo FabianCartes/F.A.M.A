@@ -25,6 +25,7 @@ backend/data/
 backend/data/**
 *.mp3
 *.wav
+!audios_prueba/audio_prueba.wav
 *.flac
 *.ogg
 

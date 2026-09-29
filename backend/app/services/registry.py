@@ -142,14 +142,15 @@ class ModelRegistry:
             if ckpt_file and ckpt_file.stat().st_size > 10000:
                 try:
                     model_key = f"fama_trained_model_{m.id_modelo}"
+                    is_active = bool(m.activo)
                     pred = TrainedModelPredictor(
                         checkpoint_path=ckpt_file,
                         model_id=model_key,
                         name=f"{m.arquitectura} (Entrenado #{m.id_modelo})",
-                        is_default=bool(m.activo),
-                        lazy_load=False,
+                        is_default=is_active,
+                        lazy_load=not is_active,
                     )
-                    self.register(pred, is_default=bool(m.activo))
+                    self.register(pred, is_default=is_active)
                     # Registrar alias útiles para consultas directas
                     self._predictors[ckpt_file.name] = pred
                     self._predictors[ckpt_file.stem] = pred
@@ -216,14 +217,15 @@ def discover_and_register_checkpoints(
         )
         for ckpt in fama_checkpoints:
             try:
+                is_def = (not active_found)
                 pred = TrainedModelPredictor(
                     checkpoint_path=ckpt,
                     model_id=ckpt.stem,
                     name=f"Modelo Entrenado ({ckpt.stem})",
-                    is_default=(not active_found),
-                    lazy_load=False,
+                    is_default=is_def,
+                    lazy_load=not is_def,
                 )
-                registry.register(pred, is_default=(not active_found))
+                registry.register(pred, is_default=is_def)
                 count += 1
                 if not active_found:
                     active_found = True

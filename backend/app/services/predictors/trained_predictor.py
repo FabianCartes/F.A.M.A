@@ -71,11 +71,7 @@ class TrainedModelPredictor(AudioPredictor):
         if not lazy_load:
             self._load_model()
         else:
-            # Inspección preliminar ligera si es posible
-            try:
-                self._load_model()
-            except Exception:
-                pass
+            self._load_metadata()
 
         self._metadata = ModelMetadata(
             id=self._model_id,
@@ -87,6 +83,33 @@ class TrainedModelPredictor(AudioPredictor):
             is_default=self.is_default,
             metrics={"accuracy": round(self.best_val_acc / 100.0 if self.best_val_acc and self.best_val_acc > 1 else (self.best_val_acc or 0.0), 4)},
         )
+
+    def _load_metadata(self) -> None:
+        """
+        Carga únicamente la metadata del checkpoint sin instanciar el modelo
+        ni alocar pesos en memoria/GPU (Lazy Loading real).
+        """
+        if not self.checkpoint_path.exists():
+            raise ModelWeightsError(
+                f"Archivo de checkpoint inexistente: {self.checkpoint_path}"
+            )
+
+        try:
+            checkpoint = torch.load(self.checkpoint_path, map_location="cpu")
+        except Exception as err:
+            raise ModelWeightsError(
+                f"Error al deserializar checkpoint {self.checkpoint_path}: {err}"
+            ) from err
+
+        if not isinstance(checkpoint, dict):
+            raise ModelWeightsError(
+                f"El checkpoint {self.checkpoint_path} no tiene un formato válido (se esperaba un diccionario)."
+            )
+
+        self.architecture_name = checkpoint.get("architecture", "EfficientNet-B0")
+        self.classes = checkpoint.get("classes", list(DEFAULT_CHILEAN_BIRD_CLASSES))
+        self.best_val_acc = checkpoint.get("best_val_acc")
+        self.model = None
 
     def _load_model(self) -> None:
         """Carga y valida los pesos binarios en memoria."""

@@ -1,0 +1,93 @@
+{
+  "receipt_name": "fase2_memoria_portabilidad_receipt",
+  "generated_at": "2026-09-28T21:15:00Z",
+  "methodology": "TDD + RDD + ODD",
+  "architecture_layer": "Backend Inference Engine, Model Catalog Registry & Test Suite Portability",
+  "rdd_mode": "unmanaged",
+  "approval": "granted",
+  "supersedes": "none — primer receipt formal de optimización de memoria y portabilidad en Fase 2",
+  "causal_invariants": [
+    {
+      "name": "Deferred Model Instantiation (Lazy Loading) Invariant",
+      "statement": "Cuando un predictor es inicializado con lazy_load=True, su atributo model permanece estrictamente como None y no se alocan pesos ni redes PyTorch en memoria/GPU. La metadata descriptiva (arquitectura, clases, métricas) se extrae del checkpoint ligero en CPU para el catálogo, y la instanciación de BioacousticModel se difiere causalmente hasta la primera llamada a predict()."
+    },
+    {
+      "name": "Model Registry Inactive Conservation Invariant",
+      "statement": "Tanto en sincronización relacional con PostgreSQL (register_from_db) como en autodescubrimiento físico en disco (discover_and_register_checkpoints), únicamente el modelo activo o marcado como por defecto (is_default=True) se inicializa en memoria de inmediato (lazy_load=False). Todos los modelos secundarios o inactivos (is_default=False) se registran con lazy_load=True, previniendo el consumo masivo de RAM/VRAM en el arranque."
+    },
+    {
+      "name": "Portable Test Media Invariant",
+      "statement": "Las pruebas unitarias y de integración del backend resuelven la ruta de audios de validación buscando de forma canónica en 'audios_prueba/audio_prueba.wav' relativo a la raíz del repositorio, eliminando rutas absolutas acopladas al entorno del desarrollador (~/Downloads) y garantizando portabilidad en CI, Docker y entornos de evaluación."
+    }
+  ],
+  "defects_addressed": [
+    {
+      "slice": "Slice 1: Implementación de Lazy Loading Real en TrainedModelPredictor y ModelRegistry",
+      "target_files": [
+        "backend/app/services/predictors/trained_predictor.py",
+        "backend/app/services/registry.py"
+      ],
+      "symptom": "Uvicorn intentaba instanciar y cargar en memoria/GPU decenas de modelos bioacústicos pesados en el arranque, saturando memoria RAM/VRAM de forma desproporcionada e impidiendo escalabilidad horizontal.",
+      "mechanism": "En trained_predictor.py:71-78, cuando lazy_load=True, se ejecutaba self._load_model() dentro de un bloque try-except sin diferir la instanciación de la red neuronal. Asimismo, en registry.py:150 y registry.py:224, todos los modelos de BD y checkpoints descubiertos se creaban con lazy_load=False hardcodeado.",
+      "fix": "Se implementó _load_metadata() en TrainedModelPredictor para leer el diccionario liviano del checkpoint en CPU y poblar arquitectura, clases y métricas con self.model = None. En predict(), si self.model is None, se ejecuta _load_model() bajo demanda. En registry.py, se configuró lazy_load=not is_default tanto en register_from_db como en discover_and_register_checkpoints.",
+      "red_evidence": "test_trained_predictor_lazy_loading_defers_model_instantiation falló en Red con AssertionError: assert BioacousticModel(...) is None. test_registry_register_from_db_inactive_models_lazy_loaded y test_discover_and_register_checkpoints_inactive_models_lazy_loaded fallaron con AssertionError: assert AudioCNN(...) is None.",
+      "green_evidence": "Las 3 pruebas de lazy loading pasaron 100% en Green. La suite completa de predictores (44 tests) y la suite consolidada del backend (264 tests) pasaron exitosamente en 50.01s."
+    },
+    {
+      "slice": "Slice 2: Portabilidad de Audios de Prueba para Tests Automatizados",
+      "target_files": [
+        "audios_prueba/audio_prueba.wav",
+        ".gitignore",
+        "backend/tests/test_trained_predictor.py",
+        "backend/tests/test_api_predict.py"
+      ],
+      "symptom": "Pruebas críticas de inferencia real dependían rígidamente de una ruta del host (/home/kevin/Downloads/audio_prueba.wav), forzando pytest.skip o fallando en máquinas CI/CD y contenedores.",
+      "mechanism": "AUDIO_PRUEBA_PATH estaba hardcodeado con la ruta personal del desarrollador, y .gitignore excluía todos los archivos *.wav impidiendo la inclusión del archivo en el repositorio.",
+      "fix": "Se copió el audio a audios_prueba/audio_prueba.wav, se añadió excepción !audios_prueba/audio_prueba.wav a .gitignore, y se implementó resolve_test_audio_path() en test_trained_predictor.py y test_api_predict.py para buscar prioritariamente audios_prueba/audio_prueba.wav relativo a la raíz del repositorio.",
+      "red_evidence": "Pruebas dependientes de rutas absolutas de host no reproducibles en entornos sin directorio Downloads.",
+      "green_evidence": "test_trained_predictor_infers_real_audio y test_predict_endpoint_uses_active_model_and_never_returns_mock_fallback resuelven audios_prueba/audio_prueba.wav y clasifican 'Chucao' con confianza >= 0.95 en GPU/CPU."
+    }
+  ],
+  "seams_under_test": [
+    {
+      "seam": "TrainedModelPredictor lazy loading and on-demand inference seam",
+      "file": "backend/tests/test_trained_predictor.py",
+      "test_name": "test_trained_predictor_lazy_loading_defers_model_instantiation",
+      "red_before_green": true
+    },
+    {
+      "seam": "ModelRegistry DB inactive models lazy loading seam",
+      "file": "backend/tests/test_model_registry.py",
+      "test_name": "test_registry_register_from_db_inactive_models_lazy_loaded",
+      "red_before_green": true
+    },
+    {
+      "seam": "ModelRegistry checkpoint discovery inactive models lazy loading seam",
+      "file": "backend/tests/test_model_registry.py",
+      "test_name": "test_discover_and_register_checkpoints_inactive_models_lazy_loaded",
+      "red_before_green": true
+    },
+    {
+      "seam": "TrainedModelPredictor portable audio real inference seam",
+      "file": "backend/tests/test_trained_predictor.py",
+      "test_name": "test_trained_predictor_infers_real_audio",
+      "red_before_green": false
+    },
+    {
+      "seam": "FastAPI /api/predict active model portable audio inference seam",
+      "file": "backend/tests/test_api_predict.py",
+      "test_name": "test_predict_endpoint_uses_active_model_and_never_returns_mock_fallback",
+      "red_before_green": false
+    }
+  ],
+  "verification_summary": {
+    "test_runner": ".venv/bin/pytest",
+    "total_tests": 264,
+    "passed": 264,
+    "failed": 0,
+    "warnings": 3,
+    "execution_time_seconds": 50.01,
+    "status": "PASSED"
+  },
+  "rollback_plan": "Revertir cambios en backend/app/services/predictors/trained_predictor.py y backend/app/services/registry.py con git restore. La inclusión de audios_prueba/audio_prueba.wav y el ajuste de .gitignore son puramente aditivos."
+}

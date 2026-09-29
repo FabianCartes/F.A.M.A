@@ -28,6 +28,20 @@ def create_dummy_wav_bytes(duration_sec: float = 2.0, sr: int = 22050) -> bytes:
     return bio.read()
 
 
+def resolve_test_audio_path() -> Path:
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    candidate_repo = repo_root / "audios_prueba" / "audio_prueba.wav"
+    if candidate_repo.exists():
+        return candidate_repo
+    candidate_cwd = Path("audios_prueba/audio_prueba.wav").resolve()
+    if candidate_cwd.exists():
+        return candidate_cwd
+    downloads = Path.home() / "Downloads" / "audio_prueba.wav"
+    if downloads.exists():
+        return downloads
+    return candidate_repo
+
+
 @pytest.fixture
 def mock_db_session():
     """Mock de sesión de base de datos SQLAlchemy."""
@@ -155,7 +169,7 @@ def test_predict_endpoint_uses_active_model_and_never_returns_mock_fallback(mock
     4. Si se solicita un modelo sin pesos (p. ej. chilean-birds-ensemble sin ckpts), falle con 503 en vez de retornar un mock.
     """
     mock_gcp.return_value = True
-    audio_path = Path("/home/kevin/Downloads/audio_prueba.wav")
+    audio_path = resolve_test_audio_path()
     if not audio_path.exists():
         pytest.skip(f"Audio de prueba no disponible en {audio_path}")
 

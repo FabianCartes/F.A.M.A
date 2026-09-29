@@ -4,7 +4,7 @@ Esta carpeta contiene audios listos para arrastrar y soltar en la sección de **
 
 ---
 
-## 🎯 1. Audios de Aves de Campo Reales (Test Set Ciego — Zero Recordist Leakage)
+## 1. Audios de Aves de Campo Reales (Test Set Ciego — Zero Recordist Leakage)
 
 Estos audios provienen del conjunto oficial `test.csv` (154 muestras de campo de Xeno-Canto). **Fueron estrictamente aislados por grabador y ubicación**, lo que significa que el modelo **NUNCA los vio durante su entrenamiento**. Por lo tanto, el modelo no puede "recordarlos" por memorización, sino que debe aplicar generalización acústica pura.
 
@@ -21,7 +21,7 @@ Estos audios provienen del conjunto oficial `test.csv` (154 muestras de campo de
 
 ---
 
-## 🛑 2. Audios de Control Negativo (Out-of-Distribution / No Biológicos)
+## 2. Audios de Control Negativo (Out-of-Distribution / No Biológicos)
 
 Estos audios **NO contienen cantos de aves chilenas**. Se utilizan para evaluar cómo reacciona el modelo ante señales artificiales, ruido ambiental o silencio:
 
@@ -33,7 +33,7 @@ Estos audios **NO contienen cantos de aves chilenas**. Se utilizan para evaluar 
 
 ---
 
-## 🚀 Cómo utilizarlos:
+## Cómo utilizarlos:
 1. Abre tu navegador en [http://localhost:3000](http://localhost:3000).
 2. Ve a la sección **Predicción**.
 3. Abre esta carpeta en el Explorador de Archivos de Windows:  

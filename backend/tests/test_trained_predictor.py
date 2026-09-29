@@ -12,7 +12,55 @@ from app.schemas.prediction import PredictionResult
 
 
 CHECKPOINT_PATH = Path("backend/checkpoints/fama_efficientnet_b0_1790539191_efficientnet_b0_best.pt")
-AUDIO_PRUEBA_PATH = Path("/home/kevin/Downloads/audio_prueba.wav")
+
+
+def resolve_test_audio_path() -> Path:
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    candidate_repo = repo_root / "audios_prueba" / "audio_prueba.wav"
+    if candidate_repo.exists():
+        return candidate_repo
+    candidate_cwd = Path("audios_prueba/audio_prueba.wav").resolve()
+    if candidate_cwd.exists():
+        return candidate_cwd
+    downloads = Path.home() / "Downloads" / "audio_prueba.wav"
+    if downloads.exists():
+        return downloads
+    return candidate_repo
+
+
+AUDIO_PRUEBA_PATH = resolve_test_audio_path()
+
+
+def test_trained_predictor_lazy_loading_defers_model_instantiation():
+    """
+    Verifica que con lazy_load=True:
+    1. predictor.model sea None tras la inicialización (ahorro crítico de RAM/VRAM).
+    2. La metadata ligera (clases, arquitectura, métricas) esté poblada desde el checkpoint.
+    3. Al llamar a predict(), el modelo PyTorch se instancie bajo demanda y clasifique.
+    """
+    if not CHECKPOINT_PATH.exists():
+        pytest.skip(f"Checkpoint no disponible en {CHECKPOINT_PATH}")
+    if not AUDIO_PRUEBA_PATH.exists():
+        pytest.skip(f"Audio de prueba no disponible en {AUDIO_PRUEBA_PATH}")
+
+    predictor = TrainedModelPredictor(checkpoint_path=CHECKPOINT_PATH, lazy_load=True)
+
+    # Invariante 1: No debe cargar pesos en GPU/RAM en el constructor
+    assert predictor.model is None
+
+    # Invariante 2: Metadata ligera disponible de inmediato
+    assert len(predictor.classes) == 15
+    assert "Chucao" in predictor.classes
+    assert predictor.architecture_name == "EfficientNet-B0"
+    assert predictor.metadata.id == predictor.model_id
+    assert predictor.metadata.classes == predictor.classes
+
+    # Invariante 3: Inferencia bajo demanda instancia el modelo y predice
+    result = predictor.predict(AUDIO_PRUEBA_PATH)
+    assert predictor.model is not None
+    assert isinstance(result, PredictionResult)
+    assert result.clase == "Chucao"
+    assert result.confianza >= 0.95
 
 
 def test_trained_predictor_infers_real_audio():
