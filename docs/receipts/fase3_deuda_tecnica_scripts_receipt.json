@@ -1,0 +1,86 @@
+{
+  "receipt_name": "fase3_deuda_tecnica_scripts_receipt",
+  "generated_at": "2026-09-28T21:30:00Z",
+  "methodology": "TDD + RDD + ODD",
+  "architecture_layer": "Backend Architecture, Modular Training Subsystem & Historical Scripts Compatibility",
+  "rdd_mode": "unmanaged",
+  "approval": "granted",
+  "supersedes": "none — primer receipt formal de saneamiento de scripts y deuda técnica en Fase 3",
+  "causal_invariants": [
+    {
+      "name": "Canonical Model Bundle & Ingestor Contract Invariant",
+      "statement": "El script de validación end-to-end del subsistema modular de entrenamiento (test_manual_pipeline.py) consume las APIs canónicas vigentes: LocalFolderPAMIngestor(source_dir=...), ingesta tabular retornando pd.DataFrame para grouped_stratified_split_dataset, exportación estática con BundleExporter.export(output_dir, model, config, classes, metrics), autodescubrimiento con discover_and_register_bundles(registry, checkpoints_dir) y acceso a metadatos de predictor vía predictor.metadata.name."
+    },
+    {
+      "name": "Universal Root Models Re-export Invariant",
+      "statement": "El archivo de fachada backend/models.py re-exporta sin excepciones todas las entidades SQLAlchemy de la capa de dominio (Prediccion, ConjuntoDatos, Audio, Modelo, MetricaEntrenamiento, Retroalimentacion, Usuario) desde app.models.*, preservando retrocompatibilidad total con scripts y utilitarios históricos ubicados en la raíz del backend."
+    },
+    {
+      "name": "Canonical Checkpoints Directory Resolution Invariant",
+      "statement": "La función canónica get_checkpoints_dir(subpath=None) y la fachada estática PathResolver.checkpoints_dir(subpath=None) resuelven de forma agnóstica al directorio de trabajo actual (cwd) la ubicación absoluta de checkpoints tanto en entorno de desarrollo local (backend/checkpoints) como dentro de contenedores Docker (/app/checkpoints), permitiendo además la navegación parametrizada por subdirectorios de modelos."
+    }
+  ],
+  "defects_addressed": [
+    {
+      "slice": "Slice 1: Sincronización y actualización de backend/test_manual_pipeline.py",
+      "target_files": [
+        "backend/test_manual_pipeline.py"
+      ],
+      "symptom": "La ejecución de test_manual_pipeline.py colapsaba tempranamente con TypeError al instanciar el ingestor de carpetas locales y presentaba múltiples derivas de firma en split, exporter, registro y metadatos de modelos.",
+      "mechanism": "LocalFolderPAMIngestor fue refactorizado para aceptar source_dir en lugar de data_dir y retornar un DataFrame de pandas. Además, BundleExporter.export evolucionó a método de clase (@classmethod) que requiere (output_dir, model, config, classes, metrics), discover_and_register_bundles invirtió sus argumentos esperando (registry, checkpoints_dir), y ModelMetadata estandarizó su campo a name en vez de nombre.",
+      "fix": "Se sincronizaron todas las firmas en test_manual_pipeline.py: se utilizó source_dir=tmp_path, se extrajeron las clases únicas desde records['clase'].unique(), se instanció una red dummy con TrainingConfig y DatasetConfig para invocar BundleExporter.export, se corrigieron los argumentos de discover_and_register_bundles(registry, checkpoints_dir) y se adaptó la salida a predictor.metadata.name.",
+      "red_evidence": "Ejecución con python backend/test_manual_pipeline.py falló con 'TypeError: LocalFolderPAMIngestor.__init__() got an unexpected keyword argument data_dir'.",
+      "green_evidence": "Ejecución completó su flujo al 100% imprimiendo '>>> ¡TODO EL SUBSISTEMA MODULAR FUNCIONA CORRECTAMENTE! <<<' con exit code 0."
+    },
+    {
+      "slice": "Slice 2: Re-export Completo en backend/models.py",
+      "target_files": [
+        "backend/models.py",
+        "backend/tests/test_dataset_models.py"
+      ],
+      "symptom": "Scripts y módulos que importaban entidades del modelo relacional desde models (raíz de backend) fallaban con ImportError para ConjuntoDatos, Audio, Modelo, MetricaEntrenamiento, Retroalimentacion y Usuario.",
+      "mechanism": "backend/models.py fue creado originalmente como un stub parcial que únicamente re-exportaba Prediccion desde app.models.prediction, omitiendo las restantes tablas del modelo de dominio de F.A.M.A.",
+      "fix": "Se re-exportaron todas las entidades del dominio en backend/models.py (Prediccion, ConjuntoDatos, Audio, Modelo, MetricaEntrenamiento, Retroalimentacion, Usuario) actualizando __all__ en consecuencia.",
+      "red_evidence": "test_root_models_reexports_all_domain_entities en backend/tests/test_dataset_models.py falló en Red con 'ImportError: cannot import name ConjuntoDatos from models (/home/kevin/Work/fama/backend/models.py)'.",
+      "green_evidence": "test_root_models_reexports_all_domain_entities pasó en Green verificando la presencia e integridad de las 7 tablas SQLAlchemy en models."
+    },
+    {
+      "slice": "Slice 3: Función Canónica get_checkpoints_dir() en backend/training/paths.py",
+      "target_files": [
+        "backend/training/paths.py",
+        "backend/tests/test_paths.py"
+      ],
+      "symptom": "El subsistema de rutas y PathResolver carecían de una función canónica para resolver la carpeta de checkpoints de forma agnóstica a cwd y Docker, forzando a los consumidores a duplicar resoluciones ad-hoc.",
+      "mechanism": "paths.py solo proveía get_project_root(), get_raw_data_dir() y get_processed_data_dir(), omitiendo la resolución unificada del directorio checkpoints.",
+      "fix": "Se implementó get_checkpoints_dir(subpath: Optional[str] = None) y el método estático PathResolver.checkpoints_dir(subpath) siguiendo la misma lógica de resolución agnóstica que los datos raw y procesados.",
+      "red_evidence": "backend/tests/test_paths.py falló durante recolección con 'ImportError: cannot import name get_checkpoints_dir from backend.training.paths'.",
+      "green_evidence": "backend/tests/test_paths.py ejecutó 8 de 8 tests exitosamente, validando la resolución por defecto, con subpath y la independencia absoluta del directorio de trabajo actual (cwd)."
+    }
+  ],
+  "seams_under_test": [
+    {
+      "seam": "Manual Pipeline Modular Subsystem E2E Integration Seam",
+      "file": "backend/test_manual_pipeline.py",
+      "test_name": "main() script execution with exit code 0",
+      "red_before_green": true
+    },
+    {
+      "seam": "Root models.py domain entities facade seam",
+      "file": "backend/tests/test_dataset_models.py",
+      "test_name": "test_root_models_reexports_all_domain_entities",
+      "red_before_green": true
+    },
+    {
+      "seam": "Canonical checkpoints path resolution seam",
+      "file": "backend/tests/test_paths.py",
+      "test_name": "test_get_checkpoints_dir_default and test_get_checkpoints_dir_with_subpath",
+      "red_before_green": true
+    }
+  ],
+  "rollback_plan": {
+    "slice_1": "git checkout HEAD -- backend/test_manual_pipeline.py",
+    "slice_2": "git checkout HEAD -- backend/models.py backend/tests/test_dataset_models.py",
+    "slice_3": "git checkout HEAD -- backend/training/paths.py backend/tests/test_paths.py",
+    "verification": ".venv/bin/pytest backend/tests"
+  }
+}

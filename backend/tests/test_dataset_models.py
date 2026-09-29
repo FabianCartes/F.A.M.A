@@ -89,3 +89,32 @@ def test_audio_creation_and_cascade(db_session):
 
     remaining_audio = db_session.query(Audio).filter_by(id_audio=audio.id_audio).first()
     assert remaining_audio is None
+
+
+def test_root_models_reexports_all_domain_entities():
+    """Verifica que backend/models.py re-exporte todas las entidades del dominio para compatibilidad regresiva."""
+    from models import (
+        Prediccion,
+        ConjuntoDatos,
+        Audio,
+        Modelo,
+        MetricaEntrenamiento,
+        Retroalimentacion,
+        Usuario,
+    )
+    import models
+
+    expected_entities = [
+        "Prediccion",
+        "ConjuntoDatos",
+        "Audio",
+        "Modelo",
+        "MetricaEntrenamiento",
+        "Retroalimentacion",
+        "Usuario",
+    ]
+    for entity_name in expected_entities:
+        assert hasattr(models, entity_name), f"models.py no re-exporta {entity_name}"
+        entity_cls = getattr(models, entity_name)
+        assert hasattr(entity_cls, "__tablename__"), f"{entity_name} no es una tabla SQLAlchemy válida"
+

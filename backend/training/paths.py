@@ -23,8 +23,13 @@ def get_project_root() -> Path:
 def get_raw_data_dir(dataset_name: Optional[str] = None) -> Path:
     """
     Retorna la ruta absoluta a backend/data/raw/[dataset_name].
+    Resuelve de forma robusta tanto en host local como dentro de contenedor Docker (/app).
     """
-    raw_dir = (get_project_root() / "backend" / "data" / "raw").resolve()
+    backend_raw = (Path(__file__).resolve().parent.parent / "data" / "raw").resolve()
+    if backend_raw.exists():
+        raw_dir = backend_raw
+    else:
+        raw_dir = (get_project_root() / "backend" / "data" / "raw").resolve()
     if dataset_name:
         return (raw_dir / dataset_name).resolve()
     return raw_dir
@@ -33,11 +38,31 @@ def get_raw_data_dir(dataset_name: Optional[str] = None) -> Path:
 def get_processed_data_dir(dataset_name: Optional[str] = None) -> Path:
     """
     Retorna la ruta absoluta a backend/data/processed/[dataset_name].
+    Resuelve de forma robusta tanto en host local como dentro de contenedor Docker (/app).
     """
-    proc_dir = (get_project_root() / "backend" / "data" / "processed").resolve()
+    backend_proc = (Path(__file__).resolve().parent.parent / "data" / "processed").resolve()
+    if backend_proc.exists():
+        proc_dir = backend_proc
+    else:
+        proc_dir = (get_project_root() / "backend" / "data" / "processed").resolve()
     if dataset_name:
         return (proc_dir / dataset_name).resolve()
     return proc_dir
+
+
+def get_checkpoints_dir(subpath: Optional[str] = None) -> Path:
+    """
+    Retorna la ruta absoluta a backend/checkpoints/[subpath].
+    Resuelve de forma robusta tanto en host local como dentro de contenedor Docker (/app).
+    """
+    backend_ckpts = (Path(__file__).resolve().parent.parent / "checkpoints").resolve()
+    if backend_ckpts.exists():
+        ckpts_dir = backend_ckpts
+    else:
+        ckpts_dir = (get_project_root() / "backend" / "checkpoints").resolve()
+    if subpath:
+        return (ckpts_dir / subpath).resolve()
+    return ckpts_dir
 
 
 class PathResolver:
@@ -56,3 +81,8 @@ class PathResolver:
     @staticmethod
     def processed_data_dir(dataset_name: Optional[str] = None) -> Path:
         return get_processed_data_dir(dataset_name)
+
+    @staticmethod
+    def checkpoints_dir(subpath: Optional[str] = None) -> Path:
+        return get_checkpoints_dir(subpath)
+

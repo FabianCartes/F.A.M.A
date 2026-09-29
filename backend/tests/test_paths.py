@@ -12,10 +12,12 @@ from backend.training.paths import (
     get_project_root,
     get_raw_data_dir,
     get_processed_data_dir,
+    get_checkpoints_dir,
 )
 from training.paths import (
     PathResolver as TrainingPathResolver,
     get_project_root as training_get_project_root,
+    get_checkpoints_dir as training_get_checkpoints_dir,
 )
 
 
@@ -64,10 +66,32 @@ def test_get_processed_data_dir_with_dataset():
     assert PathResolver.processed_data_dir("engine_diagnostics") == processed_dataset
 
 
+def test_get_checkpoints_dir_default():
+    ckpts_dir = get_checkpoints_dir()
+    assert isinstance(ckpts_dir, Path)
+    assert ckpts_dir.is_absolute()
+    assert ckpts_dir == get_project_root() / "backend" / "checkpoints"
+    assert PathResolver.checkpoints_dir() == ckpts_dir
+    assert training_get_checkpoints_dir() == ckpts_dir
+    assert TrainingPathResolver.checkpoints_dir() == ckpts_dir
+
+
+def test_get_checkpoints_dir_with_subpath():
+    subpath = get_checkpoints_dir("patagonian-birds-resnet34")
+    assert isinstance(subpath, Path)
+    assert subpath.is_absolute()
+    assert (
+        subpath
+        == get_project_root() / "backend" / "checkpoints" / "patagonian-birds-resnet34"
+    )
+    assert PathResolver.checkpoints_dir("patagonian-birds-resnet34") == subpath
+
+
 def test_paths_independent_of_cwd(monkeypatch, tmp_path):
     root_before = get_project_root()
     raw_before = get_raw_data_dir("test_ds")
     processed_before = get_processed_data_dir("test_ds")
+    ckpts_before = get_checkpoints_dir("test_model")
 
     # Change working directory to an arbitrary temporary directory
     monkeypatch.chdir(tmp_path)
@@ -76,4 +100,7 @@ def test_paths_independent_of_cwd(monkeypatch, tmp_path):
     assert get_project_root() == root_before
     assert get_raw_data_dir("test_ds") == raw_before
     assert get_processed_data_dir("test_ds") == processed_before
+    assert get_checkpoints_dir("test_model") == ckpts_before
     assert PathResolver.raw_data_dir("test_ds") == raw_before
+    assert PathResolver.checkpoints_dir("test_model") == ckpts_before
+
