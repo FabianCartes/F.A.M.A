@@ -50,15 +50,14 @@ services:
       - ./backend/checkpoints:/app/checkpoints
       - ./backend/data:/app/data
       - ./backend/proyectotesis-fama-de4426cc102e.json:/app/proyectotesis-fama-de4426cc102e.json:ro
-    # Aceleración GPU NVIDIA (Descomentar si el host cuenta con tarjeta NVIDIA y nvidia-container-toolkit):
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
-    #   shm_size: '2gb'
+    # Aceleración GPU NVIDIA (Configurado para RTX 2050):
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     networks:
       - fama-network
 
