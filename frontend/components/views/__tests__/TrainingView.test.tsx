@@ -701,6 +701,68 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     expect(epochsInput.className).toContain("border-red-500");
     expect(screen.getByText("El campo 'Épocas de Entrenamiento' debe ser entre 1 y 1000.")).toBeDefined();
   });
+
+  it("resets single model epochs error and value when switching to ensemble topology", async () => {
+    await act(async () => {
+      render(<TrainingView />);
+    });
+
+    const epochsInput = screen.getByLabelText("Épocas de Entrenamiento") as HTMLInputElement;
+
+    // Provocar error en modo individual
+    await act(async () => {
+      fireEvent.change(epochsInput, { target: { value: "1001" } });
+      fireEvent.blur(epochsInput);
+    });
+    expect(screen.getByText("El campo 'Épocas de Entrenamiento' debe ser entre 1 y 1000.")).toBeDefined();
+
+    // Cambiar a 3 Modelos (Tríada)
+    const trioBtn = screen.getByText("3 Modelos (Tríada)");
+    await act(async () => {
+      fireEvent.click(trioBtn);
+    });
+
+    // El error debe haberse limpiado y el valor haberse reseteado
+    expect(screen.queryByText(/El campo 'Épocas de Entrenamiento' debe ser entre 1 y 1000/i)).toBeNull();
+    expect(epochsInput.value).not.toBe("1001");
+  });
+
+  it("applies Option B hybrid validation to ensemble model epochs inputs", async () => {
+    await act(async () => {
+      render(<TrainingView />);
+    });
+
+    // Cambiar a Tríada
+    const trioBtn = screen.getByText("3 Modelos (Tríada)");
+    await act(async () => {
+      fireEvent.click(trioBtn);
+    });
+
+    const modelEpochs0 = screen.getByLabelText("Épocas del Modelo #1") as HTMLInputElement;
+    expect(modelEpochs0).toBeDefined();
+
+    // 1. Violación inmediata en onChange: valor fuera de rango (>1000 o <=0)
+    await act(async () => {
+      fireEvent.change(modelEpochs0, { target: { value: "1001" } });
+    });
+    expect(modelEpochs0.className).toContain("border-red-500");
+    expect(screen.getByText("El campo 'Épocas del Modelo #1' debe ser entre 1 y 1000.")).toBeDefined();
+
+    // 2. Corrección inmediata a valor válido
+    await act(async () => {
+      fireEvent.change(modelEpochs0, { target: { value: "35" } });
+    });
+    expect(modelEpochs0.className).not.toContain("border-red-500");
+    expect(screen.queryByText(/El campo 'Épocas del Modelo #1' debe ser entre 1 y 1000/i)).toBeNull();
+
+    // 3. Dejar vacío y desenfocar (onBlur): resalta en rojo con mensaje obligatorio
+    await act(async () => {
+      fireEvent.change(modelEpochs0, { target: { value: "" } });
+      fireEvent.blur(modelEpochs0);
+    });
+    expect(modelEpochs0.className).toContain("border-red-500");
+    expect(screen.getByText("El campo 'Épocas del Modelo #1' no puede estar vacío.")).toBeDefined();
+  });
 });
 
 

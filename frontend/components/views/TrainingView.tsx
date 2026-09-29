@@ -234,7 +234,11 @@ export default function TrainingView() {
           vad_threshold: "Umbral VAD Energético",
           focal_gamma: "Parámetro Gamma (Focal)",
         };
-        const label = fieldNamesMap[field] || field;
+        let label = fieldNamesMap[field] || field;
+        if (field.startsWith("model_epochs_")) {
+          const idx = parseInt(field.replace("model_epochs_", ""), 10);
+          label = `Épocas del Modelo #${idx + 1}`;
+        }
         setFieldErrors((prev) => ({ ...prev, [field]: `El campo '${label}' no puede estar vacío.` }));
       } else {
         clearFieldError(field);
@@ -300,6 +304,14 @@ export default function TrainingView() {
       case "focal_gamma":
         if (isNaN(num) || num < 0.0 || num > 5.0) error = "Parámetro Gamma: Debe estar entre 0.0 y 5.0.";
         break;
+      default:
+        if (field.startsWith("model_epochs_")) {
+          const idx = parseInt(field.replace("model_epochs_", ""), 10);
+          if (isNaN(num) || num < 1 || num > 1000) {
+            error = `El campo 'Épocas del Modelo #${idx + 1}' debe ser entre 1 y 1000.`;
+          }
+        }
+        break;
     }
 
     if (error) {
@@ -347,7 +359,11 @@ export default function TrainingView() {
         vad_threshold: "Umbral VAD Energético",
         focal_gamma: "Parámetro Gamma (Focal)",
       };
-      const label = fieldNamesMap[field] || field;
+      let label = fieldNamesMap[field] || field;
+      if (field.startsWith("model_epochs_")) {
+        const idx = parseInt(field.replace("model_epochs_", ""), 10);
+        label = `Épocas del Modelo #${idx + 1}`;
+      }
       setFieldErrors((prev) => ({
         ...prev,
         [field]: `El campo '${label}' no puede estar vacío.`,
@@ -375,6 +391,28 @@ export default function TrainingView() {
   const handleEnsembleSizeChange = (newSize: 1 | 2 | 3) => {
     setEnsembleSize(newSize);
     clearFieldError("ensemble_weights");
+
+    if (newSize > 1) {
+      clearFieldError("epochs");
+      setTouchedFields((prev) => {
+        const copy = { ...prev };
+        delete copy.epochs;
+        return copy;
+      });
+      setEpochs(ARCHITECTURE_PRESETS[architecture]?.epochs || "10");
+    }
+
+    setFieldErrors((prev) => {
+      const copy = { ...prev };
+      [0, 1, 2].forEach((idx) => {
+        if (idx >= newSize) {
+          delete copy[`model_epochs_${idx}`];
+          delete copy[`model_weight_${idx}`];
+        }
+      });
+      return copy;
+    });
+
     if (newSize === 1) {
       setEnsembleModels((prev) => [
         { architecture: prev[0]?.architecture || architecture, weight: 100, epochs: prev[0]?.epochs ?? 10 },
@@ -428,10 +466,10 @@ export default function TrainingView() {
   };
 
   const handleModelEpochsChange = (index: number, newEpochs: number | string) => {
-    clearFieldError(`model_epochs_${index}`);
     setEnsembleModels((prev) =>
       prev.map((m, idx) => (idx === index ? { ...m, epochs: newEpochs } : m))
     );
+    validateFieldOnChange(`model_epochs_${index}`, newEpochs);
   };
 
   // 2. Telemetría de Hardware y Datasets
@@ -1879,12 +1917,11 @@ export default function TrainingView() {
                       </label>
                       <input
                         id={`model-epochs-${idx}`}
-                        type="number"
-                        min="1"
-                        max="100"
+                        type="text"
                         value={m.epochs !== undefined ? m.epochs : ""}
                         disabled={isTraining}
                         onChange={(e) => handleModelEpochsChange(idx, e.target.value)}
+                        onBlur={(e) => validateFieldOnBlur(`model_epochs_${idx}`, e.target.value)}
                         className={`w-full bg-[#16171b] border ${
                           fieldErrors[`model_epochs_${idx}`]
                             ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200"
