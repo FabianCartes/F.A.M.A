@@ -133,20 +133,49 @@ Para eliminar por completo la "fricción de instalación" —uno de los mayores 
    # Permitir ejecución sin sudo
    sudo usermod -aG docker $USER
    ```
-3. **Instalación del NVIDIA Container Toolkit:**
-   ```bash
-   curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
-   curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
-     sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
-     sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+3. **Instalación y Configuración del NVIDIA Container Toolkit (Exclusivo para Host Linux):**
 
-   sudo apt update
-   sudo apt install -y nvidia-container-toolkit
+   > [!IMPORTANT]
+   > **Requisito Exclusivo para Linux:** En Windows con WSL2, los controladores NVIDIA del host se exponen automáticamente a Docker Desktop. En sistemas Linux nativos, es **estrictamente obligatorio** instalar `nvidia-container-toolkit` y configurar el runtime en el daemon de Docker para que los contenedores puedan detectar la tarjeta física (como la RTX 2050). Si se omite, Docker arrojará `failed to discover GPU vendor from CDI: no known GPU vendor found` y el backend se degradará a modo CPU.
 
-   # Configurar runtime de Docker y reiniciar el servicio
-   sudo nvidia-ctk runtime configure --runtime=docker
-   sudo systemctl restart docker
-   ```
+   * **En distribuciones basadas en Debian / Ubuntu:**
+     ```bash
+     curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+     curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+       sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+       sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+     sudo apt update
+     sudo apt install -y nvidia-container-toolkit
+
+     # Configurar runtime de Docker y reiniciar el servicio
+     sudo nvidia-ctk runtime configure --runtime=docker
+     sudo systemctl restart docker
+     ```
+
+   * **En distribuciones basadas en Arch Linux / Manjaro:**
+     ```bash
+     # 1. Instalar el toolkit desde los repositorios oficiales
+     sudo pacman -S nvidia-container-toolkit
+
+     # 2. Registrar el runtime de NVIDIA en /etc/docker/daemon.json
+     sudo nvidia-ctk runtime configure --runtime=docker
+
+     # 3. Reiniciar el servicio de Docker
+     sudo systemctl restart docker
+     ```
+
+   * **En el archivo `docker-compose.yml` del proyecto:**
+     Asegúrese de mantener activa la reserva de GPU en el servicio `backend`:
+     ```yaml
+     deploy:
+       resources:
+         reservations:
+           devices:
+             - driver: nvidia
+               count: all
+               capabilities: [gpu]
+     ```
 
 ### 3.3. Prueba de Verificación de CUDA en Contenedor
 
