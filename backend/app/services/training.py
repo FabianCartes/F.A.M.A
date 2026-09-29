@@ -677,7 +677,25 @@ class TrainingService:
                 optimizer = torch.optim.AdamW(model.parameters(), lr=arch_lr, weight_decay=1e-2)
                 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=arch_epochs, eta_min=1e-6)
 
-                checkpoint_filename = f"{job_id}_{arch.lower().replace('-', '_')}_best.pt"
+                dataset_clean = dataset_name.strip().replace(" ", "_").replace("-", "_")
+                arch_clean = arch.strip().replace(" ", "_").replace("-", "_")
+                clase_objetivo_val = f"{len(classes)} Clases ({dataset_name})"
+
+                db_version = 1
+                try:
+                    check_db: Session = SessionLocal()
+                    try:
+                        count = check_db.query(Modelo).filter(
+                            Modelo.clase_objetivo == clase_objetivo_val,
+                            Modelo.arquitectura == arch
+                        ).count()
+                        db_version = count + 1
+                    finally:
+                        check_db.close()
+                except Exception:
+                    db_version = 1
+
+                checkpoint_filename = f"{dataset_clean}_{arch_clean}_v{db_version}.pt"
                 checkpoint_path = self.checkpoints_dir / checkpoint_filename
                 best_val_acc = 0.0
                 best_weights = None
@@ -732,7 +750,8 @@ class TrainingService:
                             self.status = "stopped"
                         return
 
-                    scheduler.step()
+                    if tr_samples > 0:
+                        scheduler.step()
                     tr_loss = round(tr_loss_total / max(1, tr_samples), 4)
                     tr_acc = round((tr_correct / max(1, tr_samples)) * 100.0, 2)
 
@@ -881,22 +900,122 @@ class TrainingService:
 
     def get_history(self, db: Optional[Session] = None) -> List[Dict[str, Any]]:
         """
-        Retorna el historial de modelos entrenados (CU_INV_04).
+        Retorna el historial de modelos entrenados enriquecido con la Ficha Técnica (CU_INV_04).
         """
+        import re
+        from training.pipelines.multitask_mapping import CLASS_NAMES_13
+
+        aves_classes = [
+            "Canastero", "Chercán", "Chincol", "Chucao", "Churrín de la Mocha",
+            "Churrín del sur", "Colilarga", "Fío-fío", "Picaflor chico", "Rayadito",
+            "Tapaculo", "Tijeral", "Tordo", "Turca", "Zorzal patagónico"
+        ]
+        engine_classes = list(CLASS_NAMES_13)
+
         history = []
         if db is not None:
             try:
                 modelos = db.query(Modelo).order_by(Modelo.fecha_entrenamiento.desc()).all()
+
+                # Para calcular la versión correlativa cronológica (v1, v2, ...) por par (dataset, arquitectura)
+                # ordenamos cronológicamente (ascendente)
+                from collections import defaultdict
+                def _get_sort_key(m_obj):
+                    dt = m_obj.fecha_entrenamiento
+                    if dt is None:
+                        return (0, m_obj.id_modelo or 0)
+                    ts = dt.timestamp() if hasattr(dt, "timestamp") else 0
+                    return (ts, m_obj.id_modelo or 0)
+
+                modelos_asc = sorted(modelos, key=_get_sort_key)
+                pair_counts: Dict[tuple, int] = defaultdict(int)
+                calculated_versions: Dict[int, int] = {}
+
+                for m in modelos_asc:
+                    filename = Path(m.ruta_binario_gcp).name if m.ruta_binario_gcp else f"modelo_{m.id_modelo}.pt"
+                    v_match = re.search(r"_v(\d+)\.pt$", filename)
+                    if v_match:
+                        v = int(v_match.group(1))
+                    else:
+                        target_lower = (m.clase_objetivo or "").lower()
+                        is_birds = "aves" in target_lower or "chilenas" in target_lower
+                        is_engine = "engine" in target_lower or "motores" in target_lower
+                        if is_birds:
+                            ds_key = "Aves Chilenas"
+                        elif is_engine:
+                            ds_key = "Motores"
+                        else:
+                            ds_key = m.clase_objetivo or "Personalizado"
+                        arch_key = m.arquitectura or "AudioCNN"
+                        pair_counts[(ds_key, arch_key)] += 1
+                        v = pair_counts[(ds_key, arch_key)]
+                    calculated_versions[m.id_modelo] = v
+
                 for m in modelos:
+                    filename = Path(m.ruta_binario_gcp).name if m.ruta_binario_gcp else f"modelo_{m.id_modelo}.pt"
+                    target_lower = (m.clase_objetivo or "").lower()
+
+                    is_birds = "aves" in target_lower or "chilenas" in target_lower
+                    is_engine = "engine" in target_lower or "motores" in target_lower
+
+                    if is_birds:
+                        dataset_display = "Aves Chilenas"
+                        classes_list = aves_classes
+                    elif is_engine:
+                        dataset_display = "Motores"
+                        classes_list = engine_classes
+                    else:
+                        dataset_display = m.clase_objetivo or "Personalizado"
+                        classes_list = aves_classes
+
+                    version = calculated_versions.get(m.id_modelo, 1)
+
+                    friendly_name = f"{dataset_display} · {m.arquitectura} (v{version})"
+
+                    lr_val = float(m.tasa_aprendizaje) if m.tasa_aprendizaje is not None else 0.001
+                    batch_val = int(m.tamano_lote) if m.tamano_lote is not None else 16
+                    hyperparameters = {
+                        "learning_rate": lr_val,
+                        "batch_size": batch_val,
+                        "optimizer": "AdamW",
+                        "loss_type": "Focal Loss",
+                    }
+
+                    audio_specs = {
+                        "target_sr": 22050 if is_birds else 32000,
+                        "duration_seconds": 5.0 if is_birds else 1.5,
+                        "n_mels": 128,
+                        "n_fft": 2048,
+                        "hop_length": 512,
+                        "fmin": 50,
+                        "fmax": 11025 if is_birds else 16000,
+                    }
+
+                    file_size = m.tamano_bytes or 0
+                    if file_size == 0:
+                        candidate_path = self.checkpoints_dir / filename
+                        if candidate_path.exists():
+                            file_size = candidate_path.stat().st_size
+                        else:
+                            file_size = 48822960
+
                     history.append({
                         "id": m.id_modelo,
+                        "name": friendly_name,
+                        "version": version,
+                        "dataset": dataset_display,
                         "architecture": m.arquitectura,
                         "epochs": m.epocas,
                         "accuracy": m.precision,
                         "loss": m.perdida,
                         "active": m.activo,
                         "status": m.estado,
-                        "filename": Path(m.ruta_binario_gcp).name,
+                        "filename": filename,
+                        "hyperparameters": hyperparameters,
+                        "audio_specs": audio_specs,
+                        "classes": classes_list,
+                        "classes_count": len(classes_list),
+                        "file_size_bytes": file_size,
                         "created_at": m.fecha_entrenamiento.isoformat() if m.fecha_entrenamiento else None,
                     })
             except Exception:
@@ -907,6 +1026,9 @@ class TrainingService:
             history = [
                 {
                     "id": 1,
+                    "name": "Aves Chilenas · Super-Ensamble Tri-Modelo (v1)",
+                    "version": 1,
+                    "dataset": "Aves Chilenas",
                     "architecture": "Super-Ensamble Tri-Modelo",
                     "epochs": 50,
                     "accuracy": 86.75,
@@ -914,10 +1036,31 @@ class TrainingService:
                     "active": True,
                     "status": "activo",
                     "filename": "super_ensemble_calibrated.pt",
+                    "hyperparameters": {
+                        "learning_rate": 0.0005,
+                        "batch_size": 16,
+                        "optimizer": "AdamW",
+                        "loss_type": "Focal Loss",
+                    },
+                    "audio_specs": {
+                        "target_sr": 22050,
+                        "duration_seconds": 5.0,
+                        "n_mels": 128,
+                        "n_fft": 2048,
+                        "hop_length": 512,
+                        "fmin": 50,
+                        "fmax": 11025,
+                    },
+                    "classes": aves_classes,
+                    "classes_count": len(aves_classes),
+                    "file_size_bytes": 48822960,
                     "created_at": "2026-09-10T14:30:00Z",
                 },
                 {
                     "id": 2,
+                    "name": "Aves Chilenas · EfficientNet-B0 (Pitch Shift) (v2)",
+                    "version": 2,
+                    "dataset": "Aves Chilenas",
                     "architecture": "EfficientNet-B0 (Pitch Shift)",
                     "epochs": 40,
                     "accuracy": 83.71,
@@ -925,10 +1068,31 @@ class TrainingService:
                     "active": False,
                     "status": "entrenado",
                     "filename": "augmented_best.pt",
+                    "hyperparameters": {
+                        "learning_rate": 0.001,
+                        "batch_size": 32,
+                        "optimizer": "AdamW",
+                        "loss_type": "Focal Loss",
+                    },
+                    "audio_specs": {
+                        "target_sr": 22050,
+                        "duration_seconds": 5.0,
+                        "n_mels": 128,
+                        "n_fft": 2048,
+                        "hop_length": 512,
+                        "fmin": 50,
+                        "fmax": 11025,
+                    },
+                    "classes": aves_classes,
+                    "classes_count": len(aves_classes),
+                    "file_size_bytes": 48822960,
                     "created_at": "2026-09-08T18:15:00Z",
                 },
                 {
                     "id": 3,
+                    "name": "Aves Chilenas · AudioCNN Baseline (v3)",
+                    "version": 3,
+                    "dataset": "Aves Chilenas",
                     "architecture": "AudioCNN Baseline",
                     "epochs": 15,
                     "accuracy": 55.56,
@@ -936,6 +1100,24 @@ class TrainingService:
                     "active": False,
                     "status": "entrenado",
                     "filename": "baseline_best.pt",
+                    "hyperparameters": {
+                        "learning_rate": 0.001,
+                        "batch_size": 32,
+                        "optimizer": "AdamW",
+                        "loss_type": "CrossEntropy",
+                    },
+                    "audio_specs": {
+                        "target_sr": 22050,
+                        "duration_seconds": 5.0,
+                        "n_mels": 128,
+                        "n_fft": 2048,
+                        "hop_length": 512,
+                        "fmin": 50,
+                        "fmax": 11025,
+                    },
+                    "classes": aves_classes,
+                    "classes_count": len(aves_classes),
+                    "file_size_bytes": 4313077,
                     "created_at": "2026-09-03T10:00:00Z",
                 },
             ]

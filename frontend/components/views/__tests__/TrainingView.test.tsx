@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent, act, within } from "@testing-library/react";
 import TrainingView from "../TrainingView";
 import { API_BASE_URL } from "@/lib/api";
 
@@ -41,7 +41,74 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
       if (url.includes("/api/training/history")) {
         return {
           ok: true,
-          json: async () => ({ history: [] }),
+          json: async () => ({
+            history: [
+              {
+                id: 1,
+                name: "Motores · EfficientNet-B0 (v1)",
+                version: 1,
+                dataset: "Motores",
+                architecture: "EfficientNet-B0",
+                epochs: 10,
+                accuracy: 68.12,
+                loss: 1.0297,
+                active: false,
+                status: "entrenado",
+                filename: "fama_efficientnet_b0_1790642923_efficientnet_b0_best.pt",
+                hyperparameters: {
+                  learning_rate: 0.001,
+                  batch_size: 16,
+                  optimizer: "AdamW",
+                  loss_type: "Focal Loss",
+                },
+                audio_specs: {
+                  target_sr: 32000,
+                  duration_seconds: 1.5,
+                  n_mels: 128,
+                  n_fft: 2048,
+                  hop_length: 512,
+                  fmin: 50,
+                  fmax: 16000,
+                },
+                classes: ["Crankshaft", "Piston", "Bearing"],
+                classes_count: 13,
+                file_size_bytes: 48822960,
+                created_at: "2026-09-29T00:52:14Z",
+              },
+              {
+                id: 6,
+                name: "Aves Chilenas · EfficientNet-B0 (v1)",
+                version: 1,
+                dataset: "Aves Chilenas",
+                architecture: "EfficientNet-B0",
+                epochs: 10,
+                accuracy: 77.78,
+                loss: 0.35,
+                active: true,
+                status: "entrenado",
+                filename: "fama_efficientnet_b0_1790539191_efficientnet_b0_best.pt",
+                hyperparameters: {
+                  learning_rate: 0.001,
+                  batch_size: 32,
+                  optimizer: "AdamW",
+                  loss_type: "Focal Loss",
+                },
+                audio_specs: {
+                  target_sr: 22050,
+                  duration_seconds: 5.0,
+                  n_mels: 128,
+                  n_fft: 2048,
+                  hop_length: 512,
+                  fmin: 50,
+                  fmax: 11025,
+                },
+                classes: ["Canastero", "Chercán", "Chincol"],
+                classes_count: 15,
+                file_size_bytes: 48822960,
+                created_at: "2026-09-29T00:06:31Z",
+              },
+            ],
+          }),
         };
       }
       if (url.includes("/api/training/start")) {
@@ -223,6 +290,71 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
       fireEvent.click(allBtn);
     });
     expect(allBtn.className).toContain("bg-emerald-600");
+  });
+
+  it("removes the 'Activar' button and 'Activo (Inferencia)' tag from the models table", async () => {
+    await act(async () => {
+      render(<TrainingView />);
+    });
+
+    // Verify "Activar" button is completely gone
+    expect(screen.queryByRole("button", { name: /^Activar$/i })).toBeNull();
+    // Verify "Activo (Inferencia)" badge is completely gone
+    expect(screen.queryByText(/Activo \(Inferencia\)/i)).toBeNull();
+    expect(screen.queryByText(/✓ En uso/i)).toBeNull();
+  });
+
+  it("renders friendly model names with version badges v1 and domain badges", async () => {
+    await act(async () => {
+      render(<TrainingView />);
+    });
+
+    expect(screen.getByText("Motores · EfficientNet-B0 (v1)")).toBeDefined();
+    expect(screen.getByText("Aves Chilenas · EfficientNet-B0 (v1)")).toBeDefined();
+    expect(screen.getAllByText("v1").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("Aves Chilenas")).toBeDefined();
+    expect(screen.getByText("Motores")).toBeDefined();
+  });
+
+  it("opens technical sheet modal when clicking 'Ficha Técnica' displaying all 3 specification cards", async () => {
+    await act(async () => {
+      render(<TrainingView />);
+    });
+
+    const sheetButtons = screen.getAllByRole("button", { name: /Ficha Técnica/i });
+    expect(sheetButtons.length).toBeGreaterThanOrEqual(1);
+
+    // Click the first model's Ficha Técnica button
+    await act(async () => {
+      fireEvent.click(sheetButtons[0]);
+    });
+
+    // Modal is opened
+    const modal = screen.getByTestId("modal-ficha-tecnica");
+    expect(modal).toBeDefined();
+
+    // 1) Hiperparámetros de entrenamiento
+    expect(within(modal).getByText(/Hiperparámetros de Entrenamiento/i)).toBeDefined();
+    expect(within(modal).getByText("AdamW")).toBeDefined();
+    expect(within(modal).getByText("Focal Loss")).toBeDefined();
+
+    // 2) Parámetros de física de audio
+    expect(within(modal).getByText(/Parámetros de Física de Audio/i)).toBeDefined();
+    expect(within(modal).getByText(/32000 Hz/i)).toBeDefined();
+    expect(within(modal).getByText(/1.5 s/i)).toBeDefined();
+
+    // 3) Especificaciones del artefacto
+    expect(within(modal).getByText(/Especificaciones del Artefacto/i)).toBeDefined();
+    expect(within(modal).getByText("fama_efficientnet_b0_1790642923_efficientnet_b0_best.pt")).toBeDefined();
+    expect(within(modal).getByText(/13 clases/i)).toBeDefined();
+
+    // Close modal
+    const closeBtn = within(modal).getAllByRole("button", { name: /Cerrar/i })[0];
+    await act(async () => {
+      fireEvent.click(closeBtn);
+    });
+
+    expect(screen.queryByTestId("modal-ficha-tecnica")).toBeNull();
   });
 });
 

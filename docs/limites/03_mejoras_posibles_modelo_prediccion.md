@@ -155,6 +155,27 @@ Aplicar solo a los pares que sobrevivan a las Líneas 2–4 (candidatos: Zorzal�
 
 El ensamble 88.68% es el óptimo del dominio cerrado actual. El trabajo futuro no debe "estirar" el clasificador ImageNet + GAP, sino **migrar a backbone bioacústico a 32 kHz con ASL + atención + pseudo-labeling**, y **cerrar la brecha lab→prod** portando el campeón (o su destilación CMKD a EfficientNet-B0 INT8) a `backend/app/main.py` con los guardarraíles RMS/flatness existentes.
 
+### 8.1 Trabajo Futuro: Configurabilidad desacoplada de Optimizadores (Adam, AdamW, SGD) y Schedulers en el Pipeline de Entrenamiento (Trade-offs y diseño Open-Closed)
+
+Como parte de la evolución modular del pipeline de entrenamiento bioacústico e industrial en F.A.M.A. (RF_04 / CU_INV_02), se identificó la necesidad de desacoplar la instanciación de optimizadores y planificadores de tasa de aprendizaje (*learning rate schedulers*), superando el acoplamiento rígido actual a `AdamW` con `CosineAnnealingLR`.
+
+#### Trade-offs Técnicos y Dinámica de Optimización
+1. **Optimizadores**:
+   * **AdamW (Baseline actual)**: Desacopla el decaimiento de peso (*weight decay* L2) de la actualización de momentos adaptativos. Es el estándar para redes convolucionales modernas y transformers bioacústicos con regularización densa, evitando la penalización excesiva sobre gradientes dispersos.
+   * **Adam clásico**: Modifica la norma de gradiente incorporando el decaimiento en el momento de primer orden. Permite convergencia inicial rápida pero tiende a atraparse en mínimos locales más agudos en regímenes de datos ruidosos o desbalanceados como Xeno-canto.
+   * **SGD con Momentum (0.9) y Nesterov**: Exhibe una superficie de generalización superior en modelos convolucionales profundos (ResNet-34d, ConvNeXt) cuando se combina con schedules escalonados o warm-up largo. Trade-off: Alta sensibilidad a la tasa de aprendizaje inicial (requiere típicamente $10\times$ a $100\times$ mayor LR que AdamW, e.g., $10^{-2}$ vs $10^{-3}$) y mayor propensión a divergencia sin warm-up gradual.
+
+2. **Schedulers**:
+   * **CosineAnnealingLR (Actual)**: Decremento suave y continuo hasta una $\eta_{min}$, ideal para épocas fijas y ensambles heterogéneos. Trade-off: No responde dinámicamente a estancamientos en validación.
+   * **OneCycleLR**: Implementa la política de super-convergencia de Smith (fase de ascenso agresiva seguida de descenso exponencial). Reduce los tiempos de cómputo en ~30-40% de épocas totales. Trade-off: Demanda conocimiento estricto del número de pasos por época (`steps_per_epoch`) y tamaño de lote fijo antes de iniciar el ciclo.
+   * **ReduceLROnPlateau**: Monitoriza la pérdida o macro-F1 de validación en tiempo real, reduciendo el LR ante mesetas persistentes. Trade-off: Introduce estado mutador dependiente de la métrica por época, dificultando la reproducibilidad estricta entre corridas asíncronas paralelas.
+
+#### Arquitectura Abierta-Cerrada (Open-Closed Principle - OCP)
+Para soportar esta variabilidad sin mutar el worker central de entrenamiento (`_run_training_worker` en `backend/app/services/training.py`), el diseño arquitectónico debe seguir el patrón **Factory / Registry Extensible**:
+* Una interfaz base `OptimizerProvider` y `SchedulerProvider` con registros dinámicos (`@register_optimizer`, `@register_scheduler`).
+* Esquemas Pydantic desacoplados (`OptimizerConfig`, `SchedulerConfig`) que viajan en el payload de inicio de entrenamiento desde el frontend (`TrainingView.tsx`).
+* Bucle de ejecución agnóstico al algoritmo: el worker consulta el proveedor seleccionado, inyecta los parámetros validados y ejecuta el paso de optimización respetando el contrato público sin condicionales duros tipo `if/elif` dispersos.
+
 ### Referencias clave (2024–2026)
 
 * Denton et al., Perch 2.0, `arXiv:2508.04665` (2025).

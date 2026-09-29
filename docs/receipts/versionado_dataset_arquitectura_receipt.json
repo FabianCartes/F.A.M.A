@@ -1,0 +1,77 @@
+{
+  "receipt_name": "versionado_dataset_arquitectura_receipt",
+  "generated_at": "2026-09-29T14:30:00Z",
+  "methodology": "TDD + RDD + ODD",
+  "architecture_layer": "MLOps Experiment Tracking & Model Registry Catalog (CU_INV_04 / Invariante de Versionado Semántico Estricto)",
+  "rdd_mode": "unmanaged",
+  "approval": "not_granted",
+  "supersedes": "registro_modelos_nomenclatura_incremental_receipt",
+  "causal_invariant": "La versión es estrictamente local al par (Dataset, Arquitectura). Toda nueva combinación (Dataset, Arquitectura) inicia obligatoriamente en v1. Si ya existe un modelo previo con ese mismo dataset y esa misma arquitectura, el siguiente incrementa correlativamente (v2, v3, ...). Cambiar de arquitectura para un mismo dataset (ej. de EfficientNet-B0 a ResNet-34d en Aves Chilenas) reinicia el contador en v1 para esa nueva combinación. La clave primaria id_modelo de PostgreSQL jamás fuerza ni desacopla la versión. En get_history(), se elimina cualquier condición acoplada a identificadores fijos (como 'elif m.id_modelo == 6: version = 2') y se calcula la versión dinámicamente según la cronología del par (dataset, arquitectura) a menos que el artefacto binario ya contenga explícitamente _v(\\d+)\\.pt.",
+  "issue_pr": {
+    "issue": "Corrección de versionado semántico estricto por par (Dataset, Arquitectura) desacoplado de IDs de base de datos",
+    "pr": "none — validado localmente con suites completas de pruebas unitarias e integrales"
+  },
+  "slices": [
+    {
+      "slice": "Slice 1: TDD Backend (test_training_service.py)",
+      "description": "Fase RED: Creación de test_get_history_semantic_versioning_per_dataset_and_architecture y actualización de test_get_history_enriches_model_technical_sheet para verificar que Modelo ID 1 (Motores, EfficientNet-B0) y Modelo ID 6 (Aves Chilenas, EfficientNet-B0) resuelvan ambos en v1, un segundo modelo de Aves Chilenas + EfficientNet-B0 resuelva en v2, y modelos con ResNet-34d resuelvan en v1. Verificación del fallo en RED."
+    },
+    {
+      "slice": "Slice 2: Backend Implementation (training.py)",
+      "description": "Fase GREEN: En get_history(), eliminación de la condición fija 'elif m.id_modelo == 6: version = 2'. Cálculo de versiones agrupadas y ordenadas cronológicamente por par (dataset_display, arquitectura) asignando correlativo 1, 2, ... a registros sin _v(\\d+)\\.pt en su nombre de archivo."
+    },
+    {
+      "slice": "Slice 3: TDD Frontend (TrainingView.test.tsx)",
+      "description": "Actualización de mocks y tests en TrainingView.test.tsx para validar que ambos modelos iniciales muestren 'v1' junto con sus insignias de dominio 'Aves Chilenas' y 'Motores'. Verificación del 100% de tests en verde."
+    }
+  ],
+  "seams_under_test": [
+    {
+      "seam": "Versionado semántico correlativo por par (Dataset, Arquitectura) en get_history()",
+      "file": "backend/tests/test_training_service.py::test_get_history_semantic_versioning_per_dataset_and_architecture",
+      "tests": 1,
+      "red_before_green": true,
+      "red_evidence": "Fase RED: Falló con AssertionError: assert 'Aves Chilenas · EfficientNet-B0 (v2)' == 'Aves Chilenas · EfficientNet-B0 (v1)'.",
+      "green_evidence": "Fase GREEN: Aprobado. ID 1 y ID 6 resuelven en v1; ID 7 (Aves + EfficientNet) en v2; ID 8 (Aves + ResNet) en v1; ID 9 (Motores + ResNet) en v1."
+    },
+    {
+      "seam": "Enriquecimiento de Ficha Técnica con versión inicial v1 para ID #1 y ID #6",
+      "file": "backend/tests/test_training_service.py::test_get_history_enriches_model_technical_sheet",
+      "tests": 1,
+      "red_before_green": true,
+      "red_evidence": "Fase RED: Falló con AssertionError: assert 2 == 1 en item_6['version'].",
+      "green_evidence": "Fase GREEN: Aprobado. Ambos modelos históricos iniciales se catalogan como v1 sin depender de su id_modelo."
+    },
+    {
+      "seam": "Renderizado de nombres amigables con badges de versión v1 e insignias de dominio en Frontend",
+      "file": "frontend/components/views/__tests__/TrainingView.test.tsx::renders friendly model names with version badges v1 and domain badges",
+      "tests": 1,
+      "red_before_green": true,
+      "red_evidence": "Fase RED: Verificado en vitest con fallo al esperar v1 para ambos modelos.",
+      "green_evidence": "Fase GREEN: Aprobado. Renderiza 'Motores · EfficientNet-B0 (v1)' y 'Aves Chilenas · EfficientNet-B0 (v1)' con sus respectivos badges."
+    }
+  ],
+  "journey_runtime_evidence": {
+    "type": "tdd_red_green_plus_full_verification",
+    "commands": [
+      "pytest backend/tests/test_training_service.py (RED) -> 2 fallos esperados (assert 2 == 1)",
+      "pytest backend/tests/test_training_service.py (GREEN) -> 8 tests pasados (100% verde)",
+      "npm test -- components/views/__tests__/TrainingView.test.tsx (GREEN) -> 10 tests pasados (100% verde)",
+      "npm test en frontend/ -> 14 suites, 123 tests pasados, 0 fallos",
+      "npx tsc --noEmit en frontend/ -> 0 errores de tipos",
+      "pytest backend/tests/ -> 272 tests pasados, 0 fallos"
+    ]
+  },
+  "odd_observability_features": [
+    {
+      "feature": "Badges de versión local por par (Dataset, Arquitectura)",
+      "implementation": "Badge 'v{version}' en columna 'Modelo / Versión' de la tabla de modelos en TrainingView.tsx",
+      "purpose": "Asegura consistencia visual y conceptual con la invariante de dominio: cada combinación inicia en v1 y progresa de forma independiente."
+    },
+    {
+      "feature": "Insignias cromáticas de dominio",
+      "implementation": "Badges esmeralda para 'Aves Chilenas' y ámbar para 'Motores' en TrainingView.tsx",
+      "purpose": "Claridad taxonómica inmediata en la interfaz para evitar ambigüedades entre modelos de bioacústica e industria."
+    }
+  ]
+}

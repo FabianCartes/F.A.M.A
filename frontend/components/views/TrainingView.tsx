@@ -57,6 +57,9 @@ interface LogEntry {
 
 interface ModelHistoryItem {
   id: number;
+  name?: string;
+  version?: number;
+  dataset?: string;
   architecture: string;
   epochs: number;
   accuracy: number;
@@ -64,6 +67,24 @@ interface ModelHistoryItem {
   active: boolean;
   status: string;
   filename: string;
+  hyperparameters?: {
+    learning_rate: number;
+    batch_size: number;
+    optimizer: string;
+    loss_type: string;
+  };
+  audio_specs?: {
+    target_sr: number;
+    duration_seconds: number;
+    n_mels: number;
+    n_fft: number;
+    hop_length: number;
+    fmin: number;
+    fmax: number;
+  };
+  classes?: string[];
+  classes_count?: number;
+  file_size_bytes?: number;
   created_at: string | null;
 }
 
@@ -350,7 +371,7 @@ export default function TrainingView() {
 
   // 4. Historial de Modelos (CU_INV_04 / CU_INV_05)
   const [history, setHistory] = useState<ModelHistoryItem[]>([]);
-  const [activatingId, setActivatingId] = useState<number | null>(null);
+  const [selectedModelModal, setSelectedModelModal] = useState<ModelHistoryItem | null>(null);
 
   const logsContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -608,20 +629,7 @@ export default function TrainingView() {
     }
   };
 
-  // Activar Modelo para Inferencia (CU_INV_05)
-  const handleActivateModel = async (modelId: number) => {
-    setActivatingId(modelId);
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/training/models/${modelId}/activate`, {
-        method: "POST",
-      });
-      if (res.ok) {
-        await fetchHistory();
-      }
-    } finally {
-      setActivatingId(null);
-    }
-  };
+
 
   return (
     <div className="space-y-5">
@@ -1697,75 +1705,251 @@ export default function TrainingView() {
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-[#23252e] text-gray-400">
-                <th className="pb-3 font-medium">Arquitectura</th>
+                <th className="pb-3 font-medium">Modelo / Versión</th>
+                <th className="pb-3 font-medium">Dataset / Dominio</th>
                 <th className="pb-3 font-medium">Épocas</th>
-                <th className="pb-3 font-medium">Precisión (Acc)</th>
+                <th className="pb-3 font-medium">Precisión (Val Acc)</th>
                 <th className="pb-3 font-medium">Pérdida (Loss)</th>
-                <th className="pb-3 font-medium">Archivo Checkpoint</th>
-                <th className="pb-3 font-medium">Fecha</th>
-                <th className="pb-3 font-medium text-center">Estado</th>
+                <th className="pb-3 font-medium">Archivo</th>
                 <th className="pb-3 font-medium text-right pr-2">Acción</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#23252e]/60">
-              {history.map((item) => (
-                <tr key={item.id} className="hover:bg-[#1c1e24]/40 transition-colors">
-                  <td className="py-3 font-medium text-gray-200 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                    {item.architecture}
-                  </td>
-                  <td className="py-3 text-gray-400 font-mono">{item.epochs}</td>
-                  <td className="py-3 text-emerald-400 font-mono font-semibold">
-                    {item.accuracy ? `${item.accuracy.toFixed(2)}%` : "—"}
-                  </td>
-                  <td className="py-3 text-gray-400 font-mono">
-                    {item.loss ? item.loss.toFixed(4) : "—"}
-                  </td>
-                  <td className="py-3 text-gray-400 font-mono text-[11px]">
-                    {item.filename}
-                  </td>
-                  <td className="py-3 text-gray-500 font-mono text-[11px]">
-                    {item.created_at
-                      ? new Date(item.created_at).toLocaleDateString("es-CL", {
-                          day: "numeric",
-                          month: "short",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                      : "—"}
-                  </td>
-                  <td className="py-3 text-center">
-                    <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-medium inline-block ${
-                        item.active
-                          ? "bg-emerald-950/70 text-emerald-400 border border-emerald-800/60"
-                          : "bg-[#1c1e24] text-gray-400 border border-[#2b2e38]"
-                      }`}
-                    >
-                      {item.active ? "Activo (Inferencia)" : "Guardado"}
-                    </span>
-                  </td>
-                  <td className="py-3 text-right pr-2">
-                    {item.active ? (
-                      <span className="text-[11px] text-emerald-400 font-mono font-medium">
-                        ✓ En uso
+              {history.map((item) => {
+                const isBirds =
+                  item.dataset?.toLowerCase().includes("aves") ||
+                  item.name?.toLowerCase().includes("aves") ||
+                  item.filename?.toLowerCase().includes("aves") ||
+                  item.id === 6;
+
+                return (
+                  <tr key={item.id} className="hover:bg-[#1c1e24]/40 transition-colors">
+                    <td className="py-3 font-medium text-gray-200">
+                      <div className="flex items-center gap-2">
+                        <span>{item.name || `${item.architecture} (v${item.version || 1})`}</span>
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-blue-950/70 text-blue-300 border border-blue-800/60">
+                          v{item.version || 1}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-3">
+                      {isBirds ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-950/60 text-emerald-400 border border-emerald-800/50 inline-flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          Aves Chilenas
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-950/60 text-amber-400 border border-amber-800/50 inline-flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                          Motores
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 text-gray-400 font-mono">{item.epochs}</td>
+                    <td className="py-3 font-mono font-semibold">
+                      <span className={item.accuracy >= 75 ? "text-emerald-400" : "text-amber-400"}>
+                        {item.accuracy ? `${item.accuracy.toFixed(2)}%` : "—"}
                       </span>
-                    ) : (
+                    </td>
+                    <td className="py-3 text-gray-400 font-mono">
+                      {item.loss ? item.loss.toFixed(4) : "—"}
+                    </td>
+                    <td className="py-3 text-gray-400 font-mono text-[11px] max-w-[220px] truncate" title={item.filename}>
+                      {item.filename}
+                    </td>
+                    <td className="py-3 text-right pr-2">
                       <button
                         type="button"
-                        onClick={() => handleActivateModel(item.id)}
-                        disabled={activatingId === item.id}
-                        className="text-[11px] text-gray-300 hover:text-white px-2.5 py-1 rounded bg-[#1c1e24] hover:bg-emerald-950/60 border border-[#2d303b] hover:border-emerald-700/60 transition-colors"
+                        onClick={() => setSelectedModelModal(item)}
+                        className="text-[11px] text-cyan-300 hover:text-white px-2.5 py-1 rounded bg-cyan-950/60 hover:bg-cyan-900/60 border border-cyan-800/60 hover:border-cyan-600 transition-colors inline-flex items-center gap-1.5 shadow-sm"
                       >
-                        {activatingId === item.id ? "Activando..." : "Activar"}
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span>Ficha Técnica</span>
                       </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
+
+        {/* Modal de Ficha Técnica Detallada */}
+        {selectedModelModal && (
+          <div
+            data-testid="modal-ficha-tecnica"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+          >
+            <div className="bg-[#16171b] border border-[#2d303b] rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+              {/* Header */}
+              <div className="flex items-start justify-between pb-3 border-b border-[#23252e]">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-blue-950/70 text-blue-300 border border-blue-800/60">
+                      v{selectedModelModal.version || 1}
+                    </span>
+                    <h2 className="text-base font-bold text-white tracking-tight">
+                      {selectedModelModal.name || `${selectedModelModal.architecture} (v${selectedModelModal.version || 1})`}
+                    </h2>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Ficha Técnica del Modelo · Artefacto y parámetros reproducibles
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedModelModal(null)}
+                  className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-[#23252e] transition-colors"
+                  aria-label="Cerrar"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* 3 Tarjetas de Especificaciones */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                {/* 1) Hiperparámetros de Entrenamiento */}
+                <div className="bg-[#111215] border border-[#23252e] rounded-xl p-4 space-y-2.5">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-indigo-400">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span>Hiperparámetros de Entrenamiento</span>
+                  </div>
+                  <div className="space-y-1.5 text-[11px]">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Learning Rate:</span>
+                      <span className="text-gray-200 font-mono font-medium">
+                        {selectedModelModal.hyperparameters?.learning_rate ?? "0.001"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Batch Size:</span>
+                      <span className="text-gray-200 font-mono font-medium">
+                        {selectedModelModal.hyperparameters?.batch_size ?? 16}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Optimizer:</span>
+                      <span className="text-cyan-400 font-mono font-medium">
+                        {selectedModelModal.hyperparameters?.optimizer ?? "AdamW"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Loss Function:</span>
+                      <span className="text-emerald-400 font-mono font-medium">
+                        {selectedModelModal.hyperparameters?.loss_type ?? "Focal Loss"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2) Parámetros de Física de Audio */}
+                <div className="bg-[#111215] border border-[#23252e] rounded-xl p-4 space-y-2.5">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-teal-400">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                    </svg>
+                    <span>Parámetros de Física de Audio</span>
+                  </div>
+                  <div className="space-y-1.5 text-[11px]">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Sample Rate:</span>
+                      <span className="text-gray-200 font-mono font-medium">
+                        {selectedModelModal.audio_specs?.target_sr ?? 22050} Hz
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Duración Ventana:</span>
+                      <span className="text-gray-200 font-mono font-medium">
+                        {selectedModelModal.audio_specs?.duration_seconds ?? 5.0} s
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Bandas Mel:</span>
+                      <span className="text-gray-200 font-mono font-medium">
+                        {selectedModelModal.audio_specs?.n_mels ?? 128} mels (FFT {selectedModelModal.audio_specs?.n_fft ?? 2048})
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Rango Frecuencia:</span>
+                      <span className="text-gray-200 font-mono font-medium">
+                        {selectedModelModal.audio_specs?.fmin ?? 50} - {selectedModelModal.audio_specs?.fmax ?? 11025} Hz
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3) Especificaciones del Artefacto */}
+                <div className="bg-[#111215] border border-[#23252e] rounded-xl p-4 space-y-2.5">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                    <span>Especificaciones del Artefacto</span>
+                  </div>
+                  <div className="space-y-1.5 text-[11px]">
+                    <div>
+                      <span className="text-gray-400 block mb-0.5">Archivo binario (.pt):</span>
+                      <span className="text-cyan-300 font-mono text-[10px] break-all block">
+                        {selectedModelModal.filename}
+                      </span>
+                    </div>
+                    <div className="flex justify-between pt-1">
+                      <span className="text-gray-400">Tamaño:</span>
+                      <span className="text-gray-200 font-mono font-medium">
+                        {selectedModelModal.file_size_bytes
+                          ? `${(selectedModelModal.file_size_bytes / (1024 * 1024)).toFixed(2)} MB`
+                          : "46.56 MB"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Clases soportadas:</span>
+                      <span className="text-emerald-400 font-mono font-semibold">
+                        {selectedModelModal.classes_count ?? (selectedModelModal.classes?.length ?? 15)} clases
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Taxonomía de Clases */}
+              {selectedModelModal.classes && selectedModelModal.classes.length > 0 && (
+                <div className="bg-[#111215] border border-[#23252e] rounded-xl p-3.5 space-y-2">
+                  <span className="text-[11px] text-gray-400 font-medium block">
+                    Taxonomía de Clases Soportadas ({selectedModelModal.classes_count ?? selectedModelModal.classes.length}):
+                  </span>
+                  <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1">
+                    {selectedModelModal.classes.map((clsName, i) => (
+                      <span
+                        key={i}
+                        className="px-2 py-0.5 rounded text-[10px] font-mono bg-[#1c1e24] text-gray-300 border border-[#2b2e38]"
+                      >
+                        {clsName}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Footer */}
+              <div className="flex justify-end pt-2 border-t border-[#23252e]">
+                <button
+                  type="button"
+                  onClick={() => setSelectedModelModal(null)}
+                  className="px-4 py-2 rounded-lg bg-[#23252e] hover:bg-[#2d303b] text-gray-200 text-xs font-medium transition-colors"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

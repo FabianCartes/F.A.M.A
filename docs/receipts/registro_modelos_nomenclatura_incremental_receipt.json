@@ -1,0 +1,107 @@
+{
+  "receipt_name": "registro_modelos_nomenclatura_incremental_receipt",
+  "generated_at": "2026-09-29T00:45:00Z",
+  "methodology": "TDD + RDD + ODD",
+  "architecture_layer": "MLOps Experiment Tracking & Model Registry Catalog (CU_INV_02, CU_INV_04, CU_INV_05 / Ficha Técnica de Modelos)",
+  "rdd_mode": "unmanaged",
+  "approval": "not_granted",
+  "supersedes": "none",
+  "causal_invariant": "Garantizar la reproducibilidad estricta, trazabilidad semántica incremental y observabilidad técnica de los artefactos de modelado acústico e industrial. Todo checkpoint persistido en disco sigue la nomenclatura determinista {dataset_clean}_{arch_clean}_v{version}.pt sin timestamps Unix ni sufijos _best, donde la versión se calcula dinámicamente mediante conteo incremental en PostgreSQL (count + 1) para la tupla (clase_objetivo, arquitectura). El endpoint /api/training/history enriquece cada modelo con su Ficha Técnica exhaustiva (hiperparámetros, física acústica, especificaciones físicas del artefacto y taxonomía de clases soportadas), formateando retrospectivamente los modelos históricos (#1 y #6) como v1 y v2. En el frontend, se desacopla la activación de inferencia eliminando el botón 'Activar' y la etiqueta 'Activo (Inferencia)', exhibiendo un catálogo limpio con badges semánticos de versión (v1, v2), dominio visual (Aves Chilenas o Motores), métricas destacadas y modal interactivo de Ficha Técnica detallada con las 3 tarjetas de especificaciones.",
+  "issue_pr": {
+    "issue": "CU_INV_04 / CU_INV_05 / Ficha Técnica de Modelos, Nomenclatura Semántica Incremental y Registro de Experimentos",
+    "pr": "none — validado en entorno local con suites completas de pruebas TDD unitarias e integrales"
+  },
+  "slices": [
+    {
+      "slice": "Slice 1: Documentación de Trabajo Futuro sobre Optimizadores y Schedulers Desacoplados (OCP)",
+      "description": "Ampliación de docs/limites/03_mejoras_posibles_modelo_prediccion.md con la subsección 8.1 sobre configurabilidad desacoplada de Optimizadores (Adam, AdamW, SGD) y Schedulers (CosineAnnealing, OneCycle, ReduceLROnPlateau), analizando trade-offs de convergencia/generalización y diseño Open-Closed con Factory/Registry dinámico."
+    },
+    {
+      "slice": "Slice 2: Nomenclatura Incremental de Checkpoints en Backend",
+      "description": "Actualización de _run_training_worker en backend/app/services/training.py para calcular la versión incremental consultando la tabla Modelo en PostgreSQL (count + 1) por clase_objetivo y arquitectura, generando artefactos {dataset_clean}_{arch_clean}_v{version}.pt limpios sin marcas Unix ni _best."
+    },
+    {
+      "slice": "Slice 3: Enriquecimiento de Ficha Técnica en get_history()",
+      "description": "Ampliación de get_history() en backend/app/services/training.py retornando la Ficha Técnica estructurada (name amigable con badge de versión, version entera, filename físico, hyperparameters con LR/batch/optimizer/loss, audio_specs según dominio acústico, classes y classes_count, file_size_bytes) y formateo retrospectivo de modelos #1 y #6 como v1 y v2."
+    },
+    {
+      "slice": "Slice 4: Rediseño de la Tabla de Modelos en Frontend (TrainingView.tsx)",
+      "description": "Eliminación de la columna y botón 'Activar' y etiqueta 'Activo (Inferencia)'. Incorporación de columnas Modelo / Versión (con badge v1, v2), Dataset / Dominio (insignias Aves Chilenas / Motores), Épocas, Precisión destacada en verde/ámbar, Pérdida, Archivo simplificado y botón [Ficha Técnica]."
+    },
+    {
+      "slice": "Slice 5: Modal Interactivo de Ficha Técnica de Modelos",
+      "description": "Implementación del modal accesible (data-testid='modal-ficha-tecnica') en TrainingView.tsx con 3 tarjetas estructuradas: 1) Hiperparámetros de entrenamiento, 2) Parámetros de física de audio, y 3) Especificaciones del artefacto con taxonomía de clases."
+    }
+  ],
+  "seams_under_test": [
+    {
+      "seam": "Nomenclatura física incremental de checkpoints {Dataset}_{Arch}_v{N}.pt",
+      "file": "backend/tests/test_training_service.py::test_checkpoint_incremental_nomenclature_versioning",
+      "tests": 1,
+      "red_before_green": true,
+      "red_evidence": "Fase RED: Falló con AssertionError (esperaba 'AvesChilenas_ConvNeXt_Nano_v1.pt', obtuvo 'test_job_nomenclatura_convnext_nano_best.pt').",
+      "green_evidence": "Fase GREEN: Aprobado. El checkpoint se genera con nomenclatura limpia y se persiste en PostgreSQL con ruta models/{dataset}_{arch}_v{N}.pt."
+    },
+    {
+      "seam": "Enriquecimiento de Ficha Técnica y formateo retrospectivo v1/v2 en get_history()",
+      "file": "backend/tests/test_training_service.py::test_get_history_enriches_model_technical_sheet",
+      "tests": 1,
+      "red_before_green": true,
+      "red_evidence": "Fase RED: Falló con KeyError: 'version' al no retornar los metadatos de la ficha técnica.",
+      "green_evidence": "Fase GREEN: Aprobado. Retorna Ficha Técnica completa (name, version, hyperparameters, audio_specs, classes, classes_count, file_size_bytes) y formatea #1 como Motores v1 y #6 como Aves Chilenas v2."
+    },
+    {
+      "seam": "Eliminación del botón Activar y etiqueta Activo (Inferencia) en frontend",
+      "file": "frontend/components/views/__tests__/TrainingView.test.tsx::removes the 'Activar' button and 'Activo (Inferencia)' tag from the models table",
+      "tests": 1,
+      "red_before_green": true,
+      "red_evidence": "Fase RED: Falló porque el botón 'Activar' y la etiqueta 'Activo (Inferencia)' continuaban presentes en el DOM.",
+      "green_evidence": "Fase GREEN: Aprobado. Ni el botón 'Activar' ni las etiquetas de activación existen en la tabla de modelos."
+    },
+    {
+      "seam": "Renderizado de nombres amigables con badges de versión v1 y v2",
+      "file": "frontend/components/views/__tests__/TrainingView.test.tsx::renders friendly model names with version badges v1 and v2",
+      "tests": 1,
+      "red_before_green": true,
+      "red_evidence": "Fase RED: Falló al buscar 'Motores · EfficientNet-B0 (v1)' y 'Aves Chilenas · EfficientNet-B0 (v2)'.",
+      "green_evidence": "Fase GREEN: Aprobado. Ambos nombres amigables, badges v1/v2 e insignias de dominio se renderizan en el DOM."
+    },
+    {
+      "seam": "Apertura y cierre del modal de Ficha Técnica exhibiendo las 3 tarjetas de especificaciones",
+      "file": "frontend/components/views/__tests__/TrainingView.test.tsx::opens technical sheet modal when clicking 'Ficha Técnica' displaying all 3 specification cards",
+      "tests": 1,
+      "red_before_green": true,
+      "red_evidence": "Fase RED: Falló porque no existía ningún botón 'Ficha Técnica' en el DOM.",
+      "green_evidence": "Fase GREEN: Aprobado. Al hacer clic en 'Ficha Técnica', se despliega el modal data-testid='modal-ficha-tecnica' con las 3 tarjetas de especificaciones y se cierra correctamente con el botón Cerrar."
+    }
+  ],
+  "journey_runtime_evidence": {
+    "type": "tdd_red_green_plus_full_verification",
+    "commands": [
+      "pytest backend/tests/test_training_service.py (RED) -> 2 fallos esperados",
+      "pytest backend/tests/test_training_service.py (GREEN) -> 7 tests pasados (100% verde)",
+      "npm test -- components/views/__tests__/TrainingView.test.tsx (RED) -> 3 fallos esperados",
+      "npm test -- components/views/__tests__/TrainingView.test.tsx (GREEN) -> 10 tests pasados (100% verde)",
+      "npm test en frontend/ -> 14 suites, 123 tests pasados, 0 fallos",
+      "npx tsc --noEmit en frontend/ -> 0 errores de tipos",
+      "pytest backend/tests/ -> 271 tests pasados, 0 fallos"
+    ]
+  },
+  "odd_observability_features": [
+    {
+      "feature": "Modal de Ficha Técnica accesible",
+      "implementation": "data-testid='modal-ficha-tecnica' en TrainingView.tsx",
+      "purpose": "Permite auditar en un solo punto los hiperparámetros de entrenamiento, física espectral y archivo físico del modelo."
+    },
+    {
+      "feature": "Badges semánticos de versión incremental",
+      "implementation": "Badges 'v1', 'v2' en columna 'Modelo / Versión' de la tabla",
+      "purpose": "Identificación visual inmediata de la genealogía del modelo sin inspeccionar nombres de archivo crudos."
+    },
+    {
+      "feature": "Insignias de dominio acústico multi-dataset",
+      "implementation": "Badges visuales 'Aves Chilenas' (verde) y 'Motores' (ámbar)",
+      "purpose": "Diferenciación inmediata entre dominios bioacústicos e industriales en el catálogo unificado."
+    }
+  ]
+}
