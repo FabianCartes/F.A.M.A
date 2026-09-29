@@ -137,7 +137,44 @@ describe("Audio Domain Presets and Physics Validation", () => {
         f_max: 10000,
       });
       expect(rangeViolation.valid).toBe(false);
+      expect(rangeViolation.field).toBe("f_min");
       expect(rangeViolation.error).toContain("menor");
+
+      const nanFMin = validateAudioPhysics({
+        target_sr: 22050,
+        f_min: NaN,
+        f_max: 10000,
+      });
+      expect(nanFMin.valid).toBe(false);
+      expect(nanFMin.field).toBe("f_min");
+      expect(nanFMin.error).toBe("El campo 'Frecuencia Mínima' no puede estar vacío.");
+
+      const negativeFMin = validateAudioPhysics({
+        target_sr: 22050,
+        f_min: -100,
+        f_max: 10000,
+      });
+      expect(negativeFMin.valid).toBe(false);
+      expect(negativeFMin.field).toBe("f_min");
+      expect(negativeFMin.error).toBe("Frecuencia Mínima: No puede ser negativa.");
+
+      const nanFMax = validateAudioPhysics({
+        target_sr: 22050,
+        f_min: 50,
+        f_max: NaN,
+      });
+      expect(nanFMax.valid).toBe(false);
+      expect(nanFMax.field).toBe("f_max");
+      expect(nanFMax.error).toBe("El campo 'Frecuencia Máxima' no puede estar vacío.");
+
+      const nanTargetSr = validateAudioPhysics({
+        target_sr: NaN,
+        f_min: 50,
+        f_max: 10000,
+      });
+      expect(nanTargetSr.valid).toBe(false);
+      expect(nanTargetSr.field).toBe("target_sr");
+      expect(nanTargetSr.error).toBe("El campo 'Tasa de Muestreo' no puede estar vacío.");
     });
   });
 });

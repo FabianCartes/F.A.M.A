@@ -1,0 +1,60 @@
+{
+  "receipt_name": "fase_validacion_hibrida_opcion_b_receipt",
+  "generated_at": "2026-09-29T21:34:00Z",
+  "methodology": "TDD + RDD + ODD",
+  "frameworks": {
+    "tdd": "Test-Driven Development (Red-Green-Refactor cycle)",
+    "rdd": "Receipt-Driven Development (Verifiable operational contract)",
+    "odd": "Organic-Driven Development (Contextual inline error feedback)"
+  },
+  "architecture_layer": "Frontend UI Validation & Acoustic Physics Guardrails (TrainingView & audioDomainPresets)",
+  "summary": "Implementación de validación híbrida (Opción B) para parámetros acústicos e hiperparámetros de entrenamiento. Los errores de rango o violaciones físicas se señalan de inmediato en onChange marcando el campo en rojo con su mensaje de error inline; los estados de campo vacío se toleran durante la edición y se marcan en rojo con mensaje explicativo únicamente al desenfocar (onBlur) o al intentar iniciar el entrenamiento.",
+  "contracts": {
+    "frontend_audio_physics_validators": {
+      "file": "frontend/lib/utils/audioDomainPresets.ts",
+      "validators": [
+        "validateAudioPhysics",
+        "validateGemP",
+        "validateHopSeconds",
+        "validateVadThreshold",
+        "validateFocalGamma"
+      ],
+      "improvements": [
+        "Explicit checks for NaN and negative values on target_sr, f_min, f_max, duration_seconds",
+        "Precise field attribution ensuring field is set to 'f_min' when f_min is invalid or missing"
+      ],
+      "status": "VERIFIED"
+    },
+    "frontend_training_view_hybrid_validation": {
+      "file": "frontend/components/views/TrainingView.tsx",
+      "features": [
+        "Dynamic real-time validation on onChange for range violations and physical contradictions",
+        "Deferred empty-state validation on onBlur and submit via touchedFields tracking",
+        "Immediate red border and inline badge attribution for f_min and all acoustic/hyperparameter inputs",
+        "Blockade of training dispatch when any required field is empty or out of bounds"
+      ],
+      "status": "VERIFIED"
+    }
+  },
+  "test_suites": {
+    "frontend_vitest": {
+      "runner": "vitest 5.0.2",
+      "command": "npm test -- --run",
+      "test_files": 14,
+      "total_tests": 140,
+      "passed": 140,
+      "failed": 0,
+      "status": "PASSED"
+    },
+    "frontend_build": {
+      "command": "npm run build",
+      "compiler": "Next.js 16.3.4 (Turbopack) with strict TypeScript",
+      "status": "PASSED"
+    }
+  },
+  "invariants": [
+    "Frecuencia Mínima (f_min): f_min >= 0 y f_min < f_max; al quedar vacía o ser negativa resalta el recuadro correspondiente en rojo con mensaje inline.",
+    "Tolerancia en Edición: el borrado temporal de un valor no muestra error prematuro mientras el usuario escribe, pero si pierde el foco (onBlur) o intenta enviar, se valida como campo obligatorio.",
+    "Sincronía Física: el badge superior de física inválida solo se muestra ante inconsistencias físicas reales o campos requeridos vacíos que hayan sido tocados o enviados."
+  ]
+}

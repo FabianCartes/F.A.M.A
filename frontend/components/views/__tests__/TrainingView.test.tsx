@@ -634,6 +634,50 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     expect(screen.getByText(/Umbral VAD: Debe estar entre 0.0 y 1.0/i)).toBeDefined();
     expect(screen.getByText(/Parámetro Gamma: Debe estar entre 0.0 y 5.0/i)).toBeDefined();
   });
+
+  it("implements Option B hybrid validation: immediate dynamic red highlighting on out-of-range/physics violations and onBlur/submit highlighting when empty", async () => {
+    await act(async () => {
+      render(<TrainingView />);
+    });
+
+    const fMinInput = screen.getByLabelText("Frecuencia Mínima (Hz)") as HTMLInputElement;
+    expect(fMinInput).toBeDefined();
+
+    // 1. Violación física inmediata (onChange): frecuencia negativa (-50)
+    await act(async () => {
+      fireEvent.change(fMinInput, { target: { value: "-50" } });
+    });
+    expect(fMinInput.className).toContain("border-red-500");
+    expect(screen.getByText("Frecuencia Mínima: No puede ser negativa.")).toBeDefined();
+
+    // 2. Corrección inmediata a valor válido (500 Hz)
+    await act(async () => {
+      fireEvent.change(fMinInput, { target: { value: "500" } });
+    });
+    expect(fMinInput.className).not.toContain("border-red-500");
+    expect(screen.queryByText(/Frecuencia Mínima: No puede ser negativa/i)).toBeNull();
+
+    // 3. Dejar campo vacío y hacer onBlur: se marca en rojo dinámicamente con mensaje explicativo
+    await act(async () => {
+      fireEvent.change(fMinInput, { target: { value: "" } });
+      fireEvent.blur(fMinInput);
+    });
+    expect(fMinInput.className).toContain("border-red-500");
+    expect(screen.getByText("El campo 'Frecuencia Mínima' no puede estar vacío.")).toBeDefined();
+
+    // 4. Intentar iniciar entrenamiento: bloquea y mantiene el recuadro resaltado en rojo
+    const startBtn = screen.getByText("Iniciar Entrenamiento Local (1 Modelo)");
+    await act(async () => {
+      fireEvent.click(startBtn);
+    });
+    expect(fMinInput.className).toContain("border-red-500");
+    expect(screen.getByText("El campo 'Frecuencia Mínima' no puede estar vacío.")).toBeDefined();
+
+    const postCall = (global.fetch as any).mock.calls.find(
+      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    );
+    expect(postCall).toBeUndefined();
+  });
 });
 
 

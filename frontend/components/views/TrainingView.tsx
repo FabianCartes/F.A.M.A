@@ -155,6 +155,8 @@ export default function TrainingView() {
       return next;
     });
   }, []);
+  const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({});
+
   const [triadProgress, setTriadProgress] = useState<{
     isTriad: boolean;
     modelIdx: number;
@@ -214,6 +216,147 @@ export default function TrainingView() {
     }
   };
 
+  const validateFieldOnChange = useCallback((field: string, val: string | number) => {
+    const strVal = String(val ?? "").trim();
+    if (strVal === "") {
+      if (touchedFields[field]) {
+        const fieldNamesMap: Record<string, string> = {
+          learning_rate: "Tasa de Aprendizaje",
+          weight_decay: "Weight Decay (AdamW L2)",
+          batch_size: "Batch Size",
+          epochs: "Épocas de Entrenamiento",
+          target_sr: "Tasa de Muestreo",
+          duration_seconds: "Duración de Ventana",
+          f_min: "Frecuencia Mínima",
+          f_max: "Frecuencia Máxima",
+          hop_seconds: "Salto Temporal",
+          gem_p: "Exponente GeM (p)",
+          vad_threshold: "Umbral VAD Energético",
+          focal_gamma: "Parámetro Gamma (Focal)",
+        };
+        const label = fieldNamesMap[field] || field;
+        setFieldErrors((prev) => ({ ...prev, [field]: `El campo '${label}' no puede estar vacío.` }));
+      } else {
+        clearFieldError(field);
+      }
+      return;
+    }
+
+    const num = parseFloat(strVal);
+    let error: string | null = null;
+    switch (field) {
+      case "learning_rate":
+        if (isNaN(num) || num <= 0) error = "El campo 'Tasa de Aprendizaje' debe ser un número mayor a 0.";
+        break;
+      case "weight_decay":
+        if (isNaN(num) || num < 0 || num > 1) error = "El campo 'Weight Decay (AdamW L2)' debe ser un número entre 0 y 1.";
+        break;
+      case "batch_size":
+        if (isNaN(num) || num < 1) error = "El campo 'Batch Size' debe ser un número entero mayor a 0.";
+        break;
+      case "epochs":
+        if (isNaN(num) || num < 1 || num > 100) error = "El campo 'Épocas de Entrenamiento' debe ser entre 1 y 100.";
+        break;
+      case "target_sr":
+        if (isNaN(num) || num < 8000 || num > 48000) error = "Tasa de Muestreo: Debe estar entre 8.000 Hz y 48.000 Hz.";
+        break;
+      case "duration_seconds":
+        if (isNaN(num) || num <= 0) error = "Duración de Ventana: No puede ser 0 segundos ni negativa (mínimo 0.5 s).";
+        else if (num < 0.5 || num > 30.0) error = "Duración de Ventana: Debe estar en el rango de 0.5 s a 30.0 s.";
+        break;
+      case "f_min":
+        if (isNaN(num)) error = "El campo 'Frecuencia Mínima' no puede estar vacío.";
+        else if (num < 0) error = "Frecuencia Mínima: No puede ser negativa.";
+        else {
+          const numMax = typeof fMax === "number" ? fMax : parseFloat(String(fMax));
+          if (!isNaN(numMax) && num >= numMax) {
+            error = `Rango Espectral: La Frecuencia Mínima (${num.toLocaleString("es-CL")} Hz) debe ser estrictamente menor que la Frecuencia Máxima (${numMax.toLocaleString("es-CL")} Hz).`;
+          }
+        }
+        break;
+      case "f_max":
+        if (isNaN(num)) error = "El campo 'Frecuencia Máxima' no puede estar vacío.";
+        else {
+          const numSr = typeof targetSr === "number" ? targetSr : parseInt(String(targetSr), 10);
+          if (!isNaN(numSr) && num > numSr / 2) {
+            error = `Violación de Nyquist: La Frecuencia Máxima (${num.toLocaleString("es-CL")} Hz) supera la mitad de la Tasa de Muestreo (${(numSr / 2).toLocaleString("es-CL")} Hz).`;
+          } else {
+            const numMin = typeof fMin === "number" ? fMin : parseFloat(String(fMin));
+            if (!isNaN(numMin) && num <= numMin) {
+              error = `Rango Espectral: La Frecuencia Mínima (${numMin.toLocaleString("es-CL")} Hz) debe ser estrictamente menor que la Frecuencia Máxima (${num.toLocaleString("es-CL")} Hz).`;
+            }
+          }
+        }
+        break;
+      case "hop_seconds":
+        if (isNaN(num) || num < 0.1 || num > 10.0) error = "Salto Temporal: Debe ser entre 0.1 s y 10.0 s.";
+        break;
+      case "gem_p":
+        if (isNaN(num) || num < 1.0 || num > 10.0) error = "Exponente GeM: Debe estar entre 1.0 y 10.0 (no puede ser 0).";
+        break;
+      case "vad_threshold":
+        if (isNaN(num) || num < 0.0 || num > 1.0) error = "Umbral VAD: Debe estar entre 0.0 y 1.0.";
+        break;
+      case "focal_gamma":
+        if (isNaN(num) || num < 0.0 || num > 5.0) error = "Parámetro Gamma: Debe estar entre 0.0 y 5.0.";
+        break;
+    }
+
+    if (error) {
+      setFieldErrors((prev) => ({ ...prev, [field]: error! }));
+    } else {
+      clearFieldError(field);
+      if (field === "f_min") {
+        setFieldErrors((prev) => {
+          if (prev.f_max?.includes("Rango Espectral")) {
+            const copy = { ...prev };
+            delete copy.f_max;
+            return copy;
+          }
+          return prev;
+        });
+      }
+      if (field === "f_max") {
+        setFieldErrors((prev) => {
+          if (prev.f_min?.includes("Rango Espectral")) {
+            const copy = { ...prev };
+            delete copy.f_min;
+            return copy;
+          }
+          return prev;
+        });
+      }
+    }
+  }, [touchedFields, clearFieldError, fMin, fMax, targetSr]);
+
+  const validateFieldOnBlur = useCallback((field: string, val: string | number) => {
+    setTouchedFields((prev) => ({ ...prev, [field]: true }));
+    const strVal = String(val ?? "").trim();
+    if (strVal === "") {
+      const fieldNamesMap: Record<string, string> = {
+        learning_rate: "Tasa de Aprendizaje",
+        weight_decay: "Weight Decay (AdamW L2)",
+        batch_size: "Batch Size",
+        epochs: "Épocas de Entrenamiento",
+        target_sr: "Tasa de Muestreo",
+        duration_seconds: "Duración de Ventana",
+        f_min: "Frecuencia Mínima",
+        f_max: "Frecuencia Máxima",
+        hop_seconds: "Salto Temporal",
+        gem_p: "Exponente GeM (p)",
+        vad_threshold: "Umbral VAD Energético",
+        focal_gamma: "Parámetro Gamma (Focal)",
+      };
+      const label = fieldNamesMap[field] || field;
+      setFieldErrors((prev) => ({
+        ...prev,
+        [field]: `El campo '${label}' no puede estar vacío.`,
+      }));
+      return;
+    }
+    validateFieldOnChange(field, val);
+  }, [validateFieldOnChange]);
+
   const physicsValidation = useMemo(() => {
     const numSr = typeof targetSr === "number" ? targetSr : parseInt(String(targetSr), 10);
     const numFMin = typeof fMin === "number" ? fMin : parseFloat(String(fMin));
@@ -221,29 +364,6 @@ export default function TrainingView() {
     const durStr = String(durationSeconds).trim();
     const numDur = typeof durationSeconds === "number" ? durationSeconds : parseFloat(durStr);
 
-    if (durStr !== "") {
-      if (isNaN(numDur) || numDur <= 0) {
-        return {
-          valid: false,
-          field: "duration_seconds" as const,
-          error: "Duración de Ventana: No puede ser 0 segundos ni negativa (mínimo 0.5 s).",
-        };
-      }
-      if (numDur < 0.5 || numDur > 30.0) {
-        return {
-          valid: false,
-          field: "duration_seconds" as const,
-          error: "Duración de Ventana: Debe estar en el rango de 0.5 s a 30.0 s.",
-        };
-      }
-    }
-
-    if (isNaN(numSr) || isNaN(numFMin) || isNaN(numFMax)) {
-      return {
-        valid: false,
-        error: "Los parámetros de Tasa de Muestreo (SR), Frecuencia Mínima y Máxima deben ser números válidos.",
-      };
-    }
     return validateAudioPhysics({
       target_sr: numSr,
       f_min: numFMin,
@@ -655,13 +775,51 @@ export default function TrainingView() {
     }
 
     // 6. Validar Física Acústica
-    if (!physicsValidation.valid) {
-      if (physicsValidation.field) {
-        errors[physicsValidation.field] = physicsValidation.error || "Parámetro acústico inválido.";
-      } else {
-        errors.physics = physicsValidation.error || "Parámetros acústicos inválidos.";
-      }
+    const srStr = String(targetSr).trim();
+    const numSrVal = parseInt(srStr, 10);
+    if (srStr === "" || isNaN(numSrVal)) {
+      errors.target_sr = "El campo 'Tasa de Muestreo' no puede estar vacío.";
+    } else if (numSrVal < 8000 || numSrVal > 48000) {
+      errors.target_sr = "Tasa de Muestreo: Debe estar entre 8.000 Hz y 48.000 Hz.";
     }
+
+    const fMinStr = String(fMin).trim();
+    const numFMinVal = parseFloat(fMinStr);
+    if (fMinStr === "" || isNaN(numFMinVal)) {
+      errors.f_min = "El campo 'Frecuencia Mínima' no puede estar vacío.";
+    } else if (numFMinVal < 0) {
+      errors.f_min = "Frecuencia Mínima: No puede ser negativa.";
+    }
+
+    const fMaxStr = String(fMax).trim();
+    const numFMaxVal = parseFloat(fMaxStr);
+    if (fMaxStr === "" || isNaN(numFMaxVal)) {
+      errors.f_max = "El campo 'Frecuencia Máxima' no puede estar vacío.";
+    }
+
+    if (!isNaN(numSrVal) && !isNaN(numFMaxVal) && numFMaxVal > numSrVal / 2) {
+      errors.f_max = `Violación de Nyquist: La Frecuencia Máxima (${numFMaxVal.toLocaleString("es-CL")} Hz) supera la mitad de la Tasa de Muestreo (${(numSrVal / 2).toLocaleString("es-CL")} Hz).`;
+    }
+
+    if (!isNaN(numFMinVal) && !isNaN(numFMaxVal) && numFMinVal >= numFMaxVal) {
+      errors.f_min = `Rango Espectral: La Frecuencia Mínima (${numFMinVal.toLocaleString("es-CL")} Hz) debe ser estrictamente menor que la Frecuencia Máxima (${numFMaxVal.toLocaleString("es-CL")} Hz).`;
+    }
+
+    setTouchedFields((prev) => ({
+      ...prev,
+      learning_rate: true,
+      weight_decay: true,
+      batch_size: true,
+      epochs: true,
+      target_sr: true,
+      duration_seconds: true,
+      f_min: true,
+      f_max: true,
+      hop_seconds: true,
+      gem_p: true,
+      vad_threshold: true,
+      focal_gamma: true,
+    }));
 
     // 7. Validar Ventaneo Denso y Regularización (hop_seconds, gem_p, vad_threshold, focal_gamma)
     const hopStr = String(hopSeconds).trim();
@@ -994,11 +1152,22 @@ export default function TrainingView() {
           </div>
 
           <div className="flex items-center gap-3">
-            {!physicsValidation.valid && (
-              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-rose-950/70 border border-rose-800 text-rose-300">
-                Física Inválida
-              </span>
-            )}
+            {!physicsValidation.valid &&
+              (touchedFields[physicsValidation.field || ""] ||
+                (physicsValidation.field &&
+                  String(
+                    physicsValidation.field === "f_min"
+                      ? fMin
+                      : physicsValidation.field === "f_max"
+                      ? fMax
+                      : physicsValidation.field === "target_sr"
+                      ? targetSr
+                      : durationSeconds
+                  ).trim() !== "")) && (
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-rose-950/70 border border-rose-800 text-rose-300">
+                  Física Inválida
+                </span>
+              )}
             <svg
               className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${
                 isPhysicsExpanded ? "rotate-180" : ""
@@ -1069,16 +1238,17 @@ export default function TrainingView() {
                     step={100}
                     onChange={(e) => {
                       setDomainPreset("custom");
-                      clearFieldError("target_sr");
                       setTargetSr(e.target.value);
+                      validateFieldOnChange("target_sr", e.target.value);
                     }}
+                    onBlur={(e) => validateFieldOnBlur("target_sr", e.target.value)}
                     className={`w-full bg-[#111215] border ${
-                      fieldErrors.target_sr || (!physicsValidation.valid && physicsValidation.field === "target_sr")
+                      fieldErrors.target_sr || (!physicsValidation.valid && physicsValidation.field === "target_sr" && (touchedFields.target_sr || String(targetSr).trim() !== ""))
                         ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200"
                         : "border-[#23252e]"
                     } rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500`}
                   />
-                  {(fieldErrors.target_sr || (!physicsValidation.valid && physicsValidation.field === "target_sr" ? physicsValidation.error : null)) && (
+                  {(fieldErrors.target_sr || (!physicsValidation.valid && physicsValidation.field === "target_sr" && (touchedFields.target_sr || String(targetSr).trim() !== "") ? physicsValidation.error : null)) && (
                     <span className="text-[10px] text-red-400 mt-1 block">
                       {fieldErrors.target_sr || physicsValidation.error}
                     </span>
@@ -1099,16 +1269,17 @@ export default function TrainingView() {
                     step={0.5}
                     onChange={(e) => {
                       setDomainPreset("custom");
-                      clearFieldError("duration_seconds");
                       setDurationSeconds(e.target.value);
+                      validateFieldOnChange("duration_seconds", e.target.value);
                     }}
+                    onBlur={(e) => validateFieldOnBlur("duration_seconds", e.target.value)}
                     className={`w-full bg-[#111215] border ${
-                      fieldErrors.duration_seconds || (!physicsValidation.valid && physicsValidation.field === "duration_seconds")
+                      fieldErrors.duration_seconds || (!physicsValidation.valid && physicsValidation.field === "duration_seconds" && (touchedFields.duration_seconds || String(durationSeconds).trim() !== ""))
                         ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200"
                         : "border-[#23252e]"
                     } rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500`}
                   />
-                  {(fieldErrors.duration_seconds || (!physicsValidation.valid && physicsValidation.field === "duration_seconds" ? physicsValidation.error : null)) && (
+                  {(fieldErrors.duration_seconds || (!physicsValidation.valid && physicsValidation.field === "duration_seconds" && (touchedFields.duration_seconds || String(durationSeconds).trim() !== "") ? physicsValidation.error : null)) && (
                     <span className="text-[10px] text-red-400 mt-1 block">
                       {fieldErrors.duration_seconds || physicsValidation.error}
                     </span>
@@ -1128,16 +1299,17 @@ export default function TrainingView() {
                     step={10}
                     onChange={(e) => {
                       setDomainPreset("custom");
-                      clearFieldError("f_min");
                       setFMin(e.target.value);
+                      validateFieldOnChange("f_min", e.target.value);
                     }}
+                    onBlur={(e) => validateFieldOnBlur("f_min", e.target.value)}
                     className={`w-full bg-[#111215] border ${
-                      fieldErrors.f_min || (!physicsValidation.valid && physicsValidation.field === "f_min")
+                      fieldErrors.f_min || (!physicsValidation.valid && physicsValidation.field === "f_min" && (touchedFields.f_min || String(fMin).trim() !== ""))
                         ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200"
                         : "border-[#23252e]"
                     } rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500`}
                   />
-                  {(fieldErrors.f_min || (!physicsValidation.valid && physicsValidation.field === "f_min" ? physicsValidation.error : null)) && (
+                  {(fieldErrors.f_min || (!physicsValidation.valid && physicsValidation.field === "f_min" && (touchedFields.f_min || String(fMin).trim() !== "") ? physicsValidation.error : null)) && (
                     <span className="text-[10px] text-red-400 mt-1 block">
                       {fieldErrors.f_min || physicsValidation.error}
                     </span>
@@ -1157,16 +1329,17 @@ export default function TrainingView() {
                     step={100}
                     onChange={(e) => {
                       setDomainPreset("custom");
-                      clearFieldError("f_max");
                       setFMax(e.target.value);
+                      validateFieldOnChange("f_max", e.target.value);
                     }}
+                    onBlur={(e) => validateFieldOnBlur("f_max", e.target.value)}
                     className={`w-full bg-[#111215] border ${
-                      fieldErrors.f_max || (!physicsValidation.valid && physicsValidation.field === "f_max")
+                      fieldErrors.f_max || (!physicsValidation.valid && physicsValidation.field === "f_max" && (touchedFields.f_max || String(fMax).trim() !== ""))
                         ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200"
                         : "border-[#23252e]"
                     } rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500`}
                   />
-                  {(fieldErrors.f_max || (!physicsValidation.valid && physicsValidation.field === "f_max" ? physicsValidation.error : null)) && (
+                  {(fieldErrors.f_max || (!physicsValidation.valid && physicsValidation.field === "f_max" && (touchedFields.f_max || String(fMax).trim() !== "") ? physicsValidation.error : null)) && (
                     <span className="text-[10px] text-red-400 mt-1 block">
                       {fieldErrors.f_max || physicsValidation.error}
                     </span>
@@ -1195,9 +1368,10 @@ export default function TrainingView() {
                     step={0.1}
                     onChange={(e) => {
                       setDomainPreset("custom");
-                      clearFieldError("hop_seconds");
                       setHopSeconds(e.target.value);
+                      validateFieldOnChange("hop_seconds", e.target.value);
                     }}
+                    onBlur={(e) => validateFieldOnBlur("hop_seconds", e.target.value)}
                     className={`w-full bg-[#111215] border ${
                       fieldErrors.hop_seconds ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200" : "border-[#23252e]"
                     } rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500`}
@@ -1242,9 +1416,10 @@ export default function TrainingView() {
                     step={0.5}
                     onChange={(e) => {
                       setDomainPreset("custom");
-                      clearFieldError("gem_p");
                       setGemP(e.target.value);
+                      validateFieldOnChange("gem_p", e.target.value);
                     }}
+                    onBlur={(e) => validateFieldOnBlur("gem_p", e.target.value)}
                     className={`w-full bg-[#111215] border ${
                       fieldErrors.gem_p ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200" : "border-[#23252e]"
                     } rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500`}
@@ -1270,9 +1445,10 @@ export default function TrainingView() {
                     step={0.01}
                     onChange={(e) => {
                       setDomainPreset("custom");
-                      clearFieldError("vad_threshold");
                       setVadThreshold(e.target.value);
+                      validateFieldOnChange("vad_threshold", e.target.value);
                     }}
+                    onBlur={(e) => validateFieldOnBlur("vad_threshold", e.target.value)}
                     className={`w-full bg-[#111215] border ${
                       fieldErrors.vad_threshold ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200" : "border-[#23252e]"
                     } rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500`}
@@ -1326,9 +1502,10 @@ export default function TrainingView() {
                       step={0.5}
                       onChange={(e) => {
                         setDomainPreset("custom");
-                        clearFieldError("focal_gamma");
                         setFocalGamma(e.target.value);
+                        validateFieldOnChange("focal_gamma", e.target.value);
                       }}
+                      onBlur={(e) => validateFieldOnBlur("focal_gamma", e.target.value)}
                       className={`w-full bg-[#111215] border ${
                         fieldErrors.focal_gamma ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200" : "border-[#23252e]"
                       } rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500`}
@@ -1459,9 +1636,10 @@ export default function TrainingView() {
               value={learningRate}
               disabled={isTraining || ensembleSize > 1}
               onChange={(e) => {
-                clearFieldError("learning_rate");
                 setLearningRate(e.target.value);
+                validateFieldOnChange("learning_rate", e.target.value);
               }}
+              onBlur={(e) => validateFieldOnBlur("learning_rate", e.target.value)}
               className={`w-full bg-[#111215] border ${
                 fieldErrors.learning_rate
                   ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200"
@@ -1485,9 +1663,10 @@ export default function TrainingView() {
               value={weightDecay}
               disabled={isTraining}
               onChange={(e) => {
-                clearFieldError("weight_decay");
                 setWeightDecay(e.target.value);
+                validateFieldOnChange("weight_decay", e.target.value);
               }}
+              onBlur={(e) => validateFieldOnBlur("weight_decay", e.target.value)}
               placeholder="0.01"
               className={`w-full bg-[#111215] border ${
                 fieldErrors.weight_decay
@@ -1512,9 +1691,10 @@ export default function TrainingView() {
               value={epochs}
               disabled={isTraining || ensembleSize > 1}
               onChange={(e) => {
-                clearFieldError("epochs");
                 setEpochs(e.target.value);
+                validateFieldOnChange("epochs", e.target.value);
               }}
+              onBlur={(e) => validateFieldOnBlur("epochs", e.target.value)}
               className={`w-full bg-[#111215] border ${
                 fieldErrors.epochs
                   ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200"
@@ -1538,9 +1718,10 @@ export default function TrainingView() {
               value={batchSize}
               disabled={isTraining || ensembleSize > 1}
               onChange={(e) => {
-                clearFieldError("batch_size");
                 setBatchSize(e.target.value);
+                validateFieldOnChange("batch_size", e.target.value);
               }}
+              onBlur={(e) => validateFieldOnBlur("batch_size", e.target.value)}
               className={`w-full bg-[#111215] border ${
                 fieldErrors.batch_size
                   ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200"

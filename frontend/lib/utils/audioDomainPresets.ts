@@ -171,8 +171,22 @@ export function validateAudioPhysics(config: {
   f_max: number;
   duration_seconds?: number;
 }): { valid: boolean; error?: string; field?: "f_max" | "f_min" | "target_sr" | "duration_seconds" } {
+  if (isNaN(config.target_sr)) {
+    return {
+      valid: false,
+      field: "target_sr",
+      error: "El campo 'Tasa de Muestreo' no puede estar vacío.",
+    };
+  }
+  if (config.target_sr < 8000 || config.target_sr > 48000) {
+    return {
+      valid: false,
+      field: "target_sr",
+      error: "Tasa de Muestreo: Debe estar entre 8.000 Hz y 48.000 Hz.",
+    };
+  }
   if (config.duration_seconds !== undefined) {
-    if (config.duration_seconds <= 0) {
+    if (isNaN(config.duration_seconds) || config.duration_seconds <= 0) {
       return {
         valid: false,
         field: "duration_seconds",
@@ -186,6 +200,27 @@ export function validateAudioPhysics(config: {
         error: "Duración de Ventana: Debe estar en el rango de 0.5 s a 30.0 s.",
       };
     }
+  }
+  if (isNaN(config.f_min)) {
+    return {
+      valid: false,
+      field: "f_min",
+      error: "El campo 'Frecuencia Mínima' no puede estar vacío.",
+    };
+  }
+  if (config.f_min < 0) {
+    return {
+      valid: false,
+      field: "f_min",
+      error: "Frecuencia Mínima: No puede ser negativa.",
+    };
+  }
+  if (isNaN(config.f_max)) {
+    return {
+      valid: false,
+      field: "f_max",
+      error: "El campo 'Frecuencia Máxima' no puede estar vacío.",
+    };
   }
   if (!validateNyquist(config.f_max, config.target_sr)) {
     return {
