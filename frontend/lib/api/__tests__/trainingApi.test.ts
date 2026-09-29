@@ -139,6 +139,7 @@ describe("trainingApi (TDD Contract Tests)", () => {
       architecture: "EfficientNet-B0",
       epochs: 10,
       learning_rate: 0.001,
+      weight_decay: 0.01,
       batch_size: 16,
       framework: "pytorch",
       is_tri_model: false,
@@ -192,6 +193,48 @@ describe("trainingApi (TDD Contract Tests)", () => {
     it("throws ValidationError when epochs is non-positive", async () => {
       const invalid = { ...validParams, epochs: 0 };
       await expect(startTraining(invalid)).rejects.toThrow(ValidationError);
+    });
+
+    it("passes weight_decay successfully in payload when provided", async () => {
+      const mockStartResponse = {
+        status: "started",
+        job_id: "fama_adamw_456",
+        message: "Entrenamiento iniciado con AdamW",
+      };
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => mockStartResponse,
+      });
+
+      const paramsWithWeightDecay = {
+        ...validParams,
+        weight_decay: 0.05,
+      };
+
+      const res = await startTraining(paramsWithWeightDecay);
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        `${API_BASE_URL}/api/training/start`,
+        expect.objectContaining({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...validParams,
+            weight_decay: 0.05,
+          }),
+        })
+      );
+      expect(res.status).toBe("started");
+    });
+
+    it("throws ValidationError when weight_decay is negative or greater than 1", async () => {
+      const invalidNegative = { ...validParams, weight_decay: -0.01 };
+      await expect(startTraining(invalidNegative)).rejects.toThrow(ValidationError);
+
+      const invalidExcessive = { ...validParams, weight_decay: 1.5 };
+      await expect(startTraining(invalidExcessive)).rejects.toThrow(ValidationError);
     });
   });
 

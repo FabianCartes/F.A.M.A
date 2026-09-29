@@ -531,4 +531,24 @@ def test_start_training_request_with_multi_domain_configs():
     assert req_default.regularization_config is None
 
 
+def test_start_training_request_weight_decay():
+    # 1. Default value is 0.01 (AdamW canonical default)
+    req = StartTrainingRequest(dataset_name="AvesChilenas")
+    assert hasattr(req, "weight_decay")
+    assert req.weight_decay == 0.01
+
+    # 2. Custom valid weight_decay
+    req_custom = StartTrainingRequest(dataset_name="AvesChilenas", weight_decay=0.05)
+    assert req_custom.weight_decay == 0.05
+
+    # 3. Invalid negative weight_decay raises ValidationError
+    with pytest.raises(ValidationError):
+        StartTrainingRequest(dataset_name="AvesChilenas", weight_decay=-0.01)
+
+    # 4. Invalid excessive weight_decay (> 1.0) raises ValidationError
+    with pytest.raises(ValidationError):
+        StartTrainingRequest(dataset_name="AvesChilenas", weight_decay=1.5)
+
+
+
 

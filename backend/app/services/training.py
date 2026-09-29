@@ -309,6 +309,7 @@ class TrainingService:
         audio_config: Optional[Any] = None,
         windowing_config: Optional[Any] = None,
         regularization_config: Optional[Any] = None,
+        weight_decay: float = 0.01,
     ) -> Dict[str, Any]:
         """
         Inicia un nuevo ciclo de entrenamiento bioacústico en un hilo desacoplado.
@@ -377,6 +378,7 @@ class TrainingService:
             "audio_config": audio_config,
             "windowing_config": windowing_config,
             "regularization_config": regularization_config,
+            "weight_decay": weight_decay,
         }
 
         # Lanzar en hilo de fondo para no bloquear el servidor FastAPI
@@ -674,7 +676,9 @@ class TrainingService:
                 else:
                     criterion = FocalLoss(gamma=focal_gamma).to(device)
 
-                optimizer = torch.optim.AdamW(model.parameters(), lr=arch_lr, weight_decay=1e-2)
+                weight_decay = float(config.get("weight_decay", 0.01))
+                optimizer = torch.optim.AdamW(model.parameters(), lr=arch_lr, weight_decay=weight_decay)
+                self._add_log("INFO", f"Optimizador AdamW configurado: lr={arch_lr}, weight_decay={weight_decay}")
                 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=arch_epochs, eta_min=1e-6)
 
                 dataset_clean = dataset_name.strip().replace(" ", "_").replace("-", "_")

@@ -356,7 +356,35 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
 
     expect(screen.queryByTestId("modal-ficha-tecnica")).toBeNull();
   });
+
+  it("renders AdamW Weight Decay input and passes configured weight_decay in payload", async () => {
+    await act(async () => {
+      render(<TrainingView />);
+    });
+
+    const wdInput = screen.getByLabelText(/Weight Decay/i) as HTMLInputElement;
+    expect(wdInput).toBeDefined();
+    expect(wdInput.value).toBe("0.01");
+
+    await act(async () => {
+      fireEvent.change(wdInput, { target: { value: "0.05" } });
+    });
+    expect(wdInput.value).toBe("0.05");
+
+    const startBtn = screen.getByText("Iniciar Entrenamiento Local (1 Modelo)");
+    await act(async () => {
+      fireEvent.click(startBtn);
+    });
+
+    const postCall = (global.fetch as any).mock.calls.find(
+      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    );
+    expect(postCall).toBeDefined();
+    const payload = JSON.parse(postCall[1].body);
+    expect(payload.weight_decay).toBe(0.05);
+  });
 });
+
 
 
 

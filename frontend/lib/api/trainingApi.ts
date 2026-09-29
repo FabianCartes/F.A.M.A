@@ -5,6 +5,7 @@ import {
   TrainingDataset,
   DatasetsResponseSchema,
   StartTrainingRequest,
+  StartTrainingInput,
   StartTrainingRequestSchema,
   StartTrainingResponse,
   StartTrainingResponseSchema,
@@ -131,7 +132,7 @@ export async function getDatasets(): Promise<TrainingDataset[]> {
  * Inicia un ciclo de entrenamiento asíncrono en segundo plano.
  */
 export async function startTraining(
-  params: StartTrainingRequest
+  params: StartTrainingInput
 ): Promise<StartTrainingResponse> {
   let validatedParams: StartTrainingRequest;
   try {

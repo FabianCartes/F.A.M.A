@@ -91,6 +91,7 @@ export const StartTrainingRequestSchema = z.object({
   architecture: z.string().optional().default("EfficientNet-B0"),
   epochs: z.number().int().positive().default(10),
   learning_rate: z.number().positive().default(0.001),
+  weight_decay: z.number().min(0, "Weight decay must be non-negative").max(1, "Weight decay must be at most 1.0").optional().default(0.01),
   batch_size: z.number().int().positive().default(16),
   framework: z.string().default("pytorch"),
   is_tri_model: z.boolean().optional().default(false),
@@ -100,6 +101,7 @@ export const StartTrainingRequestSchema = z.object({
   regularization_config: RegularizationConfigSchema.optional(),
 });
 export type StartTrainingRequest = z.infer<typeof StartTrainingRequestSchema>;
+export type StartTrainingInput = z.input<typeof StartTrainingRequestSchema>;
 
 
 export const StartTrainingResponseSchema = z.object({

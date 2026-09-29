@@ -90,6 +90,7 @@ class StartTrainingRequest(BaseModel):
     architecture: Optional[str] = "EfficientNet-B0"
     epochs: int = 10
     learning_rate: float = 0.001
+    weight_decay: float = Field(default=0.01, ge=0.0, le=1.0, description="Decaimiento de pesos (regularización L2) para AdamW")
     batch_size: int = 16
     framework: str = "pytorch"
     is_tri_model: bool = False

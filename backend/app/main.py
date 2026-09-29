@@ -749,6 +749,7 @@ def start_training_pipeline(req: StartTrainingRequest):
             "architecture": req.architecture,
             "epochs": req.epochs,
             "learning_rate": req.learning_rate,
+            "weight_decay": req.weight_decay,
             "batch_size": req.batch_size,
             "framework": req.framework,
             "is_tri_model": req.is_tri_model,

@@ -122,6 +122,7 @@ def test_training_lifecycle_triad(client):
             architecture="EfficientNet-B0",
             epochs=10,
             learning_rate=0.001,
+            weight_decay=0.01,
             batch_size=16,
             framework="pytorch",
             is_tri_model=True,
@@ -156,6 +157,7 @@ def test_training_lifecycle_dynamic_ensemble(client):
             architecture="EfficientNet-B0",
             epochs=12,
             learning_rate=0.0005,
+            weight_decay=0.01,
             batch_size=16,
             framework="pytorch",
             is_tri_model=False,
@@ -214,5 +216,31 @@ def test_start_training_api_passes_multi_domain_configs(client):
         assert call_kwargs["windowing_config"]["hop_seconds"] == 0.5
         assert call_kwargs["regularization_config"]["loss_type"] == "focal"
         assert call_kwargs["regularization_config"]["focal_gamma"] == 2.5
+
+
+def test_start_training_api_passes_weight_decay(client):
+    """Verifica que POST /api/training/start propague weight_decay al servicio training_service."""
+    with patch("app.services.training.training_service.start_training") as mock_start:
+        mock_start.return_value = {
+            "status": "started",
+            "job_id": "fama_adamw_123",
+            "message": "Entrenamiento iniciado con AdamW parametrizado.",
+        }
+        payload = {
+            "dataset_name": "AvesChilenas",
+            "architecture": "EfficientNet-B0",
+            "epochs": 5,
+            "learning_rate": 0.001,
+            "weight_decay": 0.05,
+            "batch_size": 16,
+        }
+        res = client.post("/api/training/start", json=payload)
+        assert res.status_code == 200
+        assert res.json()["status"] == "started"
+        mock_start.assert_called_once()
+        call_kwargs = mock_start.call_args.kwargs
+        assert "weight_decay" in call_kwargs
+        assert call_kwargs["weight_decay"] == 0.05
+
 
 

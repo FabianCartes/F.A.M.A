@@ -5,6 +5,7 @@ import {
   HardwareStatus,
   TrainingDataset,
   StartTrainingRequest,
+  StartTrainingInput,
   MetricPoint,
   LogEntry,
   ModelHistoryItem,
@@ -242,7 +243,7 @@ export function useTrainingLifecycle() {
 
   // Actions
   const start = useCallback(
-    async (params: StartTrainingRequest): Promise<boolean> => {
+    async (params: StartTrainingInput): Promise<boolean> => {
       if (isTrainingRef.current) return false;
 
       setIsTraining(true);
@@ -250,7 +251,7 @@ export function useTrainingLifecycle() {
       setMetricsHistory([]);
       setLogs([]);
       setCurrentEpoch(0);
-      setTotalEpochs(params.epochs);
+      setTotalEpochs(params.epochs ?? 10);
       setLastError(null);
 
       if (params.is_tri_model) {
@@ -266,7 +267,7 @@ export function useTrainingLifecycle() {
           isTriad: false,
           modelIdx: 1,
           totalModels: 1,
-          currentArch: params.architecture,
+          currentArch: params.architecture || "EfficientNet-B0",
         });
       }
 

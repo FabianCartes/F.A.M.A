@@ -452,4 +452,26 @@ def test_get_history_semantic_versioning_per_dataset_and_architecture(training_s
     assert by_id[9]["version"] == 1
 
 
+def test_start_training_worker_receives_weight_decay(training_service):
+    """
+    Verifica que start_training capture y propague el parámetro weight_decay
+    dentro del diccionario de configuración enviado a _run_training_worker.
+    """
+    with patch.object(training_service, "_run_training_worker") as mock_worker:
+        res = training_service.start_training(
+            dataset_name="AvesChilenas",
+            architecture="ConvNeXt-Nano",
+            epochs=5,
+            learning_rate=0.0005,
+            weight_decay=0.05,
+        )
+
+        assert res["status"] == "started"
+        mock_worker.assert_called_once()
+        passed_config = mock_worker.call_args[0][0]
+        assert "weight_decay" in passed_config
+        assert passed_config["weight_decay"] == 0.05
+
+
+
 

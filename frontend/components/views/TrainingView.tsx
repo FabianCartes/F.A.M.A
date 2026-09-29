@@ -90,34 +90,39 @@ interface ModelHistoryItem {
 
 const ARCHITECTURE_PRESETS: Record<
   string,
-  { lr: string; epochs: string; batch: string; desc: string }
+  { lr: string; weightDecay: string; epochs: string; batch: string; desc: string }
 > = {
   "EfficientNet-B0": {
     lr: "0.001",
+    weightDecay: "0.01",
     epochs: "10",
     batch: "16",
     desc: "Transfer Learning & Pitch Shift (Recomendada)",
   },
   "ConvNeXt-Nano": {
     lr: "0.0005",
+    weightDecay: "0.05",
     epochs: "12",
     batch: "16",
     desc: "Gradiente fino y regularización moderna",
   },
   "ResNet-34d": {
     lr: "0.0003",
+    weightDecay: "0.01",
     epochs: "15",
     batch: "8",
     desc: "Batches moderados para estabilidad profunda",
   },
   "PANNs-CNN14": {
     lr: "0.0005",
+    weightDecay: "0.01",
     epochs: "15",
     batch: "16",
     desc: "Red pre-entrenada para acústica industrial y patrones armónicos",
   },
   "AudioCNN": {
     lr: "0.001",
+    weightDecay: "0.001",
     epochs: "20",
     batch: "32",
     desc: "Baseline convolucional clásico F.A.M.A.",
@@ -128,6 +133,7 @@ export default function TrainingView() {
   // 1. Estado de Configuración (IE_03)
   const [selectedDataset, setSelectedDataset] = useState<string>("AvesChilenas");
   const [learningRate, setLearningRate] = useState<string>("0.001");
+  const [weightDecay, setWeightDecay] = useState<string>("0.01");
   const [epochs, setEpochs] = useState<string>("10");
   const [batchSize, setBatchSize] = useState<string>("16");
   const [framework, setFramework] = useState<string>("pytorch");
@@ -381,6 +387,9 @@ export default function TrainingView() {
     const preset = ARCHITECTURE_PRESETS[newArch];
     if (preset) {
       setLearningRate(preset.lr);
+      if (preset.weightDecay) {
+        setWeightDecay(preset.weightDecay);
+      }
       setEpochs(preset.epochs);
       setBatchSize(preset.batch);
     }
@@ -575,6 +584,7 @@ export default function TrainingView() {
           architecture: normalizedEnsemble[0]?.architecture || architecture,
           epochs: parseInt(epochs) || 10,
           learning_rate: parseFloat(learningRate) || 0.001,
+          weight_decay: parseFloat(weightDecay) || 0.01,
           batch_size: parseInt(batchSize) || 16,
           framework,
           is_tri_model: ensembleSize === 3,
@@ -1184,12 +1194,13 @@ export default function TrainingView() {
         </div>
 
         {/* Inputs de Hiperparámetros en Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
-            <label className="text-[11px] text-gray-400 block mb-1 font-medium">
+            <label htmlFor="learning-rate-input" className="text-[11px] text-gray-400 block mb-1 font-medium">
               Learning Rate (Tasa de Aprendizaje)
             </label>
             <input
+              id="learning-rate-input"
               type="text"
               value={learningRate}
               disabled={isTraining || ensembleSize > 1}
@@ -1199,10 +1210,26 @@ export default function TrainingView() {
           </div>
 
           <div>
-            <label className="text-[11px] text-gray-400 block mb-1 font-medium">
+            <label htmlFor="weight-decay-input" className="text-[11px] text-gray-400 block mb-1 font-medium">
+              Weight Decay (AdamW L2)
+            </label>
+            <input
+              id="weight-decay-input"
+              type="text"
+              value={weightDecay}
+              disabled={isTraining}
+              onChange={(e) => setWeightDecay(e.target.value)}
+              placeholder="0.01"
+              className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-blue-500 disabled:opacity-60"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="epochs-input" className="text-[11px] text-gray-400 block mb-1 font-medium">
               Épocas de Entrenamiento
             </label>
             <input
+              id="epochs-input"
               type="number"
               value={epochs}
               disabled={isTraining || ensembleSize > 1}
@@ -1214,10 +1241,11 @@ export default function TrainingView() {
           </div>
 
           <div>
-            <label className="text-[11px] text-gray-400 block mb-1 font-medium">
+            <label htmlFor="batch-size-input" className="text-[11px] text-gray-400 block mb-1 font-medium">
               Batch Size (Tamaño de Lote)
             </label>
             <input
+              id="batch-size-input"
               type="number"
               value={batchSize}
               disabled={isTraining || ensembleSize > 1}
@@ -1782,7 +1810,7 @@ export default function TrainingView() {
             data-testid="modal-ficha-tecnica"
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
           >
-            <div className="bg-[#16171b] border border-[#2d303b] rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="bg-[#16171b] border border-[#2d303b] rounded-2xl max-w-2xl md:max-w-4xl lg:max-w-5xl w-full p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
               {/* Header */}
               <div className="flex items-start justify-between pb-3 border-b border-[#23252e]">
                 <div>
@@ -1822,27 +1850,27 @@ export default function TrainingView() {
                     <span>Hiperparámetros de Entrenamiento</span>
                   </div>
                   <div className="space-y-1.5 text-[11px]">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Learning Rate:</span>
-                      <span className="text-gray-200 font-mono font-medium">
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="text-gray-400 shrink-0">Learning Rate:</span>
+                      <span className="text-gray-200 font-mono font-medium text-right">
                         {selectedModelModal.hyperparameters?.learning_rate ?? "0.001"}
                       </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Batch Size:</span>
-                      <span className="text-gray-200 font-mono font-medium">
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="text-gray-400 shrink-0">Batch Size:</span>
+                      <span className="text-gray-200 font-mono font-medium text-right">
                         {selectedModelModal.hyperparameters?.batch_size ?? 16}
                       </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Optimizer:</span>
-                      <span className="text-cyan-400 font-mono font-medium">
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="text-gray-400 shrink-0">Optimizer:</span>
+                      <span className="text-cyan-400 font-mono font-medium text-right">
                         {selectedModelModal.hyperparameters?.optimizer ?? "AdamW"}
                       </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Loss Function:</span>
-                      <span className="text-emerald-400 font-mono font-medium">
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="text-gray-400 shrink-0">Loss Function:</span>
+                      <span className="text-emerald-400 font-mono font-medium text-right">
                         {selectedModelModal.hyperparameters?.loss_type ?? "Focal Loss"}
                       </span>
                     </div>
@@ -1858,27 +1886,27 @@ export default function TrainingView() {
                     <span>Parámetros de Física de Audio</span>
                   </div>
                   <div className="space-y-1.5 text-[11px]">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Sample Rate:</span>
-                      <span className="text-gray-200 font-mono font-medium">
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="text-gray-400 shrink-0">Sample Rate:</span>
+                      <span className="text-gray-200 font-mono font-medium whitespace-nowrap text-right">
                         {selectedModelModal.audio_specs?.target_sr ?? 22050} Hz
                       </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Duración Ventana:</span>
-                      <span className="text-gray-200 font-mono font-medium">
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="text-gray-400 shrink-0">Duración Ventana:</span>
+                      <span className="text-gray-200 font-mono font-medium whitespace-nowrap text-right">
                         {selectedModelModal.audio_specs?.duration_seconds ?? 5.0} s
                       </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Bandas Mel:</span>
-                      <span className="text-gray-200 font-mono font-medium">
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="text-gray-400 shrink-0">Bandas Mel:</span>
+                      <span className="text-gray-200 font-mono font-medium whitespace-nowrap text-right">
                         {selectedModelModal.audio_specs?.n_mels ?? 128} mels (FFT {selectedModelModal.audio_specs?.n_fft ?? 2048})
                       </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Rango Frecuencia:</span>
-                      <span className="text-gray-200 font-mono font-medium">
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="text-gray-400 shrink-0">Rango Frecuencia:</span>
+                      <span className="text-gray-200 font-mono font-medium whitespace-nowrap text-right">
                         {selectedModelModal.audio_specs?.fmin ?? 50} - {selectedModelModal.audio_specs?.fmax ?? 11025} Hz
                       </span>
                     </div>
