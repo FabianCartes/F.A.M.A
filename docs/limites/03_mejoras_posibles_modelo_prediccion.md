@@ -134,12 +134,12 @@ Aplicar solo a los pares que sobrevivan a las Líneas 2–4 (candidatos: Zorzal�
 
 | Técnica | Veredicto | Evidencia |
 |:---|:---|:---|
-| Más épocas (64e) | ❌ Memoriza recordists: val 87.17% pero test colapsa a 77.37% | `docs/10`, ADR 0003 |
-| Pitch-shift espectral ±1 semitono | ❌ 88.44% → 83.71% por formantes rígidos | ADR 0009, Informe 14 |
-| Manifold / D-mixup | ❌ Marginal e inestable vs BCE/Focal bien tuneado | BirdCLEF 2024 4.º |
-| CutMix / PCEN / geo-filter duro | ❌ −0.047 / −0.072 / −0.34 en holdout | Reporte BirdCLEF 2026 |
-| FT completo ViT-H desde ImageNet | ❌ Sobreajusta con 50–170/clase | Ghani et al. 2025: shallow FT generaliza mejor |
-| Generativo (ECOGEN, CycleGAN) | ⚠️ Útil si <50/clase; tuning alto para FAMA | ECOGEN +12% pero costoso |
+| Más épocas (64e) | Descartado: Memoriza recordists: val 87.17% pero test colapsa a 77.37% | `docs/10`, ADR 0003 |
+| Pitch-shift espectral ±1 semitono | Descartado: 88.44% → 83.71% por formantes rígidos | ADR 0009, Informe 14 |
+| Manifold / D-mixup | Descartado: Marginal e inestable vs BCE/Focal bien tuneado | BirdCLEF 2024 4.º |
+| CutMix / PCEN / geo-filter duro | Descartado: −0.047 / −0.072 / −0.34 en holdout | Reporte BirdCLEF 2026 |
+| FT completo ViT-H desde ImageNet | Descartado: Sobreajusta con 50–170/clase | Ghani et al. 2025: shallow FT generaliza mejor |
+| Generativo (ECOGEN, CycleGAN) | Precaución: Útil si <50/clase; tuning alto para FAMA | ECOGEN +12% pero costoso |
 
 ---
 

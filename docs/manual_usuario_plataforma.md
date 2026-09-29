@@ -303,7 +303,7 @@ El **Módulo de Predicción** (`RF_05`, `RF_06`, `CU_INV_06`, `CU_INV_07`) es la
 │  [5] CICLO DE RETROALIMENTACIÓN ACTIVA (RF_06 / CU_INV_07)                             │
 │  ¿Es correcta la clasificación realizada por la Inteligencia Artificial?               │
 │                                                                                        │
-│     [ ✔ Confirmar Acierto (Verde) ]      [ ✘ Corregir Clasificación (Naranja) ]        │
+│     [ Confirmar Acierto (Verde) ]        [ Corregir Clasificación (Naranja) ]          │
 └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 

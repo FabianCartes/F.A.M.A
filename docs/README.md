@@ -6,7 +6,7 @@ La documentación está organizada temáticamente en subdirectorios especializad
 
 ---
 
-## 📁 Estructura del Repositorio Documental
+## Estructura del Repositorio Documental
 
 ```text
 docs/
@@ -21,7 +21,7 @@ docs/
 
 ---
 
-## 🗂️ Índice Detallado por Carpeta
+## Índice Detallado por Carpeta
 
 ### 1. [`docs/tesis/`](./tesis/) — Tesis y Objetivos de Grado
 * [`VIDA_01_CINF_FINAL_PT_2026_1_CARTES.md`](./tesis/VIDA_01_CINF_FINAL_PT_2026_1_CARTES.md) / [`.pdf`](./tesis/VIDA_01_CINF_FINAL_PT_2026_1_CARTES.pdf): Memoria formal de proyecto de título.

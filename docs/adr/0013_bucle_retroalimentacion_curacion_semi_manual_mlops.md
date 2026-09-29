@@ -39,18 +39,18 @@ Se aprueba formalmente implementar un **Bucle de Retroalimentación Activa en Do
 │ 2. Curación (IngestionView)                            │
 │    Bandeja de auditoría de audios pendientes:          │
 │    • [▶ Reproducir Audio]                              │
-│    • [✓ Aprobar]: Incorpora a raw/ + metadata.csv      │
-│                   y marca procesado=True.              │
-│    • [🗑 Descartar]: Rechaza ruido/accidentes sin       │
-│                     alterar el dataset de train.       │
+│    • [Aprobar]: Incorpora a raw/ + metadata.csv        │
+│                 y marca procesado=True.                │
+│    • [Descartar]: Rechaza ruido/accidentes sin         │
+│                   alterar el dataset de train.         │
 └────────────────────────────────────────────────────────┘
 ```
 
 ### 2.1 Etapa 1: Captura Rápida en Inferencia (RF_06)
 * **Frontend ([`PredictionView.tsx`](../../frontend/components/views/PredictionView.tsx)):**  
   Inmediatamente después de ejecutar una inferencia, la tarjeta de resultado expone:
-  * Botón `[Validar ✓]`: Confirma la predicción (`fue_correcta = true`).
-  * Botón `[Corregir ✗]`: Despliega un selector con las clases oficiales del modelo activo (15 especies o 13 fallas de motor) y registra la corrección (`fue_correcta = false, etiqueta_corregida = ...`).
+  * Botón `[Validar]`: Confirma la predicción (`fue_correcta = true`).
+  * Botón `[Corregir]`: Despliega un selector con las clases oficiales del modelo activo (15 especies o 13 fallas de motor) y registra la corrección (`fue_correcta = false, etiqueta_corregida = ...`).
 * **Backend ([`POST /api/feedback`](../../backend/app/main.py)):**  
   Persiste en PostgreSQL (tabla `retroalimentacion`) vinculada a la `prediccion` con el estado **`procesado = False`**, y despacha una copia de seguridad a GCS en la carpeta de cuarentena:
   `gs://<bucket>/feedback/<etiqueta_corregida>/<filename>`

@@ -4,7 +4,7 @@ Panel web minimalista y responsivo para inferencia bioacústica en tiempo real, 
 
 ---
 
-## 🛠️ Requisitos Previos
+## Requisitos Previos
 
 - **Node.js 18.18+** o **Node.js 20+**
 - **npm** (o pnpm / yarn)
@@ -12,7 +12,7 @@ Panel web minimalista y responsivo para inferencia bioacústica en tiempo real, 
 
 ---
 
-## 🚀 Puesta en Marcha
+## Puesta en Marcha
 
 ### 1. Instalar dependencias
 ```bash
@@ -34,7 +34,7 @@ npm run start
 
 ---
 
-## 📡 Integración con el Backend
+## Integración con el Backend
 La aplicación envía los archivos `.wav` seleccionados mediante peticiones `multipart/form-data` hacia el endpoint:
 - **`POST http://127.0.0.1:8000/api/predict`**
 
