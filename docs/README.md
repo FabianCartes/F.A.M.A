@@ -10,11 +10,13 @@ La documentación está organizada temáticamente en subdirectorios especializad
 
 ```text
 docs/
+├── KANBAN.md                    # Tablero de seguimiento activo del proyecto
 ├── tesis/                       # Memoria de grado oficial y análisis de objetivos
 ├── modelos/                     # Informes experimentales, optimizaciones y ensambles
 ├── arquitectura/                # Diseño de sistemas, pipelines, MLOps y despliegue
 ├── limites/                     # Límites matemáticos, físicos y problemas conocidos
-├── adr/                         # Architectural Decision Records (ADR 0001 a 0012)
+├── manuales/                    # Manual de usuario y guías de despliegue operativo
+├── adr/                         # Architectural Decision Records (ADR 0001 a 0014)
 ├── receipts/                    # Recibos técnicos reproducibles en formato JSON (RDD)
 └── images/                      # Matrices de confusión y gráficos vectoriales
 ```
@@ -56,15 +58,20 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`20_modelo_de_producto_despliegue_y_arquitectura_operativa.md`](./arquitectura/20_modelo_de_producto_despliegue_y_arquitectura_operativa.md): Estrategia de producto on-premise, concurrencia y contenedores Docker.
 * [`21_resumen_actualizacion_remota_y_nuevas_capacidades.md`](./arquitectura/21_resumen_actualizacion_remota_y_nuevas_capacidades.md): Resumen de integración remota y resolución de conflictos.
 * [`22_arquitectura_universal_multidominio_y_limites_acusticos.md`](./arquitectura/22_arquitectura_universal_multidominio_y_limites_acusticos.md): Especificación de F.A.M.A. como motor No-Code para cualquier dataset y límites físicos/computacionales.
+* [`22_propuesta_vista_ayuda_y_centro_de_conocimiento.md`](./arquitectura/22_propuesta_vista_ayuda_y_centro_de_conocimiento.md): Diseño y especificación del centro de conocimiento e interactividad en frontend.
 
-### 4. [`docs/limites/`](./limites/) — Límites Matemáticos y Problemas Conocidos
+### 4. [`docs/manuales/`](./manuales/) — Manuales y Guías Operativas
+* [`manual_usuario_plataforma.md`](./manuales/manual_usuario_plataforma.md): Guía integral de operación para investigadores y administradores.
+* [`guia_despliegue_operativo_docker.md`](./manuales/guia_despliegue_operativo_docker.md): Manual exhaustivo de instalación y despliegue institucional con Docker.
+
+### 5. [`docs/limites/`](./limites/) — Límites Matemáticos y Problemas Conocidos
 * [`01_solapamiento_de_clases_bioacusticas.md`](./limites/01_solapamiento_de_clases_bioacusticas.md): Análisis del solapamiento espectral y confusión entre especies hermanas.
 * [`02_limites_generalizacion_universal_y_conjunto_abierto.md`](./limites/02_limites_generalizacion_universal_y_conjunto_abierto.md): Límites teóricos de la generalización a 10.000 especies y reconocimiento en conjunto abierto.
 * [`03_mejoras_posibles_modelo_prediccion.md`](./limites/03_mejoras_posibles_modelo_prediccion.md): Roadmap de mejoras futuras más allá del 88.68% F1.
 * [`04_limitacion_subida_directorios_completos_data_lake.md`](./limites/04_limitacion_subida_directorios_completos_data_lake.md): Limitaciones de I/O en la ingesta masiva hacia GCS.
 * [`05_restriccion_formato_audio_y_captura_microfono.md`](./limites/05_restriccion_formato_audio_y_captura_microfono.md): Restricción estricta de formato PCM .wav y pipeline de captura por micrófono web.
 
-### 5. [`docs/adr/`](./adr/) — Architectural Decision Records
+### 6. [`docs/adr/`](./adr/) — Architectural Decision Records
 Registro de las 14 decisiones de arquitectura fundamentales del sistema:
 * `ADR 0001`: Migración de AudioCNN a EfficientNet-B0.
 * `ADR 0002`: Particionamiento Estratificado a Nivel de Grabador (Zero Leakage).
