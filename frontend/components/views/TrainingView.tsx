@@ -9,6 +9,8 @@ import {
   validateAudioPhysics,
 } from "@/lib/utils/audioDomainPresets";
 import { getChartPaths, ChartOptions } from "@/lib/utils/trainingChart";
+import InfoTooltip from "@/components/common/InfoTooltip";
+import { PARAMETER_EXPLANATIONS } from "@/lib/constants/parameterExplanations";
 
 // ============================================================================
 // INTERFACES DEL DOMINIO DE ENTRENAMIENTO (RF_04, CU_INV_02, CU_INV_03)
@@ -1283,12 +1285,14 @@ export default function TrainingView() {
       {/* ==================================================================== */}
       {/* 2.5. PANEL DE FÍSICA DE AUDIO Y ADAPTACIÓN AL DOMINIO */}
       {/* ==================================================================== */}
-      <div className="bg-[#16171b] border border-[#23252e] rounded-xl overflow-hidden shadow-sm transition-all">
+      <div className="bg-[#16171b] border border-[#23252e] rounded-xl shadow-sm transition-all">
         {/* Encabezado colapsable */}
         <button
           type="button"
           onClick={() => setIsPhysicsExpanded(!isPhysicsExpanded)}
-          className="w-full p-4 px-5 flex items-center justify-between text-left hover:bg-[#1a1b20] transition-colors"
+          className={`w-full p-4 px-5 flex items-center justify-between text-left hover:bg-[#1a1b20] transition-colors ${
+            isPhysicsExpanded ? "rounded-t-xl" : "rounded-xl"
+          }`}
         >
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-400">
@@ -1380,9 +1384,12 @@ export default function TrainingView() {
               </span>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
-                  <label htmlFor="target_sr" className="text-[11px] text-gray-400 block mb-1 font-medium">
-                    Tasa de Muestreo (Hz)
-                  </label>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <label htmlFor="target_sr" className="text-[11px] text-gray-400 font-medium">
+                      Tasa de Muestreo (Hz)
+                    </label>
+                    <InfoTooltip id="target_sr" {...PARAMETER_EXPLANATIONS.target_sr} />
+                  </div>
                   <input
                     id="target_sr"
                     type="number"
@@ -1411,9 +1418,12 @@ export default function TrainingView() {
                 </div>
 
                 <div>
-                  <label htmlFor="duration_seconds" className="text-[11px] text-gray-400 block mb-1 font-medium">
-                    Duración de Ventana (s)
-                  </label>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <label htmlFor="duration_seconds" className="text-[11px] text-gray-400 font-medium">
+                      Duración de Ventana (s)
+                    </label>
+                    <InfoTooltip id="duration_seconds" {...PARAMETER_EXPLANATIONS.duration_seconds} />
+                  </div>
                   <input
                     id="duration_seconds"
                     type="number"
@@ -1442,9 +1452,12 @@ export default function TrainingView() {
                 </div>
 
                 <div>
-                  <label htmlFor="f_min" className="text-[11px] text-gray-400 block mb-1 font-medium">
-                    Frecuencia Mínima (Hz)
-                  </label>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <label htmlFor="f_min" className="text-[11px] text-gray-400 font-medium">
+                      Frecuencia Mínima (Hz)
+                    </label>
+                    <InfoTooltip id="f_min" {...PARAMETER_EXPLANATIONS.f_min} />
+                  </div>
                   <input
                     id="f_min"
                     type="number"
@@ -1472,9 +1485,12 @@ export default function TrainingView() {
                 </div>
 
                 <div>
-                  <label htmlFor="f_max" className="text-[11px] text-gray-400 block mb-1 font-medium">
-                    Frecuencia Máxima (Hz)
-                  </label>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <label htmlFor="f_max" className="text-[11px] text-gray-400 font-medium">
+                      Frecuencia Máxima (Hz)
+                    </label>
+                    <InfoTooltip id="f_max" {...PARAMETER_EXPLANATIONS.f_max} />
+                  </div>
                   <input
                     id="f_max"
                     type="number"
@@ -1510,9 +1526,12 @@ export default function TrainingView() {
               </span>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
-                  <label htmlFor="hop_seconds" className="text-[11px] text-gray-400 block mb-1 font-medium">
-                    Salto Temporal (s)
-                  </label>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <label htmlFor="hop_seconds" className="text-[11px] text-gray-400 font-medium">
+                      Salto Temporal (s)
+                    </label>
+                    <InfoTooltip id="hop_seconds" {...PARAMETER_EXPLANATIONS.hop_seconds} />
+                  </div>
                   <input
                     id="hop_seconds"
                     type="number"
@@ -1539,9 +1558,12 @@ export default function TrainingView() {
                 </div>
 
                 <div>
-                  <label htmlFor="aggregation_mode" className="text-[11px] text-gray-400 block mb-1 font-medium">
-                    Agregación Temporal
-                  </label>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <label htmlFor="aggregation_mode" className="text-[11px] text-gray-400 font-medium">
+                      Agregación Temporal
+                    </label>
+                    <InfoTooltip id="aggregation_mode" {...PARAMETER_EXPLANATIONS.aggregation_mode} />
+                  </div>
                   <select
                     id="aggregation_mode"
                     value={aggregationMode}
@@ -1558,9 +1580,12 @@ export default function TrainingView() {
                 </div>
 
                 <div>
-                  <label htmlFor="gem_p" className="text-[11px] text-gray-400 block mb-1 font-medium">
-                    Exponente GeM (p)
-                  </label>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <label htmlFor="gem_p" className="text-[11px] text-gray-400 font-medium">
+                      Exponente GeM (p)
+                    </label>
+                    <InfoTooltip id="gem_p" {...PARAMETER_EXPLANATIONS.gem_p} />
+                  </div>
                   <input
                     id="gem_p"
                     type="number"
@@ -1587,9 +1612,12 @@ export default function TrainingView() {
                 </div>
 
                 <div>
-                  <label htmlFor="vad_threshold" className="text-[11px] text-gray-400 block mb-1 font-medium">
-                    Umbral VAD Energético
-                  </label>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <label htmlFor="vad_threshold" className="text-[11px] text-gray-400 font-medium">
+                      Umbral VAD Energético
+                    </label>
+                    <InfoTooltip id="vad_threshold" {...PARAMETER_EXPLANATIONS.vad_threshold} />
+                  </div>
                   <input
                     id="vad_threshold"
                     type="number"
@@ -1624,9 +1652,12 @@ export default function TrainingView() {
               </span>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label htmlFor="loss_type" className="text-[11px] text-gray-400 block mb-1 font-medium">
-                    Función de Pérdida
-                  </label>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <label htmlFor="loss_type" className="text-[11px] text-gray-400 font-medium">
+                      Función de Pérdida
+                    </label>
+                    <InfoTooltip id="loss_type" {...PARAMETER_EXPLANATIONS.loss_type} />
+                  </div>
                   <select
                     id="loss_type"
                     value={lossType}
@@ -1644,9 +1675,12 @@ export default function TrainingView() {
 
                 {lossType === "focal" && (
                   <div>
-                    <label htmlFor="focal_gamma" className="text-[11px] text-gray-400 block mb-1 font-medium">
-                      Parámetro Gamma (Focal)
-                    </label>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <label htmlFor="focal_gamma" className="text-[11px] text-gray-400 font-medium">
+                        Parámetro Gamma (Focal)
+                      </label>
+                      <InfoTooltip id="focal_gamma" {...PARAMETER_EXPLANATIONS.focal_gamma} />
+                    </div>
                     <input
                       id="focal_gamma"
                       type="number"
@@ -1674,33 +1708,39 @@ export default function TrainingView() {
                 )}
 
                 <div className="flex items-center gap-4 pt-4 sm:pt-6">
-                  <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-300">
-                    <input
-                      type="checkbox"
-                      checked={mixupEnabled}
-                      disabled={isTraining}
-                      onChange={(e) => {
-                        setDomainPreset("custom");
-                        setMixupEnabled(e.target.checked);
-                      }}
-                      className="rounded bg-[#111215] border-[#23252e] text-teal-500 focus:ring-0"
-                    />
-                    <span>Mixup</span>
-                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-300">
+                      <input
+                        type="checkbox"
+                        checked={mixupEnabled}
+                        disabled={isTraining}
+                        onChange={(e) => {
+                          setDomainPreset("custom");
+                          setMixupEnabled(e.target.checked);
+                        }}
+                        className="rounded bg-[#111215] border-[#23252e] text-teal-500 focus:ring-0"
+                      />
+                      <span>Mixup</span>
+                    </label>
+                    <InfoTooltip id="mixup" {...PARAMETER_EXPLANATIONS.mixup} />
+                  </div>
 
-                  <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-300">
-                    <input
-                      type="checkbox"
-                      checked={pitchShiftEnabled}
-                      disabled={isTraining}
-                      onChange={(e) => {
-                        setDomainPreset("custom");
-                        setPitchShiftEnabled(e.target.checked);
-                      }}
-                      className="rounded bg-[#111215] border-[#23252e] text-teal-500 focus:ring-0"
-                    />
-                    <span>Pitch Shift</span>
-                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-300">
+                      <input
+                        type="checkbox"
+                        checked={pitchShiftEnabled}
+                        disabled={isTraining}
+                        onChange={(e) => {
+                          setDomainPreset("custom");
+                          setPitchShiftEnabled(e.target.checked);
+                        }}
+                        className="rounded bg-[#111215] border-[#23252e] text-teal-500 focus:ring-0"
+                      />
+                      <span>Pitch Shift</span>
+                    </label>
+                    <InfoTooltip id="pitch_shift" {...PARAMETER_EXPLANATIONS.pitch_shift} />
+                  </div>
                 </div>
               </div>
             </div>
@@ -1726,8 +1766,13 @@ export default function TrainingView() {
         {/* Selector Dinámico de Ensamble (1 a 3 Modelos) */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg bg-[#111215] border border-[#23252e]">
           <div>
-            <span className="text-xs font-semibold text-gray-200 block">Topología del Modelo / Ensamble</span>
-            <span className="text-[11px] text-gray-500">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-gray-200">
+                Topología del Modelo / Ensamble
+              </span>
+              <InfoTooltip id="ensemble_size" {...PARAMETER_EXPLANATIONS.ensemble_size} />
+            </div>
+            <span className="text-[11px] text-gray-500 block mt-0.5">
               {ensembleSize === 1
                 ? "Entrena únicamente 1 arquitectura con hiperparámetros personalizados."
                 : ensembleSize === 2
@@ -1782,9 +1827,12 @@ export default function TrainingView() {
         {/* Inputs de Hiperparámetros en Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
-            <label htmlFor="learning-rate-input" className="text-[11px] text-gray-400 block mb-1 font-medium">
-              Learning Rate (Tasa de Aprendizaje)
-            </label>
+            <div className="flex items-center gap-1.5 mb-1">
+              <label htmlFor="learning-rate-input" className="text-[11px] text-gray-400 font-medium">
+                Learning Rate (Tasa de Aprendizaje)
+              </label>
+              <InfoTooltip id="learning_rate" {...PARAMETER_EXPLANATIONS.learning_rate} />
+            </div>
             <input
               id="learning-rate-input"
               type="text"
@@ -1809,9 +1857,12 @@ export default function TrainingView() {
           </div>
 
           <div>
-            <label htmlFor="weight-decay-input" className="text-[11px] text-gray-400 block mb-1 font-medium">
-              Weight Decay (AdamW L2)
-            </label>
+            <div className="flex items-center gap-1.5 mb-1">
+              <label htmlFor="weight-decay-input" className="text-[11px] text-gray-400 font-medium">
+                Weight Decay (AdamW L2)
+              </label>
+              <InfoTooltip id="weight_decay" {...PARAMETER_EXPLANATIONS.weight_decay} />
+            </div>
             <input
               id="weight-decay-input"
               type="text"
@@ -1837,9 +1888,12 @@ export default function TrainingView() {
           </div>
 
           <div>
-            <label htmlFor="epochs-input" className="text-[11px] text-gray-400 block mb-1 font-medium">
-              Épocas de Entrenamiento
-            </label>
+            <div className="flex items-center gap-1.5 mb-1">
+              <label htmlFor="epochs-input" className="text-[11px] text-gray-400 font-medium">
+                Épocas de Entrenamiento
+              </label>
+              <InfoTooltip id="epochs" {...PARAMETER_EXPLANATIONS.epochs} />
+            </div>
             <input
               id="epochs-input"
               type="text"
@@ -1864,9 +1918,12 @@ export default function TrainingView() {
           </div>
 
           <div>
-            <label htmlFor="batch-size-input" className="text-[11px] text-gray-400 block mb-1 font-medium">
-              Batch Size (Tamaño de Lote)
-            </label>
+            <div className="flex items-center gap-1.5 mb-1">
+              <label htmlFor="batch-size-input" className="text-[11px] text-gray-400 font-medium">
+                Batch Size (Tamaño de Lote)
+              </label>
+              <InfoTooltip id="batch_size" {...PARAMETER_EXPLANATIONS.batch_size} />
+            </div>
             <input
               id="batch-size-input"
               type="text"
@@ -1894,7 +1951,10 @@ export default function TrainingView() {
         {/* Selección de Framework */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="text-[11px] text-gray-400 block mb-1 font-medium">Framework</label>
+            <div className="flex items-center gap-1.5 mb-1">
+              <label className="text-[11px] text-gray-400 font-medium">Framework</label>
+              <InfoTooltip id="framework" {...PARAMETER_EXPLANATIONS.framework} />
+            </div>
             <select
               value={framework}
               disabled={isTraining}
@@ -1908,12 +1968,17 @@ export default function TrainingView() {
 
           {ensembleSize === 1 && (
             <div>
-              <label htmlFor="architecture-select" className="text-[11px] text-gray-400 block mb-1 font-medium flex items-center justify-between">
-                <span>Arquitectura de Red Neuronal</span>
-                <span className="text-[10px] text-emerald-400 font-normal">
+              <div className="flex items-center justify-between gap-4 mb-1">
+                <div className="flex items-center gap-2 shrink-0">
+                  <label htmlFor="architecture-select" className="text-[11px] text-gray-400 font-medium">
+                    Arquitectura de Red Neuronal
+                  </label>
+                  <InfoTooltip id="architecture" {...PARAMETER_EXPLANATIONS.architecture} />
+                </div>
+                <span className="text-[10px] text-emerald-400 font-normal text-right truncate pl-2">
                   {ARCHITECTURE_PRESETS[architecture]?.desc || "Calibrado"}
                 </span>
-              </label>
+              </div>
               <select
                 id="architecture-select"
                 data-testid="architecture-select"
