@@ -1,0 +1,95 @@
+{
+  "receipt_name": "fase_early_stopping_toggle_receipt",
+  "generated_at": "2026-09-30T03:24:00Z",
+  "methodology": "TDD + RDD + ODD",
+  "frameworks": {
+    "tdd": "Test-Driven Development (Red-Green-Refactor loop)",
+    "rdd": "Receipt-Driven Development (Machine-readable verifiable delivery)",
+    "odd": "Organic-Driven Development (Adaptive real-time telemetry and domain feedback)"
+  },
+  "architecture_layer": "Full-Stack Training Optimization Pipeline (FastAPI PyTorch Service & Next.js React UI)",
+  "plan_reference": "/home/kevin/.gemini/antigravity-cli/brain/d19db34d-1b00-4711-8b5b-9687587bd6b0/plan_early_stopping_toggle_tdd_rdd_odd.md",
+  "adr_reference": "docs/adr/0014_delimitacion_hiperparametros_frontend_deep_modules.md",
+  "summary": "Implementación desacoplada y tipada del control de Detención Temprana Inteligente (Early Stopping) con tooltip ergonómico en UI, validación Zod/Pydantic y paciencia adaptativa en PyTorch backend con telemetría ODD.",
+  "contracts": {
+    "backend_pydantic": {
+      "file": "backend/app/schemas/training.py",
+      "schema": "StartTrainingRequest",
+      "field": "early_stopping",
+      "type": "bool",
+      "default": true,
+      "status": "VERIFIED"
+    },
+    "frontend_zod": {
+      "file": "frontend/lib/schemas/training.ts",
+      "schema": "StartTrainingRequestSchema",
+      "field": "early_stopping",
+      "type": "z.boolean()",
+      "default": true,
+      "status": "VERIFIED"
+    }
+  },
+  "ui_components": {
+    "toggle": {
+      "file": "frontend/components/views/TrainingView.tsx",
+      "label": "Detención Temprana Inteligente (Early Stopping)",
+      "default_state": true,
+      "layout": "full_width_subcard",
+      "status_pill": "Activo (Paciencia Dinámica ~20% épocas) / Desactivado (Épocas Fijas)"
+    },
+    "tooltip": {
+      "file": "frontend/components/common/InfoTooltip.tsx",
+      "id": "early_stopping",
+      "position": "auto",
+      "align": "auto",
+      "z_index": 50,
+      "key_points": [
+        "Previene sobreajuste cortando el cómputo cuando Val Loss se estanca.",
+        "Ahorra tiempo de GPU/CPU y energía de cómputo.",
+        "Calcula la paciencia óptima automáticamente según la longitud del entrenamiento (mínimo 5 épocas)."
+      ]
+    }
+  },
+  "backend_service": {
+    "file": "backend/app/services/training.py",
+    "patience_formula": "max(5, int(arch_epochs * 0.20))",
+    "monitor_metric": "val_loss",
+    "restore_best_weights": true,
+    "odd_telemetry_logs": [
+      "INFO: Early Stopping habilitado (Paciencia: N épocas, métrica: Val Loss)",
+      "WARN: Early Stopping activado en época E/N: Sin mejora en Val Loss durante P épocas consecutivas"
+    ]
+  },
+  "verified_endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/training/start",
+      "purpose": "Launch decoupled training background thread with configured early_stopping flag",
+      "status": "VERIFIED"
+    }
+  ],
+  "test_suites": {
+    "backend_pytest": {
+      "runner": "pytest 9.1.1 (Python 3.14.7)",
+      "command": ".venv/bin/pytest backend/tests/test_training*.py",
+      "total_tests": 44,
+      "passed": 44,
+      "failed": 0,
+      "status": "PASSED"
+    },
+    "frontend_vitest": {
+      "runner": "vitest 5.0.2",
+      "command": "npm test",
+      "total_tests": 164,
+      "passed": 164,
+      "failed": 0,
+      "status": "PASSED"
+    },
+    "frontend_build": {
+      "runner": "next build (Turbopack Next.js 16.3.4)",
+      "command": "npm run build",
+      "status": "SUCCESS",
+      "type_errors": 0
+    }
+  }
+}

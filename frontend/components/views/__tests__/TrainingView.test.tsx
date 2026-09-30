@@ -870,6 +870,61 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     expect(screen.getByText("El campo 'Learning Rate del Modelo #1' no puede estar vacío.")).toBeDefined();
     expect(screen.getByText("El campo 'Batch Size del Modelo #1' no puede estar vacío.")).toBeDefined();
   });
+
+  it("renders early stopping toggle checked by default with info tooltip", async () => {
+    await act(async () => {
+      render(<TrainingView />);
+    });
+
+    const toggle = screen.getByLabelText("Detención Temprana Inteligente (Early Stopping)") as HTMLInputElement;
+    expect(toggle).toBeDefined();
+    expect(toggle.checked).toBe(true);
+
+    const tooltipTrigger = screen.getByRole("button", { name: "Ver ayuda: early_stopping" });
+    expect(tooltipTrigger).toBeDefined();
+  });
+
+  it("sends early_stopping: false in startTraining request when user toggles off early stopping", async () => {
+    await act(async () => {
+      render(<TrainingView />);
+    });
+
+    const toggle = screen.getByLabelText("Detención Temprana Inteligente (Early Stopping)") as HTMLInputElement;
+    await act(async () => {
+      fireEvent.click(toggle);
+    });
+    expect(toggle.checked).toBe(false);
+
+    const startBtn = screen.getByRole("button", { name: /Iniciar Entrenamiento/i });
+    await act(async () => {
+      fireEvent.click(startBtn);
+    });
+
+    const postCall = (global.fetch as any).mock.calls.find(
+      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    );
+    expect(postCall).toBeDefined();
+    const payload = JSON.parse(postCall[1].body);
+    expect(payload.early_stopping).toBe(false);
+  });
+
+  it("sends early_stopping: true in startTraining request by default", async () => {
+    await act(async () => {
+      render(<TrainingView />);
+    });
+
+    const startBtn = screen.getByRole("button", { name: /Iniciar Entrenamiento/i });
+    await act(async () => {
+      fireEvent.click(startBtn);
+    });
+
+    const postCall = (global.fetch as any).mock.calls.find(
+      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    );
+    expect(postCall).toBeDefined();
+    const payload = JSON.parse(postCall[1].body);
+    expect(payload.early_stopping).toBe(true);
+  });
 });
 
 

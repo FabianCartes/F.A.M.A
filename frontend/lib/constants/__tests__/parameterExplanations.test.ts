@@ -27,6 +27,7 @@ describe("Parameter Explanations Catalog", () => {
     "framework",
     "architecture",
     "ensemble_size",
+    "early_stopping",
   ];
 
   it("contains all required audio and hyperparameter keys", () => {

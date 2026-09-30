@@ -87,6 +87,7 @@ def test_start_training_worker_executes_dynamic_models_sequentially(training_ser
         "batch_size": 16,
         "framework": "pytorch",
         "is_tri_model": False,
+        "early_stopping": False,
         "models": [
             {"architecture": "ConvNeXt-Nano", "weight": 0.7},
             {"architecture": "EfficientNet-B0", "weight": 0.3},
@@ -529,6 +530,125 @@ def test_start_training_dynamic_ensemble_preserves_custom_hyperparameters(traini
         assert passed_config["models"][0]["batch_size"] == 32
         assert passed_config["models"][1]["learning_rate"] == 0.001
         assert passed_config["models"][1]["batch_size"] == 16
+
+
+def test_start_training_propagates_early_stopping_flag(training_service):
+    """
+    Verifica que start_training capture y propague el parámetro early_stopping
+    dentro del diccionario de configuración enviado a _run_training_worker.
+    """
+    with patch.object(training_service, "_run_training_worker") as mock_worker:
+        # 1. Por defecto es True
+        res = training_service.start_training(
+            dataset_name="AvesChilenas",
+            architecture="ConvNeXt-Nano",
+            epochs=10,
+        )
+        assert res["status"] == "started"
+        passed_config = mock_worker.call_args[0][0]
+        assert "early_stopping" in passed_config
+        assert passed_config["early_stopping"] is True
+
+        # 2. Explícitamente False
+        training_service.status = "idle"
+        res2 = training_service.start_training(
+            dataset_name="AvesChilenas",
+            architecture="ConvNeXt-Nano",
+            epochs=10,
+            early_stopping=False,
+        )
+        assert res2["status"] == "started"
+        passed_config2 = mock_worker.call_args[0][0]
+        assert "early_stopping" in passed_config2
+        assert passed_config2["early_stopping"] is False
+
+
+def test_training_worker_early_stopping_halts_on_patience_exhaustion(training_service):
+    """
+    Verifica que con early_stopping=True, si val_loss no mejora durante la paciencia
+    (patience = max(5, int(10 * 0.20)) = 5 épocas), el entrenamiento se detiene antes de 10 épocas
+    y se registra un log con nivel WARN indicando Early Stopping.
+    """
+    import torch
+
+    def mock_build_model(arch, num_classes, device):
+        mock = MagicMock()
+        mock.parameters.return_value = [torch.nn.Parameter(torch.zeros(1))]
+        mock.state_dict.return_value = {"weight": torch.zeros(1)}
+        return mock
+
+    config = {
+        "job_id": "test_early_stop_job",
+        "dataset_name": "AvesChilenas",
+        "architecture": "ConvNeXt-Nano",
+        "epochs": 10,
+        "learning_rate": 0.001,
+        "batch_size": 16,
+        "framework": "pytorch",
+        "is_tri_model": False,
+        "early_stopping": True,
+    }
+
+    with patch.object(training_service, "_build_model_instance", side_effect=mock_build_model), \
+         patch("app.services.training.DataLoader", return_value=[]), \
+         patch("app.services.training.torch.save"), \
+         patch("app.services.training.SessionLocal") as mock_session_local:
+
+        mock_db = MagicMock()
+        mock_session_local.return_value = mock_db
+
+        training_service._run_training_worker(config)
+
+        # Sin datos en DataLoader, val_loss es 0.0 en cada época.
+        # En la época 1: best_val_loss = 0.0.
+        # En las épocas 2, 3, 4, 5, 6: val_loss=0.0 no mejora sobre 0.0 (epochs_no_improve llega a 5 >= patience).
+        # Por tanto debe detenerse en la época 6 y no llegar a 10.
+        assert training_service.current_epoch == 6
+        assert any("Early Stopping activado en época 6" in log["message"] for log in training_service.logs)
+        assert training_service.status == "completed"
+
+
+def test_training_worker_disabled_early_stopping_runs_all_epochs(training_service):
+    """
+    Verifica que con early_stopping=False, el modelo complete todas las 10 épocas
+    fijas sin importar la ausencia de mejora en val_loss.
+    """
+    import torch
+
+    def mock_build_model(arch, num_classes, device):
+        mock = MagicMock()
+        mock.parameters.return_value = [torch.nn.Parameter(torch.zeros(1))]
+        mock.state_dict.return_value = {"weight": torch.zeros(1)}
+        return mock
+
+    config = {
+        "job_id": "test_disabled_early_stop_job",
+        "dataset_name": "AvesChilenas",
+        "architecture": "ConvNeXt-Nano",
+        "epochs": 10,
+        "learning_rate": 0.001,
+        "batch_size": 16,
+        "framework": "pytorch",
+        "is_tri_model": False,
+        "early_stopping": False,
+    }
+
+    with patch.object(training_service, "_build_model_instance", side_effect=mock_build_model), \
+         patch("app.services.training.DataLoader", return_value=[]), \
+         patch("app.services.training.torch.save"), \
+         patch("app.services.training.SessionLocal") as mock_session_local:
+
+        mock_db = MagicMock()
+        mock_session_local.return_value = mock_db
+
+        training_service._run_training_worker(config)
+
+        # Debe completar las 10 épocas completas
+        assert training_service.current_epoch == 10
+        assert not any("Early Stopping activado" in log["message"] for log in training_service.logs)
+        assert training_service.status == "completed"
+
+
 
 
 

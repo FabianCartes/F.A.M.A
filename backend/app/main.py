@@ -753,6 +753,7 @@ def start_training_pipeline(req: StartTrainingRequest):
             "batch_size": req.batch_size,
             "framework": req.framework,
             "is_tri_model": req.is_tri_model,
+            "early_stopping": req.early_stopping,
         }
         if getattr(req, "_explicit_models", False) and req.models is not None:
             kwargs["models"] = [m.model_dump() for m in req.models]

@@ -97,6 +97,10 @@ class StartTrainingRequest(BaseModel):
     batch_size: int = 16
     framework: str = "pytorch"
     is_tri_model: bool = False
+    early_stopping: bool = Field(
+        default=True,
+        description="Habilitar detención temprana automática (Early Stopping) según convergencia de validación",
+    )
     models: Optional[List[ModelEnsembleItem]] = None
     audio_config: Optional[AudioConfigSchema] = None
     windowing_config: Optional[WindowingConfigSchema] = None

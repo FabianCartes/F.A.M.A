@@ -625,6 +625,22 @@ def test_start_training_request_preserves_model_hyperparameters():
     assert req.models[2].batch_size == 16
 
 
+def test_start_training_request_early_stopping():
+    # 1. Default value is True
+    req = StartTrainingRequest(dataset_name="AvesChilenas")
+    assert hasattr(req, "early_stopping")
+    assert req.early_stopping is True
+
+    # 2. Explicit False
+    req_disabled = StartTrainingRequest(dataset_name="AvesChilenas", early_stopping=False)
+    assert req_disabled.early_stopping is False
+
+    # 3. Invalid non-boolean value
+    with pytest.raises(ValidationError):
+        StartTrainingRequest(dataset_name="AvesChilenas", early_stopping="invalid_boolean")
+
+
+
 
 
 

@@ -218,4 +218,16 @@ export const PARAMETER_EXPLANATIONS: Record<string, ParameterExplanation> = {
       "Modelos con arquitecturas diversas complementan debilidades mutuas.",
     ],
   },
+  early_stopping: {
+    title: "Detención Temprana (Early Stopping)",
+    impact:
+      "Monitorea la pérdida de validación (Val Loss) y detiene el entrenamiento automáticamente cuando el modelo deja de mejorar, evitando sobreajuste y ahorrando cómputo.",
+    usage:
+      "Recomendado siempre activo (true) para producción y ensambles; desactivar solo si se desea forzar una exploración exhaustiva de todas las épocas.",
+    keyPoints: [
+      "Calcula una paciencia dinámica proporcional a las épocas (mínimo 5 épocas sin mejora).",
+      "Restaura y preserva automáticamente el mejor punto de control (best checkpoint).",
+    ],
+  },
 };
+

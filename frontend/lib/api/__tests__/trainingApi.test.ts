@@ -12,6 +12,7 @@ import {
   ValidationError,
 } from "../trainingApi";
 import { API_BASE_URL } from "../../api";
+import { StartTrainingRequestSchema } from "../../schemas/training";
 
 describe("trainingApi (TDD Contract Tests)", () => {
   const originalFetch = global.fetch;
@@ -143,6 +144,7 @@ describe("trainingApi (TDD Contract Tests)", () => {
       batch_size: 16,
       framework: "pytorch",
       is_tri_model: false,
+      early_stopping: true,
     };
 
     it("starts training successfully with valid parameters", async () => {
@@ -516,6 +518,21 @@ describe("trainingApi (TDD Contract Tests)", () => {
       });
 
       await expect(activateModel(99)).rejects.toThrow(ApiConnectionError);
+    });
+  });
+
+  describe("StartTrainingRequestSchema", () => {
+    it("defaults early_stopping to true and allows explicit false", () => {
+      const parsedDefault = StartTrainingRequestSchema.parse({
+        dataset_name: "AvesChilenas",
+      });
+      expect(parsedDefault.early_stopping).toBe(true);
+
+      const parsedDisabled = StartTrainingRequestSchema.parse({
+        dataset_name: "AvesChilenas",
+        early_stopping: false,
+      });
+      expect(parsedDisabled.early_stopping).toBe(false);
     });
   });
 });

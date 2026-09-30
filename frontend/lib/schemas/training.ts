@@ -98,6 +98,7 @@ export const StartTrainingRequestSchema = z.object({
   batch_size: z.number().int().positive().default(16),
   framework: z.string().default("pytorch"),
   is_tri_model: z.boolean().optional().default(false),
+  early_stopping: z.boolean().optional().default(true),
   models: z.array(ModelEnsembleItemSchema).min(1).max(3).optional(),
   audio_config: AudioConfigSchema.optional(),
   windowing_config: WindowingConfigSchema.optional(),

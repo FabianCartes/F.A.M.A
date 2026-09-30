@@ -310,6 +310,7 @@ class TrainingService:
         windowing_config: Optional[Any] = None,
         regularization_config: Optional[Any] = None,
         weight_decay: float = 0.01,
+        early_stopping: bool = True,
     ) -> Dict[str, Any]:
         """
         Inicia un nuevo ciclo de entrenamiento bioacústico en un hilo desacoplado.
@@ -391,6 +392,7 @@ class TrainingService:
             "windowing_config": windowing_config,
             "regularization_config": regularization_config,
             "weight_decay": weight_decay,
+            "early_stopping": early_stopping,
         }
 
         # Lanzar en hilo de fondo para no bloquear el servidor FastAPI
@@ -740,6 +742,21 @@ class TrainingService:
                 checkpoint_path = self.checkpoints_dir / checkpoint_filename
                 best_val_acc = 0.0
                 best_weights = None
+                early_stopping_enabled = bool(config.get("early_stopping", True))
+                patience = max(5, int(arch_epochs * 0.20))
+                best_val_loss = float("inf")
+                epochs_no_improve = 0
+
+                if early_stopping_enabled:
+                    self._add_log(
+                        "INFO",
+                        f"[{arch}] Early Stopping habilitado (Paciencia: {patience} épocas, métrica: Val Loss)."
+                    )
+                else:
+                    self._add_log(
+                        "INFO",
+                        f"[{arch}] Early Stopping deshabilitado: El modelo completará las {arch_epochs} épocas fijas."
+                    )
 
                 for epoch in range(1, arch_epochs + 1):
                     if self._stop_requested:
@@ -821,8 +838,16 @@ class TrainingService:
                     val_acc = round((val_correct / max(1, val_samples)) * 100.0, 2)
                     epoch_time = round(time.time() - t_start_epoch, 2)
 
+                    if val_loss < best_val_loss - 1e-4:
+                        best_val_loss = val_loss
+                        epochs_no_improve = 0
+                    else:
+                        epochs_no_improve += 1
+
                     if val_acc > best_val_acc:
                         best_val_acc = val_acc
+                        best_weights = {k: v.cpu() for k, v in model.state_dict().items()}
+                    elif best_weights is None:
                         best_weights = {k: v.cpu() for k, v in model.state_dict().items()}
 
                     metric_entry = {
@@ -850,6 +875,15 @@ class TrainingService:
                         f"{prefix}Época {epoch}/{arch_epochs} -> Loss: {tr_loss:.4f} | Val Loss: {val_loss:.4f} | "
                         f"Acc: {tr_acc:.1f}% | Val Acc: {val_acc:.1f}% ({epoch_time}s)"
                     )
+
+                    if early_stopping_enabled and epochs_no_improve >= patience:
+                        self._add_log(
+                            "WARN",
+                            f"[{arch}] Early Stopping activado en época {epoch}/{arch_epochs}: "
+                            f"Sin mejora en Val Loss durante {patience} épocas consecutivas. "
+                            f"Restaurando mejores pesos (Mejor Val Loss: {best_val_loss:.4f}, Mejor Val Acc: {best_val_acc:.1f}%)."
+                        )
+                        break
 
                 # Guardar el artefacto de pesos real (.pt)
                 saved_state = best_weights if best_weights is not None else {k: v.cpu() for k, v in model.state_dict().items()}
@@ -897,7 +931,11 @@ class TrainingService:
                     db.add(nuevo_modelo)
                     db.flush()
 
-                    for m in self.metrics_history[-arch_epochs:]:
+                    model_metrics = [
+                        m for m in self.metrics_history
+                        if m.get("architecture") == arch and m.get("model_index") == idx + 1
+                    ]
+                    for m in model_metrics:
                         rec = MetricaEntrenamiento(
                             id_modelo=nuevo_modelo.id_modelo,
                             epoca=m["epoca"],

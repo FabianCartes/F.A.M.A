@@ -140,6 +140,7 @@ export default function TrainingView() {
   const [batchSize, setBatchSize] = useState<string>("16");
   const [framework, setFramework] = useState<string>("pytorch");
   const [architecture, setArchitecture] = useState<string>("EfficientNet-B0");
+  const [earlyStoppingEnabled, setEarlyStoppingEnabled] = useState<boolean>(true);
   const [ensembleSize, setEnsembleSize] = useState<1 | 2 | 3>(1);
   const [ensembleModels, setEnsembleModels] = useState<
     Array<{
@@ -1093,6 +1094,7 @@ export default function TrainingView() {
           batch_size: parseInt(String(batchSize), 10) || 16,
           framework,
           is_tri_model: ensembleSize === 3,
+          early_stopping: earlyStoppingEnabled,
           models: normalizedEnsemble,
           audio_config: {
             target_sr: typeof targetSr === "number" ? targetSr : parseInt(String(targetSr), 10) || 22050,
@@ -1968,14 +1970,14 @@ export default function TrainingView() {
 
           {ensembleSize === 1 && (
             <div>
-              <div className="flex items-center justify-between gap-4 mb-1">
+              <div className="flex items-center justify-between gap-3 mb-1">
                 <div className="flex items-center gap-2 shrink-0">
                   <label htmlFor="architecture-select" className="text-[11px] text-gray-400 font-medium">
                     Arquitectura de Red Neuronal
                   </label>
                   <InfoTooltip id="architecture" {...PARAMETER_EXPLANATIONS.architecture} />
                 </div>
-                <span className="text-[10px] text-emerald-400 font-normal text-right truncate pl-2">
+                <span className="text-[10px] text-emerald-400 font-normal text-right break-words leading-tight">
                   {ARCHITECTURE_PRESETS[architecture]?.desc || "Calibrado"}
                 </span>
               </div>
@@ -1995,6 +1997,29 @@ export default function TrainingView() {
               </select>
             </div>
           )}
+        </div>
+
+        {/* Detención Temprana Inteligente (Early Stopping) */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg bg-[#111215] border border-[#23252e]">
+          <div className="flex items-center gap-2">
+            <label htmlFor="early-stopping-toggle" className="flex items-center gap-2.5 cursor-pointer">
+              <input
+                id="early-stopping-toggle"
+                type="checkbox"
+                checked={earlyStoppingEnabled}
+                disabled={isTraining}
+                onChange={(e) => setEarlyStoppingEnabled(e.target.checked)}
+                className="w-4 h-4 rounded bg-[#16171b] border-[#23252e] text-blue-600 focus:ring-0 focus:ring-offset-0 cursor-pointer disabled:opacity-50"
+              />
+              <span className="text-xs font-semibold text-gray-200">
+                Detención Temprana Inteligente (Early Stopping)
+              </span>
+            </label>
+            <InfoTooltip id="early_stopping" {...PARAMETER_EXPLANATIONS.early_stopping} />
+          </div>
+          <span className="text-[11px] text-gray-400 font-mono">
+            {earlyStoppingEnabled ? "Activo (Paciencia Dinámica ~20% épocas)" : "Desactivado (Épocas Fijas)"}
+          </span>
         </div>
 
         {/* Configuración Detallada de Miembros del Ensamble con Porcentajes Directos */}
