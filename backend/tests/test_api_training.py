@@ -126,6 +126,7 @@ def test_training_lifecycle_triad(client):
             batch_size=16,
             framework="pytorch",
             is_tri_model=True,
+            early_stopping=True,
         )
 
 
@@ -161,9 +162,10 @@ def test_training_lifecycle_dynamic_ensemble(client):
             batch_size=16,
             framework="pytorch",
             is_tri_model=False,
+            early_stopping=True,
             models=[
-                {"architecture": "ConvNeXt-Nano", "weight": 0.6, "epochs": None},
-                {"architecture": "EfficientNet-B0", "weight": 0.4, "epochs": None},
+                {"architecture": "ConvNeXt-Nano", "weight": 0.6, "epochs": None, "learning_rate": None, "batch_size": None},
+                {"architecture": "EfficientNet-B0", "weight": 0.4, "epochs": None, "learning_rate": None, "batch_size": None},
             ],
         )
 
