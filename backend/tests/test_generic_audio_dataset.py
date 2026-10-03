@@ -7,7 +7,7 @@ import torch
 import pytest
 
 from training.schemas.config import AudioConfig, AugmentationConfig
-from training.pipelines.dataset import GenericAudioDataset
+from training.pipelines.dataset import GenericAudioDataset, load_and_resample
 
 
 @pytest.fixture
@@ -111,6 +111,81 @@ def test_load_and_resample_selects_highest_energy_window(tmp_path):
     rms = np.sqrt(np.mean(result ** 2))
     # El RMS de la señal fuerte de seno con amplitud 0.8 es ~0.56. Si seleccionó silencio, RMS es 0.0.
     assert rms > 0.3
+
+
+def test_strict_loader_rejects_corrupt_audio_with_decode_cause(tmp_path):
+    from training.pipelines.dataset import MalformedAudioError
+
+    path = tmp_path / "corrupt.wav"
+    path.write_bytes(b"not an audio file")
+    with pytest.raises(MalformedAudioError) as caught:
+        load_and_resample(path, 16000, 1.0, strict=True)
+    assert isinstance(caught.value.__cause__, sf.LibsndfileError)
+    assert caught.value.__cause__.code == 1
+
+
+@pytest.mark.parametrize("code", [1, 3, 4])
+def test_strict_loader_classifies_only_format_errors(tmp_path, monkeypatch, code):
+    from training.pipelines.dataset import MalformedAudioError
+
+    error = sf.LibsndfileError(code)
+
+    def fail(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr("librosa.load", fail)
+    with pytest.raises(MalformedAudioError) as caught:
+        load_and_resample(tmp_path / "input.wav", 16000, 1.0, strict=True)
+    assert caught.value.__cause__ is error
+
+
+@pytest.mark.parametrize("error", [
+    PermissionError("denied"), FileNotFoundError("missing"),
+    RuntimeError("decoder failed"), ValueError("internal failure"),
+    OSError("I/O failure"), sf.LibsndfileError(2), sf.LibsndfileError(0),
+])
+def test_strict_loader_preserves_non_format_errors(tmp_path, monkeypatch, error):
+    def fail(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr("librosa.load", fail)
+    with pytest.raises(type(error)) as caught:
+        load_and_resample(tmp_path / "input.wav", 16000, 1.0, strict=True)
+    assert caught.value is error
+
+
+def test_strict_loader_preserves_real_silence(tmp_path):
+    path = tmp_path / "silence.wav"
+    sf.write(path, np.zeros(8000), 8000)
+    waveform = load_and_resample(path, 16000, 1.0, strict=True)
+    assert waveform.shape == (16000,)
+    assert waveform.dtype == np.float32
+    assert not waveform.any()
+
+
+def test_corrupt_audio_remains_tolerant_for_training_and_additive_mixing(tmp_path):
+    from training.pipelines.additive_mixing import AdditiveCompoundSampler
+
+    path = tmp_path / "corrupt.wav"
+    path.write_bytes(b"not audio")
+    waveform = load_and_resample(path, 16000, 1.0)
+    assert waveform.shape == (16000,)
+    assert waveform.dtype == np.float32
+    assert not waveform.any()
+    df = pd.DataFrame([
+        {"file_path": str(path), "clase": "low_oil"},
+        {"file_path": str(path), "clase": "serpentine_belt"},
+    ])
+    dataset = GenericAudioDataset(df, AudioConfig(target_sr=16000, duration_seconds=1.0),
+                                  {"low_oil": 0, "serpentine_belt": 1})
+    wave_tensor, label = dataset[0]
+    assert wave_tensor.shape == (16000,)
+    assert not wave_tensor.any()
+    assert label.item() == 0
+    sampler = AdditiveCompoundSampler(df, target_sr=16000, duration_seconds=1.0)
+    mixed = sampler.sample_synthetic_compound("no oil_serpentine belt")
+    assert mixed.shape == (16000,)
+    assert not mixed.any()
 
 
 def test_dataset_with_additive_compound_sampler(tmp_path):

@@ -10,8 +10,13 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset
 import librosa
+import soundfile as sf
 
 from training.schemas.config import AudioConfig, AugmentationConfig
+
+
+class MalformedAudioError(ValueError):
+    """Audio no reconocido, malformado o con codificación no soportada."""
 
 
 def load_and_resample(
@@ -20,12 +25,25 @@ def load_and_resample(
     duration_seconds: float,
     energy_vad: bool = True,
     hop_seconds: Optional[float] = None,
+    *,
+    strict: bool = False,
 ) -> np.ndarray:
-    """Carga y ajusta el largo del audio a la tasa de muestreo y duración solicitada con selección por energía RMS."""
+    """Carga y ajusta el audio con selección por energía RMS.
+
+    El entrenamiento conserva ceros ante fallos de lectura por defecto.
+    En modo estricto solo los códigos de formato de libsndfile (1, 3, 4)
+    generan MalformedAudioError con causa; los demás errores se propagan.
+    """
     target_samples = int(target_sr * duration_seconds)
     try:
         y, sr = librosa.load(file_path, sr=target_sr, mono=True)
-    except Exception:
+    except Exception as err:
+        if strict:
+            # 1: formato desconocido; 3: malformado; 4: encoding no soportado.
+            # 2 (sistema), 0 (indeterminado) y códigos internos no son input inválido.
+            if isinstance(err, sf.LibsndfileError) and err.code in (1, 3, 4):
+                raise MalformedAudioError(f"Audio inválido o no soportado: {file_path}") from err
+            raise
         return np.zeros(target_samples, dtype=np.float32)
 
     total_samples = len(y)
