@@ -9,7 +9,7 @@ import torch
 import numpy as np
 import librosa
 
-from app.services.predictors.base import AudioPredictor
+from app.services.predictors.base import AudioPredictor, ModelWeightsError
 from app.schemas.model_info import ModelMetadata
 from app.schemas.prediction import PredictionResult
 from training.schemas.manifest import ModelManifest
@@ -64,8 +64,8 @@ class BundleAudioPredictor(AudioPredictor):
             return
 
         weights_file = self.bundle_dir / self.manifest.model_specs.weights_file
-        if not weights_file.exists():
-            return
+        if not weights_file.is_file():
+            raise ModelWeightsError(f"Pesos no encontrados: {weights_file}")
 
         try:
             num_classes = len(self.manifest.classes)
@@ -74,10 +74,10 @@ class BundleAudioPredictor(AudioPredictor):
 
             if family == "audio_cnn" or "cnn" in backbone.lower():
                 from poc.train import AudioCNN
-                self.model = AudioCNN(num_classes=num_classes)
+                model = AudioCNN(num_classes=num_classes)
             else:
                 from poc.train import BioacousticModel
-                self.model = BioacousticModel(
+                model = BioacousticModel(
                     model_name=backbone,
                     num_classes=num_classes,
                     pretrained=False,
@@ -85,19 +85,36 @@ class BundleAudioPredictor(AudioPredictor):
                 )
 
             state_dict = torch.load(weights_file, map_location=self.device, weights_only=True)
-            self.model.load_state_dict(state_dict, strict=False)
-            self.model.to(self.device)
-            self.model.eval()
+            # BatchNorm puede completar buffers antiguos incluso con strict=True.
+            # El bundle exige todo el estado exportado, sin valores sintetizados.
+            expected_keys = set(model.state_dict())
+            supplied_keys = set(state_dict)
+            if supplied_keys != expected_keys:
+                missing = sorted(expected_keys - supplied_keys)
+                unexpected = sorted(supplied_keys - expected_keys)
+                raise ValueError(f"Estado incompatible: faltantes={missing}, inesperados={unexpected}")
+            model.load_state_dict(state_dict, strict=True)
+            model.to(self.device)
+            model.eval()
         except Exception as err:
-            print(f"[BundleAudioPredictor] Advertencia al cargar pesos de {self.bundle_dir}: {err}")
-            self.model = None
+            raise ModelWeightsError(f"No se pudieron cargar los pesos de {weights_file}: {err}") from err
+
+        # Publicar el modelo únicamente después de completar toda la carga.
+        self.model = model
 
     def predict(self, audio_file_path: Path) -> PredictionResult:
         """Ejecuta inferencia guiada por audio_specs y diagnostics del manifest."""
+        audio_file_path = Path(audio_file_path)
+        if not audio_file_path.is_file():
+            raise FileNotFoundError(f"Audio no encontrado: {audio_file_path}")
+
         target_sr = self.manifest.audio_specs.target_sr
         duration = self.manifest.audio_specs.duration_seconds
 
-        waveform = load_and_resample(audio_file_path, target_sr=target_sr, duration_seconds=duration)
+        self._ensure_loaded()
+        waveform = load_and_resample(
+            audio_file_path, target_sr=target_sr, duration_seconds=duration, strict=True,
+        )
 
         # 1. Filtro de Silencio por RMS
         rms = float(np.sqrt(np.mean(waveform ** 2)))
@@ -121,73 +138,56 @@ class BundleAudioPredictor(AudioPredictor):
                 detalles={"energy_rms": rms, "spectral_flatness": flatness, "status": "noise"},
             )
 
-        self._ensure_loaded()
+        # Extraer ventanas para Test-Time Augmentation (TTA) denso si el audio es mayor a duration
+        y_full, _ = librosa.load(audio_file_path, sr=target_sr, mono=True)
 
-        if self.model is not None:
-            try:
-                # Extraer ventanas para Test-Time Augmentation (TTA) denso si el audio es mayor a duration
-                try:
-                    y_full, _ = librosa.load(audio_file_path, sr=target_sr, mono=True)
-                except Exception:
-                    y_full = waveform
+        target_samples = int(target_sr * duration)
+        hop_samples = int(target_sr * 1.0)  # Salto de 1 segundo para cobertura densa
 
-                target_samples = int(target_sr * duration)
-                hop_samples = int(target_sr * 1.0)  # Salto de 1 segundo para cobertura densa
+        windows = []
+        if len(y_full) > target_samples:
+            for start in range(0, len(y_full) - target_samples + 1, hop_samples):
+                w = y_full[start : start + target_samples].astype(np.float32)
+                w_rms = float(np.sqrt(np.mean(w ** 2)))
+                if w_rms >= self.manifest.diagnostics.rms_silence_threshold:
+                    windows.append(w)
+        if not windows:
+            windows = [waveform]
 
-                windows = []
-                if len(y_full) > target_samples:
-                    for start in range(0, len(y_full) - target_samples + 1, hop_samples):
-                        w = y_full[start : start + target_samples].astype(np.float32)
-                        w_rms = float(np.sqrt(np.mean(w ** 2)))
-                        if w_rms >= self.manifest.diagnostics.rms_silence_threshold:
-                            windows.append(w)
-                if not windows:
-                    windows = [waveform]
+        mel_list = []
+        for w in windows:
+            mel = librosa.feature.melspectrogram(
+                y=w,
+                sr=target_sr,
+                n_fft=self.manifest.audio_specs.n_fft,
+                hop_length=self.manifest.audio_specs.hop_length,
+                n_mels=self.manifest.audio_specs.n_mels,
+                fmin=self.manifest.audio_specs.f_min,
+                fmax=self.manifest.audio_specs.f_max,
+            )
+            mel_db = librosa.power_to_db(mel, ref=np.max)
+            mel_list.append(mel_db)
 
-                mel_list = []
-                for w in windows:
-                    mel = librosa.feature.melspectrogram(
-                        y=w,
-                        sr=target_sr,
-                        n_fft=self.manifest.audio_specs.n_fft,
-                        hop_length=self.manifest.audio_specs.hop_length,
-                        n_mels=self.manifest.audio_specs.n_mels,
-                        fmin=self.manifest.audio_specs.f_min,
-                        fmax=self.manifest.audio_specs.f_max,
-                    )
-                    mel_db = librosa.power_to_db(mel, ref=np.max)
-                    mel_list.append(mel_db)
+        mel_tensor = torch.from_numpy(np.array(mel_list)).unsqueeze(1).float().to(self.device)
 
-                mel_tensor = torch.from_numpy(np.array(mel_list)).unsqueeze(1).float().to(self.device)
+        with torch.no_grad():
+            outputs = self.model(mel_tensor)
+            temp = self.manifest.diagnostics.default_temperature
+            probs = torch.softmax(outputs / temp, dim=-1)
+            # Agregación TTA Max por clase entre todas las ventanas activas
+            agg_probs, _ = torch.max(probs, dim=0)
+            conf, pred_idx = torch.max(agg_probs, dim=-1)
 
-                with torch.no_grad():
-                    outputs = self.model(mel_tensor)
-                    temp = self.manifest.diagnostics.default_temperature
-                    probs = torch.softmax(outputs / temp, dim=-1)
-                    # Agregación TTA Max por clase entre todas las ventanas activas
-                    agg_probs, _ = torch.max(probs, dim=0)
-                    conf, pred_idx = torch.max(agg_probs, dim=-1)
+            pred_class = self.manifest.classes[pred_idx.item()]
+            conf_val = round(float(conf.item()), 4)
 
-                    pred_class = self.manifest.classes[pred_idx.item()]
-                    conf_val = round(float(conf.item()), 4)
-
-                    return PredictionResult(
-                        clase=pred_class,
-                        confianza=conf_val,
-                        detalles={
-                            "energy_rms": rms,
-                            "spectral_flatness": flatness,
-                            "status": "bundle_classified",
-                            "windows_count": len(windows),
-                        },
-                    )
-            except Exception as err:
-                print(f"[BundleAudioPredictor] Error durante inferencia: {err}")
-
-        # Fallback de contingencia si no hay pesos o falla forward
-        first_class = self.manifest.classes[0] if self.manifest.classes else "Indeterminado"
-        return PredictionResult(
-            clase=first_class,
-            confianza=0.8800,
-            detalles={"status": "mock_fallback"},
-        )
+            return PredictionResult(
+                clase=pred_class,
+                confianza=conf_val,
+                detalles={
+                    "energy_rms": rms,
+                    "spectral_flatness": flatness,
+                    "status": "bundle_classified",
+                    "windows_count": len(windows),
+                },
+            )
