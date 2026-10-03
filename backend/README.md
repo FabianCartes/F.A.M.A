@@ -60,10 +60,12 @@ psql -U postgres -h localhost -c "CREATE DATABASE fama_db;"
 
 ## 3. Suite de Pruebas Automatizadas (TDD)
 
-El backend cuenta con una cobertura integral bajo TDD (174 pruebas unitarias e integrales):
+Ejecutá las pruebas desde este directorio con el intérprete del entorno del proyecto:
 ```bash
-pytest tests/ -v
+python -m pytest tests/ -q -rs
 ```
+
+Las pruebas de integración de `tests/test_registry_db_sync.py` necesitan PostgreSQL configurado y accesible: no sustituyen la base de datos con un mock. Las pruebas que usan checkpoints locales pueden omitirse si estos no están disponibles; `-rs` muestra el motivo. Las verificaciones de inferencia con pesos reales requieren que el predictor seleccionado, sus etiquetas y el dominio esperado por la prueba coincidan. Una ejecución con mocks o checkpoints ausentes no valida la calidad diagnóstica del modelo.
 
 ---
 
@@ -88,3 +90,17 @@ python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 - `GET /api/ingestion/datasets`: Listado de datasets en el Data Lake y local.
 - `POST /api/ingestion/sync`: Sincronización asíncrona bidireccional con Google Cloud Storage.
 - `POST /api/training/train`: Inicio y orquestación de entrenamientos (individuales o tríadas completas).
+
+### Contrato de errores de inferencia
+
+Los predictores de motor y bundles no generan clasificaciones simuladas cuando faltan pesos, fallan las cargas o la inferencia no puede completarse. La disponibilidad del modelo se verifica también para entradas de silencio o ruido; estas entradas siguen siendo válidas cuando el modelo está disponible.
+
+| Fallo | Respuesta HTTP |
+| --- | --- |
+| Audio inválido identificado como `MalformedAudioError` | `400`, con un mensaje seguro sin rutas temporales |
+| Pesos ausentes o incompatibles identificados como `ModelWeightsError` | `503` |
+| Permisos, errores de ejecución u otros fallos no clasificados | `500` |
+
+La decodificación estricta se aplica en inferencia. El entrenamiento conserva la decodificación tolerante por defecto. No todo fallo de decodificación se clasifica como audio inválido: algunos formatos dañados pueden producir `500`, pero nunca una predicción simulada exitosa.
+
+Una predicción fallida no se guarda en la base de datos y se limpia el archivo temporal. La subida a Cloud Storage ocurre antes de la inferencia: este contrato no garantiza revertir esa subida cuando la predicción falla.

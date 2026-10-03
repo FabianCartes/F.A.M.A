@@ -59,6 +59,7 @@ from app.schemas.prediction import PredictionResponse
 from app.schemas.feedback import FeedbackCreateRequest, ApproveFeedbackResponse
 from app.services.predictors.base import ModelWeightsError
 from app.services.predictors.cnn_predictor import AudioCNNPredictor
+from training.pipelines.dataset import MalformedAudioError
 
 # Alias de compatibilidad retroactiva para scripts o tests previos
 AudioPredictorService = AudioCNNPredictor
@@ -559,6 +560,11 @@ async def predict_audio(
             pred_result = predictor.predict(tmp_path)
             clase = pred_result.clase
             confianza = float(pred_result.confianza)
+        except MalformedAudioError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Audio inválido o no soportado. Proporcione un archivo WAV válido.",
+            )
         except ModelWeightsError as weights_err:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

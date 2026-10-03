@@ -9,7 +9,8 @@ from app.main import app
 from app.database import get_db
 from app.schemas.prediction import PredictionResult
 from app.services.registry import get_model_registry, ModelRegistry
-from app.services.predictors.base import AudioPredictor
+from app.services.predictors.base import AudioPredictor, ModelWeightsError
+from training.pipelines.dataset import MalformedAudioError, load_and_resample
 from app.schemas.model_info import ModelMetadata
 
 
@@ -33,6 +34,29 @@ class DummyPredictor(AudioPredictor):
 
     def predict(self, audio_file_path) -> PredictionResult:
         return PredictionResult(clase=self.label, confianza=self.conf)
+
+
+class StrictLoaderPredictor(DummyPredictor):
+    """API boundary fixture using the production strict decoder, without decoder mocks."""
+
+    def predict(self, audio_file_path) -> PredictionResult:
+        self.audio_path = audio_file_path
+        try:
+            load_and_resample(audio_file_path, 22050, 5.0, strict=True)
+        except MalformedAudioError as error:
+            self.decode_error = error
+            raise
+        return super().predict(audio_file_path)
+
+
+class FailingPredictor(DummyPredictor):
+    def __init__(self, error):
+        super().__init__("failing-model")
+        self.error = error
+
+    def predict(self, audio_file_path) -> PredictionResult:
+        self.audio_path = audio_file_path
+        raise self.error
 
 
 @pytest.fixture
@@ -134,6 +158,125 @@ def test_predict_invalid_model_returns_404_and_aborts_gcs(mock_upload, client):
     assert "modelo-fantasma" in response.json()["detail"]
     # Garantía de seguridad: GCS NUNCA se invoca si el modelo no existe
     mock_upload.assert_not_called()
+
+
+@patch("app.main.upload_audio_to_gcp", new_callable=AsyncMock)
+def test_predict_corrupt_wav_returns_safe_400_without_persistence(
+    mock_upload, client, mock_registry, mock_db,
+):
+    mock_upload.return_value = True
+    predictor = StrictLoaderPredictor("strict-loader")
+    mock_registry.register(predictor)
+    corrupt_wav = b"not an audio file"
+
+    response = client.post(
+        "/api/predict?model_id=strict-loader",
+        files={"file": ("corrupt.wav", corrupt_wav, "audio/wav")},
+    )
+
+    assert response.status_code == 400, response.json()
+    assert response.json() == {
+        "detail": "Audio inválido o no soportado. Proporcione un archivo WAV válido."
+    }
+    assert isinstance(predictor.decode_error, MalformedAudioError)
+    assert isinstance(predictor.decode_error.__cause__, sf.LibsndfileError)
+    assert str(predictor.audio_path) in str(predictor.decode_error)
+    assert str(predictor.audio_path) not in response.text
+    assert not predictor.audio_path.exists()
+    mock_upload.assert_awaited_once_with(corrupt_wav, filename="corrupt.wav")
+    mock_db.add.assert_not_called()
+    mock_db.commit.assert_not_called()
+    mock_db.refresh.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "error, expected_status",
+    [
+        (ModelWeightsError("required weights unavailable"), 503),
+        (RuntimeError("forward failed"), 500),
+        (ValueError("invalid internal tensor shape"), 500),
+        (PermissionError("decoder access denied"), 500),
+        (OSError("decoder system failure"), 500),
+    ],
+    ids=["weights", "runtime", "internal-value", "permission", "system"],
+)
+@patch("app.main.upload_audio_to_gcp", new_callable=AsyncMock)
+def test_predict_inference_failure_never_persists_or_fabricates_success(
+    mock_upload, client, mock_registry, mock_db, error, expected_status,
+):
+    mock_upload.return_value = True
+    predictor = FailingPredictor(error)
+    mock_registry.register(predictor)
+
+    response = client.post(
+        "/api/predict?model_id=failing-model",
+        files={"file": ("canto.wav", create_dummy_wav_bytes(), "audio/wav")},
+    )
+
+    assert response.status_code == expected_status
+    assert set(response.json()) == {"detail"}
+    assert str(error) in response.json()["detail"]
+    if expected_status == 503:
+        assert "failing-model" in response.json()["detail"]
+    assert not predictor.audio_path.exists()
+    mock_upload.assert_awaited_once()
+    mock_db.add.assert_not_called()
+    mock_db.commit.assert_not_called()
+    mock_db.refresh.assert_not_called()
+
+
+@patch("app.main.upload_audio_to_gcp", new_callable=AsyncMock)
+def test_predict_unnormalized_decoder_error_stays_500_without_persistence(
+    mock_upload, client, mock_registry, mock_db,
+):
+    mock_upload.return_value = True
+    predictor = StrictLoaderPredictor("strict-loader")
+    mock_registry.register(predictor)
+
+    response = client.post(
+        "/api/predict?model_id=strict-loader",
+        files={"file": (
+            "corrupt.wav", b"RIFF\x24\x00\x00\x00WAVEcorrupt audio payload", "audio/wav",
+        )},
+    )
+
+    assert response.status_code == 500
+    assert set(response.json()) == {"detail"}
+    assert not predictor.audio_path.exists()
+    mock_db.add.assert_not_called()
+    mock_db.commit.assert_not_called()
+    mock_db.refresh.assert_not_called()
+
+
+@patch("app.main.upload_audio_to_gcp", new_callable=AsyncMock)
+def test_predict_valid_wav_through_strict_loader_preserves_success(
+    mock_upload, client, mock_registry, mock_db,
+):
+    mock_upload.return_value = True
+    predictor = StrictLoaderPredictor("strict-loader")
+    mock_registry.register(predictor)
+
+    response = client.post(
+        "/api/predict?model_id=strict-loader",
+        files={"file": ("silence.wav", create_dummy_wav_bytes(), "audio/wav")},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["filename"] == "silence.wav"
+    assert data["gcp_upload"] is True
+    assert data["db_id"] == 101
+    assert data["modelo_id"] == "strict-loader"
+    assert data["clase"] == "Chincol"
+    assert data["confianza"] == 0.95
+    assert not predictor.audio_path.exists()
+    mock_db.add.assert_called_once()
+    mock_db.commit.assert_called_once()
+    mock_db.refresh.assert_called_once()
+    saved_prediction = mock_db.add.call_args.args[0]
+    assert saved_prediction.modelo_id == data["modelo_id"]
+    assert saved_prediction.etiqueta_predicha == data["clase"]
+    assert saved_prediction.confianza == data["confianza"]
 
 
 def test_predict_invalid_format_returns_400(client):
