@@ -13,7 +13,7 @@ import torch.nn as nn
 
 from app.schemas.model_info import ModelMetadata
 from app.schemas.prediction import PredictionResult
-from app.services.predictors.base import AudioPredictor
+from app.services.predictors.base import AudioPredictor, ModelWeightsError
 from training.pipelines.dataset import load_and_resample
 from training.pipelines.multitask_mapping import CLASS_NAMES_13
 
@@ -102,7 +102,10 @@ class EngineEnsemblePredictor(AudioPredictor):
 
     @property
     def has_weights(self) -> bool:
-        return all(p.exists() for p in self.checkpoint_paths.values())
+        return all(
+            name in self.checkpoint_paths and self.checkpoint_paths[name].is_file()
+            for name in DEFAULT_ENGINE_ENSEMBLE_WEIGHTS
+        )
 
     @property
     def metadata(self) -> ModelMetadata:
@@ -127,15 +130,13 @@ class EngineEnsemblePredictor(AudioPredictor):
     def _ensure_loaded(self) -> None:
         """Carga perezosa de los pesos de los 3 modelos componentes."""
         if self.sub_models is not None:
+            if any(self.sub_models.get(name) is None for name in DEFAULT_ENGINE_ENSEMBLE_WEIGHTS):
+                self.sub_models = None
+                raise ModelWeightsError("Modelos incompletos del super-ensamble de motores")
             return
 
-        all_exist = all(p.exists() for p in self.checkpoint_paths.values())
-        if not all_exist:
-            print(
-                f"[EngineEnsemblePredictor] Checkpoints incompletos en disco: "
-                f"{ {k: p.exists() for k, p in self.checkpoint_paths.items()} }"
-            )
-            return
+        if not self.has_weights:
+            raise ModelWeightsError("Checkpoints incompletos del super-ensamble de motores")
 
         try:
             from training.models.multitask_bioacoustic import MultiTaskBioacousticModel
@@ -190,27 +191,31 @@ class EngineEnsemblePredictor(AudioPredictor):
                 "panns": model_panns,
             }
         except Exception as err:
-            print(f"[EngineEnsemblePredictor] Advertencia al cargar pesos del super-ensamble: {err}")
             self.sub_models = None
+            raise ModelWeightsError("No se pudieron cargar los pesos del super-ensamble de motores") from err
 
     def predict(self, audio_file_path: Path) -> PredictionResult:
         """
         Ejecuta la inferencia diagnóstica sobre el archivo de audio mediante
         el super-ensamble tri-modelo HPSS.
+
+        Archivo ausente: FileNotFoundError. Pesos no disponibles o inválidos:
+        ModelWeightsError, incluso para silencio/ruido. Los errores de ejecución
+        de inferencia se propagan sin sustituirlos por predicciones.
         """
         audio_path = Path(audio_file_path)
         if not audio_path.exists():
-            return PredictionResult(
-                clase=self.classes[0] if self.classes else "normal_engine_idle",
-                confianza=0.8116,
-                detalles={"status": "mock_fallback", "error": "file_not_found"},
-            )
+            raise FileNotFoundError(f"Audio file not found: {audio_path}")
+
+        # La disponibilidad del modelo precede incluso los resultados de silencio/ruido.
+        self._ensure_loaded()
 
         waveform = load_and_resample(
             audio_path,
             target_sr=32000,
             duration_seconds=2.0,
             energy_vad=True,
+            strict=True,
         )
 
         # 1. Filtro de Silencio por RMS
@@ -237,66 +242,53 @@ class EngineEnsemblePredictor(AudioPredictor):
                 detalles={"energy_rms": rms, "spectral_flatness": flatness, "status": "noise"},
             )
 
-        self._ensure_loaded()
+        wave_tensor = torch.from_numpy(waveform).unsqueeze(0).to(self.device)
+        frontend = self._get_frontend()
 
-        if self.sub_models is not None:
-            try:
-                wave_tensor = torch.from_numpy(waveform).unsqueeze(0).to(self.device)
-                frontend = self._get_frontend()
+        with torch.no_grad():
+            spec_3ch = frontend(wave_tensor)  # [1, 3, 128, 251]
 
-                with torch.no_grad():
-                    spec_3ch = frontend(wave_tensor)  # [1, 3, 128, 251]
+            # Inferencia en los tres sub-modelos
+            out_res = self.sub_models["resnet"](spec_3ch)
+            logits_res = out_res[0] if isinstance(out_res, tuple) else out_res
+            p_res = torch.softmax(logits_res, dim=-1)
 
-                    # Inferencia en los tres sub-modelos
-                    out_res = self.sub_models["resnet"](spec_3ch)
-                    logits_res = out_res[0] if isinstance(out_res, tuple) else out_res
-                    p_res = torch.softmax(logits_res, dim=-1)
+            out_eff = self.sub_models["efficientnet"](spec_3ch)
+            logits_eff = out_eff[0] if isinstance(out_eff, tuple) else out_eff
+            p_eff = torch.softmax(logits_eff, dim=-1)
 
-                    out_eff = self.sub_models["efficientnet"](spec_3ch)
-                    logits_eff = out_eff[0] if isinstance(out_eff, tuple) else out_eff
-                    p_eff = torch.softmax(logits_eff, dim=-1)
+            out_panns = self.sub_models["panns"](spec_3ch)
+            logits_panns = out_panns[0] if isinstance(out_panns, tuple) else out_panns
+            p_panns = torch.softmax(logits_panns, dim=-1)
 
-                    out_panns = self.sub_models["panns"](spec_3ch)
-                    logits_panns = out_panns[0] if isinstance(out_panns, tuple) else out_panns
-                    p_panns = torch.softmax(logits_panns, dim=-1)
+            # Combinación lineal convexa: P_ens = 0.60 * Pr + 0.10 * Pe + 0.30 * Pp
+            w_res = self.weights.get("resnet", 0.60)
+            w_eff = self.weights.get("efficientnet", 0.10)
+            w_panns = self.weights.get("panns", 0.30)
 
-                    # Combinación lineal convexa: P_ens = 0.60 * Pr + 0.10 * Pe + 0.30 * Pp
-                    w_res = self.weights.get("resnet", 0.60)
-                    w_eff = self.weights.get("efficientnet", 0.10)
-                    w_panns = self.weights.get("panns", 0.30)
+            p_ens = w_res * p_res + w_eff * p_eff + w_panns * p_panns
 
-                    p_ens = w_res * p_res + w_eff * p_eff + w_panns * p_panns
+            pred_idx = int(torch.argmax(p_ens, dim=-1)[0].item())
+            conf = round(float(p_ens[0, pred_idx].item()), 4)
+            pred_class = self.classes[pred_idx]
 
-                    pred_idx = int(torch.argmax(p_ens, dim=-1)[0].item())
-                    conf = round(float(p_ens[0, pred_idx].item()), 4)
-                    pred_class = self.classes[pred_idx]
+            probs_dict = {
+                self.classes[i]: round(float(p_ens[0, i].item()), 4)
+                for i in range(len(self.classes))
+            }
 
-                    probs_dict = {
-                        self.classes[i]: round(float(p_ens[0, i].item()), 4)
-                        for i in range(len(self.classes))
-                    }
-
-                    return PredictionResult(
-                        clase=pred_class,
-                        confianza=conf,
-                        detalles={
-                            "energy_rms": rms,
-                            "spectral_flatness": flatness,
-                            "status": "classified_super_ensemble",
-                            "ensemble_weights": {
-                                "resnet": w_res,
-                                "efficientnet": w_eff,
-                                "panns": w_panns,
-                            },
-                            "ensemble_probabilities": probs_dict,
-                        },
-                    )
-            except Exception as err:
-                print(f"[EngineEnsemblePredictor] Error durante inferencia del ensamble: {err}")
-
-        # Fallback de contingencia si no se pudieron cargar pesos o falló forward
-        return PredictionResult(
-            clase=self.classes[0] if self.classes else "normal_engine_idle",
-            confianza=0.8116,
-            detalles={"status": "mock_fallback"},
-        )
+            return PredictionResult(
+                clase=pred_class,
+                confianza=conf,
+                detalles={
+                    "energy_rms": rms,
+                    "spectral_flatness": flatness,
+                    "status": "classified_super_ensemble",
+                    "ensemble_weights": {
+                        "resnet": w_res,
+                        "efficientnet": w_eff,
+                        "panns": w_panns,
+                    },
+                    "ensemble_probabilities": probs_dict,
+                },
+            )

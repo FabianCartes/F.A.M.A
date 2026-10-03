@@ -18,6 +18,7 @@ from app.main import app
 from app.database import get_db
 from app.schemas.prediction import PredictionResult
 from app.services.registry import build_default_registry, get_model_registry
+from app.services.predictors.base import ModelWeightsError
 from app.services.predictors.engine_ensemble_predictor import (
     EngineEnsemblePredictor,
     DEFAULT_ENGINE_ENSEMBLE_WEIGHTS,
@@ -34,6 +35,36 @@ def create_engine_wav_bytes(sr: int = 32000, duration: float = 2.0, freq: float 
     sf.write(buf, signal.astype(np.float32), sr, format="WAV")
     buf.seek(0)
     return buf.read()
+
+
+def test_engine_ensemble_missing_audio_raises(tmp_path):
+    predictor = EngineEnsemblePredictor(checkpoint_paths={})
+
+    with pytest.raises(FileNotFoundError):
+        predictor.predict(tmp_path / "missing.wav")
+
+
+@pytest.mark.parametrize(
+    "checkpoint_names", [(), ("resnet",), ("resnet", "efficientnet", "panns")]
+)
+@pytest.mark.parametrize("signal", ["tone", "silence", "noise"])
+def test_engine_ensemble_unavailable_weights_raise_before_audio_filters(
+    tmp_path, checkpoint_names, signal
+):
+    paths = {name: tmp_path / f"{name}.pt" for name in checkpoint_names}
+    predictor = EngineEnsemblePredictor(checkpoint_paths=paths)
+    audio_path = tmp_path / "input.wav"
+    if signal == "tone":
+        audio_path.write_bytes(create_engine_wav_bytes())
+    else:
+        waveform = (
+            np.zeros(64000) if signal == "silence"
+            else np.random.default_rng(42).normal(0, 0.3, 64000)
+        )
+        sf.write(audio_path, waveform, 32000)
+
+    with pytest.raises(ModelWeightsError):
+        predictor.predict(audio_path)
 
 
 def test_engine_ensemble_metadata():
@@ -74,6 +105,99 @@ class StubSubModel(nn.Module):
         batch_size = x.shape[0]
         # Devuelve tupla (class_logits, attr_logits) para compatibilidad multi-task
         return self.logits.repeat(batch_size, 1), torch.zeros((batch_size, 7))
+
+
+@pytest.mark.parametrize("failure", ["missing", "corrupt", "incompatible"])
+@pytest.mark.parametrize("failed_model", ["resnet", "efficientnet", "panns"])
+def test_engine_ensemble_weight_load_failure_and_recovery(
+    tmp_path, monkeypatch, failure, failed_model
+):
+    # Sustituir únicamente los modelos de entrenamiento externos; torch.load es real.
+    initial_probs = torch.zeros(13)
+    initial_probs[0] = 1.0
+    def factory(**kwargs):
+        return StubSubModel(initial_probs)
+
+    monkeypatch.setattr(
+        "training.models.multitask_bioacoustic.MultiTaskBioacousticModel", factory
+    )
+    monkeypatch.setattr("training.models.panns_cnn14.PannsCNN14", factory)
+    paths = {name: tmp_path / f"{name}.pt" for name in DEFAULT_ENGINE_ENSEMBLE_WEIGHTS}
+    for name, path in paths.items():
+        if name == failed_model and failure == "missing":
+            continue
+        if name == failed_model and failure == "corrupt":
+            path.write_bytes(b"not a torch checkpoint")
+        else:
+            state = (
+                {"logits": torch.zeros(2)}
+                if name == failed_model and failure == "incompatible"
+                else StubSubModel(initial_probs).state_dict()
+            )
+            torch.save(state, path)
+    predictor = EngineEnsemblePredictor(checkpoint_paths=paths, device=torch.device("cpu"))
+    audio_path = tmp_path / "input.wav"
+    audio_path.write_bytes(create_engine_wav_bytes())
+
+    with pytest.raises(ModelWeightsError):
+        predictor.predict(audio_path)
+
+    # Reparar todos los pesos con otra clase detecta reutilización parcial tras el fallo.
+    repaired_probs = torch.zeros(13)
+    repaired_probs[CLASS_NAMES_13.index("normal_engine_idle")] = 1.0
+    for path in paths.values():
+        torch.save(StubSubModel(repaired_probs).state_dict(), path)
+    result = predictor.predict(audio_path)
+    assert result.clase == "normal_engine_idle"
+    assert result.confianza == pytest.approx(1.0)
+    assert result.detalles["status"] == "classified_super_ensemble"
+
+
+@pytest.mark.parametrize("failed_model", ["resnet", "efficientnet", "panns"])
+def test_engine_ensemble_forward_failure_propagates_original_error(tmp_path, failed_model):
+    error = RuntimeError("forward failed")
+
+    class FailingModel(nn.Module):
+        def forward(self, x):
+            raise error
+
+    probs = torch.full((13,), 1 / 13)
+    models = {name: StubSubModel(probs) for name in DEFAULT_ENGINE_ENSEMBLE_WEIGHTS}
+    models[failed_model] = FailingModel()
+    predictor = EngineEnsemblePredictor(models=models, device=torch.device("cpu"))
+    audio_path = tmp_path / "input.wav"
+    audio_path.write_bytes(create_engine_wav_bytes())
+
+    with pytest.raises(RuntimeError) as caught:
+        predictor.predict(audio_path)
+    assert caught.value is error
+
+
+@pytest.mark.parametrize("model_names", [(), ("resnet",)])
+def test_engine_ensemble_partial_supplied_models_raise_on_silence(tmp_path, model_names):
+    models = {name: StubSubModel(torch.full((13,), 1 / 13)) for name in model_names}
+    predictor = EngineEnsemblePredictor(models=models, checkpoint_paths={})
+    audio_path = tmp_path / "silence.wav"
+    sf.write(audio_path, np.zeros(64000), 32000)
+
+    with pytest.raises(ModelWeightsError):
+        predictor.predict(audio_path)
+
+
+def test_engine_ensemble_rejects_corrupt_audio(tmp_path):
+    from training.pipelines.dataset import MalformedAudioError
+
+    models = {
+        name: StubSubModel(torch.full((13,), 1 / 13))
+        for name in DEFAULT_ENGINE_ENSEMBLE_WEIGHTS
+    }
+    predictor = EngineEnsemblePredictor(models=models, device=torch.device("cpu"))
+    audio_path = tmp_path / "corrupt.wav"
+    audio_path.write_bytes(b"not audio")
+
+    with pytest.raises(MalformedAudioError) as caught:
+        predictor.predict(audio_path)
+    assert isinstance(caught.value.__cause__, sf.LibsndfileError)
 
 
 def test_engine_ensemble_linear_combination_of_probabilities(tmp_path):
@@ -163,18 +287,28 @@ def test_engine_ensemble_consensus_high_confidence(tmp_path):
     assert result.confianza == pytest.approx(1.00, abs=1e-3)
 
 
-def test_engine_ensemble_silence_detection(tmp_path):
-    """Verifica que el audio silencioso sea filtrado por el umbral de RMS."""
-    predictor = EngineEnsemblePredictor(lazy_load=True)
+@pytest.mark.parametrize(
+    "status, expected_class",
+    [("silence", "Silencio / No detectado"), ("noise", "Ruido / Señal no biológica")],
+)
+def test_engine_ensemble_domain_negative_detection(tmp_path, status, expected_class):
+    """Silencio y ruido siguen siendo resultados legítimos con modelos disponibles."""
+    models = {
+        name: StubSubModel(torch.full((13,), 1 / 13))
+        for name in DEFAULT_ENGINE_ENSEMBLE_WEIGHTS
+    }
+    predictor = EngineEnsemblePredictor(models=models, checkpoint_paths={})
+    waveform = (
+        np.zeros(64000) if status == "silence"
+        else np.random.default_rng(42).normal(0, 0.3, 64000)
+    )
+    audio_path = tmp_path / f"{status}.wav"
+    sf.write(audio_path, waveform, 32000)
 
-    silence = np.zeros(64000, dtype=np.float32)
-    silence_path = tmp_path / "silence.wav"
-    sf.write(silence_path, silence, 32000)
-
-    result = predictor.predict(silence_path)
-    assert result.clase == "Silencio / No detectado"
+    result = predictor.predict(audio_path)
+    assert result.clase == expected_class
     assert result.confianza == 0.0
-    assert result.detalles["status"] == "silence"
+    assert result.detalles["status"] == status
 
 
 def test_engine_ensemble_registry_integration():
