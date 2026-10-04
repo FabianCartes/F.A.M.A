@@ -173,6 +173,7 @@ describe("feedbackApi (TDD Contract Tests for RF_06 & Semi-Manual Curation)", ()
           procesado: false,
           id_usuario: 1,
           audio_filename: "audio_10.wav",
+          dataset_name: "AvesChilenas",
         },
       ];
 
@@ -192,6 +193,17 @@ describe("feedbackApi (TDD Contract Tests for RF_06 & Semi-Manual Curation)", ()
       expect(items[0].id_retroalimentacion).toBe(1);
       expect(items[0].etiqueta_predicha).toBe("Rayadito");
       expect(items[0].etiqueta_corregida).toBe("Chucao");
+      expect(items[0].dataset_name).toBe("AvesChilenas");
+    });
+
+    it.each([null, undefined])("preserves unknown dataset association (%s) without defaulting", async (dataset_name) => {
+      global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => [{
+        id_retroalimentacion: 1, id_prediccion: 10, ruta_audio_prueba: 'old.wav',
+        etiqueta_predicha: 'Rayadito', confianza: 0.9, fue_correcta: true, procesado: false,
+        ...(dataset_name === undefined ? {} : { dataset_name }),
+      }] });
+      const [item] = await getPendingFeedback();
+      expect(item.dataset_name ?? null).toBeNull();
     });
 
     it("supports custom limit parameter", async () => {
@@ -224,7 +236,12 @@ describe("feedbackApi (TDD Contract Tests for RF_06 & Semi-Manual Curation)", ()
   // 3. approveFeedback
   // ==========================================================================
   describe("approveFeedback", () => {
-    it("sends POST approval request with dataset_name query param and returns confirmation with canonical filename", async () => {
+    it("approves by feedback ID only without selecting or overriding a dataset", async () => {
+      global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ status: 'approved' }) });
+      await approveFeedback(6);
+      expect(global.fetch).toHaveBeenCalledWith(`${API_BASE_URL}/api/feedback/6/approve`, expect.objectContaining({ method: 'POST' }));
+    });
+    it("sends POST approval without query and returns confirmation with canonical filename", async () => {
       const mockResponse = {
         status: "approved",
         id_retroalimentacion: 5,
@@ -240,10 +257,10 @@ describe("feedbackApi (TDD Contract Tests for RF_06 & Semi-Manual Curation)", ()
         json: async () => mockResponse,
       });
 
-      const result = await approveFeedback(5, "AvesChilenas");
+      const result = await approveFeedback(5);
 
       expect(global.fetch).toHaveBeenCalledWith(
-        `${API_BASE_URL}/api/feedback/5/approve?dataset_name=AvesChilenas`,
+        `${API_BASE_URL}/api/feedback/5/approve`,
         expect.objectContaining({ method: "POST" })
       );
       expect(result.status).toBe("approved");

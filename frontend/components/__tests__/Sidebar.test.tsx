@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import Sidebar from "../Sidebar";
 
 vi.mock("@/lib/api/feedbackApi", () => ({
@@ -24,7 +24,7 @@ function renderSidebar(isCollapsed: boolean) {
   };
 }
 
-const DESTINATIONS = ["Dashboard", "Ingesta", "Entrenamiento", "Predicción"];
+const DESTINATIONS = ["Dashboard", "Gestión de audios", "Entrenamiento", "Predicción"];
 
 describe("Sidebar destinations", () => {
   beforeEach(() => {
@@ -54,7 +54,16 @@ describe("Sidebar destinations", () => {
     expect(screen.getByRole("button", { name: "Predicción" }).getAttribute("aria-current")).toBe(
       "page",
     );
-    expect(screen.getByRole("button", { name: "Ingesta" }).getAttribute("aria-current")).toBeNull();
+    expect(screen.getByRole("button", { name: "Gestión de audios" }).getAttribute("aria-current")).toBeNull();
+  });
+
+  it("preserves the ingesta navigation key under the new visible label", () => {
+    const onSelectTab = vi.fn();
+    render(<Sidebar activeTab="ingesta" onSelectTab={onSelectTab} isCollapsed={false} onToggleCollapsed={vi.fn()} />);
+    const destination = screen.getByRole('button', { name: 'Gestión de audios' });
+    fireEvent.click(destination);
+    expect(onSelectTab).toHaveBeenCalledWith('ingesta');
+    expect(destination.getAttribute('aria-current')).toBe('page');
   });
 
   it("reports the panel as expanded through its collapse control", () => {

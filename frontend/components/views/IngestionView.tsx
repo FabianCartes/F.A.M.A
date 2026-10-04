@@ -88,6 +88,17 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
   const [pendingFeedbacks, setPendingFeedbacks] = useState<PendingFeedbackItem[]>([]);
   const [isLoadingFeedback, setIsLoadingFeedback] = useState<boolean>(true);
   const [processingFeedbackId, setProcessingFeedbackId] = useState<number | null>(null);
+  const processingFeedback = useRef(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const [queueLoadError, setQueueLoadError] = useState<string | null>(null);
+
+  const reportFeedbackError = (err: unknown) => {
+    const detail = err instanceof Error ? err.message : String(err);
+    const conflict = typeof err === "object" && err !== null && "statusCode" in err && err.statusCode === 409;
+    setFeedbackError(conflict
+      ? `Conflicto (409): el audio ya fue finalizado. Actualiza la cola para consultar su estado. ${detail}`
+      : `No se completó la acción; el audio sigue pendiente. ${detail}`);
+  };
 
   // Explorador de archivos de un dataset
   const [inspectingDataset, setInspectingDataset] = useState<string | null>(null);
@@ -180,8 +191,10 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
     try {
       const items = await getPendingFeedback();
       setPendingFeedbacks(items || []);
+      setQueueLoadError(null);
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
+      setQueueLoadError(`No se pudo consultar la cola de revisión: ${errMsg}`);
       addLog("WARN", `Error al consultar la cola de curación: ${errMsg}`);
     } finally {
       setIsLoadingFeedback(false);
@@ -237,6 +250,7 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
         if (feedbackResult.status === "fulfilled") {
           setPendingFeedbacks(feedbackResult.value || []);
         } else {
+          setQueueLoadError("No fue posible cargar la cola de revisión. Actualiza la cola para reintentar.");
           addLog("WARN", "No fue posible cargar la cola inicial de curación.");
         }
       } catch (err: unknown) {
@@ -358,36 +372,48 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
 
   // Acciones de Curación Human-in-the-Loop (RF_06 / ADR 0013)
   const handleApprove = async (item: PendingFeedbackItem) => {
+    if (processingFeedback.current) return;
+    const datasetName = item.dataset_name;
+    const validatedClass = item.fue_correcta ? item.etiqueta_predicha : item.etiqueta_corregida;
+    if (!datasetName || !validatedClass) return;
+    processingFeedback.current = true;
+    setFeedbackError(null);
     setProcessingFeedbackId(item.id_retroalimentacion);
     try {
-      const datasetName = "AvesChilenas";
-      const res = await approveFeedback(item.id_retroalimentacion, datasetName);
+      const res = await approveFeedback(item.id_retroalimentacion);
       addLog(
         "SUCCESS",
-        `Audio #${item.id_retroalimentacion} (${item.audio_filename || item.ruta_audio_prueba}) aprobado e incorporado al dataset '${datasetName}' (Clase: ${res.clase || item.etiqueta_corregida || item.etiqueta_predicha}).`
+        `Audio #${item.id_retroalimentacion} (${item.audio_filename || item.ruta_audio_prueba}) incorporado al dataset '${datasetName}' en GCS y en el dataset local (Clase: ${res.clase || item.etiqueta_corregida || item.etiqueta_predicha}).`
       );
       await Promise.all([fetchDatasets(), fetchPendingFeedbacks()]);
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      addLog("ERROR", `Error al aprobar retroalimentación #${item.id_retroalimentacion}: ${errMsg}`);
+      reportFeedbackError(err);
+      addLog("ERROR", `Error al incorporar audio #${item.id_retroalimentacion}: ${errMsg}`);
     } finally {
+      processingFeedback.current = false;
       setProcessingFeedbackId(null);
     }
   };
 
   const handleReject = async (idRetroalimentacion: number) => {
+    if (processingFeedback.current) return;
+    processingFeedback.current = true;
+    setFeedbackError(null);
     setProcessingFeedbackId(idRetroalimentacion);
     try {
       const res = await rejectFeedback(idRetroalimentacion);
       addLog(
         "INFO",
-        `Audio #${idRetroalimentacion} descartado sin modificar los datasets (${res.message || "Descartado"}).`
+        `Audio #${idRetroalimentacion} descartado de la cola sin borrar físicamente el audio ni modificar los datasets (${res.message || "Descartado"}).`
       );
       await fetchPendingFeedbacks();
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
+      reportFeedbackError(err);
       addLog("ERROR", `Error al descartar audio #${idRetroalimentacion}: ${errMsg}`);
     } finally {
+      processingFeedback.current = false;
       setProcessingFeedbackId(null);
     }
   };
@@ -426,7 +452,7 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
           </div>
           <div>
             <h1 className="text-xl font-bold text-white tracking-tight font-heading">
-              Ingesta y Data Lake
+              Gestión de audios
             </h1>
             <p className="text-xs text-gray-400">
               Gestión multi-dataset y sincronización selectiva nube ↔ GPU local
@@ -761,7 +787,7 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
       {/* ==================================================================== */}
       <section
         id="seccion-curacion-feedback"
-        aria-label="Bandeja de Curación e Incorporación de Audios al Dataset"
+        aria-label="Revisar audios"
         className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4 shadow-sm"
       >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#23252e] pb-3">
@@ -773,10 +799,10 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
             </div>
             <div>
               <h2 className="text-sm font-bold text-white tracking-tight">
-                Bandeja de Curación e Incorporación de Audios al Dataset (RF_06 / ADR 0013)
+                Revisar audios
               </h2>
               <p className="text-[11px] text-gray-400">
-                Auditoría supervisada Human-in-the-Loop para incorporar grabaciones de inferencia sin envenenar el entrenamiento.
+                Incorporar al dataset guarda el audio en GCS y en el dataset local. Descartar de la cola no borra físicamente el audio.
               </p>
             </div>
           </div>
@@ -799,6 +825,8 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
           </div>
         </div>
 
+        {feedbackError && <p role="alert" className="text-xs text-red-300">{feedbackError}</p>}
+        {queueLoadError && <p role="alert" className="text-xs text-red-300">{queueLoadError}</p>}
         {/* CONTENIDO DE LA BANDEJA: ESTADO DE CARGA / VACÍA / LISTADO */}
         {isLoadingFeedback ? (
           <div className="py-8 text-center text-gray-400">
@@ -810,7 +838,7 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
               <span className="text-xs">Consultando audios pendientes de curación...</span>
             </div>
           </div>
-        ) : pendingFeedbacks.length === 0 ? (
+        ) : queueLoadError && pendingFeedbacks.length === 0 ? null : pendingFeedbacks.length === 0 ? (
           <div
             data-testid="curation-queue-empty"
             role="status"
@@ -827,7 +855,7 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
                 Cola de curación vacía (0 audios pendientes de incorporación)
               </p>
               <p className="text-[11px] text-gray-400 max-w-lg mx-auto">
-                Todos los audios clasificados han sido procesados. Para incorporar nuevas grabaciones con validación de modelo, realiza inferencias en el clasificador acústico.
+                No hay audios enviados a revisión pendientes. Ejecuta una inferencia, confirma o corrige la clase y pulsa «Enviar a revisión».
               </p>
             </div>
             <div>
@@ -861,7 +889,8 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
                     item.audio_filename ||
                     item.ruta_audio_prueba.split("/").pop() ||
                     item.ruta_audio_prueba;
-                  const label = item.etiqueta_corregida || item.etiqueta_predicha;
+                  const label = item.fue_correcta ? item.etiqueta_predicha : item.etiqueta_corregida;
+                  const canIncorporate = Boolean(item.dataset_name && label);
                   const isCorrected = !item.fue_correcta && Boolean(item.etiqueta_corregida);
                   const isProcessing = processingFeedbackId === item.id_retroalimentacion;
 
@@ -905,11 +934,20 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
                         {(item.confianza * 100).toFixed(1)}%
                       </td>
                       <td className="py-3 text-right pr-2">
+                        <div className="mb-2 space-y-1 text-left">
+                          <span className="block text-gray-400">Dataset de inferencia</span>
+                          {item.dataset_name ? (
+                            <p className="font-mono text-emerald-300">{item.dataset_name}</p>
+                          ) : (
+                            <p className="text-[11px] text-amber-300">Sin dataset de inferencia asociado. No se puede incorporar este audio sin una asociación verificable; permanece pendiente o puedes descartarlo de la cola.</p>
+                          )}
+                          {!label && <p className="text-[11px] text-amber-300">No hay una clase validada disponible para incorporar este audio.</p>}
+                        </div>
                         <div className="flex items-center justify-end gap-2">
                           <button
                             type="button"
                             onClick={() => handleApprove(item)}
-                            disabled={isProcessing}
+                            disabled={processingFeedbackId !== null || !canIncorporate}
                             className="px-2.5 py-1 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 transition-colors shadow-sm flex items-center gap-1 cursor-pointer"
                           >
                             {isProcessing ? (
@@ -922,19 +960,19 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                               </svg>
                             )}
-                            <span>Aprobar e Incorporar al Dataset</span>
+                            <span>Incorporar al dataset</span>
                           </button>
 
                           <button
                             type="button"
                             onClick={() => handleReject(item.id_retroalimentacion)}
-                            disabled={isProcessing}
+                            disabled={processingFeedbackId !== null}
                             className="px-2.5 py-1 rounded-lg text-xs font-semibold text-red-400 hover:text-red-300 bg-red-950/40 hover:bg-red-900/50 border border-red-800/60 disabled:opacity-40 transition-colors flex items-center gap-1 cursor-pointer"
                           >
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                             </svg>
-                            <span>Descartar</span>
+                            <span>Descartar de la cola</span>
                           </button>
                         </div>
                       </td>

@@ -147,12 +147,10 @@ export async function getPendingFeedback(limit: number = 50): Promise<PendingFee
  * Approves a feedback recording and integrates it into the raw training dataset.
  */
 export async function approveFeedback(
-  idRetroalimentacion: number,
-  datasetName: string = "AvesChilenas"
+  idRetroalimentacion: number
 ): Promise<ApproveFeedbackResponse> {
-  const query = encodeURIComponent(datasetName);
   return request(
-    `${API_BASE_URL}/api/feedback/${idRetroalimentacion}/approve?dataset_name=${query}`,
+    `${API_BASE_URL}/api/feedback/${idRetroalimentacion}/approve`,
     {
       method: "POST",
     },

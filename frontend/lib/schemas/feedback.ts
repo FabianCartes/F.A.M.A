@@ -51,6 +51,8 @@ export type FeedbackResponse = z.infer<typeof FeedbackResponseSchema>;
  * Schema for an uncurated item waiting in the curation queue.
  */
 export const PendingFeedbackItemSchema = z.object({
+  // Missing legacy snapshots are unknown, never an implicit dataset choice.
+  dataset_name: z.string().nullable().optional(),
   id_retroalimentacion: z.number().int(),
   id_prediccion: z.number().int(),
   ruta_audio_prueba: z.string(),
