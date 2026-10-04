@@ -8,6 +8,22 @@ from app.schemas.model_info import ModelMetadata
 from app.services.predictors.base import AudioPredictor, ModelWeightsError
 
 
+def _verified_dataset_name(dataset) -> Optional[str]:
+    """A relation's name is a storage identity only when its GCS route agrees."""
+    from app.services import storage
+    if dataset is None:
+        return None
+    try:
+        name = storage.validate_path_component(dataset.nombre)
+        route = dataset.ruta_gcp.rstrip("/")
+        if route in (f"datasets/{name}", f"gs://{storage.DEFAULT_BUCKET_NAME}/datasets/{name}"):
+            return name
+    except (ValueError, TypeError, AttributeError):
+        pass
+    # Unknown/mismatched associations do not disable inference, only incorporation.
+    return None
+
+
 class ModelNotFoundError(Exception):
     """Excepción lanzada cuando se solicita un modelo no registrado."""
     pass
@@ -149,6 +165,7 @@ class ModelRegistry:
                         name=f"{m.arquitectura} (Entrenado #{m.id_modelo})",
                         is_default=is_active,
                         lazy_load=not is_active,
+                        dataset_name=_verified_dataset_name(m.conjunto_datos),
                     )
                     self.register(pred, is_default=is_active)
                     # Registrar alias útiles para consultas directas
@@ -273,6 +290,8 @@ def build_default_registry() -> ModelRegistry:
     cnn = AudioCNNPredictor()
     ensemble = ChileanBirdsEnsemblePredictor(lazy_load=True)
     engine_ensemble = EngineEnsemblePredictor(lazy_load=True)
+    # This concrete standard bird predictor also targets the pilot storage dataset.
+    engine_ensemble.metadata.dataset_name = "AvesChilenas"
 
     reg.register(cnn, is_default=True)
     reg.register(ensemble, is_default=False)

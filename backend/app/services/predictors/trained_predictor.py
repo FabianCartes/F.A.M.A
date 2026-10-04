@@ -52,6 +52,7 @@ class TrainedModelPredictor(AudioPredictor):
         name: Optional[str] = None,
         is_default: bool = False,
         lazy_load: bool = False,
+        dataset_name: Optional[str] = None,
     ):
         self.checkpoint_path = Path(checkpoint_path)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -75,6 +76,7 @@ class TrainedModelPredictor(AudioPredictor):
 
         self._metadata = ModelMetadata(
             id=self._model_id,
+            dataset_name=dataset_name,
             name=self.custom_name or f"Modelo Entrenado: {self.architecture_name} ({self.checkpoint_path.name})",
             description=f"Inferencia bioacústica con pesos reales entrenados ({self.architecture_name})",
             target_sr=TARGET_SR,

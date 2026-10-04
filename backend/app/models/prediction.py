@@ -15,6 +15,8 @@ class Prediccion(Base):
     etiqueta_predicha = Column(String(100), nullable=False)
     confianza = Column(Float, nullable=False)
     modelo_id = Column(String(100), nullable=True, default="chilean-birds-cnn")
+    # Immutable storage identity captured from the executed predictor, not a FK.
+    dataset_name = Column(String(100), nullable=True)
     fecha_prediccion = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

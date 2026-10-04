@@ -55,6 +55,7 @@ class AudioCNNPredictor(AudioPredictor):
 
         self._metadata = ModelMetadata(
             id="chilean-birds-cnn",
+            dataset_name="AvesChilenas",
             name="AudioCNN Baseline (VAD + Data Augmentation)",
             description="Red convolucional compacta optimizada con VAD y Data Augmentation para 15 aves chilenas",
             target_sr=TARGET_SR,

@@ -33,6 +33,38 @@ class FakeAudioPredictor(AudioPredictor):
         return PredictionResult(clase="Especie A", confianza=0.95)
 
 
+@pytest.mark.parametrize("name,path,expected", [
+    ("AvesChilenas", "datasets/AvesChilenas/", "AvesChilenas"),
+    ("Motores", "datasets/Motores/", "Motores"),
+    ("Motores", "datasets/AvesChilenas/", None),
+    ("Motores", "gs://other-bucket/datasets/Motores/", None),
+    (None, None, None),
+])
+def test_db_registration_propagates_only_verified_storage_identity(tmp_path, monkeypatch, name, path, expected):
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+    from app.services.predictors import trained_predictor
+    checkpoint = tmp_path / "trained.pt"
+    checkpoint.write_bytes(b"isolated checkpoint fixture" * 500)
+    model = SimpleNamespace(id_modelo=41, activo=False, arquitectura="fixture",
+                            ruta_binario_gcp="models/trained.pt",
+                            conjunto_datos=SimpleNamespace(nombre=name, ruta_gcp=path) if name else None)
+    db = MagicMock()
+    db.query.return_value.order_by.return_value.all.return_value = [model]
+    captured = {}
+    def factory(**kwargs):
+        captured.update(kwargs)
+        pred = FakeAudioPredictor(kwargs["model_id"], kwargs["name"])
+        pred._meta = pred.metadata.model_copy(update={"dataset_name": kwargs.get("dataset_name")})
+        return pred
+    monkeypatch.setattr(trained_predictor, "TrainedModelPredictor", factory)
+    registry = ModelRegistry()
+    registry.register_from_db(db, tmp_path)
+    assert "dataset_name" in captured
+    assert registry.get("41").dataset_name == expected
+    assert registry.list_models()[0].dataset_name == expected
+
+
 def test_registry_register_and_get():
     registry = ModelRegistry()
     fake_predictor = FakeAudioPredictor(model_id="test-model-1", name="Test Model 1")
@@ -82,9 +114,14 @@ def test_registry_no_default_configured():
         registry.get(None)
 
 
-def test_get_model_registry_default_population():
-    from app.services.registry import get_model_registry, set_global_model_registry
-    set_global_model_registry(None)  # Reset singleton
+def test_get_model_registry_default_population(monkeypatch):
+    from app.services import registry as module
+    from app.services.predictors.cnn_predictor import AudioCNNPredictor
+    from app.services.registry import get_model_registry
+    monkeypatch.setattr(module, "_global_model_registry", None)
+    monkeypatch.setattr(module, "discover_and_register_bundles", lambda *a: 0)
+    monkeypatch.setattr(module, "discover_and_register_checkpoints", lambda *a: 0)
+    monkeypatch.setattr(AudioCNNPredictor, "_load_checkpoint", lambda self: None)
     reg = get_model_registry()
 
     assert reg.has_model("chilean-birds-cnn")
@@ -93,6 +130,8 @@ def test_get_model_registry_default_population():
 
     cnn = reg.get("chilean-birds-cnn")
     assert cnn.model_id == "chilean-birds-cnn"
+    assert cnn.dataset_name == "AvesChilenas"
+    assert all(meta.dataset_name == "AvesChilenas" for meta in reg.list_models())
 
     default_model = reg.get(None)
     assert default_model.model_id == reg.get_default_model_id()
@@ -175,12 +214,14 @@ def test_registry_register_from_db_inactive_models_lazy_loaded(tmp_path):
     m_active.arquitectura = "AudioCNN"
     m_active.activo = True
     m_active.ruta_binario_gcp = f"models/{ckpt_file.name}"
+    m_active.conjunto_datos = None
 
     m_inactive = MagicMock()
     m_inactive.id_modelo = 102
     m_inactive.arquitectura = "AudioCNN"
     m_inactive.activo = False
     m_inactive.ruta_binario_gcp = f"models/{ckpt_file.name}"
+    m_inactive.conjunto_datos = None
 
     mock_db = MagicMock()
     mock_db.query.return_value.order_by.return_value.all.return_value = [m_active, m_inactive]

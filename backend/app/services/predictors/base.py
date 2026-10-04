@@ -44,6 +44,11 @@ class AudioPredictor(ABC):
         return self.metadata.id
 
     @property
+    def dataset_name(self):
+        """Explicit storage association; never infer a destination from class labels."""
+        return self.metadata.dataset_name
+
+    @property
     def has_weights(self) -> bool:
         """Indica si el modelo cuenta con archivos de pesos (.pt) válidos en disco."""
         return True

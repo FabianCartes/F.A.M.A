@@ -53,6 +53,7 @@ class ChileanBirdsEnsemblePredictor(AudioPredictor):
 
         self._metadata = ModelMetadata(
             id="chilean-birds-ensemble",
+            dataset_name="AvesChilenas",
             name="Super-Ensamble Tri-Modelo (ConvNeXt + EfficientNet + ResNet34d)",
             description="Ensamble heterogéneo ponderado con Late Fusion y Dense TTA (88.68% F1 récord)",
             target_sr=TARGET_SR,

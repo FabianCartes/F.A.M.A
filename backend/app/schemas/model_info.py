@@ -12,6 +12,7 @@ class ModelMetadata(BaseModel):
     description: str = Field(..., description="Descripción técnica de la arquitectura y entrenamiento")
     target_sr: int = Field(22050, description="Tasa de muestreo requerida en Hz")
     duration_seconds: float = Field(5.0, description="Duración de ventana de análisis en segundos")
+    dataset_name: Optional[str] = Field(None, description="Destino canónico de almacenamiento verificado; null si desconocido")
     classes: List[str] = Field(default_factory=list, description="Lista de clases/especies reconocidas")
     is_default: bool = Field(False, description="Indica si es el modelo por defecto del sistema")
     has_weights: bool = Field(True, description="Indica si los pesos binarios (.pt) existen físicamente en disco y están listos")
