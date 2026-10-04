@@ -219,7 +219,9 @@ Cuando el equipo de campo regresa con nuevas grabaciones:
 
 ## 5. Módulo 3: Entrenamiento Local con Tríadas de Ensambles
 
-El **Módulo de Entrenamiento** (`RF_04`, `CU_INV_02`, `CU_INV_03`, `CU_INV_04`, `CU_INV_05`, `CU_ADM_05`) permite entrenar redes neuronales profundas de última generación aprovechando la GPU del laboratorio sin generar costos en la nube.
+El **Módulo de Entrenamiento** (`RF_04`, `CU_INV_02`, `CU_INV_03`, `CU_INV_04`, `CU_INV_05`, `CU_ADM_05`) ejecuta entrenamiento local en GPU o CPU. Un trabajo aceptado no equivale a un modelo guardado: `started` confirma el inicio; `completed` requiere checkpoints locales y commits confirmados de modelos y métricas. Este contrato está implementado y comprobado en entornos aislados, no validado mediante entrenamiento real ni despliegue productivo.
+
+El panel siguiente es ilustrativo; sus cifras y acciones no acreditan resultados ni disponibilidad operativa.
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
@@ -248,30 +250,68 @@ El **Módulo de Entrenamiento** (`RF_04`, `CU_INV_02`, `CU_INV_03`, `CU_INV_04`,
    * `ResNet-34d`: Conexiones residuales profundas optimizadas para estabilidad y señales complejas de maquinaria.
    * `PANNs-CNN14`: Red pre-entrenada para audio con amplio campo receptivo, ideal para armónicos mecánicos.
    * `AudioCNN`: Baseline convolucional clásico liviano para pruebas rápidas en hardware limitado.
-2. **Modo Tríada de Ensambles (`triad` - Recomendado para Producción):**  
-   Ejecuta un pipeline secuencial automatizado de 3 fases. El sistema entrena de forma sucesiva los tres modelos que componen el ensamble campeón, guardando sus pesos calibrados y generando de manera automática el checkpoint combinado con ponderación bayesiana óptima.
+2. **Modo Tríada de Ensambles:**
+   Entrena secuencialmente EfficientNet-B0, ConvNeXt-Nano y ResNet-34d para `AvesChilenas`; para `engine_diagnostics`, ResNet-34d, EfficientNet-B0 y PANNs-CNN14. Guarda un checkpoint por componente con su peso de ensamble y configuración, no un checkpoint combinado calibrado automáticamente. La disponibilidad y calidad para producción requieren verificación independiente.
 
 ### 5.2. Guía Paso a Paso para Iniciar un Entrenamiento
 1. **Verificar Disponibilidad de Hardware:** En la esquina superior derecha del módulo, revise el widget de telemetría. Asegúrese de que el estado indique `CUDA Disponible` y que la memoria VRAM libre supere los 4.0 GB.
-2. **Seleccionar Dataset:** En el menú desplegable, seleccione el conjunto de datos deseado (debe haber sido sincronizado previamente en el Módulo de Ingesta).
+2. **Seleccionar Dataset:** Solo se admiten los nombres exactos `AvesChilenas` y `engine_diagnostics`, con un registro único en `conjunto_datos` y fuente local válida (véase 5.5). El catálogo filtra datasets no soportados o no registrados, pero aparecer en él no acredita particiones válidas. `CarEngineDiagnostics`, usado como ejemplo de ingesta en 4.1, no es un alias admitido por entrenamiento.
 3. **Elegir la Modalidad y Arquitectura:** Seleccione `Modelo Individual` o `Tríada Completa (Super-Ensamble)`.
 4. **Ajustar Hiperparámetros (o utilizar los Presets recomendados):**
    * **Tasa de Aprendizaje (Learning Rate):** Por defecto `0.001` para EfficientNet, `0.0005` para ConvNeXt y `0.0003` para ResNet.
    * **Épocas:** Rango recomendado entre 10 y 25 épocas.
    * **Tamaño del Lote (Batch Size):** Valor predeterminado `16` (en GPUs con 6-8 GB de VRAM) u `8` para ResNet-34d.
 5. **Iniciar Pipeline:** Haga clic en **[Comenzar Entrenamiento]**.
-   * El sistema bloqueará la GPU física mediante la cola de trabajos secuencial (Job Queue FIFO).
-   * La interfaz cambiará a modo de supervisión en vivo, mostrando curvas de pérdida y exactitud por época y logs detallados en la terminal integrada.
+   * La respuesta `started` incluye un `job_id`; supervise el progreso y su `error_message` hasta el estado final. Una admisión inválida devuelve HTTP 400 y progreso `failed`, sin lanzar el worker ni sustituir el dataset por otro.
+   * El servicio rechaza otro inicio mientras está en `training`; este control dentro del proceso no es una cola FIFO ni un bloqueo global de la GPU frente a otros procesos.
+   * Las curvas y logs en vivo son telemetría; las métricas se insertan en BD al finalizar cada modelo, no mediante un commit por época.
 
 ### 5.3. Control de Procesos y Detención Segura (`CU_ADM_05`)
 Si el usuario detecta divergencia en la pérdida o necesita liberar la GPU para una tarea urgente:
 * Presione el botón **[Detener Entrenamiento]**.
-* El backend interceptará la señal al término del mini-batch actual, ejecutará la limpieza de memoria mediante `torch.cuda.empty_cache()` y preservará el mejor checkpoint obtenido hasta ese instante, evitando la corrupción del modelo.
+* La respuesta `stopping` confirma una solicitud cooperativa, no un guardado. El worker comprueba la señal durante el procesamiento y puede terminar como `stopped` sin publicar el checkpoint del modelo en curso. No se garantiza conservar sus mejores pesos; los componentes ya registrados permanecen guardados.
 
 ### 5.4. Activación de Modelos en Caliente (`CU_INV_05`)
 En la parte inferior del módulo se ubica la tabla de **Historial de Modelos**:
-* Muestra todos los experimentos completados y registrados en PostgreSQL con sus métricas finales de validación.
-* Al pulsar el botón **[Activar Modelo]** sobre cualquier registro, el backend descarga los pesos anteriores de la VRAM y carga el nuevo modelo seleccionado en menos de 1 segundo, dejándolo inmediatamente activo para todas las inferencias del sistema sin necesidad de reiniciar contenedores ni interrumpir el servicio web.
+* El historial consultado con BD incluye `dataset_id`, `dataset_name`, `filename`, `sha256` y métricas persistidas por época. Los nombres amigables, versiones y fichas descriptivas no sustituyen esa evidencia de origen ni la inspección del checkpoint.
+* **[Activar Modelo]** marca la fila activa e intenta sincronizar el registro. No garantiza carga inmediata, latencia inferior a un segundo ni inferencia correcta: compruebe pesos disponibles y una inferencia explícita con ese modelo.
+
+### 5.5. Requisitos de la Fuente Local y Procedencia
+
+La fuente se resuelve en `backend/data/raw/<dataset>` mediante el resolutor de rutas del backend. Los CSV se leen con `pandas.read_csv`, con encabezados exactos:
+
+| Dataset | Particiones admitidas | Columnas para localizar audio |
+| --- | --- | --- |
+| `AvesChilenas` | `train.csv` y `val.csv`; si ambos faltan, partición desde `metadata.csv` | `clase` y `file_path`; alternativamente `clase` y `nombre_archivo`, con `xc_id` opcional para resolución compatible |
+| `engine_diagnostics` | `train_metadata.csv` y `val_metadata.csv` obligatorios | `clase` y `file_path` |
+
+- Si falta solo una partición, se rechaza el inicio. El fallback de Aves necesita además `recordist` para el particionador agrupado; no promete separación por grabador cuando hay menos de tres grupos. Las particiones explícitas no reciben esa comprobación de agrupación.
+- Train y val deben ser no vacíos, con clases de texto no nulas ni en blanco; cada clase de val debe existir en train. No pueden compartir una ruta de audio resuelta.
+- `file_path` tiene prioridad si la columna existe: debe ser texto no vacío, absoluto o relativo a la raíz raw del dataset. Para Aves sin esa columna se buscan variantes compatibles del nombre/ID, incluida la carpeta de clase normalizada a minúsculas y guiones bajos.
+- Cada ruta debe resolver a un archivo no vacío, con extensión `.wav`, `.mp3`, `.flac` u `.ogg`, dentro de la fuente raw o del `processed_wav` canónico de ese mismo dataset. Los CSV no pueden escapar de la raíz raw mediante enlaces.
+- La admisión fija ID, nombre, directorio y tablas con rutas resueltas para que el worker consuma esa fuente, sin fallback a otro dataset. No copia ni bloquea los bytes de audio: evite cambiar la fuente durante el trabajo. No valida códec, decodificación efectiva, calidad acústica ni calidad del modelo.
+
+### 5.6. Guardado Confirmado y Límites de Recuperación
+
+1. Cada modelo publica `fama_<UUID>_best.pt` en el directorio local de checkpoints (por defecto `backend/checkpoints`). Escribe un temporal exclusivo, sincroniza archivo, publica mediante hard link sin reemplazar un destino existente y sincroniza directorio. Requiere soporte del filesystem; no reutiliza nombres basados en conteos.
+2. El payload guarda pesos, clases, arquitectura, `dataset_id`, `dataset_name`, `job_id`, `source_directory` y configuración del componente. La BD conserva tamaño y SHA-256 completo del checkpoint; ese hash identifica el artefacto, no certifica los bytes de la fuente de entrenamiento.
+3. Antes de registrar, revalida el ID/nombre aceptado con bloqueo de fila (`SELECT FOR UPDATE`) y confirma modelo y sus métricas en un mismo commit de BD. Solo después de guardar todos los componentes puede anunciar `completed`. Fallos de escritura, identidad o persistencia producen `failed` con error visible.
+4. La publicación local y el commit de BD **no forman una transacción atómica conjunta**. La limpieza solo alcanza el archivo nuevo probado como no registrado; ante un commit de resultado indeterminado se conserva el artefacto si no puede comprobarse su ausencia en BD. Una interrupción abrupta entre publicación y commit puede dejar un archivo huérfano, sin recuperación automática. Un ensamble fallido puede conservar componentes exitosos y sus filas; no hay rollback global del ensamble.
+
+`ruta_binario_gcp = models/<archivo>` es metadata del registro, **no evidencia de carga a GCS**. El registro toma el basename para buscar el checkpoint local. Este flujo no sube checkpoints a la nube.
+
+La asociación verificable aplica a modelos nuevos. `fama_trained_model_7` y otros históricos con `id_conjunto_datos = NULL` no reciben inferencia de procedencia ni backfill por etiqueta, nombre visible o similitud de clases. Su incorporación de audios continúa bloqueada si falta destino verificable; véase [flujo de revisión](flujo_revision_audios.md).
+
+### 5.7. Próxima Comprobación Operativa Autorizada
+
+**Solo tras autorización explícita de despliegue y entrenamiento real**, realizar un smoke test de un modelo individual sobre una fuente válida, sin eliminar ni modificar modelos antiguos:
+
+- Registrar ID/nombre aceptados y `job_id`; observar `completed` o conservar el error real, sin convertir `started` en éxito.
+- Contrastar la FK `id_conjunto_datos` con el registro original; revisar checkpoint local, payload, tamaño y SHA-256 frente a la fila guardada.
+- Consultar historial y métricas persistidas, resolver el checkpoint desde el registro y ejecutar una inferencia explícita con el modelo nuevo. Esto no demuestra calidad general sobre un corpus.
+- Verificar después la curación de un audio hacia GCS y dataset local como operación separada, con autorización de escritura propia; no confundirla con subir checkpoints ni con reentrenamiento automático.
+
+PostgreSQL real, bloqueo de fila, durabilidad del filesystem desplegado, GPU, entrenamiento real y GCS no se ejercitaron en este cambio documental. Las decisiones y alternativas están en el [ADR 0016](../adr/0016-procedencia-y-persistencia-entrenamiento.md).
 
 ---
 
