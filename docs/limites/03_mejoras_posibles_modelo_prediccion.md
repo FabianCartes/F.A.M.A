@@ -176,6 +176,49 @@ Para soportar esta variabilidad sin mutar el worker central de entrenamiento (`_
 * Esquemas Pydantic desacoplados (`OptimizerConfig`, `SchedulerConfig`) que viajan en el payload de inicio de entrenamiento desde el frontend (`TrainingView.tsx`).
 * Bucle de ejecución agnóstico al algoritmo: el worker consulta el proveedor seleccionado, inyecta los parámetros validados y ejecuta el paso de optimización respetando el contrato público sin condicionales duros tipo `if/elif` dispersos.
 
+### 8.2 Trabajo futuro: selección de fragmentos de audio antes de la inferencia
+
+**Estado:** propuesta pendiente de evaluación e implementación. No se ha decidido ni implementado un editor de audio o un cambio de estrategia de inferencia.
+
+#### Problema observado
+
+En una prueba del endpoint local `POST /api/predict` con `model_id=fama_trained_model_7` (EfficientNet-B0, «Entrenado #7»), se obtuvieron los siguientes resultados:
+
+| Archivo | Duración aproximada | Etiqueta esperada según el usuario | Predicción devuelta | Confianza devuelta |
+|:---|:---:|:---|:---|:---:|
+| `chucao.wav` | 18.02 s | Chucao | Fío-fío | 1.0 |
+| `canastero.wav` | 5.62 s | Canastero | Churrín de la Mocha | 1.0 |
+
+Ambas llamadas respondieron HTTP 200 con `is_mock=false`. Esta evidencia corresponde a dos archivos concretos: no constituye una evaluación representativa del modelo ni una verificación independiente de las especies presentes. «Entrenado #7» identifica un registro del catálogo, no demuestra correspondencia con la Iteración 7 de los informes experimentales.
+
+La vista permite visualizar la onda y desplazar la reproducción, pero no seleccionar un intervalo para clasificar: envía el WAV original. `TrainedModelPredictor` utiliza una única ventana central de 5 segundos. Por tanto, un evento fuera de ese intervalo puede quedar excluido. **Todavía no se ha demostrado que el recorte sea la causa de los errores observados.**
+
+La confianza es el máximo de softmax, redondeado a cuatro decimales por el predictor; `1.0` no equivale a certeza de clasificación correcta ni demuestra una confianza calibrada. Seleccionar un fragmento más relevante no garantiza resolver este problema.
+
+#### Alternativas a evaluar
+
+| Alternativa | Beneficio | Límite o costo |
+|:---|:---|:---|
+| Selección manual en la vista | Permite escuchar y elegir el tramo que se enviará a inferencia, sin salir de F.A.M.A. | Requiere validar tiempos, duración esperada por el modelo y correspondencia entre el fragmento mostrado y el procesado. |
+| Análisis automático de varias ventanas | Reduce la dependencia de un único recorte central y facilita clasificar audios largos. | Aumenta latencia y requiere evaluar selección y agregación; mayor energía no implica presencia de canto. |
+| Edición con herramienta externa | Permite cortes precisos y edición avanzada sin desarrollar un editor completo en F.A.M.A. | Agrega pasos al usuario y no corrige por sí sola incompatibilidades del pipeline o sobreconfianza del modelo. |
+
+**Orientación propuesta:** no exigir una herramienta externa para el uso habitual. Evaluar una selección manual sencilla con reproducción previa como control opcional, y contrastar el recorte central con varias ventanas para el predictor afectado. La edición avanzada puede continuar fuera de la aplicación. No ampliar el alcance a limpieza de ruido, filtros o edición multicanal sin una necesidad validada.
+
+Ya existe `extract_active_windows` en el procesamiento de entrenamiento y ensamble/TTA; su reutilización debe comprobarse por modelo, sin asumir que todos los checkpoints admiten la misma configuración o agregación. El filtrado energético puede conservar ruido fuerte y descartar vocalizaciones débiles.
+
+#### Validación previa y criterios de aceptación
+
+- [ ] Comparar el recorte central, un fragmento elegido manualmente y varias ventanas sobre audios etiquetados, incluidos eventos fuera del centro.
+- [ ] Verificar la compatibilidad del preprocesamiento de inferencia con el entrenamiento del checkpoint seleccionado antes de atribuir el error al recorte.
+- [ ] Permitir escuchar el fragmento seleccionado e identificar claramente qué intervalo se clasificará; conservar el audio original.
+- [ ] Validar límites temporales, audios cortos, silencio y duración requerida por cada modelo; documentar cualquier relleno o recorte adicional.
+- [ ] Para ventanas automáticas, documentar la regla de selección y agregación, medir latencia y registrar los intervalos analizados.
+- [ ] Evaluar errores por especie y calibración con un conjunto independiente; no elegir thresholds ni agregación a partir de estos dos ejemplos únicamente.
+- [ ] Mantener trazabilidad del modelo y fragmento analizado en el resultado y, si corresponde, en el historial.
+
+**Referencias de implementación actual:** [`PredictionView.tsx`](../../frontend/components/views/PredictionView.tsx), [`trained_predictor.py`](../../backend/app/services/predictors/trained_predictor.py), [`preprocess.py`](../../backend/poc/preprocess.py) y [`evaluate.py`](../../backend/poc/evaluate.py).
+
 ### Referencias clave (2024–2026)
 
 * Denton et al., Perch 2.0, `arXiv:2508.04665` (2025).
