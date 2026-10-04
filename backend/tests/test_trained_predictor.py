@@ -11,7 +11,10 @@ from app.services.predictors.trained_predictor import (
 from app.schemas.prediction import PredictionResult
 
 
-CHECKPOINT_PATH = Path("backend/checkpoints/fama_efficientnet_b0_1790539191_efficientnet_b0_best.pt")
+CHECKPOINT_PATH = (
+    Path(__file__).resolve().parent.parent
+    / "checkpoints/fama_efficientnet_b0_1790539191_efficientnet_b0_best.pt"
+)
 
 
 def resolve_test_audio_path() -> Path:

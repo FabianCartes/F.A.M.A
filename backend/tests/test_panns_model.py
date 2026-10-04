@@ -48,7 +48,10 @@ def test_panns_cnn14_freeze_stages():
 
 
 def test_panns_weight_loading_with_channel_adaptation():
-    ckpt_path = Path("backend/checkpoints/pretrained/Cnn14_mAP=0.431.pth")
+    ckpt_path = (
+        Path(__file__).resolve().parent.parent
+        / "checkpoints/pretrained/Cnn14_mAP=0.431.pth"
+    )
     if not ckpt_path.exists():
         pytest.skip("Pretrained checkpoint not present on disk")
 
