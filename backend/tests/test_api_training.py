@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -8,13 +9,64 @@ _BACKEND_ROOT = Path(__file__).resolve().parent.parent
 if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
 
-from app.main import app
+# Disable dotenv reads and import-time DDL; lifespan is never entered by this client.
+os.environ["PYTHON_DOTENV_DISABLED"] = "1"
+with patch("app.database.Base.metadata.create_all"):
+    from app import main
+from app.database import get_db
+from app.services import training
+from tests.test_training_flow import training_env, partitions, register
+
+app = main.app
 
 
 @pytest.fixture
-def client():
-    with TestClient(app) as test_client:
+def client(training_env, monkeypatch):
+    service, sessions, _, _ = training_env
+    monkeypatch.setattr(main, "training_service", service)
+    monkeypatch.setattr(training, "training_service", service)
+    def isolated_db():
+        with sessions() as db:
+            yield db
+    app.dependency_overrides[get_db] = isolated_db
+    # Without the context manager TestClient does not run model loading/admin seeding.
+    test_client = TestClient(app, raise_server_exceptions=False)
+    try:
         yield test_client
+    finally:
+        test_client.close()
+        app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.mark.parametrize("name,registered", [("medical_cough", True), ("AvesChilenas", False), ("AvesChilenas", True)])
+def test_start_rejection_is_visible_in_api_progress(client, training_env, name, registered):
+    service, sessions, _, thread = training_env
+    if registered:
+        register(sessions, name)
+    response = client.post("/api/training/start", json={"dataset_name": name})
+    assert response.status_code == 400
+    assert name in response.json()["detail"]
+    progress = client.get("/api/training/progress").json()
+    assert progress["status"] == "failed"
+    assert progress["error_message"] == response.json()["detail"]
+    thread.assert_not_called()
+
+
+@pytest.mark.parametrize("name", ["AvesChilenas", "engine_diagnostics"])
+def test_api_accepts_supported_registered_source(client, training_env, name):
+    _, sessions, root, _ = training_env
+    register(sessions, name)
+    partitions(root, name)
+    response = client.post("/api/training/start", json={"dataset_name": name})
+    assert response.status_code == 200
+    assert response.json()["status"] == "started"
+    progress = client.get("/api/training/progress").json()
+    assert progress["status"] == "training"
+    assert progress["job_id"] == response.json()["job_id"]
+    conflict = client.post("/api/training/start", json={"dataset_name": name})
+    assert conflict.status_code == 400
+    assert client.get("/api/training/progress").json()["status"] == "training"
+    assert client.get("/api/training/history").status_code == 200
 
 
 def test_get_training_hardware(client):
@@ -35,6 +87,17 @@ def test_get_training_datasets(client):
     data = res.json()
     assert "datasets" in data
     assert isinstance(data["datasets"], list)
+    assert data["datasets"] == []
+
+
+def test_catalog_excludes_unsupported_registered_dataset(client, training_env):
+    _, sessions, root, _ = training_env
+    register(sessions, "medical_cough")
+    register(sessions, "engine_diagnostics")
+    partitions(root, "engine_diagnostics")
+    response = client.get("/api/training/datasets")
+    assert response.status_code == 200
+    assert [entry["id"] for entry in response.json()["datasets"]] == ["engine_diagnostics"]
 
 
 def test_training_lifecycle(client):
@@ -179,7 +242,7 @@ def test_start_training_api_passes_multi_domain_configs(client):
             "message": "Pipeline Multi-Dominio iniciado.",
         }
         payload = {
-            "dataset_name": "medical_cough",
+            "dataset_name": "engine_diagnostics",
             "architecture": "ResNet-34d",
             "epochs": 15,
             "learning_rate": 0.0003,
@@ -212,7 +275,7 @@ def test_start_training_api_passes_multi_domain_configs(client):
         assert res.json()["status"] == "started"
         mock_start.assert_called_once()
         call_kwargs = mock_start.call_args.kwargs
-        assert call_kwargs["dataset_name"] == "medical_cough"
+        assert call_kwargs["dataset_name"] == "engine_diagnostics"
         assert call_kwargs["audio_config"]["target_sr"] == 16000
         assert call_kwargs["audio_config"]["f_max"] == 4000.0
         assert call_kwargs["windowing_config"]["hop_seconds"] == 0.5

@@ -776,7 +776,7 @@ def start_training_pipeline(req: StartTrainingRequest):
 
         result = training_service.start_training(**kwargs)
         return result
-    except RuntimeError as exc:
+    except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
 

@@ -26,7 +26,7 @@ from torch.utils.data import DataLoader
 from poc.preprocess import GPUAudioFrontEnd, GPUSpecAugment
 from poc.train import BioacousticModel, AudioCNN, AudioDataset, FocalLoss, apply_mixup
 from poc.split import grouped_stratified_split
-from training.paths import get_raw_data_dir
+from training.paths import get_raw_data_dir, get_processed_data_dir
 from training.schemas.config import AudioConfig
 from training.pipelines.dataset import GenericAudioDataset
 
@@ -40,6 +40,14 @@ ARCHITECTURE_PRESETS: Dict[str, Dict[str, Any]] = {
 
 TRIAD_ARCHITECTURES: List[str] = ["EfficientNet-B0", "ConvNeXt-Nano", "ResNet-34d"]
 ENGINE_TRIAD_ARCHITECTURES: List[str] = ["ResNet-34d", "EfficientNet-B0", "PANNs-CNN14"]
+SUPPORTED_DATASETS = frozenset({"AvesChilenas", "engine_diagnostics"})
+
+
+class _AcceptedAudioDataset(AudioDataset):
+    """Keep the bioacoustic transforms, but consume only admitted file paths."""
+
+    def _resolve_file_path(self, row: pd.Series) -> Path:
+        return Path(row["file_path"])
 
 
 class TrainingService:
@@ -151,9 +159,9 @@ class TrainingService:
     def get_available_datasets(self, db: Optional[Session] = None) -> List[Dict[str, Any]]:
         """
         Lista los datasets disponibles para seleccionar como origen de entrenamiento (CU_INV_02).
-        Retorna nombres exactos coincidentes con GCS y calcula dinámicamente las clases de cada conjunto.
+        Only registered, supported identities are offered; start still validates local data.
         """
-        raw_dir = _BACKEND_DIR / "data" / "raw"
+        raw_dir = get_raw_data_dir()
         datasets = []
 
         # 1. Consultar base de datos PostgreSQL si está conectada
@@ -161,6 +169,8 @@ class TrainingService:
             try:
                 db_datasets = db.query(ConjuntoDatos).all()
                 for ds in db_datasets:
+                    if ds.nombre not in SUPPORTED_DATASETS:
+                        continue
                     classes = []
                     try:
                         classes_query = db.query(Audio.clase).filter(Audio.id_conjunto_datos == ds.id_conjunto_datos).distinct().all()
@@ -190,72 +200,6 @@ class TrainingService:
                     })
             except Exception:
                 pass
-
-        # 2. Dataset nativo de aves chilenas (AvesChilenas coincidente con GCS)
-        has_aves = any(d["id"] == "AvesChilenas" for d in datasets)
-        if not has_aves:
-            local_aves_count = 0
-            if raw_dir.is_dir():
-                local_aves_count = len(list(raw_dir.rglob("*.mp3"))) + len(list(raw_dir.rglob("*.wav")))
-
-            datasets.insert(0, {
-                "id": "AvesChilenas",
-                "name": f"AvesChilenas ({local_aves_count or 1211} audios)",
-                "audio_count": local_aves_count or 1211,
-                "class_count": 15,
-                "classes": ["Canastero", "Chercán", "Chincol", "Chucao", "Churrín de la Mocha",
-                            "Churrín del sur", "Colilarga", "Fío-fío", "Picaflor chico", "Rayadito",
-                            "Tapaculo", "Tijeral", "Tordo", "Turca", "Zorzal patagónico"],
-                "size_mb": 340.5,
-                "estado": "sincronizado",
-                "domain": "bioacoustic",
-                "domain_label": "Bioacústica Silvestre",
-                "db_id": None,
-            })
-
-        # 3. Dataset de Diagnóstico de Motores Vehiculares (13 clases mecánicas)
-        has_engine = any(d["id"] in ["engine_diagnostics", "MotoresVehiculares"] for d in datasets)
-        if not has_engine:
-            from training.pipelines.multitask_mapping import CLASS_NAMES_13
-            engine_dir = get_raw_data_dir("engine_diagnostics")
-            engine_count = 0
-            if engine_dir.is_dir():
-                engine_count = len(list(engine_dir.rglob("*.wav")))
-            datasets.append({
-                "id": "engine_diagnostics",
-                "name": f"Motores Vehiculares ({engine_count or 1380} audios)",
-                "audio_count": engine_count or 1380,
-                "class_count": len(CLASS_NAMES_13),
-                "classes": list(CLASS_NAMES_13),
-                "size_mb": 420.0,
-                "estado": "sincronizado" if engine_dir.is_dir() else "disponible",
-                "domain": "industrial",
-                "domain_label": "Acústica Industrial",
-                "db_id": None,
-            })
-
-        # 3. Incorporar otros directorios locales presentes en data/raw (ej. MaquinariaMinas)
-        if raw_dir.is_dir():
-            for entry in raw_dir.iterdir():
-                if entry.is_dir() and entry.name not in [d["id"] for d in datasets]:
-                    if entry.name.lower() in [
-                        "canastero", "chercán", "chincol", "chucao", "churrín_del_sur",
-                        "churrín_de_la_mocha", "colilarga", "fío-fío", "picaflor_chico",
-                        "rayadito", "tapaculo", "tijeral", "tordo", "turca", "zorzal_patagónico"
-                    ]:
-                        continue
-                    audios = len(list(entry.rglob("*.wav"))) + len(list(entry.rglob("*.mp3")))
-                    classes = [p.name for p in entry.iterdir() if p.is_dir()]
-                    datasets.append({
-                        "id": entry.name,
-                        "name": f"{entry.name} ({audios} audios)",
-                        "audio_count": audios,
-                        "class_count": len(classes) or 1,
-                        "classes": classes,
-                        "size_mb": 0.0,
-                        "estado": "local",
-                        "db_id": None,
-                    })
 
         return datasets
 
@@ -296,6 +240,67 @@ class TrainingService:
             self._add_log("WARN", "Solicitud de detención manual recibida. Abortando entrenamiento...")
             return {"status": "stopping", "message": "Detención solicitada. El proceso finalizará de forma segura."}
 
+    def _prepare_source(self, dataset_name: str) -> Dict[str, Any]:
+        """Validate and freeze partitions before a job is admitted."""
+        raw_dir = get_raw_data_dir(dataset_name).resolve()
+        if not raw_dir.is_dir():
+            raise ValueError(f"Dataset '{dataset_name}' sin fuente local válida: {raw_dir}")
+        suffix = "_metadata" if dataset_name == "engine_diagnostics" else ""
+        train_csv, val_csv = (raw_dir / f"{split}{suffix}.csv" for split in ("train", "val"))
+        for csv in (train_csv, val_csv, raw_dir / "metadata.csv"):
+            if csv.exists() and not csv.resolve().is_relative_to(raw_dir):
+                raise ValueError(f"Dataset '{dataset_name}': metadatos fuera de su fuente local.")
+        if train_csv.exists() != val_csv.exists():
+            raise ValueError(f"Dataset '{dataset_name}' con particiones incompletas.")
+        if train_csv.is_file() and val_csv.is_file():
+            train_df, val_df = pd.read_csv(train_csv), pd.read_csv(val_csv)
+        elif dataset_name == "AvesChilenas" and not train_csv.exists() and not val_csv.exists():
+            metadata = pd.read_csv(raw_dir / "metadata.csv")
+            train_df, val_df, _ = grouped_stratified_split(metadata)
+        else:
+            raise ValueError(f"Dataset '{dataset_name}' sin particiones válidas.")
+
+        # ADR 0012 allows the dataset's canonical processed_wav compatibility link.
+        processed_dir = get_processed_data_dir(dataset_name).resolve() / "processed_wav"
+        for split, frame in (("train", train_df), ("val", val_df)):
+            if frame.empty or "clase" not in frame or frame["clase"].isna().any():
+                raise ValueError(f"Dataset '{dataset_name}': partición {split} vacía o sin clases válidas.")
+            if not frame["clase"].map(lambda c: isinstance(c, str) and bool(c.strip())).all():
+                raise ValueError(f"Dataset '{dataset_name}': clases inválidas en {split}.")
+            paths = []
+            for _, row in frame.iterrows():
+                if "file_path" in frame:
+                    value = row["file_path"]
+                    if not isinstance(value, str) or not value.strip():
+                        raise ValueError(f"Dataset '{dataset_name}': ruta de audio inválida en {split}.")
+                    path = Path(value)
+                    candidates = [path if path.is_absolute() else raw_dir / path]
+                elif dataset_name == "AvesChilenas" and "nombre_archivo" in frame:
+                    filename = row["nombre_archivo"]
+                    if not isinstance(filename, str) or not filename.strip():
+                        raise ValueError(f"Dataset '{dataset_name}': nombre de audio inválido.")
+                    slug = row["clase"].lower().replace(" ", "_").replace("/", "_")
+                    stem = Path(filename).stem
+                    xc_id = str(row.get("xc_id", ""))
+                    candidates = [raw_dir / folder / slug / f"{identifier}.wav"
+                                  for folder in ("", "processed_wav") for identifier in (stem, xc_id)]
+                    candidates += [raw_dir / slug / filename, raw_dir / slug / f"{xc_id}.mp3",
+                                   raw_dir / f"{stem}.wav", raw_dir / filename]
+                else:
+                    raise ValueError(f"Dataset '{dataset_name}': partición {split} sin rutas de audio.")
+                path = next((p.resolve() for p in candidates if p.is_file()), None)
+                if (path is None or not (path.is_relative_to(raw_dir) or path.is_relative_to(processed_dir))
+                        or path.suffix.lower() not in {".wav", ".mp3", ".flac", ".ogg"}
+                        or path.stat().st_size == 0):
+                    raise ValueError(f"Dataset '{dataset_name}': audio ausente o fuera de su fuente en {split}.")
+                paths.append(str(path))
+            frame["file_path"] = paths
+        if not set(val_df["clase"]).issubset(set(train_df["clase"])):
+            raise ValueError(f"Dataset '{dataset_name}': clases de validación ausentes en train.")
+        if set(train_df["file_path"]) & set(val_df["file_path"]):
+            raise ValueError(f"Dataset '{dataset_name}': audios compartidos entre train y val.")
+        return {"raw_dir": raw_dir, "train_df": train_df, "val_df": val_df}
+
     def start_training(
         self,
         dataset_name: str,
@@ -321,7 +326,29 @@ class TrainingService:
             if self.status == "training":
                 raise RuntimeError("Ya existe un proceso de entrenamiento en ejecución.")
 
-            is_engine = dataset_name in ["engine_diagnostics", "MotoresVehiculares"]
+            try:
+                if dataset_name not in SUPPORTED_DATASETS:
+                    raise ValueError(f"Dataset '{dataset_name}' no soportado para entrenamiento.")
+                with SessionLocal() as db:
+                    matches = [ds for ds in db.query(ConjuntoDatos).filter_by(nombre=dataset_name).all()
+                               if ds.nombre == dataset_name]
+                    if len(matches) != 1:
+                        raise ValueError(f"Dataset '{dataset_name}' requiere un registro exacto y único.")
+                    dataset_id = matches[0].id_conjunto_datos
+                source = self._prepare_source(dataset_name)
+            except Exception as exc:
+                self.status = "failed"
+                self.current_job_id = None
+                self.error_message = f"Dataset '{dataset_name}': {exc}"
+                self.start_timestamp = None
+                self.current_epoch = 0
+                self.total_epochs = 0
+                self.metrics_history = []
+                self.logs = []
+                self._add_log("ERROR", self.error_message)
+                raise ValueError(self.error_message) from exc
+
+            is_engine = dataset_name == "engine_diagnostics"
             triad_list = ENGINE_TRIAD_ARCHITECTURES if is_engine else TRIAD_ARCHITECTURES
 
             if models is not None and len(models) > 0:
@@ -381,6 +408,8 @@ class TrainingService:
         config = {
             "job_id": job_id,
             "dataset_name": dataset_name,
+            "dataset_id": dataset_id,
+            "source": source,
             "architecture": architecture,
             "epochs": self.total_epochs,
             "learning_rate": learning_rate,
@@ -447,7 +476,7 @@ class TrainingService:
         job_id = config["job_id"]
         dataset_name = config["dataset_name"]
         is_tri_model = config.get("is_tri_model", False)
-        is_engine = dataset_name in ["engine_diagnostics", "MotoresVehiculares"]
+        is_engine = dataset_name == "engine_diagnostics"
 
         if "models" in config and config["models"]:
             models_to_train = [m["architecture"] for m in config["models"]]
@@ -476,27 +505,13 @@ class TrainingService:
             self._add_log("INFO", f"Iniciando pipeline en dispositivo: {device_str.upper()}. Arquitectura: {config['architecture']}")
 
         try:
-            # 1. Cargar metadatos y particiones reales
+            # Consume the admitted source snapshot, never re-resolve another dataset.
+            source = config["source"]
+            raw_dir = source["raw_dir"]
+            train_df, val_df = source["train_df"], source["val_df"]
+            classes = sorted(train_df["clase"].unique().tolist())
+            label_to_idx = {c: i for i, c in enumerate(classes)}
             if is_engine:
-                raw_dir = get_raw_data_dir("engine_diagnostics")
-                train_csv = raw_dir / "train_metadata.csv"
-                val_csv = raw_dir / "val_metadata.csv"
-                train_df = pd.read_csv(train_csv)
-                val_df = pd.read_csv(val_csv)
-
-                def _fix_engine_path(p: str) -> str:
-                    parts = Path(p).parts
-                    if "engine_diagnostics" in parts:
-                        idx = parts.index("engine_diagnostics")
-                        cand = raw_dir.joinpath(*parts[idx + 1 :])
-                        if cand.exists():
-                            return str(cand)
-                    return p
-
-                train_df["file_path"] = train_df["file_path"].apply(_fix_engine_path)
-                val_df["file_path"] = val_df["file_path"].apply(_fix_engine_path)
-                classes = sorted(train_df["clase"].unique().tolist())
-                label_to_idx = {c: i for i, c in enumerate(classes)}
                 target_sr = 32000
                 duration_seconds = 2.0
                 n_mels = 128
@@ -505,19 +520,6 @@ class TrainingService:
                 f_min = 50.0
                 f_max = 16000.0
             else:
-                raw_dir = get_raw_data_dir("AvesChilenas")
-                train_csv = raw_dir / "train.csv"
-                val_csv = raw_dir / "val.csv"
-                if train_csv.exists() and val_csv.exists():
-                    train_df = pd.read_csv(train_csv)
-                    val_df = pd.read_csv(val_csv)
-                else:
-                    metadata_csv = raw_dir / "metadata.csv"
-                    df = pd.read_csv(metadata_csv)
-                    train_df, val_df, _ = grouped_stratified_split(df)
-
-                classes = sorted(train_df["clase"].unique().tolist())
-                label_to_idx = {c: i for i, c in enumerate(classes)}
                 target_sr = 22050
                 duration_seconds = 5.0
                 n_mels = 128
@@ -545,26 +547,6 @@ class TrainingService:
                     n_mels = getattr(audio_cfg_dict, "n_mels", n_mels)
                     n_fft = getattr(audio_cfg_dict, "n_fft", n_fft)
                     hop_length = getattr(audio_cfg_dict, "hop_length", hop_length)
-
-                if "file_path" not in train_df.columns:
-                    def _resolve_candidate_path(row):
-                        clase_val = str(row.get("clase", ""))
-                        species_slug = clase_val.lower().replace(" ", "_").replace("/", "_")
-                        filename_val = str(row.get("nombre_archivo", ""))
-                        stem_val = Path(filename_val).stem
-                        candidates = [
-                            raw_dir / species_slug / f"{stem_val}.wav",
-                            raw_dir / species_slug / filename_val,
-                            raw_dir / "processed_wav" / species_slug / f"{stem_val}.wav",
-                            raw_dir / "processed_wav" / species_slug / filename_val,
-                        ]
-                        for cand in candidates:
-                            if cand.exists():
-                                return str(cand)
-                        return str(raw_dir / species_slug / filename_val)
-
-                    train_df["file_path"] = train_df.apply(_resolve_candidate_path, axis=1)
-                    val_df["file_path"] = val_df.apply(_resolve_candidate_path, axis=1)
 
             self._add_log(
                 "INFO",
@@ -639,7 +621,7 @@ class TrainingService:
                         return_raw_waveform=True,
                     )
                 else:
-                    train_ds = AudioDataset(
+                    train_ds = _AcceptedAudioDataset(
                         train_df,
                         raw_dir=raw_dir,
                         label_to_idx=label_to_idx,
@@ -649,7 +631,7 @@ class TrainingService:
                         is_train=True,
                         return_raw_waveform=True,
                     )
-                    val_ds = AudioDataset(
+                    val_ds = _AcceptedAudioDataset(
                         val_df,
                         raw_dir=raw_dir,
                         label_to_idx=label_to_idx,
@@ -910,11 +892,8 @@ class TrainingService:
                 # Persistencia en PostgreSQL (Tablas 6.6 y 6.7)
                 db: Session = SessionLocal()
                 try:
-                    ds_obj = db.query(ConjuntoDatos).filter_by(nombre=dataset_name).first()
-                    ds_id = ds_obj.id_conjunto_datos if ds_obj else None
-
                     nuevo_modelo = Modelo(
-                        id_conjunto_datos=ds_id,
+                        id_conjunto_datos=config["dataset_id"],
                         clase_objetivo=f"{len(classes)} Clases ({dataset_name})",
                         arquitectura=arch,
                         epocas=arch_epochs,
