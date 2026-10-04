@@ -10,15 +10,16 @@ La documentación está organizada temáticamente en subdirectorios especializad
 
 ```text
 docs/
+├── README.md                    # Vista general e índice documental
 ├── KANBAN.md                    # Tablero de seguimiento activo del proyecto
 ├── tesis/                       # Memoria de grado oficial y análisis de objetivos
 ├── modelos/                     # Informes experimentales, optimizaciones y ensambles
 ├── arquitectura/                # Diseño de sistemas, pipelines, MLOps y despliegue
 ├── limites/                     # Límites matemáticos, físicos y problemas conocidos
 ├── manuales/                    # Manual de usuario y guías de despliegue operativo
-├── adr/                         # Architectural Decision Records (ADR 0001 a 0014)
+├── adr/                         # Architectural Decision Records (ADR 0001 a 0015)
 ├── receipts/                    # Recibos técnicos reproducibles en formato JSON (RDD)
-└── images/                      # Matrices de confusión y gráficos vectoriales
+└── images/                      # Diagramas, matrices de confusión y gráficos vectoriales
 ```
 
 ---
@@ -62,6 +63,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 
 ### 4. [`docs/manuales/`](./manuales/) — Manuales y Guías Operativas
 * [`manual_usuario_plataforma.md`](./manuales/manual_usuario_plataforma.md): Guía integral de operación para investigadores y administradores.
+* [`flujo_revision_audios.md`](./manuales/flujo_revision_audios.md): Validación, revisión e incorporación de audios, destinos, reintentos y limitaciones verificadas.
 * [`guia_despliegue_operativo_docker.md`](./manuales/guia_despliegue_operativo_docker.md): Manual exhaustivo de instalación y despliegue institucional con Docker.
 
 ### 5. [`docs/limites/`](./limites/) — Límites Matemáticos y Problemas Conocidos
@@ -72,7 +74,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`05_restriccion_formato_audio_y_captura_microfono.md`](./limites/05_restriccion_formato_audio_y_captura_microfono.md): Restricción estricta de formato PCM .wav y pipeline de captura por micrófono web.
 
 ### 6. [`docs/adr/`](./adr/) — Architectural Decision Records
-Registro de las 14 decisiones de arquitectura fundamentales del sistema:
+Registro de las 15 decisiones de arquitectura fundamentales del sistema:
 * `ADR 0001`: Migración de AudioCNN a EfficientNet-B0.
 * `ADR 0002`: Particionamiento Estratificado a Nivel de Grabador (Zero Leakage).
 * `ADR 0003`: Adopción de Focal Loss frente a Cross-Entropy estándar.
@@ -87,3 +89,4 @@ Registro de las 14 decisiones de arquitectura fundamentales del sistema:
 * `ADR 0012`: Unificación de Fuente de Datos Raw.
 * `ADR 0013`: Bucle de Retroalimentación Activa (RF_06) con Curación Semi-Manual Human-in-the-Loop.
 * `ADR 0014`: Delimitación de Parámetros Configurables en Frontend bajo Principios de Deep Modules y Presets de Dominio.
+* [`ADR 0015`](./adr/0015-fallos-explicitos-inferencia-y-validacion.md): Fallos explícitos de inferencia y validación aislada.
