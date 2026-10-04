@@ -4,6 +4,8 @@ from app.schemas.model_info import ModelMetadata
 from app.schemas.prediction import PredictionResult
 from app.services.predictors.base import AudioPredictor
 from app.services.registry import ModelRegistry, ModelNotFoundError
+from tests.test_training_flow import training_env
+from tests.test_training_persistence import persistence_env, start, history
 
 
 class FakeAudioPredictor(AudioPredictor):
@@ -63,6 +65,26 @@ def test_db_registration_propagates_only_verified_storage_identity(tmp_path, mon
     assert "dataset_name" in captured
     assert registry.get("41").dataset_name == expected
     assert registry.list_models()[0].dataset_name == expected
+
+
+def test_registered_uuid_checkpoint_resolves_by_history_basename(persistence_env, monkeypatch):
+    import torch
+    service, sessions, _, _ = persistence_env
+    save = torch.save
+    def save_tiny_registry_fixture(payload, output):
+        # Meet the existing 10KB registry threshold with synthetic metadata only.
+        save({**payload, "test_padding": torch.zeros(3000)}, output)
+    monkeypatch.setattr(torch, "save", save_tiny_registry_fixture)
+    start(service)
+    assert service.get_progress()["status"] == "completed"
+    entry, = history(service, sessions)
+    registry = ModelRegistry()
+    with sessions() as db:
+        registry.register_from_db(db, service.checkpoints_dir)
+    predictor = registry.get(entry["filename"])
+    assert predictor.checkpoint_path == service.checkpoints_dir / entry["filename"]
+    assert predictor.dataset_name == "engine_diagnostics"
+    assert predictor.has_weights is True
 
 
 def test_registry_register_and_get():

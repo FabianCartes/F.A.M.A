@@ -19,7 +19,6 @@ if str(_BACKEND_DIR) not in sys.path:
 from app.database import SessionLocal
 from app.models.dataset import ConjuntoDatos, Audio
 from app.models.training import Modelo, MetricaEntrenamiento
-from app.services.storage import upload_audio_to_gcp
 import pandas as pd
 import gc
 from torch.utils.data import DataLoader
@@ -58,7 +57,7 @@ class TrainingService:
     - Soporta parada segura (graceful stop / abort) requerida por CU_INV_03.
     - Reporta telemetría de hardware en tiempo real (GPU CUDA / VRAM / CPU / RAM).
     - Persiste modelos y curvas de métricas época a época en PostgreSQL (Tablas 6.6 y 6.7).
-    - Genera artefactos binarios (.pt) y los respalda opcionalmente en Google Cloud Storage.
+    - Saves durable local checkpoints (.pt); does not upload checkpoints to GCS.
     """
 
     def __init__(self, checkpoints_dir: Optional[Path] = None):
@@ -385,7 +384,7 @@ class TrainingService:
                 is_ensemble = False
 
             mode_tag = "ensemble" if is_ensemble else resolved_models[0]["architecture"].lower().replace('-', '_')
-            job_id = f"fama_{mode_tag}_{int(time.time())}"
+            job_id = f"fama_{mode_tag}_{uuid.uuid4().hex}"
             self.current_job_id = job_id
             self.status = "training"
             self.is_tri_model = is_tri_model or (len(resolved_models) == 3)
@@ -466,6 +465,38 @@ class TrainingService:
             return BioacousticModel(model_name=target_arch, num_classes=num_classes, pretrained=True, in_chans=1).to(device)
         except Exception:
             return BioacousticModel(model_name=target_arch, num_classes=num_classes, pretrained=False, in_chans=1).to(device)
+
+    def _write_checkpoint(self, path: Path, payload: Dict[str, Any]) -> tuple:
+        """Publish a durable local checkpoint without replacing an existing file."""
+        temporary = path.with_suffix(f".{uuid.uuid4().hex}.tmp")
+        owned_temporary = published = False
+        try:
+            with temporary.open("xb") as output:
+                owned_temporary = True
+                torch.save(payload, output)
+                output.flush()
+                os.fsync(output.fileno())
+            file_size = temporary.stat().st_size
+            if not file_size:
+                raise RuntimeError("Checkpoint local vacío.")
+            file_hash = hashlib.sha256(temporary.read_bytes()).hexdigest()
+            # A same-directory hard link publishes atomically and fails on collision.
+            os.link(temporary, path)
+            published = True
+            temporary.unlink()
+            owned_temporary = False
+            directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
+            return file_size, file_hash
+        except Exception:
+            if owned_temporary:
+                temporary.unlink(missing_ok=True)
+            if published:
+                path.unlink(missing_ok=True)
+            raise
 
     def _run_training_worker(self, config: Dict[str, Any]) -> None:
         """
@@ -702,25 +733,7 @@ class TrainingService:
                 self._add_log("INFO", f"Optimizador AdamW configurado: lr={arch_lr}, weight_decay={weight_decay}")
                 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=arch_epochs, eta_min=1e-6)
 
-                dataset_clean = dataset_name.strip().replace(" ", "_").replace("-", "_")
-                arch_clean = arch.strip().replace(" ", "_").replace("-", "_")
-                clase_objetivo_val = f"{len(classes)} Clases ({dataset_name})"
-
-                db_version = 1
-                try:
-                    check_db: Session = SessionLocal()
-                    try:
-                        count = check_db.query(Modelo).filter(
-                            Modelo.clase_objetivo == clase_objetivo_val,
-                            Modelo.arquitectura == arch
-                        ).count()
-                        db_version = count + 1
-                    finally:
-                        check_db.close()
-                except Exception:
-                    db_version = 1
-
-                checkpoint_filename = f"{dataset_clean}_{arch_clean}_v{db_version}.pt"
+                checkpoint_filename = f"fama_{uuid.uuid4().hex}_best.pt"
                 checkpoint_path = self.checkpoints_dir / checkpoint_filename
                 best_val_acc = 0.0
                 best_weights = None
@@ -870,6 +883,11 @@ class TrainingService:
                 # Guardar el artefacto de pesos real (.pt)
                 saved_state = best_weights if best_weights is not None else {k: v.cpu() for k, v in model.state_dict().items()}
                 checkpoint_payload = {
+                    "dataset_id": config["dataset_id"],
+                    "dataset_name": dataset_name,
+                    "job_id": job_id,
+                    "source_directory": str(raw_dir),
+                    "model_index": idx + 1,
                     "architecture": arch,
                     "epochs": arch_epochs,
                     "best_val_acc": best_val_acc,
@@ -882,16 +900,18 @@ class TrainingService:
                     "state_dict": saved_state,
                     "created_at": datetime.now(timezone.utc).isoformat(),
                 }
-                torch.save(checkpoint_payload, str(checkpoint_path))
-                file_size = checkpoint_path.stat().st_size if checkpoint_path.exists() else 0
-                file_hash = hashlib.sha256(checkpoint_path.read_bytes()).hexdigest()[:16] if checkpoint_path.exists() else "0000000000000000"
+                file_size, file_hash = self._write_checkpoint(checkpoint_path, checkpoint_payload)
 
-                self._add_log("SUCCESS", f"Artefacto real del modelo {arch} guardado: {checkpoint_filename} ({file_size} bytes)")
-
-
-                # Persistencia en PostgreSQL (Tablas 6.6 y 6.7)
-                db: Session = SessionLocal()
+                # A checkpoint is successful only after its registration commits.
+                db = None
+                commit_attempted = False
                 try:
+                    db = SessionLocal()
+                    dataset = db.query(ConjuntoDatos).filter_by(
+                        id_conjunto_datos=config["dataset_id"], nombre=dataset_name
+                    ).with_for_update().one_or_none()
+                    if dataset is None or dataset.nombre != dataset_name or config["dataset_id"] is None:
+                        raise RuntimeError("El dataset aceptado ya no tiene un registro de origen válido.")
                     nuevo_modelo = Modelo(
                         id_conjunto_datos=config["dataset_id"],
                         clase_objetivo=f"{len(classes)} Clases ({dataset_name})",
@@ -914,6 +934,8 @@ class TrainingService:
                         m for m in self.metrics_history
                         if m.get("architecture") == arch and m.get("model_index") == idx + 1
                     ]
+                    if not model_metrics:
+                        raise RuntimeError("No hay métricas de época para registrar el modelo.")
                     for m in model_metrics:
                         rec = MetricaEntrenamiento(
                             id_modelo=nuevo_modelo.id_modelo,
@@ -925,13 +947,33 @@ class TrainingService:
                         )
                         db.add(rec)
 
+                    model_id = nuevo_modelo.id_modelo
+                    commit_attempted = True
                     db.commit()
-                    self._add_log("INFO", f"Modelo #{nuevo_modelo.id_modelo} ({arch}) y sus métricas persistidos en PostgreSQL.")
-                except Exception as db_err:
-                    db.rollback()
-                    self._add_log("WARN", f"Advertencia al persistir en PostgreSQL: {db_err}")
+                    self._add_log("SUCCESS", f"Checkpoint local {checkpoint_filename} ({file_size} bytes), modelo #{model_id} ({arch}) y métricas guardados.")
+                except Exception:
+                    if db is not None:
+                        try:
+                            db.rollback()
+                        except Exception as rollback_error:
+                            self._add_log("WARN", f"No se pudo confirmar rollback: {rollback_error}")
+                    # Commit may have succeeded before the connection reported an error.
+                    # Delete only this job's newly published, proven unregistered file.
+                    unregistered = not commit_attempted
+                    if commit_attempted:
+                        try:
+                            with SessionLocal() as verification:
+                                unregistered = verification.query(Modelo).filter_by(
+                                    ruta_binario_gcp=f"models/{checkpoint_filename}"
+                                ).first() is None
+                        except Exception:
+                            self._add_log("WARN", f"Checkpoint {checkpoint_filename} conservado: resultado de commit indeterminado.")
+                    if unregistered:
+                        checkpoint_path.unlink(missing_ok=True)
+                    raise
                 finally:
-                    db.close()
+                    if db is not None:
+                        db.close()
 
                 # Limpieza de memoria RAM y VRAM antes del siguiente modelo
                 if torch.cuda.is_available():
@@ -1062,6 +1104,12 @@ class TrainingService:
                         "name": friendly_name,
                         "version": version,
                         "dataset": dataset_display,
+                        "dataset_id": m.id_conjunto_datos,
+                        "dataset_name": m.conjunto_datos.nombre if m.conjunto_datos else None,
+                        "sha256": m.hash_binario,
+                        "metrics": [{"epoca": metric.epoca, "precision": metric.precision,
+                                     "perdida": metric.perdida, "tiempo_epoca": metric.tiempo_epoca}
+                                    for metric in m.metricas],
                         "architecture": m.arquitectura,
                         "epochs": m.epocas,
                         "accuracy": m.precision,
@@ -1080,7 +1128,7 @@ class TrainingService:
                 pass
 
         # Si la base de datos está vacía, mostrar los checkpoints históricos de referencia
-        if not history:
+        if not history and db is None:
             history = [
                 {
                     "id": 1,

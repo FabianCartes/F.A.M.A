@@ -16,6 +16,7 @@ with patch("app.database.Base.metadata.create_all"):
 from app.database import get_db
 from app.services import training
 from tests.test_training_flow import training_env, partitions, register
+from tests.test_training_persistence import persistence_env
 
 app = main.app
 
@@ -67,6 +68,36 @@ def test_api_accepts_supported_registered_source(client, training_env, name):
     assert conflict.status_code == 400
     assert client.get("/api/training/progress").json()["status"] == "training"
     assert client.get("/api/training/history").status_code == 200
+
+
+@pytest.mark.parametrize("commit_fails", [False, True])
+def test_api_reports_checkpoint_registration_outcome(client, persistence_env, commit_fails):
+    from sqlalchemy import event
+    service, sessions, _, dataset_id = persistence_env
+    if commit_fails:
+        def reject_commit(db):
+            raise RuntimeError("Synthetic API commit failure")
+        event.listen(sessions, "before_commit", reject_commit)
+    response = client.post("/api/training/start", json={
+        "dataset_name": "engine_diagnostics", "architecture": "EfficientNet-B0", "epochs": 1,
+        "audio_config": {"target_sr": 8000, "duration_seconds": 0.5, "n_mels": 32,
+                         "n_fft": 256, "hop_length": 64, "f_min": 0.0, "f_max": 4000.0},
+        "regularization_config": {"loss_type": "cross_entropy"}, "early_stopping": False,
+    })
+    assert response.status_code == 200
+    progress = client.get("/api/training/progress").json()
+    entries = client.get("/api/training/history").json()["history"]
+    if commit_fails:
+        assert progress["status"] == "failed"
+        assert "Synthetic API commit failure" in progress["error_message"]
+        assert entries == []
+        assert list(service.checkpoints_dir.iterdir()) == []
+    else:
+        assert progress["status"] == "completed"
+        entry, = entries
+        assert entry["dataset_id"] == dataset_id
+        assert len(entry["metrics"]) == 1
+        assert (service.checkpoints_dir / entry["filename"]).is_file()
 
 
 def test_get_training_hardware(client):
