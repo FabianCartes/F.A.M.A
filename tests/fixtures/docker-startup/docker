@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+set -eu
+printf '%s' "$PWD|$FAKE_CLI" >> "$FAKE_LOG"
+printf ' <%s>' "$@" >> "$FAKE_LOG"
+printf '\n' >> "$FAKE_LOG"
+if [[ $FAKE_CLI == docker-compose && ${1:-} == version ]]; then exit 0; fi
+if [[ ${1:-} == info ]]; then [[ $SCENARIO != daemon ]]; exit; fi
+if [[ ${1:-} == compose ]]; then
+    shift
+    if [[ ${1:-} == version ]]; then [[ $SCENARIO != legacy && $SCENARIO != compose_missing ]]; exit; fi
+fi
+case ${1:-} in
+    up)
+        [[ $SCENARIO != up_failure ]] || exit 1
+        # Minimal image lifecycle for the external CLI contract; not a Compose emulator.
+        if [[ $SCENARIO == missing ]]; then
+            if [[ -f $FAKE_STATE/image-present ]]; then
+                printf 'before-up present\n' >> "$FAKE_STATE/image-events"
+            else
+                printf 'before-up absent\n' >> "$FAKE_STATE/image-events"
+                for arg in "$@"; do
+                    if [[ $arg == --no-build ]]; then
+                        printf 'after-up absent\n' >> "$FAKE_STATE/image-events"
+                        exit 1
+                    fi
+                done
+                touch "$FAKE_STATE/image-present"
+            fi
+            printf 'after-up present\n' >> "$FAKE_STATE/image-events"
+        fi
+        touch "$FAKE_STATE/up"
+        [[ ${!#} != db ]] || touch "$FAKE_STATE/db-only"
+        ;;
+    ps)
+        [[ " $* " == *' -q '* ]] || exit 0
+        [[ $SCENARIO != empty ]] || exit 0
+        if [[ ! -f $FAKE_STATE/up ]]; then
+            if [[ " $* " != *' status=running '* ]]; then
+                [[ $SCENARIO != dep_restarted ]] || printf 'db-id\n'
+                [[ $SCENARIO != dormant ]] || printf 'dormant-id\n'
+            fi
+            printf 'unrelated\n'; exit
+        fi
+        if [[ $SCENARIO == missing_selected && " $* " == *' backend '* ]]; then
+            [[ " $* " != *' db '* ]] || printf 'db-id\n'
+            exit
+        fi
+        if [[ $SCENARIO == dormant && " $* " != *' status=running '* && " $* " != *' backend '* ]]; then printf 'dormant-id\n'; fi
+        if [[ " $* " == *' backend '* ]]; then printf 'backend-id\n'
+        elif [[ " $* " == *' db '* ]]; then printf 'db-id\n'
+        elif [[ -f $FAKE_STATE/db-only ]]; then printf 'db-id\nunrelated\n'
+        elif [[ $SCENARIO == all ]]; then printf 'backend-id\ndb-id\n'
+        else printf 'backend-id\ndb-id\nunrelated\n'; fi
+        ;;
+    inspect)
+        id=${!#}
+        [[ $id != unrelated && $id != dormant-id ]] || { printf 'exited none\n'; exit; }
+        if [[ $SCENARIO == unhealthy && $id == db-id ]]; then printf 'running unhealthy\n'
+        elif [[ $SCENARIO == exited ]]; then printf 'exited none\n'
+        elif [[ $SCENARIO == timeout ]]; then printf 'running starting\n'
+        elif [[ $SCENARIO == transition && ! -f $FAKE_STATE/polled ]]; then
+            touch "$FAKE_STATE/polled"; printf 'running starting\n'
+        elif [[ $id == db-id ]]; then printf 'running healthy\n'
+        else printf 'running none\n'; fi
+        ;;
+    *) printf 'Unexpected fake command\n' >&2; exit 90 ;;
+esac

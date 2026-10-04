@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+export FAKE_CLI=docker-compose
+exec docker "$@"

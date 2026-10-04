@@ -572,15 +572,17 @@ CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://192.168.
    ```bash
    ls -la credentials/fama-gcs-credentials.json
    ```
-3. **Construir las Imágenes de Contenedores:**
+3. **Iniciar con Verificación de Disponibilidad (Linux / macOS):**
    ```bash
-   docker compose build
+   ./iniciar_fama.sh
    ```
-4. **Encender los Servicios en Segundo Plano:**
+   El arranque diario reutiliza las imágenes existentes. Compose construye las imágenes faltantes de servicios con `build` y obtiene las imágenes externas necesarias. No se solicita una reconstrucción en cada inicio.
+4. **Reconstruir Solo Cuando Sea Necesario:**
    ```bash
-   docker compose up -d
+   ./iniciar_fama.sh --build
    ```
-5. **Inspeccionar el Estado de Salud de los Contenedores:**
+   `--build` solicita una compilación con la caché habitual de Docker; **no fuerza reinstalar dependencias** ni equivale a `--no-cache`.
+5. **Inspeccionar el Estado de los Contenedores:**
    ```bash
    docker compose ps
    ```
@@ -598,32 +600,25 @@ CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://192.168.
 Para entregar al personal de laboratorio una experiencia completamente libre de terminales:
 
 #### Script para Linux / macOS: `iniciar_fama.sh`
-```bash
-#!/bin/bash
-echo "=========================================================="
-echo "    INICIANDO FRAMEWORK MLOPS HÍBRIDO F.A.M.A. (UBB)     "
-echo "=========================================================="
 
-# Validar existencia de Docker
-if ! command -v docker &> /dev/null; then
-    echo "[ERROR] Docker no está instalado en este sistema."
-    exit 1
-fi
+Use el [script del repositorio](../../iniciar_fama.sh), sin copiar una versión abreviada. Puede invocarlo por su ruta desde otro directorio: trabaja junto al archivo y crea `backend/checkpoints` y `backend/data` allí. Verifica Docker, el daemon y Compose v2; si v2 no está disponible, utiliza `docker-compose` v1.
 
-# Validar archivo de credenciales
-if [ ! -f "./credentials/fama-gcs-credentials.json" ]; then
-    echo "[AVISO] No se encontró ./credentials/fama-gcs-credentials.json."
-    echo "Recuerde cargarlo en el asistente web de primer inicio (/setup)."
-fi
+| Necesidad | Comando |
+| :--- | :--- |
+| Arranque diario | `./iniciar_fama.sh` |
+| Reconstrucción explícita con caché | `./iniciar_fama.sh --build` |
+| Prohibir compilaciones, incluso si faltan imágenes | `./iniciar_fama.sh --no-build` |
+| Iniciar solo el backend y sus dependencias | `./iniciar_fama.sh backend` |
+| Esperar hasta 300 segundos tras `up` | `./iniciar_fama.sh --wait-timeout 300 backend` |
+| Evitar iniciar dependencias | `./iniciar_fama.sh --no-deps backend` |
 
-# Levantar contenedores
-docker compose up -d
+**Qué significa éxito:** todos los contenedores solicitados y las dependencias iniciadas en esta ejecución deben estar en ejecución; si tienen healthcheck, además deben estar `healthy`. Se espera mientras estén `starting` o en otro estado transitorio. Un contenedor `unhealthy`, `exited` o `dead`, o la ausencia de contenedores de un servicio solicitado, produce error y no muestra éxito. Los servicios ajenos que ya estaban activos o permanecen detenidos no bloquean un arranque parcial.
 
-echo ""
-echo "[OK] Contenedores en ejecución exitosa."
-echo "Acceda a la plataforma web ingresando a: http://localhost:3000"
-echo "Para supervisar los logs en tiempo real ejecute: docker compose logs -f"
-```
+**Sin healthcheck:** basta el estado `running`. En la configuración actual esto aplica al backend y al frontend; no garantiza que sus endpoints HTTP ya respondan. La base de datos se verifica mediante su healthcheck existente. No se añaden comprobaciones HTTP ni se cambia la topología.
+
+**Límite y errores:** la espera de disponibilidad posterior a `up` dura hasta 180 segundos por defecto; `--wait-timeout N` (o `--wait-timeout=N`) admite entre 1 y 86400 segundos. Este límite no acota la descarga, compilación ni la propia ejecución de `Compose up`. Si falla la comprobación previa, `up`, una inspección o la espera, el script termina con código distinto de cero e indica el motivo. No detiene ni elimina contenedores al fallar; revise `docker compose ps -a` y `docker compose logs` (o sus equivalentes v1) antes de reintentar.
+
+Se conservan argumentos habituales de `up`, como `--force-recreate`, `--no-recreate`, `--remove-orphans`, `--scale SERVICIO=N`, `--pull POLÍTICA` y `--timeout N`, sin dividir valores que contengan espacios. `--timeout` sigue siendo una opción de Compose, no el límite de disponibilidad. `--build` y `--no-build` juntos se rechazan. Los modos incompatibles con esta espera, como `--no-start`, `--abort-on-container-exit` o `--exit-code-from`, y las opciones no soportadas se rechazan explícitamente; para otros modos use Compose directamente. Una opción que su versión de Compose no admita se informa como fallo de `up`.
 
 #### Script para Windows: `iniciar_fama.bat`
 ```batch
@@ -809,7 +804,8 @@ docker run --rm -v fama_checkpoints_volume:/data -v $(pwd):/backup ubuntu tar cz
 Cuando se publiquen mejoras o parches en el repositorio oficial:
 ```bash
 git pull origin main
-docker compose build --no-cache
-docker compose up -d
+./iniciar_fama.sh --build
 ```
+La reconstrucción aprovecha la caché de Docker. Reserve `docker compose build --no-cache` para diagnósticos que realmente requieran reconstruir todas las capas; no es parte del arranque diario.
+
 El volumen de PostgreSQL y los checkpoints locales se mantendrán intactos tras la actualización.

@@ -64,7 +64,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 ### 4. [`docs/manuales/`](./manuales/) — Manuales y Guías Operativas
 * [`manual_usuario_plataforma.md`](./manuales/manual_usuario_plataforma.md): Guía integral de operación para investigadores y administradores.
 * [`flujo_revision_audios.md`](./manuales/flujo_revision_audios.md): Validación, revisión e incorporación de audios, destinos, reintentos y limitaciones verificadas.
-* [`guia_despliegue_operativo_docker.md`](./manuales/guia_despliegue_operativo_docker.md): Manual exhaustivo de instalación y despliegue institucional con Docker.
+* [`guia_despliegue_operativo_docker.md`](./manuales/guia_despliegue_operativo_docker.md): Manual de instalación y despliegue institucional con Docker; incluye [arranque diario, reconstrucción explícita y espera de disponibilidad](./manuales/guia_despliegue_operativo_docker.md#7-puesta-en-marcha-y-scripts-de-automatización).
 
 ### 5. [`docs/limites/`](./limites/) — Límites Matemáticos y Problemas Conocidos
 * [`01_solapamiento_de_clases_bioacusticas.md`](./limites/01_solapamiento_de_clases_bioacusticas.md): Análisis del solapamiento espectral y confusión entre especies hermanas.
