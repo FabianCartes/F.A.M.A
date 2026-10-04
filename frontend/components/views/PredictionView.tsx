@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback, ChangeEvent, FormEvent } from "react";
 import { API_BASE_URL } from "@/lib/api";
+import { ApiConnectionError, sendFeedback } from "@/lib/api/feedbackApi";
 
 interface AudioWaveformStats {
   duration: number;
@@ -44,9 +45,10 @@ interface BackendModelStatus {
 }
 
 interface PredictionResponse {
+  detalles?: { dataset_name?: string | null } | null;
   filename: string;
   gcp_upload: boolean;
-  db_id: number;
+  db_id?: number | null;
   clase: string;
   confianza: number;
   modelo?: string;
@@ -116,29 +118,102 @@ const ENGINE_FAULT_LABELS: Record<string, string> = {
   worn_out_brakes: "Desgaste Severo de Pastillas de Freno",
 };
 
-// 15 Especies de aves chilenas oficiales del dataset F.A.M.A.
-const OFFICIAL_SPECIES = [
-  "Canastero",
-  "Chercán",
-  "Chincol",
-  "Chucao",
-  "Churrín de la Mocha",
-  "Churrín del sur",
-  "Colilarga",
-  "Fío-fío",
-  "Picaflor chico",
-  "Rayadito",
-  "Tapaculo",
-  "Tijeral",
-  "Tordo",
-  "Turca",
-  "Zorzal patagónico",
-];
+interface CurrentPrediction extends PredictionResponse {
+  inferenceModel: string;
+  inferenceClasses: string[];
+  inferenceDomain: string;
+  sequence: number;
+}
+
+function PredictionFeedback({ prediction }: { prediction: CurrentPrediction }) {
+  const [choice, setChoice] = useState<boolean | null>(null);
+  const [correction, setCorrection] = useState("");
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error" | "finalized">("idle");
+  const [message, setMessage] = useState("");
+  const sending = useRef(false);
+  const validId = typeof prediction.db_id === "number" && Number.isInteger(prediction.db_id) && prediction.db_id > 0;
+  const canSubmit = validId && choice !== null && (choice || prediction.inferenceClasses.includes(correction));
+  const locked = status === "sending" || status === "sent" || status === "finalized";
+
+  const submit = async () => {
+    if (!canSubmit || locked || sending.current) return;
+    sending.current = true;
+    setStatus("sending");
+    setMessage("");
+    try {
+      await sendFeedback({ id_prediccion: prediction.db_id, fue_correcta: choice, etiqueta_corregida: choice ? null : correction });
+      setStatus("sent");
+    } catch (err: unknown) {
+      const finalized = err instanceof ApiConnectionError && err.statusCode === 409;
+      setStatus(finalized ? "finalized" : "error");
+      setMessage(finalized
+        ? "Conflicto (409): esta predicción ya fue finalizada y no admite nuevos envíos."
+        : `No se pudo enviar a revisión: ${err instanceof Error ? err.message : String(err)}. Puedes reintentar sin perder tu selección.`);
+    } finally {
+      sending.current = false;
+    }
+  };
+
+  return (
+    <section aria-label="Validar resultado" className="pt-3 border-t border-[#23252e] space-y-3 text-xs text-gray-300">
+      <h3 className="font-semibold text-white">Validar clase predicha</h3>
+      {!validId && <p role="status">Este resultado no tiene un ID de predicción válido. No se puede enviar a revisión.</p>}
+      {status === "sent" ? (
+        <p role="status" className="text-emerald-400">Enviado a revisión. El audio queda pendiente en Gestión de audios; todavía no se ha incorporado al dataset.</p>
+      ) : (
+        <>
+          <fieldset disabled={locked || !validId} className="space-y-2">
+            <legend>¿La clase predicha es correcta?</legend>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                type="button"
+                aria-pressed={choice === true}
+                disabled={locked || !validId}
+                onClick={() => setChoice(true)}
+                className={`min-h-16 px-5 py-4 rounded-xl border-2 text-base font-semibold flex items-center justify-center gap-3 transition-colors focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed ${choice === true ? "bg-emerald-600 border-emerald-300 text-white" : "bg-emerald-950/40 border-emerald-800 text-emerald-300 hover:bg-emerald-900/60"}`}
+              >
+                <svg aria-hidden="true" className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span>Correcta</span>
+              </button>
+              <button
+                type="button"
+                aria-pressed={choice === false}
+                disabled={locked || !validId}
+                onClick={() => setChoice(false)}
+                className={`min-h-16 px-5 py-4 rounded-xl border-2 text-base font-semibold flex items-center justify-center gap-3 transition-colors focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-red-300 disabled:opacity-40 disabled:cursor-not-allowed ${choice === false ? "bg-red-600 border-red-300 text-white" : "bg-red-950/40 border-red-800 text-red-300 hover:bg-red-900/60"}`}
+              >
+                <svg aria-hidden="true" className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                <span>Incorrecta</span>
+              </button>
+            </div>
+            {choice === false && (prediction.inferenceClasses.length > 0 ? (
+              <label className="block space-y-1">
+                <span>Clase correcta</span>
+                <select value={correction} onChange={(e) => setCorrection(e.target.value)} className="block w-full bg-[#101114] border border-[#2d303b] rounded px-2 py-1.5 text-white">
+                  <option value="">Selecciona la clase correcta</option>
+                  {prediction.inferenceClasses.map((cls) => <option key={cls} value={cls}>{ENGINE_FAULT_LABELS[cls] || cls}</option>)}
+                </select>
+              </label>
+            ) : <p role="status">Catálogo de clases no disponible para el modelo ejecutado. No es posible corregir la clase; aún puedes confirmar una predicción correcta.</p>)}
+          </fieldset>
+          {message && <p role="alert" className="text-red-300">{message}</p>}
+          <button type="button" onClick={submit} disabled={!canSubmit || locked} className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold disabled:opacity-40 disabled:cursor-not-allowed">
+            {status === "sending" ? "Enviando a revisión…" : "Enviar a revisión"}
+          </button>
+        </>
+      )}
+    </section>
+  );
+}
 
 export default function PredictionView() {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
-  const [result, setResult] = useState<PredictionResponse | null>(null);
+  const [result, setResult] = useState<CurrentPrediction | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [latency, setLatency] = useState<string>("0.14s");
   const [searchTerm, setSearchTerm] = useState<string>("");
@@ -157,6 +232,7 @@ export default function PredictionView() {
   const playheadRef = useRef<SVGGElement | null>(null);
   const timeLabelRef = useRef<HTMLSpanElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const inferenceSequence = useRef(0);
 
   const selectedModel = useMemo(() => {
     return availableModels.find((m) => m.id === selectedModelId);
@@ -178,11 +254,8 @@ export default function PredictionView() {
     if (selectedModel?.classes && selectedModel.classes.length > 0) {
       return selectedModel.classes;
     }
-    if (isEngineModel) {
-      return Object.keys(ENGINE_FAULT_LABELS);
-    }
-    return OFFICIAL_SPECIES;
-  }, [selectedModel, isEngineModel]);
+    return [];
+  }, [selectedModel]);
 
   const classesCount = currentClasses.length;
 
@@ -518,6 +591,7 @@ export default function PredictionView() {
 
   const handleFileSelection = useCallback(
     (selectedFile: File | null) => {
+      inferenceSequence.current += 1;
       setError(null);
       setResult(null);
 
@@ -567,6 +641,9 @@ export default function PredictionView() {
     setError(null);
     setResult(null);
     const startTime = performance.now();
+    const sequence = ++inferenceSequence.current;
+    const inferenceClasses = [...(selectedModel?.classes || [])];
+    const inferenceModel = selectedModel?.name || selectedModelId;
 
     try {
       const formData = new FormData();
@@ -592,7 +669,8 @@ export default function PredictionView() {
       }
 
       const predData = data as PredictionResponse;
-      setResult(predData);
+      if (sequence !== inferenceSequence.current) return;
+      setResult({ ...predData, inferenceClasses, inferenceModel, inferenceDomain: selectedDomain, sequence });
 
       const isEngine =
         isEngineModel ||
@@ -600,7 +678,7 @@ export default function PredictionView() {
 
       // Agregar al inicio del historial de predicciones con badge code y modelo utilizado
       const newItem: HistoryItem = {
-        id: predData.db_id,
+        id: predData.db_id || `prediction-${sequence}`,
         filename: predData.filename,
         timestamp: new Date().toLocaleString(),
         clase: predData.clase,
@@ -1418,13 +1496,13 @@ export default function PredictionView() {
             <div className="bg-[#111215] border border-[#23252e] rounded-lg p-4 space-y-3">
               <div>
                 <span className="text-[10px] text-gray-400 uppercase tracking-wider block font-semibold">
-                  {isEngineModel || Boolean(ENGINE_FAULT_LABELS[result.clase])
+                  {result.inferenceDomain === "engine_diagnostics"
                     ? "Diagnóstico Mecánico Detectado"
-                    : "Especie de Ave Predicha"}
+                    : "Clase Predicha"}
                 </span>
                 <p
                   className={`text-xl font-bold mt-0.5 ${
-                    isEngineModel || Boolean(ENGINE_FAULT_LABELS[result.clase])
+                    result.inferenceDomain === "engine_diagnostics"
                       ? result.clase.startsWith("normal_")
                         ? "text-emerald-400"
                         : "text-amber-400"
@@ -1445,11 +1523,7 @@ export default function PredictionView() {
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="text-gray-400">Modelo ejecutado:</span>
                   <span className="text-blue-400 font-mono font-semibold">
-                    {result.modelo ||
-                      selectedModel?.name ||
-                      (isEngineModel
-                        ? "Super-Ensamble Acústico de Motores"
-                        : "Super-Ensamble Tri-Modelo")}
+                    {result.modelo || result.inferenceModel}
                   </span>
                 </div>
                 {result.modelos_activos && result.modelos_activos.length > 0 && (
@@ -1466,6 +1540,15 @@ export default function PredictionView() {
                 )}
               </div>
 
+              <div className="text-xs space-y-1">
+                <span className="text-gray-400">Dataset de inferencia</span>
+                {result.detalles?.dataset_name ? (
+                  <p className="font-mono text-emerald-300">{result.detalles.dataset_name}</p>
+                ) : (
+                  <p role="status" className="text-amber-300">Sin dataset de inferencia asociado. El audio puede enviarse a revisión, pero no incorporarse hasta contar con una asociación verificable.</p>
+                )}
+              </div>
+
               {/* Nivel de confianza */}
               <div>
                 <div className="flex justify-between items-center text-xs text-gray-300 mb-1">
@@ -1477,7 +1560,7 @@ export default function PredictionView() {
                 <div className="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
                   <div
                     className={`h-2 rounded-full transition-all duration-500 ${
-                      isEngineModel && !result.clase.startsWith("normal_")
+                      result.inferenceDomain === "engine_diagnostics" && !result.clase.startsWith("normal_")
                         ? "bg-amber-500"
                         : "bg-green-500"
                     }`}
@@ -1488,13 +1571,14 @@ export default function PredictionView() {
 
               {/* Metadatos de persistencia y trazabilidad */}
               <div className="pt-2 border-t border-[#23252e] flex items-center justify-between text-[11px] text-gray-400">
-                <span className="font-mono">PostgreSQL ID #{result.db_id}</span>
+                <span className="font-mono">{result.db_id ? `Predicción #${result.db_id}` : "Predicción sin ID registrado"}</span>
                 {result.gcp_upload && (
                   <span className="text-blue-400 flex items-center gap-1 text-[10px]">
                     ● Google Cloud Storage
                   </span>
                 )}
               </div>
+              <PredictionFeedback key={result.sequence} prediction={result} />
             </div>
           ) : error ? (
             <div className="bg-red-950/60 border border-red-800/80 rounded-lg p-4 text-xs text-red-300 space-y-1">
