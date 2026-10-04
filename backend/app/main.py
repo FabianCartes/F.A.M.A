@@ -535,10 +535,12 @@ async def predict_audio(
 
     try:
         audio_bytes = await file.read()
+        from uuid import uuid4
+        source_filename = f"{uuid4().hex}.wav"
 
         # 3. Persistencia en la nube: Subida a Google Cloud Storage (RNF_03)
         try:
-            gcp_success = await upload_audio_to_gcp(audio_bytes, filename=filename)
+            gcp_success = await upload_audio_to_gcp(audio_bytes, filename=source_filename)
         except Exception as gcp_err:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -577,10 +579,11 @@ async def predict_audio(
         # 5. Persistencia relacional en PostgreSQL (Tabla 'prediccion')
         try:
             registro_prediccion = Prediccion(
-                ruta_audio_prueba=filename,
+                ruta_audio_prueba=f"raw_audios/{source_filename}",
                 etiqueta_predicha=clase,
                 confianza=confianza,
                 modelo_id=predictor.model_id,
+                dataset_name=predictor.dataset_name,
             )
             db.add(registro_prediccion)
             db.commit()
@@ -599,7 +602,8 @@ async def predict_audio(
             f"{m['name']} ({int(round(m['weight'] * 100))}%)"
             for m in status_info.get("active_models", [])
         ]
-        detalles = getattr(pred_result, "detalles", None)
+        detalles = dict(getattr(pred_result, "detalles", None) or {})
+        detalles["dataset_name"] = registro_prediccion.dataset_name
         is_fallback = getattr(predictor, "is_fallback", status_info.get("is_fallback", False))
         if detalles and detalles.get("is_mock") is False:
             is_fallback = False
@@ -855,13 +859,19 @@ def get_pending_feedback(
 @app.post("/api/feedback/{id_retroalimentacion}/approve", response_model=ApproveFeedbackResponse)
 def approve_feedback(
     id_retroalimentacion: int,
+    dataset_name: Optional[str] = Query(
+        None, min_length=1, max_length=100,
+        description="Compatibilidad legacy: debe coincidir con el destino persistido; no permite cambiarlo.",
+    ),
     db: Session = Depends(get_db),
 ):
     """
-    Aprueba e incorpora el audio de retroalimentación en el dataset de entrenamiento crudo,
+    Aprueba e incorpora el audio en el destino congelado durante la inferencia,
     actualiza metadata.csv y marca el registro como procesado.
     """
-    return feedback_service.approve_feedback(db=db, id_retroalimentacion=id_retroalimentacion)
+    return feedback_service.approve_feedback(
+        db=db, id_retroalimentacion=id_retroalimentacion, dataset_name=dataset_name,
+    )
 
 
 @app.post("/api/feedback/{id_retroalimentacion}/reject")

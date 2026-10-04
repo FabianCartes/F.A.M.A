@@ -183,7 +183,8 @@ def test_predict_corrupt_wav_returns_safe_400_without_persistence(
     assert str(predictor.audio_path) in str(predictor.decode_error)
     assert str(predictor.audio_path) not in response.text
     assert not predictor.audio_path.exists()
-    mock_upload.assert_awaited_once_with(corrupt_wav, filename="corrupt.wav")
+    assert mock_upload.await_args.args[0] == corrupt_wav
+    assert mock_upload.await_args.kwargs["filename"].endswith(".wav")
     mock_db.add.assert_not_called()
     mock_db.commit.assert_not_called()
     mock_db.refresh.assert_not_called()
@@ -277,6 +278,34 @@ def test_predict_valid_wav_through_strict_loader_preserves_success(
     assert saved_prediction.modelo_id == data["modelo_id"]
     assert saved_prediction.etiqueta_predicha == data["clase"]
     assert saved_prediction.confianza == data["confianza"]
+
+
+@patch("app.main.upload_audio_to_gcp", new_callable=AsyncMock)
+def test_same_filename_predictions_have_distinct_recoverable_sources(mock_upload, client, mock_db):
+    mock_upload.return_value = True
+    audio = create_dummy_wav_bytes()
+    for _ in range(2):
+        response = client.post("/api/predict", files={"file": ("same.wav", audio, "audio/wav")})
+        assert response.status_code == 200
+    saved = [call.args[0] for call in mock_db.add.call_args_list]
+    sources = [prediction.ruta_audio_prueba for prediction in saved]
+    assert len(set(sources)) == 2
+    for source, upload in zip(sources, mock_upload.await_args_list):
+        assert source == "raw_audios/" + upload.kwargs["filename"]
+        assert upload.args[0] == audio
+
+
+@pytest.mark.parametrize("failure", [False, OSError("cloud unavailable")])
+@patch("app.main.upload_audio_to_gcp", new_callable=AsyncMock)
+def test_unconfirmed_source_never_produces_success(mock_upload, client, mock_db, failure):
+    if isinstance(failure, Exception):
+        mock_upload.side_effect = failure
+    else:
+        mock_upload.return_value = failure
+    response = client.post("/api/predict", files={"file": ("same.wav", create_dummy_wav_bytes(), "audio/wav")})
+    assert response.status_code == 500
+    mock_db.add.assert_not_called()
+    mock_db.commit.assert_not_called()
 
 
 def test_predict_invalid_format_returns_400(client):

@@ -37,6 +37,7 @@ class PendingFeedbackItem(BaseModel):
     """Response item for uncurated feedback in the curation queue."""
     id_retroalimentacion: int
     id_prediccion: int
+    dataset_name: Optional[str] = None
     ruta_audio_prueba: str
     etiqueta_predicha: str
     confianza: float

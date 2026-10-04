@@ -141,13 +141,21 @@ def test_predict_success_contract(mock_gcp, client, mock_db_session):
     assert data["modelo"] == "HTTP contract fixture"
     assert data["is_fallback"] is False
     assert isinstance(data["modelos_activos"], list)
-    assert data["detalles"] == {"is_mock": True, "fixture": "http-contract"}
-    mock_gcp.assert_awaited_once_with(wav_data, filename="test_chucao.wav")
+    assert data["detalles"] == {"is_mock": True, "fixture": "http-contract", "dataset_name": None}
+    mock_gcp.assert_awaited_once()
+    uploaded_filename = mock_gcp.await_args.kwargs["filename"]
+    assert len(uploaded_filename) == 36
+    assert uploaded_filename.endswith(".wav")
+    assert all(character in "0123456789abcdef" for character in uploaded_filename[:-4])
+    assert uploaded_filename != "test_chucao.wav"
+    mock_gcp.assert_awaited_once_with(wav_data, filename=uploaded_filename)
     mock_db_session.add.assert_called_once()
     saved = mock_db_session.add.call_args.args[0]
+    assert saved.ruta_audio_prueba == f"raw_audios/{uploaded_filename}"
     assert saved.etiqueta_predicha == "Chucao"
     assert saved.confianza == 0.97
     assert saved.modelo_id == "contract-birds"
+    assert saved.dataset_name is None
     mock_db_session.commit.assert_called_once()
     mock_db_session.refresh.assert_called_once_with(saved)
 

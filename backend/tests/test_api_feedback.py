@@ -1,4 +1,5 @@
 import sys
+from types import SimpleNamespace
 import wave
 from pathlib import Path
 import pytest
@@ -16,6 +17,20 @@ from app.main import app
 from app.models.prediction import Prediccion
 from app.models.feedback import Retroalimentacion
 from app.services.feedback import feedback_service
+from app.services import storage
+
+
+@pytest.fixture(autouse=True)
+def fake_gcs(monkeypatch):
+    class Client:
+        def list_blobs(self, bucket_name, prefix):
+            return [SimpleNamespace(name=f"{prefix}{label}/seed.wav")
+                    for label in ("Chucao", "Churrín de la Mocha", "rayadito")]
+        def bucket(self, name): return self
+        def blob(self, key): return self
+        def download_as_bytes(self): return b"real audio fixture"
+        def upload_from_string(self, data, **kwargs): pass
+    monkeypatch.setattr(storage.storage, "Client", Client)
 
 
 @pytest.fixture
@@ -80,7 +95,6 @@ def _create_dummy_wav(path: Path) -> None:
 
 def test_record_feedback_validation(client, test_db, sample_prediction, monkeypatch):
     """POST /api/feedback with fue_correcta=true persists validation in db and returns 200/201."""
-    monkeypatch.setattr(feedback_service, "_sync_feedback_audio_to_gcs", lambda *args, **kwargs: None)
 
     payload = {
         "id_prediccion": sample_prediction.id_prediccion,
@@ -103,7 +117,6 @@ def test_record_feedback_validation(client, test_db, sample_prediction, monkeypa
 
 def test_record_feedback_correction(client, test_db, sample_prediction, monkeypatch):
     """POST /api/feedback with fue_correcta=false and etiqueta_corregida persists correction."""
-    monkeypatch.setattr(feedback_service, "_sync_feedback_audio_to_gcs", lambda *args, **kwargs: None)
 
     payload = {
         "id_prediccion": sample_prediction.id_prediccion,
@@ -206,8 +219,9 @@ def test_approve_feedback(client, test_db, tmp_path, monkeypatch):
 
     # Persist prediction and feedback
     pred = Prediccion(
-        ruta_audio_prueba=str(source_audio),
+        ruta_audio_prueba="raw_audios/0123456789abcdef0123456789abcdef.wav",
         etiqueta_predicha="Rayadito",
+        dataset_name="AvesChilenas",
         confianza=0.72,
         modelo_id="super-ensemble-tri-model",
     )
@@ -225,7 +239,7 @@ def test_approve_feedback(client, test_db, tmp_path, monkeypatch):
     test_db.commit()
     test_db.refresh(fb)
 
-    response = client.post(f"/api/feedback/{fb.id_retroalimentacion}/approve")
+    response = client.post(f"/api/feedback/{fb.id_retroalimentacion}/approve?dataset_name=AvesChilenas")
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "approved"
@@ -261,8 +275,9 @@ def test_approve_feedback_canonical_naming_accents_and_spaces(client, test_db, t
     monkeypatch.setattr(feedback_service, "raw_data_dir", raw_dir)
 
     pred = Prediccion(
-        ruta_audio_prueba=str(source_audio),
+        ruta_audio_prueba="raw_audios/0123456789abcdef0123456789abcdef.wav",
         etiqueta_predicha="Chercán",
+        dataset_name="AvesChilenas",
         confianza=0.65,
     )
     test_db.add(pred)
@@ -279,7 +294,7 @@ def test_approve_feedback_canonical_naming_accents_and_spaces(client, test_db, t
     test_db.commit()
     test_db.refresh(fb)
 
-    response = client.post(f"/api/feedback/{fb.id_retroalimentacion}/approve")
+    response = client.post(f"/api/feedback/{fb.id_retroalimentacion}/approve?dataset_name=AvesChilenas")
     assert response.status_code == 200
     data = response.json()
     expected_filename = f"churrin_de_la_mocha_fb_{fb.id_retroalimentacion}.wav"
@@ -359,7 +374,7 @@ def test_get_feedback_stats(client, test_db, monkeypatch):
 
 def test_approve_nonexistent_feedback_returns_404(client):
     """POST /api/feedback/{id}/approve returns 404 for non-existent feedback."""
-    response = client.post("/api/feedback/99999/approve")
+    response = client.post("/api/feedback/99999/approve?dataset_name=AvesChilenas")
     assert response.status_code == 404
 
 
