@@ -1,356 +1,232 @@
-import sys
-import time
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+"""Training configuration and execution contracts through public service seams."""
+import re
+from datetime import datetime, timezone
+
+import librosa
+import numpy as np
+import pandas as pd
 import pytest
+import timm
+import torch
+import torchaudio
 
-_BACKEND_ROOT = Path(__file__).resolve().parent.parent
-if str(_BACKEND_ROOT) not in sys.path:
-    sys.path.insert(0, str(_BACKEND_ROOT))
-
-from app.services.training import TrainingService
+from app.models.training import Modelo
+from app.services import training
+from tests.test_training_flow import training_env, partitions, register
 
 
 @pytest.fixture
-def training_service(tmp_path):
-    svc = TrainingService(checkpoints_dir=tmp_path)
-    yield svc
+def service_env(training_env):
+    service, sessions, root, thread = training_env
+    register(sessions, "AvesChilenas")
+    raw = partitions(root, "AvesChilenas")
+    # Two classes make loss configuration observable, unlike a one-class fixture.
+    for split in ("train", "val"):
+        csv = raw / f"{split}.csv"
+        frame = pd.read_csv(csv)
+        audio = raw / "other" / f"{split}.wav"
+        audio.parent.mkdir(exist_ok=True)
+        audio.write_bytes(b"synthetic audio fixture")
+        other = {"clase": "Other", "nombre_archivo": audio.name,
+                 "file_path": f"other/{split}.wav", "recordist": split}
+        pd.concat([frame, pd.DataFrame([other])]).to_csv(csv, index=False)
+    return service, sessions, root, thread
+
+
+@pytest.fixture
+def training_service(service_env):
+    return service_env[0]
+
+
+@pytest.fixture
+def execution(service_env, monkeypatch):
+    service, sessions, root, thread = service_env
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+
+    class ConstantClassifier(torch.nn.Module):
+        """Tiny external-model substitute with a deterministic validation plateau."""
+        def __init__(self, num_classes):
+            super().__init__()
+            self.bias = torch.nn.Parameter(torch.zeros(1))
+            self.num_classes = num_classes
+
+        def forward(self, inputs):
+            return (self.bias * 0).expand(inputs.shape[0], self.num_classes)
+
+    monkeypatch.setattr(timm, "create_model", lambda *a, num_classes, **k: ConstantClassifier(num_classes))
+    # Replace only external ML input/scheduling boundaries, not our worker or model builder.
+    monkeypatch.setattr(training, "DataLoader", lambda *a, **k: [(torch.ones(1, 4096), torch.zeros(1, dtype=torch.long))])
+
+    class InlineThread:
+        def __init__(self, target, args, **kwargs):
+            self.target, self.args = target, args
+
+        def start(self):
+            self.target(*self.args)
+
+    thread.side_effect = InlineThread
+    return service, sessions, root
+
+
+def run(service, **kwargs):
+    options = {"dataset_name": "AvesChilenas", "architecture": "ConvNeXt-Nano",
+               "epochs": 1, "early_stopping": False}
+    options.update(kwargs)
+    assert service.start_training(**options)["status"] == "started"
+    progress = service.get_progress()
+    assert progress["status"] == "completed", progress["error_message"]
+    return progress
+
+
+def history(service, sessions):
+    with sessions() as db:
+        return service.get_history(db)
+
+
+def payloads(service, sessions):
+    return {entry["architecture"]: torch.load(service.checkpoints_dir / entry["filename"], weights_only=True)
+            for entry in history(service, sessions)}
 
 
 def test_start_training_dynamic_duo_models_initialization(training_service):
-    """
-    Verifica que al solicitar un Dúo Ensamble (2 modelos), TrainingService
-    planifique total_models = 2, current_model_index = 1 y la primera arquitectura.
-    """
-    with patch.object(training_service, "_run_training_worker"):
-        res = training_service.start_training(
-            dataset_name="AvesChilenas",
-            models=[
-                {"architecture": "ConvNeXt-Nano", "weight": 0.6},
-                {"architecture": "EfficientNet-B0", "weight": 0.4},
-            ],
-        )
-
-        assert res["status"] == "started"
-        assert training_service.status == "training"
-        assert training_service.total_models == 2
-        assert training_service.current_model_index == 1
-        assert training_service.current_architecture == "ConvNeXt-Nano"
-
-        progress = training_service.get_progress()
-        assert progress["total_models"] == 2
-        assert progress["current_model_index"] == 1
-        assert progress["current_architecture"] == "ConvNeXt-Nano"
+    """A deferred duo exposes its initial execution plan without starting ML."""
+    result = training_service.start_training("AvesChilenas", models=[
+        {"architecture": "ConvNeXt-Nano", "weight": 0.6},
+        {"architecture": "EfficientNet-B0", "weight": 0.4},
+    ])
+    assert result["status"] == "started"
+    progress = training_service.get_progress()
+    assert progress["status"] == "training"
+    assert progress["total_models"] == 2
+    assert progress["current_model_index"] == 1
+    assert progress["current_architecture"] == "ConvNeXt-Nano"
+    assert [m["weight"] for m in progress["models_config"]] == [0.6, 0.4]
 
 
 def test_start_training_dynamic_trio_custom_models(training_service):
-    """
-    Verifica ensamble personalizado de 3 modelos arbitrarios con ponderaciones.
-    """
-    with patch.object(training_service, "_run_training_worker"):
-        res = training_service.start_training(
-            dataset_name="AvesChilenas",
-            models=[
-                {"architecture": "PANNs-CNN14", "weight": 0.5},
-                {"architecture": "ResNet-34d", "weight": 0.3},
-                {"architecture": "AudioCNN", "weight": 0.2},
-            ],
-        )
-
-        assert res["status"] == "started"
-        assert training_service.total_models == 3
-        assert training_service.current_architecture == "PANNs-CNN14"
+    """A custom trio preserves model order and every ensemble weight."""
+    result = training_service.start_training("AvesChilenas", models=[
+        {"architecture": "PANNs-CNN14", "weight": 0.5},
+        {"architecture": "ResNet-34d", "weight": 0.3},
+        {"architecture": "AudioCNN", "weight": 0.2},
+    ])
+    assert result["status"] == "started"
+    progress = training_service.get_progress()
+    assert progress["total_models"] == 3
+    assert progress["current_architecture"] == "PANNs-CNN14"
+    assert [m["architecture"] for m in progress["models_config"]] == ["PANNs-CNN14", "ResNet-34d", "AudioCNN"]
+    assert [m["weight"] for m in progress["models_config"]] == [0.5, 0.3, 0.2]
 
 
-def test_start_training_worker_executes_dynamic_models_sequentially(training_service):
-    """
-    Verifica que _run_training_worker itere y entrene exactamente la lista dinámica
-    de modelos configurados (ej: ConvNeXt-Nano y EfficientNet-B0).
-    """
-    executed_models = []
-
-    def mock_build_model(arch, num_classes, device):
-        import torch
-        executed_models.append(arch)
-        mock = MagicMock()
-        mock.parameters.return_value = [torch.nn.Parameter(torch.zeros(1))]
-        mock.state_dict.return_value = {}
-        return mock
-
-
-    config = {
-        "job_id": "test_duo_job",
-        "dataset_name": "AvesChilenas",
-        "architecture": "EfficientNet-B0",
-        "epochs": 1,
-        "learning_rate": 0.001,
-        "batch_size": 16,
-        "framework": "pytorch",
-        "is_tri_model": False,
-        "early_stopping": False,
-        "models": [
-            {"architecture": "ConvNeXt-Nano", "weight": 0.7},
-            {"architecture": "EfficientNet-B0", "weight": 0.3},
-        ],
-    }
-
-    with patch.object(training_service, "_build_model_instance", side_effect=mock_build_model), \
-         patch("app.services.training.DataLoader", return_value=[]), \
-         patch("app.services.training.torch.save"), \
-         patch("app.services.training.SessionLocal") as mock_session_local:
-        
-        mock_db = MagicMock()
-        mock_session_local.return_value = mock_db
-
-        training_service._run_training_worker(config)
-
-        assert executed_models == ["ConvNeXt-Nano", "EfficientNet-B0"]
-        assert training_service.status == "completed"
-        assert training_service.total_models == 2
-        assert training_service.current_model_index == 2
-
-        # Verificar que cada entrada en metrics_history incluya architecture y model_index
-        assert len(training_service.metrics_history) == 22
-        for entry in training_service.metrics_history[:12]:
-            assert entry.get("architecture") == "ConvNeXt-Nano"
-            assert entry.get("model_index") == 1
-        for entry in training_service.metrics_history[12:]:
-            assert entry.get("architecture") == "EfficientNet-B0"
-            assert entry.get("model_index") == 2
-
-        progress = training_service.get_progress()
-        assert progress["metrics_history"][0].get("architecture") == "ConvNeXt-Nano"
-        assert progress["metrics_history"][0].get("model_index") == 1
+def test_start_training_worker_executes_dynamic_models_sequentially(execution):
+    """A duo runs the 12/10 epoch presets sequentially and saves its weights."""
+    service, sessions, _ = execution
+    progress = run(service, models=[
+        {"architecture": "ConvNeXt-Nano", "weight": 0.7},
+        {"architecture": "EfficientNet-B0", "weight": 0.3},
+    ])
+    assert progress["total_models"] == 2
+    assert progress["current_model_index"] == 2
+    metrics = progress["metrics_history"]
+    assert len(metrics) == 22
+    assert [(m["architecture"], m["model_index"], m["epoca"]) for m in metrics[:12]] == [
+        ("ConvNeXt-Nano", 1, epoch) for epoch in range(1, 13)]
+    assert [(m["architecture"], m["model_index"], m["epoca"]) for m in metrics[12:]] == [
+        ("EfficientNet-B0", 2, epoch) for epoch in range(1, 11)]
+    saved = payloads(service, sessions)
+    assert saved["ConvNeXt-Nano"]["ensemble_weight"] == 0.7
+    assert saved["EfficientNet-B0"]["ensemble_weight"] == 0.3
+    assert {entry["architecture"]: len(entry["metrics"]) for entry in history(service, sessions)} == {
+        "ConvNeXt-Nano": 12, "EfficientNet-B0": 10}
 
 
-def test_start_training_worker_with_custom_audio_physics(training_service):
-    """
-    Verifica que al proveer un audio_config personalizado (ej: 16000 Hz, 2.0 s, f_min=50, f_max=4000),
-    el worker utilice GenericAudioDataset y GPUAudioFrontEnd con dichos parámetros en lugar de los cableados.
-    """
-    config = {
-        "job_id": "test_custom_physics_job",
-        "dataset_name": "AvesChilenas",
-        "architecture": "EfficientNet-B0",
-        "epochs": 1,
-        "learning_rate": 0.001,
-        "batch_size": 16,
-        "framework": "pytorch",
-        "is_tri_model": False,
-        "models": [{"architecture": "EfficientNet-B0", "weight": 1.0}],
-        "audio_config": {
-            "target_sr": 16000,
-            "duration_seconds": 2.0,
-            "f_min": 50.0,
-            "f_max": 4000.0,
-            "n_mels": 128,
-            "n_fft": 1024,
-            "hop_length": 256,
-        },
-    }
-
-    mock_model = MagicMock()
-    mock_model.parameters.return_value = []
-    mock_model.state_dict.return_value = {}
-
-    with patch.object(training_service, "_build_model_instance", return_value=mock_model), \
-         patch("app.services.training.GenericAudioDataset") as mock_generic_ds, \
-         patch("app.services.training.GPUAudioFrontEnd") as mock_frontend, \
-         patch("app.services.training.DataLoader", return_value=[]), \
-         patch("app.services.training.torch.save"), \
-         patch("app.services.training.SessionLocal"):
-
-        training_service._run_training_worker(config)
-
-        # Verificar que GenericAudioDataset fue llamado con AudioConfig personalizado
-        assert mock_generic_ds.called
-        created_audio_cfg = mock_generic_ds.call_args_list[0].kwargs.get("audio_config")
-        assert created_audio_cfg is not None
-        assert created_audio_cfg.target_sr == 16000
-        assert created_audio_cfg.duration_seconds == 2.0
-        assert created_audio_cfg.f_min == 50.0
-        assert created_audio_cfg.f_max == 4000.0
-        assert created_audio_cfg.n_fft == 1024
-        assert created_audio_cfg.hop_length == 256
-
-        # Verificar que GPUAudioFrontEnd fue configurado con los mismos parámetros
-        assert mock_frontend.called
-        frontend_kwargs = mock_frontend.call_args.kwargs
-        assert frontend_kwargs.get("sample_rate") == 16000
-        assert frontend_kwargs.get("f_min") == 50.0
-        assert frontend_kwargs.get("f_max") == 4000.0
-        assert frontend_kwargs.get("n_fft") == 1024
-        assert frontend_kwargs.get("hop_length") == 256
+def test_start_training_worker_with_custom_audio_physics(execution, monkeypatch):
+    """Custom physics reaches real dataset decoding and the external mel transform."""
+    service, sessions, root = execution
+    decoded = []
+    transforms = []
+    mel_transform = torchaudio.transforms.MelSpectrogram
+    def decode(path, sr, **kwargs):
+        decoded.append((str(path), sr))
+        return np.zeros(16, dtype=np.float32), sr
+    def observe_mel(**kwargs):
+        transforms.append(kwargs)
+        return mel_transform(**kwargs)
+    def synthetic_loader(dataset, **kwargs):
+        waveform, label = dataset[0]
+        assert waveform.shape == (32000,)  # 16000 Hz * 2 seconds.
+        return [(waveform.unsqueeze(0), label.unsqueeze(0))]
+    monkeypatch.setattr(librosa, "load", decode)
+    monkeypatch.setattr("random.random", lambda: 1.0)
+    monkeypatch.setattr(torchaudio.transforms, "MelSpectrogram", observe_mel)
+    monkeypatch.setattr(training, "DataLoader", synthetic_loader)
+    physics = {"target_sr": 16000, "duration_seconds": 2.0, "f_min": 50.0, "f_max": 4000.0,
+               "n_mels": 128, "n_fft": 1024, "hop_length": 256}
+    run(service, architecture="EfficientNet-B0", audio_config=physics)
+    assert decoded == [(str(root / "raw/AvesChilenas/fixture/train.wav"), 16000),
+                       (str(root / "raw/AvesChilenas/fixture/val.wav"), 16000)]
+    assert transforms
+    for transform in transforms:
+        assert transform["sample_rate"] == 16000
+        assert transform["f_min"] == 50.0
+        assert transform["f_max"] == 4000.0
+        assert transform["n_mels"] == 128
+        assert transform["n_fft"] == 1024
+        assert transform["hop_length"] == 256
+    assert payloads(service, sessions)["EfficientNet-B0"]["audio_config"] == physics
 
 
-def test_start_training_worker_with_regularization_loss_config(training_service):
-    """
-    Verifica que el worker configure FocalLoss con el gamma especificado o CrossEntropyLoss
-    según regularization_config.
-    """
-    mock_model = MagicMock()
-    mock_model.parameters.return_value = []
-    mock_model.state_dict.return_value = {}
-
-    # Caso 1: CrossEntropyLoss
-    ce_config = {
-        "job_id": "test_ce_job",
-        "dataset_name": "AvesChilenas",
-        "architecture": "EfficientNet-B0",
-        "epochs": 1,
-        "learning_rate": 0.001,
-        "batch_size": 16,
-        "framework": "pytorch",
-        "is_tri_model": False,
-        "models": [{"architecture": "EfficientNet-B0", "weight": 1.0}],
-        "regularization_config": {
-            "loss_type": "cross_entropy",
-        },
-    }
-
-    with patch.object(training_service, "_build_model_instance", return_value=mock_model), \
-         patch("app.services.training.DataLoader", return_value=[]), \
-         patch("app.services.training.torch.save"), \
-         patch("app.services.training.SessionLocal"), \
-         patch("app.services.training.torch.nn.CrossEntropyLoss") as mock_ce:
-
-        training_service._run_training_worker(ce_config)
-        assert mock_ce.called
-
-    # Caso 2: FocalLoss con gamma=3.5
-    focal_config = {
-        "job_id": "test_focal_job",
-        "dataset_name": "AvesChilenas",
-        "architecture": "EfficientNet-B0",
-        "epochs": 1,
-        "learning_rate": 0.001,
-        "batch_size": 16,
-        "framework": "pytorch",
-        "is_tri_model": False,
-        "models": [{"architecture": "EfficientNet-B0", "weight": 1.0}],
-        "regularization_config": {
-            "loss_type": "focal",
-            "focal_gamma": 3.5,
-        },
-    }
-
-    with patch.object(training_service, "_build_model_instance", return_value=mock_model), \
-         patch("app.services.training.DataLoader", return_value=[]), \
-         patch("app.services.training.torch.save"), \
-         patch("app.services.training.SessionLocal"), \
-         patch("app.services.training.FocalLoss") as mock_focal:
-
-        training_service._run_training_worker(focal_config)
-        assert mock_focal.called
-        assert mock_focal.call_args.kwargs.get("gamma") == 3.5
+def test_start_training_worker_with_regularization_loss_config(execution):
+    """Equal two-class logits distinguish cross-entropy from focal gamma 3.5."""
+    service, sessions, _ = execution
+    ce = run(service, regularization_config={"loss_type": "cross_entropy"})
+    assert ce["train_loss"] == 0.6931
+    assert ce["val_loss"] == 0.6931
+    focal = run(service, regularization_config={"loss_type": "focal", "focal_gamma": 3.5})
+    assert focal["train_loss"] == 0.0613  # (1 - 0.5)^3.5 * ln(2), rounded to four decimals.
+    assert focal["val_loss"] == 0.0613
+    assert len(history(service, sessions)) == 2
 
 
-def test_checkpoint_incremental_nomenclature_versioning(training_service, tmp_path):
-    """
-    Verifica que el nombre físico del checkpoint siga la convención {dataset_clean}_{arch_clean}_v{version}.pt
-    sin timestamps Unix ni la palabra _best, derivando la versión de count + 1 en PostgreSQL.
-    """
-    import torch
-    from app.models.training import Modelo
-
-    mock_model = MagicMock()
-    mock_model.parameters.return_value = [torch.nn.Parameter(torch.zeros(1))]
-    mock_model.state_dict.return_value = {}
-
-    config = {
-        "job_id": "test_job_nomenclatura",
-        "dataset_name": "AvesChilenas",
-        "architecture": "ConvNeXt-Nano",
-        "epochs": 1,
-        "learning_rate": 0.0005,
-        "batch_size": 16,
-        "framework": "pytorch",
-        "is_tri_model": False,
-        "models": [{"architecture": "ConvNeXt-Nano", "weight": 1.0}],
-    }
-
-    saved_files = []
-
-    def mock_torch_save(obj, path):
-        saved_files.append(Path(path).name)
-
-    mock_db = MagicMock()
-    # Simular que no existen modelos previos: count() = 0 -> version = 1
-    mock_query = mock_db.query.return_value
-    mock_filter = mock_query.filter.return_value
-    mock_filter.count.return_value = 0
-
-    with patch.object(training_service, "_build_model_instance", return_value=mock_model), \
-         patch("app.services.training.DataLoader", return_value=[]), \
-         patch("app.services.training.torch.save", side_effect=mock_torch_save), \
-         patch("app.services.training.SessionLocal", return_value=mock_db):
-
-        training_service._run_training_worker(config)
-
-        assert len(saved_files) == 1
-        expected_filename = "AvesChilenas_ConvNeXt_Nano_v1.pt"
-        assert saved_files[0] == expected_filename
-        assert "_best" not in saved_files[0]
-        assert "test_job" not in saved_files[0]
-
-        # Verificar qué se persistió en el modelo
-        added_objects = [call[0][0] for call in mock_db.add.call_args_list if isinstance(call[0][0], Modelo)]
-        assert len(added_objects) >= 1
-        persisted_model = added_objects[0]
-        assert persisted_model.ruta_binario_gcp == f"models/{expected_filename}"
+def test_checkpoint_incremental_nomenclature_versioning(execution):
+    """Physical UUID names are unique; history retains display-version semantics."""
+    service, sessions, _ = execution
+    run(service, learning_rate=0.0005)
+    entry, = history(service, sessions)
+    assert re.fullmatch(r"fama_[0-9a-f]{32}_best\.pt", entry["filename"])
+    assert entry["version"] == 1
+    assert entry["hyperparameters"]["learning_rate"] == 0.0005
+    original = (service.checkpoints_dir / entry["filename"]).read_bytes()
+    run(service, learning_rate=0.0005)
+    entries = history(service, sessions)
+    assert len(entries) == 2
+    assert {item["version"] for item in entries} == {1, 2}
+    assert len({item["filename"] for item in entries}) == 2
+    assert (service.checkpoints_dir / entry["filename"]).read_bytes() == original
 
 
-def test_get_history_enriches_model_technical_sheet(training_service):
-    """
-    Verifica que get_history() enriquezca cada registro con la Ficha Técnica completa:
-    name, version, filename, hyperparameters, audio_specs, classes, classes_count, file_size_bytes.
-    También valida que los modelos históricos iniciales (#1 de Motores y #6 de Aves Chilenas)
-    resuelvan con version = 1 (v1) ya que son los primeros de su respectivo par (Dataset, Arquitectura).
-    """
-    from datetime import datetime, timezone
-    from app.models.training import Modelo
+def seed_model(db, **kwargs):
+    values = {"epocas": 10, "tasa_aprendizaje": 0.001, "tamano_lote": 16,
+              "tamano_bytes": 48822960, "activo": False, "estado": "entrenado"}
+    values.update(kwargs)
+    db.add(Modelo(**values))
 
-    mock_m1 = Modelo(
-        id_modelo=1,
-        clase_objetivo="13 Clases (engine_diagnostics)",
-        arquitectura="EfficientNet-B0",
-        epocas=10,
-        tasa_aprendizaje=0.001,
-        tamano_lote=16,
-        precision=68.12,
-        perdida=1.0297,
-        ruta_binario_gcp="models/fama_efficientnet_b0_1790642923_efficientnet_b0_best.pt",
-        tamano_bytes=48822960,
-        activo=False,
-        estado="entrenado",
-        fecha_entrenamiento=datetime(2026, 9, 29, 0, 52, 14, tzinfo=timezone.utc),
-    )
 
-    mock_m6 = Modelo(
-        id_modelo=6,
-        clase_objetivo="15 Clases (AvesChilenas)",
-        arquitectura="EfficientNet-B0",
-        epocas=10,
-        tasa_aprendizaje=0.001,
-        tamano_lote=32,
-        precision=77.78,
-        perdida=0.35,
-        ruta_binario_gcp="models/fama_efficientnet_b0_1790539191_efficientnet_b0_best.pt",
-        tamano_bytes=48822960,
-        activo=True,
-        estado="entrenado",
-        fecha_entrenamiento=datetime(2026, 9, 29, 0, 6, 31, tzinfo=timezone.utc),
-    )
-
-    mock_db = MagicMock()
-    mock_db.query.return_value.order_by.return_value.all.return_value = [mock_m1, mock_m6]
-
-    history = training_service.get_history(db=mock_db)
-
-    assert len(history) == 2
-
-    # Modelo #1 (Motores Vehiculares · EfficientNet-B0) -> v1
-    item_1 = next(h for h in history if h["id"] == 1)
+def test_get_history_enriches_model_technical_sheet(service_env):
+    """Historical models retain their complete technical sheets and first versions."""
+    service, sessions, _, _ = service_env
+    with sessions() as db:
+        seed_model(db, id_modelo=1, clase_objetivo="13 Clases (engine_diagnostics)", arquitectura="EfficientNet-B0",
+                   precision=68.12, perdida=1.0297, fecha_entrenamiento=datetime(2026, 9, 29, 0, 52, 14, tzinfo=timezone.utc),
+                   ruta_binario_gcp="models/fama_efficientnet_b0_1790642923_efficientnet_b0_best.pt")
+        seed_model(db, id_modelo=6, clase_objetivo="15 Clases (AvesChilenas)", arquitectura="EfficientNet-B0",
+                   precision=77.78, perdida=0.35, tamano_lote=32, activo=True,
+                   fecha_entrenamiento=datetime(2026, 9, 29, 0, 6, 31, tzinfo=timezone.utc),
+                   ruta_binario_gcp="models/fama_efficientnet_b0_1790539191_efficientnet_b0_best.pt")
+        db.commit()
+    entries = history(service, sessions)
+    assert len(entries) == 2
+    item_1 = next(h for h in entries if h["id"] == 1)
     assert item_1["version"] == 1
     assert "v1" in item_1["name"]
     assert "Motores" in item_1["name"]
@@ -364,9 +240,7 @@ def test_get_history_enriches_model_technical_sheet(training_service):
     assert item_1["audio_specs"]["fmax"] == 16000
     assert item_1["classes_count"] == 13
     assert item_1["file_size_bytes"] == 48822960
-
-    # Modelo #6 (Aves Chilenas · EfficientNet-B0) -> v1 (primer modelo de Aves Chilenas + EfficientNet-B0)
-    item_6 = next(h for h in history if h["id"] == 6)
+    item_6 = next(h for h in entries if h["id"] == 6)
     assert item_6["version"] == 1
     assert "v1" in item_6["name"]
     assert "Aves Chilenas" in item_6["name"]
@@ -380,278 +254,116 @@ def test_get_history_enriches_model_technical_sheet(training_service):
     assert item_6["file_size_bytes"] == 48822960
 
 
-def test_get_history_semantic_versioning_per_dataset_and_architecture(training_service):
-    """
-    Verifica la invariante de dominio de versionado semántico estricto por par (Dataset, Arquitectura):
-    - Modelo ID 1: Motores · EfficientNet-B0 -> v1
-    - Modelo ID 6: Aves Chilenas · EfficientNet-B0 -> v1
-    - Modelo ID 7: Aves Chilenas · EfficientNet-B0 -> v2 (mismo dataset y arquitectura)
-    - Modelo ID 8: Aves Chilenas · ResNet-34d -> v1 (nueva arquitectura para Aves Chilenas)
-    - Modelo ID 9: Motores · ResNet-34d -> v1
-    """
-    from datetime import datetime, timezone
-    from app.models.training import Modelo
-
-    models = [
-        Modelo(
-            id_modelo=1,
-            clase_objetivo="13 Clases (engine_diagnostics)",
-            arquitectura="EfficientNet-B0",
-            fecha_entrenamiento=datetime(2026, 9, 29, 0, 52, 14, tzinfo=timezone.utc),
-            ruta_binario_gcp="models/motores_eff_1.pt",
-        ),
-        Modelo(
-            id_modelo=6,
-            clase_objetivo="15 Clases (AvesChilenas)",
-            arquitectura="EfficientNet-B0",
-            fecha_entrenamiento=datetime(2026, 9, 29, 0, 6, 31, tzinfo=timezone.utc),
-            ruta_binario_gcp="models/aves_eff_1.pt",
-        ),
-        Modelo(
-            id_modelo=7,
-            clase_objetivo="15 Clases (AvesChilenas)",
-            arquitectura="EfficientNet-B0",
-            fecha_entrenamiento=datetime(2026, 9, 29, 1, 0, 0, tzinfo=timezone.utc),
-            ruta_binario_gcp="models/aves_eff_2.pt",
-        ),
-        Modelo(
-            id_modelo=8,
-            clase_objetivo="15 Clases (AvesChilenas)",
-            arquitectura="ResNet-34d",
-            fecha_entrenamiento=datetime(2026, 9, 29, 1, 15, 0, tzinfo=timezone.utc),
-            ruta_binario_gcp="models/aves_res_1.pt",
-        ),
-        Modelo(
-            id_modelo=9,
-            clase_objetivo="13 Clases (engine_diagnostics)",
-            arquitectura="ResNet-34d",
-            fecha_entrenamiento=datetime(2026, 9, 29, 1, 30, 0, tzinfo=timezone.utc),
-            ruta_binario_gcp="models/motores_res_1.pt",
-        ),
-    ]
-
-    mock_db = MagicMock()
-    mock_db.query.return_value.order_by.return_value.all.return_value = models
-
-    history = training_service.get_history(db=mock_db)
-
-    by_id = {h["id"]: h for h in history}
-
+def test_get_history_semantic_versioning_per_dataset_and_architecture(service_env):
+    """Display versions remain independent for each dataset/architecture pair."""
+    service, sessions, _, _ = service_env
+    rows = [(1, "engine_diagnostics", "EfficientNet-B0", 0, 52, "motores_eff_1.pt"),
+            (6, "AvesChilenas", "EfficientNet-B0", 0, 6, "aves_eff_1.pt"),
+            (7, "AvesChilenas", "EfficientNet-B0", 1, 0, "aves_eff_2.pt"),
+            (8, "AvesChilenas", "ResNet-34d", 1, 15, "aves_res_1.pt"),
+            (9, "engine_diagnostics", "ResNet-34d", 1, 30, "motores_res_1.pt")]
+    with sessions() as db:
+        for identifier, dataset, arch, hour, minute, filename in rows:
+            classes = 13 if dataset == "engine_diagnostics" else 15
+            seed_model(db, id_modelo=identifier, clase_objetivo=f"{classes} Clases ({dataset})", arquitectura=arch,
+                       fecha_entrenamiento=datetime(2026, 9, 29, hour, minute, tzinfo=timezone.utc),
+                       ruta_binario_gcp=f"models/{filename}")
+        db.commit()
+    by_id = {h["id"]: h for h in history(service, sessions)}
     assert by_id[1]["name"] == "Motores · EfficientNet-B0 (v1)"
     assert by_id[1]["version"] == 1
-
     assert by_id[6]["name"] == "Aves Chilenas · EfficientNet-B0 (v1)"
     assert by_id[6]["version"] == 1
-
     assert by_id[7]["name"] == "Aves Chilenas · EfficientNet-B0 (v2)"
     assert by_id[7]["version"] == 2
-
     assert by_id[8]["name"] == "Aves Chilenas · ResNet-34d (v1)"
     assert by_id[8]["version"] == 1
-
     assert by_id[9]["name"] == "Motores · ResNet-34d (v1)"
     assert by_id[9]["version"] == 1
 
 
-def test_start_training_worker_receives_weight_decay(training_service):
-    """
-    Verifica que start_training capture y propague el parámetro weight_decay
-    dentro del diccionario de configuración enviado a _run_training_worker.
-    """
-    with patch.object(training_service, "_run_training_worker") as mock_worker:
-        res = training_service.start_training(
-            dataset_name="AvesChilenas",
-            architecture="ConvNeXt-Nano",
-            epochs=5,
-            learning_rate=0.0005,
-            weight_decay=0.05,
-        )
-
-        assert res["status"] == "started"
-        mock_worker.assert_called_once()
-        passed_config = mock_worker.call_args[0][0]
-        assert "weight_decay" in passed_config
-        assert passed_config["weight_decay"] == 0.05
+def test_start_training_worker_receives_weight_decay(execution, monkeypatch):
+    """The requested decay reaches the external optimizer and its parameter groups."""
+    service, _, _ = execution
+    optimizer = torch.optim.AdamW
+    observed = []
+    def observe_optimizer(parameters, **kwargs):
+        instance = optimizer(parameters, **kwargs)
+        observed.extend(group["weight_decay"] for group in instance.param_groups)
+        return instance
+    monkeypatch.setattr(torch.optim, "AdamW", observe_optimizer)
+    run(service, epochs=5, learning_rate=0.0005, weight_decay=0.05)
+    assert observed == [0.05]
 
 
 def test_start_training_dynamic_ensemble_preserves_custom_epochs(training_service):
-    """
-    Verifica que si los modelos del ensamble definen epochs individuales,
-    se capturen y propaguen dentro de la configuración del worker.
-    """
-    with patch.object(training_service, "_run_training_worker") as mock_worker:
-        res = training_service.start_training(
-            dataset_name="AvesChilenas",
-            models=[
-                {"architecture": "ResNet-34d", "weight": 0.6, "epochs": 35},
-                {"architecture": "EfficientNet-B0", "weight": 0.4, "epochs": 10},
-            ],
-        )
-
-        assert res["status"] == "started"
-        mock_worker.assert_called_once()
-        passed_config = mock_worker.call_args[0][0]
-        assert "models" in passed_config
-        assert passed_config["models"][0]["epochs"] == 35
-        assert passed_config["models"][1]["epochs"] == 10
+    """Public progress preserves each model's custom epoch count."""
+    assert training_service.start_training("AvesChilenas", models=[
+        {"architecture": "ResNet-34d", "weight": 0.6, "epochs": 35},
+        {"architecture": "EfficientNet-B0", "weight": 0.4, "epochs": 10},
+    ])["status"] == "started"
+    models = training_service.get_progress()["models_config"]
+    assert models[0]["epochs"] == 35
+    assert models[1]["epochs"] == 10
+    assert [model["weight"] for model in models] == [0.6, 0.4]
 
 
-def test_start_training_dynamic_ensemble_preserves_custom_hyperparameters(training_service):
-    """
-    Verifica que si los modelos del ensamble definen learning_rate y batch_size individuales,
-    se capturen y propaguen dentro de la configuración del worker.
-    """
-    with patch.object(training_service, "_run_training_worker") as mock_worker:
-        res = training_service.start_training(
-            dataset_name="AvesChilenas",
-            models=[
-                {
-                    "architecture": "ResNet-34d",
-                    "weight": 0.6,
-                    "epochs": 35,
-                    "learning_rate": 0.0007,
-                    "batch_size": 32,
-                },
-                {
-                    "architecture": "EfficientNet-B0",
-                    "weight": 0.4,
-                    "epochs": 10,
-                    "learning_rate": 0.001,
-                    "batch_size": 16,
-                },
-            ],
-        )
-
-        assert res["status"] == "started"
-        mock_worker.assert_called_once()
-        passed_config = mock_worker.call_args[0][0]
-        assert "models" in passed_config
-        assert passed_config["models"][0]["learning_rate"] == 0.0007
-        assert passed_config["models"][0]["batch_size"] == 32
-        assert passed_config["models"][1]["learning_rate"] == 0.001
-        assert passed_config["models"][1]["batch_size"] == 16
+def test_start_training_dynamic_ensemble_preserves_custom_hyperparameters(execution):
+    """Per-model epochs, rates, batches and weights survive execution and persistence."""
+    service, sessions, _ = execution
+    progress = run(service, models=[
+        {"architecture": "ResNet-34d", "weight": 0.6, "epochs": 35, "learning_rate": 0.0007, "batch_size": 32},
+        {"architecture": "EfficientNet-B0", "weight": 0.4, "epochs": 10, "learning_rate": 0.001, "batch_size": 16},
+    ])
+    models = progress["models_config"]
+    assert models[0]["learning_rate"] == 0.0007
+    assert models[0]["batch_size"] == 32
+    assert models[1]["learning_rate"] == 0.001
+    assert models[1]["batch_size"] == 16
+    entries = {entry["architecture"]: entry for entry in history(service, sessions)}
+    assert entries["ResNet-34d"]["epochs"] == 35
+    assert len(entries["ResNet-34d"]["metrics"]) == 35
+    assert entries["ResNet-34d"]["hyperparameters"]["learning_rate"] == 0.0007
+    assert entries["ResNet-34d"]["hyperparameters"]["batch_size"] == 32
+    assert entries["EfficientNet-B0"]["epochs"] == 10
+    assert len(entries["EfficientNet-B0"]["metrics"]) == 10
+    assert entries["EfficientNet-B0"]["hyperparameters"]["learning_rate"] == 0.001
+    assert entries["EfficientNet-B0"]["hyperparameters"]["batch_size"] == 16
+    saved = payloads(service, sessions)
+    assert saved["ResNet-34d"]["ensemble_weight"] == 0.6
+    assert saved["EfficientNet-B0"]["ensemble_weight"] == 0.4
 
 
-def test_start_training_propagates_early_stopping_flag(training_service):
-    """
-    Verifica que start_training capture y propague el parámetro early_stopping
-    dentro del diccionario de configuración enviado a _run_training_worker.
-    """
-    with patch.object(training_service, "_run_training_worker") as mock_worker:
-        # 1. Por defecto es True
-        res = training_service.start_training(
-            dataset_name="AvesChilenas",
-            architecture="ConvNeXt-Nano",
-            epochs=10,
-        )
-        assert res["status"] == "started"
-        passed_config = mock_worker.call_args[0][0]
-        assert "early_stopping" in passed_config
-        assert passed_config["early_stopping"] is True
-
-        # 2. Explícitamente False
-        training_service.status = "idle"
-        res2 = training_service.start_training(
-            dataset_name="AvesChilenas",
-            architecture="ConvNeXt-Nano",
-            epochs=10,
-            early_stopping=False,
-        )
-        assert res2["status"] == "started"
-        passed_config2 = mock_worker.call_args[0][0]
-        assert "early_stopping" in passed_config2
-        assert passed_config2["early_stopping"] is False
+def test_start_training_propagates_early_stopping_flag(execution):
+    """The default stops on a plateau; explicit False completes the full schedule."""
+    service, _, _ = execution
+    # Do not pass early_stopping for the first job: exercise the public default.
+    assert service.start_training("AvesChilenas", architecture="ConvNeXt-Nano", epochs=10)["status"] == "started"
+    assert service.get_progress()["status"] == "completed"
+    assert service.get_progress()["epoch"] == 6
+    assert run(service, epochs=10, early_stopping=False)["epoch"] == 10
 
 
-def test_training_worker_early_stopping_halts_on_patience_exhaustion(training_service):
-    """
-    Verifica que con early_stopping=True, si val_loss no mejora durante la paciencia
-    (patience = max(5, int(10 * 0.20)) = 5 épocas), el entrenamiento se detiene antes de 10 épocas
-    y se registra un log con nivel WARN indicando Early Stopping.
-    """
-    import torch
-
-    def mock_build_model(arch, num_classes, device):
-        mock = MagicMock()
-        mock.parameters.return_value = [torch.nn.Parameter(torch.zeros(1))]
-        mock.state_dict.return_value = {"weight": torch.zeros(1)}
-        return mock
-
-    config = {
-        "job_id": "test_early_stop_job",
-        "dataset_name": "AvesChilenas",
-        "architecture": "ConvNeXt-Nano",
-        "epochs": 10,
-        "learning_rate": 0.001,
-        "batch_size": 16,
-        "framework": "pytorch",
-        "is_tri_model": False,
-        "early_stopping": True,
-    }
-
-    with patch.object(training_service, "_build_model_instance", side_effect=mock_build_model), \
-         patch("app.services.training.DataLoader", return_value=[]), \
-         patch("app.services.training.torch.save"), \
-         patch("app.services.training.SessionLocal") as mock_session_local:
-
-        mock_db = MagicMock()
-        mock_session_local.return_value = mock_db
-
-        training_service._run_training_worker(config)
-
-        # Sin datos en DataLoader, val_loss es 0.0 en cada época.
-        # En la época 1: best_val_loss = 0.0.
-        # En las épocas 2, 3, 4, 5, 6: val_loss=0.0 no mejora sobre 0.0 (epochs_no_improve llega a 5 >= patience).
-        # Por tanto debe detenerse en la época 6 y no llegar a 10.
-        assert training_service.current_epoch == 6
-        assert any("Early Stopping activado en época 6" in log["message"] for log in training_service.logs)
-        assert training_service.status == "completed"
+def test_training_worker_early_stopping_halts_on_patience_exhaustion(execution):
+    """One improvement followed by five flat validation epochs stops at epoch six."""
+    service, sessions, _ = execution
+    progress = run(service, epochs=10, early_stopping=True)
+    assert progress["epoch"] == 6
+    assert len(progress["metrics_history"]) == 6
+    assert {metric["val_loss"] for metric in progress["metrics_history"]} == {0.1733}
+    assert any("Early Stopping activado en época 6" in log["message"] and log["level"] == "WARN"
+               for log in progress["logs"])
+    entry, = history(service, sessions)
+    assert len(entry["metrics"]) == 6
 
 
-def test_training_worker_disabled_early_stopping_runs_all_epochs(training_service):
-    """
-    Verifica que con early_stopping=False, el modelo complete todas las 10 épocas
-    fijas sin importar la ausencia de mejora en val_loss.
-    """
-    import torch
-
-    def mock_build_model(arch, num_classes, device):
-        mock = MagicMock()
-        mock.parameters.return_value = [torch.nn.Parameter(torch.zeros(1))]
-        mock.state_dict.return_value = {"weight": torch.zeros(1)}
-        return mock
-
-    config = {
-        "job_id": "test_disabled_early_stop_job",
-        "dataset_name": "AvesChilenas",
-        "architecture": "ConvNeXt-Nano",
-        "epochs": 10,
-        "learning_rate": 0.001,
-        "batch_size": 16,
-        "framework": "pytorch",
-        "is_tri_model": False,
-        "early_stopping": False,
-    }
-
-    with patch.object(training_service, "_build_model_instance", side_effect=mock_build_model), \
-         patch("app.services.training.DataLoader", return_value=[]), \
-         patch("app.services.training.torch.save"), \
-         patch("app.services.training.SessionLocal") as mock_session_local:
-
-        mock_db = MagicMock()
-        mock_session_local.return_value = mock_db
-
-        training_service._run_training_worker(config)
-
-        # Debe completar las 10 épocas completas
-        assert training_service.current_epoch == 10
-        assert not any("Early Stopping activado" in log["message"] for log in training_service.logs)
-        assert training_service.status == "completed"
-
-
-
-
-
-
-
-
+def test_training_worker_disabled_early_stopping_runs_all_epochs(execution):
+    """Disabling early stopping retains all ten flat validation epochs."""
+    service, sessions, _ = execution
+    progress = run(service, epochs=10, early_stopping=False)
+    assert progress["epoch"] == 10
+    assert len(progress["metrics_history"]) == 10
+    assert {metric["val_loss"] for metric in progress["metrics_history"]} == {0.1733}
+    assert not any("Early Stopping activado" in log["message"] for log in progress["logs"])
+    entry, = history(service, sessions)
+    assert len(entry["metrics"]) == 10
