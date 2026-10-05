@@ -15,6 +15,7 @@ from app.main import app, ensemble_service
 from app.services import registry as registry_module, storage
 from app.services.feedback import feedback_service
 from app.services.registry import ModelRegistry, get_model_registry
+from training.datasets.local_folder import LocalFolderPAMIngestor
 
 
 class ByteBucket:
@@ -99,6 +100,36 @@ def review_api(tmp_path, monkeypatch):
         engine.dispose()
 
 
+def test_http_local_approval_is_ingestable_while_cloud_catalogue_and_upload_are_offline(review_api, monkeypatch):
+    client, bucket, raw = review_api
+    (raw / "AvesChilenas/rayadito").mkdir()
+    feedback_id, source, audio, _ = predict_and_validate(client, bucket, raw, "Rayadito")
+
+    def offline(*args, **kwargs):
+        raise AssertionError("Local approval must not list or upload cloud datasets")
+
+    monkeypatch.setattr(bucket, "list_blobs", offline)
+    bucket.fail_dataset_upload_once = True
+    response = client.post(f"/api/feedback/{feedback_id}/approve")
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        "status": "approved", "id_retroalimentacion": 1,
+        "destination_path": str(raw / "AvesChilenas/rayadito/feedback_1.wav"),
+        "clase": "Rayadito", "filename": "feedback_1.wav",
+        "local_status": "incorporated", "sync_status": "pending",
+    }
+    assert bucket.objects == {source: audio}
+    assert bucket.fail_dataset_upload_once is True
+    assert pending(client) == []
+    dataset = raw / "AvesChilenas"
+    samples = LocalFolderPAMIngestor(dataset, annotations_csv=dataset / "metadata.csv").ingest()
+    assert len(samples) == 1
+    assert samples.iloc[0]["file_path"] == str(dataset / "rayadito/feedback_1.wav")
+    assert samples.iloc[0]["clase"] == "Rayadito"
+    assert samples.iloc[0]["duracion_segundos"] == .1
+    assert client.post(f"/api/feedback/{feedback_id}/approve").json() == response.json()
+
+
 def test_automatic_snapshot_resolves_rayadito_and_rejects_override(review_api):
     client, bucket, raw = review_api
     feedback_id, source, audio, _ = predict_and_validate(client, bucket, raw, "Rayadito")
@@ -109,15 +140,17 @@ def test_automatic_snapshot_resolves_rayadito_and_rejects_override(review_api):
     response = client.post(f"/api/feedback/{feedback_id}/approve")
     assert response.status_code == 200, response.text
     assert response.json()["clase"] == "Rayadito"
-    assert bucket.objects[f"datasets/AvesChilenas/rayadito/rayadito_fb_{feedback_id}.wav"] == audio
-    assert (raw / f"AvesChilenas/rayadito/rayadito_fb_{feedback_id}.wav").read_bytes() == audio
-    assert response.json()["destination_path"] == str(raw / f"AvesChilenas/rayadito/rayadito_fb_{feedback_id}.wav")
+    assert bucket.objects == {source: audio}
+    assert response.json()["local_status"] == "incorporated"
+    assert response.json()["sync_status"] == "pending"
+    assert (raw / "AvesChilenas/rayadito/feedback_1.wav").read_bytes() == audio
+    assert response.json()["destination_path"] == str(raw / "AvesChilenas/rayadito/feedback_1.wav")
     assert not (raw / "AvesChilenas/Rayadito").exists()
     assert not any(key.startswith("datasets/AvesChilenas/Rayadito/") for key in bucket.objects)
     with (raw / "AvesChilenas/metadata.csv").open(newline="", encoding="utf-8") as stream:
         rows = list(csv.DictReader(stream))
     assert len(rows) == 1
-    assert rows[0]["nombre_archivo"] == f"rayadito_fb_{feedback_id}.wav"
+    assert rows[0]["nombre_archivo"] == "feedback_1.wav"
     assert rows[0]["clase"] == "Rayadito"
     assert int(rows[0]["tamano_bytes"]) == len(audio)
     assert bucket.objects[source] == audio
@@ -169,13 +202,11 @@ def predict_and_validate(client, bucket, raw, corrected=None):
 
 
 def assert_destinations(bucket, raw, feedback_id, audio, label, slug, dataset):
-    filename = f"{slug}_fb_{feedback_id}.wav"
-    key = f"datasets/{dataset}/{label}/{filename}"
+    filename = "feedback_1.wav"
     local = raw / dataset / label / filename
-    assert bucket.objects[key] == audio
     assert local.read_bytes() == audio
     assert list(raw.rglob("*.wav")) == [local]
-    assert [key for key in bucket.objects if key.startswith("datasets/")] == [key]
+    assert [key for key in bucket.objects if key.startswith("datasets/")] == []
     with (raw / dataset / "metadata.csv").open(newline="", encoding="utf-8") as stream:
         rows = list(csv.DictReader(stream))
     assert len(rows) == 1
@@ -200,7 +231,9 @@ def test_prediction_validation_approval_preserves_source_bytes(review_api, corre
     assert pending(client) == []
     assert bucket.objects[source] == audio
     assert client.post("/api/feedback", json=payload).status_code == 409
-    assert client.post(f"/api/feedback/{feedback_id}/approve?dataset_name=AvesChilenas").status_code == 409
+    replay = client.post(f"/api/feedback/{feedback_id}/approve?dataset_name=AvesChilenas")
+    assert replay.status_code == 200
+    assert replay.json()["sync_status"] == "pending"
 
 
 def test_prediction_validation_rejection_retains_source_without_dataset_changes(review_api):
@@ -234,21 +267,24 @@ def test_missing_prediction_source_remains_pending_until_retry(review_api):
     assert pending(client) == []
 
 
-def test_partial_upload_retry_has_one_object_file_and_metadata_row(review_api):
+def test_upload_outage_does_not_block_local_approval_and_replay(review_api):
     client, bucket, raw = review_api
     feedback_id, source, audio, payload = predict_and_validate(client, bucket, raw, "Turca")
     bucket.fail_dataset_upload_once = True
     response = client.post(f"/api/feedback/{feedback_id}/approve?dataset_name=AvesChilenas")
-    assert response.status_code == 503
-    assert len([key for key in bucket.objects if key.startswith("datasets/")]) == 1
-    assert list(raw.rglob("*.wav")) == []
-    assert pending(client)[0]["procesado"] is False
-    # The first attempt pins intent, even when an upload acknowledgement was lost.
+    assert response.status_code == 200
+    assert response.json()["local_status"] == "incorporated"
+    assert response.json()["sync_status"] == "pending"
+    assert bucket.fail_dataset_upload_once is True  # No upload was attempted.
+    assert len([key for key in bucket.objects if key.startswith("datasets/")]) == 0
+    assert (raw / "AvesChilenas/Turca/feedback_1.wav").read_bytes() == audio
+    assert pending(client) == []
+    # The local decision pins intent; replay cannot change its destination.
     assert client.post("/api/feedback", json=payload).status_code == 409
     before_override = bucket.objects.copy()
     assert client.post(f"/api/feedback/{feedback_id}/approve?dataset_name=aves_revision").status_code == 409
     assert bucket.objects == before_override
-    assert pending(client)[0]["procesado"] is False
+    assert pending(client) == []
     assert not any(key.startswith("datasets/aves_revision/") for key in bucket.objects)
     assert client.post(f"/api/feedback/{feedback_id}/approve?dataset_name=AvesChilenas").status_code == 200
     assert_destinations(bucket, raw, feedback_id, audio, "Turca", "turca", "AvesChilenas")

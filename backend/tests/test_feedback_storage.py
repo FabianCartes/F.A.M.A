@@ -13,6 +13,7 @@ from app.database import Base
 from app.models.prediction import Prediccion
 from app.models.feedback import Retroalimentacion
 from app.services.feedback import FeedbackService
+from app.services.feedback_sync import FeedbackSyncQueue
 from app.services import storage
 
 
@@ -67,23 +68,40 @@ def _concurrent_approval_worker(raw_dir, source, feedback_id, snapshot, uploaded
     paused = False
 
     def controlled_reader(stream, *args, **kwargs):
-        nonlocal paused
-        yield from original_reader(stream, *args, **kwargs)
-        if not paused:
-            paused = True
-            snapshot.set()
-            if feedback_id == 1:
-                assert release_read.wait(10), "Parent did not release the first snapshot"
+        reader = original_reader(stream, *args, **kwargs)
+
+        class Reader:
+            @property
+            def line_num(self):
+                return reader.line_num
+
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                nonlocal paused
+                try:
+                    return next(reader)
+                except StopIteration:
+                    if not paused:
+                        paused = True
+                        snapshot.set()
+                        if feedback_id == 1:
+                            assert release_read.wait(10), "Parent did not release the first snapshot"
+                    raise
+
+        return Reader()
 
     class Client:
         def list_blobs(self, bucket_name, prefix):
             return [SimpleNamespace(name="datasets/AvesChilenas/Chucao/seed.wav")]
         def bucket(self, name): return self
         def blob(self, key): return self
-        def download_as_bytes(self): return source
+        def download_as_bytes(self):
+            uploaded.set()  # Source ready, before the shared dataset lock.
+            return source
         def upload_from_string(self, data, **kwargs):
-            assert data == source
-            uploaded.set()
+            raise AssertionError("Approval must not upload synchronously")
 
     try:
         with Session(engine) as db, patch.object(storage.storage, "Client", Client), \
@@ -115,6 +133,7 @@ def _concurrent_approval_worker(raw_dir, source, feedback_id, snapshot, uploaded
 
 def test_concurrent_process_approvals_preserve_both_rows_and_retries(workflow):
     service, db, pred, fb, objects = workflow
+    (service.raw_data_dir / "AvesChilenas/Chucao").mkdir()
     context = multiprocessing.get_context("fork")
     release_read, retry = context.Event(), context.Event()
     snapshots = [context.Event(), context.Event()]
@@ -149,7 +168,7 @@ def test_concurrent_process_approvals_preserve_both_rows_and_retries(workflow):
             process.join(15)
     assert all(process.exitcode == 0 for process in started)
     assert sorted(results.get(timeout=2) for _ in started) == [(1, "ok"), (2, "ok")]
-    expected = {"chucao_fb_1.wav", "chucao_fb_2.wav"}
+    expected = {"feedback_1.wav", "feedback_2.wav"}
     assert {row[0] for row in rows_before_retry[1:]} == expected
     with metadata.open() as stream:
         rows_after_retry = list(csv.reader(stream))
@@ -157,23 +176,24 @@ def test_concurrent_process_approvals_preserve_both_rows_and_retries(workflow):
     assert {row[0] for row in rows_after_retry[1:]} == expected
 
 
-def test_approval_preserves_exact_source_in_both_destinations(workflow):
+def test_approval_preserves_exact_source_locally_and_enqueues_cloud_identity(workflow):
     service, db, pred, fb, objects = workflow
+    before = objects.copy()
     result = service.approve_feedback(db, fb.id_retroalimentacion)
-    key = f"datasets/AvesChilenas/Chucao/chucao_fb_{fb.id_retroalimentacion}.wav"
-    assert objects[key] == objects[pred.ruta_audio_prueba]
-    assert (service.raw_data_dir / "AvesChilenas/Chucao" / result["filename"]).read_bytes() == objects[key]
+    assert objects == before
+    assert result["filename"] == "feedback_1.wav"
+    assert result["sync_status"] == "pending"
+    assert (service.raw_data_dir / "AvesChilenas/Chucao/feedback_1.wav").read_bytes() == objects[pred.ruta_audio_prueba]
+    assert FeedbackSyncQueue().get(db, 1).object_key == "datasets/AvesChilenas/Chucao/feedback_1.wav"
     assert service.get_pending_feedback(db) == []
 
 
-@pytest.mark.parametrize("failure", ["missing", "gcs", "local", "metadata"])
+@pytest.mark.parametrize("failure", ["missing", "local", "metadata"])
 def test_failed_approval_stays_pending_and_retry_has_no_duplicates(workflow, monkeypatch, failure):
     service, db, pred, fb, objects = workflow
     source = objects[pred.ruta_audio_prueba]
     if failure == "missing":
         objects.clear()
-    elif failure == "gcs":
-        monkeypatch.setattr(storage, "upload_audio_to_gcp_sync", lambda *a, **k: False)
     elif failure == "local":
         destination = service.raw_data_dir / "AvesChilenas/Chucao"
         destination.write_text("not a directory")
@@ -205,12 +225,10 @@ def test_failed_approval_stays_pending_and_retry_has_no_duplicates(workflow, mon
             return Blob()
     monkeypatch.setattr(storage.storage, "Client", Client)
     service.approve_feedback(db, fb.id_retroalimentacion)
-    with pytest.raises(HTTPException) as error:
-        service.approve_feedback(db, fb.id_retroalimentacion)
-    assert error.value.status_code == 409
+    assert service.approve_feedback(db, fb.id_retroalimentacion)["sync_status"] == "pending"
     with (service.raw_data_dir / "AvesChilenas/metadata.csv").open() as f:
         assert len(list(csv.reader(f))) == 2
-    assert len(objects) == 2
+    assert len(objects) == 1
 
 
 def test_database_failure_after_both_writes_retries_without_metadata_duplicates(workflow, monkeypatch):
@@ -226,7 +244,8 @@ def test_database_failure_after_both_writes_retries_without_metadata_duplicates(
     service.approve_feedback(db, fb.id_retroalimentacion)
     with (service.raw_data_dir / "AvesChilenas/metadata.csv").open() as stream:
         assert len(list(csv.reader(stream))) == 2
-    assert len(objects) == 2
+    assert len(objects) == 1
+    assert len(FeedbackSyncQueue().pending(db)) == 1
 
 
 def test_rejection_preserves_source_and_final_decision(workflow):

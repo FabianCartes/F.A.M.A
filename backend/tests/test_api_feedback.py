@@ -1,6 +1,7 @@
 import sys
 from types import SimpleNamespace
 import wave
+import io
 from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
@@ -28,7 +29,14 @@ def fake_gcs(monkeypatch):
                     for label in ("Chucao", "Churrín de la Mocha", "rayadito")]
         def bucket(self, name): return self
         def blob(self, key): return self
-        def download_as_bytes(self): return b"real audio fixture"
+        def download_as_bytes(self):
+            stream = io.BytesIO()
+            with wave.open(stream, "wb") as wav:
+                wav.setnchannels(1)
+                wav.setsampwidth(2)
+                wav.setframerate(22050)
+                wav.writeframes(b"\x00\x00" * 2205)
+            return stream.getvalue()
         def upload_from_string(self, data, **kwargs): pass
     monkeypatch.setattr(storage.storage, "Client", Client)
 
@@ -64,8 +72,12 @@ def test_db():
 @pytest.fixture
 def client(test_db):
     """FastAPI TestClient configured with test database."""
-    with TestClient(app) as test_client:
+    # No lifespan: no model discovery, cloud access, seeding or real DB.
+    test_client = TestClient(app)
+    try:
         yield test_client
+    finally:
+        test_client.close()
 
 
 @pytest.fixture
@@ -244,7 +256,9 @@ def test_approve_feedback(client, test_db, tmp_path, monkeypatch):
     data = response.json()
     assert data["status"] == "approved"
     assert "destination_path" in data
-    expected_filename = f"chucao_fb_{fb.id_retroalimentacion}.wav"
+    assert data["local_status"] == "incorporated"
+    assert data["sync_status"] == "pending"
+    expected_filename = "feedback_1.wav"
     assert data.get("filename") == expected_filename
 
     # Verify database state
@@ -262,7 +276,7 @@ def test_approve_feedback(client, test_db, tmp_path, monkeypatch):
 
 
 def test_approve_feedback_canonical_naming_accents_and_spaces(client, test_db, tmp_path, monkeypatch):
-    """POST /api/feedback/{id}/approve generates canonical filename with normalized slug for accents and spaces."""
+    """Approval preserves accented semantic labels with the queue's canonical ID filename."""
     raw_dir = tmp_path / "data" / "raw"
     dataset_dir = raw_dir / "AvesChilenas"
     dataset_dir.mkdir(parents=True, exist_ok=True)
@@ -297,7 +311,7 @@ def test_approve_feedback_canonical_naming_accents_and_spaces(client, test_db, t
     response = client.post(f"/api/feedback/{fb.id_retroalimentacion}/approve?dataset_name=AvesChilenas")
     assert response.status_code == 200
     data = response.json()
-    expected_filename = f"churrin_de_la_mocha_fb_{fb.id_retroalimentacion}.wav"
+    expected_filename = "feedback_1.wav"
     assert data.get("filename") == expected_filename
 
     expected_audio = dataset_dir / "Churrín de la Mocha" / expected_filename

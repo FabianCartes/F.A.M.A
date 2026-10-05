@@ -65,4 +65,6 @@ class ApproveFeedbackResponse(BaseModel):
     destination_path: str
     clase: str
     filename: Optional[str] = None
+    local_status: str
+    sync_status: str
 

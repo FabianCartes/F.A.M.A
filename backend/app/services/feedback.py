@@ -24,6 +24,7 @@ from fastapi import HTTPException, status
 from app.models.prediction import Prediccion
 from app.models.feedback import Retroalimentacion
 from app.services import storage
+from app.services.feedback_sync import FeedbackSyncQueue
 
 logger = logging.getLogger(__name__)
 
@@ -50,28 +51,6 @@ class FeedbackService:
 
     def _intent_path(self, feedback_id: int) -> Path:
         return self.raw_data_dir / f".feedback_{feedback_id}.json"
-
-    def _normalize_class_slug(self, class_name: str) -> str:
-        """
-        Normalize a target class label into a canonical, URL-safe, and filesystem-safe slug:
-        - Accents and diacritics are removed (NFKD normalization).
-        - Converted to lowercase.
-        - Non-alphanumeric characters (spaces, hyphens, punctuation) are converted to underscores.
-        - Consecutive underscores are collapsed, and leading/trailing underscores are stripped.
-        Examples:
-          "Chucao" -> "chucao"
-          "Churrín de la Mocha" -> "churrin_de_la_mocha"
-          "worn_out_brakes" -> "worn_out_brakes"
-          "power steering combined_no oil" -> "power_steering_combined_no_oil"
-        """
-        if not class_name:
-            return "general"
-        normalized = unicodedata.normalize("NFKD", class_name)
-        ascii_text = normalized.encode("ascii", "ignore").decode("utf-8")
-        lowered = ascii_text.lower()
-        slug = re.sub(r"[^a-z0-9]+", "_", lowered)
-        slug = slug.strip("_")
-        return slug or "general"
 
     def record_feedback(
         self,
@@ -173,156 +152,290 @@ class FeedbackService:
             })
         return items
 
-    def approve_feedback(
-        self,
-        db: Session,
-        id_retroalimentacion: int,
-        dataset_name: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """
-        Approve and ingest the feedback audio recording into the raw training dataset,
-        update metadata.csv if present, and mark the feedback record as processed.
-        """
-        feedback = db.query(Retroalimentacion).filter(
-            Retroalimentacion.id_retroalimentacion == id_retroalimentacion
-        ).with_for_update().first()
+    def _safe_path(self, path: Path):
+        """Reject symlinks in every ancestor, including configured raw ancestors."""
+        if any(part.is_symlink() for part in (path, *path.parents)):
+            raise ValueError("Ruta de dataset no válida")
+        if not path.resolve().is_relative_to(self.raw_data_dir.resolve()):
+            raise ValueError("Ruta fuera del dataset local")
 
+    @staticmethod
+    def _fsync_dir(path: Path):
+        descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+    def _mkdir(self, path: Path):
+        self._safe_path(path)
+        if path.exists() and not path.is_dir():
+            raise OSError("Dataset directory obstructed")
+        missing = []
+        current = path
+        while not current.exists():
+            missing.append(current)
+            current = current.parent
+        # Reconfirm the last existing entry too: a prior mkdir may have been
+        # interrupted after creation but before fsync of its parent.
+        self._fsync_dir(current.parent)
+        for directory in reversed(missing):
+            directory.mkdir(exist_ok=True)
+            self._fsync_dir(directory.parent)
+
+    def _publish(self, path: Path, data: bytes, *, no_replace=False):
+        """Durable staged publication; audio must never replace an existing inode."""
+        staging = path.with_suffix(path.suffix + ".pending")
+        self._safe_path(path)
+        self._safe_path(staging)
+        descriptor = os.open(staging, os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+                             | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        if no_replace:
+            # Atomic no-clobber publication, unlike replace(check-then-write).
+            os.link(staging, path)
+            staging.unlink()
+        else:
+            staging.replace(path)
+        self._fsync_dir(path.parent)
+
+    @staticmethod
+    def _class_key(label: str) -> str:
+        return re.sub(r"[\s_]+", "_", unicodedata.normalize("NFC", label).casefold())
+
+    def _resolve_local_class(self, dataset: Path, label: str) -> str:
+        """Local directories/metadata are authoritative; cloud is legacy fallback only."""
+        directories = set()
+        if dataset.exists():
+            for child in dataset.iterdir():
+                if child.name.startswith(".") or child.name in ("processed_wav", "metadata.csv.pending"):
+                    continue
+                if child.is_dir() or child.is_symlink():
+                    storage.validate_path_component(child.name)
+                    directories.add(child.name)
+        key = self._class_key(label)
+        matches = [name for name in directories if self._class_key(name) == key]
+        if len(matches) > 1:
+            raise ValueError("Clase ambigua en el catálogo local")
+        if matches:
+            self._safe_path(dataset / matches[0])
+            return matches[0]
+        metadata = dataset / "metadata.csv"
+        self._safe_path(metadata)
+        labels = set()
+        if metadata.exists():
+            with metadata.open(newline="", encoding="utf-8") as stream:
+                for row in csv.DictReader(stream):
+                    value = row.get("clase")
+                    if value:
+                        labels.add(storage.validate_path_component(value))
+        matches = [name for name in labels if self._class_key(name) == key]
+        if len(matches) > 1:
+            raise ValueError("Clase ambigua en los metadatos locales")
+        if matches:
+            return matches[0]
+        if directories or labels:
+            raise ValueError("Clase desconocida en el catálogo local")
+        # Compatibility for cloud-backed datasets not yet downloaded locally.
+        prefix = f"datasets/{dataset.name}/"
+        blobs = storage.storage.Client().list_blobs(storage.DEFAULT_BUCKET_NAME, prefix=prefix)
+        names = set()
+        for blob in blobs:
+            relative = blob.name.removeprefix(prefix)
+            if "/" in relative:
+                names.add(storage.validate_path_component(relative.split("/", 1)[0]))
+        matches = [name for name in names if self._class_key(name) == key]
+        if len(matches) != 1:
+            raise ValueError("Clase desconocida o ambigua en el catálogo de almacenamiento")
+        return matches[0]
+
+    def _metadata_audio_path(self, dataset: Path, row: dict) -> str:
+        """Add explicit paths without invalidating existing legacy CSV samples."""
+        if row.get("file_path"):
+            path = Path(row["file_path"])
+            candidates = [path if path.is_absolute() else dataset / path]
+        else:
+            filename = row.get("nombre_archivo", "")
+            label = row.get("clase", "")
+            if not filename or not label:
+                raise ValueError("Fila de metadatos incompleta")
+            slug = label.lower().replace(" ", "_").replace("/", "_")
+            stem, source_id = Path(filename).stem, row.get("xc_id", "")
+            candidates = [dataset / folder / slug / f"{identifier}.wav"
+                          for folder in ("", "processed_wav") for identifier in (stem, source_id)
+                          if identifier]
+            candidates += [dataset / slug / filename, dataset / slug / f"{source_id}.mp3",
+                           dataset / f"{stem}.wav", dataset / filename]
+            candidates += [directory / filename for directory in dataset.iterdir()
+                           if directory.is_dir() and self._class_key(directory.name) == self._class_key(label)]
+        for candidate in candidates:
+            if candidate.is_file():
+                self._safe_path(candidate)
+                return str(candidate.resolve().relative_to(dataset.resolve()))
+        raise ValueError("Audio existente ausente del índice local; no se modificaron sus metadatos")
+
+    def _incorporate_metadata(self, dataset, storage_class, filename, label, audio, digest):
+        metadata = dataset / "metadata.csv"
+        self._safe_path(metadata)
+        with wave.open(io.BytesIO(audio), "rb") as wav:
+            sr = wav.getframerate()
+            if sr <= 0 or wav.getnframes() <= 0:
+                raise ValueError("Audio WAV vacío")
+            duration = round(wav.getnframes() / sr, 3)
+            if len(wav.readframes(wav.getnframes())) != wav.getnframes() * wav.getnchannels() * wav.getsampwidth():
+                raise ValueError("Audio WAV incompleto")
+        values = dict(nombre_archivo=filename, clase=label, frecuencia_muestreo=sr,
+                      duracion_segundos=duration, tamano_bytes=len(audio), hash_archivo=digest,
+                      xc_id=filename.removesuffix(".wav"), recordist="human_feedback",
+                      licencia="", pais="", localidad="", lat="", lon="", calidad="",
+                      file_path=f"{storage_class}/{filename}")
+        rows, columns = [], list(values)
+        if metadata.exists():
+            with metadata.open(newline="", encoding="utf-8") as stream:
+                reader = csv.DictReader(stream)
+                if (not reader.fieldnames or len(set(reader.fieldnames)) != len(reader.fieldnames)
+                        or not {"nombre_archivo", "clase"}.issubset(reader.fieldnames)):
+                    raise ValueError("Formato de metadatos no válido")
+                columns = list(reader.fieldnames) + [c for c in values if c not in reader.fieldnames]
+                rows = list(reader)
+        if any(None in row for row in rows):
+            raise ValueError("Fila de metadatos malformada")
+        duplicates = [row for row in rows if row.get("nombre_archivo") == filename]
+        if duplicates:
+            if len(duplicates) != 1 or any(duplicates[0].get(k) != str(values[k])
+                                          for k in ("clase", "hash_archivo", "xc_id", "file_path",
+                                                    "frecuencia_muestreo", "duracion_segundos",
+                                                    "tamano_bytes", "recordist")):
+                raise ValueError("Conflicto de metadatos para el audio canónico")
+            with metadata.open("rb") as stream:
+                os.fsync(stream.fileno())
+            self._fsync_dir(dataset)
+            return
+        for row in rows:
+            row["file_path"] = self._metadata_audio_path(dataset, row)
+            # Added numeric columns must not become NaN in CSV-consuming ingestors.
+            for column in ("frecuencia_muestreo", "duracion_segundos", "tamano_bytes"):
+                row.setdefault(column, 0)
+            row.setdefault("recordist", f"legacy_{Path(row['nombre_archivo']).stem}")
+        rows.append(values)
+        output = io.StringIO(newline="")
+        writer = csv.DictWriter(output, fieldnames=columns)
+        writer.writeheader()
+        writer.writerows(rows)
+        self._publish(metadata, output.getvalue().encode("utf-8"))
+
+    def approve_feedback(self, db: Session, id_retroalimentacion: int,
+                         dataset_name: Optional[str] = None) -> Dict[str, Any]:
+        """Verify durable local audio/CSV, then commit processed + sync intent together.
+
+        The filesystem intent survives rollback/crash and pins source, destination
+        and digest. No synchronous cloud upload; replay verifies local evidence.
+        """
+        feedback = db.query(Retroalimentacion).filter_by(
+            id_retroalimentacion=id_retroalimentacion).with_for_update().first()
         if not feedback:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Retroalimentación con ID {id_retroalimentacion} no encontrada.",
-            )
-
-        if feedback.procesado:
-            raise HTTPException(status_code=409, detail="La retroalimentación ya fue finalizada.")
-
-        prediccion = db.query(Prediccion).filter(
-            Prediccion.id_prediccion == feedback.id_prediccion
-        ).first()
-
-        stored_dataset = prediccion.dataset_name if prediccion else None
-        if not stored_dataset:
-            raise HTTPException(status_code=409, detail="Predicción sin dataset de almacenamiento verificable; permanece pendiente.")
-        if dataset_name is not None:
-            try:
+            raise HTTPException(status_code=404, detail="Retroalimentación no encontrada.")
+        queue = FeedbackSyncQueue()
+        try:
+            existing = queue.get(db, id_retroalimentacion)
+            if feedback.procesado and existing is None:
+                raise HTTPException(status_code=409, detail="La retroalimentación ya fue finalizada.")
+            pred = feedback.prediccion
+            stored_dataset = pred.dataset_name if pred else None
+            if not stored_dataset:
+                raise HTTPException(status_code=409, detail="Predicción sin dataset de almacenamiento verificable; permanece pendiente.")
+            if dataset_name is not None:
                 storage.validate_path_component(dataset_name)
-            except ValueError:
-                raise HTTPException(status_code=422, detail="Dataset no válido.")
-            if dataset_name != stored_dataset:
-                raise HTTPException(status_code=409, detail="El destino no puede cambiar respecto a la inferencia.")
-        dataset_name = stored_dataset
-
-        target_class = (
-            feedback.etiqueta_corregida
-            if not feedback.fue_correcta and feedback.etiqueta_corregida
-            else (prediccion.etiqueta_predicha if prediccion else "General")
-        )
-
-        try:
-            storage.validate_path_component(dataset_name)
-            storage.validate_path_component(target_class)
-        except ValueError:
-            raise HTTPException(status_code=422, detail="Dataset o clase no válidos.")
-        class_slug = self._normalize_class_slug(target_class)
-        canonical_filename = f"{class_slug}_fb_{feedback.id_retroalimentacion}.wav"
-        dataset_dir = self.raw_data_dir / dataset_name
-        metadata_file = dataset_dir / "metadata.csv"
-        intent_file = self._intent_path(feedback.id_retroalimentacion)
-        intent = {"dataset": dataset_name, "class": target_class,
-                  "source": prediccion.ruta_audio_prueba}
-        # A retry uses the pinned directory even if the cloud catalogue changes.
-        try:
-            if intent_file.is_symlink():
-                raise ValueError("Invalid incorporation intent path")
-            if intent_file.exists():
-                recorded = json.loads(intent_file.read_text(encoding="utf-8"))
-                if {key: recorded.get(key) for key in intent} != intent:
-                    raise ValueError("Incorporation target cannot change after an attempt")
-                storage_class = recorded.get("storage_class", recorded["class"])
-            else:
-                storage_class = storage.resolve_dataset_class(dataset_name, target_class)
-            storage.validate_path_component(storage_class)
-        except ValueError as err:
-            raise HTTPException(status_code=422, detail=str(err))
-        except Exception:
-            raise HTTPException(status_code=503, detail="Catálogo de almacenamiento no disponible. Reintente.")
-        dest_file = dataset_dir / storage_class / canonical_filename
-        for path in (self.raw_data_dir, dataset_dir, dest_file.parent, dest_file, metadata_file):
-            if path.is_symlink():
-                raise HTTPException(status_code=422, detail="Ruta de dataset no válida.")
-        try:
-            self.raw_data_dir.mkdir(parents=True, exist_ok=True)
-            intent_file = self._intent_path(feedback.id_retroalimentacion)
-            if intent_file.is_symlink():
-                raise ValueError("Invalid incorporation intent path")
-            with _filesystem_lock(intent_file.with_suffix(".json.lock")):
-                if intent_file.exists():
-                    recorded = json.loads(intent_file.read_text(encoding="utf-8"))
-                    if ({key: recorded.get(key) for key in intent} != intent
-                            or recorded.get("storage_class", recorded["class"]) != storage_class):
-                        raise ValueError("Incorporation target cannot change after an attempt")
+                if dataset_name != stored_dataset:
+                    raise HTTPException(status_code=409, detail="El destino no puede cambiar respecto a la inferencia.")
+            label = pred.etiqueta_predicha if feedback.fue_correcta else feedback.etiqueta_corregida
+            storage.validate_path_component(stored_dataset)
+            storage.validate_path_component(label)
+            dataset = self.raw_data_dir / stored_dataset
+            self._safe_path(dataset)
+            self._mkdir(self.raw_data_dir)
+            intent_path = self._intent_path(id_retroalimentacion)
+            self._safe_path(intent_path)
+            # Retain the per-feedback lock through the DB commit, not just JSON creation.
+            with _filesystem_lock(intent_path.with_suffix(".json.lock")):
+                db.refresh(feedback)
+                db.refresh(pred)
+                current_label = pred.etiqueta_predicha if feedback.fue_correcta else feedback.etiqueta_corregida
+                if pred.dataset_name != stored_dataset or current_label != label:
+                    raise HTTPException(status_code=409, detail="La identidad cambió durante la aprobación. Reintente.")
+                existing = queue.get(db, id_retroalimentacion)
+                if feedback.procesado and existing is None:
+                    raise HTTPException(status_code=409, detail="La retroalimentación ya fue finalizada.")
+                identity = {"dataset": stored_dataset, "class": label, "source": pred.ruta_audio_prueba}
+                recorded = json.loads(intent_path.read_text(encoding="utf-8")) if intent_path.exists() else None
+                if recorded and any(recorded.get(k) != v for k, v in identity.items()):
+                    raise ValueError("El destino, clase o fuente de la intención no pueden cambiar")
+                if existing and (existing.dataset_name != stored_dataset or existing.class_label != label):
+                    raise ValueError("Identidad de sincronización incompatible")
+                storage_class = (existing.storage_class if existing else recorded["storage_class"]
+                                 if recorded else self._resolve_local_class(dataset, label))
+                storage.validate_path_component(storage_class)
+                filename = f"feedback_{id_retroalimentacion}.wav"
+                destination = dataset / storage_class / filename
+                self._safe_path(destination)
+                if recorded is None:
+                    recorded = {**identity, "storage_class": storage_class, "filename": filename}
+                    self._publish(intent_path, json.dumps(recorded).encode("utf-8"))
+                elif recorded.get("filename") != filename or recorded.get("storage_class") != storage_class:
+                    raise ValueError("Intención legacy o incompatible; requiere recuperación explícita")
+                digest = existing.sha256 if existing else recorded.get("sha256")
+                if digest and destination.exists():
+                    audio = destination.read_bytes()
                 else:
-                    staging_intent = intent_file.with_suffix(".json.pending")
-                    if staging_intent.is_symlink():
-                        raise ValueError("Invalid incorporation staging path")
-                    with staging_intent.open("w", encoding="utf-8") as stream:
-                        json.dump({**intent, "storage_class": storage_class}, stream)
-                    staging_intent.replace(intent_file)
-            audio = storage.download_prediction_audio(prediccion.ruta_audio_prueba if prediccion else "")
-            if not storage.upload_audio_to_gcp_sync(
-                audio, canonical_filename,
-                destination_folder=f"datasets/{dataset_name}/{storage_class}",
-            ):
-                raise OSError("Dataset upload was not confirmed")
-            dest_file.parent.mkdir(parents=True, exist_ok=True)
-            dest_file.write_bytes(audio)
-            # Hold the dataset lock from reading through replacement, including
-            # duplicate detection and the shared staging file used by retries.
-            with _filesystem_lock(dataset_dir / ".metadata.lock"):
-                if metadata_file.exists():
-                    with metadata_file.open(newline="", encoding="utf-8") as stream:
-                        rows = list(csv.reader(stream))
-                    if not any(row and row[0] == canonical_filename for row in rows):
-                        sr, duration = "", ""
-                        try:
-                            with wave.open(io.BytesIO(audio), "rb") as wf:
-                                sr = wf.getframerate()
-                                duration = round(wf.getnframes() / sr, 3)
-                        except (wave.Error, EOFError):
-                            pass
-                        rows.append([canonical_filename, target_class, sr, duration, len(audio),
-                                     hashlib.sha256(audio).hexdigest(), f"feedback_{feedback.id_retroalimentacion}",
-                                     "human_feedback", "", "", "", "", "", ""])
-                        # Atomic replacement prevents truncated metadata on an interrupted write.
-                        staging = metadata_file.with_suffix(".csv.pending")
-                        if staging.is_symlink():
-                            raise ValueError("Invalid metadata staging path")
-                        with staging.open("w", newline="", encoding="utf-8") as stream:
-                            csv.writer(stream).writerows(rows)
-                        staging.replace(metadata_file)
+                    audio = storage.download_prediction_audio(pred.ruta_audio_prueba)
+                actual = hashlib.sha256(audio).hexdigest()
+                if digest and actual != digest:
+                    raise ValueError("Hash de audio incompatible con la intención")
+                if not digest:
+                    digest = actual
+                    recorded["sha256"] = digest
+                    self._publish(intent_path, json.dumps(recorded).encode("utf-8"))
+                elif recorded.get("sha256") != digest:
+                    raise ValueError("Hash de intención local incompatible con la cola")
+                # A prior replace may have succeeded before its directory fsync failed.
+                with intent_path.open("rb") as stream:
+                    os.fsync(stream.fileno())
+                self._fsync_dir(self.raw_data_dir)
+                self._mkdir(dataset)
+                # Serialize all feedback touching this dataset, including publication/CSV.
+                with _filesystem_lock(dataset / ".metadata.lock"):
+                    self._safe_path(destination)
+                    if destination.exists() and hashlib.sha256(destination.read_bytes()).hexdigest() != digest:
+                        raise ValueError("El archivo canónico existente tiene contenido diferente")
+                    # Validate WAV and CSV before publishing any new audio.
+                    self._mkdir(destination.parent)
+                    self._incorporate_metadata(dataset, storage_class, filename, label, audio, digest)
+                    if not destination.exists():
+                        self._publish(destination, audio, no_replace=True)
+                    else:
+                        with destination.open("rb") as stream:
+                            os.fsync(stream.fileno())
+                        self._fsync_dir(destination.parent)
+                    sync = queue.enqueue(db, id_retroalimentacion, dataset_name=stored_dataset,
+                                         storage_class=storage_class, sha256=digest)
+                    feedback.procesado = True
+                    db.commit()
+                return {"status": "approved", "id_retroalimentacion": id_retroalimentacion,
+                        "destination_path": str(destination), "clase": label, "filename": filename,
+                        "local_status": "incorporated", "sync_status": sync.status}
+        except HTTPException:
+            db.rollback()
+            raise
+        except ValueError as error:
+            db.rollback()
+            raise HTTPException(status_code=422, detail=str(error))
         except Exception:
             db.rollback()
-            logger.exception("Feedback incorporation failed")
-            raise HTTPException(status_code=503, detail="No se pudo incorporar el audio real en GCS y local. Reintente.")
-
-        try:
-            feedback.procesado = True
-            db.commit()
-            db.refresh(feedback)
-        except Exception:
-            db.rollback()
-            logger.exception("Feedback finalization failed")
-            raise HTTPException(status_code=503, detail="No se pudo finalizar la incorporación. Reintente.")
-
-        logger.info(f"[FeedbackService] Audio approved with canonical filename '{canonical_filename}' -> {dest_file}")
-
-        return {
-            "status": "approved",
-            "id_retroalimentacion": feedback.id_retroalimentacion,
-            "destination_path": str(dest_file),
-            "clase": target_class,
-            "filename": canonical_filename,
-        }
+            logger.exception("Local feedback incorporation failed")
+            raise HTTPException(status_code=503, detail="No se pudo confirmar la incorporación local. Reintente con la misma intención.")
 
     def reject_feedback(self, db: Session, id_retroalimentacion: int) -> Dict[str, Any]:
         """
@@ -339,11 +452,22 @@ class FeedbackService:
                 detail=f"Retroalimentación con ID {id_retroalimentacion} no encontrada.",
             )
 
-        if feedback.procesado:
-            raise HTTPException(status_code=409, detail="La retroalimentación ya fue finalizada.")
-        feedback.procesado = True
-        db.commit()
-        db.refresh(feedback)
+        try:
+            self._mkdir(self.raw_data_dir)
+            intent_path = self._intent_path(id_retroalimentacion)
+            self._safe_path(intent_path)
+            with _filesystem_lock(intent_path.with_suffix(".json.lock")):
+                db.refresh(feedback)
+                if feedback.procesado or intent_path.exists():
+                    raise HTTPException(status_code=409, detail="La retroalimentación fue finalizada o su incorporación ya fue iniciada.")
+                feedback.procesado = True
+                db.commit()
+        except HTTPException:
+            db.rollback()
+            raise
+        except Exception:
+            db.rollback()
+            raise HTTPException(status_code=503, detail="No se pudo confirmar el descarte. Reintente.")
 
         return {
             "status": "rejected",
