@@ -220,7 +220,9 @@ export default function PredictionView() {
   const [classFilter, setClassFilter] = useState<string>("all");
   const [modelStatus, setModelStatus] = useState<BackendModelStatus | null>(null);
   const [availableModels, setAvailableModels] = useState<RegisteredModel[]>([]);
-  const [selectedModelId, setSelectedModelId] = useState<string>("chilean-birds-ensemble");
+  const [selectedModelId, setSelectedModelId] = useState<string>("");
+  const [catalogueError, setCatalogueError] = useState<string | null>(null);
+  const [publicationErrors, setPublicationErrors] = useState<{ model_id?: string; code: string }[]>([]);
   const [audioStats, setAudioStats] = useState<AudioWaveformStats | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -296,28 +298,53 @@ export default function PredictionView() {
   }, [selectedModel, selectedDomain]);
 
 
-  // Obtener catálogo de modelos registrados en FastAPI (ModelRegistry)
+  // Cada entrada o regreso consulta el catálogo; la última solicitud prevalece.
   useEffect(() => {
+    let generation = 0;
+    let controller: AbortController | undefined;
+    let previousModels: RegisteredModel[] = [];
     async function fetchModels() {
+      const request = ++generation;
+      controller?.abort();
+      controller = new AbortController();
       try {
-        const res = await fetch(`${API_BASE_URL}/api/models`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.models && Array.isArray(data.models)) {
-            setAvailableModels(data.models);
-            const hasBirdEnsemble = data.models.some((m: RegisteredModel) => m.id === "chilean-birds-ensemble");
-            if (hasBirdEnsemble) {
-              setSelectedModelId("chilean-birds-ensemble");
-            } else if (data.default_model_id) {
-              setSelectedModelId(data.default_model_id);
-            }
-          }
-        }
+        const res = await fetch(`${API_BASE_URL}/api/models`, { signal: controller.signal });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (request !== generation) return;
+        if (!Array.isArray(data.models)) throw new Error("invalid_catalogue");
+        setCatalogueError(null);
+        setPublicationErrors(Array.isArray(data.publication_errors) ? data.publication_errors : []);
+        const models: RegisteredModel[] = data.models;
+        const priorCatalogue = previousModels;
+        previousModels = models;
+        setAvailableModels(models);
+        setSelectedModelId((current) => {
+          if (models.some((m) => m.id === current)) return current;
+          const defaultModel = models.find((m) => m.id === data.default_model_id);
+          const domain = resolveModelDomain(priorCatalogue.find((m) => m.id === current), current);
+          const sameDomain = models.filter((m) => resolveModelDomain(m) === domain);
+          const replacement = current
+            ? sameDomain.find((m) => m.id === defaultModel?.id) || sameDomain[0] || defaultModel || models[0]
+            : defaultModel || models[0];
+          return replacement?.id || "";
+        });
       } catch (err) {
-        console.warn("No se pudo obtener catálogo de modelos:", err);
+        if (request !== generation) return;
+        const status = err instanceof Error && /^HTTP \d{3}$/.test(err.message) ? ` (${err.message})` : "";
+        setCatalogueError(`No se pudo actualizar el catálogo de modelos${status}. Se conserva el último catálogo disponible; vuelve a esta ventana para reintentar.`);
       }
     }
-    fetchModels();
+    const onVisible = () => { if (document.visibilityState === "visible") void fetchModels(); };
+    void fetchModels();
+    window.addEventListener("focus", fetchModels);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      generation += 1;
+      controller?.abort();
+      window.removeEventListener("focus", fetchModels);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   useEffect(() => {
@@ -637,6 +664,11 @@ export default function PredictionView() {
       return;
     }
 
+    if (!selectedModel) {
+      setError("No hay un modelo disponible para ejecutar la inferencia.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setResult(null);
@@ -770,21 +802,7 @@ export default function PredictionView() {
                   )}
                 </>
               ) : (
-                <>
-                  <optgroup label="Bioacústica (Aves Chilenas)">
-                    <option value="chilean-birds-ensemble" className="bg-[#16171b] text-white">
-                      Aves Chilenas · Super-Ensamble Tri-Modelo (88.68% F1)
-                    </option>
-                    <option value="chilean-birds-cnn" className="bg-[#16171b] text-white">
-                      Chilean Birds CNN Baseline (79.2% Acc)
-                    </option>
-                  </optgroup>
-                  <optgroup label="Diagnóstico Industrial (Motores)">
-                    <option value="car-engine-diagnostics-super-ensemble" className="bg-[#16171b] text-white">
-                      Fallas de Motores · Super-Ensamble (81.16% Acc)
-                    </option>
-                  </optgroup>
-                </>
+                <option value="">Sin modelos disponibles</option>
               )}
             </select>
           </div>
@@ -799,6 +817,27 @@ export default function PredictionView() {
           </div>
         </div>
       </div>
+
+      {catalogueError && <p role="alert" className="text-xs text-red-300">{catalogueError}</p>}
+      {publicationErrors.length > 0 && (
+        <div role="status" aria-label="Publicación de modelos" className="text-xs text-amber-300">
+          <p>Algunos modelos no pudieron publicarse. Los modelos disponibles siguen siendo seleccionables.</p>
+          <ul>
+            {publicationErrors.map((issue, index) => {
+              const labels: Record<string, string> = {
+                checkpoint_missing: "archivo de pesos ausente",
+                checkpoint_too_small: "archivo de pesos incompleto",
+                checkpoint_invalid: "archivo de pesos inválido",
+                checkpoint_unreadable: "archivo de pesos ilegible",
+                checkpoint_outside_root: "archivo de pesos fuera de la ubicación permitida",
+                database_unavailable: "base de datos no disponible",
+              };
+              const id = issue.model_id && /^[a-zA-Z0-9_-]+$/.test(issue.model_id) ? issue.model_id : "Modelo sin identificador";
+              return <li key={index}>{id}: {labels[issue.code] || "error de publicación"}</li>;
+            })}
+          </ul>
+        </div>
+      )}
 
       {/* Banner de Especificaciones y Contrato Acústico del Modelo */}
       <div
@@ -1043,7 +1082,7 @@ export default function PredictionView() {
               <div className="flex items-center gap-1.5 mt-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                 <span className="text-xs font-semibold text-emerald-400">
-                  {selectedModel?.has_weights !== false ? "Pesos Verificados" : "No inicializado"}
+                  {!selectedModel ? "Sin modelo disponible" : selectedModel.has_weights !== false ? "Pesos Verificados" : "No inicializado"}
                 </span>
               </div>
               <span className="text-[10px] text-gray-400 mt-1 block">
@@ -1083,18 +1122,13 @@ export default function PredictionView() {
               <span className="text-xs text-gray-400 font-medium">Modelo activo en producción</span>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-950/60 border border-green-800/60 text-green-400 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                {isEnsemble ? "Super-Ensamble Activo (3/3)" : "Modelo Individual Activo (1/1)"}
+                {!selectedModel ? "Sin modelo disponible" : isEnsemble ? "Super-Ensamble Activo (3/3)" : "Modelo Individual Activo (1/1)"}
               </span>
             </div>
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="text-base font-bold text-white">
-                  {selectedModel?.name ||
-                    (isEngineModel
-                      ? "Super-Ensamble Acústico de Motores"
-                      : modelStatus
-                      ? modelStatus.model_name
-                      : "Super-Ensamble Tri-Modelo")}
+                  {selectedModel?.name || "Sin modelo disponible"}
                 </h2>
                 <p className="text-[11px] text-gray-400 mt-0.5">
                   {isEnsemble
@@ -1466,7 +1500,7 @@ export default function PredictionView() {
           <button
             type="button"
             onClick={handleExecuteInference}
-            disabled={loading || !file}
+            disabled={loading || !file || !selectedModel}
             className="mt-4 w-full py-2.5 px-4 rounded-lg text-xs font-semibold text-white bg-[#2b2d35] hover:bg-[#343740] active:bg-[#23242b] disabled:opacity-40 disabled:cursor-not-allowed border border-[#373a46] transition-all flex items-center justify-center gap-2 shadow-sm"
           >
             {loading ? (
