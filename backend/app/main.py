@@ -50,13 +50,15 @@ from app.services.ingestion import ingestion_service
 from app.services.training import training_service
 from app.services.dashboard import dashboard_service
 from app.services.feedback import feedback_service
+from app.services.feedback_sync_worker import FeedbackSyncWorker
+from app.services.feedback_sync import FeedbackSyncQueue
 from app.database import Base, engine, get_db
 from app.models import Prediccion, ConjuntoDatos, Audio, Modelo, MetricaEntrenamiento, Retroalimentacion, Usuario
 from app.routes.auth import router as auth_router
 from app.services.registry import get_model_registry, ModelRegistry, ModelNotFoundError
 from app.schemas.model_info import ModelListResponse
 from app.schemas.prediction import PredictionResponse
-from app.schemas.feedback import FeedbackCreateRequest, ApproveFeedbackResponse
+from app.schemas.feedback import FeedbackCreateRequest, ApproveFeedbackResponse, FeedbackSyncState
 from app.services.predictors.base import ModelWeightsError
 from app.services.predictors.cnn_predictor import AudioCNNPredictor
 from training.pipelines.dataset import MalformedAudioError
@@ -389,7 +391,10 @@ async def lifespan(app_instance: FastAPI):
             seed_initial_admin(db_session)
     except Exception as seed_err:
         print(f"[Startup Warning] Excepción al realizar seeding inicial: {seed_err}")
-    yield
+    from app.database import SessionLocal
+    worker = FeedbackSyncWorker(SessionLocal, feedback_service.raw_data_dir)
+    async with worker.running():
+        yield
 
 
 # ============================================================================
@@ -851,6 +856,18 @@ def record_feedback(req: FeedbackCreateRequest, db: Session = Depends(get_db)):
             else None
         ),
     }
+
+
+@app.get("/api/feedback/sync", response_model=List[FeedbackSyncState])
+def get_feedback_sync_states(
+    limit: int = Query(50, ge=1, le=500),
+    db: Session = Depends(get_db),
+):
+    """Read recent accepted local milestones; never upload or change outcomes."""
+    try:
+        return FeedbackSyncQueue().recent(db, limit=limit)
+    except Exception:
+        raise HTTPException(status_code=503, detail="Synchronization states unavailable")
 
 
 @app.get("/api/feedback/pending")

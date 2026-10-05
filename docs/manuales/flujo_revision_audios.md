@@ -21,7 +21,7 @@ La predicción guarda una instantánea nullable en `prediccion.dataset_name`, to
 - La ruta local debe corresponder exactamente al nombre registrado y a un directorio existente; su destino físico debe permanecer dentro de la raíz raw. Se rechazan rutas externas, traversal incluso codificado, autoridades en `file://`, rutas malformadas y symlinks que escapen de esa raíz. No basta con que cualquier ruta local exista.
 - No se supone que todos los bundles pertenezcan a ese dataset. Una asociación desconocida o inválida queda como `NULL`, sin impedir por sí sola la inferencia.
 
-La asociación local verificada se expone en el catálogo y en los predictores registrados para inferencias nuevas. AUDIO-3a conecta la aprobación a la incorporación local y a la cola durable. **El uploader, su arranque, el listado público de estados y la UI de sincronización no forman parte de este corte**: corresponden a AUDIO-3b/AUDIO-4. Por ahora no hay una subida automática de estas intenciones.
+La asociación local verificada se expone en el catálogo y en los predictores registrados para inferencias nuevas. AUDIO-3a conecta la aprobación a la incorporación local y a la cola durable; AUDIO-3b agrega subida automática recuperable y consulta read-only. **La presentación y el refresco de estos estados en la UI corresponden a AUDIO-4**, todavía pendiente.
 
 Las predicciones antiguas o sin asociación verificable permanecen en `NULL`: no se adivina ni se rellena retrospectivamente el destino, y no existe una selección manual para repararlo. La interfaz muestra la advertencia y deshabilita la incorporación; una aprobación por API devuelve un error explícito y conserva el pendiente. **Descartar de la cola** sigue disponible.
 
@@ -90,9 +90,9 @@ Procedimiento para un operador autorizado; este manual no concede autorización 
 
 El script soporta **SQLite y PostgreSQL** y agrega `dataset_name VARCHAR(100) NULL` a `prediccion`. Es idempotente si la columna ya existe; no hace backfill: las filas antiguas conservan `NULL`. No exige instalar dependencias nuevas ni se debe sustituir la URL aprobada por una base elegida automáticamente.
 
-## Intención durable de sincronización (AUDIO-2 + AUDIO-3a)
+## Intención durable de sincronización (AUDIO-2 + AUDIO-3a/3b)
 
-La cola **record-only** está conectada a la aprobación local, pero no al arranque, uploader ni UI. La aprobación verifica audio/CSV durables antes de encolar y marcar `procesado` en su misma transacción. La mera existencia de una intención de cola no prueba por sí sola que los archivos sigan íntegros: el replay los vuelve a comprobar.
+La cola **record-only** está conectada a la aprobación local, al sincronizador y a su arranque gestionado; la UI queda pendiente. La aprobación verifica audio/CSV durables antes de encolar y marcar `procesado` en su misma transacción. La mera existencia de una intención de cola no prueba por sí sola que los archivos sigan íntegros: el replay los vuelve a comprobar.
 
 La tabla `feedback_sync` tiene una fila por `id_retroalimentacion` (clave primaria y FK restrictiva). Conserva dataset, clase semántica, directorio canónico, objeto, ruta relativa y SHA-256 de los bytes que se subirán. `pending`/`synced` son independientes de `retroalimentacion.procesado`: ese booleano legacy también representa descarte. No se crean intenciones para registros históricos.
 
@@ -101,10 +101,10 @@ Contrato de [`FeedbackSyncQueue`](../../backend/app/services/feedback_sync.py), 
 - `enqueue(db, feedback_id, *, dataset_name, storage_class, sha256)`: exige ID entero positivo, dataset igual al persistido en la predicción, componentes de ruta válidos y hash hexadecimal minúsculo de 64 caracteres. La clase semántica proviene del feedback/predicción; la aprobación suministra el directorio ya resuelto y verificado, no una ruta del cliente.
 - Deriva `datasets/<dataset>/<storage_class>/feedback_<ID>.wav` y la ruta local relativa `<dataset>/<storage_class>/feedback_<ID>.wav`. No recibe rutas absolutas, bucket ni clave arbitraria. La aprobación nueva usa este mismo nombre; no renombra los archivos legacy `<slug>_fb_<ID>.wav`.
 - Un duplicado exacto devuelve la misma identidad y estado; un destino, clase o hash diferente devuelve `ValueError` sin reemplazar la intención. Las instantáneas retornadas son inmutables; no hay protección contra cambios SQL directos fuera del módulo.
-- `get(db, feedback_id)` devuelve una instantánea o `None`; `pending(db, limit=50)` devuelve pendientes ordenados por ID, independientemente de `procesado`.
-- `mark_outcome(db, feedback_id, *, success, error_code=None)` registra un intento: fallo conserva `pending` y solo admite `upload_failed` o `integrity_mismatch`, nunca mensajes, rutas o secretos del proveedor. Éxito limpia el error y marca `synced`; repetir éxito no incrementa intentos. `synced` es terminal y no admite volver a pendiente. El uploader de AUDIO-3b podrá llamar éxito solo tras comprobar la subida; la aprobación local no llama `mark_outcome`.
+- `get(db, feedback_id)` devuelve una instantánea o `None`; `pending(db, limit=50)` devuelve pendientes ordenados por menor número de intentos y luego ID, independientemente de `procesado`. `recent(db, limit=50)` consulta solo filas con feedback procesado, por ID descendente. Ambas lecturas exigen límites enteros entre 1 y 500.
+- `mark_outcome(db, feedback_id, *, success, error_code=None)` registra un intento: fallo conserva `pending` y solo admite `upload_failed` o `integrity_mismatch`, nunca mensajes, rutas o secretos del proveedor. Éxito limpia el error y marca `synced`; repetir éxito no incrementa intentos. `synced` es terminal y no admite volver a pendiente. El uploader de AUDIO-3b llama éxito solo tras confirmar la subida; la aprobación local no llama `mark_outcome`.
 
-Las operaciones no hacen commit ni rollback; las escrituras hacen flush de la sesión y pueden incluir cambios pendientes del llamador. Este controla confirmación, rollback y errores de base de datos. La cola no escribe archivos, calcula hashes, sube bytes, reclama trabajos ni ejecuta reintentos. El bloqueo de filas PostgreSQL y la exclusión concurrente del futuro uploader no se han validado aquí; SQLite no proporciona `FOR UPDATE` y la restricción única es la última defensa ante carreras.
+Las operaciones no hacen commit ni rollback; las escrituras hacen flush de la sesión y pueden incluir cambios pendientes del llamador. Este controla confirmación, rollback y errores de base de datos. La cola no escribe archivos, calcula hashes, sube bytes, reclama trabajos ni ejecuta reintentos. El sincronizador posee sus propias sesiones y coordina la exclusión con el mismo lock de filesystem de aprobación. SQLite no proporciona `FOR UPDATE`; PostgreSQL real no se ha ejercitado.
 
 ### Creación explícita del esquema de sincronización
 
@@ -122,10 +122,50 @@ Las pruebas de [cola](../../backend/tests/test_feedback_sync_queue.py) y [migrac
 
 Rollback de código: retirar modelo, registro, módulo, script, pruebas y esta sección sin tocar AUDIO-1. No se proporciona ni ejecuta una migración destructiva inversa. Si un operador ya creó la tabla y guardó intenciones, debe preservar esos registros y definir una recuperación explícita; revertir código no revierte datos.
 
+## Sincronización automática y consulta de estados (AUDIO-3b)
+
+`FeedbackSyncWorker(session_factory, raw_data_dir).run_once()` es la costura pública de reintento para código de aplicación y pruebas: posee y cierra sesiones, limita cada pasada a 50 candidatos por defecto (configurable entre 1 y 500) y devuelve contadores `attempted`, `synced`, `failed` de outcomes confirmados en BD. No es un endpoint HTTP de escritura. El runner recorre candidatas por ID con un cursor de página en memoria, volviendo al inicio al agotar el recorrido. A diferencia de la lectura `pending` de la cola, su cursor usa una clave inmutable: los intentos crecientes de otro archivo fallido no pueden impedir volver a un lock que ya se liberó. Avanza incluso si un lock no puede reclamarse o falla el commit: esas entradas no pueden incrementar intentos de forma segura, pero no monopolizan los lotes pequeños mientras siga vivo el runner. Un reinicio vuelve a empezar el recorrido; el estado y los intentos confirmados siguen siendo durables.
+
+Antes de subir, revalida feedback procesado, dataset y clase de la predicción, fuente administrada y su coincidencia con la intención local, directorio/nombre canónicos, objeto determinista, ruta relativa y SHA-256. Rechaza archivos ausentes/corruptos, rutas externas y symlinks en archivo, intención o ancestros. Lee los bytes verificados bajo exclusión y entrega esos mismos bytes al adaptador, sin descargar fuentes, modificar CSV, inferir ni borrar archivos. La consulta de estados no vuelve a verificar los archivos: `incorporated` describe el hito local aceptado, no una auditoría física actual.
+
+El orden de exclusión compartido es **fila de feedback → inode estable `.feedback_<ID>.json.lock` → fila de sync**, manteniéndolo hasta el commit. Usa `FOR UPDATE SKIP LOCKED` cuando el motor lo soporta y `flock` no bloqueante para omitir un uploader ocupado en SQLite o procesos cooperantes. No elimina ni reemplaza el lock. Una aprobación puede esperar ese mismo lock y luego devolver el outcome real.
+
+Solo `True` del adaptador de subida confirma cloud: `False`, ausencia de acuse o excepción conserva `pending` con `upload_failed`. Una inconsistencia local conserva `pending` con `integrity_mismatch`. Incrementa intentos al confirmar cada outcome; nunca almacena mensajes privados del proveedor. Un fallo de commit se propaga sin declarar éxito: si hubo rollback, el próximo intento publica los mismos bytes en la misma clave; si el commit ocurrió y perdió el acuse, la reconstrucción ve `synced` y no sube otra vez. No existe transacción distribuida ni garantía de una única petición cloud bajo pérdida de acuse; sí identidad idempotente, sin duplicados locales/CSV.
+
+El lifespan conserva carga de modelos y seeding inicial. Después inicia una tarea propia que hace una primera pasada de recuperación sin bloquear la disponibilidad HTTP por una caída cloud, y luego reintenta cada **60 segundos**. La pasada corre fuera del hilo de serving; excepciones de BD/local se registran como `database_or_local_unavailable`, sin detalles privados, y el loop continúa. El adaptador existente recibe timeout de **30 segundos** (configurable en el runner, máximo 60) y deshabilita retries internos del SDK para esta subida. El timeout limita la operación de red según el SDK, no sustituye límites operativos de BD/filesystem. No introduce broker ni dependencias nuevas.
+
+Al cerrar, primero señala `stop`, no empieza nuevos uploads y despierta la espera periódica; después **espera la tarea y el trabajo en vuelo**, incluyendo su outcome/commit. No cancela `to_thread` pretendiendo que terminó. Un adaptador inyectado debe respetar el timeout; una BD o filesystem bloqueado puede prolongar el cierre. No se ejecutan escrituras desde un hilo abandonado después de retornar el lifespan.
+
+### Contrato para Gestión de audios
+
+`GET /api/feedback/sync?limit=50` devuelve un array de estados recientes por ID de feedback descendente, con máximo solicitado de **1 a 500**; límites inválidos devuelven HTTP 422 y BD indisponible HTTP 503 sanitizado. Solo incluye feedback procesado que tenga intención de sync; no incluye descartes legacy, históricos sin intención ni la cola de curación pendiente. No sube, reintenta, modifica outcomes ni expone rutas locales, fuente, hashes o errores privados. No requiere ni agrega un endpoint de mutación no autenticado; la política de acceso conserva la convención existente de lectura del backend.
+
+```json
+[
+  {
+    "id_retroalimentacion": 7,
+    "id_prediccion": 12,
+    "dataset_name": "AvesChilenas",
+    "storage_class": "rayadito",
+    "class_label": "Rayadito",
+    "local_status": "incorporated",
+    "sync_status": "pending",
+    "attempts": 1,
+    "error_code": "upload_failed"
+  }
+]
+```
+
+`sync_status` admite `pending` o `synced`; `error_code` es `null`, `upload_failed` o `integrity_mismatch`, y `attempts` es entero no negativo. `synced` significa subida reconocida y outcome confirmado en BD, no una consulta de existencia actual en GCS. La UI puede refrescar esta lectura independientemente de `/api/feedback/pending` y mostrar incorporación local y copia cloud como hitos distintos. No hay backfill de predicción 23/feedback 5 ni recuperación histórica automática.
+
+Rollback del corte 3b: retirar runner y sus pruebas, wiring de lifespan/lectura en `main.py`, schema de estados, lecturas de cola y timeout opcional del adaptador, preservando aprobación local, tabla e intenciones de AUDIO-2/3a. No revertir datos ni eliminar evidencia pendiente. No se ha ejecutado rollback o despliegue real.
+
 ## Prerrequisitos y límites de verificación
 
-La primera incorporación necesita acceso de lectura a la fuente raw administrada de GCS. El listado del catálogo requiere GCS únicamente cuando no hay catálogo local confiable. No requiere permisos de subida al dataset para aprobar localmente; la futura sincronización sí los necesitará. El backend requiere acceso de escritura y durabilidad al dataset local y un sistema Linux/FS con soporte de `flock`; la protección de metadatos supone escritores cooperantes.
+La primera incorporación necesita acceso de lectura a la fuente raw administrada de GCS. El listado del catálogo requiere GCS únicamente cuando no hay catálogo local confiable. No requiere permisos de subida al dataset para aprobar localmente; la sincronización automática sí los necesita. El backend requiere acceso de escritura y durabilidad al dataset local y un sistema Linux/FS con soporte de `flock`; la protección de metadatos supone escritores cooperantes.
 
 Las pruebas en [`test_audio_review_flow.py`](../../backend/tests/test_audio_review_flow.py) conectan los endpoints con `TestClient` sin lifespan, SQLite aislado, predictor/registro controlados y GCS falso que conserva bytes. Las de [aprobación local](../../backend/tests/test_feedback_local_approval.py) verifican disponibilidad mediante el ingestor real, catálogo local sin cloud, transacción conjunta, replay, corrupción, conflictos, symlinks e interrupciones de filesystem/BD, con WAV sintético y directorios temporales. Las pruebas de [almacenamiento](../../backend/tests/test_storage.py), [incorporación](../../backend/tests/test_feedback_storage.py) y [migración](../../backend/tests/test_prediction_dataset_migration.py) protegen la resolución de clase, los reintentos y el cambio de esquema. No acreditan acceso a GCS real, despliegue, interacción de navegador ni calidad acústica. La integración del registro con PostgreSQL y la prueba optativa de calidad real de Chucao requieren sus entornos y artefactos propios y quedan fuera de esta verificación; Chucao se omite sin `FAMA_QUALITY_MODEL_ID`, `FAMA_QUALITY_CHECKPOINT` y `FAMA_QUALITY_AUDIO`.
+
+Las pruebas del sincronizador usan SQLite temporal, uploads falsos y sesiones propias; ejercitan identidad/integridad, resultados indeterminados de commit, reintentos, contención entre threads y procesos con **spawn**. Las pruebas de lifespan sustituyen modelos y seeding, verifican recuperación inicial, retries periódicos tras caída cloud/BD y espera real del upload en shutdown. Las HTTP verifican schema, límites y separación de la cola de curación sin iniciar servicios reales. No prueban PostgreSQL/GCS reales, interrupción abrupta del sistema ni la UI de AUDIO-4.
 
 Para la operación general, consultar el [manual de usuario](manual_usuario_plataforma.md) y la [guía de despliegue](guia_despliegue_operativo_docker.md). El cierre del flujo y sus verificaciones pendientes se siguen en el [tablero del proyecto](../KANBAN.md).

@@ -1,7 +1,7 @@
 """
 Pydantic schemas for RF_06 Active Feedback Loop and Semi-Manual Curation.
 """
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
@@ -56,6 +56,19 @@ class FeedbackStatsResponse(BaseModel):
     accuracy_rate: float
     pending_curation_count: int
     corrections_breakdown: List[Dict[str, Any]]
+
+
+class FeedbackSyncState(BaseModel):
+    """Accepted local milestone, independent from acknowledged cloud state."""
+    id_retroalimentacion: int
+    id_prediccion: int
+    dataset_name: str
+    storage_class: str
+    class_label: str
+    local_status: Literal["incorporated"]
+    sync_status: Literal["pending", "synced"]
+    attempts: int = Field(..., ge=0)
+    error_code: Optional[Literal["upload_failed", "integrity_mismatch"]]
 
 
 class ApproveFeedbackResponse(BaseModel):

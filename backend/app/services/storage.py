@@ -88,6 +88,7 @@ def download_prediction_audio(source_key: str) -> bytes:
 def upload_audio_to_gcp_sync(
     audio_content: Union[bytes, Path, str], filename: str,
     bucket_name: Optional[str] = None, destination_folder: str = "raw_audios",
+    timeout: Optional[float] = None,
 ) -> bool:
     """Upload real bytes, propagating failures instead of simulating success."""
     validate_path_component(filename)
@@ -95,7 +96,8 @@ def upload_audio_to_gcp_sync(
     if not isinstance(data, bytes):
         raise TypeError("Audio content must be bytes or a file path")
     key = f"{destination_folder}/{filename}" if destination_folder else filename
-    _blob(key, bucket_name).upload_from_string(data, content_type="audio/wav")
+    options = {} if timeout is None else {"timeout": timeout, "retry": None}
+    _blob(key, bucket_name).upload_from_string(data, content_type="audio/wav", **options)
     return True
 
 

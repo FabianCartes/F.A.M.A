@@ -150,6 +150,15 @@ def test_feedback_identity_must_be_a_positive_integer(engine, feedback_id):
                                     storage_class="rayadito", sha256="a" * 64)
 
 
+@pytest.mark.parametrize("limit", [0, -1, 501, True, "50"])
+def test_queue_reads_reject_unbounded_limits(engine, limit):
+    from app.services.feedback_sync import FeedbackSyncQueue
+    with Session(engine) as db:
+        for read in (FeedbackSyncQueue().pending, FeedbackSyncQueue().recent):
+            with pytest.raises(ValueError):
+                read(db, limit=limit)
+
+
 def test_missing_feedback_cannot_be_enqueued(engine):
     from app.services.feedback_sync import FeedbackSyncQueue
 
