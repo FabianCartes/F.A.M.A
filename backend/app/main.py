@@ -474,17 +474,25 @@ def get_dashboard_stats(
 def list_models(
     only_available: bool = Query(False, description="Si es True, retorna solo modelos con pesos físicos verificados en disco"),
     registry: ModelRegistry = Depends(get_model_registry),
+    db: Session = Depends(get_db),
 ):
     """
     Retorna la lista de todos los modelos bioacústicos disponibles en el catálogo,
     sus especificaciones técnicas, clases soportadas, disponibilidad de pesos y el modelo por defecto.
     """
+    publication_errors = registry.publish_from_db(db, checkpoints_root=training_service.checkpoints_dir)
+    if any(error["code"] == "database_unavailable" for error in publication_errors):
+        raise HTTPException(status_code=503, detail={
+            "message": "Model catalogue publication incomplete",
+            "errors": publication_errors,
+        })
     models = registry.list_models(only_with_weights=only_available)
-    default_id = registry.get_default_model_id() or "fama_trained_model_6"
+    default_id = registry.get_default_model_id() or ""
     return ModelListResponse(
         models=models,
         total=len(models),
         default_model_id=default_id,
+        publication_errors=publication_errors,
     )
 
 

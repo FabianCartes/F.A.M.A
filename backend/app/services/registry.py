@@ -3,6 +3,8 @@ Registro centralizado y catálogo de modelos de predicción bioacústica.
 Permite registrar y resolver dinámicamente instancias de AudioPredictor en tiempo de ejecución.
 """
 from pathlib import Path
+from threading import RLock
+from urllib.parse import unquote, urlparse
 from typing import Dict, List, Optional, Any
 from app.schemas.model_info import ModelMetadata
 from app.services.predictors.base import AudioPredictor, ModelWeightsError
@@ -37,6 +39,7 @@ class ModelRegistry:
     def __init__(self):
         self._predictors: Dict[str, AudioPredictor] = {}
         self._default_model_id: Optional[str] = None
+        self._publication_lock = RLock()
 
     def register(self, predictor: AudioPredictor, is_default: bool = False) -> None:
         """
@@ -124,6 +127,65 @@ class ModelRegistry:
     def has_model(self, model_id: str) -> bool:
         """Verifica si un modelo específico está registrado."""
         return model_id in self._predictors
+
+    def publish_from_db(
+        self, db: Any, checkpoints_root: Optional[Path] = None,
+    ) -> List[Dict[str, Any]]:
+        """Publish missing persisted predictors without activation or DB writes.
+
+        Lazy initialization deserializes metadata once without building inference.
+        Failures are returned as public codes; exception text and paths stay private.
+        Concurrent catalogue requests cannot replace an already published predictor.
+        """
+        from app.models.training import Modelo
+        from app.services.predictors.trained_predictor import TrainedModelPredictor
+
+        root = Path(checkpoints_root) if checkpoints_root is not None else Path(__file__).resolve().parents[2] / "checkpoints"
+        errors = []
+        with self._publication_lock:
+            try:
+                models = db.query(Modelo).order_by(Modelo.id_modelo.desc()).all()
+            except Exception:
+                return [{"code": "database_unavailable"}]
+            for model in models:
+                key = f"fama_trained_model_{model.id_modelo}"
+                if self.has_model(key):
+                    continue
+                code = "checkpoint_unreadable"
+                try:
+                    uri = urlparse(model.ruta_binario_gcp)
+                    basename = Path(unquote(uri.path) if uri.scheme else model.ruta_binario_gcp).name
+                    physical_root = root.resolve()
+                    checkpoint = (physical_root / basename).resolve()
+                    if not checkpoint.is_relative_to(physical_root):
+                        code = "checkpoint_outside_root"
+                        raise ModelWeightsError(code)
+                    if not checkpoint.is_file():
+                        code = "checkpoint_missing"
+                        raise ModelWeightsError(code)
+                    if checkpoint.stat().st_size <= 10000:
+                        code = "checkpoint_too_small"
+                        raise ModelWeightsError(code)
+                    # Verify readable storage before asking the ML adapter for metadata.
+                    with checkpoint.open("rb") as stream:
+                        stream.read(1)
+                    code = "checkpoint_invalid"
+                    pred = TrainedModelPredictor(
+                        checkpoint_path=checkpoint,
+                        model_id=key,
+                        name=f"{model.arquitectura} (Entrenado #{model.id_modelo})",
+                        is_default=False,
+                        lazy_load=True,
+                        dataset_name=_verified_dataset_name(model.conjunto_datos),
+                    )
+                    # register() selects a default on an empty catalogue. Publication
+                    # deliberately preserves even an unset default instead.
+                    self._predictors[key] = pred
+                    for alias in (basename, Path(basename).stem, str(model.id_modelo)):
+                        self._predictors.setdefault(alias, pred)
+                except Exception:
+                    errors.append({"model_id": key, "code": code})
+        return errors
 
     def register_from_db(
         self,

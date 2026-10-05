@@ -19,8 +19,15 @@ class ModelMetadata(BaseModel):
     metrics: Optional[Dict[str, Any]] = Field(None, description="Métricas de evaluación conocidas (F1, Accuracy)")
 
 
+class ModelPublicationError(BaseModel):
+    """Sanitized failure to publish one persisted model in the catalogue."""
+    model_id: str
+    code: str
+
+
 class ModelListResponse(BaseModel):
     """Respuesta del catálogo de modelos disponibles."""
     models: List[ModelMetadata]
     total: int
     default_model_id: str
+    publication_errors: List[ModelPublicationError] = Field(default_factory=list)
