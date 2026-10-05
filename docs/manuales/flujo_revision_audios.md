@@ -82,6 +82,38 @@ Procedimiento para un operador autorizado; este manual no concede autorización 
 
 El script soporta **SQLite y PostgreSQL** y agrega `dataset_name VARCHAR(100) NULL` a `prediccion`. Es idempotente si la columna ya existe; no hace backfill: las filas antiguas conservan `NULL`. No exige instalar dependencias nuevas ni se debe sustituir la URL aprobada por una base elegida automáticamente.
 
+## Intención durable de sincronización (AUDIO-2)
+
+Existe una cola **record-only**, todavía no conectada a la aprobación, al arranque ni a la UI. No cambia el recorrido actual descrito arriba: incorporar sigue requiriendo GCS y local. AUDIO-3 deberá verificar audio y metadatos locales antes de encolar y marcar `procesado` en la misma transacción. La mera existencia de una intención no verifica archivos ni autoriza entrenar.
+
+La tabla `feedback_sync` tiene una fila por `id_retroalimentacion` (clave primaria y FK restrictiva). Conserva dataset, clase semántica, directorio canónico, objeto, ruta relativa y SHA-256 de los bytes que se subirán. `pending`/`synced` son independientes de `retroalimentacion.procesado`: ese booleano legacy también representa descarte. No se crean intenciones para registros históricos.
+
+Contrato de [`FeedbackSyncQueue`](../../backend/app/services/feedback_sync.py), con sesión SQLAlchemy suministrada por el llamador:
+
+- `enqueue(db, feedback_id, *, dataset_name, storage_class, sha256)`: exige ID entero positivo, dataset igual al persistido en la predicción, componentes de ruta válidos y hash hexadecimal minúsculo de 64 caracteres. La clase semántica proviene del feedback/predicción; AUDIO-3 deberá suministrar el directorio ya resuelto y verificado, no una ruta del cliente.
+- Deriva `datasets/<dataset>/<storage_class>/feedback_<ID>.wav` y la ruta local relativa `<dataset>/<storage_class>/feedback_<ID>.wav`. No recibe rutas absolutas, bucket ni clave arbitraria. Este nombre nuevo pertenece a la cola; no renombra los archivos legacy `<slug>_fb_<ID>.wav`.
+- Un duplicado exacto devuelve la misma identidad y estado; un destino, clase o hash diferente devuelve `ValueError` sin reemplazar la intención. Las instantáneas retornadas son inmutables; no hay protección contra cambios SQL directos fuera del módulo.
+- `get(db, feedback_id)` devuelve una instantánea o `None`; `pending(db, limit=50)` devuelve pendientes ordenados por ID, independientemente de `procesado`.
+- `mark_outcome(db, feedback_id, *, success, error_code=None)` registra un intento: fallo conserva `pending` y solo admite `upload_failed` o `integrity_mismatch`, nunca mensajes, rutas o secretos del proveedor. Éxito limpia el error y marca `synced`; repetir éxito no incrementa intentos. `synced` es terminal y no admite volver a pendiente. Solo AUDIO-3 podrá llamar éxito tras comprobar la subida.
+
+Las operaciones no hacen commit ni rollback; las escrituras hacen flush de la sesión y pueden incluir cambios pendientes del llamador. Este controla confirmación, rollback y errores de base de datos. La cola no escribe archivos, calcula hashes, sube bytes, reclama trabajos ni ejecuta reintentos. El bloqueo de filas PostgreSQL y la exclusión concurrente del futuro uploader no se han validado aquí; SQLite no proporciona `FOR UPDATE` y la restricción única es la última defensa ante carreras.
+
+### Creación explícita del esquema de sincronización
+
+Con respaldo verificado, escritores pausados y `DATABASE_URL` explícita aprobada por el operador, desde la raíz:
+
+```bash
+python backend/scripts/migrate_feedback_sync.py --apply
+```
+
+El [script](../../backend/scripts/migrate_feedback_sync.py) no carga `.env`, no importa la aplicación ni elige una base por defecto. Soporta PostgreSQL/SQLite y requiere la tabla legacy `retroalimentacion`. Crea **solo** `feedback_sync`; devuelve `feedback_sync added` o `feedback_sync already present` al reejecutarse. No modifica columnas, filas ni estados anteriores, no hace backfill y no declara audios históricos localmente listos. Si la tabla ya existe, no repara ni valida un esquema incompatible: inspeccionarlo es responsabilidad del operador.
+
+El modelo también está registrado en `Base.metadata`: el `create_all` del arranque puede crear esta tabla faltante tanto en una base nueva como en una existente; no altera tablas ya presentes ni inserta intenciones. Esto difiere de la migración de columnas de `prediccion`. El script es una acción operativa explícita disponible antes del despliegue, no un hook de arranque. No se ejecutó sobre una base desplegada.
+
+Las pruebas de [cola](../../backend/tests/test_feedback_sync_queue.py) y [migración](../../backend/tests/test_feedback_sync_migration.py) usan SQLite temporal y la interfaz pública, verifican reconstrucción de sesión/módulo, duplicados, resultados, rollback y conservación de históricos. Comparan además el contrato de columnas de migración y metadata. No prueban PostgreSQL real, integridad de archivos, contención física/symlinks ni sincronización cloud.
+
+Rollback de código: retirar modelo, registro, módulo, script, pruebas y esta sección sin tocar AUDIO-1. No se proporciona ni ejecuta una migración destructiva inversa. Si un operador ya creó la tabla y guardó intenciones, debe preservar esos registros y definir una recuperación explícita; revertir código no revierte datos.
+
 ## Prerrequisitos y límites de verificación
 
 Se necesita un bucket GCS accesible, credenciales válidas configuradas por el operador y permisos para leer la fuente, consultar el catálogo y escribir el dataset. El backend requiere acceso de escritura al dataset local y un sistema Linux/FS con soporte de `flock`; la protección de metadatos supone escritores cooperantes.
