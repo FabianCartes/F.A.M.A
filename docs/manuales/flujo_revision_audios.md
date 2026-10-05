@@ -1,6 +1,6 @@
 # Revisar e incorporar audios
 
-El audio inferido solo entra al dataset después de una validación explícita y una aprobación en la cola de revisión. Confirmar o corregir una clase no incorpora la muestra ni inicia un entrenamiento. El destino se conserva automáticamente al ejecutar el modelo: no se elige otro dataset durante la revisión.
+El audio inferido solo entra al dataset después de una validación explícita y una aprobación en la cola de revisión. Confirmar o corregir una clase no incorpora la muestra ni inicia un entrenamiento. El destino se conserva automáticamente al ejecutar el modelo: no se elige otro dataset durante la revisión. El [ADR 0018](../adr/0018-incorporacion-local-y-sincronizacion-gcs.md) explica la decisión local-first y sus límites; los [próximos pasos del operador](#próximos-pasos-del-operador) separan implementación de operación autorizada.
 
 ## Recorrido de uso
 
@@ -177,6 +177,18 @@ Las consultas de revisión y sincronización se actualizan al montar, al recuper
 Rollback UI: retirar `FeedbackSyncPanel.tsx`, su integración/refresco/mensajes en `IngestionView.tsx`, las pruebas nuevas y esta explicación, conservando los parciales API/schema, la aprobación local y las intenciones durables. No afecta datos ni ejecuta una reversión operativa.
 
 Rollback del corte 3b: retirar runner y sus pruebas, wiring de lifespan/lectura en `main.py`, schema de estados, lecturas de cola y timeout opcional del adaptador, preservando aprobación local, tabla e intenciones de AUDIO-2/3a. No revertir datos ni eliminar evidencia pendiente. No se ha ejecutado rollback o despliegue real.
+
+## Próximos pasos del operador
+
+Este manual y el [ADR 0018](../adr/0018-incorporacion-local-y-sincronizacion-gcs.md) no autorizan ni acreditan despliegue, reinicio, migración o escrituras reales. El [índice documental](../README.md) reúne las guías relacionadas.
+
+1. Solicitar autorización operativa separada y verificar respaldos recuperables de BD y del volumen raw persistente, incluidos audios, CSV, intenciones y locks. Preservar también checkpoints y asociaciones existentes; no resetear el entorno para probar el flujo.
+2. Revisar el esquema antes de actualizar: aplicar la [migración de columnas de predicción](#migración-antes-de-actualizar-el-backend) solo si corresponde. Para `feedback_sync`, elegir la [creación explícita aditiva](#creación-explícita-del-esquema-de-sincronización) si el operador necesita preparar la tabla antes del despliegue; el `create_all` del futuro arranque también puede crearla si falta en una BD existente. Ninguna opción rellena históricos ni repara un esquema incompatible. Los scripts requieren `--apply` y `DATABASE_URL` explícita aprobada, sin imprimir credenciales; no se ejecutaron sobre la base desplegada.
+3. Tras el despliegue autorizado, comprobar una **inferencia nueva** con modelo y dataset canónico verificados, envío a revisión, aprobación local y consulta de estados. Verificar por separado audio/CSV locales y copia cloud: `incorporated` y `synced` son hitos persistidos, no auditorías actuales. El arranque activa la recuperación automática; actualizar la UI solo consulta, no dispara uploads.
+4. Preparar entrenamiento con el raw local aceptado aunque la copia cloud siga pendiente, comprobando las particiones requeridas. La incorporación no regenera `train`/`val`, no ejecuta entrenamiento ni acredita calidad acústica. Local-first no es offline: la inferencia y la primera descarga de la fuente raw aún dependen de GCS.
+5. Tratar predicción 23/feedback 5 y cualquier `dataset_name=NULL` como recuperación histórica separada: obtener evidencia explícita de procedencia antes de proponer cambios. Aunque hoy la FK del modelo sea válida, solo las inferencias nuevas obtienen esa asociación; no se rellenan instantáneas antiguas por suposición. Conservar los pendientes sin reasignar destinos ni editar intenciones.
+
+Ante un rollback, pausar los escritores bajo autorización y definir recuperación compatible con el código elegido. **Preservar archivos aceptados, CSV, intenciones, locks y filas de BD**: retirar código no revierte datos y no justifica borrar la outbox ni aplicar SQL inverso destructivo. Las comprobaciones reales de PostgreSQL, GCS, navegador, durabilidad e interrupción abrupta siguen pendientes; las pruebas aisladas no las sustituyen.
 
 ## Prerrequisitos y límites de verificación
 
