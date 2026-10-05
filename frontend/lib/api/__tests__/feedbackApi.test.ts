@@ -237,13 +237,15 @@ describe("feedbackApi (TDD Contract Tests for RF_06 & Semi-Manual Curation)", ()
   // ==========================================================================
   describe("approveFeedback", () => {
     it("approves by feedback ID only without selecting or overriding a dataset", async () => {
-      global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ status: 'approved' }) });
+      global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ status: 'approved', id_retroalimentacion: 6, destination_path: 'local.wav', clase: 'Rayadito', local_status: 'incorporated', sync_status: 'pending' }) });
       await approveFeedback(6);
       expect(global.fetch).toHaveBeenCalledWith(`${API_BASE_URL}/api/feedback/6/approve`, expect.objectContaining({ method: 'POST' }));
     });
     it("sends POST approval without query and returns confirmation with canonical filename", async () => {
       const mockResponse = {
         status: "approved",
+        local_status: "incorporated",
+        sync_status: "pending",
         id_retroalimentacion: 5,
         destination_path: "backend/data/raw/AvesChilenas/Chucao/chucao_fb_5.wav",
         clase: "Chucao",

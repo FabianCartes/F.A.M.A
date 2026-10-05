@@ -12,6 +12,8 @@ import {
   ApproveFeedbackResponseSchema,
   RejectFeedbackResponse,
   RejectFeedbackResponseSchema,
+  FeedbackSyncState,
+  FeedbackSyncListSchema,
 } from "@/lib/schemas/feedback";
 import { ZodError } from "zod";
 
@@ -133,13 +135,26 @@ export async function sendFeedback(payload: unknown): Promise<FeedbackResponse> 
 /**
  * Fetches uncurated pending feedback items for human-in-the-loop review.
  */
-export async function getPendingFeedback(limit: number = 50): Promise<PendingFeedbackItem[]> {
+export async function getPendingFeedback(limit: number = 50, signal?: AbortSignal): Promise<PendingFeedbackItem[]> {
   return request(
     `${API_BASE_URL}/api/feedback/pending?limit=${limit}`,
     {
       method: "GET",
+      signal,
     },
     (data) => PendingFeedbackListSchema.parse(data)
+  );
+}
+
+/** Read-only recent accepted records; refreshing never retries an upload. */
+export async function getFeedbackSync(limit: number = 50, signal?: AbortSignal): Promise<FeedbackSyncState[]> {
+  if (!Number.isInteger(limit) || limit < 1 || limit > 500) {
+    throw new ValidationError("El límite debe ser un entero entre 1 y 500");
+  }
+  return request(
+    `${API_BASE_URL}/api/feedback/sync?limit=${limit}`,
+    { method: "GET", signal },
+    (data) => FeedbackSyncListSchema.parse(data)
   );
 }
 

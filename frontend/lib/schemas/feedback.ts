@@ -101,15 +101,32 @@ export type FeedbackStats = z.infer<typeof FeedbackStatsSchema>;
  * Response when a pending feedback audio is approved and moved to the raw dataset.
  */
 export const ApproveFeedbackResponseSchema = z.object({
-  status: z.string(),
-  id_retroalimentacion: z.number().int().optional(),
-  destination_path: z.string().optional(),
-  clase: z.string().optional(),
-  filename: z.string().optional(),
+  status: z.literal("approved"),
+  id_retroalimentacion: z.number().int(),
+  destination_path: z.string(),
+  clase: z.string(),
+  filename: z.string().nullable().optional(),
+  local_status: z.literal("incorporated"),
+  sync_status: z.enum(["pending", "synced"]),
   message: z.string().optional(),
 });
 
 export type ApproveFeedbackResponse = z.infer<typeof ApproveFeedbackResponseSchema>;
+
+/** Accepted local milestone and persisted cloud acknowledgement, not an existence audit. */
+export const FeedbackSyncStateSchema = z.object({
+  id_retroalimentacion: z.number().int(),
+  id_prediccion: z.number().int(),
+  dataset_name: z.string(),
+  storage_class: z.string(),
+  class_label: z.string(),
+  local_status: z.literal("incorporated"),
+  sync_status: z.enum(["pending", "synced"]),
+  attempts: z.number().int().nonnegative(),
+  error_code: z.enum(["upload_failed", "integrity_mismatch"]).nullable(),
+});
+export type FeedbackSyncState = z.infer<typeof FeedbackSyncStateSchema>;
+export const FeedbackSyncListSchema = z.array(FeedbackSyncStateSchema);
 
 /**
  * Response when a pending feedback audio is rejected/discarded.

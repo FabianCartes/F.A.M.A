@@ -3,7 +3,7 @@ import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import IngestionView from '../IngestionView';
 import * as feedbackApi from '@/lib/api/feedbackApi';
 
-vi.mock('@/lib/api/feedbackApi', () => ({ getPendingFeedback: vi.fn(), approveFeedback: vi.fn(), rejectFeedback: vi.fn(), getFeedbackStats: vi.fn(), sendFeedback: vi.fn() }));
+vi.mock('@/lib/api/feedbackApi', () => ({ getPendingFeedback: vi.fn(), getFeedbackSync: vi.fn(), approveFeedback: vi.fn(), rejectFeedback: vi.fn(), getFeedbackStats: vi.fn(), sendFeedback: vi.fn() }));
 const mockStatus = { connected: true, bucket: 'fama-audio-records-2026', total_objects: 120, total_bytes: 10485760, error: null };
 const mockDatasets = [{ id: 'AvesChilenas', name: 'AvesChilenas', file_count: 45, classes: ['Chucao', 'rayadito'], total_size_bytes: 25000000, last_modified: null, local_file_count: 45, is_synced: true }];
 const item = { id_retroalimentacion: 42, id_prediccion: 101, dataset_name: 'AvesChilenas', ruta_audio_prueba: 'test.wav', etiqueta_predicha: 'Chincol', etiqueta_corregida: 'Chucao', confianza: 0.942, fue_correcta: false, procesado: false, id_usuario: 1 };
@@ -17,11 +17,95 @@ describe('IngestionView persisted inference dataset and curation', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.mocked(feedbackApi.getPendingFeedback).mockResolvedValue([]);
-    vi.mocked(feedbackApi.approveFeedback).mockResolvedValue({ status: 'approved', id_retroalimentacion: 42, destination_path: 'datasets/AvesChilenas/Chucao/test.wav', clase: 'Chucao', filename: 'test.wav' });
+    vi.mocked(feedbackApi.getFeedbackSync).mockResolvedValue([]);
+    vi.mocked(feedbackApi.approveFeedback).mockResolvedValue({ status: 'approved', local_status: 'incorporated', sync_status: 'pending', id_retroalimentacion: 42, destination_path: 'datasets/AvesChilenas/Chucao/test.wav', clase: 'Chucao', filename: 'test.wav' });
     vi.mocked(feedbackApi.rejectFeedback).mockResolvedValue({ status: 'rejected', id_retroalimentacion: 42 });
     global.fetch = vi.fn(async input => ({ ok: true, json: async () => String(input).includes('/datasets') ? { datasets: mockDatasets } : mockStatus }) as Response);
   });
   afterEach(() => { global.fetch = originalFetch; });
+
+  it('keeps accepted local audio visible separately while cloud is pending after approval', async () => {
+    vi.mocked(feedbackApi.getPendingFeedback).mockResolvedValueOnce([item]).mockResolvedValue([]);
+    vi.mocked(feedbackApi.getFeedbackSync).mockResolvedValueOnce([]).mockResolvedValue([{
+      id_retroalimentacion: 42, id_prediccion: 101, dataset_name: 'AvesChilenas',
+      storage_class: 'chucao', class_label: 'Chucao', local_status: 'incorporated',
+      sync_status: 'pending', attempts: 0, error_code: null,
+    }]);
+    await open();
+    await act(async () => { fireEvent.click(incorporate()); });
+    expect(screen.getByTestId('curation-queue-empty')).toBeDefined();
+    const sync = within(screen.getByRole('region', { name: 'Sincronización de audios incorporados' }));
+    expect(sync.getByText('AvesChilenas')).toBeDefined();
+    expect(sync.getByText('Incorporado localmente')).toBeDefined();
+    expect(sync.getByText(/Pendiente de copia cloud/)).toBeDefined();
+    expect(screen.getByText(/puede preparar entrenamiento sin esperar GCS/)).toBeDefined();
+    expect(screen.queryByText(/incorporado al dataset .* en GCS y en el dataset local/)).toBeNull();
+  });
+
+  it('only claims cloud acknowledgement when the approval response is synced', async () => {
+    vi.mocked(feedbackApi.getPendingFeedback).mockResolvedValueOnce([item]).mockResolvedValue([]);
+    vi.mocked(feedbackApi.approveFeedback).mockResolvedValue({ status: 'approved', local_status: 'incorporated', sync_status: 'synced', id_retroalimentacion: 42, destination_path: 'datasets/AvesChilenas/Chucao/feedback_42.wav', clase: 'Chucao' });
+    await open();
+    await act(async () => { fireEvent.click(incorporate()); });
+    expect(screen.getByText(/Audio #42 incorporado al dataset local.*Copia cloud confirmada/)).toBeDefined();
+  });
+
+  it('manual global refresh reads sync state without calling approval, discard or dataset download', async () => {
+    await open();
+    await act(async () => { fireEvent.click(screen.getByTitle('Refrescar estado de GCS y datos')); });
+    expect(feedbackApi.getFeedbackSync).toHaveBeenCalledTimes(2);
+    expect(feedbackApi.approveFeedback).not.toHaveBeenCalled();
+    expect(feedbackApi.rejectFeedback).not.toHaveBeenCalled();
+    expect(vi.mocked(global.fetch).mock.calls.every(([, options]) => options?.method !== 'POST')).toBe(true);
+  });
+
+  it('refreshes uncurated items on visible focus and does not restore a stale initial queue', async () => {
+    let finish!: (items: typeof item[]) => void;
+    vi.mocked(feedbackApi.getPendingFeedback).mockReturnValueOnce(new Promise(resolve => { finish = resolve; })).mockResolvedValue([]);
+    let unmount!: () => void;
+    await act(async () => { ({ unmount } = render(<IngestionView />)); });
+    const signal = vi.mocked(feedbackApi.getPendingFeedback).mock.calls[0][1];
+    await act(async () => { fireEvent(window, new Event('focus')); });
+    expect(screen.getByTestId('curation-queue-empty')).toBeDefined();
+    expect(signal?.aborted).toBe(true);
+    await act(async () => { finish([item]); });
+    expect(queue().queryByText('test.wav')).toBeNull();
+    unmount();
+    await act(async () => { fireEvent(window, new Event('focus')); fireEvent(document, new Event('visibilitychange')); });
+    expect(feedbackApi.getPendingFeedback).toHaveBeenCalledTimes(2);
+  });
+
+  it('preserves prior uncurated items when a refresh fails and aborts an in-flight query on unmount', async () => {
+    vi.mocked(feedbackApi.getPendingFeedback).mockResolvedValueOnce([item]).mockRejectedValueOnce(new Error('offline'));
+    let unmount!: () => void;
+    await act(async () => { ({ unmount } = render(<IngestionView />)); });
+    await act(async () => { fireEvent.click(screen.getByTitle('Actualizar cola de curación')); });
+    expect(queue().getByText('test.wav')).toBeDefined();
+    expect(screen.getByRole('alert').textContent).toContain('offline');
+    vi.mocked(feedbackApi.getPendingFeedback).mockReturnValueOnce(new Promise(() => {}));
+    await act(async () => { fireEvent.click(screen.getByTitle('Actualizar cola de curación')); });
+    const signal = vi.mocked(feedbackApi.getPendingFeedback).mock.calls[2][1];
+    unmount();
+    expect(signal?.aborted).toBe(true);
+  });
+
+  it('ignores late queue errors, preserves the current queue and refreshes only when visible', async () => {
+    let fail!: (error: Error) => void;
+    vi.mocked(feedbackApi.getPendingFeedback).mockReturnValueOnce(new Promise((_, reject) => { fail = reject; })).mockResolvedValue([item]);
+    await open();
+    await act(async () => { fireEvent(window, new Event('focus')); });
+    await act(async () => { fail(new Error('obsolete failure')); });
+    expect(queue().getByText('test.wav')).toBeDefined();
+    expect(screen.queryByRole('alert')).toBeNull();
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    await act(async () => { fireEvent(document, new Event('visibilitychange')); fireEvent(window, new Event('focus')); });
+    expect(feedbackApi.getPendingFeedback).toHaveBeenCalledTimes(2);
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    vi.mocked(feedbackApi.getPendingFeedback).mockResolvedValue([]);
+    await act(async () => { fireEvent(document, new Event('visibilitychange')); });
+    expect(screen.getByTestId('curation-queue-empty')).toBeDefined();
+    vi.restoreAllMocks();
+  });
 
   it('removes blind direct upload and places review after dataset table', async () => {
     await open();
@@ -118,7 +202,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
     vi.mocked(feedbackApi.rejectFeedback).mockRejectedValueOnce(Object.assign(new Error('Ya finalizado'), { statusCode: 409 }));
     await open();
     expect(screen.getByRole('heading', { name: 'Gestión de audios' })).toBeDefined();
-    expect(screen.getByText(/GCS y.*local/)).toBeDefined();
+    expect(screen.getByText(/Incorporar guarda el audio localmente.*sin esperar GCS/)).toBeDefined();
     await act(async () => { fireEvent.click(incorporate()); });
     expect(screen.getByRole('alert').textContent).toContain('GCS no disponible');
     expect(screen.getByText('test.wav')).toBeDefined();

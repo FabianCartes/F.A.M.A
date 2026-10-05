@@ -8,6 +8,7 @@ import {
   rejectFeedback,
 } from "@/lib/api/feedbackApi";
 import { PendingFeedbackItem } from "@/lib/schemas/feedback";
+import FeedbackSyncPanel from "@/components/feedback/FeedbackSyncPanel";
 
 // ============================================================================
 // INTERFACES DEL MODELO DE DOMINIO DE INGESTA (RF_02 / RF_06 / ADR 0013)
@@ -91,6 +92,9 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
   const processingFeedback = useRef(false);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [queueLoadError, setQueueLoadError] = useState<string | null>(null);
+  const [syncRefreshKey, setSyncRefreshKey] = useState(0);
+  const queueGeneration = useRef(0);
+  const queueRequest = useRef<AbortController | null>(null);
 
   const reportFeedbackError = (err: unknown) => {
     const detail = err instanceof Error ? err.message : String(err);
@@ -187,29 +191,50 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
   }, [addLog]);
 
   const fetchPendingFeedbacks = useCallback(async () => {
+    const current = ++queueGeneration.current;
+    queueRequest.current?.abort();
+    const controller = new AbortController();
+    queueRequest.current = controller;
     setIsLoadingFeedback(true);
     try {
-      const items = await getPendingFeedback();
-      setPendingFeedbacks(items || []);
+      const items = await getPendingFeedback(50, controller.signal);
+      if (current !== queueGeneration.current || controller.signal.aborted) return;
+      setPendingFeedbacks(items);
       setQueueLoadError(null);
     } catch (err: unknown) {
+      if (current !== queueGeneration.current || controller.signal.aborted) return;
       const errMsg = err instanceof Error ? err.message : String(err);
-      setQueueLoadError(`No se pudo consultar la cola de revisión: ${errMsg}`);
+      setQueueLoadError(`No fue posible cargar la cola de revisión: ${errMsg}. Se conserva la última consulta disponible.`);
       addLog("WARN", `Error al consultar la cola de curación: ${errMsg}`);
     } finally {
-      setIsLoadingFeedback(false);
+      if (current === queueGeneration.current && !controller.signal.aborted) setIsLoadingFeedback(false);
     }
   }, [addLog]);
+
+  useEffect(() => {
+    let disposed = false;
+    void Promise.resolve().then(() => { if (!disposed) void fetchPendingFeedbacks(); });
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void fetchPendingFeedbacks();
+    };
+    window.addEventListener("focus", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      disposed = true;
+      queueRequest.current?.abort();
+      window.removeEventListener("focus", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [fetchPendingFeedbacks]);
 
   useEffect(() => {
     let isCancelled = false;
 
     async function initializeIngestion() {
       try {
-        const [statusResult, datasetsResult, feedbackResult] = await Promise.allSettled([
+        const [statusResult, datasetsResult] = await Promise.allSettled([
           fetch(`${API_BASE_URL}/api/ingestion/status`),
           fetch(`${API_BASE_URL}/api/ingestion/datasets`),
-          getPendingFeedback(),
         ]);
 
         if (isCancelled) return;
@@ -247,12 +272,6 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
           addLog("WARN", "Error de red al consultar datasets.");
         }
 
-        if (feedbackResult.status === "fulfilled") {
-          setPendingFeedbacks(feedbackResult.value || []);
-        } else {
-          setQueueLoadError("No fue posible cargar la cola de revisión. Actualiza la cola para reintentar.");
-          addLog("WARN", "No fue posible cargar la cola inicial de curación.");
-        }
       } catch (err: unknown) {
         if (!isCancelled) {
           const errMsg = err instanceof Error ? err.message : String(err);
@@ -262,7 +281,6 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
         if (!isCancelled) {
           setIsLoadingStatus(false);
           setIsLoadingDatasets(false);
-          setIsLoadingFeedback(false);
         }
       }
     }
@@ -383,8 +401,10 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
       const res = await approveFeedback(item.id_retroalimentacion);
       addLog(
         "SUCCESS",
-        `Audio #${item.id_retroalimentacion} (${item.audio_filename || item.ruta_audio_prueba}) incorporado al dataset '${datasetName}' en GCS y en el dataset local (Clase: ${res.clase || item.etiqueta_corregida || item.etiqueta_predicha}).`
+        `Audio #${item.id_retroalimentacion} incorporado al dataset local '${datasetName}' (Clase: ${res.clase}). ${res.sync_status === "synced" ? "Copia cloud confirmada." : "Copia cloud pendiente; la sincronización automática no bloquea la preparación de entrenamiento."}`
       );
+      setPendingFeedbacks(previous => previous.filter(pending => pending.id_retroalimentacion !== item.id_retroalimentacion));
+      setSyncRefreshKey(previous => previous + 1);
       await Promise.all([fetchDatasets(), fetchPendingFeedbacks()]);
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -468,6 +488,7 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
               fetchStatus();
               fetchDatasets();
               fetchPendingFeedbacks();
+              setSyncRefreshKey(previous => previous + 1);
             }}
             title="Refrescar estado de GCS y datos"
             className="p-1.5 rounded-lg text-gray-400 hover:text-white bg-[#16171b] border border-[#23252e] hover:border-[#373a46] transition-colors"
@@ -802,7 +823,7 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
                 Revisar audios
               </h2>
               <p className="text-[11px] text-gray-400">
-                Incorporar al dataset guarda el audio en GCS y en el dataset local. Descartar de la cola no borra físicamente el audio.
+                Incorporar guarda el audio localmente; puede preparar entrenamiento sin esperar GCS y su copia cloud se sincroniza después. Descartar de la cola no borra físicamente el audio.
               </p>
             </div>
           </div>
@@ -984,6 +1005,8 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
           </div>
         )}
       </section>
+
+      <FeedbackSyncPanel refreshKey={syncRefreshKey} />
 
       {/* ==================================================================== */}
       {/* 4. MODAL EXPLORADOR DE ARCHIVOS POR CLASE */}
