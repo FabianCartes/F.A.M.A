@@ -274,7 +274,10 @@ Si el usuario detecta divergencia en la pérdida o necesita liberar la GPU para 
 ### 5.4. Activación de Modelos en Caliente (`CU_INV_05`)
 En la parte inferior del módulo se ubica la tabla de **Historial de Modelos**:
 * El historial consultado con BD incluye `dataset_id`, `dataset_name`, `filename`, `sha256` y métricas persistidas por época. Los nombres amigables, versiones y fichas descriptivas no sustituyen esa evidencia de origen ni la inspección del checkpoint.
-* **[Activar Modelo]** marca la fila activa e intenta sincronizar el registro. No garantiza carga inmediata, latencia inferior a un segundo ni inferencia correcta: compruebe pesos disponibles y una inferencia explícita con ese modelo.
+* **[Activar Modelo]** invoca `POST /api/training/models/{id}/activate`: cambia la selección activa en BD e intenta actualizar el predeterminado del registro. Es una operación explícita, separada del descubrimiento del catálogo.
+* No garantiza carga inmediata, latencia inferior a un segundo ni inferencia correcta. La implementación confirma el commit de BD **antes** de intentar registrar los predictores; no ofrece atomicidad entre activación y carga.
+* `register_from_db()` en `training.py:1246` pertenece a `set_active_model()`, no al worker de entrenamiento. No es un mecanismo de publicación al finalizar el trabajo.
+* No es necesario activar un modelo ni reentrenarlo solo para descubrirlo en Predicción; véase [disponibilidad del catálogo](#611-disponibilidad-del-catálogo-y-activación).
 
 ### 5.5. Requisitos de la Fuente Local y Procedencia
 
@@ -290,6 +293,7 @@ La fuente se resuelve en `backend/data/raw/<dataset>` mediante el resolutor de r
 - `file_path` tiene prioridad si la columna existe: debe ser texto no vacío, absoluto o relativo a la raíz raw del dataset. Para Aves sin esa columna se buscan variantes compatibles del nombre/ID, incluida la carpeta de clase normalizada a minúsculas y guiones bajos.
 - Cada ruta debe resolver a un archivo no vacío, con extensión `.wav`, `.mp3`, `.flac` u `.ogg`, dentro de la fuente raw o del `processed_wav` canónico de ese mismo dataset. Los CSV no pueden escapar de la raíz raw mediante enlaces.
 - La admisión fija ID, nombre, directorio y tablas con rutas resueltas para que el worker consuma esa fuente, sin fallback a otro dataset. No copia ni bloquea los bytes de audio: evite cambiar la fuente durante el trabajo. No valida códec, decodificación efectiva, calidad acústica ni calidad del modelo.
+- Una identidad local de dataset no demuestra un destino canónico de incorporación en GCS. La verificación de almacenamiento y la reparación de asociaciones históricas son operaciones separadas; la publicación del catálogo no las realiza.
 
 ### 5.6. Guardado Confirmado y Límites de Recuperación
 
@@ -297,6 +301,8 @@ La fuente se resuelve en `backend/data/raw/<dataset>` mediante el resolutor de r
 2. El payload guarda pesos, clases, arquitectura, `dataset_id`, `dataset_name`, `job_id`, `source_directory` y configuración del componente. La BD conserva tamaño y SHA-256 completo del checkpoint; ese hash identifica el artefacto, no certifica los bytes de la fuente de entrenamiento.
 3. Antes de registrar, revalida el ID/nombre aceptado con bloqueo de fila (`SELECT FOR UPDATE`) y confirma modelo y sus métricas en un mismo commit de BD. Solo después de guardar todos los componentes puede anunciar `completed`. Fallos de escritura, identidad o persistencia producen `failed` con error visible.
 4. La publicación local y el commit de BD **no forman una transacción atómica conjunta**. La limpieza solo alcanza el archivo nuevo probado como no registrado; ante un commit de resultado indeterminado se conserva el artefacto si no puede comprobarse su ausencia en BD. Una interrupción abrupta entre publicación y commit puede dejar un archivo huérfano, sin recuperación automática. Un ensamble fallido puede conservar componentes exitosos y sus filas; no hay rollback global del ensamble.
+
+`completed` confirma persistencia del checkpoint, modelo y métricas, **no preparación para inferencia**. La compatibilidad de arquitectura y pesos requiere una ejecución explícita; aparecer en el catálogo tampoco la certifica.
 
 `ruta_binario_gcp = models/<archivo>` es metadata del registro, **no evidencia de carga a GCS**. El registro toma el basename para buscar el checkpoint local. Este flujo no sube checkpoints a la nube.
 
@@ -352,6 +358,71 @@ Antes de cargar el archivo, el usuario puede seleccionar el contexto analítico 
 * **Dominio Bioacústico:** Dirigido a la clasificación de aves chilenas (15 especies) utilizando el Ensamble Tri-Modelo calibrado a 22.05 kHz.
 * **Dominio Industrial:** Dirigido al diagnóstico preventivo de maquinaria y motores de vehículos (13 fallas mecánicas) calibrado a 32 kHz.
 * **Modelo Específico:** Permite alternar entre el Ensamble Campeón, modelos individuales o paquetes independientes (*Model Bundles*).
+
+#### 6.1.1. Disponibilidad del Catálogo y Activación
+
+Para usar un modelo ya entrenado, vuelva a **Predicción**, selecciónelo y pruebe una inferencia.
+El descubrimiento no exige reentrenar ni cambiar el modelo activo.
+La publicación y la activación tienen alcances distintos:
+
+| Concepto | Qué acredita | Qué no acredita |
+| --- | --- | --- |
+| Entrenamiento `completed` | Checkpoint, modelo y métricas persistidos | Compatibilidad de inferencia |
+| Publicación en `GET /api/models` | Predictor incorporado al registro del proceso | Activación ni ejecución correcta |
+| `only_available=true` | Filtro existente de disponibilidad de pesos en almacenamiento | Inferencia validada |
+| Activación explícita | Cambio de selección activa e intento de sincronizar el predeterminado | Carga garantizada o transacción atómica conjunta |
+
+Cada `GET /api/models` consulta la BD y reconcilia los modelos persistidos que faltan
+en el registro del proceso que atiende la solicitud, incluidos modelos entrenados antes de la corrección.
+Conserva las instancias predictoras existentes y el predeterminado actual, incluso si no está definido.
+No escribe indicadores `activo` en BD; cada proceso mantiene su propio registro en memoria.
+
+Los checkpoints se buscan por **basename** del localizador bajo la raíz física configurada.
+Se rechazan escapes mediante enlaces simbólicos antes de deserializar.
+Una URI o un prefijo `models/` no provoca una descarga GCS ni acredita un objeto remoto.
+
+La inicialización diferida existente usa `torch.load(..., map_location="cpu")` para obtener
+metadatos una vez por publicación exitosa en cada proceso, sin construir todavía la red de inferencia.
+Esto **deserializa el checkpoint**: no es lectura solo de cabecera ni garantiza cero asignaciones tensoriales.
+No comprueba compatibilidad de inferencia ni verifica el SHA registrado en cada GET.
+Un modelo que no logra publicarse puede volver a intentarse en consultas posteriores, con el costo correspondiente.
+
+Si falla la publicación de algún archivo, HTTP 200 conserva los modelos sanos y devuelve
+`publication_errors` sanitizados: identificador y código, sin rutas ni texto interno de excepciones.
+Solo `database_unavailable` produce HTTP 503 en este contrato de publicación.
+La vista muestra avisos parciales en español; una advertencia no revierte la persistencia del entrenamiento.
+
+#### 6.1.2. Refresco y Conservación de la Selección
+
+- Predicción solicita el catálogo al montar la vista, recuperar el foco y volver al estado visible.
+  No realiza polling; regresar a la ventana permite reintentar una consulta fallida.
+- Conserva una selección que siga presente. Si desaparece, prioriza opciones del mismo dominio
+  y después opciones existentes del catálogo; no inventa un modelo de respaldo.
+- Descarta respuestas y errores tardíos con generación de solicitudes y cancelación.
+  Retira los listeners y cancela la solicitud pendiente al desmontar la vista.
+- Ante un fallo de actualización, incluido HTTP 503, mantiene el catálogo previo y muestra el error.
+  Un catálogo vacío no inventa opciones ni habilita inferencia.
+- El refresco no cambia la identificación del modelo ya ejecutado ni los metadatos de clases
+  usados por el feedback de ese resultado. Elegir otro modelo afecta la siguiente inferencia.
+
+#### 6.1.3. Comprobación Operativa Tras el Despliegue
+
+**El despliegue requiere autorización operativa separada y puede interrumpir servicios.**
+El comando compatible con el script existente es `./iniciar_fama.sh --build backend frontend`;
+se documenta como referencia, no como una instrucción ejecutada ni una autorización.
+
+Una vez desplegada la corrección con esa autorización:
+
+1. Vuelva a Predicción o recupere el foco para consultar el catálogo actualizado.
+2. Seleccione el modelo entrenado; revise cualquier aviso parcial de publicación.
+3. Pruebe inferencia explícita y compruebe el modelo ejecutado en el resultado.
+   No necesita reentrenar ni activar el modelo meramente para descubrirlo.
+
+El modelo real 11 tenía persistencia, checkpoint y hash verificados **antes** de esta corrección.
+El catálogo corregido en vivo y su inferencia **no están verificados**; esa evidencia previa no los sustituye.
+No se efectuaron despliegue, reset, migración, cambios GCS ni entrenamiento real en esta corrección.
+Las verificaciones de almacenamiento y reparación histórica continúan separadas y requieren su propia autorización.
+La decisión y sus alternativas están en el [ADR 0017](../adr/0017-disponibilidad-y-activacion-modelos.md).
 
 ### 6.2. Inspección Acústica con Oscilograma Interactivo
 Al arrastrar o seleccionar un archivo de audio:

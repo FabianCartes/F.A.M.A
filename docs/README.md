@@ -17,7 +17,7 @@ docs/
 ├── arquitectura/                # Diseño de sistemas, pipelines, MLOps y despliegue
 ├── limites/                     # Límites matemáticos, físicos y problemas conocidos
 ├── manuales/                    # Manual de usuario y guías de despliegue operativo
-├── adr/                         # Architectural Decision Records (ADR 0001 a 0016)
+├── adr/                         # Architectural Decision Records (ADR 0001 a 0017)
 ├── receipts/                    # Recibos técnicos reproducibles en formato JSON (RDD)
 └── images/                      # Diagramas, matrices de confusión y gráficos vectoriales
 ```
@@ -62,7 +62,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`22_propuesta_vista_ayuda_y_centro_de_conocimiento.md`](./arquitectura/22_propuesta_vista_ayuda_y_centro_de_conocimiento.md): Diseño y especificación del centro de conocimiento e interactividad en frontend.
 
 ### 4. [`docs/manuales/`](./manuales/) — Manuales y Guías Operativas
-* [`manual_usuario_plataforma.md`](./manuales/manual_usuario_plataforma.md): Guía integral de operación para investigadores y administradores; incluye [admisión, procedencia y guardado del entrenamiento](./manuales/manual_usuario_plataforma.md#55-requisitos-de-la-fuente-local-y-procedencia) y siguiente comprobación autorizada.
+* [`manual_usuario_plataforma.md`](./manuales/manual_usuario_plataforma.md): Guía integral de operación para investigadores y administradores; incluye [admisión, procedencia y guardado del entrenamiento](./manuales/manual_usuario_plataforma.md#55-requisitos-de-la-fuente-local-y-procedencia) y siguiente comprobación autorizada; distingue [disponibilidad, activación y refresco de Predicción](./manuales/manual_usuario_plataforma.md#611-disponibilidad-del-catálogo-y-activación) de inferencia comprobada.
 * [`flujo_revision_audios.md`](./manuales/flujo_revision_audios.md): Validación, revisión e incorporación de audios, destinos, reintentos y limitaciones verificadas.
 * [`guia_despliegue_operativo_docker.md`](./manuales/guia_despliegue_operativo_docker.md): Manual de instalación y despliegue institucional con Docker; incluye [arranque diario, reconstrucción explícita y espera de disponibilidad](./manuales/guia_despliegue_operativo_docker.md#7-puesta-en-marcha-y-scripts-de-automatización).
 
@@ -74,7 +74,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`05_restriccion_formato_audio_y_captura_microfono.md`](./limites/05_restriccion_formato_audio_y_captura_microfono.md): Restricción estricta de formato PCM .wav y pipeline de captura por micrófono web.
 
 ### 6. [`docs/adr/`](./adr/) — Architectural Decision Records
-Registro de las 16 decisiones de arquitectura fundamentales del sistema:
+Registro de las 17 decisiones de arquitectura fundamentales del sistema:
 * `ADR 0001`: Migración de AudioCNN a EfficientNet-B0.
 * `ADR 0002`: Particionamiento Estratificado a Nivel de Grabador (Zero Leakage).
 * `ADR 0003`: Adopción de Focal Loss frente a Cross-Entropy estándar.
@@ -91,3 +91,4 @@ Registro de las 16 decisiones de arquitectura fundamentales del sistema:
 * `ADR 0014`: Delimitación de Parámetros Configurables en Frontend bajo Principios de Deep Modules y Presets de Dominio.
 * [`ADR 0015`](./adr/0015-fallos-explicitos-inferencia-y-validacion.md): Fallos explícitos de inferencia y validación aislada.
 * [`ADR 0016`](./adr/0016-procedencia-y-persistencia-entrenamiento.md): Datasets soportados, procedencia verificable y finalización confirmada; límites entre checkpoints locales y BD, sin garantía de subida a GCS.
+* [`ADR 0017`](./adr/0017-disponibilidad-y-activacion-modelos.md): Reconciliación del catálogo por solicitud y refresco predecible de Predicción; disponibilidad sin activación implícita ni garantía de inferencia.
