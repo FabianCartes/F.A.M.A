@@ -10,8 +10,8 @@ from app.schemas.model_info import ModelMetadata
 from app.services.predictors.base import AudioPredictor, ModelWeightsError
 
 
-def _verified_dataset_name(dataset) -> Optional[str]:
-    """A relation's name is a storage identity only when its GCS route agrees."""
+def _verified_dataset_name(dataset, raw_data_root: Optional[Path] = None) -> Optional[str]:
+    """Verify a persisted relation against its GCS or canonical local route."""
     from app.services import storage
     if dataset is None:
         return None
@@ -20,7 +20,13 @@ def _verified_dataset_name(dataset) -> Optional[str]:
         route = dataset.ruta_gcp.rstrip("/")
         if route in (f"datasets/{name}", f"gs://{storage.DEFAULT_BUCKET_NAME}/datasets/{name}"):
             return name
-    except (ValueError, TypeError, AttributeError):
+        from training.paths import get_raw_data_dir
+        raw_root = Path(raw_data_root) if raw_data_root is not None else get_raw_data_dir()
+        canonical = raw_root / name
+        if (route == canonical.as_uri() and canonical.is_dir()
+                and canonical.resolve(strict=True).is_relative_to(raw_root.resolve(strict=True))):
+            return name
+    except (ValueError, TypeError, AttributeError, OSError, RuntimeError):
         pass
     # Unknown/mismatched associations do not disable inference, only incorporation.
     return None
@@ -36,7 +42,10 @@ class ModelRegistry:
     Catálogo y gestor de ciclo de vida de modelos en memoria.
     """
 
-    def __init__(self):
+    def __init__(self, raw_data_root: Optional[Path] = None):
+        # Deployment uses the canonical resolver; isolated catalogues can supply
+        # their actual filesystem root without replacing internal collaborators.
+        self._raw_data_root = raw_data_root
         self._predictors: Dict[str, AudioPredictor] = {}
         self._default_model_id: Optional[str] = None
         self._publication_lock = RLock()
@@ -176,7 +185,7 @@ class ModelRegistry:
                         name=f"{model.arquitectura} (Entrenado #{model.id_modelo})",
                         is_default=False,
                         lazy_load=True,
-                        dataset_name=_verified_dataset_name(model.conjunto_datos),
+                        dataset_name=_verified_dataset_name(model.conjunto_datos, self._raw_data_root),
                     )
                     # register() selects a default on an empty catalogue. Publication
                     # deliberately preserves even an unset default instead.
@@ -227,7 +236,7 @@ class ModelRegistry:
                         name=f"{m.arquitectura} (Entrenado #{m.id_modelo})",
                         is_default=is_active,
                         lazy_load=not is_active,
-                        dataset_name=_verified_dataset_name(m.conjunto_datos),
+                        dataset_name=_verified_dataset_name(m.conjunto_datos, self._raw_data_root),
                     )
                     self.register(pred, is_default=is_active)
                     # Registrar alias útiles para consultas directas

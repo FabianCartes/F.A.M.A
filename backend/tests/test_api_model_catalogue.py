@@ -39,7 +39,7 @@ def catalogue(tmp_path, monkeypatch):
     checkpoints_root = tmp_path / "checkpoints"
     checkpoints_root.mkdir()
     monkeypatch.setattr(main.training_service, "checkpoints_dir", checkpoints_root)
-    registry = ModelRegistry()
+    registry = ModelRegistry(raw_data_root=tmp_path / "data" / "raw")
     selected = FakeAudioPredictor("selected", "Selected")
     registry.register(selected, is_default=True)
 
@@ -51,14 +51,17 @@ def catalogue(tmp_path, monkeypatch):
     main.app.dependency_overrides[get_model_registry] = lambda: registry
     client = TestClient(main.app, raise_server_exceptions=False)
 
-    def persist(model_id=11, contents=None, route=None):
+    def persist(model_id=11, contents=None, route=None, dataset=None, active=True):
         checkpoint = checkpoints_root / f"trained_{model_id}.pt"
         checkpoint.write_text(contents if contents is not None else json.dumps({
             "classes": ["Motor sano", "Falla"], "padding": "x" * 11000,
         }))
         with sessions() as db:
-            db.add(Modelo(id_modelo=model_id, arquitectura="EfficientNet-B0", epocas=1,
-                          tasa_aprendizaje=0.001, tamano_lote=2, activo=True,
+            if dataset is not None:
+                db.add(dataset)
+            db.add(Modelo(id_modelo=model_id, conjunto_datos=dataset,
+                          arquitectura="EfficientNet-B0", epocas=1,
+                          tasa_aprendizaje=0.001, tamano_lote=2, activo=active,
                           ruta_binario_gcp=route or checkpoint.as_uri()))
             db.commit()
         return checkpoint

@@ -17,8 +17,11 @@ Antes de enviar la validación no hay un elemento en la cola. Después del enví
 La predicción guarda una instantánea nullable en `prediccion.dataset_name`, tomada del **modelo realmente ejecutado**, no de una selección de dominio ni del modelo que esté activo cuando se revise. El resultado la expone en `detalles.dataset_name` y la cola en `dataset_name`.
 
 - Los predictores estándar de aves tienen el destino explícito `AvesChilenas`.
-- Para un modelo registrado, se valida la asociación con `conjunto_datos`: su nombre debe ser un componente de ruta válido y su `ruta_gcp` debe coincidir con `datasets/<nombre>` o `gs://<bucket configurado>/datasets/<nombre>` (se admite la barra final).
+- Para un modelo registrado, se valida la asociación persistida con `conjunto_datos`: su nombre debe ser un componente de ruta válido. Su `ruta_gcp` puede coincidir con `datasets/<nombre>` o `gs://<bucket configurado>/datasets/<nombre>`, o ser la URI `file://` canónica del directorio local `backend/data/raw/<nombre>`, obtenido por el resolver de rutas del backend (en el contenedor: `file:///app/data/raw/<nombre>`). Se admite la barra final.
+- La ruta local debe corresponder exactamente al nombre registrado y a un directorio existente; su destino físico debe permanecer dentro de la raíz raw. Se rechazan rutas externas, traversal incluso codificado, autoridades en `file://`, rutas malformadas y symlinks que escapen de esa raíz. No basta con que cualquier ruta local exista.
 - No se supone que todos los bundles pertenezcan a ese dataset. Una asociación desconocida o inválida queda como `NULL`, sin impedir por sí sola la inferencia.
+
+La asociación local verificada se expone en el catálogo y en los predictores registrados para inferencias nuevas. Este soporte no implementa incorporación local previa a GCS ni sincronización durable en segundo plano: el flujo de aprobación descrito en este manual sigue requiriendo ambos destinos.
 
 Las predicciones antiguas o sin asociación verificable permanecen en `NULL`: no se adivina ni se rellena retrospectivamente el destino, y no existe una selección manual para repararlo. La interfaz muestra la advertencia y deshabilita la incorporación; una aprobación por API devuelve un error explícito y conserva el pendiente. **Descartar de la cola** sigue disponible.
 
