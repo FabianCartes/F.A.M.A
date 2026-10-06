@@ -281,18 +281,19 @@ En la parte inferior del módulo se ubica la tabla de **Historial de Modelos**:
 
 ### 5.5. Requisitos de la Fuente Local y Procedencia
 
-La fuente se resuelve en `backend/data/raw/<dataset>` mediante el resolutor de rutas del backend. Los CSV se leen con `pandas.read_csv`, con encabezados exactos:
+Los índices se vinculan a `backend/data/raw/<dataset>` y a un mapa explícito de raíces físicas: raw en ese directorio y processed en `backend/data/processed/<dataset>/processed_wav`, no mediante el enlace bajo raw. Los CSV se leen con `pandas.read_csv(dtype=str, keep_default_na=False)`, con encabezados exactos:
 
-| Dataset | Particiones admitidas | Columnas para localizar audio |
+| Dataset | Particiones admitidas | Columnas obligatorias |
 | --- | --- | --- |
-| `AvesChilenas` | `train.csv` y `val.csv`; si ambos faltan, partición desde `metadata.csv` | `clase` y `file_path`; alternativamente `clase` y `nombre_archivo`, con `xc_id` opcional para resolución compatible |
-| `engine_diagnostics` | `train_metadata.csv` y `val_metadata.csv` obligatorios | `clase` y `file_path` |
+| `AvesChilenas` | `train.csv` y `val.csv`; si ambos faltan, partición desde `metadata.csv` canónico | `clase`, `file_path` y `file_stage` |
+| `engine_diagnostics` | `train_metadata.csv` y `val_metadata.csv` obligatorios | `clase`, `file_path` y `file_stage` |
 
-- Si falta solo una partición, se rechaza el inicio. El fallback de Aves necesita además `recordist` para el particionador agrupado; no promete separación por grabador cuando hay menos de tres grupos. Las particiones explícitas no reciben esa comprobación de agrupación.
+- Si falta solo una partición, se rechaza el inicio. La generación desde metadata de Aves necesita además `recordist` para el particionador agrupado; no promete separación por grabador cuando hay menos de tres grupos. Las particiones explícitas no reciben esa comprobación de agrupación.
 - Train y val deben ser no vacíos, con clases de texto no nulas ni en blanco; cada clase de val debe existir en train. No pueden compartir una ruta de audio resuelta.
-- `file_path` tiene prioridad si la columna existe: debe ser texto no vacío, absoluto o relativo a la raíz raw del dataset. Para Aves sin esa columna se buscan variantes compatibles del nombre/ID, incluida la carpeta de clase normalizada a minúsculas y guiones bajos.
-- Cada ruta debe resolver a un archivo no vacío, con extensión `.wav`, `.mp3`, `.flac` u `.ogg`, dentro de la fuente raw o del `processed_wav` canónico de ese mismo dataset. Los CSV no pueden escapar de la raíz raw mediante enlaces.
-- La admisión fija ID, nombre, directorio y tablas con rutas resueltas para que el worker consuma esa fuente, sin fallback a otro dataset. No copia ni bloquea los bytes de audio: evite cambiar la fuente durante el trabajo. No valida códec, decodificación efectiva, calidad acústica ni calidad del modelo.
+- `file_path` debe ser texto relativo POSIX seguro y no vacío; `file_stage` debe declarar `raw` o `processed`. No se admiten absolutas persistidas, búsqueda por nombre/`xc_id`, variantes de clase/slug ni fallback de referencias inválidas. La etapa es independiente de la extensión: un WAV puede ser raw.
+- Cada referencia debe señalar un archivo regular no vacío, con extensión `.wav`, `.mp3`, `.flac` u `.ogg`, bajo la raíz física de su etapa. Se rechazan symlinks en archivo, raíz o cualquier ancestro; no pre-resolver aliases antes de validar. Etiqueta semántica, carpeta y nombre original no son intercambiables.
+- La admisión fija ID, nombre, directorio, raíces y tablas para que el worker consuma esa fuente, sin fallback a otro dataset. Las absolutas resueltas son transitorias en memoria. No copia ni bloquea los bytes de audio: evite cambiar la fuente durante el trabajo. No valida códec, decodificación efectiva, hash del audio, calidad acústica ni calidad del modelo.
+- Los índices legacy requieren conversión offline explícita, no reparación durante entrenamiento o aprobación. Véase la [guía de referencias canónicas](contrato_referencias_dataset_canonicas.md) para dry-run, preservación y corte autorizado separado.
 - Una identidad local de dataset no demuestra un destino canónico de incorporación en GCS. La verificación de almacenamiento y la reparación de asociaciones históricas son operaciones separadas; la publicación del catálogo no las realiza.
 
 ### 5.6. Guardado Confirmado y Límites de Recuperación
