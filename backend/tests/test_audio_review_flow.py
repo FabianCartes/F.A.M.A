@@ -83,7 +83,7 @@ def review_api(tmp_path, monkeypatch):
         directory = raw / dataset
         directory.mkdir(parents=True)
         (directory / "metadata.csv").write_text(
-            "nombre_archivo,clase,frecuencia_muestreo,duracion_segundos,tamano_bytes,hash_archivo,xc_id,recordist,licencia,pais,localidad,lat,lon,calidad\n",
+            "nombre_archivo,clase,frecuencia_muestreo,duracion_segundos,tamano_bytes,hash_archivo,xc_id,recordist,licencia,pais,localidad,lat,lon,calidad,file_path,file_stage\n",
             encoding="utf-8",
         )
     previous = app.dependency_overrides.copy()
@@ -124,7 +124,8 @@ def test_http_local_approval_is_ingestable_while_cloud_catalogue_and_upload_are_
     dataset = raw / "AvesChilenas"
     samples = LocalFolderPAMIngestor(dataset, annotations_csv=dataset / "metadata.csv").ingest()
     assert len(samples) == 1
-    assert samples.iloc[0]["file_path"] == str(dataset / "rayadito/feedback_1.wav")
+    assert samples.iloc[0]["file_path"] == "rayadito/feedback_1.wav"
+    assert samples.iloc[0]["file_stage"] == "raw"
     assert samples.iloc[0]["clase"] == "Rayadito"
     assert samples.iloc[0]["duracion_segundos"] == .1
     assert client.post(f"/api/feedback/{feedback_id}/approve").json() == response.json()
@@ -137,6 +138,7 @@ def test_automatic_snapshot_resolves_rayadito_and_rejects_override(review_api):
     before = bucket.objects.copy()
     assert client.post(f"/api/feedback/{feedback_id}/approve?dataset_name=aves_revision").status_code == 409
     assert bucket.objects == before
+    (raw / "AvesChilenas/rayadito").mkdir()
     response = client.post(f"/api/feedback/{feedback_id}/approve")
     assert response.status_code == 200, response.text
     assert response.json()["clase"] == "Rayadito"
@@ -223,6 +225,7 @@ def assert_destinations(bucket, raw, feedback_id, audio, label, slug, dataset):
 def test_prediction_validation_approval_preserves_source_bytes(review_api, corrected, label, slug):
     client, bucket, raw = review_api
     feedback_id, source, audio, payload = predict_and_validate(client, bucket, raw, corrected)
+    (raw / "AvesChilenas" / label).mkdir()
     response = client.post(f"/api/feedback/{feedback_id}/approve")
     assert response.status_code == 200, response.text
     filename = assert_destinations(bucket, raw, feedback_id, audio, label, slug, "AvesChilenas")
@@ -254,6 +257,7 @@ def test_prediction_validation_rejection_retains_source_without_dataset_changes(
 def test_missing_prediction_source_remains_pending_until_retry(review_api):
     client, bucket, raw = review_api
     feedback_id, source, audio, _ = predict_and_validate(client, bucket, raw)
+    (raw / "AvesChilenas/Chucao").mkdir()
     # Model a storage-side unavailable object without touching a real filesystem/cloud.
     with patch.dict(bucket.objects, {}, clear=True):
         response = client.post(f"/api/feedback/{feedback_id}/approve?dataset_name=AvesChilenas")
@@ -270,6 +274,7 @@ def test_missing_prediction_source_remains_pending_until_retry(review_api):
 def test_upload_outage_does_not_block_local_approval_and_replay(review_api):
     client, bucket, raw = review_api
     feedback_id, source, audio, payload = predict_and_validate(client, bucket, raw, "Turca")
+    (raw / "AvesChilenas/Turca").mkdir()
     bucket.fail_dataset_upload_once = True
     response = client.post(f"/api/feedback/{feedback_id}/approve?dataset_name=AvesChilenas")
     assert response.status_code == 200
@@ -314,5 +319,6 @@ def test_approval_rejects_different_dataset_without_writes(review_api):
     assert list(raw.rglob("*.wav")) == []
     assert pending(client)[0]["procesado"] is False
     assert not (raw / f".feedback_{feedback_id}.json").exists()
+    (raw / "AvesChilenas/Chucao").mkdir()
     assert client.post(f"/api/feedback/{feedback_id}/approve").status_code == 200
     assert_destinations(bucket, raw, feedback_id, audio, "Chucao", "chucao", "AvesChilenas")

@@ -25,6 +25,7 @@ from app.models.prediction import Prediccion
 from app.models.feedback import Retroalimentacion
 from app.services import storage
 from app.services.feedback_sync import FeedbackSyncQueue
+from dataset_references import resolve_reference, reference_from_path
 
 logger = logging.getLogger(__name__)
 
@@ -206,8 +207,35 @@ class FeedbackService:
     def _class_key(label: str) -> str:
         return re.sub(r"[\s_]+", "_", unicodedata.normalize("NFC", label).casefold())
 
+    def _read_canonical_metadata(self, dataset: Path):
+        """Validate existing raw rows without rewriting or guessing historical paths."""
+        metadata = dataset / "metadata.csv"
+        self._safe_path(metadata)
+        if not metadata.exists():
+            return [], []
+        with metadata.open(newline="", encoding="utf-8") as stream:
+            reader = csv.DictReader(stream)
+            columns = reader.fieldnames
+            if (not columns or len(set(columns)) != len(columns)
+                    or not {"nombre_archivo", "clase", "file_path", "file_stage"}.issubset(columns)):
+                raise ValueError("Índice no canónico; requiere conversión offline explícita")
+            rows = list(reader)
+        for row in rows:
+            if None in row or any(value is None for value in row.values()):
+                raise ValueError("Fila de metadatos malformada")
+            storage.validate_path_component(row["nombre_archivo"])
+            storage.validate_path_component(row["clase"])
+            if row["file_stage"] != "raw":
+                raise ValueError("El índice de incorporación debe declarar etapa raw")
+            try:
+                resolve_reference(row["file_path"], row["file_stage"], {"raw": dataset})
+            except ValueError:
+                raise ValueError("Referencia raw no válida en los metadatos locales") from None
+        return rows, columns
+
     def _resolve_local_class(self, dataset: Path, label: str) -> str:
-        """Local directories/metadata are authoritative; cloud is legacy fallback only."""
+        """Local directories and verified canonical metadata establish class identity."""
+        rows, _ = self._read_canonical_metadata(dataset)
         directories = set()
         if dataset.exists():
             for child in dataset.iterdir():
@@ -219,63 +247,45 @@ class FeedbackService:
         key = self._class_key(label)
         matches = [name for name in directories if self._class_key(name) == key]
         if len(matches) > 1:
-            raise ValueError("Clase ambigua en el catálogo local")
+            return self._resolve_indexed_class(dataset, key, matches)
         if matches:
             self._safe_path(dataset / matches[0])
             return matches[0]
         metadata = dataset / "metadata.csv"
         self._safe_path(metadata)
         labels = set()
-        if metadata.exists():
-            with metadata.open(newline="", encoding="utf-8") as stream:
-                for row in csv.DictReader(stream):
-                    value = row.get("clase")
-                    if value:
-                        labels.add(storage.validate_path_component(value))
+        for row in rows:
+            labels.add(storage.validate_path_component(row["clase"]))
         matches = [name for name in labels if self._class_key(name) == key]
         if len(matches) > 1:
             raise ValueError("Clase ambigua en los metadatos locales")
         if matches:
             return matches[0]
-        if directories or labels:
-            raise ValueError("Clase desconocida en el catálogo local")
-        # Compatibility for cloud-backed datasets not yet downloaded locally.
-        prefix = f"datasets/{dataset.name}/"
-        blobs = storage.storage.Client().list_blobs(storage.DEFAULT_BUCKET_NAME, prefix=prefix)
-        names = set()
-        for blob in blobs:
-            relative = blob.name.removeprefix(prefix)
-            if "/" in relative:
-                names.add(storage.validate_path_component(relative.split("/", 1)[0]))
-        matches = [name for name in names if self._class_key(name) == key]
-        if len(matches) != 1:
-            raise ValueError("Clase desconocida o ambigua en el catálogo de almacenamiento")
-        return matches[0]
+        raise ValueError("Clase desconocida en el catálogo local")
 
-    def _metadata_audio_path(self, dataset: Path, row: dict) -> str:
-        """Add explicit paths without invalidating existing legacy CSV samples."""
-        if row.get("file_path"):
-            path = Path(row["file_path"])
-            candidates = [path if path.is_absolute() else dataset / path]
-        else:
-            filename = row.get("nombre_archivo", "")
-            label = row.get("clase", "")
-            if not filename or not label:
-                raise ValueError("Fila de metadatos incompleta")
-            slug = label.lower().replace(" ", "_").replace("/", "_")
-            stem, source_id = Path(filename).stem, row.get("xc_id", "")
-            candidates = [dataset / folder / slug / f"{identifier}.wav"
-                          for folder in ("", "processed_wav") for identifier in (stem, source_id)
-                          if identifier]
-            candidates += [dataset / slug / filename, dataset / slug / f"{source_id}.mp3",
-                           dataset / f"{stem}.wav", dataset / filename]
-            candidates += [directory / filename for directory in dataset.iterdir()
-                           if directory.is_dir() and self._class_key(directory.name) == self._class_key(label)]
-        for candidate in candidates:
-            if candidate.is_file():
-                self._safe_path(candidate)
-                return str(candidate.resolve().relative_to(dataset.resolve()))
-        raise ValueError("Audio existente ausente del índice local; no se modificaron sus metadatos")
+    def _resolve_indexed_class(self, dataset: Path, key: str, matches: List[str]) -> str:
+        """Resolve a collision only from unanimous, physically verified CSV evidence."""
+        metadata = dataset / "metadata.csv"
+        self._safe_path(metadata)
+        if not metadata.is_file():
+            raise ValueError("Clase ambigua sin metadatos locales verificables")
+        for name in matches:
+            directory = dataset / name
+            self._safe_path(directory)
+            if not directory.is_dir():
+                raise ValueError("Directorio de clase no válido")
+        selected = set()
+        rows, _ = self._read_canonical_metadata(dataset)
+        for row in rows:
+            if self._class_key(row["clase"]) != key:
+                continue
+            relative = Path(row["file_path"])
+            if len(relative.parts) < 2 or relative.parts[0] not in matches:
+                raise ValueError("Referencia de audio fuera de los directorios de clase")
+            selected.add(relative.parts[0])
+        if len(selected) != 1:
+            raise ValueError("Clase ambigua: los metadatos locales no identifican un único directorio")
+        return selected.pop()
 
     def _incorporate_metadata(self, dataset, storage_class, filename, label, audio, digest):
         metadata = dataset / "metadata.csv"
@@ -291,22 +301,13 @@ class FeedbackService:
                       duracion_segundos=duration, tamano_bytes=len(audio), hash_archivo=digest,
                       xc_id=filename.removesuffix(".wav"), recordist="human_feedback",
                       licencia="", pais="", localidad="", lat="", lon="", calidad="",
-                      file_path=f"{storage_class}/{filename}")
-        rows, columns = [], list(values)
-        if metadata.exists():
-            with metadata.open(newline="", encoding="utf-8") as stream:
-                reader = csv.DictReader(stream)
-                if (not reader.fieldnames or len(set(reader.fieldnames)) != len(reader.fieldnames)
-                        or not {"nombre_archivo", "clase"}.issubset(reader.fieldnames)):
-                    raise ValueError("Formato de metadatos no válido")
-                columns = list(reader.fieldnames) + [c for c in values if c not in reader.fieldnames]
-                rows = list(reader)
-        if any(None in row for row in rows):
-            raise ValueError("Fila de metadatos malformada")
+                      file_path=f"{storage_class}/{filename}", file_stage="raw")
+        rows, columns = self._read_canonical_metadata(dataset)
+        columns = columns + [c for c in values if c not in columns]
         duplicates = [row for row in rows if row.get("nombre_archivo") == filename]
         if duplicates:
             if len(duplicates) != 1 or any(duplicates[0].get(k) != str(values[k])
-                                          for k in ("clase", "hash_archivo", "xc_id", "file_path",
+                                          for k in ("clase", "hash_archivo", "xc_id", "file_path", "file_stage",
                                                     "frecuencia_muestreo", "duracion_segundos",
                                                     "tamano_bytes", "recordist")):
                 raise ValueError("Conflicto de metadatos para el audio canónico")
@@ -314,18 +315,12 @@ class FeedbackService:
                 os.fsync(stream.fileno())
             self._fsync_dir(dataset)
             return
-        for row in rows:
-            row["file_path"] = self._metadata_audio_path(dataset, row)
-            # Added numeric columns must not become NaN in CSV-consuming ingestors.
-            for column in ("frecuencia_muestreo", "duracion_segundos", "tamano_bytes"):
-                row.setdefault(column, 0)
-            row.setdefault("recordist", f"legacy_{Path(row['nombre_archivo']).stem}")
         rows.append(values)
         output = io.StringIO(newline="")
         writer = csv.DictWriter(output, fieldnames=columns)
         writer.writeheader()
         writer.writerows(rows)
-        self._publish(metadata, output.getvalue().encode("utf-8"))
+        return output.getvalue().encode("utf-8")
 
     def approve_feedback(self, db: Session, id_retroalimentacion: int,
                          dataset_name: Optional[str] = None) -> Dict[str, Any]:
@@ -412,13 +407,17 @@ class FeedbackService:
                         raise ValueError("El archivo canónico existente tiene contenido diferente")
                     # Validate WAV and CSV before publishing any new audio.
                     self._mkdir(destination.parent)
-                    self._incorporate_metadata(dataset, storage_class, filename, label, audio, digest)
+                    metadata_update = self._incorporate_metadata(dataset, storage_class, filename, label, audio, digest)
                     if not destination.exists():
                         self._publish(destination, audio, no_replace=True)
                     else:
                         with destination.open("rb") as stream:
                             os.fsync(stream.fileno())
                         self._fsync_dir(destination.parent)
+                    # Publish verified audio before referring to it in a NEW CSV row.
+                    reference_from_path(destination, "raw", {"raw": dataset})
+                    if metadata_update is not None:
+                        self._publish(dataset / "metadata.csv", metadata_update)
                     sync = queue.enqueue(db, id_retroalimentacion, dataset_name=stored_dataset,
                                          storage_class=storage_class, sha256=digest)
                     feedback.procesado = True
