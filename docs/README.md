@@ -17,7 +17,7 @@ docs/
 ├── arquitectura/                # Diseño de sistemas, pipelines, MLOps y despliegue
 ├── limites/                     # Límites matemáticos, físicos y problemas conocidos
 ├── manuales/                    # Manual de usuario y guías de despliegue operativo
-├── adr/                         # Architectural Decision Records (ADR 0001 a 0018)
+├── adr/                         # Architectural Decision Records (ADR 0001 a 0019)
 ├── receipts/                    # Recibos técnicos reproducibles en formato JSON (RDD)
 └── images/                      # Diagramas, matrices de confusión y gráficos vectoriales
 ```
@@ -74,7 +74,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`05_restriccion_formato_audio_y_captura_microfono.md`](./limites/05_restriccion_formato_audio_y_captura_microfono.md): Restricción estricta de formato PCM .wav y pipeline de captura por micrófono web.
 
 ### 6. [`docs/adr/`](./adr/) — Architectural Decision Records
-Registro de las 18 decisiones de arquitectura fundamentales del sistema:
+Registro de las 19 decisiones de arquitectura fundamentales del sistema:
 * `ADR 0001`: Migración de AudioCNN a EfficientNet-B0.
 * `ADR 0002`: Particionamiento Estratificado a Nivel de Grabador (Zero Leakage).
 * `ADR 0003`: Adopción de Focal Loss frente a Cross-Entropy estándar.
@@ -93,3 +93,4 @@ Registro de las 18 decisiones de arquitectura fundamentales del sistema:
 * [`ADR 0016`](./adr/0016-procedencia-y-persistencia-entrenamiento.md): Datasets soportados, procedencia verificable y finalización confirmada; límites entre checkpoints locales y BD, sin garantía de subida a GCS.
 * [`ADR 0017`](./adr/0017-disponibilidad-y-activacion-modelos.md): Reconciliación del catálogo por solicitud y refresco predecible de Predicción; disponibilidad sin activación implícita ni garantía de inferencia.
 * [`ADR 0018`](./adr/0018-incorporacion-local-y-sincronizacion-gcs.md): Incorporación local antes de GCS, intención recuperable y outbox durable; aceptación, acuse cloud y entrenamiento sin atomicidad distribuida ni reparación histórica implícita.
+* [`ADR 0019`](./adr/0019-referencias-canonicas-por-etapa.md): Referencias relativas con etapa raw/processed obligatoria y raíces físicas explícitas; contrato compartido estricto, sin inferencia ni activación automática de productores/consumidores legacy.
