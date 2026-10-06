@@ -23,10 +23,10 @@ def dummy_audio_df():
         sf.write(f2, data, sr)
 
         df = pd.DataFrame([
-            {"nombre_archivo": "aud1.wav", "file_path": str(f1), "clase": "sp_a", "labels": ["sp_a"], "recordist": "rec1"},
-            {"nombre_archivo": "aud2.wav", "file_path": str(f2), "clase": "sp_b", "labels": ["sp_a", "sp_b"], "recordist": "rec2"},
+            {"nombre_archivo": "aud1.wav", "file_path": f1.name, "file_stage": "raw", "clase": "sp_a", "labels": ["sp_a"], "recordist": "rec1"},
+            {"nombre_archivo": "aud2.wav", "file_path": f2.name, "file_stage": "raw", "clase": "sp_b", "labels": ["sp_a", "sp_b"], "recordist": "rec2"},
         ])
-        yield df
+        yield df, {"raw": root}
 
 
 def test_dataset_respects_custom_sample_rate_and_duration(dummy_audio_df):
@@ -34,7 +34,8 @@ def test_dataset_respects_custom_sample_rate_and_duration(dummy_audio_df):
     label_to_idx = {"sp_a": 0, "sp_b": 1}
 
     ds = GenericAudioDataset(
-        df=dummy_audio_df,
+        df=dummy_audio_df[0],
+        roots=dummy_audio_df[1],
         audio_config=audio_cfg,
         label_to_idx=label_to_idx,
         is_train=False,
@@ -54,7 +55,8 @@ def test_dataset_deterministic_when_eval(dummy_audio_df):
     label_to_idx = {"sp_a": 0, "sp_b": 1}
 
     ds = GenericAudioDataset(
-        df=dummy_audio_df,
+        df=dummy_audio_df[0],
+        roots=dummy_audio_df[1],
         audio_config=audio_cfg,
         label_to_idx=label_to_idx,
         is_train=False,
@@ -72,7 +74,8 @@ def test_dataset_multilabel_tensor_vector(dummy_audio_df):
     label_to_idx = {"sp_a": 0, "sp_b": 1}
 
     ds = GenericAudioDataset(
-        df=dummy_audio_df,
+        df=dummy_audio_df[0],
+        roots=dummy_audio_df[1],
         audio_config=audio_cfg,
         label_to_idx=label_to_idx,
         is_train=False,
@@ -87,6 +90,51 @@ def test_dataset_multilabel_tensor_vector(dummy_audio_df):
 
     _, l1 = ds[1]  # labels: ['sp_a', 'sp_b'] -> [1.0, 1.0]
     assert torch.equal(l1, torch.tensor([1.0, 1.0]))
+
+
+@pytest.mark.parametrize("stage,level", [("raw", 0.25), ("processed", -0.5)])
+def test_dataset_uses_declared_physical_stage_not_extension_or_cwd(tmp_path, monkeypatch, stage, level):
+    roots = {name: tmp_path / name for name in ("raw", "processed")}
+    for name, root in roots.items():
+        root.mkdir()
+        sf.write(root / "001.wav", np.full(8000, 0.25 if name == "raw" else -0.5), 8000)
+    sf.write(tmp_path / "001.wav", np.zeros(8000), 8000)
+    monkeypatch.chdir(tmp_path)
+    frame = pd.DataFrame([{"file_path": "001.wav", "file_stage": stage, "clase": "normal"}])
+    dataset = GenericAudioDataset(frame, AudioConfig(target_sr=8000, duration_seconds=1.0),
+                                  {"normal": 0}, roots=roots, is_train=False)
+    waveform, label = dataset[0]
+    assert torch.allclose(waveform, torch.full((8000,), level))
+    assert label.item() == 0
+    pd.testing.assert_frame_equal(dataset.df, frame)
+
+
+@pytest.mark.parametrize("missing", ["file_stage", "file_path"])
+def test_dataset_rejects_legacy_index_without_enrolling_audio(tmp_path, missing):
+    sf.write(tmp_path / "001.wav", np.zeros(8000), 8000)
+    frame = pd.DataFrame([{"file_path": "001.wav", "file_stage": "raw", "clase": "normal"}])
+    with pytest.raises(ValueError, match="file_path and file_stage"):
+        GenericAudioDataset(frame.drop(columns=missing), AudioConfig(), {"normal": 0},
+                            roots={"raw": tmp_path})
+
+
+def test_dataset_requires_explicit_roots(dummy_audio_df):
+    with pytest.raises(TypeError, match="roots"):
+        GenericAudioDataset(dummy_audio_df[0], AudioConfig(), {"sp_a": 0, "sp_b": 1})
+
+
+def test_dataset_revalidates_reference_before_audio_decode(tmp_path):
+    path = tmp_path / "001.wav"
+    sf.write(path, np.zeros(8000), 8000)
+    frame = pd.DataFrame([{"file_path": path.name, "file_stage": "raw", "clase": "normal"}])
+    dataset = GenericAudioDataset(frame, AudioConfig(), {"normal": 0}, roots={"raw": tmp_path})
+    replacement = tmp_path / "other.wav"
+    sf.write(replacement, np.ones(8000), 8000)
+    # Replace only the temporary fixture with an alias after constructor validation.
+    path.rename(tmp_path / "original.wav")
+    path.symlink_to(replacement)
+    with pytest.raises(ValueError, match="symlink"):
+        dataset[0]
 
 
 def test_load_and_resample_selects_highest_energy_window(tmp_path):
@@ -176,13 +224,14 @@ def test_corrupt_audio_remains_tolerant_for_training_and_additive_mixing(tmp_pat
         {"file_path": str(path), "clase": "low_oil"},
         {"file_path": str(path), "clase": "serpentine_belt"},
     ])
-    dataset = GenericAudioDataset(df, AudioConfig(target_sr=16000, duration_seconds=1.0),
-                                  {"low_oil": 0, "serpentine_belt": 1})
+    canonical_df = df.assign(file_path=path.name, file_stage="raw")
+    dataset = GenericAudioDataset(canonical_df, AudioConfig(target_sr=16000, duration_seconds=1.0),
+                                  {"low_oil": 0, "serpentine_belt": 1}, roots={"raw": tmp_path})
     wave_tensor, label = dataset[0]
     assert wave_tensor.shape == (16000,)
     assert not wave_tensor.any()
     assert label.item() == 0
-    sampler = AdditiveCompoundSampler(df, target_sr=16000, duration_seconds=1.0)
+    sampler = AdditiveCompoundSampler(canonical_df, roots={"raw": tmp_path}, target_sr=16000, duration_seconds=1.0)
     mixed = sampler.sample_synthetic_compound("no oil_serpentine belt")
     assert mixed.shape == (16000,)
     assert not mixed.any()
@@ -204,12 +253,15 @@ def test_dataset_with_additive_compound_sampler(tmp_path):
         {"file_path": str(oil_wav), "clase": "no oil_serpentine belt"},
     ])
 
-    sampler = AdditiveCompoundSampler(df, target_sr=sr, duration_seconds=1.0)
+    canonical_df = df.assign(file_path=[oil_wav.name, belt_wav.name, oil_wav.name], file_stage="raw")
+    sampler = AdditiveCompoundSampler(canonical_df, roots={"raw": tmp_path}, target_sr=sr, duration_seconds=1.0)
     audio_cfg = AudioConfig(target_sr=sr, duration_seconds=1.0)
     label_to_idx = {"low_oil": 0, "serpentine_belt": 1, "no oil_serpentine belt": 2}
 
+    # Both readers consume the same portable index and declared root.
     ds = GenericAudioDataset(
-        df=df,
+        df=canonical_df,
+        roots={"raw": tmp_path},
         audio_config=audio_cfg,
         label_to_idx=label_to_idx,
         is_train=True,

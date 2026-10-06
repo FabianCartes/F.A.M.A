@@ -16,6 +16,7 @@ from app.database import Base
 from app.models.dataset import ConjuntoDatos
 from app.models.training import Modelo
 from app.services import training
+from training import paths
 
 
 @pytest.fixture
@@ -26,6 +27,8 @@ def training_env(tmp_path, monkeypatch):
     sessions = sessionmaker(bind=engine)
     monkeypatch.setattr(training, "SessionLocal", sessions)
     monkeypatch.setattr(training, "get_raw_data_dir", lambda name=None: tmp_path / "raw" / (name or ""))
+    monkeypatch.setattr(paths, "get_raw_data_dir", lambda name=None: tmp_path / "raw" / (name or ""))
+    monkeypatch.setattr(paths, "get_processed_data_dir", lambda name=None: tmp_path / "processed" / (name or ""))
     monkeypatch.setattr(training, "_BACKEND_DIR", tmp_path)
     service = training.TrainingService(tmp_path / "checkpoints")
     # Thread scheduling is an external execution boundary. Never run ML here.
@@ -42,15 +45,19 @@ def register(sessions, name):
         return dataset.id_conjunto_datos
 
 
-def partitions(root, name):
+def partitions(root, name, stage="raw", extension=".wav"):
     raw = root / "raw" / name
     raw.mkdir(parents=True)
+    audio_root = raw if stage == "raw" else root / "processed" / name / "processed_wav"
     for split in ("train", "val"):
-        audio = raw / "fixture" / f"{split}.wav"
-        audio.parent.mkdir(exist_ok=True)
+        audio = audio_root / "fixture" / f"{split}{extension}"
+        audio.parent.mkdir(parents=True, exist_ok=True)
         audio.write_bytes(b"tiny audio fixture")
         frame = pd.DataFrame([{"clase": "Fixture", "nombre_archivo": audio.name,
-                               "file_path": f"fixture/{split}.wav", "recordist": split}])
+                               "file_path": f"fixture/{split}{extension}", "file_stage": stage,
+                               "recordist": split, "source_group": f"group-{split}",
+                               "hash_sha256": "0" * 64, "xc_id": "00042", "feedback_id": "0006",
+                               "labels": '["Fixture"]'}])
         suffix = "_metadata" if name == "engine_diagnostics" else ""
         frame.to_csv(raw / f"{split}{suffix}.csv", index=False)
     return raw
@@ -89,7 +96,10 @@ def test_requires_exact_unambiguous_registration(training_env, registrations):
 
 
 @pytest.mark.parametrize("name", ["AvesChilenas", "engine_diagnostics"])
-@pytest.mark.parametrize("defect", ["missing_source", "missing_partition", "empty", "schema", "unknown_label", "missing_audio", "outside_source", "overlap"])
+@pytest.mark.parametrize("defect", ["missing_source", "missing_partition", "empty", "schema", "unknown_label",
+                                  "missing_audio", "outside_source", "overlap", "missing_stage", "unknown_stage",
+                                  "blank_stage", "wrong_stage", "missing_path", "blank_path", "traversal", "alias",
+                                  "legacy_alias", "unsupported_extension", "empty_audio"])
 def test_invalid_source_is_rejected_before_scheduling(training_env, name, defect):
     service, sessions, root, thread = training_env
     register(sessions, name)
@@ -115,6 +125,27 @@ def test_invalid_source_is_rejected_before_scheduling(training_env, name, defect
             frame.assign(file_path=str(other), nombre_archivo=str(other)).to_csv(val_csv, index=False)
         elif defect == "overlap":
             frame.assign(file_path="fixture/train.wav", nombre_archivo="train.wav").to_csv(val_csv, index=False)
+        elif defect in {"missing_stage", "missing_path"}:
+            frame.drop(columns="file_stage" if defect == "missing_stage" else "file_path").to_csv(val_csv, index=False)
+        elif defect in {"unknown_stage", "blank_stage", "wrong_stage"}:
+            stage = {"unknown_stage": "derived", "blank_stage": "", "wrong_stage": "processed"}[defect]
+            frame.assign(file_stage=stage).to_csv(val_csv, index=False)
+        elif defect in {"blank_path", "traversal"}:
+            frame.assign(file_path="" if defect == "blank_path" else "fixture/../fixture/val.wav").to_csv(val_csv, index=False)
+        elif defect == "alias":
+            (raw / "alias").symlink_to(raw / "fixture", target_is_directory=True)
+            frame.assign(file_path="alias/val.wav").to_csv(val_csv, index=False)
+        elif defect == "legacy_alias":
+            processed = root / "processed" / name / "processed_wav"
+            processed.mkdir(parents=True)
+            (processed / "val.wav").write_bytes(b"derived audio")
+            (raw / "processed_wav").symlink_to(processed, target_is_directory=True)
+            frame.assign(file_path="processed_wav/val.wav").to_csv(val_csv, index=False)
+        elif defect == "unsupported_extension":
+            (raw / "fixture" / "val.txt").write_bytes(b"not supported")
+            frame.assign(file_path="fixture/val.txt").to_csv(val_csv, index=False)
+        elif defect == "empty_audio":
+            (raw / "fixture" / "val.wav").write_bytes(b"")
     with pytest.raises(ValueError):
         service.start_training(name)
     assert service.get_progress()["status"] == "failed"
@@ -125,10 +156,18 @@ def test_invalid_source_is_rejected_before_scheduling(training_env, name, defect
 
 @pytest.mark.parametrize("name", ["AvesChilenas", "engine_diagnostics"])
 @pytest.mark.parametrize("audio_config", [None, {"target_sr": 16000}])
-def test_accepted_source_reaches_ml_boundary_without_training(training_env, monkeypatch, name, audio_config):
+@pytest.mark.parametrize("stage,extension", [("raw", ".wav"), ("raw", ".mp3"), ("processed", ".wav")])
+def test_accepted_source_reaches_ml_boundary_without_training(training_env, monkeypatch, name, audio_config,
+                                                              stage, extension):
     service, sessions, root, thread = training_env
     dataset_id = register(sessions, name)
-    raw = partitions(root, name)
+    raw = partitions(root, name, stage, extension)
+    audio_root = raw if stage == "raw" else root / "processed" / name / "processed_wav"
+    alternate = root / "processed" / name / "processed_wav" if stage == "raw" else raw
+    for split in ("train", "val"):
+        decoy = alternate / "fixture" / f"{split}{extension}"
+        decoy.parent.mkdir(parents=True, exist_ok=True)
+        decoy.write_bytes(b"not the declared stage")
     # Both sources exist: choosing another dataset must never be a fallback.
     other_name = "engine_diagnostics" if name == "AvesChilenas" else "AvesChilenas"
     partitions(root, other_name)
@@ -139,8 +178,13 @@ def test_accepted_source_reaches_ml_boundary_without_training(training_env, monk
         return np.zeros(8, dtype=np.float32), sr
 
     def disabled_loader(dataset, **kwargs):
-        dataset[0]  # Observe the path actually requested at the audio I/O boundary.
-        raise RuntimeError("ML execution disabled at DataLoader boundary")
+        # Persist the admitted index exactly as an ordinary consumer would.
+        snapshot = root / ("train-snapshot.csv" if kwargs["shuffle"] else "val-snapshot.csv")
+        dataset.df.to_csv(snapshot, index=False)
+        dataset[0]  # Observe actual codec input, without executing ML.
+        if not kwargs["shuffle"]:
+            raise RuntimeError("ML execution disabled at DataLoader boundary")
+        return []
 
     monkeypatch.setattr(librosa, "load", decode_fixture)
     monkeypatch.setattr("random.random", lambda: 1.0)
@@ -161,7 +205,25 @@ def test_accepted_source_reaches_ml_boundary_without_training(training_env, monk
     thread.side_effect = InlineThread
     result = service.start_training(name, architecture="AudioCNN", audio_config=audio_config)
     assert result["status"] == "started"
-    assert observed == [str(raw / "fixture" / "train.wav")]
+    assert observed == [str(audio_root / "fixture" / f"{split}{extension}") for split in ("train", "val")], \
+        service.get_progress()["error_message"]
+    for split in ("train", "val"):
+        snapshot = pd.read_csv(root / f"{split}-snapshot.csv", dtype=str, keep_default_na=False)
+        assert snapshot.to_dict("records") == [{
+            "clase": "Fixture", "nombre_archivo": f"{split}{extension}",
+            "file_path": f"fixture/{split}{extension}", "file_stage": stage,
+            "recordist": split, "source_group": f"group-{split}", "hash_sha256": "0" * 64,
+            "xc_id": "00042", "feedback_id": "0006", "labels": '["Fixture"]'}]
+        # The persisted index remains usable on a different physical host root.
+        portable_root = root / "relocated" / split
+        portable_audio = portable_root / "fixture" / f"{split}{extension}"
+        portable_audio.parent.mkdir(parents=True)
+        portable_audio.write_bytes(b"portable fixture")
+        portable = training.GenericAudioDataset(snapshot, training.AudioConfig(), {"Fixture": 0},
+                                                roots={stage: portable_root})
+        _, label = portable[0]
+        assert label.item() == 0
+        assert observed[-1] == str(portable_audio)
     progress = service.get_progress()
     assert progress["status"] == "failed"
     assert progress["error_message"] == "ML execution disabled at DataLoader boundary"
@@ -181,7 +243,7 @@ def test_training_catalog_only_offers_supported_registered_datasets(training_env
 
 
 @pytest.mark.parametrize("metadata_only", [False, True])
-def test_bird_legacy_metadata_is_validated_before_acceptance(training_env, metadata_only):
+def test_bird_legacy_metadata_requires_offline_conversion(training_env, metadata_only):
     service, sessions, root, thread = training_env
     register(sessions, "AvesChilenas")
     raw = partitions(root, "AvesChilenas")
@@ -197,9 +259,63 @@ def test_bird_legacy_metadata_is_validated_before_acceptance(training_env, metad
         for split in ("train", "val"):
             csv = raw / f"{split}.csv"
             pd.read_csv(csv).drop(columns="file_path").to_csv(csv, index=False)
+    with pytest.raises(ValueError, match="file_path.*file_stage.*offline"):
+        service.start_training("AvesChilenas")
+    assert service.get_progress()["status"] == "failed"
+    thread.assert_not_called()
+    assert list(service.checkpoints_dir.iterdir()) == []
+
+
+def test_canonical_metadata_only_source_preserves_rows_without_rewriting_indices(training_env):
+    service, sessions, root, _ = training_env
+    register(sessions, "AvesChilenas")
+    raw = partitions(root, "AvesChilenas")
+    rows = []
+    for i in range(10):
+        (raw / "fixture" / f"{i}.wav").write_bytes(b"fixture")
+        rows.append({"clase": "Fixture", "file_path": f"fixture/{i}.wav", "file_stage": "raw",
+                     "recordist": f"r{i}", "source_group": f"group-{i}", "xc_id": f"00{i}"})
+    metadata_csv = raw / "metadata.csv"
+    pd.DataFrame(rows).to_csv(metadata_csv, index=False)
+    before = metadata_csv.read_bytes()
+    for split in ("train", "val"):
+        (raw / f"{split}.csv").rename(raw / f"{split}.unused")
     assert service.start_training("AvesChilenas")["status"] == "started"
     assert service.get_progress()["status"] == "training"
+    assert metadata_csv.read_bytes() == before
+    assert not (raw / "train.csv").exists()
+    assert not (raw / "val.csv").exists()
+
+
+@pytest.mark.parametrize("stage", ["raw", "processed"])
+def test_selected_dataset_root_alias_fails_before_scheduling(training_env, stage):
+    service, sessions, root, thread = training_env
+    name = "AvesChilenas"
+    register(sessions, name)
+    raw = partitions(root, name, stage)
+    selected = raw if stage == "raw" else root / "processed" / name / "processed_wav"
+    physical = selected.with_name("physical")
+    selected.rename(physical)
+    selected.symlink_to(physical, target_is_directory=True)
+    with pytest.raises(ValueError):
+        service.start_training(name)
+    assert service.get_progress()["status"] == "failed"
+    thread.assert_not_called()
     assert list(service.checkpoints_dir.iterdir()) == []
+
+
+def test_identical_relative_paths_in_distinct_stages_are_not_split_overlap(training_env):
+    service, sessions, root, _ = training_env
+    name = "AvesChilenas"
+    register(sessions, name)
+    raw = partitions(root, name)
+    processed = root / "processed" / name / "processed_wav" / "fixture"
+    processed.mkdir(parents=True)
+    (processed / "train.wav").write_bytes(b"processed validation fixture")
+    frame = pd.read_csv(raw / "val.csv", dtype=str, keep_default_na=False)
+    frame.assign(file_path="fixture/train.wav", file_stage="processed").to_csv(raw / "val.csv", index=False)
+    assert service.start_training(name)["status"] == "started"
+    assert service.get_progress()["status"] == "training"
 
 
 def test_unavailable_registration_store_fails_closed(training_env, monkeypatch):

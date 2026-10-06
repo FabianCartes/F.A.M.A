@@ -38,7 +38,8 @@ def test_audio_dataset_synthetic(tmp_path):
     ])
     label_to_idx = {"Chincol": 0}
     
-    dataset = AudioDataset(df, raw_dir=raw_dir, label_to_idx=label_to_idx, n_mels=64, is_train=False)
+    df = df.assign(file_path="chincol/101.mp3", file_stage="raw")
+    dataset = AudioDataset(df, raw_dir=raw_dir, roots={"raw": raw_dir}, label_to_idx=label_to_idx, n_mels=64, is_train=False)
     assert len(dataset) == 1
     
     mel_tensor, label_tensor = dataset[0]
@@ -64,7 +65,8 @@ def test_audio_dataset_deterministic_when_eval(tmp_path):
     label_to_idx = {"Zorzal": 0}
     
     # is_train=False -> deterministic
-    eval_ds = AudioDataset(df, raw_dir=raw_dir, label_to_idx=label_to_idx, is_train=False)
+    df = df.assign(file_path="zorzal/202.mp3", file_stage="raw")
+    eval_ds = AudioDataset(df, raw_dir=raw_dir, roots={"raw": raw_dir}, label_to_idx=label_to_idx, is_train=False)
     tensor1, _ = eval_ds[0]
     tensor2, _ = eval_ds[0]
     
@@ -87,9 +89,11 @@ def test_audio_dataset_augmentation_in_train(tmp_path):
     label_to_idx = {"Tordo": 0}
     
     # is_train=True -> on-the-fly augmentation enabled
+    df = df.assign(file_path="tordo/303.mp3", file_stage="raw")
     train_ds = AudioDataset(
         df,
         raw_dir=raw_dir,
+        roots={"raw": raw_dir},
         label_to_idx=label_to_idx,
         is_train=True,
         time_shift_prob=1.0,
@@ -121,9 +125,11 @@ def test_audio_dataset_raw_waveform(tmp_path):
     ])
     label_to_idx = {"Chincol": 0}
 
+    df = df.assign(file_path="chincol/101.mp3", file_stage="raw")
     dataset = AudioDataset(
         df,
         raw_dir=raw_dir,
+        roots={"raw": raw_dir},
         label_to_idx=label_to_idx,
         is_train=False,
         return_raw_waveform=True,
@@ -140,6 +146,7 @@ def test_audio_dataset_raw_waveform(tmp_path):
     train_dataset = AudioDataset(
         df,
         raw_dir=raw_dir,
+        roots={"raw": raw_dir},
         label_to_idx=label_to_idx,
         is_train=True,
         time_shift_prob=1.0,
@@ -204,10 +211,13 @@ def test_build_dataloaders_concurrency_and_seeding(tmp_path):
     ])
     label_to_idx = {"Chincol": 0}
 
+    train_df = train_df.assign(file_path=["chincol/0.mp3", "chincol/1.mp3"], file_stage="raw")
+    val_df = val_df.assign(file_path=["chincol/2.mp3", "chincol/3.mp3"], file_stage="raw")
     train_loader, val_loader = build_dataloaders(
         train_df=train_df,
         val_df=val_df,
         raw_dir=raw_dir,
+        roots={"raw": raw_dir},
         label_to_idx=label_to_idx,
         batch_size=2,
         num_workers=2,
@@ -245,10 +255,13 @@ def test_build_dataloaders_raw_waveform(tmp_path):
     ])
     label_to_idx = {"Chincol": 0}
 
+    train_df = train_df.assign(file_path="chincol/0.mp3", file_stage="raw")
+    val_df = val_df.assign(file_path="chincol/1.mp3", file_stage="raw")
     train_loader, val_loader = build_dataloaders(
         train_df=train_df,
         val_df=val_df,
         raw_dir=raw_dir,
+        roots={"raw": raw_dir},
         label_to_idx=label_to_idx,
         batch_size=1,
         num_workers=0,

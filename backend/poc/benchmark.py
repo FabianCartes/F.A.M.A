@@ -3,7 +3,7 @@ import json
 import random
 import argparse
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Tuple, Optional, Any, Mapping, Union
 import numpy as np
 import pandas as pd
 import torch
@@ -178,6 +178,8 @@ def run_benchmark(
     n_mels: int = 128,
     use_tta: bool = True,
     tta_mode: str = "mean",
+    *,
+    roots: Mapping[str, Union[str, Path]],
 ) -> Dict[str, Any]:
     """
     Ejecuta el protocolo de benchmark de múltiples entrenamientos consecutivos:
@@ -186,13 +188,12 @@ def run_benchmark(
     3. Agrega las métricas y calcula media y desviación estándar.
     4. Genera la matriz de confusión consolidada y el reporte en Markdown y JSON.
     """
+    roots = dict(roots)
     output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
 
     if checkpoint_dir is None:
         checkpoint_dir = output_dir / "checkpoints"
     checkpoint_dir = Path(checkpoint_dir)
-    checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
     if seeds is None:
         seeds = [100 + i * 42 for i in range(num_runs)]
@@ -220,6 +221,7 @@ def run_benchmark(
         train_res = train_pipeline(
             metadata_csv=metadata_csv,
             raw_dir=raw_dir,
+            roots=roots,
             checkpoint_dir=checkpoint_dir,
             epochs=epochs,
             batch_size=batch_size,
@@ -235,8 +237,11 @@ def run_benchmark(
             n_mels=n_mels,
         )
 
+        # Training validates the split boundary before any benchmark outputs.
+        output_dir.mkdir(parents=True, exist_ok=True)
         eval_res = run_evaluation(
             checkpoint_path=ckpt_path,
+            roots=roots,
             test_csv=test_csv,
             raw_dir=raw_dir,
             output_image_path=cm_image_path,
@@ -328,10 +333,11 @@ if __name__ == "__main__":
     parser.add_argument("--tta-mode", type=str, default="mean", choices=["mean", "max"], help="Estrategia TTA (mean o max, default: mean)")
     args = parser.parse_args()
 
-    from training.paths import get_project_root, get_raw_data_dir
+    from training.paths import get_project_root, get_dataset_roots
 
     repo_root = get_project_root()
-    aves_raw = get_raw_data_dir("AvesChilenas")
+    roots = get_dataset_roots("AvesChilenas")
+    aves_raw = roots["raw"]
 
     out_path = Path(args.output_dir)
     if not out_path.is_absolute():
@@ -340,6 +346,7 @@ if __name__ == "__main__":
     run_benchmark(
         metadata_csv=aves_raw / "metadata.csv",
         raw_dir=aves_raw,
+        roots=roots,
         test_csv=aves_raw / "test.csv",
         output_dir=out_path,
         num_runs=args.runs,

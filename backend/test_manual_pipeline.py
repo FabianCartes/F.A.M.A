@@ -44,7 +44,8 @@ def main():
 
         unique_classes = sorted(records["clase"].unique().tolist())
         label_to_idx = {c: i for i, c in enumerate(unique_classes)}
-        dataset = GenericAudioDataset(train_recs, audio_cfg, label_to_idx=label_to_idx, is_train=False)
+        dataset = GenericAudioDataset(train_recs, audio_cfg, label_to_idx=label_to_idx,
+                                      is_train=False, roots={"raw": tmp_path})
         waveform, label = dataset[0]
         print(f"[OK] Tensor extraído desde GenericAudioDataset: Forma Audio={waveform.shape}, Label={label}")
 

@@ -1,4 +1,4 @@
-from training.paths import get_raw_data_dir, get_project_root
+from training.paths import get_raw_data_dir, get_project_root, get_dataset_roots
 """
 backend/train_efficientnet_hpss_additive.py
 Entrenamiento de MultiTaskBioacousticModel (EfficientNet-B0) con entrada HPSS de 3 canales
@@ -36,13 +36,14 @@ from poc.train import FocalLoss
 
 def main():
     data_dir = get_raw_data_dir("engine_diagnostics")
+    roots = get_dataset_roots("engine_diagnostics")
     test_csv = data_dir / "test_metadata.csv"
     verify_test_set_integrity(test_csv, FROZEN_ENGINE_TEST_SHA256)
     print(f"\n[Test Guard] Test set verificado bajo SHA-256 congelado: {FROZEN_ENGINE_TEST_SHA256[:16]}...")
 
-    train_df = pd.read_csv(data_dir / "train_metadata.csv")
-    val_df = pd.read_csv(data_dir / "val_metadata.csv")
-    test_df = pd.read_csv(data_dir / "test_metadata.csv")
+    train_df = pd.read_csv(data_dir / "train_metadata.csv", dtype=str, keep_default_na=False)
+    val_df = pd.read_csv(data_dir / "val_metadata.csv", dtype=str, keep_default_na=False)
+    test_df = pd.read_csv(data_dir / "test_metadata.csv", dtype=str, keep_default_na=False)
 
     classes = CLASS_NAMES_13
     label_to_idx = {c: i for i, c in enumerate(classes)}
@@ -76,6 +77,7 @@ def main():
     # 2. Sampler de Síntesis Aditiva Física (solo para train_df)
     additive_sampler = AdditiveCompoundSampler(
         df=train_df,
+        roots=roots,
         target_sr=audio_cfg.target_sr,
         duration_seconds=audio_cfg.duration_seconds,
     )
@@ -83,6 +85,7 @@ def main():
     # 3. Datasets y DataLoaders
     train_dataset = GenericAudioDataset(
         train_df,
+        roots=roots,
         audio_config=audio_cfg,
         label_to_idx=label_to_idx,
         is_train=True,
@@ -90,8 +93,8 @@ def main():
         additive_sampler=additive_sampler,
         synth_prob=0.5,
     )
-    val_dataset = GenericAudioDataset(val_df, audio_config=audio_cfg, label_to_idx=label_to_idx, is_train=False, return_raw_waveform=True)
-    test_dataset = GenericAudioDataset(test_df, audio_config=audio_cfg, label_to_idx=label_to_idx, is_train=False, return_raw_waveform=True)
+    val_dataset = GenericAudioDataset(val_df, roots=roots, audio_config=audio_cfg, label_to_idx=label_to_idx, is_train=False, return_raw_waveform=True)
+    test_dataset = GenericAudioDataset(test_df, roots=roots, audio_config=audio_cfg, label_to_idx=label_to_idx, is_train=False, return_raw_waveform=True)
 
     train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, pin_memory=True)
     val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
@@ -233,7 +236,7 @@ def main():
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     torch.save(best_state_dict, ckpt_dir / "weights.pt")
 
-    receipt_path = Path(\"docs/receipts/fase5_efficientnet_additive_receipt.json\")
+    receipt_path = Path("docs/receipts/fase5_efficientnet_additive_receipt.json")
     with open(receipt_path, "w", encoding="utf-8") as f:
         json.dump({
             "model_id": "car-engine-diagnostics-efficientnet-b0-multitask-hpss-additive",

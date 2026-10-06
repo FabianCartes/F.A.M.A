@@ -9,7 +9,44 @@ _BACKEND_ROOT = Path(__file__).resolve().parent.parent
 if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
 
-from app.database import Base
+from unittest.mock import patch
+
+with patch("dotenv.load_dotenv", return_value=False):
+    from app.database import Base
+from training.datasets.base import AudioRecordingMetadata
+from pydantic import ValidationError
+
+
+@pytest.mark.parametrize("stage", [None, "", "legacy", "RAW"])
+def test_metadata_requires_explicit_stage(stage):
+    fields = dict(nombre_archivo="bird.wav", file_path="birds/bird.wav",
+                  clase="Bird", recordist="sensor")
+    if stage is not None:
+        fields["file_stage"] = stage
+    with pytest.raises(ValidationError):
+        AudioRecordingMetadata(**fields)
+
+
+def test_metadata_serializes_relative_reference():
+    record = AudioRecordingMetadata(nombre_archivo="bird.wav", file_path="birds/bird.wav",
+                                    file_stage="raw", clase="Bird", recordist="sensor")
+    assert record.model_dump()["file_stage"] == "raw"
+    with pytest.raises(ValidationError):
+        AudioRecordingMetadata(**{**record.model_dump(), "file_path": "/birds/bird.wav"})
+
+
+@pytest.mark.parametrize("path", ["", ".", "../bird.wav", "birds//bird.wav", "birds/./bird.wav",
+                                  "birds\\bird.wav", "file:bird.wav"])
+def test_metadata_rejects_nonrelative_structural_paths(path):
+    with pytest.raises(ValidationError):
+        AudioRecordingMetadata(nombre_archivo="bird.wav", file_path=path, file_stage="raw",
+                               clase="Bird", recordist="sensor")
+
+
+def test_metadata_structure_does_not_claim_physical_validation():
+    record = AudioRecordingMetadata(nombre_archivo="missing.wav", file_path="missing.wav",
+                                    file_stage="processed", clase="Bird", recordist="sensor")
+    assert record.model_dump()["file_path"] == "missing.wav"
 
 
 @pytest.fixture

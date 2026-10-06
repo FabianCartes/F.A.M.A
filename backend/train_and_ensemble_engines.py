@@ -9,7 +9,7 @@ import numpy as np
 import torch
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 
-from training.paths import get_project_root, get_raw_data_dir
+from training.paths import get_project_root, get_raw_data_dir, get_dataset_roots
 from training.schemas.config import TrainingConfig
 from training.trainers.standalone_trainer import GenericModelTrainer
 from training.pipelines.dataset import GenericAudioDataset
@@ -20,7 +20,7 @@ from poc.preprocess import GPUAudioFrontEnd
 from poc.train import BioacousticModel
 
 
-def train_model(recipe_name: str, train_df, val_df, test_df):
+def train_model(recipe_name: str, train_df, val_df, test_df, *, roots):
     project_root = get_project_root()
     recipe_path = project_root / f"backend/training/recipes/{recipe_name}"
     with open(recipe_path, "r", encoding="utf-8") as f:
@@ -37,12 +37,13 @@ def train_model(recipe_name: str, train_df, val_df, test_df):
         test_df=test_df,
         output_checkpoints_dir=project_root / "backend" / "checkpoints",
         verbose=True,
+        roots=roots,
     )
     print(f"[Train] Completado: {cfg.model_id} | Test F1={metrics['test_f1_macro']:.4f}")
     return cfg, bundle_path, metrics
 
 
-def evaluate_ensemble(models, weights, test_df, audio_cfg, device):
+def evaluate_ensemble(models, weights, test_df, audio_cfg, device, *, roots):
     classes = sorted(test_df["clase"].unique().tolist())
     label_to_idx = {c: i for i, c in enumerate(classes)}
 
@@ -57,6 +58,7 @@ def evaluate_ensemble(models, weights, test_df, audio_cfg, device):
 
     dataset = GenericAudioDataset(
         df=test_df,
+        roots=roots,
         audio_config=audio_cfg,
         label_to_idx=label_to_idx,
         is_train=False,
@@ -93,9 +95,10 @@ def evaluate_ensemble(models, weights, test_df, audio_cfg, device):
 def main():
     project_root = get_project_root()
     data_dir = get_raw_data_dir("engine_diagnostics")
-    train_df = pd.read_csv(data_dir / "train_metadata.csv")
-    val_df = pd.read_csv(data_dir / "val_metadata.csv")
-    test_df = pd.read_csv(data_dir / "test_metadata.csv")
+    roots = get_dataset_roots("engine_diagnostics")
+    train_df = pd.read_csv(data_dir / "train_metadata.csv", dtype=str, keep_default_na=False)
+    val_df = pd.read_csv(data_dir / "val_metadata.csv", dtype=str, keep_default_na=False)
+    test_df = pd.read_csv(data_dir / "test_metadata.csv", dtype=str, keep_default_na=False)
 
     checkpoints_dir = project_root / "backend" / "checkpoints"
 
@@ -111,7 +114,7 @@ def main():
         path_conv = conv_ckpt
         print(f"[ConvNeXt-Nano] Checkpoint existente encontrado en {path_conv}. Métricas previas: Test Acc={m_conv.get('test_accuracy', 0)*100:.2f}%, F1={m_conv.get('test_f1_macro', 0)*100:.2f}%")
     else:
-        cfg_conv, path_conv, m_conv = train_model("car_engine_diagnostics_convnext_nano.yaml", train_df, val_df, test_df)
+        cfg_conv, path_conv, m_conv = train_model("car_engine_diagnostics_convnext_nano.yaml", train_df, val_df, test_df, roots=roots)
 
     # 2. Cargar o entrenar EfficientNet-B0
     eff_ckpt = checkpoints_dir / "car-engine-diagnostics-efficientnet-b0"
@@ -125,7 +128,7 @@ def main():
         path_eff = eff_ckpt
         print(f"[EfficientNet-B0] Checkpoint existente encontrado en {path_eff}. Métricas previas: Test Acc={m_eff.get('test_accuracy', 0)*100:.2f}%, F1={m_eff.get('test_f1_macro', 0)*100:.2f}%")
     else:
-        cfg_eff, path_eff, m_eff = train_model("car_engine_diagnostics_efficientnet_b0.yaml", train_df, val_df, test_df)
+        cfg_eff, path_eff, m_eff = train_model("car_engine_diagnostics_efficientnet_b0.yaml", train_df, val_df, test_df, roots=roots)
 
     # 0. Higiene Metodológica: Verificar Integridad Criptográfica del Test Set Congelado
     test_csv = data_dir / "test_metadata.csv"
@@ -155,10 +158,10 @@ def main():
     ).to(device)
 
     # DataLoaders para Validación y Test
-    val_dataset = GenericAudioDataset(val_df, audio_config=cfg_eff.audio, label_to_idx=label_to_idx, is_train=False, return_raw_waveform=True)
+    val_dataset = GenericAudioDataset(val_df, roots=roots, audio_config=cfg_eff.audio, label_to_idx=label_to_idx, is_train=False, return_raw_waveform=True)
     val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
 
-    test_dataset = GenericAudioDataset(test_df, audio_config=cfg_eff.audio, label_to_idx=label_to_idx, is_train=False, return_raw_waveform=True)
+    test_dataset = GenericAudioDataset(test_df, roots=roots, audio_config=cfg_eff.audio, label_to_idx=label_to_idx, is_train=False, return_raw_waveform=True)
     test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
     # 4. TUNING EXCLUSIVO EN VALIDACIÓN (Zero Test Leakage)

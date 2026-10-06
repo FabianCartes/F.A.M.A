@@ -106,8 +106,15 @@ def test_run_benchmark(tmp_path, monkeypatch):
         "confusion_matrix_path": str(tmp_path / "cm.png"),
     }
 
-    monkeypatch.setattr("poc.benchmark.train_pipeline", lambda **kwargs: fake_train_history)
-    monkeypatch.setattr("poc.benchmark.run_evaluation", lambda **kwargs: fake_eval_results)
+    bindings = []
+    def fake_train(**kwargs):
+        bindings.append(kwargs["roots"])
+        return fake_train_history
+    def fake_evaluate(**kwargs):
+        bindings.append(kwargs["roots"])
+        return fake_eval_results
+    monkeypatch.setattr("poc.benchmark.train_pipeline", fake_train)
+    monkeypatch.setattr("poc.benchmark.run_evaluation", fake_evaluate)
 
     # Crear archivos falsos requeridos
     meta_csv = tmp_path / "metadata.csv"
@@ -116,18 +123,26 @@ def test_run_benchmark(tmp_path, monkeypatch):
     test_csv.write_text("dummy")
     raw_dir = tmp_path / "raw"
     raw_dir.mkdir()
+    processed = tmp_path / "processed"
+    processed.mkdir()
+    roots = {"raw": raw_dir, "processed": processed}
 
     summary = run_benchmark(
         metadata_csv=meta_csv,
         raw_dir=raw_dir,
         test_csv=test_csv,
         output_dir=tmp_path / "benchmark_out",
+        roots=roots,
         num_runs=2,
         epochs=1,
         seeds=[10, 20],
     )
 
     assert summary["num_runs"] == 2
+    assert len(bindings) == 4
+    assert all(binding == roots for binding in bindings)
+    assert all(binding is bindings[0] for binding in bindings)
+    assert bindings[0] is not roots
     assert (tmp_path / "benchmark_out" / "benchmark_summary.json").exists()
     assert (tmp_path / "benchmark_out" / "benchmark_confusion_matrix.png").exists()
     assert (tmp_path / "benchmark_out" / "benchmark_report.md").exists()

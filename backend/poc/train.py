@@ -1,6 +1,7 @@
 import sys
 import time
 import random
+from contextlib import ExitStack
 from pathlib import Path
 
 # Asegurar que la raíz del proyecto esté en sys.path
@@ -8,7 +9,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from typing import Dict, List, Tuple, Optional, Any, Union
+from typing import Dict, List, Tuple, Optional, Any, Union, Mapping
 import numpy as np
 import pandas as pd
 import torch
@@ -30,7 +31,22 @@ from poc.preprocess import (
     DURATION_SECONDS,
 )
 from poc.split import grouped_stratified_split
+from dataset_references import resolve_reference
 
+
+
+def _validate_canonical_index(df: pd.DataFrame, roots) -> None:
+    if not {"file_path", "file_stage", "clase", "recordist"}.issubset(df.columns):
+        raise ValueError("file_path and file_stage, clase and recordist required; convert the index offline")
+    if df.empty:
+        raise ValueError("empty canonical index; prepare the index offline")
+    for _, row in df.iterrows():
+        try:
+            resolve_reference(row["file_path"], row["file_stage"], roots)
+        except ValueError as exc:
+            raise ValueError("invalid canonical index reference; correct or convert offline") from exc
+        if not str(row["clase"]).strip() or not str(row["recordist"]).strip():
+            raise ValueError("clase and recordist required; correct the index offline")
 
 
 def seed_worker(worker_id: int) -> None:
@@ -77,8 +93,15 @@ class AudioDataset(Dataset):
         pitch_shift_prob: float = 0.0,
         pitch_shift_range: Tuple[float, float] = (-1.5, 1.5),
         return_raw_waveform: bool = False,
+        *,
+        roots: Mapping[str, Union[str, Path]],
     ):
-        self.df = df.reset_index(drop=True)
+        self.df = df.copy(deep=True).reset_index(drop=True)
+        self.roots = dict(roots)
+        if not {"file_path", "file_stage"}.issubset(self.df.columns):
+            raise ValueError("file_path and file_stage required; convert the index offline")
+        for _, row in self.df.iterrows():
+            resolve_reference(row["file_path"], row["file_stage"], self.roots)
         self.raw_dir = Path(raw_dir)
         self.label_to_idx = label_to_idx
         self.target_sr = target_sr
@@ -109,31 +132,7 @@ class AudioDataset(Dataset):
         return len(self.df)
 
     def _resolve_file_path(self, row: pd.Series) -> Path:
-        clase = str(row.get("clase", ""))
-        species_slug = clase.lower().replace(" ", "_").replace("/", "_")
-        filename = str(row.get("nombre_archivo", ""))
-        xc_id = str(row.get("xc_id", ""))
-        stem = Path(filename).stem
-
-        # Búsqueda con prioridad para archivos saneados (.wav)
-        candidates = [
-            self.raw_dir / species_slug / f"{stem}.wav",
-            self.raw_dir / species_slug / f"{xc_id}.wav",
-            self.raw_dir / "processed_wav" / species_slug / f"{stem}.wav",
-            self.raw_dir / "processed_wav" / species_slug / f"{xc_id}.wav",
-            self.raw_dir.parent / "processed_wav" / species_slug / f"{stem}.wav",
-            self.raw_dir.parent / "processed_wav" / species_slug / f"{xc_id}.wav",
-            self.raw_dir / species_slug / filename,
-            self.raw_dir / species_slug / f"{xc_id}.mp3",
-            self.raw_dir / f"{stem}.wav",
-            self.raw_dir / filename,
-        ]
-
-        for cand in candidates:
-            if cand.exists():
-                return cand
-
-        return candidates[4]  # fallback a candidate1 original
+        return resolve_reference(row["file_path"], row["file_stage"], self.roots)
 
     def _get_active_window(self, idx: int, file_path: Path) -> np.ndarray:
         """Obtiene una ventana activa usando VAD con caché en RAM; aleatoria en train, determinista en eval."""
@@ -542,6 +541,8 @@ def build_dataloaders(
     val_windows_cache: Optional[Dict[int, List[np.ndarray]]] = None,
     n_mels: int = 64,
     return_raw_waveform: bool = False,
+    *,
+    roots: Mapping[str, Union[str, Path]],
 ) -> Tuple[DataLoader, DataLoader]:
     """
     Factoría desacoplada para construir DataLoaders concurrentes y seguros para multiprocesamiento.
@@ -555,10 +556,12 @@ def build_dataloaders(
         else:
             pin_memory = torch.cuda.is_available()
 
+    roots = dict(roots)
     train_ds = AudioDataset(
         train_df,
         raw_dir,
         label_to_idx,
+        roots=roots,
         n_mels=n_mels,
         is_train=True,
         windows_cache=train_windows_cache,
@@ -568,6 +571,7 @@ def build_dataloaders(
         val_df,
         raw_dir,
         label_to_idx,
+        roots=roots,
         n_mels=n_mels,
         is_train=False,
         windows_cache=val_windows_cache,
@@ -623,6 +627,8 @@ def train_pipeline(
     pitch_shift_bins: int = 2,
     pitch_shift_prob: float = 0.3,
     pool_type: str = "gem",
+    *,
+    roots: Mapping[str, Union[str, Path]],
 ) -> Dict[str, Any]:
     """
     Ejecuta el ciclo de entrenamiento completo:
@@ -651,24 +657,36 @@ def train_pipeline(
     val_file = data_dir / "val.csv"
     test_file = data_dir / "test.csv"
 
-    if train_file.exists() and val_file.exists() and test_file.exists():
+    roots = dict(roots)
+    split_files = (train_file, val_file, test_file)
+    present = [path.exists() or path.is_symlink() for path in split_files]
+    if any(present) and not all(present):
+        raise ValueError("incomplete partial split trio; recover or convert offline")
+    if all(present):
         print("Cargando particiones existentes (train.csv, val.csv, test.csv)...")
-        train_df = pd.read_csv(train_file)
-        val_df = pd.read_csv(val_file)
-        test_df = pd.read_csv(test_file)
+        for path in split_files:
+            # This binding validates CSV publication targets, never audio roots.
+            resolve_reference(path.name, "raw", {"raw": path.parent})
+        train_df = pd.read_csv(train_file, dtype=str, keep_default_na=False)
+        val_df = pd.read_csv(val_file, dtype=str, keep_default_na=False)
+        test_df = pd.read_csv(test_file, dtype=str, keep_default_na=False)
+        for frame in (train_df, val_df, test_df):
+            _validate_canonical_index(frame, roots)
     else:
-        df = pd.read_csv(metadata_csv)
-        def _exists(row):
-            sp_slug = str(row["clase"]).lower().replace(" ", "_").replace("/", "_")
-            f1 = raw_dir / sp_slug / str(row["nombre_archivo"])
-            f2 = raw_dir / sp_slug / f"{row['xc_id']}.mp3"
-            return f1.exists() or f2.exists()
-
-        df = df[df.apply(_exists, axis=1)].reset_index(drop=True)
+        resolve_reference(metadata_csv.name, "raw", {"raw": metadata_csv.parent})
+        df = pd.read_csv(metadata_csv, dtype=str, keep_default_na=False)
+        _validate_canonical_index(df, roots)
         train_df, val_df, test_df = grouped_stratified_split(df)
-        train_df.to_csv(train_file, index=False)
-        val_df.to_csv(val_file, index=False)
-        test_df.to_csv(test_file, index=False)
+        # Exclusive creation never replaces a concurrent publication. Failure may
+        # leave a partial trio; the next run must stop for offline recovery.
+        try:
+            with ExitStack() as stack:
+                streams = [stack.enter_context(path.open("x", encoding="utf-8", newline=""))
+                           for path in split_files]
+                for frame, stream in zip((train_df, val_df, test_df), streams):
+                    frame.to_csv(stream, index=False)
+        except OSError as exc:
+            raise ValueError("split publication failed; inspect partial trio offline") from exc
 
     print(f"Split cargado -> Train: {len(train_df)}, Val: {len(val_df)}, Test: {len(test_df)}")
 
@@ -680,6 +698,7 @@ def train_pipeline(
     train_loader, val_loader = build_dataloaders(
         train_df=train_df,
         val_df=val_df,
+        roots=roots,
         raw_dir=raw_dir,
         label_to_idx=label_to_idx,
         batch_size=batch_size,
@@ -835,13 +854,15 @@ if __name__ == "__main__":
     parser.add_argument("--pitch-shift-prob", type=float, default=0.3, help="Probabilidad de aplicar Pitch Shift espectral por muestra")
     args = parser.parse_args()
 
-    from training.paths import get_project_root, get_raw_data_dir
+    from training.paths import get_project_root, get_dataset_roots
 
     repo_root = get_project_root()
-    aves_raw_dir = get_raw_data_dir("AvesChilenas")
+    roots = get_dataset_roots("AvesChilenas")
+    aves_raw_dir = roots["raw"]
     train_pipeline(
         metadata_csv=aves_raw_dir / "metadata.csv",
         raw_dir=aves_raw_dir,
+        roots=roots,
         checkpoint_dir=repo_root / "checkpoints",
         epochs=args.epochs,
         batch_size=args.batch_size,

@@ -13,6 +13,8 @@ import librosa
 import soundfile as sf
 
 from training.schemas.config import AudioConfig, AugmentationConfig
+from dataset_references import resolve_reference
+from collections.abc import Mapping
 
 
 class MalformedAudioError(ValueError):
@@ -100,8 +102,16 @@ class GenericAudioDataset(Dataset):
         return_raw_waveform: bool = True,
         additive_sampler: Optional[Any] = None,
         synth_prob: float = 0.5,
+        *,
+        roots: Mapping[str, Union[str, Path]],
     ):
+        # This interface accepts canonical rows only, never persisted absolutes.
+        if not {"file_path", "file_stage"}.issubset(df.columns):
+            raise ValueError("Canonical rows require file_path and file_stage")
+        self.roots = dict(roots)
         self.df = df.reset_index(drop=True)
+        for row in self.df.to_dict("records"):
+            resolve_reference(row["file_path"], row["file_stage"], self.roots)
         self.audio_config = audio_config
         self.label_to_idx = label_to_idx
         self.aug_config = augmentation_config or AugmentationConfig()
@@ -118,6 +128,8 @@ class GenericAudioDataset(Dataset):
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         row = self.df.iloc[idx]
         clase = str(row.get("clase", "")).strip()
+        # Revalidate even for synthesis: invalid references cannot become zero audio.
+        file_path = resolve_reference(row["file_path"], row["file_stage"], self.roots)
 
         waveform = None
         if (
@@ -129,7 +141,6 @@ class GenericAudioDataset(Dataset):
             waveform = self.additive_sampler.sample_synthetic_compound(clase)
 
         if waveform is None:
-            file_path = row.get("file_path", "")
             waveform = load_and_resample(
                 file_path=file_path,
                 target_sr=self.audio_config.target_sr,

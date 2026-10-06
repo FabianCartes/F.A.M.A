@@ -64,11 +64,11 @@ def test_additive_compound_sampler_builds_synthetic_waveform(tmp_path):
     sf.write(belt_wav, np.random.randn(32000).astype(np.float32) * 0.1, 32000)
 
     df = pd.DataFrame([
-        {"file_path": str(oil_wav), "clase": "low_oil"},
-        {"file_path": str(belt_wav), "clase": "serpentine_belt"},
+        {"file_path": "low_oil/oil_01.wav", "file_stage": "raw", "clase": "low_oil"},
+        {"file_path": "serpentine_belt/belt_01.wav", "file_stage": "raw", "clase": "serpentine_belt"},
     ])
 
-    sampler = AdditiveCompoundSampler(df, target_sr=32000, duration_seconds=1.0)
+    sampler = AdditiveCompoundSampler(df, roots={"raw": tmp_path}, target_sr=32000, duration_seconds=1.0)
     # Debe poder sintetizar la clase compuesta 'no oil_serpentine belt'
     assert sampler.can_synthesize("no oil_serpentine belt") is True
     assert sampler.can_synthesize("normal_engine_idle") is False
@@ -76,6 +76,87 @@ def test_additive_compound_sampler_builds_synthetic_waveform(tmp_path):
     synth_wave = sampler.sample_synthetic_compound("no oil_serpentine belt")
     assert synth_wave is not None
     assert len(synth_wave) == 32000
+
+
+@pytest.mark.parametrize("stage,sign", [("raw", 1), ("processed", -1)])
+def test_sampler_synthesizes_from_declared_stage_not_extension(tmp_path, stage, sign):
+    import soundfile as sf
+
+    roots = {s: tmp_path / s for s in ("raw", "processed")}
+    for name, root in roots.items():
+        root.mkdir()
+        sf.write(root / "001.wav", np.full(8000, .25 if name == "raw" else -.5), 8000)
+    frame = pd.DataFrame([{"file_path": "001.wav", "file_stage": stage, "clase": label,
+                           "source_group": "0007", "hash": "00abc"}
+                          for label in ("low_oil", "serpentine_belt")])
+    original = frame.copy(deep=True)
+    sampler = AdditiveCompoundSampler(frame, roots=roots, target_sr=8000, duration_seconds=1)
+    wave = sampler.sample_synthetic_compound("no oil_serpentine belt")
+    assert wave.shape == (8000,)
+    assert np.all(wave * sign > .1)
+    pd.testing.assert_frame_equal(frame, original)
+
+
+@pytest.mark.parametrize("defect", ["missing_stage", "unknown_stage", "blank_stage", "absolute", "traversal",
+                                   "missing_file", "directory", "missing_root", "root_alias", "path_alias"])
+def test_sampler_rejects_invalid_references_before_decoding(tmp_path, monkeypatch, defect):
+    root = tmp_path / "raw"
+    root.mkdir()
+    (root / "001.wav").write_bytes(b"opaque regular fixture")
+    frame = pd.DataFrame([{"file_path": "001.wav", "file_stage": "raw", "clase": "low_oil"}])
+    roots = {"raw": root}
+    if defect == "missing_stage":
+        frame = frame.drop(columns="file_stage")
+    elif defect in ("unknown_stage", "blank_stage"):
+        frame = frame.assign(file_stage="unknown" if defect == "unknown_stage" else "")
+    elif defect in ("absolute", "traversal", "missing_file"):
+        frame = frame.assign(file_path={"absolute": str(root / "001.wav"), "traversal": "../raw/001.wav",
+                                       "missing_file": "absent.wav"}[defect])
+    elif defect == "directory":
+        (root / "directory.wav").mkdir()
+        frame = frame.assign(file_path="directory.wav")
+    elif defect == "missing_root":
+        roots = {}
+    else:
+        alias = tmp_path / "alias"
+        alias.symlink_to(root, target_is_directory=True)
+        if defect == "root_alias":
+            roots = {"raw": alias}
+        else:
+            (root / "alias.wav").symlink_to(root / "001.wav")
+            frame = frame.assign(file_path="alias.wav")
+    def forbidden_decode(*args, **kwargs):
+        pytest.fail("invalid references must fail before the codec")
+    monkeypatch.setattr("librosa.load", forbidden_decode)
+    with pytest.raises(ValueError):
+        AdditiveCompoundSampler(frame, roots=roots)
+
+
+@pytest.mark.parametrize("location", ["root", "ancestor"])
+def test_sampler_revalidates_original_binding_after_first_sample(tmp_path, location):
+    import soundfile as sf
+
+    root = tmp_path / "raw"
+    (root / "audio").mkdir(parents=True)
+    sf.write(root / "audio/001.wav", np.full(8000, .25), 8000)
+    frame = pd.DataFrame([{"file_path": "audio/001.wav", "file_stage": "raw", "clase": c}
+                          for c in ("low_oil", "serpentine_belt")])
+    roots = {"raw": root}
+    sampler = AdditiveCompoundSampler(frame, roots=roots, target_sr=8000, duration_seconds=1)
+    assert sampler.sample_synthetic_compound("no oil_serpentine belt").shape == (8000,)
+    selected = root if location == "root" else root / "audio"
+    physical = selected.with_name("physical")
+    selected.rename(physical)
+    selected.symlink_to(physical, target_is_directory=True)
+    if location == "root":
+        roots["raw"] = physical
+    with pytest.raises(ValueError, match="symlink"):
+        sampler.sample_synthetic_compound("no oil_serpentine belt")
+
+
+def test_sampler_requires_explicit_roots():
+    with pytest.raises(TypeError, match="roots"):
+        AdditiveCompoundSampler(pd.DataFrame())
 
 
 def test_build_balanced_class_sampler():

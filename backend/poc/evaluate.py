@@ -6,7 +6,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from typing import List, Dict, Any, Optional, Tuple, Union
+from typing import List, Dict, Any, Optional, Tuple, Union, Mapping
 import numpy as np
 import pandas as pd
 import torch
@@ -22,6 +22,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from poc.train import AudioCNN, AudioDataset
+from dataset_references import resolve_reference
 from poc.preprocess import (
     extract_active_windows,
     extract_mel_spectrogram,
@@ -29,7 +30,7 @@ from poc.preprocess import (
     TARGET_SR,
     DURATION_SECONDS,
 )
-from training.paths import PathResolver, get_raw_data_dir, get_project_root
+from training.paths import PathResolver, get_project_root, get_dataset_roots
 
 
 
@@ -362,14 +363,17 @@ def run_evaluation(
     checkpoints: Optional[List[Union[str, Path]]] = None,
     weights: Optional[List[float]] = None,
     max_window_batch_size: int = 32,
+    *,
+    roots: Mapping[str, Union[str, Path]],
 ) -> Dict[str, Any]:
     """Carga uno o más checkpoints y ejecuta la evaluación oficial en el conjunto de prueba (con soporte para Ensamble)."""
+    roots = dict(roots)
     if test_csv is None:
-        test_csv = get_raw_data_dir("AvesChilenas") / "test.csv"
+        test_csv = Path(roots["raw"]) / "test.csv"
     else:
         test_csv = Path(test_csv)
     if raw_dir is None:
-        raw_dir = get_raw_data_dir("AvesChilenas")
+        raw_dir = Path(roots["raw"])
     else:
         raw_dir = Path(raw_dir)
 
@@ -377,6 +381,12 @@ def run_evaluation(
         device_obj = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     else:
         device_obj = torch.device(device)
+
+    test_df = pd.read_csv(test_csv, dtype=str, keep_default_na=False)
+    if not {"file_path", "file_stage"}.issubset(test_df.columns):
+        raise ValueError("file_path and file_stage required; convert the index offline")
+    for row in test_df.to_dict("records"):
+        resolve_reference(row["file_path"], row["file_stage"], roots)
 
     all_ckpt_paths = []
     if checkpoints:
@@ -410,14 +420,13 @@ def run_evaluation(
         model_type = checkpoint.get("model_type", "audiocnn")
         n_mels = checkpoint.get("n_mels", 64)
 
-    test_df = pd.read_csv(test_csv)
     print(f"Cargando {len(test_df)} muestras del conjunto de prueba: {test_csv} (Modelo: {model_type}, n_mels: {n_mels})")
     if use_tta:
         print(f"Estrategia de inferencia: Test-Time Augmentation (TTA) activado [Modo: {tta_mode}, Hop: {hop_seconds}s]")
     else:
         print("Estrategia de inferencia: Estándar (Single-Crop sin TTA)")
 
-    test_ds = AudioDataset(test_df, raw_dir, label_to_idx, n_mels=n_mels, return_raw_waveform=True)
+    test_ds = AudioDataset(test_df, raw_dir, label_to_idx, roots=roots, n_mels=n_mels, return_raw_waveform=True)
     test_loader = DataLoader(test_ds, batch_size=16, shuffle=False)
 
     results = evaluate_test_set(
@@ -492,7 +501,8 @@ if __name__ == "__main__":
 
     project_root = Path(__file__).resolve().parent.parent
     repo_root = get_project_root()
-    aves_raw = get_raw_data_dir("AvesChilenas")
+    roots = get_dataset_roots("AvesChilenas")
+    aves_raw = roots["raw"]
 
     ckpt_dir = repo_root / "checkpoints"
     suffix = f"_tta_{args.tta_mode}" if use_tta else ""
@@ -502,6 +512,7 @@ if __name__ == "__main__":
         out_name = args.output or f"confusion_matrix_ensemble{suffix}.png"
         run_evaluation(
             checkpoints=ckpt_paths,
+            roots=roots,
             weights=args.weights,
             test_csv=aves_raw / "test.csv",
             raw_dir=aves_raw,
@@ -524,6 +535,7 @@ if __name__ == "__main__":
 
         run_evaluation(
             checkpoint_path=ckpt_path,
+            roots=roots,
             test_csv=aves_raw / "test.csv",
             raw_dir=aves_raw,
             output_image_path=project_root / "poc" / out_name,

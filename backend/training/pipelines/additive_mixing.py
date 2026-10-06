@@ -4,12 +4,13 @@ Síntesis aditiva física de fallas mecánicas compuestas a partir de formas de 
 Basado en el principio de superposición acústica lineal en presión sonora.
 """
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Mapping, Union
 import random
 import numpy as np
 import pandas as pd
 
 from training.pipelines.dataset import load_and_resample
+from dataset_references import resolve_reference
 
 
 COMPOSITE_RECIPES: Dict[str, List[str]] = {
@@ -83,18 +84,22 @@ class AdditiveCompoundSampler:
         df: pd.DataFrame,
         target_sr: int = 32000,
         duration_seconds: float = 2.0,
+        *,
+        roots: Mapping[str, Union[str, Path]],
     ):
         self.target_sr = target_sr
         self.duration_seconds = duration_seconds
-        self.class_to_paths: Dict[str, List[str]] = {}
+        self.roots = dict(roots)
+        self.df = df.copy(deep=True).reset_index(drop=True)
+        if not {"file_path", "file_stage"}.issubset(self.df.columns):
+            raise ValueError("file_path and file_stage required; convert the index offline")
+        self.class_to_paths: Dict[str, List[dict]] = {}
 
-        for _, row in df.iterrows():
+        for row in self.df.to_dict("records"):
+            resolve_reference(row["file_path"], row["file_stage"], self.roots)
             c = str(row.get("clase", "")).strip()
-            p = str(row.get("file_path", "")).strip()
-            if c and p:
-                if c not in self.class_to_paths:
-                    self.class_to_paths[c] = []
-                self.class_to_paths[c].append(p)
+            if c:
+                self.class_to_paths.setdefault(c, []).append(row)
 
     def can_synthesize(self, composite_class: str) -> bool:
         """Determina si se cuenta con archivos de todas las clases constitutivas para sintetizar."""
@@ -112,7 +117,9 @@ class AdditiveCompoundSampler:
         unit_waveforms: List[np.ndarray] = []
 
         for req in required_classes:
-            chosen_path = random.choice(self.class_to_paths[req])
+            row = random.choice(self.class_to_paths[req])
+            # Revalidate original spelling on every access, before decoder caches.
+            chosen_path = resolve_reference(row["file_path"], row["file_stage"], self.roots)
             wave = load_and_resample(
                 file_path=chosen_path,
                 target_sr=self.target_sr,

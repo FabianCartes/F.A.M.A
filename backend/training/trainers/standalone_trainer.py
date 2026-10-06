@@ -4,7 +4,7 @@ Entrenador desacoplado y parametrizado por TrainingConfig.
 Ejecuta el ciclo de entrenamiento, optimización, cálculo de métricas y exportación a Model Bundle.
 """
 from pathlib import Path
-from typing import Dict, Any, Tuple, List, Optional
+from typing import Dict, Any, Tuple, List, Optional, Mapping
 import time
 import yaml
 import torch
@@ -40,10 +40,14 @@ class GenericModelTrainer:
         test_df: pd.DataFrame,
         output_checkpoints_dir: Path,
         verbose: bool = True,
+        *,
+        roots: Mapping[str, str | Path],
     ) -> Tuple[Path, Dict[str, Any]]:
         """
         Ejecuta el ciclo completo de entrenamiento y exporta el Model Bundle.
+        roots declara las raíces físicas de las etapas de los tres índices canónicos.
         """
+        roots = dict(roots)
         classes = sorted(train_df["clase"].unique().tolist())
         num_classes = len(classes)
         label_to_idx = {c: i for i, c in enumerate(classes)}
@@ -64,6 +68,7 @@ class GenericModelTrainer:
         # 1. Instanciar Datasets y DataLoaders
         train_dataset = GenericAudioDataset(
             df=train_df,
+            roots=roots,
             audio_config=self.config.audio,
             label_to_idx=label_to_idx,
             augmentation_config=self.config.augmentation,
@@ -72,6 +77,7 @@ class GenericModelTrainer:
         )
         val_dataset = GenericAudioDataset(
             df=val_df,
+            roots=roots,
             audio_config=self.config.audio,
             label_to_idx=label_to_idx,
             is_train=False,
@@ -79,6 +85,7 @@ class GenericModelTrainer:
         )
         test_dataset = GenericAudioDataset(
             df=test_df,
+            roots=roots,
             audio_config=self.config.audio,
             label_to_idx=label_to_idx,
             is_train=False,

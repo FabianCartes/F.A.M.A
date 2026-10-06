@@ -25,9 +25,10 @@ from torch.utils.data import DataLoader
 from poc.preprocess import GPUAudioFrontEnd, GPUSpecAugment
 from poc.train import BioacousticModel, AudioCNN, AudioDataset, FocalLoss, apply_mixup
 from poc.split import grouped_stratified_split
-from training.paths import get_raw_data_dir, get_processed_data_dir
+from training.paths import get_raw_data_dir, get_dataset_roots
 from training.schemas.config import AudioConfig
 from training.pipelines.dataset import GenericAudioDataset
+from dataset_references import resolve_reference
 
 ARCHITECTURE_PRESETS: Dict[str, Dict[str, Any]] = {
     "EfficientNet-B0": {"lr": 0.001, "epochs": 10, "batch": 16},
@@ -43,10 +44,14 @@ SUPPORTED_DATASETS = frozenset({"AvesChilenas", "engine_diagnostics"})
 
 
 class _AcceptedAudioDataset(AudioDataset):
-    """Keep the bioacoustic transforms, but consume only admitted file paths."""
+    """Keep bioacoustic transforms and revalidate canonical references on access."""
+
+    def __init__(self, *args, roots, **kwargs):
+        self.roots = dict(roots)
+        super().__init__(*args, roots=self.roots, **kwargs)
 
     def _resolve_file_path(self, row: pd.Series) -> Path:
-        return Path(row["file_path"])
+        return resolve_reference(row["file_path"], row["file_stage"], self.roots)
 
 
 class TrainingService:
@@ -241,7 +246,8 @@ class TrainingService:
 
     def _prepare_source(self, dataset_name: str) -> Dict[str, Any]:
         """Validate and freeze partitions before a job is admitted."""
-        raw_dir = get_raw_data_dir(dataset_name).resolve()
+        roots = get_dataset_roots(dataset_name)
+        raw_dir = roots["raw"]
         if not raw_dir.is_dir():
             raise ValueError(f"Dataset '{dataset_name}' sin fuente local válida: {raw_dir}")
         suffix = "_metadata" if dataset_name == "engine_diagnostics" else ""
@@ -252,53 +258,39 @@ class TrainingService:
         if train_csv.exists() != val_csv.exists():
             raise ValueError(f"Dataset '{dataset_name}' con particiones incompletas.")
         if train_csv.is_file() and val_csv.is_file():
-            train_df, val_df = pd.read_csv(train_csv), pd.read_csv(val_csv)
+            train_df = pd.read_csv(train_csv, dtype=str, keep_default_na=False)
+            val_df = pd.read_csv(val_csv, dtype=str, keep_default_na=False)
         elif dataset_name == "AvesChilenas" and not train_csv.exists() and not val_csv.exists():
-            metadata = pd.read_csv(raw_dir / "metadata.csv")
+            metadata = pd.read_csv(raw_dir / "metadata.csv", dtype=str, keep_default_na=False)
+            if not {"file_path", "file_stage"}.issubset(metadata.columns):
+                raise ValueError("Índice histórico: se requieren file_path y file_stage; use conversión offline.")
             train_df, val_df, _ = grouped_stratified_split(metadata)
         else:
             raise ValueError(f"Dataset '{dataset_name}' sin particiones válidas.")
 
-        # ADR 0012 allows the dataset's canonical processed_wav compatibility link.
-        processed_dir = get_processed_data_dir(dataset_name).resolve() / "processed_wav"
+        resolved_partitions = {}
         for split, frame in (("train", train_df), ("val", val_df)):
             if frame.empty or "clase" not in frame or frame["clase"].isna().any():
                 raise ValueError(f"Dataset '{dataset_name}': partición {split} vacía o sin clases válidas.")
             if not frame["clase"].map(lambda c: isinstance(c, str) and bool(c.strip())).all():
                 raise ValueError(f"Dataset '{dataset_name}': clases inválidas en {split}.")
-            paths = []
+            if not {"file_path", "file_stage"}.issubset(frame.columns):
+                raise ValueError("Índice histórico: se requieren file_path y file_stage; use conversión offline.")
+            paths = set()
             for _, row in frame.iterrows():
-                if "file_path" in frame:
-                    value = row["file_path"]
-                    if not isinstance(value, str) or not value.strip():
-                        raise ValueError(f"Dataset '{dataset_name}': ruta de audio inválida en {split}.")
-                    path = Path(value)
-                    candidates = [path if path.is_absolute() else raw_dir / path]
-                elif dataset_name == "AvesChilenas" and "nombre_archivo" in frame:
-                    filename = row["nombre_archivo"]
-                    if not isinstance(filename, str) or not filename.strip():
-                        raise ValueError(f"Dataset '{dataset_name}': nombre de audio inválido.")
-                    slug = row["clase"].lower().replace(" ", "_").replace("/", "_")
-                    stem = Path(filename).stem
-                    xc_id = str(row.get("xc_id", ""))
-                    candidates = [raw_dir / folder / slug / f"{identifier}.wav"
-                                  for folder in ("", "processed_wav") for identifier in (stem, xc_id)]
-                    candidates += [raw_dir / slug / filename, raw_dir / slug / f"{xc_id}.mp3",
-                                   raw_dir / f"{stem}.wav", raw_dir / filename]
-                else:
-                    raise ValueError(f"Dataset '{dataset_name}': partición {split} sin rutas de audio.")
-                path = next((p.resolve() for p in candidates if p.is_file()), None)
-                if (path is None or not (path.is_relative_to(raw_dir) or path.is_relative_to(processed_dir))
-                        or path.suffix.lower() not in {".wav", ".mp3", ".flac", ".ogg"}
-                        or path.stat().st_size == 0):
+                try:
+                    path = resolve_reference(row["file_path"], row["file_stage"], roots)
+                except ValueError as exc:
+                    raise ValueError(f"Dataset '{dataset_name}': referencia inválida en {split}: {exc}") from exc
+                if path.suffix.lower() not in {".wav", ".mp3", ".flac", ".ogg"} or path.stat().st_size == 0:
                     raise ValueError(f"Dataset '{dataset_name}': audio ausente o fuera de su fuente en {split}.")
-                paths.append(str(path))
-            frame["file_path"] = paths
+                paths.add(path)
+            resolved_partitions[split] = paths
         if not set(val_df["clase"]).issubset(set(train_df["clase"])):
             raise ValueError(f"Dataset '{dataset_name}': clases de validación ausentes en train.")
-        if set(train_df["file_path"]) & set(val_df["file_path"]):
+        if resolved_partitions["train"] & resolved_partitions["val"]:
             raise ValueError(f"Dataset '{dataset_name}': audios compartidos entre train y val.")
-        return {"raw_dir": raw_dir, "train_df": train_df, "val_df": val_df}
+        return {"raw_dir": raw_dir, "roots": roots, "train_df": train_df, "val_df": val_df}
 
     def start_training(
         self,
@@ -639,6 +631,7 @@ class TrainingService:
                     )
                     train_ds = GenericAudioDataset(
                         train_df,
+                        roots=source["roots"],
                         audio_config=audio_cfg,
                         label_to_idx=label_to_idx,
                         is_train=True,
@@ -646,6 +639,7 @@ class TrainingService:
                     )
                     val_ds = GenericAudioDataset(
                         val_df,
+                        roots=source["roots"],
                         audio_config=audio_cfg,
                         label_to_idx=label_to_idx,
                         is_train=False,
@@ -654,6 +648,7 @@ class TrainingService:
                 else:
                     train_ds = _AcceptedAudioDataset(
                         train_df,
+                        roots=source["roots"],
                         raw_dir=raw_dir,
                         label_to_idx=label_to_idx,
                         target_sr=target_sr,
@@ -664,6 +659,7 @@ class TrainingService:
                     )
                     val_ds = _AcceptedAudioDataset(
                         val_df,
+                        roots=source["roots"],
                         raw_dir=raw_dir,
                         label_to_idx=label_to_idx,
                         target_sr=target_sr,

@@ -7,6 +7,7 @@ from typing import Optional, List, Dict
 import pandas as pd
 
 from training.datasets.base import DatasetIngestor, AudioRecordingMetadata
+from dataset_references import resolve_reference
 
 
 class XenoCantoIngestor(DatasetIngestor):
@@ -25,19 +26,21 @@ class XenoCantoIngestor(DatasetIngestor):
 
     def ingest(self, destination_dir: Optional[Path] = None, force_refresh: bool = False) -> pd.DataFrame:
         if self.metadata_csv and self.metadata_csv.exists():
-            df_raw = pd.read_csv(self.metadata_csv)
+            if self.raw_audio_dir is None:
+                raise ValueError("raw_audio_dir must be explicitly declared")
+            df_raw = pd.read_csv(self.metadata_csv, keep_default_na=False,
+                                 dtype={field: str for field in ("file_path", "file_stage", "xc_id", "hash_archivo")})
+            if not {"file_path", "file_stage"}.issubset(df_raw.columns):
+                raise ValueError("Canonical CSV requires file_path and file_stage")
             records: List[Dict] = []
             for _, row in df_raw.iterrows():
                 filename = str(row.get("nombre_archivo", ""))
                 clase = str(row.get("clase", ""))
                 rec_val = str(row.get("recordist", row.get("rec", "desconocido")))
 
-                # Buscar ruta física si raw_audio_dir está disponible
-                file_path_str = ""
-                if self.raw_audio_dir:
-                    candidate = self.raw_audio_dir / filename
-                    if candidate.exists():
-                        file_path_str = str(candidate.resolve())
+                if row["file_stage"] != "raw":
+                    raise ValueError("XenoCanto source index must declare raw stage")
+                resolve_reference(row["file_path"], row["file_stage"], {"raw": self.raw_audio_dir})
 
                 # Extraer especies secundarias si existen en 'also'
                 also_field = str(row.get("also", ""))
@@ -46,12 +49,13 @@ class XenoCantoIngestor(DatasetIngestor):
 
                 rec = AudioRecordingMetadata(
                     nombre_archivo=filename,
-                    file_path=file_path_str,
+                    file_path=row["file_path"],
+                    file_stage=row["file_stage"],
                     clase=clase,
                     labels=labels,
-                    frecuencia_muestreo=int(row.get("frecuencia_muestreo", 22050)),
-                    duracion_segundos=float(row.get("duracion_segundos", 0.0)),
-                    tamano_bytes=int(row.get("tamano_bytes", 0)),
+                    frecuencia_muestreo=int(row["frecuencia_muestreo"]) if row.get("frecuencia_muestreo") != "" and "frecuencia_muestreo" in row else None,
+                    duracion_segundos=float(row["duracion_segundos"]) if row.get("duracion_segundos") != "" and "duracion_segundos" in row else None,
+                    tamano_bytes=int(row["tamano_bytes"]) if row.get("tamano_bytes") != "" and "tamano_bytes" in row else None,
                     hash_archivo=str(row.get("hash_archivo", "")),
                     source_id=str(row.get("xc_id", "")),
                     recordist=rec_val,

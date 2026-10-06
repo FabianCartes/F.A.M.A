@@ -9,7 +9,7 @@ if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
 
 
-def test_get_storage_status_connected():
+def test_get_storage_status_connected(tmp_path):
     """Verifica que el servicio retorne el estado de conexión al bucket GCS."""
     from app.services.ingestion import IngestionService
 
@@ -24,7 +24,8 @@ def test_get_storage_status_connected():
         blob2 = MagicMock(size=2048)
         mock_client.list_blobs.return_value = [blob1, blob2]
 
-        service = IngestionService(bucket_name="test-bucket")
+        service = IngestionService(bucket_name="test-bucket", local_base_dir=tmp_path / "raw",
+                                   local_processed_dir=tmp_path / "processed")
         status = service.get_storage_status()
 
         assert status["connected"] is True
@@ -42,7 +43,8 @@ def test_list_datasets_empty_bucket(tmp_path):
         mock_client_cls.return_value = mock_client
         mock_client.list_blobs.return_value = []
 
-        service = IngestionService(bucket_name="test-bucket", local_base_dir=tmp_path)
+        service = IngestionService(bucket_name="test-bucket", local_base_dir=tmp_path / "raw",
+                                   local_processed_dir=tmp_path / "processed")
         datasets = service.list_datasets()
 
         assert datasets == []
@@ -68,7 +70,8 @@ def test_list_datasets_two_level_hierarchy(tmp_path):
 
         mock_client.list_blobs.return_value = [blob1, blob2, blob3, blob4]
 
-        service = IngestionService(bucket_name="test-bucket", local_base_dir=tmp_path)
+        service = IngestionService(bucket_name="test-bucket", local_base_dir=tmp_path / "raw",
+                                   local_processed_dir=tmp_path / "processed")
         datasets = service.list_datasets()
 
         assert len(datasets) == 2
@@ -120,7 +123,8 @@ def test_sync_dataset_only_new_files(tmp_path):
         # Crear existing.wav localmente con tamaño 100 bytes
         (local_dataset / "existing.wav").write_bytes(b"x" * 100)
 
-        service = IngestionService(bucket_name="test-bucket", local_base_dir=local_dir)
+        service = IngestionService(bucket_name="test-bucket", local_base_dir=local_dir,
+                                   local_processed_dir=tmp_path / "processed")
         result = service.sync_dataset_to_local("Chucao")
 
         assert result["downloaded"] == 1
@@ -131,7 +135,7 @@ def test_sync_dataset_only_new_files(tmp_path):
         blob1.download_to_filename.assert_not_called()
 
 
-def test_upload_files_with_class_label():
+def test_upload_files_with_class_label(tmp_path):
     """Verifica que la subida construya la ruta de dos niveles datasets/{dataset}/{class}/{file}."""
     from app.services.ingestion import IngestionService
 
@@ -143,7 +147,8 @@ def test_upload_files_with_class_label():
         mock_blob = MagicMock()
         mock_bucket.blob.return_value = mock_blob
 
-        service = IngestionService(bucket_name="test-bucket")
+        service = IngestionService(bucket_name="test-bucket", local_base_dir=tmp_path / "raw",
+                                   local_processed_dir=tmp_path / "processed")
         result = service.upload_files_to_gcs(
             files=[("audio1.wav", b"dummy")],
             dataset_name="AvesChilenas",
@@ -181,7 +186,8 @@ def test_sync_dataset_with_db_persistence(tmp_path):
         mock_client.list_blobs.return_value = [blob1]
 
         local_dir = tmp_path / "raw"
-        service = IngestionService(bucket_name="test-bucket", local_base_dir=local_dir)
+        service = IngestionService(bucket_name="test-bucket", local_base_dir=local_dir,
+                                   local_processed_dir=tmp_path / "processed")
         res = service.sync_dataset_to_local("TestPersist", db=db)
 
         assert res["downloaded"] == 1
@@ -224,7 +230,8 @@ def test_sync_dataset_with_preprocess_trigger(tmp_path):
         }
 
         local_dir = tmp_path / "raw"
-        service = IngestionService(bucket_name="test-bucket", local_base_dir=local_dir)
+        service = IngestionService(bucket_name="test-bucket", local_base_dir=local_dir,
+                                   local_processed_dir=tmp_path / "processed")
         res = service.sync_dataset_to_local("ChucaoDS", preprocess=True)
 
         assert res["downloaded"] == 1
@@ -232,17 +239,22 @@ def test_sync_dataset_with_preprocess_trigger(tmp_path):
         mock_prep.assert_called_once_with("ChucaoDS")
 
 
-def test_list_datasets_gracefully_falls_back_to_local_when_gcs_unavailable():
+def test_list_datasets_gracefully_falls_back_to_local_when_gcs_unavailable(tmp_path):
     """
     Verifica que si GCS arroja DefaultCredentialsError o error de red,
-    list_datasets() degrada grácilmente a los datasets locales descubiertos en DEFAULT_LOCAL_RAW_DIR
+    list_datasets() degrada grácilmente a los datasets locales temporales
     (AvesChilenas, engine_diagnostics) con metadata completa:
     id, name, classes, file_count, total_size_bytes, source='local', gcs_available=False.
     """
     from google.auth.exceptions import DefaultCredentialsError
     from app.services.ingestion import IngestionService
 
-    service = IngestionService(bucket_name="test-bucket")
+    for name, label in (("AvesChilenas", "Chucao"), ("engine_diagnostics", "Diesel")):
+        audio = tmp_path / "raw" / name / label / "fixture.wav"
+        audio.parent.mkdir(parents=True)
+        audio.write_bytes(b"isolated audio fixture")
+    service = IngestionService(bucket_name="test-bucket", local_base_dir=tmp_path / "raw",
+                               local_processed_dir=tmp_path / "processed")
     with patch.object(service, "_get_client", side_effect=DefaultCredentialsError("No credentials")):
         datasets = service.list_datasets()
 
@@ -265,14 +277,18 @@ def test_list_datasets_gracefully_falls_back_to_local_when_gcs_unavailable():
             assert d["gcs_available"] is False
 
 
-def test_list_dataset_files_falls_back_to_local():
+def test_list_dataset_files_falls_back_to_local(tmp_path):
     """
     Verifica que si GCS no está disponible, list_dataset_files() liste
     los archivos locales del dataset con name, class_name, size_bytes y metadata.
     """
     from app.services.ingestion import IngestionService
 
-    service = IngestionService(bucket_name="test-bucket")
+    audio = tmp_path / "raw" / "AvesChilenas" / "Chucao" / "fixture.wav"
+    audio.parent.mkdir(parents=True)
+    audio.write_bytes(b"isolated audio fixture")
+    service = IngestionService(bucket_name="test-bucket", local_base_dir=tmp_path / "raw",
+                               local_processed_dir=tmp_path / "processed")
     with patch.object(service, "_get_client", side_effect=Exception("Network error")):
         files = service.list_dataset_files("AvesChilenas")
 

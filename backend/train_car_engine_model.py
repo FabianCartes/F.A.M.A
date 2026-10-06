@@ -5,7 +5,7 @@ Script de entrenamiento para el modelo de diagnóstico mecánico de motores.
 from pathlib import Path
 import yaml
 import pandas as pd
-from training.paths import get_project_root, get_raw_data_dir
+from training.paths import get_project_root, get_raw_data_dir, get_dataset_roots
 from training.schemas.config import TrainingConfig
 from training.trainers.standalone_trainer import GenericModelTrainer
 
@@ -17,9 +17,10 @@ def main():
         cfg = TrainingConfig.model_validate(yaml.safe_load(f))
 
     data_dir = get_raw_data_dir("engine_diagnostics")
-    train_df = pd.read_csv(data_dir / "train_metadata.csv")
-    val_df = pd.read_csv(data_dir / "val_metadata.csv")
-    test_df = pd.read_csv(data_dir / "test_metadata.csv")
+    roots = get_dataset_roots("engine_diagnostics")
+    train_df = pd.read_csv(data_dir / "train_metadata.csv", dtype=str, keep_default_na=False)
+    val_df = pd.read_csv(data_dir / "val_metadata.csv", dtype=str, keep_default_na=False)
+    test_df = pd.read_csv(data_dir / "test_metadata.csv", dtype=str, keep_default_na=False)
 
     print(f"[Train] Iniciando entrenamiento con receta: {recipe_path.name}")
     print(f"[Train] Train: {len(train_df)} | Val: {len(val_df)} | Test: {len(test_df)}")
@@ -32,6 +33,7 @@ def main():
         test_df=test_df,
         output_checkpoints_dir=project_root / "backend" / "checkpoints",
         verbose=True,
+        roots=roots,
     )
 
     print("\n" + "=" * 60)

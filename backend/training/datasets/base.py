@@ -3,9 +3,9 @@ backend/training/datasets/base.py
 Contrato abstracto para ingestores de datos bioacústicos y esquema canónico de metadatos.
 """
 from abc import ABC, abstractmethod
-from pathlib import Path
-from typing import Optional, Dict, Any, List
-from pydantic import BaseModel, Field
+from pathlib import Path, PurePosixPath
+from typing import Optional, Dict, Any, List, Literal
+from pydantic import BaseModel, Field, field_validator
 import pandas as pd
 
 
@@ -13,6 +13,18 @@ class AudioRecordingMetadata(BaseModel):
     """Esquema canónico normalizado para cualquier registro bioacústico."""
     nombre_archivo: str
     file_path: str
+    file_stage: Literal["raw", "processed"]
+
+    @field_validator("file_path")
+    @classmethod
+    def relative_reference(cls, value: str) -> str:
+        """Structural check only; producers must also verify physical references."""
+        path = PurePosixPath(value)
+        if (not value or value == "." or path.is_absolute() or path.as_posix() != value
+                or ".." in path.parts or "\\" in value or ":" in value):
+            raise ValueError("file_path must be relative POSIX text")
+        return value
+
     clase: str
     labels: List[str] = Field(default_factory=list)
     frecuencia_muestreo: Optional[int] = None

@@ -11,7 +11,7 @@ import torch
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, classification_report
 from torch.utils.data import DataLoader
 
-from training.paths import get_project_root, get_raw_data_dir
+from training.paths import get_project_root, get_raw_data_dir, get_dataset_roots
 from training.schemas.config import TrainingConfig
 from training.trainers.standalone_trainer import GenericModelTrainer
 from training.pipelines.dataset import GenericAudioDataset
@@ -19,7 +19,7 @@ from poc.preprocess import GPUAudioFrontEnd
 from poc.train import BioacousticModel
 
 
-def train_recipe(recipe_filename: str, train_df, val_df, test_df):
+def train_recipe(recipe_filename: str, train_df, val_df, test_df, *, roots):
     project_root = get_project_root()
     recipe_path = project_root / f"backend/training/recipes/{recipe_filename}"
     with open(recipe_path, "r", encoding="utf-8") as f:
@@ -36,12 +36,13 @@ def train_recipe(recipe_filename: str, train_df, val_df, test_df):
         test_df=test_df,
         output_checkpoints_dir=project_root / "backend" / "checkpoints",
         verbose=True,
+        roots=roots,
     )
     print(f"[Train] Completado: {cfg.model_id} | Test Acc={metrics['test_accuracy']*100:.2f}%, F1={metrics['test_f1_macro']*100:.2f}%")
     return cfg, bundle_path, metrics
 
 
-def evaluate_models(models, weights, test_df, audio_cfg, device):
+def evaluate_models(models, weights, test_df, audio_cfg, device, *, roots):
     classes = sorted(test_df["clase"].unique().tolist())
     label_to_idx = {c: i for i, c in enumerate(classes)}
 
@@ -56,6 +57,7 @@ def evaluate_models(models, weights, test_df, audio_cfg, device):
 
     dataset = GenericAudioDataset(
         df=test_df,
+        roots=roots,
         audio_config=audio_cfg,
         label_to_idx=label_to_idx,
         is_train=False,
@@ -92,15 +94,16 @@ def evaluate_models(models, weights, test_df, audio_cfg, device):
 
 def main():
     data_dir = get_raw_data_dir("engine_diagnostics")
-    train_df = pd.read_csv(data_dir / "train_metadata.csv")
-    val_df = pd.read_csv(data_dir / "val_metadata.csv")
-    test_df = pd.read_csv(data_dir / "test_metadata.csv")
+    roots = get_dataset_roots("engine_diagnostics")
+    train_df = pd.read_csv(data_dir / "train_metadata.csv", dtype=str, keep_default_na=False)
+    val_df = pd.read_csv(data_dir / "val_metadata.csv", dtype=str, keep_default_na=False)
+    test_df = pd.read_csv(data_dir / "test_metadata.csv", dtype=str, keep_default_na=False)
 
     # 1. Entrenar ResNet34d v2 (ventana exacta 1.5s, mixup 0.2)
-    cfg_r_v2, path_r_v2, m_r_v2 = train_recipe("car_engine_diagnostics_resnet34d_v2.yaml", train_df, val_df, test_df)
+    cfg_r_v2, path_r_v2, m_r_v2 = train_recipe("car_engine_diagnostics_resnet34d_v2.yaml", train_df, val_df, test_df, roots=roots)
 
     # 2. Entrenar EfficientNet-B0 v2 (ventana exacta 1.5s, mixup 0.2)
-    cfg_e_v2, path_e_v2, m_e_v2 = train_recipe("car_engine_diagnostics_efficientnet_b0_v2.yaml", train_df, val_df, test_df)
+    cfg_e_v2, path_e_v2, m_e_v2 = train_recipe("car_engine_diagnostics_efficientnet_b0_v2.yaml", train_df, val_df, test_df, roots=roots)
 
     # 3. Cargar modelos en GPU para evaluación
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -112,8 +115,8 @@ def main():
     m_e2 = BioacousticModel("efficientnet_b0", num_classes=num_classes, pretrained=False, pool_type="gem", use_gpu_frontend=False).to(device)
     m_e2.load_state_dict(torch.load(path_e_v2 / "weights.pt", map_location=device, weights_only=True))
 
-    acc_r2, f1_r2, rep_r2 = evaluate_models([m_r2], [1.0], test_df, cfg_r_v2.audio, device)
-    acc_e2, f1_e2, rep_e2 = evaluate_models([m_e2], [1.0], test_df, cfg_e_v2.audio, device)
+    acc_r2, f1_r2, rep_r2 = evaluate_models([m_r2], [1.0], test_df, cfg_r_v2.audio, device, roots=roots)
+    acc_e2, f1_e2, rep_e2 = evaluate_models([m_e2], [1.0], test_df, cfg_e_v2.audio, device, roots=roots)
 
     print("\n" + "=" * 60)
     print("MÉTRICAS INDIVIDUALES V2 EN TEST SET (Ventana 1.5s):")
@@ -130,7 +133,7 @@ def main():
     for w_int in range(1, 10):
         w1 = w_int / 10.0
         w2 = round(1.0 - w1, 1)
-        acc_c, f1_c, rep_c = evaluate_models([m_r2, m_e2], [w1, w2], test_df, cfg_r_v2.audio, device)
+        acc_c, f1_c, rep_c = evaluate_models([m_r2, m_e2], [w1, w2], test_df, cfg_r_v2.audio, device, roots=roots)
         print(f"  Weights: [ResNet_v2={w1:.1f}, EffNet_v2={w2:.1f}] -> Acc={acc_c*100:.2f}%, F1={f1_c*100:.2f}%")
         if f1_c > best_f1:
             best_f1 = f1_c
@@ -146,7 +149,7 @@ def main():
     print("=" * 60)
 
     # Guardar reporte detallado
-    report_file = Path(\"docs/receipts/experiment_v2_receipt.json\")
+    report_file = Path("docs/receipts/experiment_v2_receipt.json")
     with open(report_file, "w", encoding="utf-8") as f:
         json.dump({
             "resnet34d_v2": {"accuracy": acc_r2, "f1_macro": f1_r2},
