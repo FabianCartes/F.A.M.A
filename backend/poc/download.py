@@ -1,6 +1,8 @@
 import os
 import time
 import hashlib
+import stat
+import unicodedata
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -9,14 +11,15 @@ from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 import pandas as pd
 from tqdm import tqdm
-import dotenv
 import sys
 
 _BACKEND_ROOT = Path(__file__).resolve().parent.parent
 if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
 
-from training.paths import get_raw_data_dir, PathResolver
+from training.paths import get_dataset_roots
+from dataset_references import reference_from_path, resolve_reference
+import soundfile as sf
 
 EXPECTED_COLUMNS = [
     "nombre_archivo",
@@ -33,6 +36,8 @@ EXPECTED_COLUMNS = [
     "lat",
     "lon",
     "calidad",
+    "file_path",
+    "file_stage",
 ]
 
 # Top 15 approved species for F.A.M.A. PoC
@@ -99,13 +104,18 @@ def create_metadata_row(
     file_path: Path,
     clase: str,
     audio_info: Optional[Dict[str, Any]] = None,
+    *,
+    roots: Dict[str, Path],
 ) -> Dict[str, Any]:
-    """Genera un diccionario con las columnas exactas de la tabla audio."""
+    """Emit raw references only for verified, nonempty physical originals."""
+    reference = reference_from_path(file_path, "raw", roots)
+    if file_path.stat().st_size == 0:
+        raise ValueError("downloaded audio must be nonempty")
     if audio_info is None:
         audio_info = get_audio_info(file_path)
 
-    file_size = file_path.stat().st_size if file_path.exists() else 0
-    file_hash = compute_file_sha256(file_path) if file_path.exists() else ""
+    file_size = file_path.stat().st_size
+    file_hash = compute_file_sha256(file_path)
 
     lat = rec.get("lat")
     lon = rec.get("lng") if "lng" in rec else rec.get("lon")
@@ -125,6 +135,7 @@ def create_metadata_row(
         "lat": lat,
         "lon": lon,
         "calidad": rec.get("q", ""),
+        **reference,
     }
 
 
@@ -184,6 +195,26 @@ def search_recordings(
     return unique_recordings
 
 
+def _physical_path(value: Path) -> Path:
+    """Preflight a future path without resolving away ancestor aliases."""
+    text = str(value)
+    if (not text.startswith("/") or "\\" in text or ":" in text
+            or any(unicodedata.category(c) == "Cc" for c in text)
+            or any(p in ("", ".", "..") for p in text[1:].split("/"))):
+        raise ValueError("path must be canonical absolute POSIX text")
+    path = Path(value)
+    for entry in (path, *path.parents):
+        try:
+            mode = entry.lstat().st_mode
+        except FileNotFoundError:
+            continue
+        except OSError:
+            raise ValueError("path ancestors cannot be physically verified") from None
+        if stat.S_ISLNK(mode) or (entry != path and not stat.S_ISDIR(mode)):
+            raise ValueError("path ancestors must be physical directories without symlinks")
+    return path
+
+
 def download_file(
     url: str,
     dest_path: Path,
@@ -198,7 +229,9 @@ def download_file(
     if url.startswith("//"):
         url = "https:" + url
 
-    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    dest_path = _physical_path(dest_path)
+    if dest_path.exists():
+        raise ValueError("download destination already exists")
 
     for attempt in range(max_retries):
         try:
@@ -206,18 +239,20 @@ def download_file(
                 if r.status_code != 200:
                     time.sleep(1)
                     continue
-                with open(dest_path, "wb") as f:
-                    for chunk in r.iter_content(chunk_size=chunk_size):
-                        if chunk:
-                            f.write(chunk)
-            if dest_path.exists() and dest_path.stat().st_size > 0:
-                return True
+                content = b"".join(chunk for chunk in r.iter_content(chunk_size=chunk_size) if chunk)
+            if not content:
+                return False
+            _physical_path(dest_path)
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            with dest_path.open("xb") as f:
+                f.write(content)
+            return True
+        except FileExistsError:
+            raise ValueError("download destination already exists") from None
         except Exception:
+            # Never adopt or remove a partially published original on retry.
             if dest_path.exists():
-                try:
-                    dest_path.unlink()
-                except Exception:
-                    pass
+                return False
             time.sleep(1.5 * (attempt + 1))
 
     return False
@@ -228,37 +263,39 @@ def run_download_pipeline(
     api_key: Optional[str] = None,
     species_list: Optional[List[tuple[str, str]]] = None,
     max_per_species: Optional[int] = None,
+    *,
+    metadata_index: Optional[Path] = None,
 ) -> pd.DataFrame:
-    """Ejecuta la descarga masiva y persistencia continua de metadata.csv."""
-    if api_key is None:
-        dotenv.load_dotenv()
-        api_key = os.getenv("XC_API_KEY")
-        if not api_key:
-            raise ValueError("XC_API_KEY no encontrada en entorno ni en .env")
+    """Append verified raw rows progressively; not an atomic whole-batch publication.
 
-    if species_list is None:
-        species_list = APPROVED_SPECIES
-
-    if data_dir is None:
-        raw_dir = get_raw_data_dir("AvesChilenas")
-        metadata_file = raw_dir / "metadata.csv"
-    else:
-        data_path = Path(data_dir)
-        if (data_path / "raw").is_dir():
-            raw_dir = data_path / "raw"
-            metadata_file = data_path / "metadata.csv"
-        else:
-            raw_dir = data_path
-            metadata_file = data_path / "metadata.csv"
-
-    raw_dir.mkdir(parents=True, exist_ok=True)
-
-    session = create_resilient_session()
-
+    data_dir is the declared physical raw root, never inferred from an index.
+    Legacy indexes require offline CANON-5 conversion before acquisition.
+    """
+    raw_dir = _physical_path(data_dir if data_dir is not None else get_dataset_roots("AvesChilenas")["raw"])
+    metadata_file = _physical_path(metadata_index if metadata_index is not None else raw_dir / "metadata.csv")
+    roots = {"raw": raw_dir}
+    if raw_dir.exists() and not raw_dir.is_dir():
+        raise ValueError("raw root must be a physical directory")
     if metadata_file.exists():
-        existing_df = pd.read_csv(metadata_file)
+        if not metadata_file.is_file():
+            raise ValueError("metadata index must be a regular file")
+        existing_df = pd.read_csv(metadata_file, dtype=str, keep_default_na=False)
+        if not {"file_path", "file_stage", "xc_id"}.issubset(existing_df.columns):
+            raise ValueError("file_path and file_stage required; convert legacy index offline")
+        for row in existing_df.to_dict("records"):
+            source = resolve_reference(row["file_path"], row["file_stage"], roots)
+            if source.samefile(metadata_file):
+                raise ValueError("metadata index cannot be an audio source")
     else:
         existing_df = pd.DataFrame(columns=EXPECTED_COLUMNS)
+
+    if api_key is None:
+        api_key = os.getenv("XC_API_KEY")
+        if not api_key:
+            raise ValueError("XC_API_KEY required in environment or explicit argument")
+    if species_list is None:
+        species_list = APPROVED_SPECIES
+    session = create_resilient_session()
 
     existing_xc_ids = set(existing_df["xc_id"].astype(str).tolist()) if not existing_df.empty else set()
     rows_list = existing_df.to_dict("records") if not existing_df.empty else []
@@ -274,7 +311,7 @@ def run_download_pipeline(
         print(f"  Encontradas {len(recs)} grabaciones A/B en Xeno-canto.")
         species_slug = common_name.lower().replace(" ", "_").replace("/", "_")
         species_dir = raw_dir / species_slug
-        species_dir.mkdir(parents=True, exist_ok=True)
+        _physical_path(species_dir)
 
         to_process = []
         for rec in recs:
@@ -284,7 +321,13 @@ def run_download_pipeline(
             file_url = rec.get("file")
             if not file_url:
                 continue
-            dest_file = species_dir / f"{xc_id}.mp3"
+            if (not xc_id or xc_id in (".", "..") or any(c in xc_id for c in "/\\:")
+                    or any(unicodedata.category(c) == "Cc" for c in xc_id)):
+                raise ValueError("recording identity must be a safe filename component")
+            dest_file = _physical_path(species_dir / f"{xc_id}.mp3")
+            if dest_file == metadata_file or dest_file.exists():
+                raise ValueError("unindexed download destination already exists or overlaps index")
+            existing_xc_ids.add(xc_id)
             to_process.append((rec, dest_file, file_url))
 
         if not to_process:
@@ -293,12 +336,11 @@ def run_download_pipeline(
 
         def _process_item(item):
             rec_item, d_file, f_url = item
-            if not d_file.exists() or d_file.stat().st_size == 0:
-                ok = download_file(f_url, d_file, session=session)
-                if not ok:
-                    return None
+            ok = download_file(f_url, d_file, session=session)
+            if not ok:
+                return None
             info = get_audio_info(d_file)
-            return create_metadata_row(rec_item, d_file, clase=common_name, audio_info=info)
+            return create_metadata_row(rec_item, d_file, clase=common_name, audio_info=info, roots=roots)
 
         species_added = 0
         with ThreadPoolExecutor(max_workers=5) as executor:
@@ -311,16 +353,30 @@ def run_download_pipeline(
                     species_added += 1
 
         # Guardar progreso tras cada especie para no perder nada si hay corte
-        current_df = pd.DataFrame(rows_list)
-        current_df.to_csv(metadata_file, index=False)
+        current_df = pd.DataFrame(rows_list).reindex(columns=list(dict.fromkeys([*existing_df.columns, *EXPECTED_COLUMNS])))
+        if species_added:
+            _physical_path(metadata_file)
+            metadata_file.parent.mkdir(parents=True, exist_ok=True)
+            current_df.to_csv(metadata_file, index=False)
         print(f"  {species_added} nuevas grabaciones guardadas para {common_name}. Total acumulado: {len(current_df)}")
 
-    final_df = pd.DataFrame(rows_list)
-    final_df.to_csv(metadata_file, index=False)
-    print(f"\nDescarga finalizada. Metadatos persistidos en {metadata_file} ({len(final_df)} filas totales).")
+    final_df = pd.DataFrame(rows_list).reindex(columns=list(dict.fromkeys([*existing_df.columns, *EXPECTED_COLUMNS])))
+    print(f"\nDescarga finalizada. Índice: {metadata_file} ({len(final_df)} filas; publicado solo si hubo éxitos nuevos).")
     return final_df
 
 
+def main(argv=None):
+    """CLI with physical Aves defaults and independent root/index overrides."""
+    import argparse
+    parser = argparse.ArgumentParser(description="Download canonical raw recordings")
+    parser.add_argument("--raw-dir", "--data-dir", dest="raw_dir", type=Path)
+    parser.add_argument("--metadata-index", type=Path)
+    parser.add_argument("--max-per-species", type=int)
+    args = parser.parse_args(argv)
+    raw = args.raw_dir if args.raw_dir is not None else get_dataset_roots("AvesChilenas")["raw"]
+    return run_download_pipeline(data_dir=raw, metadata_index=args.metadata_index,
+                                 max_per_species=args.max_per_species)
+
+
 if __name__ == "__main__":
-    data_directory = get_raw_data_dir("AvesChilenas")
-    run_download_pipeline(data_dir=data_directory)
+    main()
