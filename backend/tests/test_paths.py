@@ -87,6 +87,105 @@ def test_get_checkpoints_dir_with_subpath():
     assert PathResolver.checkpoints_dir("patagonian-birds-resnet34") == subpath
 
 
+@pytest.mark.parametrize("stage", ["raw", "processed"])
+@pytest.mark.parametrize("alias_location", ["ancestor", "base", "dataset", "code_ancestor"])
+def test_configured_root_alias_is_rejected_by_consumer(monkeypatch, tmp_path, stage, alias_location):
+    from training import paths
+    from dataset_references import resolve_reference
+
+    backend = tmp_path / "backend"
+    (backend / "training").mkdir(parents=True)
+    monkeypatch.setattr(paths, "__file__", str(backend / "training" / "paths.py"))
+    physical = tmp_path / "physical"
+    physical.mkdir()
+    if alias_location == "code_ancestor":
+        backend.rename(tmp_path / "physical-backend")
+        backend.symlink_to(tmp_path / "physical-backend", target_is_directory=True)
+        (backend / "data" / stage / "Fixture").mkdir(parents=True)
+    elif alias_location == "ancestor":
+        (backend / "data").symlink_to(physical, target_is_directory=True)
+    else:
+        (backend / "data").mkdir()
+        alias = backend / "data" / stage
+        if alias_location == "dataset":
+            alias.mkdir()
+            alias = alias / "Fixture"
+        alias.symlink_to(physical, target_is_directory=True)
+    getter = paths.get_raw_data_dir if stage == "raw" else paths.get_processed_data_dir
+    root = getter("Fixture")
+    if stage == "processed":
+        root = root / "processed_wav"
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "fixture.wav").write_bytes(b"temporary audio")
+    with pytest.raises(ValueError, match="symlinks"):
+        resolve_reference("fixture.wav", stage, {stage: root})
+
+
+@pytest.mark.parametrize("stage", ["raw", "processed"])
+def test_declared_stage_map_resolves_only_selected_root(monkeypatch, tmp_path, stage):
+    from training import paths
+    from dataset_references import resolve_reference
+
+    backend = tmp_path / "backend"
+    (backend / "training").mkdir(parents=True)
+    monkeypatch.setattr(paths, "__file__", str(backend / "training" / "paths.py"))
+    selected = backend / "data" / stage / "Fixture"
+    if stage == "processed":
+        selected = selected / "processed_wav"
+    selected.mkdir(parents=True)
+    (selected / "fixture.wav").write_bytes(b"temporary audio")
+    roots = paths.get_dataset_roots("Fixture")
+    assert roots == {"raw": backend / "data" / "raw" / "Fixture",
+                     "processed": backend / "data" / "processed" / "Fixture" / "processed_wav"}
+    assert not roots["processed" if stage == "raw" else "raw"].exists()
+    monkeypatch.chdir(tmp_path)
+    assert resolve_reference("fixture.wav", stage, roots) == selected / "fixture.wav"
+
+
+@pytest.mark.parametrize("module_name", ["backend.training.paths", "training.paths"])
+@pytest.mark.parametrize("stage", ["raw", "processed"])
+@pytest.mark.parametrize("interface", ["getter", "wrapper"])
+@pytest.mark.parametrize("root_kind", ["ancestor", "base", "dataset", "code_ancestor", "physical", "missing"])
+def test_public_dataset_locator_preserves_declared_spelling(
+    monkeypatch, tmp_path, module_name, stage, interface, root_kind
+):
+    import importlib
+
+    paths = importlib.import_module(module_name)
+    backend = tmp_path / "backend"
+    physical = tmp_path / "physical"
+    physical.mkdir()
+    if root_kind == "code_ancestor":
+        (physical / "training").mkdir()
+        backend.symlink_to(physical, target_is_directory=True)
+    else:
+        (backend / "training").mkdir(parents=True)
+    monkeypatch.setattr(paths, "__file__", str(backend / "training" / "paths.py"))
+    if root_kind == "ancestor":
+        (backend / "data").symlink_to(physical, target_is_directory=True)
+    elif root_kind in ("base", "dataset"):
+        (backend / "data").mkdir()
+        alias = backend / "data" / stage
+        if root_kind == "dataset":
+            alias.mkdir()
+            alias = alias / "Fixture"
+        alias.symlink_to(physical, target_is_directory=True)
+    expected_base = backend / "data" / stage
+    expected_dataset = expected_base / "Fixture"
+    if root_kind != "missing":
+        expected_dataset.mkdir(parents=True, exist_ok=True)
+    getter_name = "get_raw_data_dir" if stage == "raw" else "get_processed_data_dir"
+    wrapper_name = "raw_data_dir" if stage == "raw" else "processed_data_dir"
+    locate = (getattr(paths, getter_name) if interface == "getter"
+              else getattr(paths.PathResolver, wrapper_name))
+    assert locate() == expected_base
+    assert locate("Fixture") == expected_dataset
+    monkeypatch.chdir(physical)
+    assert locate("Fixture") == expected_dataset
+    if root_kind == "missing":
+        assert not expected_dataset.exists()  # A declaration is not validation.
+
+
 def test_paths_independent_of_cwd(monkeypatch, tmp_path):
     root_before = get_project_root()
     raw_before = get_raw_data_dir("test_ds")
