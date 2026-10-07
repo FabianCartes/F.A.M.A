@@ -70,7 +70,6 @@ export default function FeedbackSyncPanel({ refreshKey }: { refreshKey: number }
           <table className="w-full text-left" aria-label="Estados de audios incorporados">
             <thead>
               <tr className="border-b border-[#23252e]">
-                <th className="p-2">Feedback / Predicción</th>
                 <th className="p-2">Dataset / Clase</th>
                 <th className="p-2">Estado local</th>
                 <th className="p-2">Copia cloud</th>
@@ -80,7 +79,6 @@ export default function FeedbackSyncPanel({ refreshKey }: { refreshKey: number }
             <tbody>
               {records.map(record => (
                 <tr key={record.id_retroalimentacion} className="border-b border-[#23252e]">
-                  <td className="p-2">Feedback #{record.id_retroalimentacion}<br />Predicción #{record.id_prediccion}</td>
                   <td className="p-2"><p>{record.dataset_name}</p><p>{record.class_label}</p><p className="text-gray-400">Directorio: {record.storage_class}</p></td>
                   <td className="p-2 text-emerald-300">Incorporado localmente</td>
                   <td className="p-2">

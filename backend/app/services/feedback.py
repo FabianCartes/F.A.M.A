@@ -138,10 +138,21 @@ class FeedbackService:
 
         items = []
         for fb, pred in results:
+            fecha_carga = pred.fecha_carga if pred else None
+            if fecha_carga is not None:
+                if fecha_carga.tzinfo is None:
+                    # SQLite strips tzinfo from this UTC-only column on round-trip.
+                    # Do not relabel an unknown naive value from another dialect.
+                    fecha_carga = (fecha_carga.replace(tzinfo=timezone.utc)
+                                   if db.get_bind().dialect.name == "sqlite" else None)
+                if fecha_carga is not None:
+                    fecha_carga = fecha_carga.astimezone(timezone.utc).isoformat()
             items.append({
                 "id_retroalimentacion": fb.id_retroalimentacion,
                 "id_prediccion": fb.id_prediccion,
                 "dataset_name": pred.dataset_name if pred else None,
+                "audio_filename": pred.nombre_original if pred else None,
+                "fecha_carga": fecha_carga,
                 "ruta_audio_prueba": pred.ruta_audio_prueba if pred else "",
                 "etiqueta_predicha": pred.etiqueta_predicha if pred else "",
                 "confianza": float(pred.confianza) if (pred and pred.confianza is not None) else 0.0,

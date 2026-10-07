@@ -39,6 +39,8 @@ class PendingFeedbackItem(BaseModel):
     id_prediccion: int
     dataset_name: Optional[str] = None
     ruta_audio_prueba: str
+    audio_filename: Optional[str] = None
+    fecha_carga: Optional[str] = None
     etiqueta_predicha: str
     confianza: float
     etiqueta_corregida: Optional[str] = None

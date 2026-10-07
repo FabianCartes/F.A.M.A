@@ -63,7 +63,8 @@ export const PendingFeedbackItemSchema = z.object({
   fue_correcta: z.boolean(),
   procesado: z.boolean(),
   id_usuario: z.number().int().optional().default(1),
-  audio_filename: z.string().optional(),
+  audio_filename: z.string().nullable().optional(),
+  fecha_carga: z.string().nullable().optional(),
 });
 
 export type PendingFeedbackItem = z.infer<typeof PendingFeedbackItemSchema>;

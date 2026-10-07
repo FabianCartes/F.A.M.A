@@ -164,15 +164,15 @@ function PredictionFeedback({ prediction }: { prediction: CurrentPrediction }) {
         <>
           <fieldset disabled={locked || !validId} className="space-y-2">
             <legend>¿La clase predicha es correcta?</legend>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 aria-pressed={choice === true}
                 disabled={locked || !validId}
                 onClick={() => setChoice(true)}
-                className={`min-h-16 px-5 py-4 rounded-xl border-2 text-base font-semibold flex items-center justify-center gap-3 transition-colors focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed ${choice === true ? "bg-emerald-600 border-emerald-300 text-white" : "bg-emerald-950/40 border-emerald-800 text-emerald-300 hover:bg-emerald-900/60"}`}
+                className={`px-3 py-2 rounded-lg border text-xs font-semibold flex items-center justify-center gap-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed ${choice === true ? "bg-emerald-600 border-emerald-300 text-white" : "bg-emerald-950/40 border-emerald-800 text-emerald-300 hover:bg-emerald-900/60"}`}
               >
-                <svg aria-hidden="true" className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg aria-hidden="true" className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
                 <span>Correcta</span>
@@ -182,9 +182,9 @@ function PredictionFeedback({ prediction }: { prediction: CurrentPrediction }) {
                 aria-pressed={choice === false}
                 disabled={locked || !validId}
                 onClick={() => setChoice(false)}
-                className={`min-h-16 px-5 py-4 rounded-xl border-2 text-base font-semibold flex items-center justify-center gap-3 transition-colors focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-red-300 disabled:opacity-40 disabled:cursor-not-allowed ${choice === false ? "bg-red-600 border-red-300 text-white" : "bg-red-950/40 border-red-800 text-red-300 hover:bg-red-900/60"}`}
+                className={`px-3 py-2 rounded-lg border text-xs font-semibold flex items-center justify-center gap-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-red-300 disabled:opacity-40 disabled:cursor-not-allowed ${choice === false ? "bg-red-600 border-red-300 text-white" : "bg-red-950/40 border-red-800 text-red-300 hover:bg-red-900/60"}`}
               >
-                <svg aria-hidden="true" className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg aria-hidden="true" className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
                 <span>Incorrecta</span>

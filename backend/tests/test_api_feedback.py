@@ -22,7 +22,8 @@ from app.services import storage
 
 
 @pytest.fixture(autouse=True)
-def fake_gcs(monkeypatch):
+def fake_gcs(monkeypatch, tmp_path):
+    monkeypatch.setattr(feedback_service, "raw_data_dir", tmp_path / "raw")
     class Client:
         def list_blobs(self, bucket_name, prefix):
             return [SimpleNamespace(name=f"{prefix}{label}/seed.wav")
@@ -214,6 +215,23 @@ def test_get_pending_feedback(client, test_db, sample_prediction):
     assert "fecha_retroalimentacion" in item
 
 
+@pytest.mark.parametrize("with_metadata", [True, False])
+def test_pending_original_audio_metadata(client, test_db, sample_prediction, with_metadata):
+    from datetime import datetime, timezone
+    if with_metadata:
+        sample_prediction.nombre_original = "canto original.wav"
+        sample_prediction.fecha_carga = datetime(2026, 10, 6, 20, 30, 17, tzinfo=timezone.utc)
+    test_db.add(Retroalimentacion(id_prediccion=sample_prediction.id_prediccion,
+                                 fue_correcta=True, procesado=False))
+    test_db.commit()
+    response = client.get("/api/feedback/pending")
+    assert response.status_code == 200
+    item = response.json()[0]
+    assert item["audio_filename"] == ("canto original.wav" if with_metadata else None)
+    assert item["fecha_carga"] == ("2026-10-06T20:30:17+00:00" if with_metadata else None)
+    assert item["ruta_audio_prueba"] == "audios_prueba/canto_zorzal.wav"
+
+
 def test_approve_feedback(client, test_db, tmp_path, monkeypatch):
     """POST /api/feedback/{id}/approve marks procesado=True, places audio in dataset, updates metadata.csv."""
     # Setup temporary dataset directory
@@ -226,6 +244,9 @@ def test_approve_feedback(client, test_db, tmp_path, monkeypatch):
     # Create dummy source audio file
     source_audio = tmp_path / "audios_prueba" / "canto_test_approve.wav"
     _create_dummy_wav(source_audio)
+    # Approval requires a local class catalogue and canonical index.
+    (dataset_dir / "Chucao").mkdir()
+    metadata_file.write_text("nombre_archivo,clase,file_path,file_stage,frecuencia_muestreo,duracion_segundos,tamano_bytes,hash_archivo,xc_id,recordist,licencia,pais,localidad,lat,lon,calidad\n")
 
     monkeypatch.setattr(feedback_service, "raw_data_dir", raw_dir)
 
@@ -234,6 +255,7 @@ def test_approve_feedback(client, test_db, tmp_path, monkeypatch):
         ruta_audio_prueba="raw_audios/0123456789abcdef0123456789abcdef.wav",
         etiqueta_predicha="Rayadito",
         dataset_name="AvesChilenas",
+        nombre_original="../original humano.wav",
         confianza=0.72,
         modelo_id="super-ensemble-tri-model",
     )
@@ -260,6 +282,10 @@ def test_approve_feedback(client, test_db, tmp_path, monkeypatch):
     assert data["sync_status"] == "pending"
     expected_filename = "feedback_1.wav"
     assert data.get("filename") == expected_filename
+    from app.services.feedback_sync import FeedbackSyncQueue
+    intent = FeedbackSyncQueue().get(test_db, fb.id_retroalimentacion)
+    assert intent.object_key == "datasets/AvesChilenas/Chucao/feedback_1.wav"
+    assert intent.local_relative_path == "AvesChilenas/Chucao/feedback_1.wav"
 
     # Verify database state
     test_db.refresh(fb)
@@ -285,6 +311,8 @@ def test_approve_feedback_canonical_naming_accents_and_spaces(client, test_db, t
 
     source_audio = tmp_path / "audios_prueba" / "canto_churrin.wav"
     _create_dummy_wav(source_audio)
+    (dataset_dir / "Churrín de la Mocha").mkdir()
+    metadata_file.write_text("nombre_archivo,clase,file_path,file_stage,frecuencia_muestreo,duracion_segundos,tamano_bytes,hash_archivo,xc_id,recordist,licencia,pais,localidad,lat,lon,calidad\n")
 
     monkeypatch.setattr(feedback_service, "raw_data_dir", raw_dir)
 

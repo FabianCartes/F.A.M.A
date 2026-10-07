@@ -6,7 +6,7 @@ import * as feedbackApi from '@/lib/api/feedbackApi';
 vi.mock('@/lib/api/feedbackApi', () => ({ getPendingFeedback: vi.fn(), getFeedbackSync: vi.fn(), approveFeedback: vi.fn(), rejectFeedback: vi.fn(), getFeedbackStats: vi.fn(), sendFeedback: vi.fn() }));
 const mockStatus = { connected: true, bucket: 'fama-audio-records-2026', total_objects: 120, total_bytes: 10485760, error: null };
 const mockDatasets = [{ id: 'AvesChilenas', name: 'AvesChilenas', file_count: 45, classes: ['Chucao', 'rayadito'], total_size_bytes: 25000000, last_modified: null, local_file_count: 45, is_synced: true }];
-const item = { id_retroalimentacion: 42, id_prediccion: 101, dataset_name: 'AvesChilenas', ruta_audio_prueba: 'test.wav', etiqueta_predicha: 'Chincol', etiqueta_corregida: 'Chucao', confianza: 0.942, fue_correcta: false, procesado: false, id_usuario: 1 };
+const item = { id_retroalimentacion: 42, id_prediccion: 101, dataset_name: 'AvesChilenas', ruta_audio_prueba: 'test.wav', audio_filename: 'test.wav', etiqueta_predicha: 'Chincol', etiqueta_corregida: 'Chucao', confianza: 0.942, fue_correcta: false, procesado: false, id_usuario: 1 };
 const queue = () => within(screen.getByRole('region', { name: 'Revisar audios' }));
 const incorporate = () => queue().getByRole('button', { name: 'Incorporar al dataset' });
 const discard = () => queue().getByRole('button', { name: 'Descartar de la cola' });
@@ -47,7 +47,55 @@ describe('IngestionView persisted inference dataset and curation', () => {
     vi.mocked(feedbackApi.approveFeedback).mockResolvedValue({ status: 'approved', local_status: 'incorporated', sync_status: 'synced', id_retroalimentacion: 42, destination_path: 'datasets/AvesChilenas/Chucao/feedback_42.wav', clase: 'Chucao' });
     await open();
     await act(async () => { fireEvent.click(incorporate()); });
-    expect(screen.getByText(/Audio #42 incorporado al dataset local.*Copia cloud confirmada/)).toBeDefined();
+    expect(screen.getByText(/Audio incorporado al dataset local.*Copia cloud confirmada/)).toBeDefined();
+    expect(screen.queryByText(/Audio #42/)).toBeNull();
+  });
+
+  it('identifies audio by original name and local reception seconds without visible IDs', async () => {
+    const filename = '<canto> & ' + 'nombre largo '.repeat(20) + '.wav';
+    vi.mocked(feedbackApi.getPendingFeedback).mockResolvedValue([{ ...item,
+      audio_filename: filename, fecha_carga: '2026-10-06T20:30:17+00:00',
+      ruta_audio_prueba: 'raw_audios/technical-uuid.wav',
+    }]);
+    vi.mocked(feedbackApi.getFeedbackSync).mockResolvedValue([{
+      id_retroalimentacion: 42, id_prediccion: 101, dataset_name: 'AvesChilenas',
+      storage_class: 'chucao', class_label: 'Chucao', local_status: 'incorporated',
+      sync_status: 'pending', attempts: 2, error_code: null,
+    }]);
+    await open();
+    expect(queue().getByRole('columnheader', { name: 'Audio' })).toBeDefined();
+    const name = queue().getByTitle(filename);
+    expect(name.textContent).toBe(filename);
+    expect(name.classList.contains('truncate')).toBe(true);
+    const local = new Date('2026-10-06T20:30:17+00:00').toLocaleString('es-CL', {
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    });
+    expect(queue().getByText(`Cargado el ${local}`)).toBeDefined();
+    expect(screen.queryByText(/#42|#101|technical-uuid/)).toBeNull();
+    expect(screen.queryByRole('columnheader', { name: 'Feedback / Predicción' })).toBeNull();
+    const sync = within(screen.getByRole('region', { name: 'Sincronización de audios incorporados' }));
+    expect(sync.getByText('Chucao')).toBeDefined();
+    expect(sync.getByText('2')).toBeDefined();
+  });
+
+  it.each([null, undefined, ''])('does not invent original names or upload dates for missing metadata (%s)', async value => {
+    vi.mocked(feedbackApi.getPendingFeedback).mockResolvedValue([{ ...item,
+      audio_filename: value, fecha_carga: value, ruta_audio_prueba: 'raw_audios/technical-uuid.wav',
+    }]);
+    await open();
+    expect(queue().getByText('Nombre original no disponible')).toBeDefined();
+    expect(queue().getByText('Fecha de carga no disponible')).toBeDefined();
+    expect(screen.queryByText(/technical-uuid|Predicción #|#42/)).toBeNull();
+  });
+
+  it('uses the unavailable date fallback for an invalid timestamp', async () => {
+    vi.mocked(feedbackApi.getPendingFeedback).mockResolvedValue([{ ...item, fecha_carga: 'invalid' }]);
+    await open();
+    expect(queue().getByText('Fecha de carga no disponible')).toBeDefined();
+    await act(async () => { fireEvent.click(discard()); });
+    expect(feedbackApi.rejectFeedback).toHaveBeenCalledWith(42);
+    expect(screen.queryByText(/Audio #42/)).toBeNull();
   });
 
   it('manual global refresh reads sync state without calling approval, discard or dataset download', async () => {
@@ -140,7 +188,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
   });
 
   it('renders corrected and correct pending recordings and refreshes after incorporation and discard', async () => {
-    const second = { ...item, id_retroalimentacion: 43, id_prediccion: 102, ruta_audio_prueba: 'second.wav', etiqueta_predicha: 'Rayadito', etiqueta_corregida: null, fue_correcta: true };
+    const second = { ...item, id_retroalimentacion: 43, id_prediccion: 102, ruta_audio_prueba: 'second.wav', audio_filename: 'second.wav', etiqueta_predicha: 'Rayadito', etiqueta_corregida: null, fue_correcta: true };
     vi.mocked(feedbackApi.getPendingFeedback).mockResolvedValueOnce([item, second]).mockResolvedValueOnce([second]).mockResolvedValueOnce([]);
     await open();
     expect(screen.getByText('test.wav')).toBeDefined();

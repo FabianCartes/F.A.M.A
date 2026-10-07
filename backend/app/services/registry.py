@@ -47,6 +47,8 @@ class ModelRegistry:
         # their actual filesystem root without replacing internal collaborators.
         self._raw_data_root = raw_data_root
         self._predictors: Dict[str, AudioPredictor] = {}
+        # Track provenance, not ID spelling: explicit registrations are not DB-owned.
+        self._db_predictors: Dict[str, AudioPredictor] = {}
         self._default_model_id: Optional[str] = None
         self._publication_lock = RLock()
 
@@ -137,10 +139,27 @@ class ModelRegistry:
         """Verifica si un modelo específico está registrado."""
         return model_id in self._predictors
 
+    def _reconcile_db_models(self, models: List[Any]) -> None:
+        """Retire only DB-owned instances absent from a successful DB snapshot.
+
+        Call under the publication lock. Remove every alias of the retired instance,
+        but preserve explicit replacements and never select an unrelated fallback.
+        """
+        persisted_ids = {f"fama_trained_model_{model.id_modelo}" for model in models}
+        for model_id, predictor in list(self._db_predictors.items()):
+            if model_id in persisted_ids:
+                continue
+            for alias, registered in list(self._predictors.items()):
+                if registered is predictor:
+                    del self._predictors[alias]
+            if self._default_model_id == model_id and model_id not in self._predictors:
+                self._default_model_id = None
+            del self._db_predictors[model_id]
+
     def publish_from_db(
         self, db: Any, checkpoints_root: Optional[Path] = None,
     ) -> List[Dict[str, Any]]:
-        """Publish missing persisted predictors without activation or DB writes.
+        """Reconcile and publish persisted predictors without activation or DB writes.
 
         Lazy initialization deserializes metadata once without building inference.
         Failures are returned as public codes; exception text and paths stay private.
@@ -156,6 +175,7 @@ class ModelRegistry:
                 models = db.query(Modelo).order_by(Modelo.id_modelo.desc()).all()
             except Exception:
                 return [{"code": "database_unavailable"}]
+            self._reconcile_db_models(models)
             for model in models:
                 key = f"fama_trained_model_{model.id_modelo}"
                 if self.has_model(key):
@@ -190,6 +210,7 @@ class ModelRegistry:
                     # register() selects a default on an empty catalogue. Publication
                     # deliberately preserves even an unset default instead.
                     self._predictors[key] = pred
+                    self._db_predictors[key] = pred
                     for alias in (basename, Path(basename).stem, str(model.id_modelo)):
                         self._predictors.setdefault(alias, pred)
                 except Exception:
@@ -215,42 +236,45 @@ class ModelRegistry:
         from app.models.training import Modelo
         from app.services.predictors.trained_predictor import TrainedModelPredictor
 
-        db_models = db.query(Modelo).order_by(Modelo.id_modelo.desc()).all()
-        active_predictor = None
+        with self._publication_lock:
+            db_models = db.query(Modelo).order_by(Modelo.id_modelo.desc()).all()
+            self._reconcile_db_models(db_models)
+            active_predictor = None
 
-        for m in db_models:
-            ckpt_name = Path(m.ruta_binario_gcp).name
-            candidate_paths = [
-                checkpoints_root / ckpt_name,
-                checkpoints_root.parent / "checkpoints" / ckpt_name,
-            ]
-            ckpt_file = next((p for p in candidate_paths if p.exists()), None)
-            # Solo registrar si el archivo existe físicamente y contiene pesos reales (> 10KB)
-            if ckpt_file and ckpt_file.stat().st_size > 10000:
-                try:
-                    model_key = f"fama_trained_model_{m.id_modelo}"
-                    is_active = bool(m.activo)
-                    pred = TrainedModelPredictor(
-                        checkpoint_path=ckpt_file,
-                        model_id=model_key,
-                        name=f"{m.arquitectura} (Entrenado #{m.id_modelo})",
-                        is_default=is_active,
-                        lazy_load=not is_active,
-                        dataset_name=_verified_dataset_name(m.conjunto_datos, self._raw_data_root),
-                    )
-                    self.register(pred, is_default=is_active)
-                    # Registrar alias útiles para consultas directas
-                    self._predictors[ckpt_file.name] = pred
-                    self._predictors[ckpt_file.stem] = pred
-                    self._predictors[str(m.id_modelo)] = pred
+            for m in db_models:
+                ckpt_name = Path(m.ruta_binario_gcp).name
+                candidate_paths = [
+                    checkpoints_root / ckpt_name,
+                    checkpoints_root.parent / "checkpoints" / ckpt_name,
+                ]
+                ckpt_file = next((p for p in candidate_paths if p.exists()), None)
+                # Solo registrar si el archivo existe físicamente y contiene pesos reales (> 10KB)
+                if ckpt_file and ckpt_file.stat().st_size > 10000:
+                    try:
+                        model_key = f"fama_trained_model_{m.id_modelo}"
+                        is_active = bool(m.activo)
+                        pred = TrainedModelPredictor(
+                            checkpoint_path=ckpt_file,
+                            model_id=model_key,
+                            name=f"{m.arquitectura} (Entrenado #{m.id_modelo})",
+                            is_default=is_active,
+                            lazy_load=not is_active,
+                            dataset_name=_verified_dataset_name(m.conjunto_datos, self._raw_data_root),
+                        )
+                        self.register(pred, is_default=is_active)
+                        self._db_predictors[model_key] = pred
+                        # Registrar alias útiles para consultas directas
+                        self._predictors[ckpt_file.name] = pred
+                        self._predictors[ckpt_file.stem] = pred
+                        self._predictors[str(m.id_modelo)] = pred
 
-                    if m.activo:
-                        active_predictor = pred
-                        self.set_default_model(model_key)
-                except Exception as err:
-                    print(f"[ModelRegistry] Advertencia al registrar modelo #{m.id_modelo} ({ckpt_name}): {err}")
+                        if m.activo:
+                            active_predictor = pred
+                            self.set_default_model(model_key)
+                    except Exception as err:
+                        print(f"[ModelRegistry] Advertencia al registrar modelo #{m.id_modelo} ({ckpt_name}): {err}")
 
-        return active_predictor
+            return active_predictor
 
 
 def discover_and_register_checkpoints(
@@ -352,28 +376,21 @@ def discover_and_register_bundles(registry: ModelRegistry, checkpoints_root: Opt
 
 
 def build_default_registry() -> ModelRegistry:
-    """Construye y puebla el catálogo con los modelos estándar de F.A.M.A."""
+    """Construye el catálogo productivo exclusivamente desde modelos persistidos.
+
+    Un catálogo vacío o una BD inaccesible no habilitan semillas ni descubrimiento
+    de archivos. El registro explícito y los descubridores siguen disponibles para
+    callers que los soliciten; /api/models reintenta la publicación desde BD.
+    """
+    from app.database import SessionLocal
+
     reg = ModelRegistry()
-    from app.services.predictors.cnn_predictor import AudioCNNPredictor
-    from app.services.predictors.ensemble_predictor import ChileanBirdsEnsemblePredictor
-    from app.services.predictors.engine_ensemble_predictor import EngineEnsemblePredictor
-
-    cnn = AudioCNNPredictor()
-    ensemble = ChileanBirdsEnsemblePredictor(lazy_load=True)
-    engine_ensemble = EngineEnsemblePredictor(lazy_load=True)
-    # This concrete standard bird predictor also targets the pilot storage dataset.
-    engine_ensemble.metadata.dataset_name = "AvesChilenas"
-
-    reg.register(cnn, is_default=True)
-    reg.register(ensemble, is_default=False)
-    reg.register(engine_ensemble, is_default=False)
-
-    # Autodescubrir bundles empaquetados en checkpoints/
-    discover_and_register_bundles(reg)
-
-    # Autodescubrir y registrar modelos entrenados desde BD y checkpoints/
-    discover_and_register_checkpoints(reg)
-
+    try:
+        with SessionLocal() as db:
+            reg.register_from_db(db)
+    except Exception:
+        # The HTTP catalogue reports database availability through publish_from_db.
+        pass
     return reg
 
 

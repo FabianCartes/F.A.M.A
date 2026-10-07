@@ -64,6 +64,15 @@ function formatBytes(bytes: number): string {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
 }
 
+function uploadDateLabel(value?: string | null): string {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return "Fecha de carga no disponible";
+  return `Cargado el ${date.toLocaleString("es-CL", {
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  })}`;
+}
+
 export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
   // Estado de almacenamiento GCS
   const [storageStatus, setStorageStatus] = useState<StorageStatus | null>(null);
@@ -401,7 +410,7 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
       const res = await approveFeedback(item.id_retroalimentacion);
       addLog(
         "SUCCESS",
-        `Audio #${item.id_retroalimentacion} incorporado al dataset local '${datasetName}' (Clase: ${res.clase}). ${res.sync_status === "synced" ? "Copia cloud confirmada." : "Copia cloud pendiente; la sincronización automática no bloquea la preparación de entrenamiento."}`
+        `Audio incorporado al dataset local '${datasetName}' (Clase: ${res.clase}). ${res.sync_status === "synced" ? "Copia cloud confirmada." : "Copia cloud pendiente; la sincronización automática no bloquea la preparación de entrenamiento."}`
       );
       setPendingFeedbacks(previous => previous.filter(pending => pending.id_retroalimentacion !== item.id_retroalimentacion));
       setSyncRefreshKey(previous => previous + 1);
@@ -409,7 +418,7 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       reportFeedbackError(err);
-      addLog("ERROR", `Error al incorporar audio #${item.id_retroalimentacion}: ${errMsg}`);
+      addLog("ERROR", `Error al incorporar audio: ${errMsg}`);
     } finally {
       processingFeedback.current = false;
       setProcessingFeedbackId(null);
@@ -425,13 +434,13 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
       const res = await rejectFeedback(idRetroalimentacion);
       addLog(
         "INFO",
-        `Audio #${idRetroalimentacion} descartado de la cola sin borrar físicamente el audio ni modificar los datasets (${res.message || "Descartado"}).`
+        `Audio descartado de la cola sin borrar físicamente el audio ni modificar los datasets (${res.message || "Descartado"}).`
       );
       await fetchPendingFeedbacks();
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       reportFeedbackError(err);
-      addLog("ERROR", `Error al descartar audio #${idRetroalimentacion}: ${errMsg}`);
+      addLog("ERROR", `Error al descartar audio: ${errMsg}`);
     } finally {
       processingFeedback.current = false;
       setProcessingFeedbackId(null);
@@ -897,7 +906,7 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-[#23252e] text-gray-400">
-                  <th className="pb-2.5 font-medium">ID / Grabación</th>
+                  <th className="pb-2.5 font-medium">Audio</th>
                   <th className="pb-2.5 font-medium">Etiqueta Predicha</th>
                   <th className="pb-2.5 font-medium">Etiqueta Validada / Corregida</th>
                   <th className="pb-2.5 font-medium">Confianza</th>
@@ -906,10 +915,7 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
               </thead>
               <tbody className="divide-y divide-[#23252e]/60">
                 {pendingFeedbacks.map((item) => {
-                  const filename =
-                    item.audio_filename ||
-                    item.ruta_audio_prueba.split("/").pop() ||
-                    item.ruta_audio_prueba;
+                  const filename = item.audio_filename?.trim() || "Nombre original no disponible";
                   const label = item.fue_correcta ? item.etiqueta_predicha : item.etiqueta_corregida;
                   const canIncorporate = Boolean(item.dataset_name && label);
                   const isCorrected = !item.fue_correcta && Boolean(item.etiqueta_corregida);
@@ -918,16 +924,11 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
                   return (
                     <tr key={item.id_retroalimentacion} className="hover:bg-[#1c1e24]/40 transition-colors">
                       <td className="py-3 font-medium text-gray-200">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-emerald-400 text-[11px] font-semibold">
-                            #{item.id_retroalimentacion}
-                          </span>
-                          <span className="font-mono text-gray-300 text-xs truncate max-w-xs" title={filename}>
-                            {filename}
-                          </span>
-                        </div>
+                        <span className="block font-mono text-gray-300 text-xs truncate max-w-xs" title={filename}>
+                          {filename}
+                        </span>
                         <span className="text-[10px] text-gray-500 font-mono block mt-0.5">
-                          Predicción #{item.id_prediccion}
+                          {uploadDateLabel(item.fecha_carga)}
                         </span>
                       </td>
                       <td className="py-3 text-gray-400 font-mono text-xs">

@@ -17,6 +17,9 @@ class Prediccion(Base):
     modelo_id = Column(String(100), nullable=True, default="chilean-birds-cnn")
     # Immutable storage identity captured from the executed predictor, not a FK.
     dataset_name = Column(String(100), nullable=True)
+    # Display metadata only; never used to build a storage identity.
+    nombre_original = Column(String(255), nullable=True)
+    fecha_carga = Column(DateTime(timezone=True), nullable=True)
     fecha_prediccion = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

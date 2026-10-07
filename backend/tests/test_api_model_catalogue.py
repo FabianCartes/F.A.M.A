@@ -75,6 +75,81 @@ def catalogue(tmp_path, monkeypatch):
         engine.dispose()
 
 
+def test_default_catalogue_does_not_enroll_static_or_unpublished_disk_models(catalogue, monkeypatch):
+    from app import database
+    from app.services import registry as module
+    from app.services.predictors import cnn_predictor, ensemble_predictor, engine_ensemble_predictor
+
+    client, _, persist, engine = catalogue
+    monkeypatch.setattr(database, "SessionLocal", sessionmaker(bind=engine))
+    # Isolate legacy ML/file discovery: if invoked, it exposes an unpublished model.
+    for adapter, name in ((cnn_predictor, "AudioCNNPredictor"),
+                          (ensemble_predictor, "ChileanBirdsEnsemblePredictor"),
+                          (engine_ensemble_predictor, "EngineEnsemblePredictor")):
+        monkeypatch.setattr(adapter, name, lambda **kwargs: FakeAudioPredictor("static", "Static"))
+    def disk_discovery(registry):
+        registry.register(FakeAudioPredictor("unpublished-disk", "Unpublished"))
+        return 1
+    monkeypatch.setattr(module, "discover_and_register_bundles", disk_discovery)
+    monkeypatch.setattr(module, "discover_and_register_checkpoints", disk_discovery)
+    registry = module.build_default_registry()
+    main.app.dependency_overrides[get_model_registry] = lambda: registry
+    response = client.get("/api/models")
+    assert response.status_code == 200
+    assert response.json() == {"models": [], "total": 0, "default_model_id": "", "publication_errors": []}
+    # A new valid DB publication remains allowed; there is no permanent ID allowlist.
+    persist(73)
+    payload = client.get("/api/models").json()
+    assert [model["id"] for model in payload["models"]] == ["fama_trained_model_73"]
+    assert payload["models"][0]["classes"] == ["Motor sano", "Falla"]
+    assert payload["default_model_id"] == ""
+    assert registry.get("73") is registry.get("trained_73.pt")
+
+
+@pytest.mark.parametrize("initial_sync", ["publication", "registration"])
+@pytest.mark.parametrize("removed_default", [False, True])
+def test_catalogue_reconciles_removed_db_models_without_removing_explicit_entries(
+    catalogue, initial_sync, removed_default,
+):
+    from app.services.registry import ModelNotFoundError
+
+    client, registry, persist, engine = catalogue
+    checkpoint = persist(11, active=False)
+    persist(74, active=False)
+    if initial_sync == "registration":
+        with sessionmaker(bind=engine)() as db:
+            registry.register_from_db(db, checkpoint.parent)
+    original = client.get("/api/models").json()
+    assert original["total"] == 3
+    survivor = registry.get("74")
+    if removed_default:
+        registry.set_default_model("fama_trained_model_11")
+    # Only temporary SQLite fixture rows are mutated, never deployment persistence.
+    with sessionmaker(bind=engine)() as db:
+        db.delete(db.get(Modelo, 11))
+        db.commit()
+    def unavailable(*args):
+        raise RuntimeError("Synthetic database outage")
+    event.listen(engine, "before_cursor_execute", unavailable)
+    try:
+        assert client.get("/api/models").status_code == 503
+        assert registry.has_model("11")
+    finally:
+        event.remove(engine, "before_cursor_execute", unavailable)
+    payload = client.get("/api/models").json()
+    assert [model["id"] for model in payload["models"]] == ["selected", "fama_trained_model_74"]
+    assert payload["default_model_id"] == ("" if removed_default else "selected")
+    assert registry.get("74") is survivor
+    for alias in ("fama_trained_model_11", "11", "trained_11.pt", "trained_11"):
+        with pytest.raises(ModelNotFoundError):
+            registry.get(alias)
+    assert checkpoint.is_file()  # Storage alone must not resurrect the removed row.
+    assert client.get("/api/models").json() == payload
+    persist(75)
+    assert client.get("/api/models").json()["total"] == 3
+    assert registry.get("75").metadata.classes == ["Motor sano", "Falla"]
+
+
 def test_catalogue_discovers_persisted_models_without_changing_selection(catalogue):
     client, registry, persist, _ = catalogue
     assert client.get("/api/models").json()["total"] == 1

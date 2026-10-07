@@ -136,27 +136,28 @@ def test_registry_no_default_configured():
         registry.get(None)
 
 
-def test_get_model_registry_default_population(monkeypatch):
+@pytest.mark.parametrize("database_available", [True, False])
+def test_get_model_registry_empty_default_has_no_legacy_fallback(monkeypatch, database_available):
+    from unittest.mock import MagicMock
+    from app import database
     from app.services import registry as module
-    from app.services.predictors.cnn_predictor import AudioCNNPredictor
     from app.services.registry import get_model_registry
+
+    session = MagicMock()
+    if database_available:
+        session.query.return_value.order_by.return_value.all.return_value = []
+    else:
+        session.query.side_effect = RuntimeError("Synthetic DB outage")
+    session_factory = MagicMock()
+    session_factory.return_value.__enter__.return_value = session
+    monkeypatch.setattr(database, "SessionLocal", session_factory)
     monkeypatch.setattr(module, "_global_model_registry", None)
-    monkeypatch.setattr(module, "discover_and_register_bundles", lambda *a: 0)
-    monkeypatch.setattr(module, "discover_and_register_checkpoints", lambda *a: 0)
-    monkeypatch.setattr(AudioCNNPredictor, "_load_checkpoint", lambda self: None)
     reg = get_model_registry()
-
-    assert reg.has_model("chilean-birds-cnn")
-    assert reg.has_model("chilean-birds-ensemble")
-    assert reg.get_default_model_id() is not None
-
-    cnn = reg.get("chilean-birds-cnn")
-    assert cnn.model_id == "chilean-birds-cnn"
-    assert cnn.dataset_name == "AvesChilenas"
-    assert all(meta.dataset_name == "AvesChilenas" for meta in reg.list_models())
-
-    default_model = reg.get(None)
-    assert default_model.model_id == reg.get_default_model_id()
+    assert reg.list_models() == []
+    assert reg.get_default_model_id() is None
+    assert get_model_registry() is reg
+    with pytest.raises(ModelNotFoundError, match="vacío"):
+        reg.get()
 
 
 def test_model_metadata_reports_has_weights():
@@ -296,8 +297,12 @@ def test_discover_and_register_checkpoints_inactive_models_lazy_loaded(tmp_path)
     os.utime(ckpt_path_1, (2000, 2000))
     os.utime(ckpt_path_2, (1000, 1000))
 
+    from unittest.mock import MagicMock
+    db = MagicMock()
+    db.query.return_value.order_by.return_value.all.return_value = []
     registry = ModelRegistry()
-    count = discover_and_register_checkpoints(registry, checkpoints_root=tmp_path, db=None)
+    # Explicit discovery remains supported, but never connects to deployment DB.
+    count = discover_and_register_checkpoints(registry, checkpoints_root=tmp_path, db=db)
     assert count == 2
 
     # ckpt_path_1 es el más reciente -> default

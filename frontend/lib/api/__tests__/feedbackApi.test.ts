@@ -206,6 +206,21 @@ describe("feedbackApi (TDD Contract Tests for RF_06 & Semi-Manual Curation)", ()
       expect(item.dataset_name ?? null).toBeNull();
     });
 
+    it.each([
+      { audio_filename: 'original.wav', fecha_carga: '2026-10-06T20:30:17+00:00' },
+      { audio_filename: null, fecha_carga: null },
+      {},
+    ])('preserves original upload metadata without inventing historical values (%s)', async metadata => {
+      global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => [{
+        id_retroalimentacion: 1, id_prediccion: 10, ruta_audio_prueba: 'raw_audios/uuid.wav',
+        etiqueta_predicha: 'Rayadito', confianza: 0.9, fue_correcta: true, procesado: false,
+        ...metadata,
+      }] });
+      const [item] = await getPendingFeedback();
+      expect(item.audio_filename).toBe(metadata.audio_filename);
+      expect(item.fecha_carga).toBe(metadata.fecha_carga);
+    });
+
     it("supports custom limit parameter", async () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,

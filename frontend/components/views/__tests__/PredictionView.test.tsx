@@ -38,21 +38,33 @@ async function preparePrediction({ classes = ['alarm', 'normal'], dbId = 201, da
 describe('PredictionView validation and responsive controls', () => {
   beforeEach(() => { vi.resetAllMocks(); global.fetch = vi.fn(async (input) => String(input).includes('/api/models') ? { ok: true, json: async () => ({ models: mockModels }) } as Response : { ok: false } as Response); });
 
-  it('offers large semantic Check/X buttons with explicit pressed state, separate submit and no default', async () => {
+  it('offers compact wrapping Check/X buttons with explicit pressed state, separate submit and no default', async () => {
     const api = await preparePrediction();
     const correct = choice('Correcta');
     const incorrect = choice('Incorrecta');
     expect(panel().queryByRole('radio')).toBeNull();
+    // Structural CSS regression only: jsdom does not measure rendered button sizes.
+    expect(correct.parentElement).toBe(incorrect.parentElement);
+    expect(correct.parentElement?.classList.contains('flex')).toBe(true);
+    expect(correct.parentElement?.classList.contains('flex-wrap')).toBe(true);
+    expect(correct.parentElement?.classList.contains('grid')).toBe(false);
     for (const button of [correct, incorrect]) {
       expect(button.getAttribute('type')).toBe('button');
       expect(button.getAttribute('aria-pressed')).toBe('false');
-      expect(button.className).toContain('min-h-');
+      for (const token of ['px-3', 'py-2', 'rounded-lg', 'text-xs', 'gap-2', 'border']) {
+        expect(button.classList.contains(token)).toBe(true);
+      }
+      for (const token of ['min-h-16', 'px-5', 'py-4', 'text-base', 'border-2', 'w-full', 'flex-1']) {
+        expect(button.classList.contains(token)).toBe(false);
+      }
+      expect(button.querySelector('svg')?.getAttribute('class')).toBe('w-4 h-4');
       expect(button.className).toContain('focus-visible:');
       expect(button.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
     }
     expect(correct.className).toContain('emerald');
     expect(incorrect.className).toContain('red');
     expect((submit() as HTMLButtonElement).disabled).toBe(true);
+    expect(submit().className).toBe('px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold disabled:opacity-40 disabled:cursor-not-allowed');
     correct.focus();
     expect(document.activeElement).toBe(correct);
     fireEvent.click(correct);

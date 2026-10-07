@@ -3,6 +3,7 @@ import tempfile
 from pathlib import Path
 from typing import Optional, Tuple, List
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Form, Query, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -528,6 +529,10 @@ async def predict_audio(
     5. Inserta el registro histórico en la tabla 'prediccion' de PostgreSQL (incluyendo modelo_id).
     6. Retorna el contrato JSON con la predicción, confirmación de GCS y trazabilidad.
     """
+    fecha_carga = datetime.now(timezone.utc)
+    # Browser names may contain POSIX or Windows paths; retain only bounded metadata.
+    nombre_original = (file.filename or "").replace("\\", "/").rsplit("/", 1)[-1]
+    nombre_original = "".join(char for char in nombre_original if char.isprintable()).strip()[:255] or None
     filename = file.filename or "audio.wav"
 
     # 1. Validación de formato: solo archivos .wav permitidos
@@ -597,6 +602,8 @@ async def predict_audio(
                 confianza=confianza,
                 modelo_id=predictor.model_id,
                 dataset_name=predictor.dataset_name,
+                nombre_original=nombre_original,
+                fecha_carga=fecha_carga,
             )
             db.add(registro_prediccion)
             db.commit()
