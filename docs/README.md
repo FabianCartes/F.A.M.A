@@ -19,12 +19,16 @@ docs/
 ├── manuales/                    # Manual de usuario, revisión, despliegue e índices canónicos
 ├── adr/                         # Architectural Decision Records (ADR 0001 a 0020)
 ├── receipts/                    # Recibos técnicos reproducibles en formato JSON (RDD)
+├── duplicados-exactos/           # Tarea acotada: admisión de feedback sin duplicados SHA-256
 └── images/                      # Diagramas, matrices de confusión y gráficos vectoriales
 ```
 
 ---
 
 ## Índice Detallado por Carpeta
+
+### Tarea acotada: duplicados exactos
+* [`docs/duplicados-exactos/tasks.md`](./duplicados-exactos/tasks.md): Alcance, decisiones locales, checklist y evidencia TDD de aprobación de feedback sin duplicados SHA-256; revisión y commit pendientes del orquestador.
 
 ### 1. [`docs/tesis/`](./tesis/) — Tesis y Objetivos de Grado
 * [`VIDA_01_CINF_FINAL_PT_2026_1_CARTES.md`](./tesis/VIDA_01_CINF_FINAL_PT_2026_1_CARTES.md) / [`.pdf`](./tesis/VIDA_01_CINF_FINAL_PT_2026_1_CARTES.pdf): Memoria formal de proyecto de título.

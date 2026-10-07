@@ -1,7 +1,9 @@
 """Local-first approval through public seams, with no deployed services."""
 import csv
+import hashlib
 import io
 import wave
+from contextlib import contextmanager
 from types import SimpleNamespace
 
 import pytest
@@ -14,6 +16,7 @@ from unittest.mock import patch
 with patch("dotenv.load_dotenv", return_value=False):
     from app.database import Base
     from app.models.prediction import Prediccion
+    from app.services import feedback as feedback_module
     from app.services import storage
     from app.services.feedback import FeedbackService
     from app.services.feedback_sync import FeedbackSyncQueue
@@ -104,6 +107,96 @@ def test_approved_sample_is_trainable_before_cloud_sync(local_workflow):
     assert sample["duracion_segundos"] == .1
     assert sample["file_path"] == "rayadito/feedback_1.wav"
     assert sample["file_stage"] == "raw"
+
+
+@pytest.mark.parametrize("storage_class,label", [("rayadito", "Rayadito"), ("turca", "Turca")])
+def test_exact_duplicate_in_another_row_stays_pending_without_publication(local_workflow, storage_class, label):
+    w = local_workflow
+    dataset = w.service.raw_data_dir / "AvesChilenas"
+    directory = dataset / storage_class
+    directory.mkdir(exist_ok=True)
+    original_audio = directory / "seed.wav"
+    original_audio.write_bytes(w.audio)
+    metadata = dataset / "metadata.csv"
+    metadata.write_text(
+        "nombre_archivo,clase,file_path,file_stage,hash_archivo\n"
+        f"seed.wav,{label},{storage_class}/seed.wav,raw,{hashlib.sha256(w.audio).hexdigest()}\n"
+    )
+    before = metadata.read_bytes()
+    pending = w.service.get_pending_feedback(w.db)
+    with pytest.raises(HTTPException) as error:
+        w.service.approve_feedback(w.db, 1)
+    assert error.value.status_code == 409
+    assert w.service.get_pending_feedback(w.db) == pending
+    assert FeedbackSyncQueue().get(w.db, 1) is None
+    assert not (w.service.raw_data_dir / ".feedback_1.json").exists()
+    assert not (w.service.raw_data_dir / ".feedback_1.json.pending").exists()
+    assert not list(dataset.rglob("feedback_1.wav*"))
+    assert metadata.read_bytes() == before
+    assert original_audio.read_bytes() == w.audio
+    assert w.calls == ["download"]
+
+
+def test_duplicate_index_is_rechecked_after_acquiring_metadata_lock(local_workflow, monkeypatch):
+    w = local_workflow
+    dataset = w.service.raw_data_dir / "AvesChilenas"
+    metadata = dataset / "metadata.csv"
+    lock = feedback_module._filesystem_lock
+    published = []
+
+    @contextmanager
+    def intervening_publication(path):
+        with lock(path):
+            if path.name == ".metadata.lock":
+                # Another admission completed after class resolution, before this lock.
+                assert not (w.service.raw_data_dir / ".feedback_1.json").exists()
+                (dataset / "rayadito/seed.wav").write_bytes(w.audio)
+                metadata.write_text(
+                    "nombre_archivo,clase,file_path,file_stage,hash_archivo\n"
+                    f"seed.wav,Rayadito,rayadito/seed.wav,raw,{hashlib.sha256(w.audio).hexdigest()}\n"
+                )
+                published.append(metadata.read_bytes())
+            yield
+
+    monkeypatch.setattr(feedback_module, "_filesystem_lock", intervening_publication)
+    with pytest.raises(HTTPException) as error:
+        w.service.approve_feedback(w.db, 1)
+    assert error.value.status_code == 409
+    assert metadata.read_bytes() == published[0]
+    assert not (w.service.raw_data_dir / ".feedback_1.json").exists()
+    assert not list(dataset.rglob("feedback_1.wav*"))
+    assert FeedbackSyncQueue().get(w.db, 1) is None
+    assert w.service.get_pending_feedback(w.db)[0]["procesado"] is False
+
+
+@pytest.mark.parametrize("case", ["distinct_bytes", "missing_hash", "other_dataset"])
+def test_nonduplicate_approval_and_same_feedback_replay(local_workflow, case):
+    w = local_workflow
+    dataset = w.service.raw_data_dir / ("OtherDataset" if case == "other_dataset" else "AvesChilenas")
+    (dataset / "turca").mkdir(parents=True)
+    seed = w.audio if case != "distinct_bytes" else w.audio[:-2] + b"\x02\x00"
+    (dataset / "turca/seed.wav").write_bytes(seed)
+    digest = "" if case == "missing_hash" else hashlib.sha256(seed).hexdigest()
+    metadata = dataset / "metadata.csv"
+    metadata.write_text(
+        "nombre_archivo,clase,file_path,file_stage,hash_archivo\n"
+        f"seed.wav,Turca,turca/seed.wav,raw,{digest}\n"
+    )
+    original = metadata.read_bytes()
+    result = w.service.approve_feedback(w.db, 1)
+    target_metadata = w.service.raw_data_dir / "AvesChilenas/metadata.csv"
+    approved = target_metadata.read_bytes()
+    assert FeedbackService(w.service.raw_data_dir).approve_feedback(w.db, 1) == result
+    assert target_metadata.read_bytes() == approved
+    assert (dataset / "turca/seed.wav").read_bytes() == seed
+    if case == "other_dataset":
+        assert metadata.read_bytes() == original
+    with target_metadata.open() as stream:
+        rows = list(csv.DictReader(stream))
+    assert len(rows) == (1 if case == "other_dataset" else 2)
+    assert len(FeedbackSyncQueue().pending(w.db)) == 1
+    assert w.service.get_pending_feedback(w.db) == []
+    assert w.calls == ["download"]
 
 
 def test_legacy_index_rejection_preserves_durable_intent(local_workflow, monkeypatch):
