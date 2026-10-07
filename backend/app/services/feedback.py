@@ -376,9 +376,9 @@ class FeedbackService:
                 filename = f"feedback_{id_retroalimentacion}.wav"
                 destination = dataset / storage_class / filename
                 self._safe_path(destination)
+                publish_intent = recorded is None or not recorded.get("sha256")
                 if recorded is None:
                     recorded = {**identity, "storage_class": storage_class, "filename": filename}
-                    self._publish(intent_path, json.dumps(recorded).encode("utf-8"))
                 elif recorded.get("filename") != filename or recorded.get("storage_class") != storage_class:
                     raise ValueError("Intención legacy o incompatible; requiere recuperación explícita")
                 digest = existing.sha256 if existing else recorded.get("sha256")
@@ -392,16 +392,25 @@ class FeedbackService:
                 if not digest:
                     digest = actual
                     recorded["sha256"] = digest
-                    self._publish(intent_path, json.dumps(recorded).encode("utf-8"))
                 elif recorded.get("sha256") != digest:
                     raise ValueError("Hash de intención local incompatible con la cola")
-                # A prior replace may have succeeded before its directory fsync failed.
-                with intent_path.open("rb") as stream:
-                    os.fsync(stream.fileno())
-                self._fsync_dir(self.raw_data_dir)
                 self._mkdir(dataset)
-                # Serialize all feedback touching this dataset, including publication/CSV.
+                # Serialize duplicate admission with intent/audio/CSV publication.
                 with _filesystem_lock(dataset / ".metadata.lock"):
+                    rows, _ = self._read_canonical_metadata(dataset)
+                    canonical_path = f"{storage_class}/{filename}"
+                    if any(row.get("hash_archivo") == digest
+                           and row["file_path"] != canonical_path for row in rows):
+                        raise HTTPException(
+                            status_code=409,
+                            detail="El audio exacto ya está incorporado en otra fila del dataset; permanece pendiente.",
+                        )
+                    if publish_intent:
+                        self._publish(intent_path, json.dumps(recorded).encode("utf-8"))
+                    # A prior replace may have succeeded before its directory fsync failed.
+                    with intent_path.open("rb") as stream:
+                        os.fsync(stream.fileno())
+                    self._fsync_dir(self.raw_data_dir)
                     self._safe_path(destination)
                     if destination.exists() and hashlib.sha256(destination.read_bytes()).hexdigest() != digest:
                         raise ValueError("El archivo canónico existente tiene contenido diferente")
