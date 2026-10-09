@@ -15,7 +15,7 @@ _BACKEND_ROOT = Path(__file__).resolve().parent.parent
 if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
 
-from poc.train import train_pipeline
+from poc.train import train_pipeline, AdmittedPreparedSource
 from poc.evaluate import run_evaluation
 
 
@@ -161,7 +161,7 @@ def format_benchmark_markdown_table(
 def run_benchmark(
     metadata_csv: Path,
     raw_dir: Path,
-    test_csv: Path,
+    test_csv: Optional[Path],
     output_dir: Path,
     num_runs: int = 10,
     epochs: int = 15,
@@ -180,6 +180,7 @@ def run_benchmark(
     tta_mode: str = "mean",
     *,
     roots: Mapping[str, Union[str, Path]],
+    dataset_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Ejecuta el protocolo de benchmark de múltiples entrenamientos consecutivos:
@@ -188,7 +189,12 @@ def run_benchmark(
     3. Agrega las métricas y calcula media y desviación estándar.
     4. Genera la matriz de confusión consolidada y el reporte en Markdown y JSON.
     """
+    if dataset_name not in ("AvesChilenas", "engine_diagnostics"):
+        raise ValueError("dataset_name is required and must name a supported dataset")
+    if test_csv is not None:
+        raise ValueError("test_csv override is not supported by dataset-bound benchmark")
     roots = dict(roots)
+    admitted_source = AdmittedPreparedSource(dataset_name=dataset_name, roots=roots)
     output_dir = Path(output_dir)
 
     if checkpoint_dir is None:
@@ -219,6 +225,8 @@ def run_benchmark(
         print(f"\n>>> [Corrida {i:02d}/{num_runs:02d}] - Semilla: {seed} <<<")
 
         train_res = train_pipeline(
+            dataset_name=dataset_name,
+            admitted_source=admitted_source,
             metadata_csv=metadata_csv,
             raw_dir=raw_dir,
             roots=roots,
@@ -242,7 +250,8 @@ def run_benchmark(
         eval_res = run_evaluation(
             checkpoint_path=ckpt_path,
             roots=roots,
-            test_csv=test_csv,
+            dataset_name=dataset_name,
+            admitted_source=admitted_source,
             raw_dir=raw_dir,
             output_image_path=cm_image_path,
             device=device,
@@ -344,10 +353,11 @@ if __name__ == "__main__":
         out_path = repo_root / out_path
 
     run_benchmark(
+        dataset_name="AvesChilenas",
         metadata_csv=aves_raw / "metadata.csv",
         raw_dir=aves_raw,
         roots=roots,
-        test_csv=aves_raw / "test.csv",
+        test_csv=None,
         output_dir=out_path,
         num_runs=args.runs,
         epochs=args.epochs,

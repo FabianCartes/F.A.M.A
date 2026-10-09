@@ -21,7 +21,7 @@ from sklearn.metrics import (
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from poc.train import AudioCNN, AudioDataset
+from poc.train import AudioCNN, AudioDataset, AdmittedPreparedSource
 from dataset_references import resolve_reference
 from poc.preprocess import (
     extract_active_windows,
@@ -30,7 +30,8 @@ from poc.preprocess import (
     TARGET_SR,
     DURATION_SECONDS,
 )
-from training.paths import PathResolver, get_project_root, get_dataset_roots
+from training.paths import PathResolver, get_project_root, get_dataset_roots, get_prepared_data_dir
+from training.prepare_data import load_prepared_dataset
 
 
 
@@ -365,28 +366,40 @@ def run_evaluation(
     max_window_batch_size: int = 32,
     *,
     roots: Mapping[str, Union[str, Path]],
+    dataset_name: Optional[str] = None,
+    admitted_source: Optional[AdmittedPreparedSource] = None,
 ) -> Dict[str, Any]:
     """Carga uno o más checkpoints y ejecuta la evaluación oficial en el conjunto de prueba (con soporte para Ensamble)."""
     roots = dict(roots)
+    if test_csv is not None and (dataset_name is not None or admitted_source is not None):
+        raise ValueError("test_csv and dataset_name/admitted_source are mutually exclusive")
     if test_csv is None:
-        test_csv = Path(roots["raw"]) / "test.csv"
+        if dataset_name not in ("AvesChilenas", "engine_diagnostics"):
+            raise ValueError("dataset_name is required and must name a supported dataset")
+        if admitted_source is None:
+            _, _, test_df = load_prepared_dataset(
+                get_prepared_data_dir(dataset_name), roots=roots, dataset_name=dataset_name)
+        else:
+            if type(admitted_source) is not AdmittedPreparedSource:
+                raise ValueError("admitted_source must be an admitted prepared source")
+            _, _, test_df = admitted_source.frames(dataset_name=dataset_name, roots=roots)
     else:
         test_csv = Path(test_csv)
+        test_df = pd.read_csv(test_csv, dtype=str, keep_default_na=False)
     if raw_dir is None:
         raw_dir = Path(roots["raw"])
     else:
         raw_dir = Path(raw_dir)
 
-    if device is None:
-        device_obj = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    else:
-        device_obj = torch.device(device)
-
-    test_df = pd.read_csv(test_csv, dtype=str, keep_default_na=False)
     if not {"file_path", "file_stage"}.issubset(test_df.columns):
         raise ValueError("file_path and file_stage required; convert the index offline")
     for row in test_df.to_dict("records"):
         resolve_reference(row["file_path"], row["file_stage"], roots)
+
+    if device is None:
+        device_obj = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    else:
+        device_obj = torch.device(device)
 
     all_ckpt_paths = []
     if checkpoints:
@@ -514,7 +527,7 @@ if __name__ == "__main__":
             checkpoints=ckpt_paths,
             roots=roots,
             weights=args.weights,
-            test_csv=aves_raw / "test.csv",
+            dataset_name="AvesChilenas",
             raw_dir=aves_raw,
             output_image_path=project_root / "poc" / out_name,
             use_tta=use_tta,
@@ -536,7 +549,7 @@ if __name__ == "__main__":
         run_evaluation(
             checkpoint_path=ckpt_path,
             roots=roots,
-            test_csv=aves_raw / "test.csv",
+            dataset_name="AvesChilenas",
             raw_dir=aves_raw,
             output_image_path=project_root / "poc" / out_name,
             use_tta=use_tta,

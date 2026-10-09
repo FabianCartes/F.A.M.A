@@ -19,17 +19,7 @@ from tests.test_training_flow import training_env, partitions, register
 def service_env(training_env):
     service, sessions, root, thread = training_env
     register(sessions, "AvesChilenas")
-    raw = partitions(root, "AvesChilenas")
-    # Two classes make loss configuration observable, unlike a one-class fixture.
-    for split in ("train", "val"):
-        csv = raw / f"{split}.csv"
-        frame = pd.read_csv(csv)
-        audio = raw / "other" / f"{split}.wav"
-        audio.parent.mkdir(exist_ok=True)
-        audio.write_bytes(b"synthetic audio fixture")
-        other = {"clase": "Other", "nombre_archivo": audio.name,
-                 "file_path": f"other/{split}.wav", "recordist": split}
-        pd.concat([frame, pd.DataFrame([other])]).to_csv(csv, index=False)
+    partitions(root, "AvesChilenas", classes=("Fixture", "Other"))
     return service, sessions, root, thread
 
 
@@ -163,8 +153,9 @@ def test_start_training_worker_with_custom_audio_physics(execution, monkeypatch)
     physics = {"target_sr": 16000, "duration_seconds": 2.0, "f_min": 50.0, "f_max": 4000.0,
                "n_mels": 128, "n_fft": 1024, "hop_length": 256}
     run(service, architecture="EfficientNet-B0", audio_config=physics)
-    assert decoded == [(str(root / "raw/AvesChilenas/fixture/train.wav"), 16000),
-                       (str(root / "raw/AvesChilenas/fixture/val.wav"), 16000)]
+    expected = [pd.read_csv(root / f"prepared/AvesChilenas/{split}.csv").iloc[0]["file_path"]
+                for split in ("train", "val")]
+    assert decoded == [(str(root / "raw/AvesChilenas" / path), 16000) for path in expected]
     assert transforms
     for transform in transforms:
         assert transform["sample_rate"] == 16000

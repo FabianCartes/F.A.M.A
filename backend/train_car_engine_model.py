@@ -4,8 +4,8 @@ Script de entrenamiento para el modelo de diagnóstico mecánico de motores.
 """
 from pathlib import Path
 import yaml
-import pandas as pd
-from training.paths import get_project_root, get_raw_data_dir, get_dataset_roots
+from training.paths import get_project_root, get_prepared_data_dir, get_dataset_roots
+from training.prepare_data import load_prepared_dataset
 from training.schemas.config import TrainingConfig
 from training.trainers.standalone_trainer import GenericModelTrainer
 
@@ -16,11 +16,11 @@ def main():
     with open(recipe_path, "r", encoding="utf-8") as f:
         cfg = TrainingConfig.model_validate(yaml.safe_load(f))
 
-    data_dir = get_raw_data_dir("engine_diagnostics")
+    data_dir = get_prepared_data_dir("engine_diagnostics")
     roots = get_dataset_roots("engine_diagnostics")
-    train_df = pd.read_csv(data_dir / "train_metadata.csv", dtype=str, keep_default_na=False)
-    val_df = pd.read_csv(data_dir / "val_metadata.csv", dtype=str, keep_default_na=False)
-    test_df = pd.read_csv(data_dir / "test_metadata.csv", dtype=str, keep_default_na=False)
+    train_df, val_df, test_df = load_prepared_dataset(
+        data_dir, roots=roots, dataset_name="engine_diagnostics",
+    )
 
     print(f"[Train] Iniciando entrenamiento con receta: {recipe_path.name}")
     print(f"[Train] Train: {len(train_df)} | Val: {len(val_df)} | Test: {len(test_df)}")

@@ -31,16 +31,21 @@ def main():
         sp2 = tmp_path / "Sephanoides_sephaniodes"
         sp1.mkdir(); sp2.mkdir()
         
-        dummy_audio = np.random.uniform(-0.5, 0.5, 32000 * 2).astype(np.float32)
-        sf.write(str(sp1 / "audio1.wav"), dummy_audio, 32000)
-        sf.write(str(sp2 / "audio2.wav"), dummy_audio, 32000)
+        rng = np.random.default_rng(42)
+        for species_dir in (sp1, sp2):
+            # Alphabetic stems remain distinct source groups in the ingestor;
+            # numeric chunk suffixes would be collapsed into one recording.
+            for group in ("a", "b", "c", "d"):
+                dummy_audio = rng.uniform(-0.5, 0.5, 32000 * 2).astype(np.float32)
+                sf.write(str(species_dir / f"recording_{group}.wav"), dummy_audio, 32000)
 
         ingestor = LocalFolderPAMIngestor(source_dir=tmp_path)
         records = ingestor.ingest()
         print(f"[OK] Ingestadas {len(records)} grabaciones.")
 
-        train_recs, val_recs, test_recs = grouped_stratified_split_dataset(records, train_ratio=0.5, val_ratio=0.5, test_ratio=0.0)
-        print(f"[OK] Split completado: {len(train_recs)} train, {len(val_recs)} val")
+        train_recs, val_recs, test_recs = grouped_stratified_split_dataset(
+            records, train_ratio=0.5, val_ratio=0.25, test_ratio=0.25)
+        print(f"[OK] Split completado: {len(train_recs)} train, {len(val_recs)} val, {len(test_recs)} test")
 
         unique_classes = sorted(records["clase"].unique().tolist())
         label_to_idx = {c: i for i, c in enumerate(unique_classes)}

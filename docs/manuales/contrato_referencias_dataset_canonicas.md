@@ -7,7 +7,128 @@ Esta guía describe el contrato disponible y la preparación de una transición
 **futura, con autorización propia**; no acredita migración ni despliegue real.
 La decisión está en el [ADR 0019](../adr/0019-referencias-canonicas-por-etapa.md).
 
-## Ruta rápida: preparar, revisar y decidir
+## Ruta rápida: preparar → entrenar → evaluar
+
+1. Elegir un índice canónico explícito y raíces físicas aprobadas; no descubrir
+   audio ni reparar raíces durante el entrenamiento.
+2. Preparar una vez las particiones en un destino nuevo mediante la API siguiente
+   (Aves) o el adaptador CLI (motores). Revisar conteos y proporciones efectivas.
+3. Entrenar desde el trío preparado completo. Usar **val únicamente** para
+   seleccionar checkpoint/configuración; reservar **test para evaluación final**.
+4. Si falla la admisión, detenerse: conversión histórica, reparación de datos,
+   regeneración y limpieza offline requieren autorización separada. Esta guía
+   no realizó ninguna de esas operaciones ni reparó problemas de raíces.
+
+### Preparación explícita y layouts
+
+La [API de preparación](../../backend/training/prepare_data.py), **no una CLI**, es:
+
+```python
+prepare_dataset(index_csv, *, roots, dataset_name, output_dir=None,
+                train_ratio=.70, val_ratio=.15, test_ratio=.15, random_state=42)
+```
+
+| Dataset admitido | Destino fijo por defecto, relativo al repositorio | CSV obligatorios |
+| --- | --- | --- |
+| `AvesChilenas` | `backend/data/prepared/AvesChilenas/` | `train.csv`, `val.csv`, `test.csv` |
+| `engine_diagnostics` | `backend/data/prepared/engine_diagnostics/` | `train_metadata.csv`, `val_metadata.csv`, `test_metadata.csv` |
+
+Ambos incluyen `.complete`. El padre del destino debe existir; `output_dir`
+permite preparar otro destino nuevo, pero los consumidores vinculados por
+`dataset_name` leen **solo el destino fijo**, sin override ni adopción automática.
+Las raíces de audio por defecto son `backend/data/raw/<dataset>` y
+`backend/data/processed/<dataset>/processed_wav`; se validan, no se reparan.
+
+El particionador estricto usa grupos completos `recordist`, sin cruce entre
+train/val/test ni pérdida de filas, y exige todas las clases en cada partición.
+70/15/15 y semilla 42 son defaults; los porcentajes son objetivos **aproximados**,
+subordinados a grupos y cobertura. Rechaza columnas ausentes, nulos/blancos en
+clase/grupo y cobertura inviable (incluida inviabilidad conjunta); no relaja
+restricciones. Una interrupción sin solución admisible del solver es un error
+separado. La preparación exige `file_path`, `file_stage`, `clase`, `recordist`
+y además `xc_id` para Aves; valida referencias y duplicados antes de publicar.
+
+**Ejemplo Aves, Python desde `backend`, ilustrativo y no ejecutado:** el índice
+canónico y las raíces son explícitos; se omite `output_dir` para usar el destino
+fijo. Las rutas `/synthetic/...` no autorizan operaciones reales.
+
+```python
+from pathlib import Path
+from training.prepare_data import prepare_dataset
+from poc.train import train_pipeline
+from poc.evaluate import run_evaluation
+
+roots = {
+    "raw": Path("/synthetic/data/raw/AvesChilenas"),
+    "processed": Path("/synthetic/data/processed/AvesChilenas/processed_wav"),
+}
+index = Path("/synthetic/indices/aves_canonico.csv")
+summary = prepare_dataset(index, roots=roots, dataset_name="AvesChilenas")
+trained = train_pipeline(
+    metadata_csv=index, raw_dir=roots["raw"], roots=roots,
+    dataset_name="AvesChilenas", checkpoint_dir=Path("/synthetic/checkpoints"),
+)
+metrics = run_evaluation(
+    checkpoint_path=trained["best_checkpoint_path"], roots=roots,
+    dataset_name="AvesChilenas",
+    output_image_path=Path("/synthetic/results/aves_test.png"),
+)
+```
+
+`metadata_csv` en entrenamiento conserva compatibilidad posicional: **no lee
+ese índice ni genera splits**. Las CLIs `python -m poc.train` y
+`python -m poc.evaluate` fijan Aves y sus raíces; no exponen argumentos de
+`dataset_name`, índice, trío preparado o raíces. No son una CLI unificada para
+motores. Por ejemplo, desde `backend` (no ejecutado):
+
+```bash
+python -m poc.train --epochs 15 --checkpoint-name augmented_best.pt
+python -m poc.evaluate --checkpoint augmented_best.pt --no-tta
+```
+
+**Motores, desde `backend`, ejemplos no ejecutados:** preparar con el
+[adaptador real](../../backend/training/prepare_engine_data.py), luego entrenar
+con la receta fija del [script](../../backend/train_car_engine_model.py), que
+incluye evaluación final de test y no expone flags de dataset/índice/raíces.
+Las raíces declaradas al preparar deben corresponder a las configuradas por
+ese consumidor.
+
+```bash
+python -m training.prepare_engine_data \
+  --index-csv /synthetic/indices/motores_canonico.csv \
+  --raw-root /synthetic/data/raw/engine_diagnostics \
+  --processed-root /synthetic/data/processed/engine_diagnostics/processed_wav \
+  --train-ratio 0.70 --val-ratio 0.15 --test-ratio 0.15 --seed 42
+python train_car_engine_model.py
+```
+
+El adaptador también admite `--output-dir`; `--processed-root` es opcional
+solo si ninguna referencia necesita esa etapa. No convierte audio ni ingiere
+carpetas. Estos ejemplos describen interfaces, no compatibilidad acústica de
+experimentos/frontends ni resultados de rendimiento.
+
+### Barrera de admisión y límites
+
+- El destino se reserva mediante creación exclusiva de un directorio **nuevo**,
+  separado de las raíces de audio. No sobrescribe ni adopta existentes.
+- Los CSV nuevos se publican con modo `0644` y el directorio nuevo con `0755`;
+  no cambia permisos de raíces, audio, fuentes ni artefactos privados existentes.
+- `.complete` es JSON escrito **al final**, tras releer/validar el trío. Declara
+  esquema, dataset y SHA-256 de cada CSV: integridad, **no autenticidad**.
+  El lector exige layout exacto, marcador válido, hashes y trío válido.
+- Un fallo puede dejar el destino reservado incompleto. No hay promesa de
+  atomicidad de lote, rollback ni overwrite; inspección/limpieza offline y
+  reintento con otro destino requieren autorización separada.
+- Evaluación API: `test_csv` personalizado es excluyente con `dataset_name` o
+  `admitted_source`; no recibe la garantía de admisión del trío preparado.
+  El benchmark vinculado exige `dataset_name` y `test_csv=None`.
+- `AdmittedPreparedSource` conserva una copia propia del trío admitido. El
+  benchmark comparte ese snapshot entre corridas y evaluación, entrega copias
+  y revalida trío/referencias con dataset y raíces iguales, **sin releer CSV**.
+  Congela membresía, **no bytes de audio**: las raíces y archivos siguen vivos;
+  no es un snapshot acústico ni protección contra carreras del filesystem.
+
+## Transición histórica: revisar y decidir
 
 1. Identificar explícitamente índice de entrada, etapa y raíces físicas del dataset.
 2. Preparar un plan offline: metadata sola **o** el trío completo train/val/test;
@@ -75,10 +196,11 @@ originales, no el WAV derivado**; no se reemplaza por un hash del derivado.
 No extrapolar estos flags a todos los scripts del repositorio. El modo productor
 PAM `input_mode='pam_filename'` del [ingestor local](../../backend/training/datasets/local_folder.py)
 es explícito y exige coincidencia única; no es fallback legacy de los lectores.
-En el pipeline PoC, el trío existente se valida y reutiliza conservando strings,
-membresía y orden; un trío parcial falla antes de outputs. Solo si faltan las
-tres particiones se generan nuevas desde el índice canónico explícito.
-El conversor siguiente **no llama al particionador**.
+En el pipeline PoC, solo se admite el trío preparado completo con su barrera;
+la ausencia o invalidez falla antes de outputs, sin generación implícita.
+El conversor siguiente **no llama al particionador**: conserva la membresía
+histórica, no convierte a WAV ni reparticiona. Convertir índices históricos
+no equivale a preparar un nuevo trío ni autoriza regenerar datos.
 
 Saneamiento usa creación exclusiva por archivo, no atomicidad de lote: un fallo
 puede dejar derivados huérfanos sin índice. La descarga publica CSV progresivo,

@@ -11,7 +11,8 @@ import torch
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, classification_report
 from torch.utils.data import DataLoader
 
-from training.paths import get_project_root, get_raw_data_dir, get_dataset_roots
+from training.paths import get_project_root, get_prepared_data_dir, get_dataset_roots
+from training.prepare_data import load_prepared_dataset
 from training.schemas.config import TrainingConfig
 from training.trainers.standalone_trainer import GenericModelTrainer
 from training.pipelines.dataset import GenericAudioDataset
@@ -93,11 +94,11 @@ def evaluate_models(models, weights, test_df, audio_cfg, device, *, roots):
 
 
 def main():
-    data_dir = get_raw_data_dir("engine_diagnostics")
+    data_dir = get_prepared_data_dir("engine_diagnostics")
     roots = get_dataset_roots("engine_diagnostics")
-    train_df = pd.read_csv(data_dir / "train_metadata.csv", dtype=str, keep_default_na=False)
-    val_df = pd.read_csv(data_dir / "val_metadata.csv", dtype=str, keep_default_na=False)
-    test_df = pd.read_csv(data_dir / "test_metadata.csv", dtype=str, keep_default_na=False)
+    train_df, val_df, test_df = load_prepared_dataset(
+        data_dir, roots=roots, dataset_name="engine_diagnostics",
+    )
 
     # 1. Entrenar ResNet34d v2 (ventana exacta 1.5s, mixup 0.2)
     cfg_r_v2, path_r_v2, m_r_v2 = train_recipe("car_engine_diagnostics_resnet34d_v2.yaml", train_df, val_df, test_df, roots=roots)

@@ -119,18 +119,29 @@ def test_run_benchmark(tmp_path, monkeypatch):
     # Crear archivos falsos requeridos
     meta_csv = tmp_path / "metadata.csv"
     meta_csv.write_text("dummy")
-    test_csv = tmp_path / "test.csv"
-    test_csv.write_text("dummy")
+    from training.prepare_data import prepare_dataset
+    import pandas as pd
+    import soundfile as sf
+    prepared = tmp_path / "prepared"
+    monkeypatch.setattr("poc.train.get_prepared_data_dir", lambda name: prepared)
     raw_dir = tmp_path / "raw"
     raw_dir.mkdir()
     processed = tmp_path / "processed"
     processed.mkdir()
     roots = {"raw": raw_dir, "processed": processed}
+    rows = []
+    for i in range(20):
+        sf.write(processed / f"{i}.wav", np.zeros(800), 8000)
+        rows.append({"file_path": f"{i}.wav", "file_stage": "processed", "clase": "A",
+                     "recordist": str(i), "xc_id": str(i)})
+    pd.DataFrame(rows).to_csv(meta_csv, index=False)
+    prepare_dataset(meta_csv, roots=roots, dataset_name="AvesChilenas", output_dir=prepared)
 
     summary = run_benchmark(
+        dataset_name="AvesChilenas",
         metadata_csv=meta_csv,
         raw_dir=raw_dir,
-        test_csv=test_csv,
+        test_csv=None,
         output_dir=tmp_path / "benchmark_out",
         roots=roots,
         num_runs=2,

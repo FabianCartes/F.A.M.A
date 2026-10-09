@@ -1,4 +1,5 @@
 """Public training entrypoints prepare canonical rows before expensive ML work."""
+from types import SimpleNamespace
 import numpy as np
 import pandas as pd
 import pytest
@@ -113,8 +114,9 @@ def test_car_entrypoint_preserves_canonical_csv_identity(source, tmp_path, monke
     (recipe_dir / "car_engine_diagnostics_resnet34d.yaml").write_text(
         yaml.safe_dump(config.model_dump(mode="json")), encoding="utf-8")
     monkeypatch.setattr(script, "get_project_root", lambda: tmp_path)
-    monkeypatch.setattr(script, "get_raw_data_dir", lambda name: roots["raw"])
+    monkeypatch.setattr(script, "get_prepared_data_dir", lambda name: roots["raw"])
     monkeypatch.setattr(script, "get_dataset_roots", lambda name: dict(roots))
+    monkeypatch.setattr(script, "load_prepared_dataset", lambda *args, **kwargs: (frame, frame, frame))
     prepared = stop_after_preparation(monkeypatch)
     with pytest.raises(PreparedSplits):
         script.main()
@@ -124,6 +126,125 @@ def test_car_entrypoint_preserves_canonical_csv_identity(source, tmp_path, monke
     for split in ("train", "val", "test"):
         pd.testing.assert_frame_equal(
             pd.read_csv(roots["raw"] / f"{split}_metadata.csv", dtype=str, keep_default_na=False), frame)
+
+
+@pytest.mark.parametrize("module", [
+    "train_car_engine_model", "train_v2_and_compare", "train_and_ensemble_engines",
+])
+@pytest.mark.parametrize("invalid", [False, True])
+def test_engine_main_loads_validated_prepared_trio_before_training(source, tmp_path, monkeypatch, module, invalid):
+    import importlib
+
+    script = importlib.import_module(module)
+    roots, frame, config = source
+    frames = tuple(frame.assign(id=f"00{idx}") for idx in range(3))
+    prepared_dir = tmp_path / "prepared"
+    recipe_dir = tmp_path / "backend/training/recipes"
+    recipe_dir.mkdir(parents=True)
+    (recipe_dir / "car_engine_diagnostics_resnet34d.yaml").write_text(
+        yaml.safe_dump(config.model_dump(mode="json")), encoding="utf-8")
+    monkeypatch.setattr(script, "get_project_root", lambda: tmp_path)
+
+    def destination(name):
+        assert name == "engine_diagnostics"
+        return prepared_dir
+
+    def binding(name):
+        assert name == "engine_diagnostics"
+        return roots
+
+    loaded = []
+
+    def load(path, *, roots: object, dataset_name):
+        assert path == prepared_dir
+        assert roots is source[0]
+        assert dataset_name == "engine_diagnostics"
+        loaded.append(True)
+        if invalid:
+            raise ValueError("Invalid prepared dataset")
+        return frames
+
+    def train(*args, **kwargs):
+        assert loaded == [True]
+        actual = tuple(kwargs[key] for key in ("train_df", "val_df", "test_df")) if not args else args[1:4]
+        assert all(actual[idx] is frames[idx] for idx in range(3))
+        assert kwargs["roots"] is roots
+        raise PreparedSplits
+
+    def legacy_read(*args, **kwargs):
+        pytest.fail("main must not read legacy CSVs directly")
+
+    monkeypatch.setattr(script, "get_prepared_data_dir", destination, raising=False)
+    monkeypatch.setattr(script, "get_dataset_roots", binding)
+    monkeypatch.setattr(script, "load_prepared_dataset", load, raising=False)
+    monkeypatch.setattr(pd, "read_csv", legacy_read)
+    if module == "train_car_engine_model":
+        class Trainer:
+            def __init__(self, **kwargs):
+                assert loaded == [True]
+            train_and_export = staticmethod(train)
+        monkeypatch.setattr(script, "GenericModelTrainer", Trainer)
+    else:
+        monkeypatch.setattr(script, "train_recipe" if module == "train_v2_and_compare" else "train_model", train)
+    with pytest.raises(ValueError if invalid else PreparedSplits):
+        script.main()
+    assert loaded == [True]
+
+
+def test_engine_ensemble_evaluates_same_admitted_snapshot_without_historic_hash(source, tmp_path, monkeypatch):
+    import train_and_ensemble_engines as script
+    from training.prepare_data import prepare_dataset, load_prepared_dataset
+
+    roots, frame, config = source
+    rows = []
+    for i in range(12):
+        sf.write(roots["processed"] / f"{i:03}.wav", np.zeros(8000), 8000)
+        rows.append(frame.assign(file_path=f"{i:03}.wav", id=f"{i:03}", recordist=f"{i:03}"))
+    index = tmp_path / "index.csv"
+    pd.concat(rows).to_csv(index, index=False)
+    destination = tmp_path / "prepared"
+    prepare_dataset(index, roots=roots, dataset_name="engine_diagnostics", output_dir=destination)
+    admitted = load_prepared_dataset(destination, roots=roots, dataset_name="engine_diagnostics")
+    monkeypatch.setattr(script, "get_project_root", lambda: tmp_path)
+    monkeypatch.setattr(script, "get_prepared_data_dir", lambda name: destination)
+    monkeypatch.setattr(script, "get_dataset_roots", lambda name: roots)
+    def load(*args, **kwargs):
+        actual = load_prepared_dataset(*args, **kwargs)
+        assert all(actual[i].equals(admitted[i]) for i in range(3))
+        # Mutation after admission must not change the evaluation snapshot.
+        (destination / "test_metadata.csv").write_bytes(b"changed after admission")
+        (roots["raw"] / "test_metadata.csv").write_bytes(b"legacy must not be read")
+        monkeypatch.setattr(pd, "read_csv", lambda *a, **k: pytest.fail("no CSV re-read after admission"))
+        admitted[:] = actual
+        return actual
+    admitted = list(admitted)
+    monkeypatch.setattr(script, "load_prepared_dataset", load)
+    def train(recipe, train_df, val_df, test_df, **kwargs):
+        assert train_df is admitted[0] and val_df is admitted[1] and test_df is admitted[2]
+        return config, tmp_path / "fake-model", {}
+    monkeypatch.setattr(script, "train_model", train)
+    class Model(torch.nn.Module):
+        def load_state_dict(self, *args, **kwargs):
+            pass
+    monkeypatch.setattr(script, "BioacousticModel", lambda *a, **k: Model())
+    monkeypatch.setattr(script, "GPUAudioFrontEnd", lambda **kwargs: torch.nn.Identity())
+    monkeypatch.setattr(torch, "load", lambda *a, **k: {})
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(script, "GenericAudioDataset", lambda df, **kwargs: df)
+    monkeypatch.setattr(script, "DataLoader", lambda dataset, **kwargs: dataset)
+    calibration = SimpleNamespace(val_accuracy=1., val_macro_f1=1., val_ece=0.,
+                                  optimal_weights=[.5, .5], optimal_temperatures=[1., 1.])
+    def tune(**kwargs):
+        assert kwargs["val_loader"] is admitted[1]
+        return calibration
+    monkeypatch.setattr(script, "tune_ensemble_calibration", tune)
+    def evaluate(**kwargs):
+        assert kwargs["data_loader"] is admitted[2]
+        assert kwargs["calibration_result"] is calibration
+        raise PreparedSplits
+    monkeypatch.setattr(script, "evaluate_calibrated_ensemble", evaluate)
+    with pytest.raises(PreparedSplits):
+        script.main()
 
 
 @pytest.mark.parametrize("module,function", [

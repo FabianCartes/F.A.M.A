@@ -80,7 +80,9 @@ def test_prepare_engine_persists_canonical_splits(tmp_path):
             for segment in (1, 2):
                 write_audio(source / clase / f"engine{group}_{segment}.wav")
     output = tmp_path / "splits"
-    prepare_engine_dataset(source, output_dir=output)
+    index = tmp_path / "canonical.csv"
+    LocalFolderPAMIngestor(source).ingest().to_csv(index, index=False)
+    prepare_engine_dataset(source, index_csv=index, output_dir=output)
     frames = [pd.read_csv(output / f"{split}_metadata.csv") for split in ("train", "val", "test")]
     assert sum(map(len, frames)) == 24
     groups = [set(frame["recordist"]) for frame in frames]

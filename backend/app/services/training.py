@@ -24,8 +24,8 @@ import gc
 from torch.utils.data import DataLoader
 from poc.preprocess import GPUAudioFrontEnd, GPUSpecAugment
 from poc.train import BioacousticModel, AudioCNN, AudioDataset, FocalLoss, apply_mixup
-from poc.split import grouped_stratified_split
-from training.paths import get_raw_data_dir, get_dataset_roots
+from training.prepare_data import load_prepared_dataset
+from training.paths import get_raw_data_dir, get_dataset_roots, get_prepared_data_dir
 from training.schemas.config import AudioConfig
 from training.pipelines.dataset import GenericAudioDataset
 from dataset_references import resolve_reference
@@ -248,28 +248,17 @@ class TrainingService:
         """Validate and freeze partitions before a job is admitted."""
         roots = get_dataset_roots(dataset_name)
         raw_dir = roots["raw"]
-        if not raw_dir.is_dir():
-            raise ValueError(f"Dataset '{dataset_name}' sin fuente local válida: {raw_dir}")
-        suffix = "_metadata" if dataset_name == "engine_diagnostics" else ""
-        train_csv, val_csv = (raw_dir / f"{split}{suffix}.csv" for split in ("train", "val"))
-        for csv in (train_csv, val_csv, raw_dir / "metadata.csv"):
-            if csv.exists() and not csv.resolve().is_relative_to(raw_dir):
-                raise ValueError(f"Dataset '{dataset_name}': metadatos fuera de su fuente local.")
-        if train_csv.exists() != val_csv.exists():
-            raise ValueError(f"Dataset '{dataset_name}' con particiones incompletas.")
-        if train_csv.is_file() and val_csv.is_file():
-            train_df = pd.read_csv(train_csv, dtype=str, keep_default_na=False)
-            val_df = pd.read_csv(val_csv, dtype=str, keep_default_na=False)
-        elif dataset_name == "AvesChilenas" and not train_csv.exists() and not val_csv.exists():
-            metadata = pd.read_csv(raw_dir / "metadata.csv", dtype=str, keep_default_na=False)
-            if not {"file_path", "file_stage"}.issubset(metadata.columns):
-                raise ValueError("Índice histórico: se requieren file_path y file_stage; use conversión offline.")
-            train_df, val_df, _ = grouped_stratified_split(metadata)
-        else:
-            raise ValueError(f"Dataset '{dataset_name}' sin particiones válidas.")
+        prepared_dir = get_prepared_data_dir(dataset_name)
+        try:
+            train_df, val_df, test_df = load_prepared_dataset(
+                prepared_dir, roots=roots, dataset_name=dataset_name)
+        except (ValueError, OSError) as exc:
+            raise ValueError(
+                f"Dataset '{dataset_name}': preparación ausente o inválida en {prepared_dir}: {exc}"
+            ) from exc
 
         resolved_partitions = {}
-        for split, frame in (("train", train_df), ("val", val_df)):
+        for split, frame in (("train", train_df), ("val", val_df), ("test", test_df)):
             if frame.empty or "clase" not in frame or frame["clase"].isna().any():
                 raise ValueError(f"Dataset '{dataset_name}': partición {split} vacía o sin clases válidas.")
             if not frame["clase"].map(lambda c: isinstance(c, str) and bool(c.strip())).all():
@@ -290,7 +279,8 @@ class TrainingService:
             raise ValueError(f"Dataset '{dataset_name}': clases de validación ausentes en train.")
         if resolved_partitions["train"] & resolved_partitions["val"]:
             raise ValueError(f"Dataset '{dataset_name}': audios compartidos entre train y val.")
-        return {"raw_dir": raw_dir, "roots": roots, "train_df": train_df, "val_df": val_df}
+        return {"raw_dir": raw_dir, "roots": roots, "train_df": train_df,
+                "val_df": val_df, "test_df": test_df}
 
     def start_training(
         self,

@@ -57,6 +57,15 @@ def get_processed_data_dir(dataset_name: Optional[str] = None) -> Path:
     return proc_dir
 
 
+def get_prepared_data_dir(dataset_name: str) -> Path:
+    """Declare the separate prepared destination; never create directories."""
+    if (not isinstance(dataset_name, str) or not dataset_name
+            or dataset_name in (".", "..") or "/" in dataset_name
+            or "\\" in dataset_name):
+        raise ValueError("dataset_name must be a single directory name")
+    return Path(__file__).absolute().parent.parent / "data" / "prepared" / dataset_name
+
+
 def get_dataset_roots(dataset_name: str) -> dict[str, Path]:
     """Declare audio roots with the same unresolved spelling as the public getters.
 

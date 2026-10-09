@@ -1,7 +1,6 @@
 import sys
 import time
 import random
-from contextlib import ExitStack
 from pathlib import Path
 
 # Asegurar que la raíz del proyecto esté en sys.path
@@ -30,9 +29,33 @@ from poc.preprocess import (
     TARGET_SR,
     DURATION_SECONDS,
 )
-from poc.split import grouped_stratified_split
+from training.paths import get_prepared_data_dir
+from training.prepare_data import load_prepared_dataset, _validate_trio
 from dataset_references import resolve_reference
 
+
+
+class AdmittedPreparedSource:
+    """Owned CSV snapshot admitted by the preparation barrier, never caller frames.
+
+    Consumers receive copies and revalidate references/trio without rereading CSVs.
+    Audio bytes are not frozen; the existing physical-root checks still apply.
+    """
+
+    def __init__(self, *, dataset_name, roots):
+        if dataset_name not in ("AvesChilenas", "engine_diagnostics"):
+            raise ValueError("dataset_name is required and must name a supported dataset")
+        self._dataset_name = dataset_name
+        self._roots = dict(roots)
+        self._parts = load_prepared_dataset(
+            get_prepared_data_dir(dataset_name), roots=self._roots, dataset_name=dataset_name)
+
+    def frames(self, *, dataset_name, roots):
+        if dataset_name != self._dataset_name or dict(roots) != self._roots:
+            raise ValueError("Admitted source dataset_name and roots must match")
+        parts = tuple(frame.copy(deep=True) for frame in self._parts)
+        _validate_trio(parts, self._roots, self._dataset_name)
+        return parts
 
 
 def _validate_canonical_index(df: pd.DataFrame, roots) -> None:
@@ -629,15 +652,27 @@ def train_pipeline(
     pool_type: str = "gem",
     *,
     roots: Mapping[str, Union[str, Path]],
+    dataset_name: Optional[str] = None,
+    admitted_source: Optional[AdmittedPreparedSource] = None,
 ) -> Dict[str, Any]:
     """
     Ejecuta el ciclo de entrenamiento completo:
-    1. Carga particiones o genera split agrupado y estratificado.
+    1. Carga exclusivamente particiones preparadas para dataset_name explícito.
+       metadata_csv conserva compatibilidad posicional; no selecciona ni genera datos.
     2. Configura AudioDataset con Data Augmentation en Train y Determinismo en Val.
     3. Construye DataLoaders concurrentes con multiprocesamiento y memoria fijada.
     4. Entrena el modelo (EfficientNet o AudioCNN) registrando loss y accuracy por época con Mixup opcional.
     5. Guarda el mejor checkpoint en checkpoints/<checkpoint_name>.
     """
+    if dataset_name not in ("AvesChilenas", "engine_diagnostics"):
+        raise ValueError("dataset_name is required and must name a supported dataset")
+    roots = dict(roots)
+    if admitted_source is None:
+        admitted_source = AdmittedPreparedSource(dataset_name=dataset_name, roots=roots)
+    if type(admitted_source) is not AdmittedPreparedSource:
+        raise ValueError("admitted_source must be an admitted prepared source")
+    train_df, val_df, test_df = admitted_source.frames(dataset_name=dataset_name, roots=roots)
+
     if seed is not None:
         random.seed(seed)
         np.random.seed(seed)
@@ -651,42 +686,6 @@ def train_pipeline(
         device_obj = torch.device(device)
 
     print(f"\nIniciando entrenamiento en dispositivo: {device_obj}")
-
-    data_dir = metadata_csv.parent
-    train_file = data_dir / "train.csv"
-    val_file = data_dir / "val.csv"
-    test_file = data_dir / "test.csv"
-
-    roots = dict(roots)
-    split_files = (train_file, val_file, test_file)
-    present = [path.exists() or path.is_symlink() for path in split_files]
-    if any(present) and not all(present):
-        raise ValueError("incomplete partial split trio; recover or convert offline")
-    if all(present):
-        print("Cargando particiones existentes (train.csv, val.csv, test.csv)...")
-        for path in split_files:
-            # This binding validates CSV publication targets, never audio roots.
-            resolve_reference(path.name, "raw", {"raw": path.parent})
-        train_df = pd.read_csv(train_file, dtype=str, keep_default_na=False)
-        val_df = pd.read_csv(val_file, dtype=str, keep_default_na=False)
-        test_df = pd.read_csv(test_file, dtype=str, keep_default_na=False)
-        for frame in (train_df, val_df, test_df):
-            _validate_canonical_index(frame, roots)
-    else:
-        resolve_reference(metadata_csv.name, "raw", {"raw": metadata_csv.parent})
-        df = pd.read_csv(metadata_csv, dtype=str, keep_default_na=False)
-        _validate_canonical_index(df, roots)
-        train_df, val_df, test_df = grouped_stratified_split(df)
-        # Exclusive creation never replaces a concurrent publication. Failure may
-        # leave a partial trio; the next run must stop for offline recovery.
-        try:
-            with ExitStack() as stack:
-                streams = [stack.enter_context(path.open("x", encoding="utf-8", newline=""))
-                           for path in split_files]
-                for frame, stream in zip((train_df, val_df, test_df), streams):
-                    frame.to_csv(stream, index=False)
-        except OSError as exc:
-            raise ValueError("split publication failed; inspect partial trio offline") from exc
 
     print(f"Split cargado -> Train: {len(train_df)}, Val: {len(val_df)}, Test: {len(test_df)}")
 
@@ -860,6 +859,7 @@ if __name__ == "__main__":
     roots = get_dataset_roots("AvesChilenas")
     aves_raw_dir = roots["raw"]
     train_pipeline(
+        dataset_name="AvesChilenas",
         metadata_csv=aves_raw_dir / "metadata.csv",
         raw_dir=aves_raw_dir,
         roots=roots,

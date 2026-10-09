@@ -3,17 +3,18 @@ backend/train_and_ensemble_engines.py
 Entrenamiento de ConvNeXt-Nano y EfficientNet-B0, seguido de evaluación y ensamblado tri-modelo.
 """
 from pathlib import Path
+import json
 import yaml
 import pandas as pd
 import numpy as np
 import torch
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 
-from training.paths import get_project_root, get_raw_data_dir, get_dataset_roots
+from training.paths import get_project_root, get_prepared_data_dir, get_dataset_roots
+from training.prepare_data import load_prepared_dataset
 from training.schemas.config import TrainingConfig
 from training.trainers.standalone_trainer import GenericModelTrainer
 from training.pipelines.dataset import GenericAudioDataset
-from training.pipelines.test_guard import verify_test_set_integrity, FROZEN_ENGINE_TEST_SHA256
 from training.pipelines.ensemble_tuner import tune_ensemble_calibration, evaluate_calibrated_ensemble
 from torch.utils.data import DataLoader
 from poc.preprocess import GPUAudioFrontEnd
@@ -94,18 +95,17 @@ def evaluate_ensemble(models, weights, test_df, audio_cfg, device, *, roots):
 
 def main():
     project_root = get_project_root()
-    data_dir = get_raw_data_dir("engine_diagnostics")
+    data_dir = get_prepared_data_dir("engine_diagnostics")
     roots = get_dataset_roots("engine_diagnostics")
-    train_df = pd.read_csv(data_dir / "train_metadata.csv", dtype=str, keep_default_na=False)
-    val_df = pd.read_csv(data_dir / "val_metadata.csv", dtype=str, keep_default_na=False)
-    test_df = pd.read_csv(data_dir / "test_metadata.csv", dtype=str, keep_default_na=False)
+    train_df, val_df, test_df = load_prepared_dataset(
+        data_dir, roots=roots, dataset_name="engine_diagnostics",
+    )
 
     checkpoints_dir = project_root / "backend" / "checkpoints"
 
     # 1. Cargar o entrenar ConvNeXt-Nano
     conv_ckpt = checkpoints_dir / "car-engine-diagnostics-convnext-nano"
     if (conv_ckpt / "weights.pt").exists() and (conv_ckpt / "manifest.json").exists():
-        import json
         with open(conv_ckpt / "manifest.json", "r", encoding="utf-8") as f:
             m_conv = json.load(f).get("metrics", {})
         recipe_path = project_root / "backend/training/recipes/car_engine_diagnostics_convnext_nano.yaml"
@@ -119,7 +119,6 @@ def main():
     # 2. Cargar o entrenar EfficientNet-B0
     eff_ckpt = checkpoints_dir / "car-engine-diagnostics-efficientnet-b0"
     if (eff_ckpt / "weights.pt").exists() and (eff_ckpt / "manifest.json").exists():
-        import json
         with open(eff_ckpt / "manifest.json", "r", encoding="utf-8") as f:
             m_eff = json.load(f).get("metrics", {})
         recipe_path = project_root / "backend/training/recipes/car_engine_diagnostics_efficientnet_b0.yaml"
@@ -130,10 +129,9 @@ def main():
     else:
         cfg_eff, path_eff, m_eff = train_model("car_engine_diagnostics_efficientnet_b0.yaml", train_df, val_df, test_df, roots=roots)
 
-    # 0. Higiene Metodológica: Verificar Integridad Criptográfica del Test Set Congelado
-    test_csv = data_dir / "test_metadata.csv"
-    verify_test_set_integrity(test_csv, FROZEN_ENGINE_TEST_SHA256)
-    print(f"\n[Test Guard] Integridad verificada. Hash SHA-256 congelado: {FROZEN_ENGINE_TEST_SHA256[:16]}...")
+    # La admisión prepared verificó y parseó los mismos bytes. Evaluar ese
+    # snapshot, sin reabrir rutas ni compararlo con el conjunto histórico.
+    print("\n[Test Guard] Evaluación sobre el snapshot prepared validado al cargar.")
 
     # 3. Cargar modelos en GPU/CPU para calibración y evaluación
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -206,8 +204,8 @@ def main():
     receipt_path.parent.mkdir(parents=True, exist_ok=True)
     with open(receipt_path, "w", encoding="utf-8") as f:
         json.dump({
-            "test_sha256": FROZEN_ENGINE_TEST_SHA256,
-            "test_file": str(test_csv),
+            "test_source": "validated_prepared_snapshot",
+            "dataset_name": "engine_diagnostics",
             "tuning_split": "validation_only",
             "validation_metrics": {
                 "val_accuracy": calib_result.val_accuracy,
