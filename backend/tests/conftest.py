@@ -23,6 +23,7 @@ _focused_suites = {
     "test_prediction_audio_metadata.py", "test_prediction_audio_metadata_migration.py",
     "test_api_feedback.py", "test_api_feedback_sync.py",
     "test_feedback_local_approval.py", "test_feedback_sync_worker.py",
+    "test_feedback_storage.py",
 }
 _selected_suites = {Path(arg.split("::")[0]).name for arg in sys.argv[1:]
                     if arg.split("::")[0].endswith(".py")}

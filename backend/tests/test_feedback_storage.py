@@ -54,8 +54,8 @@ def workflow(tmp_path, monkeypatch):
         db.commit()
         fb = service.record_feedback(db, pred.id_prediccion, True)
         dataset = service.raw_data_dir / "AvesChilenas"
-        dataset.mkdir(parents=True)
-        (dataset / "metadata.csv").write_text("nombre_archivo,clase\n")
+        (dataset / "Chucao").mkdir(parents=True)
+        (dataset / "metadata.csv").write_text("nombre_archivo,clase,file_path,file_stage\n")
         yield service, db, pred, fb, objects
 
 
@@ -133,7 +133,14 @@ def _concurrent_approval_worker(raw_dir, source, feedback_id, snapshot, uploaded
 
 def test_concurrent_process_approvals_preserve_both_rows_and_retries(workflow):
     service, db, pred, fb, objects = workflow
-    (service.raw_data_dir / "AvesChilenas/Chucao").mkdir()
+    # Independent admissions need different valid audio, not duplicate hashes.
+    second_source = io.BytesIO()
+    with wave.open(second_source, "wb") as audio:
+        audio.setnchannels(1)
+        audio.setsampwidth(2)
+        audio.setframerate(22050)
+        audio.writeframes(b"\x02\x00\xfe\xff" * 100)
+    sources = [objects[pred.ruta_audio_prueba], second_source.getvalue()]
     context = multiprocessing.get_context("fork")
     release_read, retry = context.Event(), context.Event()
     snapshots = [context.Event(), context.Event()]
@@ -141,7 +148,7 @@ def test_concurrent_process_approvals_preserve_both_rows_and_retries(workflow):
     done = [context.Event(), context.Event()]
     results = context.Queue()
     processes = [context.Process(target=_concurrent_approval_worker, args=(
-        service.raw_data_dir, objects[pred.ruta_audio_prueba], index + 1,
+        service.raw_data_dir, sources[index], index + 1,
         snapshots[index], uploaded[index], release_read, done[index], retry, results,
     )) for index in range(2)]
     metadata = service.raw_data_dir / "AvesChilenas/metadata.csv"
@@ -174,6 +181,7 @@ def test_concurrent_process_approvals_preserve_both_rows_and_retries(workflow):
         rows_after_retry = list(csv.reader(stream))
     assert len(rows_after_retry) == 3
     assert {row[0] for row in rows_after_retry[1:]} == expected
+    assert rows_after_retry == rows_before_retry
 
 
 def test_approval_preserves_exact_source_locally_and_enqueues_cloud_identity(workflow):
@@ -196,19 +204,45 @@ def test_failed_approval_stays_pending_and_retry_has_no_duplicates(workflow, mon
         objects.clear()
     elif failure == "local":
         destination = service.raw_data_dir / "AvesChilenas/Chucao"
-        destination.write_text("not a directory")
+        # Obstruct publication only after the real local catalogue was resolved.
+        original_client = storage.storage.Client
+
+        class ObstructingClient(original_client):
+            def blob(self, key):
+                def download():
+                    destination.rename(service.raw_data_dir / ".saved_chucao")
+                    destination.write_text("not a directory")
+                    return objects[key]
+                return SimpleNamespace(download_as_bytes=download)
+
+        monkeypatch.setattr(storage.storage, "Client", ObstructingClient)
     else:
         (service.raw_data_dir / "AvesChilenas/metadata.csv.pending").mkdir()
-    with pytest.raises(HTTPException):
-        service.approve_feedback(db, fb.id_retroalimentacion)
-    assert len(service.get_pending_feedback(db)) == 1
     with pytest.raises(HTTPException) as error:
-        service.record_feedback(db, pred.id_prediccion, False, "Turca")
-    assert error.value.status_code == 409
-    assert (service.raw_data_dir / "AvesChilenas/metadata.csv").read_text() == "nombre_archivo,clase\n"
+        service.approve_feedback(db, fb.id_retroalimentacion)
+    assert error.value.status_code == 503
+    assert len(service.get_pending_feedback(db)) == 1
+    intent = service.raw_data_dir / f".feedback_{fb.id_retroalimentacion}.json"
+    if failure == "missing":
+        # No source bytes means no durable admission intent yet.
+        assert not intent.exists()
+        assert service.record_feedback(db, pred.id_prediccion, True).id_retroalimentacion == fb.id_retroalimentacion
+    else:
+        assert intent.exists()
+        with pytest.raises(HTTPException) as error:
+            service.record_feedback(db, pred.id_prediccion, False, "Turca")
+        assert error.value.status_code == 409
+    assert (service.raw_data_dir / "AvesChilenas/metadata.csv").read_text() == "nombre_archivo,clase,file_path,file_stage\n"
+    audio_path = service.raw_data_dir / "AvesChilenas/Chucao/feedback_1.wav"
+    if failure == "metadata":
+        assert audio_path.read_bytes() == source
+    else:
+        assert not audio_path.exists()
+    intent_before_retry = intent.read_bytes() if intent.exists() else None
     if failure == "local":
         # The obstruction is a test fixture, not production data.
         destination.rename(service.raw_data_dir / "obstruction")
+        (service.raw_data_dir / ".saved_chucao").rename(destination)
     if failure == "metadata":
         (service.raw_data_dir / "AvesChilenas/metadata.csv.pending").rename(service.raw_data_dir / "metadata_obstruction")
     monkeypatch.undo()
@@ -229,16 +263,27 @@ def test_failed_approval_stays_pending_and_retry_has_no_duplicates(workflow, mon
     with (service.raw_data_dir / "AvesChilenas/metadata.csv").open() as f:
         assert len(list(csv.reader(f))) == 2
     assert len(objects) == 1
+    assert audio_path.read_bytes() == source
+    assert service.get_pending_feedback(db) == []
+    assert len(FeedbackSyncQueue().pending(db)) == 1
+    if intent_before_retry is not None:
+        assert intent.read_bytes() == intent_before_retry
 
 
 def test_database_failure_after_both_writes_retries_without_metadata_duplicates(workflow, monkeypatch):
     service, db, pred, fb, objects = workflow
     commit = db.commit
+    commit_attempts = []
     def fail_commit():
+        commit_attempts.append(True)
         raise OSError("database commit unavailable")
     monkeypatch.setattr(db, "commit", fail_commit)
-    with pytest.raises(HTTPException):
+    with pytest.raises(HTTPException) as error:
         service.approve_feedback(db, fb.id_retroalimentacion)
+    assert error.value.status_code == 503
+    assert commit_attempts == [True]
+    assert (service.raw_data_dir / "AvesChilenas/Chucao/feedback_1.wav").read_bytes() == objects[pred.ruta_audio_prueba]
+    metadata_before_retry = (service.raw_data_dir / "AvesChilenas/metadata.csv").read_bytes()
     assert len(service.get_pending_feedback(db)) == 1
     monkeypatch.setattr(db, "commit", commit)
     service.approve_feedback(db, fb.id_retroalimentacion)
@@ -246,6 +291,7 @@ def test_database_failure_after_both_writes_retries_without_metadata_duplicates(
         assert len(list(csv.reader(stream))) == 2
     assert len(objects) == 1
     assert len(FeedbackSyncQueue().pending(db)) == 1
+    assert (service.raw_data_dir / "AvesChilenas/metadata.csv").read_bytes() == metadata_before_retry
 
 
 def test_rejection_preserves_source_and_final_decision(workflow):
@@ -291,27 +337,46 @@ def test_legacy_unassociated_prediction_cannot_be_rescued_by_override(workflow):
     assert not (service.raw_data_dir / f".feedback_{fb.id_retroalimentacion}.json").exists()
 
 
-@pytest.mark.parametrize("catalogue,expected", [("ambiguous", 422), ("absent", 422), ("unavailable", 503)])
-def test_unverifiable_class_catalogue_stays_pending_without_writes(workflow, monkeypatch, catalogue, expected):
+@pytest.mark.parametrize("catalogue", ["ambiguous", "absent"])
+def test_unverifiable_local_class_stays_pending_without_artifact_writes(workflow, catalogue):
     service, db, pred, fb, objects = workflow
     pred.etiqueta_predicha = "RAYADITO"
     db.commit()
     before = objects.copy()
 
-    class Client:
-        def list_blobs(self, bucket_name, prefix):
-            if catalogue == "unavailable":
-                raise OSError("catalogue unavailable")
-            if catalogue == "absent":
-                return []
-            return [SimpleNamespace(name=f"{prefix}{label}/seed.wav")
-                    for label in ("Rayadito", "rayadito")]
-
-    monkeypatch.setattr(storage.storage, "Client", Client)
-    with pytest.raises(HTTPException) as error:
-        service.approve_feedback(db, fb.id_retroalimentacion)
-    assert error.value.status_code == expected
+    if catalogue == "ambiguous":
+        for label in ("Rayadito", "rayadito"):
+            (service.raw_data_dir / "AvesChilenas" / label).mkdir()
+    with patch.object(storage.storage, "Client") as client:
+        with pytest.raises(HTTPException) as error:
+            service.approve_feedback(db, fb.id_retroalimentacion)
+        assert error.value.status_code == 422
+        client.assert_not_called()
+    assert (service.raw_data_dir / "AvesChilenas/metadata.csv").read_text() == "nombre_archivo,clase,file_path,file_stage\n"
+    assert FeedbackSyncQueue().pending(db) == []
     assert objects == before
     assert len(service.get_pending_feedback(db)) == 1
     assert list(service.raw_data_dir.rglob("*.wav")) == []
     assert not (service.raw_data_dir / f".feedback_{fb.id_retroalimentacion}.json").exists()
+
+
+def test_known_local_class_approval_succeeds_despite_unavailable_cloud_catalogue(workflow, monkeypatch):
+    service, db, pred, fb, objects = workflow
+    before = objects.copy()
+    catalogue_calls = []
+    original_client = storage.storage.Client
+
+    class UnavailableCatalogueClient(original_client):
+        def list_blobs(self, bucket_name, prefix):
+            catalogue_calls.append((bucket_name, prefix))
+            raise OSError("catalogue unavailable")
+
+    monkeypatch.setattr(storage.storage, "Client", UnavailableCatalogueClient)
+    result = service.approve_feedback(db, fb.id_retroalimentacion)
+    assert result["status"] == "approved"
+    assert result["sync_status"] == "pending"
+    assert catalogue_calls == []
+    assert objects == before
+    assert (service.raw_data_dir / "AvesChilenas/Chucao/feedback_1.wav").read_bytes() == objects[pred.ruta_audio_prueba]
+    assert service.get_pending_feedback(db) == []
+    assert len(FeedbackSyncQueue().pending(db)) == 1

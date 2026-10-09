@@ -2,6 +2,8 @@
 import csv
 import hashlib
 import io
+import os
+import stat
 import wave
 from contextlib import contextmanager
 from types import SimpleNamespace
@@ -68,6 +70,99 @@ def local_workflow(tmp_path, monkeypatch):
         yield SimpleNamespace(service=service, db=db, pred=pred, fb=fb,
                               audio=audio, calls=calls, root=tmp_path)
     engine.dispose()
+
+
+@pytest.mark.parametrize("existing_index", [False, True])
+def test_approval_publishes_readable_metadata_and_private_artifacts(local_workflow, existing_index):
+    w = local_workflow
+    dataset = w.service.raw_data_dir / "AvesChilenas"
+    metadata = dataset / "metadata.csv"
+    if existing_index:
+        metadata.write_text("nombre_archivo,clase,file_path,file_stage\n")
+        metadata.chmod(0o600)
+    assert w.service.approve_feedback(w.db, 1)["status"] == "approved"
+    assert stat.S_IMODE(metadata.stat().st_mode) == 0o644
+    for path in [w.service.raw_data_dir / ".feedback_1.json",
+                 dataset / "rayadito/feedback_1.wav"]:
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+@pytest.mark.parametrize("staging_mode", [0o666, 0o200])
+def test_approval_normalizes_reused_staging_before_write_and_fsync(local_workflow, monkeypatch, staging_mode):
+    w = local_workflow
+    dataset = w.service.raw_data_dir / "AvesChilenas"
+    artifacts = {
+        w.service.raw_data_dir / ".feedback_1.json": 0o600,
+        dataset / "rayadito/feedback_1.wav": 0o600,
+        dataset / "metadata.csv": 0o644,
+    }
+    pending = {}
+    for path, mode in artifacts.items():
+        staging = path.with_suffix(path.suffix + ".pending")
+        staging.write_bytes(b"interrupted publication")
+        staging.chmod(staging_mode)
+        pending[staging.stat().st_ino] = mode
+    fdopen, fsync = os.fdopen, os.fsync
+    writes, synced = [], []
+
+    def private_writer(descriptor, *args, **kwargs):
+        stream = fdopen(descriptor, *args, **kwargs)
+
+        class Writer:
+            def __enter__(self):
+                stream.__enter__()
+                return self
+
+            def __exit__(self, *args):
+                return stream.__exit__(*args)
+
+            def write(self, data):
+                info = os.fstat(descriptor)
+                assert stat.S_IMODE(info.st_mode) == 0o600
+                writes.append(info.st_ino)
+                return stream.write(data)
+
+            def flush(self):
+                return stream.flush()
+
+            def fileno(self):
+                return stream.fileno()
+
+        return Writer()
+
+    def durable_mode(descriptor):
+        info = os.fstat(descriptor)
+        if info.st_ino in pending:
+            assert stat.S_IMODE(info.st_mode) == pending[info.st_ino]
+            synced.append(info.st_ino)
+        return fsync(descriptor)
+
+    monkeypatch.setattr(os, "fdopen", private_writer)
+    monkeypatch.setattr(os, "fsync", durable_mode)
+    assert w.service.approve_feedback(w.db, 1)["status"] == "approved"
+    assert set(writes) == set(pending)
+    assert set(synced) == set(pending)
+    for path, mode in artifacts.items():
+        assert stat.S_IMODE(path.stat().st_mode) == mode
+    assert (dataset / "rayadito/feedback_1.wav").read_bytes() == w.audio
+
+
+def test_approval_with_restrictive_umask_keeps_private_stable_locks_and_replays(local_workflow):
+    w = local_workflow
+    dataset = w.service.raw_data_dir / "AvesChilenas"
+    previous = os.umask(0o777)
+    try:
+        result = w.service.approve_feedback(w.db, 1)
+        locks = [w.service.raw_data_dir / ".feedback_1.json.lock", dataset / ".metadata.lock"]
+        inodes = [path.stat().st_ino for path in locks]
+        for path in locks + [w.service.raw_data_dir / ".feedback_1.json",
+                             dataset / "rayadito/feedback_1.wav"]:
+            assert stat.S_IMODE(path.stat().st_mode) == 0o600
+        assert stat.S_IMODE((dataset / "metadata.csv").stat().st_mode) == 0o644
+        assert w.service.approve_feedback(w.db, 1) == result
+        assert [path.stat().st_ino for path in locks] == inodes
+    finally:
+        os.umask(previous)
 
 
 def test_approved_sample_is_trainable_before_cloud_sync(local_workflow):

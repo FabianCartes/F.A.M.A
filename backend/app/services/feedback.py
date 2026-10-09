@@ -37,6 +37,8 @@ def _filesystem_lock(path: Path):
     """Lock a stable sidecar inode across processes; never lock a replaced file."""
     descriptor = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
     try:
+        # Creation modes are masked by umask; normalize without replacing the inode.
+        os.fchmod(descriptor, 0o600)
         fcntl.flock(descriptor, fcntl.LOCK_EX)
         yield
     finally:
@@ -195,7 +197,7 @@ class FeedbackService:
             directory.mkdir(exist_ok=True)
             self._fsync_dir(directory.parent)
 
-    def _publish(self, path: Path, data: bytes, *, no_replace=False):
+    def _publish(self, path: Path, data: bytes, *, no_replace=False, final_mode=0o600):
         """Durable staged publication; audio must never replace an existing inode."""
         staging = path.with_suffix(path.suffix + ".pending")
         self._safe_path(path)
@@ -203,8 +205,11 @@ class FeedbackService:
         descriptor = os.open(staging, os.O_WRONLY | os.O_CREAT | os.O_TRUNC
                              | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
         with os.fdopen(descriptor, "wb") as stream:
+            # O_CREAT does not change a reused staging inode's permissions.
+            os.fchmod(stream.fileno(), 0o600)
             stream.write(data)
             stream.flush()
+            os.fchmod(stream.fileno(), final_mode)
             os.fsync(stream.fileno())
         if no_replace:
             # Atomic no-clobber publication, unlike replace(check-then-write).
@@ -437,7 +442,7 @@ class FeedbackService:
                     # Publish verified audio before referring to it in a NEW CSV row.
                     reference_from_path(destination, "raw", {"raw": dataset})
                     if metadata_update is not None:
-                        self._publish(dataset / "metadata.csv", metadata_update)
+                        self._publish(dataset / "metadata.csv", metadata_update, final_mode=0o644)
                     sync = queue.enqueue(db, id_retroalimentacion, dataset_name=stored_dataset,
                                          storage_class=storage_class, sha256=digest)
                     feedback.procesado = True
