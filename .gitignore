@@ -98,4 +98,6 @@ Thumbs.db
 # Agent & Tooling artifacts
 .atl/
 .codegraph/
+.obsidian/
+docs/.obsidian/
 

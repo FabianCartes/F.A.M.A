@@ -1,3 +1,7 @@
+---
+kanban-plugin: basic
+---
+
 # Tablero Kanban - Proyecto F.A.M.A
 
 Tablero de seguimiento del ciclo de vida del proyecto **F.A.M.A** (*Flujo de Clasificación de Audio y Machine-learning Avanzado*). Diseñado para coordinar tareas entre el equipo de desarrollo, investigación y agentes.
@@ -247,6 +251,14 @@ Tablero de seguimiento del ciclo de vida del proyecto **F.A.M.A** (*Flujo de Cla
 
 ## 📋 Backlog (Pendientes y Próximas Mejoras)
 
+### Seguridad de la subida de archivos de audio
+
+- [ ] **Auditar la validación de archivos WAV en el backend:** comprobar que se valida el contenido real y la decodificación completa del audio, no solo la extensión `.wav` o el MIME declarado por el cliente. Rechazar archivos renombrados, corruptos, truncados o con estructuras no admitidas antes de almacenarlos o procesarlos.
+- [ ] **Evaluar contenido malicioso y saneamiento:** revisar metadatos, chunks adicionales y datos anexados; definir cuándo rechazar el archivo y cuándo generar un WAV canónico a partir del audio decodificado, sin conservar contenido no necesario. No asumir que la recodificación o un análisis antivirus garantizan eliminar todo código malicioso; proteger también el decodificador con límites de recursos y aislamiento adecuados.
+- [ ] **Verificar límites y pruebas de seguridad:** cubrir tamaño de subida, duración, canales y frecuencia de muestreo; nombres y rutas seguros; archivos falsos, contenido extra y entradas que agoten recursos. Confirmar que los rechazos no dejan archivos temporales, objetos persistidos ni registros de éxito.
+
+**Criterio de cierre:** documentar los controles existentes y las brechas encontradas, con pruebas reproducibles de aceptación de WAV válidos y rechazo seguro de entradas inválidas o peligrosas. Auditoría e implementación pendientes; esta tarea no acredita que la subida actual sea segura.
+
 ### Frontend & UI / UX
 - [ ] **BUG — Selector de modelos ofrece entradas ajenas a la BD o sin pesos disponibles:** el usuario reporta modelos seleccionables que no existen en la base de datos. Al seleccionar `chilean-birds-ensemble` y ejecutar inferencia, aparece: `Modelo 'chilean-birds-ensemble' no disponible para inferencia: Pesos del Super-Ensamble no disponibles. Checkpoints requeridos: ['/app/checkpoints/convnext_nano_35e_best.pt', '/app/checkpoints/efficientnet_gpu_pipeline_35e_best.pt', '/app/checkpoints/resnet34d_35e_best.pt']`. Impacto: el selector permite elegir una opción que no puede ejecutar inferencia. **Diagnóstico pendiente:** contrastar catálogo expuesto por la API, registro de predictores y registros de BD; distinguir existencia en BD de disponibilidad efectiva de checkpoints, sin asumir que el error de pesos demuestra ausencia en BD. **Criterios de aceptación:** definir qué modelos deben ofrecerse, no presentar como ejecutables los modelos indisponibles, mostrar una explicación clara y agregar pruebas del catálogo/selector para entradas fuera de BD y pesos ausentes. Reporte registrado sin verificar BD, checkpoints ni reproducir inferencia; no corregido.
 - [ ] **No mostrar códigos HTTP en errores visibles del frontend:** reemplazar los números de estado (por ejemplo, `409`) por mensajes que expliquen el problema y el estado real de la acción. Conservar los códigos para la lógica interna y los logs. **Criterio de aceptación:** el conflicto por audio duplicado informa que ya existe en el dataset y que el feedback sigue pendiente, sin decir que fue finalizado; agregar cobertura para la presentación del error.
@@ -270,6 +282,7 @@ Tablero de seguimiento del ciclo de vida del proyecto **F.A.M.A** (*Flujo de Cla
 - [ ] **Exportación de Modelos:** Añadir descarga directa de artefactos compilados (`.pth`, bundles de inferencia) desde el historial de modelos.
 
 ### Backend & MLOps
+- [ ] **Auditar y definir la cobertura temporal del audio en inferencia:** verificar, para cada predictor soportado, qué parte del audio recibe y procesa realmente, incluyendo límites de duración, truncamiento, relleno y preprocesamiento. No asumir que el ventaneo documentado para otros pipelines está activo en la inferencia actual. Evaluar el procesamiento del audio completo mediante ventanas temporales, con o sin solapamiento, y la selección explícita de fragmentos como alternativa con alcance visible; definir duración, paso, tratamiento de la última ventana y agregación de predicciones según el contrato de cada modelo y su entrenamiento. **Criterios de aceptación:** documentar el comportamiento actual y la estrategia elegida; evitar descartes silenciosos de audio; informar el intervalo o la cobertura analizada; agregar pruebas con eventos relevantes al inicio, medio y final, audios cortos y largos y límites entre ventanas; evaluar calidad predictiva, latencia y consumo de recursos antes de adoptar la estrategia. Auditoría y decisión pendientes: no se acredita todavía que el runtime actual procese solo un fragmento ni que deba aplicarse una única estrategia a todos los modelos.
 - [ ] **Sincronización Bidireccional Robusta con GCS:** Optimizar la descarga por chunks y sincronización delta entre Google Cloud Storage y almacenamiento local para datasets de gran tamaño (>10 GB).
 - [ ] **Exportación ONNX / TensorRT:** Evaluar exportación de modelos del ensamble a formatos optimizados para inferencia de baja latencia en entornos edge.
 - [ ] **Gestión de Nodos y Colas Asíncronas (Celery / Redis):** Desacoplar entrenamientos masivos de larga duración a trabajadores independientes fuera del proceso FastAPI.
