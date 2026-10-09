@@ -505,6 +505,9 @@ def list_models(
 # ============================================================================
 # ENDPOINT DE PREDICCIÓN BIOACÚSTICA
 # ============================================================================
+MAX_AUDIO_BYTES = 100 * 1024 * 1024
+
+
 @app.post(
     "/api/predict",
     response_model=PredictionResponse,
@@ -552,7 +555,19 @@ async def predict_audio(
         )
 
     try:
-        audio_bytes = await file.read()
+        audio_buffer = bytearray()
+        while True:
+            chunk = await file.read(min(1024 * 1024, MAX_AUDIO_BYTES + 1 - len(audio_buffer)))
+            if not chunk:
+                break
+            if len(audio_buffer) + len(chunk) > MAX_AUDIO_BYTES:
+                raise HTTPException(
+                    status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                    detail="El archivo supera el límite de 100 MiB (104.857.600 bytes).",
+                )
+            audio_buffer.extend(chunk)
+        audio_bytes = bytes(audio_buffer)
+        del audio_buffer
         from uuid import uuid4
         source_filename = f"{uuid4().hex}.wav"
 

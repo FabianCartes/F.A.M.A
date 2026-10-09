@@ -32,11 +32,57 @@ async function preparePrediction({ classes = ['alarm', 'normal'], dbId = 201, da
   await act(async () => { fireEvent.change(view.container.querySelector('input[type="file"]')!, { target: { files: [new File(['audio'], 'machine.wav')] } }); });
   const infer = async () => { await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Ejecutar inferencia/ })); }); };
   await infer();
-  return { infer, setId: (id: number) => { nextId = id; }, setFeedback: (response: () => Promise<Response>) => { feedbackResponse = response; }, setPrediction: (response: () => Promise<Response>) => { predictionResponse = response; }, feedbackCalls: () => fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/api/feedback')) };
+  return { infer, setId: (id: number) => { nextId = id; }, setFeedback: (response: () => Promise<Response>) => { feedbackResponse = response; }, setPrediction: (response: () => Promise<Response>) => { predictionResponse = response; }, predictionCalls: () => fetchMock.mock.calls.filter(([url]) => String(url).includes('/api/predict')), feedbackCalls: () => fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/api/feedback')) };
 }
 
 describe('PredictionView validation and responsive controls', () => {
   beforeEach(() => { vi.resetAllMocks(); global.fetch = vi.fn(async (input) => String(input).includes('/api/models') ? { ok: true, json: async () => ({ models: mockModels }) } as Response : { ok: false } as Response); });
+
+  it('rejects oversized WAV before browser decoding or prediction HTTP', async () => {
+    const api = await preparePrediction();
+    const file = new File(['audio'], 'large.wav');
+    Object.defineProperty(file, 'size', { value: 104857601 });
+    const decode = vi.fn();
+    Object.defineProperty(file, 'arrayBuffer', { value: decode });
+    await act(async () => { fireEvent.change(document.querySelector('input[type="file"]')!, { target: { files: [file] } }); });
+    expect(screen.getByText(/El archivo supera el límite de 100 MiB/)).toBeDefined();
+    expect(decode).not.toHaveBeenCalled();
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('region', { name: 'Validar resultado' })).toBeNull();
+    await api.infer();
+    expect(api.predictionCalls()).toHaveLength(1);
+  });
+
+  it.each([
+    [new Response('<html>Bad gateway</html>', { status: 502 }), 'Error HTTP 502'],
+    [new Response('', { status: 413 }), 'Error HTTP 413'],
+    [new Response('upstream unavailable', { status: 503 }), 'Error HTTP 503'],
+    [Response.json({ detail: 'Audio demasiado grande' }, { status: 413 }), 'Audio demasiado grande'],
+    [Response.json({ detail: { message: 'Catálogo incompleto', errors: [] } }, { status: 503 }), 'Catálogo incompleto'],
+    [Response.json({ detail: [{ msg: 'Campo requerido' }] }, { status: 422 }), 'Campo requerido'],
+    [Response.json({ detail: { unknown: true } }, { status: 500 }), 'Error HTTP 500'],
+    [Response.json({}), 'Respuesta de inferencia inválida'],
+    [Response.json({ filename: 'bad.wav', clase: 'alarm', confianza: '0.9', gcp_upload: true }), 'Respuesta de inferencia inválida'],
+    [Response.json({ filename: 'bad.wav', clase: 'alarm', confianza: 2, gcp_upload: true }), 'Respuesta de inferencia inválida'],
+    [new Response('not json'), 'Respuesta de inferencia inválida'],
+  ])('reports HTTP and malformed success honestly (%s)', async (response, message) => {
+    const api = await preparePrediction();
+    api.setPrediction(async () => response);
+    await api.infer();
+    expect(screen.getByText(message, { exact: false })).toBeDefined();
+    expect(screen.queryByRole('region', { name: 'Validar resultado' })).toBeNull();
+    expect(screen.queryByText(/<html>|Unexpected token|\[object Object\]/)).toBeNull();
+  });
+
+  it('accepts the exact inclusive file limit', async () => {
+    const api = await preparePrediction();
+    const file = new File(['audio'], 'boundary.wav');
+    Object.defineProperty(file, 'size', { value: 104857600 });
+    await act(async () => { fireEvent.change(document.querySelector('input[type="file"]')!, { target: { files: [file] } }); });
+    await api.infer();
+    expect(api.predictionCalls()).toHaveLength(2);
+    expect(screen.getByRole('region', { name: 'Validar resultado' })).toBeDefined();
+  });
 
   it('offers compact wrapping Check/X buttons with explicit pressed state, separate submit and no default', async () => {
     const api = await preparePrediction();

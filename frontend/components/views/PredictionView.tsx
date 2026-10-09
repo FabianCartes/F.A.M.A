@@ -644,6 +644,14 @@ export default function PredictionView() {
         return;
       }
 
+      if (selectedFile.size > 100 * 1024 * 1024) {
+        setError("El archivo supera el límite de 100 MiB (104.857.600 bytes). Selecciona un WAV más pequeño.");
+        setFile(null);
+        setIsDecodingAudio(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        return;
+      }
+
       const nextUrl = URL.createObjectURL(selectedFile);
       setFile(selectedFile);
       setAudioUrl(nextUrl);
@@ -661,6 +669,11 @@ export default function PredictionView() {
     e.preventDefault();
     if (!file) {
       setError("Carga un archivo de audio .wav antes de ejecutar la inferencia.");
+      return;
+    }
+
+    if (file.size > 100 * 1024 * 1024) {
+      setError("El archivo supera el límite de 100 MiB (104.857.600 bytes). Selecciona un WAV más pequeño.");
       return;
     }
 
@@ -693,13 +706,33 @@ export default function PredictionView() {
       const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
       setLatency(`${elapsed}s`);
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        const detail = data?.detail || `Error HTTP ${response.status}: ${response.statusText}`;
-        throw new Error(detail);
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        // Proxies can return HTML, plain text or an empty body; never expose it.
+        data = null;
       }
 
+      if (!response.ok) {
+        const detail = data?.detail;
+        const messages = (Array.isArray(detail) ? detail : [detail]).map((item) => {
+          if (typeof item === "string") return item;
+          if (item && typeof item === "object") {
+            if (typeof item.message === "string") return item.message;
+            if (typeof item.msg === "string") return item.msg;
+          }
+          return "";
+        }).filter(Boolean);
+        throw new Error(messages.join("; ") || `Error HTTP ${response.status}${response.statusText ? `: ${response.statusText}` : ""}. No se pudo completar la inferencia.`);
+      }
+
+      if (!data || typeof data.filename !== "string" || !data.filename ||
+          typeof data.clase !== "string" || !data.clase ||
+          typeof data.confianza !== "number" || !Number.isFinite(data.confianza) ||
+          data.confianza < 0 || data.confianza > 1 || typeof data.gcp_upload !== "boolean") {
+        throw new Error("Respuesta de inferencia inválida. No se recibió una predicción válida del servidor.");
+      }
       const predData = data as PredictionResponse;
       if (sequence !== inferenceSequence.current) return;
       setResult({ ...predData, inferenceClasses, inferenceModel, inferenceDomain: selectedDomain, sequence });
