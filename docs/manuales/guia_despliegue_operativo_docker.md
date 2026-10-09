@@ -311,7 +311,42 @@ Al iniciar el contenedor del backend, SQLAlchemy ejecuta automáticamente el map
 
 ## 6. Archivos Oficiales de Empaquetado Docker
 
-A continuación se presentan las especificaciones exactas de los artefactos de compilación.
+Los archivos del repositorio son la fuente operativa: [Dockerfile backend](../../backend/Dockerfile) y [Compose](../../docker-compose.yml). Los bloques de las secciones 6.1–6.4 son ejemplos históricos de infraestructura, **no una copia de la configuración vigente**; no los use para reemplazar los archivos actuales ni para omitir la identidad no-root.
+
+### Identidad del backend y permisos del host
+
+Ejecute el backend como su usuario habitual, **sin root ni `sudo`**. El launcher obtiene `HOST_UID` con `id -u` y `HOST_GID` con `id -g`, valida UID decimal positivo y GID decimal no negativo y los exporta antes de cualquier llamada a Docker. Ignora overrides heredados, incluso vacíos: no admite elegir otra identidad. Mantiene los argumentos y la espera de disponibilidad existentes.
+
+Para usar Compose directamente, prepare las variables en **la misma terminal** antes de cualquier comando Compose (incluidos `ps`, `logs` y `down`):
+
+```bash
+export HOST_UID="$(id -u)" HOST_GID="$(id -g)"
+[[ "$HOST_UID" =~ ^[1-9][0-9]*$ && "$HOST_GID" =~ ^(0|[1-9][0-9]*)$ ]] || exit 1
+# Inspección sin iniciar servicios:
+docker compose config --quiet
+```
+
+Compose exige ambas variables no vacías; no usa un UID root ni 1000 de respaldo. La interpolación por sí sola **no valida valores numéricos ni rechaza UID 0**: use el launcher o la validación anterior. En Windows utilice la terminal WSL y el launcher Linux; el ejemplo `.bat` posterior no prepara esta identidad.
+
+| Superficie | Política vigente |
+| :--- | :--- |
+| Imagen sin Compose | Usuario estable `10001:10001`; `/app/data`, `/app/checkpoints` y HOME preparados durante build. Solo se cambia el propietario de los directorios indicados, no de sus árboles. |
+| Backend Compose | UID/GID del host; conserva GPU, PostgreSQL, ffmpeg y mounts actuales. |
+| HOME y cachés | `/home/fama`, tmpfs privado `0700` con UID/GID del host; permite cachés basadas en HOME aunque el UID difiera de 10001. Efímero, no almacene allí datos durables. No se necesita override XDG. |
+| Temporales | `/tmp` del contenedor; sin mkdir de startup en rutas del código ni permisos `0777` añadidos. |
+| Datos durables | Bind mounts `backend/data` y `backend/checkpoints`; deben permitir escritura al usuario invocante. La imagen no corrige permisos del host. |
+
+Para una instalación nueva, cree únicamente los directorios faltantes como su usuario (`mkdir -p backend/data backend/checkpoints`); el launcher ya lo hace. Antes de iniciar sobre datos existentes, inspeccione sin modificar:
+
+```bash
+ls -ldn backend/data backend/checkpoints
+find backend/data backend/checkpoints -uid 0 -print
+find backend/data backend/checkpoints ! -writable -print
+```
+
+Los archivos root preexistentes, ancestros sin acceso, ACL y credenciales montadas sin permiso de lectura pueden bloquear la ejecución no-root. Estas inspecciones no garantizan toda operación ni reparan nada. Ante bloqueadores, detenga el despliegue y solicite mantenimiento separado con rutas y respaldo aprobados; **no ejecute chown recursivo, chmod 777 ni reparación automática**. No cambie el volumen PostgreSQL.
+
+**Límite de evidencia PERM-2:** pruebas estructurales y launcher con CLIs fake no prueban escritura real, GPU, bibliotecas que requieran entrada passwd para un UID arbitrario ni arranque de servicios. La integración con volúmenes temporales pertenece a PERM-3; este cambio no autoriza reconstruir, reiniciar ni reparar datos reales.
 
 ### 6.1. Dockerfile del Backend (`backend/Dockerfile`)
 
@@ -614,7 +649,7 @@ Use el [script del repositorio](../../iniciar_fama.sh), sin copiar una versión 
 
 **Qué significa éxito:** todos los contenedores solicitados y las dependencias iniciadas en esta ejecución deben estar en ejecución; si tienen healthcheck, además deben estar `healthy`. Se espera mientras estén `starting` o en otro estado transitorio. Un contenedor `unhealthy`, `exited` o `dead`, o la ausencia de contenedores de un servicio solicitado, produce error y no muestra éxito. Los servicios ajenos que ya estaban activos o permanecen detenidos no bloquean un arranque parcial.
 
-**Sin healthcheck:** basta el estado `running`. En la configuración actual esto aplica al backend y al frontend; no garantiza que sus endpoints HTTP ya respondan. La base de datos se verifica mediante su healthcheck existente. No se añaden comprobaciones HTTP ni se cambia la topología.
+**Sin healthcheck:** basta el estado `running`; no garantiza que los endpoints HTTP respondan. En el Compose vigente, backend y base de datos tienen healthcheck y requieren `healthy`; frontend solo requiere `running`. El launcher no añade comprobaciones HTTP ni cambia la topología.
 
 **Límite y errores:** la espera de disponibilidad posterior a `up` dura hasta 180 segundos por defecto; `--wait-timeout N` (o `--wait-timeout=N`) admite entre 1 y 86400 segundos. Este límite no acota la descarga, compilación ni la propia ejecución de `Compose up`. Si falla la comprobación previa, `up`, una inspección o la espera, el script termina con código distinto de cero e indica el motivo. No detiene ni elimina contenedores al fallar; revise `docker compose ps -a` y `docker compose logs` (o sus equivalentes v1) antes de reintentar.
 

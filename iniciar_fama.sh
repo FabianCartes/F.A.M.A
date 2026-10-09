@@ -13,6 +13,14 @@ NC='\033[0m' # Sin color
 
 echo -e "${GREEN}F.A.M.A. - Framework de Monitoreo y Diagnóstico Acústico${NC}"
 
+# La identidad pertenece al usuario invocante, nunca a overrides heredados.
+fail() { echo -e "${RED}[ERROR] $*${NC}" >&2; exit 1; }
+HOST_UID=$(id -u) || fail 'No se pudo obtener HOST_UID.'
+HOST_GID=$(id -g) || fail 'No se pudo obtener HOST_GID.'
+[[ $HOST_UID =~ ^[1-9][0-9]*$ ]] || fail 'HOST_UID debe ser numerico y distinto de root (0).'
+[[ $HOST_GID =~ ^(0|[1-9][0-9]*)$ ]] || fail 'HOST_GID debe ser numerico no negativo.'
+export HOST_UID HOST_GID
+
 # 1. Verificar si Docker está instalado
 if ! command -v docker >/dev/null 2>&1; then
     echo -e "${RED}[ERROR] Docker no está instalado en este sistema.${NC}"
@@ -44,7 +52,6 @@ cd "$SCRIPT_DIR"
 
 mkdir -p backend/checkpoints backend/data
 
-fail() { echo -e "${RED}[ERROR] $*${NC}" >&2; exit 1; }
 WAIT_TIMEOUT=180
 UP_ARGS=()
 SERVICES=()

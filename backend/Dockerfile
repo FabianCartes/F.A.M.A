@@ -33,6 +33,15 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copiar el código fuente del backend
 COPY . .
 
+# Identidad segura por defecto; Compose utiliza la identidad numérica del host.
+RUN groupadd --gid 10001 fama && \
+    useradd --uid 10001 --gid 10001 --home-dir /home/fama --no-create-home fama && \
+    install -d -o 10001 -g 10001 -m 0700 /home/fama && \
+    mkdir -p /app/data /app/checkpoints && \
+    chown 10001:10001 /app/data /app/checkpoints
+ENV HOME=/home/fama
+USER 10001:10001
+
 # Argumento para URL de API con default para orquestación en red interna
 ARG API_URL=http://backend:8000
 ENV API_URL=${API_URL}

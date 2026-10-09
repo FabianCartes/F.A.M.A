@@ -16,8 +16,10 @@ cleanup() {
 trap cleanup EXIT
 mkdir -p "$WORK/project with spaces" "$WORK/bin" "$WORK/outside"
 cp "$ROOT/iniciar_fama.sh" "$WORK/project with spaces/"
-cp "$ROOT/tests/fixtures/docker-startup/docker" "$WORK/bin/docker"
-chmod +x "$WORK/bin/docker"
+cp "$ROOT/tests/fixtures/docker-startup/docker" "$WORK/bin/docker-fake"
+printf '%s\n' '#!/usr/bin/env bash' 'printf "%s:%s\n" "${HOST_UID-unset}" "${HOST_GID-unset}" >> "$FAKE_LOG.identity"' 'exec "${BASH_SOURCE[0]%/*}/docker-fake" "$@"' > "$WORK/bin/docker"
+printf '%s\n' '#!/usr/bin/env bash' 'case "$1" in -u) printf "%s\n" "${TEST_UID-12345}";; -g) printf "%s\n" "${TEST_GID-23456}";; *) exit 1;; esac' > "$WORK/bin/id"
+chmod +x "$WORK/bin/docker" "$WORK/bin/docker-fake" "$WORK/bin/id"
 # Only these ordinary utilities can be found: no fallback to a host Docker CLI.
 for utility in bash dirname mkdir sleep touch; do
     ln -s "$(command -v "$utility")" "$WORK/bin/$utility"
@@ -26,6 +28,7 @@ mkdir -p "$WORK/legacy-bin" "$WORK/no-docker-bin"
 for utility in bash dirname mkdir sleep touch; do
     ln -s "$(command -v "$utility")" "$WORK/no-docker-bin/$utility"
 done
+ln -s "$WORK/bin/id" "$WORK/no-docker-bin/id"
 cp "$ROOT/tests/fixtures/docker-startup/docker-compose" "$WORK/legacy-bin/docker-compose"
 chmod +x "$WORK/legacy-bin/docker-compose"
 count=0
@@ -47,6 +50,7 @@ lacks() { if grep -Fq -- "$2" "$1"; then fail "unexpected: $2"; fi; }
 ok() { [[ $RC == 0 ]] || fail "$1"; printf 'ok %s - %s\n' "$count" "$1"; }
 run healthy backend
 ok 'daily startup reuses images'
+has "$LOG.identity" '12345:23456'
 lacks "$LOG" '<--build>'
 run transition backend
 ok 'waits through starting and includes newly started dependency'
@@ -133,5 +137,24 @@ ok 'unrelated stopped container stays outside scope'
 lacks "$LOG" '<inspect> <--format> <{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}> <dormant-id>'
 run missing_selected backend db
 bad 'each selected service needs containers' 'No se encontraron contenedores para backend'
+HOST_UID=999 HOST_GID=888 run healthy backend
+ok 'inherited overrides cannot change invoking identity'
+has "$LOG.identity" '12345:23456'
+HOST_UID='' HOST_GID='' run healthy backend
+ok 'empty overrides resolve to invoking identity'
+has "$LOG.identity" '12345:23456'
+for invalid_uid in 0 -1 abc 00; do
+    TEST_UID="$invalid_uid" run healthy backend
+    bad "reject UID $invalid_uid before Docker" 'HOST_UID debe'
+    [[ ! -e "$LOG.identity" ]] || fail 'Docker invoked for invalid UID'
+done
+for invalid_gid in -1 abc; do
+    TEST_GID="$invalid_gid" run healthy backend
+    bad "reject GID $invalid_gid before Docker" 'HOST_GID debe'
+    [[ ! -e "$LOG.identity" ]] || fail 'Docker invoked for invalid GID'
+done
+TEST_GID=0 run healthy backend
+ok 'numeric primary group zero is supported without root UID'
+has "$LOG.identity" '12345:0'
 printf 'PASS: %s public behavior cases\n' "$count"
 printf 'Temporary runtime will be removed on exit.\n'

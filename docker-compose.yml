@@ -25,6 +25,9 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     image: fama-backend:latest
+    user: "${HOST_UID:?Exporte HOST_UID no root}:${HOST_GID:?Exporte HOST_GID numerico}"
+    tmpfs:
+      - /home/fama:uid=${HOST_UID:?Exporte HOST_UID no root},gid=${HOST_GID:?Exporte HOST_GID numerico},mode=0700
     container_name: fama-backend
     restart: unless-stopped
     shm_size: '2gb'
@@ -46,6 +49,7 @@ services:
       - GCP_KEY_PATH=${GCP_KEY_PATH:-proyectotesis-fama-de4426cc102e.json}
       - XC_API_KEY=${XC_API_KEY:-}
       - ENVIRONMENT=production
+      - HOME=/home/fama
     volumes:
       - ./backend/checkpoints:/app/checkpoints
       - ./backend/data:/app/data
