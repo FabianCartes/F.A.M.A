@@ -18,6 +18,9 @@ backend/*credentials*.json
 gcp-key*.json
 backend/gcp-key*.json
 
+# Private operational backups and database dumps
+/backups/
+
 # Datasets and raw media
 data/
 data/**
