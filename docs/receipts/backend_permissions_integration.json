@@ -1,0 +1,58 @@
+{
+  "schema": "fama.operational-verification/v1",
+  "task": "PERM-3",
+  "result": "PASS",
+  "evidence_source": "gentle-ai-verify task mv02hreb-i-k9hd final report",
+  "authority_note": "Operational test evidence, not a native review receipt or delivery authorization.",
+  "build": {
+    "commands": ["docker pull python:3.12-slim", "docker build --pull=false --tag <owned-test-tag> <owned-temporary-context>"],
+    "base_digest": "sha256:05cda9777409a9c3ffddd94a4c476b79f0769a0b4857f0c7ed9226b6800b0d6f",
+    "dockerfile": "backend/Dockerfile",
+    "image_id": "sha256:60a55e96d0c621147dc37f908ebeb3b8630a6d7aa1783e09d406d9a08d57933a",
+    "image_user": "10001:10001",
+    "workdir": "/app",
+    "context_bytes": 53380,
+    "manifest_sha256": "ce0f4f561a8af9318737c5432c5810765335d77f832b425ce8a12ca9c6a764eb",
+    "manifest_paths": ["Dockerfile", "requirements.txt", "app/database.py", "app/models/feedback.py", "app/models/feedback_sync.py", "app/models/prediction.py", "app/services/feedback.py", "app/services/feedback_sync.py", "app/services/storage.py", "dataset_references.py"],
+    "apt_pip_layers": "cached"
+  },
+  "runtime": {
+    "uid": 1000,
+    "gid": 1000,
+    "network": "none",
+    "root_filesystem": "read-only",
+    "capabilities": "ALL dropped",
+    "no_new_privileges": true,
+    "mounts": "Owned temporary data/checkpoint binds; private HOME and /tmp tmpfs; no real project data or secrets mounted.",
+    "process": "sleep infinity; public feedback service invoked with docker exec, not full application startup",
+    "storage": "Fake client returning synthetic WAV bytes; no cloud calls",
+    "database": "Temporary SQLite persisted across restart",
+    "writable_smoke": {"HOME_mode_0700": "PASS", "/tmp": "PASS", "/app/checkpoints": "PASS"},
+    "phases": [
+      {"phase": "setup", "result": "Three synthetic predictions and feedback rows"},
+      {"phase": "approvals_1_2", "result": "PASS", "metadata_rows": 2, "intents": 2},
+      {"phase": "same_container_restart", "result": "PASS", "persistence": "SQLite and dataset retained"},
+      {"phase": "approval_3", "result": "PASS", "metadata_rows": 3, "intents": 3},
+      {"phase": "replay_3", "result": "PASS", "metadata_rows": 3, "intents": 3}
+    ],
+    "host_artifacts": {
+      "uid": 1000,
+      "gid": 1000,
+      "metadata_mode": "0644",
+      "intent_audio_lock_modes": "0600",
+      "symlinks": "none",
+      "stable_lock_inodes": {".feedback_1.json.lock": 13642, ".feedback_2.json.lock": 13653, "PermissionSmoke/.metadata.lock": 13648}
+    }
+  },
+  "preservation": {
+    "head_before_after": "be7693cf2fbb9bec39275a3baa9ba4504a26506e",
+    "index_sha256_before_after": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "worktree_diff_sha256_before_after": "94b18bc55d574c0206aeec7607397a8c7c4571f8a25bbb8133913cb03c24c283",
+    "dirty_file_hashes": "All 11 pre-existing modified/untracked file hashes matched before and after verification",
+    "git_diff_check": "PASS",
+    "boundary": "Comparisons cover the verifier run, before parent documentation/evidence updates."
+  },
+  "cleanup": {"owned_container": "removed, absence verified", "owned_image_tag": "removed, absence verified", "owned_temp_directory": "removed, absence verified", "shared_python_base": "retained"},
+  "attempts": ["Offline preflight stopped because the base image was absent; human then authorized required downloads/build.", "Initial fake-bucket assertion failed before publication; fake stub corrected and full scenario passed.", "Combined cleanup command was blocked before execution; separate scoped cleanup completed and absence checks passed."],
+  "limits": ["Minimal allowlisted ten-file build context; not full application or production-context completeness.", "No HTTP/lifespan startup, PostgreSQL, real GCS, GPU, model inference/training, ingestion downloads or tensor generation verified.", "Directory write smoke does not prove every library cache or training pipeline.", "No real dataset repair, deployment, service restart, git staging or commit.", "Command shapes and results are retained, but the temporary integration runner/context were removed; this record alone is not a standalone replay harness."]
+}
