@@ -81,6 +81,14 @@ Las comprobaciones del alcance modificado pasaron; la suite completa conserva un
 - Aviso `R3-001`, `PredictionView.tsx:649`, `WARNING`, disposición `informational`: no bloqueante, no abrió corrección. No se inventa detalle que el envelope no publicó.
 - Esta actualización posterior solo registra el resultado en el manual; no modifica la fuente revisada ni extiende la aprobación a otros candidatos futuros. La revisión no autoriza commit, publicación ni despliegue.
 
+## Entrega local autorizada
+
+- Commit de implementación, pruebas y manual: `cf98ea8b56f3c73cb7415a721d3e8f574d7b8f83` — `fix(inferencia): admitir audios de hasta 100 MiB y mostrar errores HTTP`.
+- Este commit es la unidad de trabajo de AUDIO-LIMIT-1, AUDIO-LIMIT-2 y AUDIO-LIMIT-3: 7 archivos, 249 adiciones y 8 eliminaciones. La fuente, configuración, pruebas e índice coinciden con el árbol revisado; el manual agrega únicamente seguimiento y evidencia pasiva posteriores.
+- La comprobación del diff preparado no reportó errores. No se repitieron pruebas ni build al commitear: no hubo cambios de código desde la verificación registrada.
+- Los cambios externos de `.gitignore`, `docs/KANBAN.md` y `docs/KANBAN_VISUAL.md` quedaron fuera del commit. AUDIO-LIMIT-4 sigue pendiente.
+- Sin push, despliegue, inferencia real ni cambios de BD. La aprobación nativa corresponde al candidato documentado, no constituye una aprobación nueva del commit ni de cambios externos futuros.
+
 ## Activación y reversión (solo instrucciones; no ejecutadas)
 
 Tras autorización operativa, seguir los requisitos de UID/GID y servicios del [manual Docker](./guia_despliegue_operativo_docker.md). Desde la raíz:
@@ -96,4 +104,4 @@ La reversión se limita a las imágenes anteriores de backend/frontend y estos c
 
 ## Próximo paso
 
-Solicitar autorización operativa antes de reconstruir/activar backend y frontend y probar el audio real. Resolver el fallo de ingesta por separado si el usuario lo autoriza. Registrar los commits locales autorizados, sin push. El orquestador conserva la propiedad de los estados y casillas de seguimiento.
+Solicitar autorización operativa antes de reconstruir/activar backend y frontend y probar el audio real. Resolver el fallo de ingesta por separado si el usuario lo autoriza. La unidad de implementación está commiteada localmente; no hacer push sin autorización. El orquestador conserva la propiedad de los estados y casillas de seguimiento.
