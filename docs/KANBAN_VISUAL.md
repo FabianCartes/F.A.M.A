@@ -17,6 +17,8 @@ kanban-source-of-truth: docs/KANBAN.md
 
 ## 📋 Pendiente
 
+- [ ] **COLILARGA-2 — Inferencia diagnóstica y calibración**<br>Requiere autorización separada: checkpoint exacto, centro y ventanas seleccionadas; bypass del filtro solo experimental, sin editar producción. Calibrar con etiquetas antes de cambiar umbral. [[KANBAN#Investigación del rechazo de Colilarga|Evidencia y límites]]
+
 - [ ] **Auditar pesos preentrenados**<br>Comprobar checkpoints reales y fallos/fallbacks de predictores. [[KANBAN#Flujo de inferencia, validación e incorporación de audios|Detalle]]
 - [ ] **Validar el entorno Docker con GPU real**<br>Construcción, arranque, healthchecks y dependencias científicas. [[KANBAN#Flujo de inferencia, validación e incorporación de audios|Detalle]]
 - [ ] **Cerrar documentación de tesis (OE4/OE5)**<br>Consolidar métricas y artefactos, distinguiendo accuracy de macro F1. [[KANBAN#Flujo de inferencia, validación e incorporación de audios|Detalle]]
@@ -47,6 +49,8 @@ kanban-source-of-truth: docs/KANBAN.md
 - [ ] **Mitigar límites acústicos entre clases cercanas**<br>Evaluar calibración o thresholding adaptativo. [[KANBAN#Base de Datos & Mantenimiento|Detalle]]
 
 ## ✅ Completado
+
+- [x] **COLILARGA-1 — Investigación numérica del rechazo**<br>Centro de 5 s rechazado incluso sin compresión; la máscara altera continuidad (8/174 ventanas pasan sin compresión, 0/174 con tratamiento actual). No es solo volumen; sin inferencia ni validación de especie, no es un bug corregido. Experimento pendiente arriba. [[KANBAN#Investigación del rechazo de Colilarga|Detalle y evidencia]]
 
 - [x] **MIG-1–MIG-4 — Metadatos de predicción**<br>Migración aplicada y una inferencia persistida/verificada. [[KANBAN#Migración operativa de metadatos de predicción|Detalle]]
 - [x] **AVES-1–AVES-3 — Preparación de AvesChilenas**<br>Particiones publicadas y admitidas por el runtime; entrenamiento real pendiente por separado. [[KANBAN#Preparación operativa de AvesChilenas real|Detalle y límites]]
