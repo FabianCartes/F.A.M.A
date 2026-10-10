@@ -139,6 +139,19 @@ class ModelRegistry:
         """Verifica si un modelo específico está registrado."""
         return model_id in self._predictors
 
+    def _discard_invalid_standard_predictor(self, model_id: str) -> None:
+        """Remove a previously published DB predictor and its aliases after guard failure."""
+        cached = self._db_predictors.pop(model_id, None)
+        removed = []
+        for alias, predictor in list(self._predictors.items()):
+            same_cached = cached is not None and predictor is cached
+            reserved_db_key = alias == model_id
+            if same_cached or reserved_db_key:
+                del self._predictors[alias]
+                removed.append(alias)
+        if self._default_model_id in removed:
+            self._default_model_id = None
+
     def _reconcile_db_models(self, models: List[Any]) -> None:
         """Retire only DB-owned instances absent from a successful DB snapshot.
 
@@ -178,6 +191,14 @@ class ModelRegistry:
             self._reconcile_db_models(models)
             for model in models:
                 key = f"fama_trained_model_{model.id_modelo}"
+                if str(model.estado or "").startswith("standard_"):
+                    try:
+                        from app.services.standard_evaluation_guard import require_standard_reports
+                        require_standard_reports(model, db, root)
+                    except Exception:
+                        self._discard_invalid_standard_predictor(key)
+                        errors.append({"model_id": key, "code": "standard_evaluation_invalid"})
+                        continue
                 if self.has_model(key):
                     continue
                 code = "checkpoint_unreadable"
@@ -248,10 +269,18 @@ class ModelRegistry:
                     checkpoints_root.parent / "checkpoints" / ckpt_name,
                 ]
                 ckpt_file = next((p for p in candidate_paths if p.exists()), None)
+                model_key = f"fama_trained_model_{m.id_modelo}"
+                is_standard = str(getattr(m, "estado", "") or "").startswith("standard_")
+                if is_standard:
+                    try:
+                        from app.services.standard_evaluation_guard import require_standard_reports
+                        require_standard_reports(m, db, ckpt_file.parent if ckpt_file else checkpoints_root)
+                    except Exception:
+                        self._discard_invalid_standard_predictor(model_key)
+                        continue
                 # Solo registrar si el archivo existe físicamente y contiene pesos reales (> 10KB)
                 if ckpt_file and ckpt_file.stat().st_size > 10000:
                     try:
-                        model_key = f"fama_trained_model_{m.id_modelo}"
                         is_active = bool(m.activo)
                         pred = TrainedModelPredictor(
                             checkpoint_path=ckpt_file,
@@ -261,18 +290,21 @@ class ModelRegistry:
                             lazy_load=not is_active,
                             dataset_name=_verified_dataset_name(m.conjunto_datos, self._raw_data_root),
                         )
-                        self.register(pred, is_default=is_active)
+                        self._predictors[model_key] = pred
                         self._db_predictors[model_key] = pred
                         # Registrar alias útiles para consultas directas
                         self._predictors[ckpt_file.name] = pred
                         self._predictors[ckpt_file.stem] = pred
                         self._predictors[str(m.id_modelo)] = pred
 
-                        if m.activo:
+                        if is_active:
                             active_predictor = pred
                             self.set_default_model(model_key)
                     except Exception as err:
-                        print(f"[ModelRegistry] Advertencia al registrar modelo #{m.id_modelo} ({ckpt_name}): {err}")
+                        if not is_standard:
+                            print(f"[ModelRegistry] Advertencia al registrar modelo #{m.id_modelo} ({ckpt_name}): {err}")
+                        else:
+                            self._discard_invalid_standard_predictor(model_key)
 
             return active_predictor
 

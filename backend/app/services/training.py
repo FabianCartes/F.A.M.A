@@ -3,7 +3,6 @@ import sys
 import time
 import uuid
 import hashlib
-import inspect
 import json
 import soundfile as sf
 import threading
@@ -24,10 +23,10 @@ from app.models.dataset import ConjuntoDatos, Audio
 from app.models.training import Modelo, MetricaEntrenamiento, ModelEvaluation
 from app.services.evaluations import EvaluationService
 from app.services.recording_evaluator import (
-    LabelledRecording, RecordingEvaluator, validate_recording_splits, REJECTION_LABEL, EVALUATOR_VERSION,
+    LabelledRecording, RecordingEvaluator, validate_recording_splits, REJECTION_LABEL,
 )
 from app.services.predictors import trained_predictor as published_predictor
-from app.schemas.evaluation import EvaluationIdentity, validate_report, strict_json
+from app.schemas.evaluation import strict_json
 import pandas as pd
 import gc
 from torch.utils.data import DataLoader
@@ -527,88 +526,26 @@ class TrainingService:
             raise
 
     def _evaluation_config(self, config, training_audio):
-        """Describe effective published inference; training physics is separate."""
-        signature = inspect.signature(published_predictor.extract_mel_spectrogram)
-        mel = {k: signature.parameters[k].default for k in ('n_mels', 'n_fft', 'hop_length', 'fmin', 'fmax')}
-        effective = dict(target_sr=published_predictor.TARGET_SR,
-                         duration_seconds=published_predictor.DURATION_SECONDS,
-                         n_mels=mel['n_mels'], n_fft=mel['n_fft'], hop_length=mel['hop_length'],
-                         f_min=mel['fmin'], f_max=mel['fmax'])
-        comparison = {**effective, 'f_max': effective['f_max'] or effective['target_sr'] / 2}
-        frontend_signature = inspect.signature(GPUAudioFrontEnd)
-        training_frontend = {k: frontend_signature.parameters[k].default for k in ('normalize', 'top_db')}
-        training_frontend['implementation'] = 'GPUAudioFrontEnd'
-        mismatch = (any(training_audio.get(k) != v for k, v in comparison.items()) or
-                    bool(config.get('windowing_config')) or training_frontend['normalize'])
-        if mismatch:
+        """Use the shared effective inference provenance builder."""
+        from app.services.standard_evaluation_guard import build_evaluation_configuration
+
+        settings = build_evaluation_configuration(config, training_audio)
+        if settings[0]['training_mismatch']:
             self._add_log('WARN', 'Discrepancia training/predictor: evaluación usa configuración publicada, sin cambiar filtros ni ventanas.')
-        def source_hash(function):
-            return hashlib.sha256(inspect.getsource(function).encode()).hexdigest()
-        predictor_config = dict(implementation='TrainedModelPredictor', version='published-fixed-crop-v1', lazy_load=True,
-            implementation_sha256=source_hash(published_predictor.TrainedModelPredictor.predict),
-            job_id=config['job_id'], training_mismatch=mismatch,
-            runtime_versions=dict(torch=str(torch.__version__), librosa=published_predictor.librosa.__version__,
-                                  numpy=published_predictor.np.__version__),
-            training_config=dict(audio=training_audio, frontend=training_frontend,
-                                 windowing=config.get('windowing_config')))
-        preprocessing = dict(**effective, mono=True, crop='center', padding='right-zero',
-            mel_power=2.0, mel_db_reference='max', normalization='none', silence_rms_threshold=1e-4,
-            noise_flatness_threshold=published_predictor.SPECTRAL_FLATNESS_NOISE_THRESHOLD,
-            flatness_mask_abs_threshold=1e-4, flatness_mask_min_samples=512,
-            load_function_sha256=source_hash(published_predictor.load_and_fix_length),
-            mel_function_sha256=source_hash(published_predictor.extract_mel_spectrogram),
-            resampling=inspect.signature(published_predictor.librosa.load).parameters['res_type'].default,
-            flatness_defaults={k: parameter.default for k, parameter in
-                               inspect.signature(published_predictor.librosa.feature.spectral_flatness).parameters.items()
-                               if k not in {'y', 'S'}})
-        aggregation = dict(unit='recording', predictions_per_recording=1, windowing='fixed-center-crop',
-                           decision='softmax-argmax', rejection_statuses=['silence', 'noise'])
-        return predictor_config, preprocessing, aggregation
+        return settings
 
     @staticmethod
     def _checkpoint_hash(path):
-        digest = hashlib.sha256()
-        with path.open('rb') as stream:
-            for chunk in iter(lambda: stream.read(1024 * 1024), b''):
-                digest.update(chunk)
-        return digest.hexdigest()
+        from app.services.standard_evaluation_guard import checkpoint_sha256
+        return checkpoint_sha256(path)
 
     def _require_standard_reports(self, target, db):
-        """Legacy remains usable; new artifacts require exact completed identities."""
-        if not target.estado.startswith('standard_'):
-            return
-        if target.estado != 'standard_eval_completed':
-            raise ValueError('Modelo nuevo sin evaluación estándar val/test completada; activación bloqueada.')
-        path = self.checkpoints_dir / Path(target.ruta_binario_gcp).name
-        if self._checkpoint_hash(path) != target.hash_binario:
-            raise ValueError('Checkpoint hash no coincide con la evaluación estándar.')
-        payload = torch.load(path, map_location='cpu', weights_only=True)
-        if self._checkpoint_hash(path) != target.hash_binario:
-            raise ValueError('Checkpoint cambió durante comprobación de activación.')
-        if not isinstance(payload.get('job_id'), str) or not payload['job_id'].strip():
-            raise ValueError('Checkpoint sin identidad de evaluación del entrenamiento.')
-        if (target.conjunto_datos is None or payload.get('dataset_name') != target.conjunto_datos.nombre or
-                payload.get('dataset_id') != target.id_conjunto_datos):
-            raise ValueError('Dataset del checkpoint no coincide con el modelo.')
-        matched = {}
-        for row in db.query(ModelEvaluation).filter_by(id_modelo=target.id_modelo).order_by(ModelEvaluation.id_evaluation):
-            if row.predictor_config.get('job_id') == payload.get('job_id'):
-                matched[row.split] = row
-        if set(matched) != {'val', 'test'}:
-            raise ValueError('Faltan evaluaciones estándar val/test del artefacto exacto.')
-        for row in matched.values():
-            if (row.status != 'completed' or row.checkpoint_sha256 != target.hash_binario or
-                    row.dataset != payload['dataset_name'] or row.classes != payload['classes'] or
-                    row.schema_version != 2 or row.evaluator_version != EVALUATOR_VERSION):
-                raise ValueError('Evaluación estándar incompleta o identidad incompatible.')
-            identity = EvaluationIdentity.model_validate({k: getattr(row, k) for k in EvaluationIdentity.model_fields})
-            validate_report(row.report, identity)
-        for key in ('predictor_config', 'preprocessing_config', 'aggregation_config', 'classes', 'evaluator_version'):
-            if getattr(matched['val'], key) != getattr(matched['test'], key):
-                raise ValueError('Procedencia val/test incompatible.')
+        """Delegate standard-artifact eligibility to the shared integrity guard."""
+        from app.services.standard_evaluation_guard import require_standard_reports
+        require_standard_reports(target, db, self.checkpoints_dir)
 
     def _evaluate_registered_checkpoint(self, model_id, checkpoint_path, checkpoint_hash,
-                                        config, classes, training_audio, is_ensemble):
+                                        config, classes, training_audio, is_ensemble, architecture):
         """Registration is durable first; evaluation errors preserve the artifact."""
         with self._lock:
             self.status = 'evaluating'
@@ -628,15 +565,27 @@ class TrainingService:
                     resolved = resolve_reference(record.reference, record.stage, config['source']['roots'])
                     if resolved != record.path:
                         raise ValueError('Referencia admitida cambió antes de evaluación')
-            settings = self._evaluation_config(config, training_audio)
+            settings = self._evaluation_config({**config, 'architecture': architecture}, training_audio)
             evaluators = [RecordingEvaluator(config['source']['recordings'][split], predictor,
                 id_modelo=model_id, dataset=config['dataset_name'], split=split,
                 checkpoint_sha256=checkpoint_hash, predictor_config=settings[0],
                 preprocessing_config=settings[1], aggregation_config=settings[2]) for split in ('val', 'test')]
+            from app.services.standard_evaluation_guard import (
+                ADMITTED_MANIFEST_PAIR_KEY, admitted_manifest_pair_provenance,
+            )
+            pair_provenance = admitted_manifest_pair_provenance(
+                evaluators[0].identity.manifest_sha256, evaluators[1].identity.manifest_sha256)
+            evaluation_identities = []
+            for evaluator in evaluators:
+                identity = evaluator.identity.model_dump()
+                identity['predictor_config'] = {
+                    **identity['predictor_config'], ADMITTED_MANIFEST_PAIR_KEY: pair_provenance,
+                }
+                evaluation_identities.append(identity)
             with SessionLocal() as evaluation_db:
                 service = EvaluationService(evaluation_db)
-                for evaluator in evaluators:
-                    attempt_ids.append(service.create(evaluator.identity)['id_evaluation'])
+                for identity in evaluation_identities:
+                    attempt_ids.append(service.create(identity)['id_evaluation'])
                 for attempt_id, evaluator in zip(attempt_ids, evaluators):
                     service.start(attempt_id)
                     report = evaluator.evaluate()
@@ -725,42 +674,11 @@ class TrainingService:
             train_df, val_df = source["train_df"], source["val_df"]
             classes = sorted(train_df["clase"].unique().tolist())
             label_to_idx = {c: i for i, c in enumerate(classes)}
-            if is_engine:
-                target_sr = 32000
-                duration_seconds = 2.0
-                n_mels = 128
-                n_fft = 1024
-                hop_length = 512
-                f_min = 50.0
-                f_max = 16000.0
-            else:
-                target_sr = 22050
-                duration_seconds = 5.0
-                n_mels = 128
-                n_fft = 2048
-                hop_length = 512
-                f_min = 800.0
-                f_max = 10000.0
-
-            # Desacoplamiento universal: sobreescribir física acústica si se suministra audio_config
-            audio_cfg_dict = config.get("audio_config")
-            if audio_cfg_dict:
-                if isinstance(audio_cfg_dict, dict):
-                    target_sr = audio_cfg_dict.get("target_sr", target_sr)
-                    duration_seconds = audio_cfg_dict.get("duration_seconds", duration_seconds)
-                    f_min = float(audio_cfg_dict.get("f_min", f_min))
-                    f_max = float(audio_cfg_dict.get("f_max", f_max))
-                    n_mels = audio_cfg_dict.get("n_mels", n_mels)
-                    n_fft = audio_cfg_dict.get("n_fft", n_fft)
-                    hop_length = audio_cfg_dict.get("hop_length", hop_length)
-                else:
-                    target_sr = getattr(audio_cfg_dict, "target_sr", target_sr)
-                    duration_seconds = getattr(audio_cfg_dict, "duration_seconds", duration_seconds)
-                    f_min = float(getattr(audio_cfg_dict, "f_min", f_min))
-                    f_max = float(getattr(audio_cfg_dict, "f_max", f_max))
-                    n_mels = getattr(audio_cfg_dict, "n_mels", n_mels)
-                    n_fft = getattr(audio_cfg_dict, "n_fft", n_fft)
-                    hop_length = getattr(audio_cfg_dict, "hop_length", hop_length)
+            from app.services.standard_evaluation_guard import resolve_training_audio
+            training_audio = resolve_training_audio(dataset_name, config.get("audio_config"))
+            target_sr, duration_seconds, n_mels, n_fft, hop_length, f_min, f_max = (
+                training_audio[key] for key in (
+                    "target_sr", "duration_seconds", "n_mels", "n_fft", "hop_length", "f_min", "f_max"))
 
             self._add_log(
                 "INFO",
@@ -1162,11 +1080,8 @@ class TrainingService:
                     if db is not None:
                         db.close()
 
-                training_audio = dict(target_sr=target_sr, duration_seconds=duration_seconds,
-                                      n_mels=n_mels, n_fft=n_fft, hop_length=hop_length,
-                                      f_min=f_min, f_max=f_max)
                 self._evaluate_registered_checkpoint(model_id, checkpoint_path, file_hash,
-                                                     config, classes, training_audio, is_ensemble)
+                                                     config, classes, training_audio, is_ensemble, arch)
 
                 # Limpieza de memoria RAM y VRAM antes del siguiente modelo
                 if torch.cuda.is_available():

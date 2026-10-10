@@ -288,7 +288,71 @@ sin reinterpretar.
 La respuesta distingue catálogo de evaluaciones `available` vacío de almacenamiento
 `unavailable`/registro inválido, con códigos acotados y sin detalles internos. Esta
 lectura no crea intentos, calcula hashes, carga pesos ni ejecuta predicción/evaluación;
-la reconciliación lazy preexistente del registro no cambia. Informes genéricos sin FK,
+la reconciliación del registro aplica el guard de integridad EVAL-5B a artefactos estándar. Informes genéricos sin FK,
 como la identidad del ensamble EVAL-4B, no se atribuyen a modelos del catálogo. La
 verificación del slice usa API en proceso y SQLite aislado; PostgreSQL y la semántica
 operacional del catálogo siguen sin acreditarse.
+
+## EVAL-5B: guard canónico de publicación y activación
+
+`standard_evaluation_guard.require_standard_reports` es el guard compartido por
+activación y las dos rutas de registro DB: `ModelRegistry.publish_from_db` (catálogo)
+y `register_from_db` (incluida la construcción startup de `build_default_registry`).
+Todas lo ejecutan antes de instanciar/exponer predictores, escoger el default o añadir
+alias. Un marcador `standard_*` solo admite publicación/activación si el estado del
+modelo sigue en `standard_eval_completed`; pending, failed y
+`standard_component_evaluated` fallan aunque existan informes antiguos. Los modelos
+legacy no entran al guard.
+
+La autorización se vincula al checkpoint confiable actual, no a que dos filas se
+parezcan entre sí. El guard limita la ruta a la raíz local, comprueba tamaño, calcula
+SHA-256 de los bytes y carga solo metadata en CPU con `torch.load(weights_only=True)`.
+Valida contra el checkpoint y el modelo DB: hash, clases ordenadas, arquitectura,
+dataset e ID, job, schema 2, versión de evaluador y configuración efectiva. El builder
+único `build_evaluation_configuration` genera la procedencia tanto para el evaluador
+MAIN como para el guard; `resolve_training_audio` es también la fuente común de los
+defaults y overrides de audio usados por el worker y reconstruidos desde metadata del
+checkpoint. El config liga arquitectura, job, audio/frontend/windowing de training,
+versiones runtime, implementación del predictor y loader, transformaciones publicadas,
+umbrales y defaults reales de resampling/flatness, además de agregación por grabación.
+Los hashes de implementación apuntan a referencias estables del código predictor (no
+al helper/guard), por lo que extraer el guard no crea un self-hash circular.
+
+Entre intentos completed, solo cuentan informes que cada uno coincide exactamente con
+ese config efectivo y con el checkpoint/dataset/clases/job/schema/evaluador actuales.
+Ambos `predictor_config` contienen la identidad compartida versionada
+`admitted_val_test_manifest_pair` (`version=1`, `sha256`): SHA-256 de JSON canónico
+ordenado que incluye un dominio estable, versión 1 y los hashes de manifiesto val y
+test en ese orden. MAIN construye ambas identidades admitidas tras validar las
+particiones y antes de crear intentos o ejecutar inferencia; de sus hashes
+individuales deriva y persiste el vínculo compartido. El guard reconstruye el digest
+con los dos manifiestos concretos y exige que ambos informes contengan exactamente
+el mismo valor reconstruido. Así no puede combinar val y test tomados de pares
+admitidos distintos. Split, manifiesto
+individual y cantidad de muestras pueden diferir, pues son propios de cada partición.
+Intentos pending/failed más nuevos siguen visibles como `latest_attempt` en EVAL-5A,
+pero no revocan una autorización completed previa del mismo artefacto/configuración:
+el guard busca el par coherente entre todos los completados, no solo el intento más
+reciente de cada split. Informes sin la identidad conjunta no autorizan publicación;
+los informes estándar históricos no se actualizan ni migran automáticamente y
+requieren reevaluación explícita. El digest acredita el emparejamiento de snapshots
+admitidos, no que ambas inferencias ocurrieron en una única ejecución ni la autenticidad
+de la procedencia. La comparación de `code_revision` sigue siendo igualdad exacta,
+incluido `None`; no se deriva una revisión desde Git ni un commit invalida por sí solo
+un par. Si cambia la identidad actual o no queda par completed coherente, se falla
+cerrado.
+
+Un error de integridad invalida una entrada DB cacheada y sus alias; el guard no cambia
+filas `activo`, estado, intentos ni default del almacenamiento. `register_from_db`
+valida antes del predictor/default/alias y solo selecciona como default una fila que
+esté explícitamente activa y haya pasado el guard; un modelo inactive no se convierte
+en fallback implícito. Un retry fallido del mismo artefacto/config no retira una
+entrada previamente autorizada ni altera el default/activo DB.
+
+Esta política no cambia la lectura lazy de modelos legacy ni les calcula hashes/carga
+metadata en el guard. La serialización de informes EVAL-5A no lee checkpoints; la
+reconciliación de un artefacto estándar sí hace lectura de integridad/metadata local,
+pero no construye `TrainingService`, no predice ni evalúa. Las regresiones usan SQLite
+y checkpoints sintéticos para configuración igual-e-incorrecta, rutas catálogo/startup,
+cache/alias/default, retries fallidos y activación; PostgreSQL, runtime desplegado y
+checkpoints o datasets reales no están acreditados.

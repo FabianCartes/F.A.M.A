@@ -274,3 +274,12 @@ class TrainedModelPredictor(AudioPredictor):
                 "is_mock": False,
             },
         )
+
+
+# Stable references keep provenance hashes bound to the production implementation,
+# even when tests inject a metadata-only adapter at the class seam.
+PREDICT_IMPLEMENTATION = TrainedModelPredictor.predict
+MODEL_LOADER_IMPLEMENTATION = TrainedModelPredictor._load_model
+LENGTH_IMPLEMENTATION = load_and_fix_length
+RMS_IMPLEMENTATION = compute_rms
+MEL_IMPLEMENTATION = extract_mel_spectrogram

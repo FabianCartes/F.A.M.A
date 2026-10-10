@@ -1,5 +1,6 @@
 """Persistence through public training seams with tiny, synthetic ML execution."""
 import hashlib
+import json
 
 import pytest
 import torch
@@ -80,6 +81,15 @@ def test_main_persists_two_final_reports_before_success_and_activation(persisten
     assert [(a['split'], a['status']) for a in attempts] == [('val', 'completed'), ('test', 'completed')]
     assert all(a['checkpoint_sha256'] == entry['sha256'] for a in attempts)
     assert attempts[0]['manifest_sha256'] != attempts[1]['manifest_sha256']
+    pair = attempts[0]['predictor_config']['admitted_val_test_manifest_pair']
+    assert pair == attempts[1]['predictor_config']['admitted_val_test_manifest_pair']
+    canonical_pair = json.dumps({
+        'domain': 'fama.standard-evaluation.admitted-val-test-manifest-pair',
+        'version': 1,
+        'val_manifest_sha256': attempts[0]['manifest_sha256'],
+        'test_manifest_sha256': attempts[1]['manifest_sha256'],
+    }, sort_keys=True, separators=(',', ':'), ensure_ascii=False, allow_nan=False).encode('utf-8')
+    assert pair == {'version': 1, 'sha256': hashlib.sha256(canonical_pair).hexdigest()}
     assert all(a['report']['sample_count'] == 1 for a in attempts)
     assert all(a['report']['rejection']['count'] == 1 for a in attempts)
     assert entry['active'] is True
@@ -264,7 +274,30 @@ def test_manual_activation_blocks_new_incomplete_models_but_preserves_legacy(per
         assert service.set_active_model(previous_id, db)['success'] is True
 
 
-@pytest.mark.parametrize('fault', ['hash', 'job', 'classes', 'dataset', 'report'])
+def test_manual_activation_preserves_same_artifact_pair_after_failed_retry(persistence_env):
+    service, sessions, _, _ = persistence_env
+    start(service)
+    entry, = history(service, sessions)
+    with sessions() as db:
+        from app.schemas.evaluation import EvaluationIdentity
+
+        target = db.get(Modelo, entry['id'])
+        active_before = [row.id_modelo for row in db.query(Modelo).filter(Modelo.activo.is_(True))]
+        val = db.query(ModelEvaluation).filter_by(id_modelo=entry['id'], split='val').one()
+        identity = {field: getattr(val, field) for field in EvaluationIdentity.model_fields}
+        attempts = EvaluationService(db)
+        retry = attempts.create(identity)
+        attempts.start(retry['id_evaluation'])
+        attempts.fail(retry['id_evaluation'], 'synthetic retry failure')
+        assert target.estado == 'standard_eval_completed'
+        assert [row.id_modelo for row in db.query(Modelo).filter(Modelo.activo.is_(True))] == active_before
+
+        result = service.set_active_model(entry['id'], db)
+        assert result['success'] is True, result
+        assert [row.id_modelo for row in db.query(Modelo).filter(Modelo.activo.is_(True))] == active_before
+
+
+@pytest.mark.parametrize('fault', ['hash', 'job', 'classes', 'dataset', 'report', 'config'])
 def test_manual_activation_rejects_wrong_report_identity(persistence_env, fault):
     service, sessions, _, _ = persistence_env
     previous_id = old_active(sessions)
@@ -281,6 +314,8 @@ def test_manual_activation_rejects_wrong_report_identity(persistence_env, fault)
             row.classes = ['wrong-class']
         elif fault == 'dataset':
             row.dataset = 'different-dataset'
+        elif fault == 'config':
+            row.preprocessing_config = {**row.preprocessing_config, 'crop': 'wrong'}
         else:
             row.report = {**row.report, 'sample_count': 99}
         db.commit()

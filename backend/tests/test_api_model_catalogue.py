@@ -108,6 +108,320 @@ def add_evaluation(engine, model_id, split, status, *, y_true=None, y_pred=None,
         return service.complete(attempt["id_evaluation"], report)
 
 
+def seed_standard_model(catalogue, model_id, *, state="standard_eval_completed", fault=None,
+                        active=False, sample_counts=None):
+    import hashlib
+    import torch
+    from app.models.dataset import ConjuntoDatos
+    from app.services.recording_evaluator import EVALUATOR_VERSION
+    from app.services.standard_evaluation_guard import (
+        ADMITTED_MANIFEST_PAIR_KEY, admitted_manifest_pair_provenance,
+        build_evaluation_configuration, resolve_training_audio,
+    )
+
+    client, _, persist, engine = catalogue
+    with Session(engine, expire_on_commit=False) as db:
+        dataset = ConjuntoDatos(nombre="engine_diagnostics", ruta_gcp="datasets/engine_diagnostics")
+        db.add(dataset)
+        db.commit()
+        dataset_id, dataset_name = dataset.id_conjunto_datos, dataset.nombre
+        db.expunge(dataset)
+    checkpoint = persist(model_id, dataset=dataset, active=active)
+    job_id = f"synthetic-job-{model_id}"
+    payload = {
+        "dataset_id": dataset_id, "dataset_name": dataset_name,
+        "job_id": job_id, "classes": ["a", "b"], "architecture": "EfficientNet-B0",
+        "audio_config": None, "windowing_config": None,
+        "state_dict": {}, "test_padding": "x" * 11000,
+        "source_directory": "/private/synthetic/path", "secret_marker": "synthetic-secret-marker",
+    }
+    torch.save(payload, checkpoint)
+    checkpoint_hash = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+    with Session(engine) as db:
+        model = db.get(Modelo, model_id)
+        model.estado = state
+        model.hash_binario = checkpoint_hash
+        db.commit()
+
+    configs = dict(zip(
+        ("predictor_config", "preprocessing_config", "aggregation_config"),
+        build_evaluation_configuration(
+            {"job_id": job_id, "architecture": payload["architecture"], "windowing_config": None},
+            resolve_training_audio(dataset_name, None))))
+    if fault == "wrong_architecture":
+        configs["predictor_config"] = {**configs["predictor_config"], "architecture": "Other"}
+    if fault in ("config", "coherent_wrong_config"):
+        configs["preprocessing_config"] = {
+            **configs["preprocessing_config"], "silence_rms_threshold": 0.75,
+        }
+    evaluation_splits = ("val",) if fault == "missing_test" else ("val", "test")
+    manifest_hashes = {"val": "d" * 64, "test": "e" * 64}
+    sample_counts = sample_counts or {"val": 2, "test": 2}
+    for split in evaluation_splits:
+        split_configs = dict(configs)
+        split_classes = ["a", "b"]
+        split_hash = checkpoint_hash
+        split_dataset = dataset_name
+        schema_version = 2
+        evaluator_version = EVALUATOR_VERSION
+        manifest_pair = admitted_manifest_pair_provenance(
+            manifest_hashes["val"], manifest_hashes["test"])
+        if fault == "cross_generation_pair":
+            manifest_pair = admitted_manifest_pair_provenance(
+                "d" * 64, "f" * 64) if split == "val" else admitted_manifest_pair_provenance(
+                    "a" * 64, "e" * 64)
+        split_configs["predictor_config"] = {
+            **split_configs["predictor_config"], ADMITTED_MANIFEST_PAIR_KEY: manifest_pair,
+        }
+        if fault == "missing_pair_identity" and split == "val":
+            split_configs["predictor_config"].pop(ADMITTED_MANIFEST_PAIR_KEY)
+        elif fault == "tampered_pair_identity" and split == "test":
+            split_configs["predictor_config"][ADMITTED_MANIFEST_PAIR_KEY] = {
+                **manifest_pair, "sha256": "f" * 64,
+            }
+        if fault == "wrong_hash":
+            split_hash = "c" * 64
+        elif fault == "wrong_classes":
+            split_classes = ["b", "a"]
+        elif fault == "wrong_job" and split == "test":
+            split_configs["predictor_config"] = {**configs["predictor_config"], "job_id": "other-job"}
+        elif fault == "wrong_config" and split == "test":
+            split_configs["preprocessing_config"] = {**configs["preprocessing_config"], "crop": "left"}
+        elif fault == "wrong_dataset" and split == "test":
+            split_dataset = "AvesChilenas"
+        elif fault == "wrong_schema":
+            schema_version = 1
+        elif fault == "wrong_evaluator":
+            evaluator_version = "other-evaluator"
+        count = sample_counts[split]
+        labels = [split_classes[index % len(split_classes)] for index in range(count)]
+        predictions = [label if index % 2 == 0 else "__recording_rejected__"
+                       for index, label in enumerate(labels)]
+        identity = {
+            "id_modelo": model_id, "schema_version": schema_version,
+            "evaluator_version": evaluator_version, "checkpoint_sha256": split_hash,
+            "dataset": split_dataset, "split": split, "manifest_sha256": manifest_hashes[split],
+            "classes": split_classes, "sample_count": count,
+            **split_configs, "code_revision": None,
+        }
+        with Session(engine) as db:
+            from app.services.evaluations import EvaluationService
+            service = EvaluationService(db)
+            attempt = service.create(identity)
+            service.start(attempt["id_evaluation"])
+            if schema_version == 2:
+                report = calculate_classification_report(
+                    labels, predictions, split_classes, rejection_label="__recording_rejected__")
+            else:
+                report = calculate_classification_report(labels, labels, split_classes)
+            service.complete(attempt["id_evaluation"], report)
+    return client, checkpoint, payload, checkpoint_hash
+
+
+def install_torch_metadata_adapter(monkeypatch):
+    import torch
+    from app.services.predictors import trained_predictor
+    from tests.test_model_registry import FakeAudioPredictor
+
+    class CheckpointMetadataPredictor(FakeAudioPredictor):
+        def __init__(self, checkpoint_path, model_id, name, is_default, lazy_load, dataset_name):
+            assert lazy_load is True
+            payload = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+            super().__init__(model_id, name, is_default)
+            self._meta.classes = payload["classes"]
+            self._meta.dataset_name = dataset_name
+            self.model = None
+
+        def predict(self, audio_path):
+            pytest.fail("Registry guard must not run inference")
+
+    monkeypatch.setattr(trained_predictor, "TrainedModelPredictor", CheckpointMetadataPredictor)
+
+
+@pytest.mark.parametrize("fault", [
+    "pending", "failed", "component", "missing_test", "wrong_hash", "wrong_classes",
+    "wrong_config", "coherent_wrong_config", "wrong_architecture", "wrong_job", "wrong_dataset",
+    "wrong_schema", "wrong_evaluator", "missing_pair_identity", "tampered_pair_identity",
+])
+def test_catalogue_rejects_unverified_standard_models_before_publication(catalogue, monkeypatch, fault):
+    states = {
+        "pending": "standard_eval_pending", "failed": "standard_eval_failed",
+        "component": "standard_component_evaluated",
+    }
+    state = states.get(fault, "standard_eval_completed")
+    client, _, _, _ = seed_standard_model(
+        catalogue, 401, state=state, fault=None if fault in states else fault)
+    install_torch_metadata_adapter(monkeypatch)
+
+    response = client.get("/api/models")
+    payload = response.json()
+    assert response.status_code == 200
+    assert all(model["id"] != "fama_trained_model_401" for model in payload["models"])
+    assert payload["publication_errors"] == [
+        {"model_id": "fama_trained_model_401", "code": "standard_evaluation_invalid"},
+    ]
+    assert "/private/synthetic/path" not in response.text
+    assert "synthetic-secret-marker" not in response.text
+
+
+def test_catalogue_rejects_val_test_from_different_admitted_manifest_pairs(catalogue, monkeypatch):
+    # These split manifests come from separate admissions; individual identities match
+    # the current artifact/configuration, but there is no shared pair identity.
+    client, _, _, _ = seed_standard_model(catalogue, 400, fault="cross_generation_pair")
+    install_torch_metadata_adapter(monkeypatch)
+
+    response = client.get("/api/models")
+
+    assert response.status_code == 200
+    assert all(model["id"] != "fama_trained_model_400" for model in response.json()["models"])
+    assert response.json()["publication_errors"] == [
+        {"model_id": "fama_trained_model_400", "code": "standard_evaluation_invalid"},
+    ]
+
+
+def test_catalogue_accepts_shared_manifest_pair_with_independent_split_manifests_and_counts(
+    catalogue, monkeypatch,
+):
+    import hashlib
+    import json
+
+    client, _, _, _ = seed_standard_model(catalogue, 400, sample_counts={"val": 2, "test": 3})
+    install_torch_metadata_adapter(monkeypatch)
+
+    response = client.get("/api/models")
+
+    assert response.status_code == 200
+    model = next(model for model in response.json()["models"]
+                 if model["id"] == "fama_trained_model_400")
+    val = model["evaluations"]["val"]["latest_completed"]["provenance"]
+    test = model["evaluations"]["test"]["latest_completed"]["provenance"]
+    assert val["manifest_sha256"] != test["manifest_sha256"]
+    assert val["sample_count"] == 2
+    assert test["sample_count"] == 3
+    val_pair = val["predictor_config"]["admitted_val_test_manifest_pair"]
+    assert test["predictor_config"]["admitted_val_test_manifest_pair"] == val_pair
+    canonical = json.dumps({
+        "domain": "fama.standard-evaluation.admitted-val-test-manifest-pair",
+        "version": 1,
+        "val_manifest_sha256": val["manifest_sha256"],
+        "test_manifest_sha256": test["manifest_sha256"],
+    }, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8")
+    assert val_pair == {"version": 1, "sha256": hashlib.sha256(canonical).hexdigest()}
+
+
+def test_catalogue_keeps_valid_standard_and_legacy_predictors_lazy(catalogue, monkeypatch):
+    import hashlib
+
+    client, registry, _, _ = catalogue
+    client, checkpoint, _, _ = seed_standard_model(catalogue, 402)
+    install_torch_metadata_adapter(monkeypatch)
+
+    response = client.get("/api/models")
+    assert response.status_code == 200
+    payload = response.json()
+    standard = next(model for model in payload["models"] if model["id"] == "fama_trained_model_402")
+    assert standard["has_weights"] is True
+    assert standard["evaluations"]["val"]["latest_completed"]["provenance"]["checkpoint_sha256"] == hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+    assert registry.get("402").model is None
+    assert registry.get("selected").model_id == "selected"
+
+
+def test_catalogue_preserves_cached_standard_predictor_after_same_artifact_failed_attempt(catalogue, monkeypatch):
+    client, registry, _, engine = catalogue
+    client, _, _, _ = seed_standard_model(catalogue, 403)
+    install_torch_metadata_adapter(monkeypatch)
+    first = client.get("/api/models")
+    assert first.status_code == 200
+    assert any(model["id"] == "fama_trained_model_403" for model in first.json()["models"]), first.json()
+    cached = registry.get("fama_trained_model_403")
+    assert registry.get("403") is cached
+    default_before = registry.get_default_model_id()
+
+    add_evaluation(engine, 403, "val", "failed")
+    response = client.get("/api/models")
+    assert response.status_code == 200
+    model = next(model for model in response.json()["models"] if model["id"] == "fama_trained_model_403")
+    assert model["evaluations"]["val"]["latest_attempt"]["status"] == "failed"
+    assert model["evaluations"]["val"]["latest_completed"] is not None
+    assert response.json()["publication_errors"] == []
+    assert registry.has_model("fama_trained_model_403")
+    assert registry.get("fama_trained_model_403") is cached
+    assert registry.get("403") is cached
+    assert registry.get_default_model_id() == default_before
+
+
+@pytest.mark.parametrize("retry_status", ["pending", "failed"])
+def test_catalogue_preserves_old_coherent_pair_after_new_incomplete_attempt(
+    catalogue, monkeypatch, retry_status,
+):
+    from app.models.training import ModelEvaluation
+    from app.schemas.evaluation import EvaluationIdentity
+    from app.services.evaluations import EvaluationService
+    from app.services.standard_evaluation_guard import (
+        ADMITTED_MANIFEST_PAIR_KEY, admitted_manifest_pair_provenance,
+    )
+
+    client, registry, _, engine = catalogue
+    client, _, _, _ = seed_standard_model(catalogue, 403, active=True)
+    install_torch_metadata_adapter(monkeypatch)
+    first = client.get("/api/models")
+    assert any(model["id"] == "fama_trained_model_403" for model in first.json()["models"])
+    cached = registry.get("fama_trained_model_403")
+    default_before = registry.get_default_model_id()
+
+    with Session(engine) as db:
+        old_val = db.query(ModelEvaluation).filter_by(
+            id_modelo=403, split="val", status="completed").one()
+        old_manifest = old_val.manifest_sha256
+        identity = {field: getattr(old_val, field) for field in EvaluationIdentity.model_fields}
+        identity["manifest_sha256"] = "f" * 64
+        identity["predictor_config"] = {
+            **identity["predictor_config"],
+            ADMITTED_MANIFEST_PAIR_KEY: admitted_manifest_pair_provenance("f" * 64, "c" * 64),
+        }
+        evaluations = EvaluationService(db)
+        retry = evaluations.create(identity)
+        if retry_status == "failed":
+            evaluations.start(retry["id_evaluation"])
+            evaluations.fail(retry["id_evaluation"], "synthetic admitted retry failure")
+
+    response = client.get("/api/models")
+    model = next(model for model in response.json()["models"] if model["id"] == "fama_trained_model_403")
+    val = model["evaluations"]["val"]
+    assert response.status_code == 200
+    assert val["latest_attempt"]["status"] == retry_status
+    assert val["latest_completed"]["provenance"]["manifest_sha256"] == old_manifest
+    assert response.json()["publication_errors"] == []
+    assert registry.get("fama_trained_model_403") is cached
+    assert registry.get("403") is cached
+    assert registry.get_default_model_id() == default_before
+    with Session(engine) as db:
+        assert db.get(Modelo, 403).activo is True
+
+
+def test_catalogue_evicts_cached_standard_predictor_when_checkpoint_identity_changes(catalogue, monkeypatch):
+    from app.services.registry import ModelNotFoundError
+
+    client, registry, _, _ = catalogue
+    client, checkpoint, _, _ = seed_standard_model(catalogue, 404, active=True)
+    install_torch_metadata_adapter(monkeypatch)
+    first = client.get("/api/models")
+    assert any(model["id"] == "fama_trained_model_404" for model in first.json()["models"])
+    cached = registry.get("fama_trained_model_404")
+    assert registry.get("404") is cached
+
+    checkpoint.write_bytes(checkpoint.read_bytes() + b"changed-synthetic-checkpoint")
+    response = client.get("/api/models")
+    assert response.status_code == 200
+    assert all(model["id"] != "fama_trained_model_404" for model in response.json()["models"])
+    assert response.json()["publication_errors"] == [
+        {"model_id": "fama_trained_model_404", "code": "standard_evaluation_invalid"},
+    ]
+    assert not registry.has_model("fama_trained_model_404")
+    with pytest.raises(ModelNotFoundError):
+        registry.get("404")
+
+
 def test_catalogue_exposes_full_val_test_evaluations_and_distinguishes_zero_from_absence(catalogue):
     client, _, persist, engine = catalogue
     persist(101, active=False, contents=json.dumps({
