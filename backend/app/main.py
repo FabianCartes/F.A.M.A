@@ -1,11 +1,13 @@
 import sys
-import tempfile
+import asyncio
+from functools import partial
+from time import perf_counter
 from pathlib import Path
 from typing import Optional, Tuple, List
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Form, Query, status
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Form, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -46,6 +48,9 @@ except ImportError:
     )
     from poc.train import BioacousticModel
 
+from app.middleware.inference_limits import InferenceLimits
+from app.services.inference_execution import InferenceExecution
+from app.services.inference_input import InvalidInferenceAudio, validate_audio
 from app.services.storage import upload_audio_to_gcp
 from app.services.ingestion import ingestion_service
 from app.services.training import training_service
@@ -408,6 +413,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+inference_execution = InferenceExecution()
+MAX_INFERENCE_BODY_BYTES = 110 * 1024 * 1024
+INFERENCE_WAIT_SECONDS = 270
+app.add_middleware(InferenceLimits, execution=inference_execution,
+                   body_limit=lambda: MAX_INFERENCE_BODY_BYTES,
+                   wait_seconds=lambda: INFERENCE_WAIT_SECONDS)
+
 # Configuración de CORS para permitir peticiones desde el frontend (Next.js)
 app.add_middleware(
     CORSMiddleware,
@@ -522,6 +534,7 @@ async def predict_audio(
     dataset_name: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     registry: ModelRegistry = Depends(get_model_registry),
+    request: Request = None,
 ):
     """
     Recibe un archivo de audio por HTTP multipart/form-data.
@@ -554,31 +567,48 @@ async def predict_audio(
             detail=str(err),
         )
 
+    lease = getattr(request.state, "inference_lease", None) if request is not None else None
+    owns_lease = lease is None
+    if owns_lease:
+        lease = inference_execution.acquire()
+    if lease is None:
+        raise HTTPException(status_code=503, detail="Inferencia ocupada. Intente nuevamente más tarde.",
+                            headers={"Retry-After": "5"})
+
+    total_started, request_outcome = perf_counter(), "ok"
     try:
-        audio_buffer = bytearray()
-        while True:
-            chunk = await file.read(min(1024 * 1024, MAX_AUDIO_BYTES + 1 - len(audio_buffer)))
-            if not chunk:
-                break
-            if len(audio_buffer) + len(chunk) > MAX_AUDIO_BYTES:
-                raise HTTPException(
-                    status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-                    detail="El archivo supera el límite de 100 MiB (104.857.600 bytes).",
-                )
-            audio_buffer.extend(chunk)
-        audio_bytes = bytes(audio_buffer)
-        del audio_buffer
+        with lease.stage("read"):
+            audio_buffer = bytearray()
+            while True:
+                chunk = await file.read(min(1024 * 1024, MAX_AUDIO_BYTES + 1 - len(audio_buffer)))
+                if not chunk:
+                    break
+                if len(audio_buffer) + len(chunk) > MAX_AUDIO_BYTES:
+                    raise HTTPException(
+                        status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                        detail="El archivo supera el límite de 100 MiB (104.857.600 bytes).",
+                    )
+                audio_buffer.extend(chunk)
+            audio_bytes = bytes(audio_buffer)
+            del audio_buffer
+        try:
+            await lease.run(validate_audio, audio_bytes, stage="validation")
+        except InvalidInferenceAudio as audio_error:
+            raise HTTPException(status_code=400, detail=str(audio_error))
         from uuid import uuid4
         source_filename = f"{uuid4().hex}.wav"
 
         # 3. Persistencia en la nube: Subida a Google Cloud Storage (RNF_03)
         try:
-            gcp_success = await upload_audio_to_gcp(audio_bytes, filename=source_filename)
-        except Exception as gcp_err:
+            gcp_success = await upload_audio_to_gcp(
+                audio_bytes, filename=source_filename, timeout=60,
+                thread_runner=partial(lease.run, stage="upload"),
+            )
+        except Exception:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Fallo en la persistencia en Google Cloud Storage: {gcp_err}",
-            )
+                detail="Fallo en la persistencia en Google Cloud Storage.",
+            ) from None
 
         if not gcp_success:
             raise HTTPException(
@@ -586,13 +616,9 @@ async def predict_audio(
                 detail="No fue posible confirmar la subida a Google Cloud Storage.",
             )
 
-        # 4. Procesar audio localmente de forma temporal para la inferencia acústica
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_audio:
-            tmp_audio.write(audio_bytes)
-            tmp_path = Path(tmp_audio.name)
-
+        # 4. Keep synchronous inference off the event loop; never pass db to its thread.
         try:
-            pred_result = predictor.predict(tmp_path)
+            pred_result = await lease.predict(predictor, audio_bytes)
             clase = pred_result.clase
             confianza = float(pred_result.confianza)
         except MalformedAudioError:
@@ -605,25 +631,23 @@ async def predict_audio(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=f"Modelo '{predictor.model_id}' no disponible para inferencia: {weights_err}",
             )
-        finally:
-            if tmp_path.exists():
-                tmp_path.unlink()
 
         # 5. Persistencia relacional en PostgreSQL (Tabla 'prediccion')
         try:
-            registro_prediccion = Prediccion(
-                ruta_audio_prueba=f"raw_audios/{source_filename}",
-                etiqueta_predicha=clase,
-                confianza=confianza,
-                modelo_id=predictor.model_id,
-                dataset_name=predictor.dataset_name,
-                nombre_original=nombre_original,
-                fecha_carga=fecha_carga,
-            )
-            db.add(registro_prediccion)
-            db.commit()
-            db.refresh(registro_prediccion)
-            db_id = registro_prediccion.id_prediccion
+            with lease.stage("persist"):
+                registro_prediccion = Prediccion(
+                    ruta_audio_prueba=f"raw_audios/{source_filename}",
+                    etiqueta_predicha=clase,
+                    confianza=confianza,
+                    modelo_id=predictor.model_id,
+                    dataset_name=predictor.dataset_name,
+                    nombre_original=nombre_original,
+                    fecha_carga=fecha_carga,
+                )
+                db.add(registro_prediccion)
+                db.commit()
+                db.refresh(registro_prediccion)
+                db_id = registro_prediccion.id_prediccion
         except Exception as db_save_err:
             db.rollback()
             raise HTTPException(
@@ -656,18 +680,28 @@ async def predict_audio(
             "detalles": detalles,
         }
 
+    except asyncio.CancelledError:
+        request_outcome = "cancelled"
+        raise
     except HTTPException:
+        request_outcome = "error"
         raise
     except ModelWeightsError as weights_err:
+        request_outcome = "error"
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Modelo no disponible para inferencia: {weights_err}",
         )
     except Exception as err:
+        request_outcome = "error"
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error durante el procesamiento del audio: {str(err)}",
         )
+    finally:
+        if owns_lease:
+            lease.release()
+            lease.record("total", total_started, request_outcome)
 
 
 

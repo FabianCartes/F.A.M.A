@@ -5,6 +5,8 @@ const nextConfig: NextConfig = {
   experimental: {
     // Whole multipart request; the file itself is limited to 100 MiB.
     proxyClientMaxBodySize: 110 * 1024 * 1024,
+    // All external HTTP rewrites, not just inference; leave backend time to return 504.
+    proxyTimeout: 300000,
   },
   async rewrites() {
     const backendUrl = process.env.API_URL || "http://127.0.0.1:8000";

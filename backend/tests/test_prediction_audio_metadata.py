@@ -1,6 +1,7 @@
 """Reception metadata through inference, with SQLite and fake external boundaries."""
 import asyncio
 import io
+import wave
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -14,10 +15,21 @@ from app.models.prediction import Prediccion
 import app.main as main
 
 
-@pytest.mark.parametrize("size, expected_status", [(7, 200), (8, 200), (9, 413), (24, 413)])
+def synthetic_wav(frames=1, rate=1, channels=1, sample_width=2):
+    stream = io.BytesIO()
+    with wave.open(stream, "wb") as audio:
+        audio.setnchannels(channels)
+        audio.setsampwidth(sample_width)
+        audio.setframerate(rate)
+        audio.writeframes(b"\x00" * frames * channels * sample_width)
+    return stream.getvalue()
+
+
+@pytest.mark.parametrize("size, expected_status", [(46, 200), (48, 200), (49, 413), (64, 413)])
 def test_public_http_audio_limit_before_external_effects(test_db, monkeypatch, size, expected_status):
     # Threshold-scale contract test, not a 100 MiB transport measurement.
-    monkeypatch.setattr(main, "MAX_AUDIO_BYTES", 8, raising=False)
+    monkeypatch.setattr(main, "MAX_AUDIO_BYTES", 48, raising=False)
+    payload = synthetic_wav() + b"\x00" * (size - 46)
     from starlette.datastructures import UploadFile as MultipartUpload
     original_read = MultipartUpload.read
     reads = []
@@ -38,7 +50,7 @@ def test_public_http_audio_limit_before_external_effects(test_db, monkeypatch, s
     try:
         # No context manager: do not run startup/lifespan or discover real models.
         client = TestClient(main.app)
-        response = client.post("/api/predict", files={"file": ("large.wav", b"x" * size, "audio/wav")},
+        response = client.post("/api/predict", files={"file": ("large.wav", payload, "audio/wav")},
                                headers={"Content-Length": "1"})
         assert response.status_code == expected_status
         assert reads
@@ -49,7 +61,7 @@ def test_public_http_audio_limit_before_external_effects(test_db, monkeypatch, s
             assert test_db.query(Prediccion).count() == 0
         else:
             assert response.json()["clase"] == "Chucao"
-            assert uploader.call_args.args[0] == b"x" * size
+            assert uploader.call_args.args[0] == payload
             assert test_db.query(Prediccion).count() == 1
     finally:
         client.close()
@@ -86,7 +98,7 @@ def test_inference_persists_original_name_and_reception_before_read(test_db, mon
     predictor = SimpleNamespace(model_id="fake-model", dataset_name="AvesChilenas",
                                 predict=lambda path: SimpleNamespace(clase="Chucao", confianza=.9))
     response = asyncio.run(main.predict_audio(
-        file=SlowUpload(filename=filename, file=io.BytesIO(b"fake audio")),
+        file=SlowUpload(filename=filename, file=io.BytesIO(synthetic_wav())),
         model_id=None, dataset_name=None, db=test_db,
         registry=SimpleNamespace(get=lambda model_id: predictor),
     ))

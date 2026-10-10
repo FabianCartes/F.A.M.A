@@ -17,7 +17,7 @@ docs/
 ├── arquitectura/                # Diseño de sistemas, pipelines, MLOps y despliegue
 ├── limites/                     # Límites matemáticos, físicos y problemas conocidos
 ├── manuales/                    # Manual de usuario, revisión, despliegue e índices canónicos
-├── adr/                         # Architectural Decision Records (ADR 0001 a 0020)
+├── adr/                         # Architectural Decision Records (ADR 0001 a 0021)
 ├── receipts/                    # Recibos técnicos reproducibles en formato JSON (RDD)
 ├── duplicados-exactos/           # Tarea acotada: admisión de feedback sin duplicados SHA-256
 └── images/                      # Diagramas, matrices de confusión y gráficos vectoriales
@@ -66,6 +66,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`22_propuesta_vista_ayuda_y_centro_de_conocimiento.md`](./arquitectura/22_propuesta_vista_ayuda_y_centro_de_conocimiento.md): Diseño y especificación del centro de conocimiento e interactividad en frontend.
 
 ### 4. [`docs/manuales/`](./manuales/) — Manuales y Guías Operativas
+* [`ejecucion_acotada_inferencia.md`](./manuales/ejecucion_acotada_inferencia.md): Plan aprobado, evidencia de admisión por proceso y ownership del predictor; ingreso, GCS y timeout pendientes.
 * [`limite_audio_inferencia.md`](./manuales/limite_audio_inferencia.md): Límite WAV de 100 MiB, margen multipart del proxy, errores HTTP, evidencia aislada y activación con reconstrucción pendiente de autorización.
 * [`contrato_referencias_dataset_canonicas.md`](./manuales/contrato_referencias_dataset_canonicas.md): Contrato relativo por etapa, raíces físicas, conversión offline dry-run y preservación; publicación, corte operativo y recuperación requieren autorización separada.
 * [`manual_usuario_plataforma.md`](./manuales/manual_usuario_plataforma.md): Guía integral de operación para investigadores y administradores; incluye [admisión, procedencia y guardado del entrenamiento](./manuales/manual_usuario_plataforma.md#55-requisitos-de-la-fuente-local-y-procedencia) y siguiente comprobación autorizada; distingue [disponibilidad, activación y refresco de Predicción](./manuales/manual_usuario_plataforma.md#611-disponibilidad-del-catálogo-y-activación) de inferencia comprobada.
@@ -83,7 +84,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`backend_permissions_integration.json`](./receipts/backend_permissions_integration.json): Verificación PERM-3 del servicio público de feedback en contenedor aislado; propietario y modos tras aprobaciones, reinicio y replay. Contexto mínimo, no prueba del despliegue completo ni autoridad de entrega.
 
 ### 6. [`docs/adr/`](./adr/) — Architectural Decision Records
-Registro de las 20 decisiones de arquitectura fundamentales del sistema:
+Registro de las 21 decisiones de arquitectura fundamentales del sistema:
 * `ADR 0001`: Migración de AudioCNN a EfficientNet-B0.
 * `ADR 0002`: Particionamiento Estratificado a Nivel de Grabador (Zero Leakage).
 * `ADR 0003`: Adopción de Focal Loss frente a Cross-Entropy estándar.
@@ -103,4 +104,5 @@ Registro de las 20 decisiones de arquitectura fundamentales del sistema:
 * [`ADR 0017`](./adr/0017-disponibilidad-y-activacion-modelos.md): Reconciliación del catálogo por solicitud y refresco predecible de Predicción; disponibilidad sin activación implícita ni garantía de inferencia.
 * [`ADR 0018`](./adr/0018-incorporacion-local-y-sincronizacion-gcs.md): Incorporación local antes de GCS, intención recuperable y outbox durable; aceptación, acuse cloud y entrenamiento sin atomicidad distribuida ni reparación histórica implícita.
 * [`ADR 0019`](./adr/0019-referencias-canonicas-por-etapa.md): Referencias relativas con etapa raw/processed obligatoria y raíces físicas explícitas; contrato compartido estricto, sin inferencia ni activación automática de productores/consumidores legacy.
+* [`ADR 0021`](./adr/0021-ejecucion-acotada-inferencia.md): Cupo y temporal conservados por el trabajo real del predictor tras cancelación HTTP; límites de GCS y cierre explícitos.
 * [`ADR 0020`](./adr/0020-raices-fisicas-en-localizadores-publicos.md): Getters raw/processed y PathResolver conservan la escritura declarada; raíces con alias no soportadas para asociación canónica, sin validación física implícita ni migración de URIs.
