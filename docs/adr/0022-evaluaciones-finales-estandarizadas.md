@@ -273,3 +273,22 @@ checkpoints privados, servicios u operaciones DB. EVAL-4B queda limitado a esa
 verificación sintética local; no acredita rendimiento, integridad externa o despliegue
 con artefactos reales. EVAL-5, EVAL-6 y validación en PostgreSQL/runtime real siguen
 pendientes.
+
+## EVAL-5A: catálogo de informes existentes
+
+`GET /api/models` expone `evaluations.val/test` únicamente para entradas del catálogo
+cuyo ID siga el contrato emitido por el registro DB (`fama_trained_model_<id>`). Una
+consulta batched ordenada por `id_evaluation DESC` devuelve por split el último intento
+(incluidos pending/running/failed) y el último completado por separado; un fallo nuevo
+no oculta el informe anterior. Informe v1/v2 y provenance pasan validación y conservan
+conteos, cobertura, versiones y tasas completas. Ausencia de intentos se representa
+como null, nunca como métricas cero; las métricas históricas del predictor permanecen
+sin reinterpretar.
+
+La respuesta distingue catálogo de evaluaciones `available` vacío de almacenamiento
+`unavailable`/registro inválido, con códigos acotados y sin detalles internos. Esta
+lectura no crea intentos, calcula hashes, carga pesos ni ejecuta predicción/evaluación;
+la reconciliación lazy preexistente del registro no cambia. Informes genéricos sin FK,
+como la identidad del ensamble EVAL-4B, no se atribuyen a modelos del catálogo. La
+verificación del slice usa API en proceso y SQLite aislado; PostgreSQL y la semántica
+operacional del catálogo siguen sin acreditarse.

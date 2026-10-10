@@ -1,8 +1,41 @@
 """
 Esquemas Pydantic para el módulo de información y catálogo de modelos.
 """
-from typing import List, Optional, Dict, Any
+from datetime import datetime
+from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
+
+from app.schemas.evaluation import EvaluationProvenance
+
+
+class EvaluationAttemptSummary(BaseModel):
+    """Safe read-only view of the newest attempt for one split."""
+    id_evaluation: int
+    status: Literal["pending", "running", "completed", "failed"]
+    provenance: EvaluationProvenance
+    created_at: datetime
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+
+
+class CompletedEvaluationSummary(BaseModel):
+    """Validated final report from the newest completed attempt for one split."""
+    id_evaluation: int
+    provenance: EvaluationProvenance
+    report: Dict[str, Any]
+    created_at: datetime
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+
+
+class EvaluationSplitSummary(BaseModel):
+    latest_attempt: Optional[EvaluationAttemptSummary] = None
+    latest_completed: Optional[CompletedEvaluationSummary] = None
+
+
+class ModelEvaluations(BaseModel):
+    val: Optional[EvaluationSplitSummary] = None
+    test: Optional[EvaluationSplitSummary] = None
 
 
 class ModelMetadata(BaseModel):
@@ -16,7 +49,8 @@ class ModelMetadata(BaseModel):
     classes: List[str] = Field(default_factory=list, description="Lista de clases/especies reconocidas")
     is_default: bool = Field(False, description="Indica si es el modelo por defecto del sistema")
     has_weights: bool = Field(True, description="Indica si los pesos binarios (.pt) existen físicamente en disco y están listos")
-    metrics: Optional[Dict[str, Any]] = Field(None, description="Métricas de evaluación conocidas (F1, Accuracy)")
+    metrics: Optional[Dict[str, Any]] = Field(None, description="Métricas históricas existentes del modelo")
+    evaluations: Optional[ModelEvaluations] = Field(None, description="Últimos intentos e informes finales por split")
 
 
 class ModelPublicationError(BaseModel):
@@ -31,3 +65,5 @@ class ModelListResponse(BaseModel):
     total: int
     default_model_id: str
     publication_errors: List[ModelPublicationError] = Field(default_factory=list)
+    evaluation_catalogue_status: Literal["available", "unavailable"] = "available"
+    evaluation_catalogue_error: Optional[Literal["evaluation_store_unavailable", "evaluation_records_invalid"]] = None

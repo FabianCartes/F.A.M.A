@@ -62,6 +62,7 @@ from app.database import Base, engine, get_db
 from app.models import Prediccion, ConjuntoDatos, Audio, Modelo, MetricaEntrenamiento, Retroalimentacion, Usuario
 from app.routes.auth import router as auth_router
 from app.services.registry import get_model_registry, ModelRegistry, ModelNotFoundError
+from app.services.evaluation_catalogue import read_model_evaluations
 from app.schemas.model_info import ModelListResponse
 from app.schemas.prediction import PredictionResponse
 from app.schemas.feedback import FeedbackCreateRequest, ApproveFeedbackResponse, FeedbackSyncState
@@ -505,12 +506,17 @@ def list_models(
             "errors": publication_errors,
         })
     models = registry.list_models(only_with_weights=only_available)
+    evaluations = read_model_evaluations(db, models)
+    for model in models:
+        model.evaluations = evaluations.by_model_id.get(model.id)
     default_id = registry.get_default_model_id() or ""
     return ModelListResponse(
         models=models,
         total=len(models),
         default_model_id=default_id,
         publication_errors=publication_errors,
+        evaluation_catalogue_status="available" if evaluations.available else "unavailable",
+        evaluation_catalogue_error=evaluations.error_code,
     )
 
 
