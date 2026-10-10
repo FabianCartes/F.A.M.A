@@ -5,6 +5,8 @@ kanban-source-of-truth: docs/KANBAN.md
 
 ## ⏳ En progreso
 
+- [ ] **VERACIDAD — Implementado; verificación backend pendiente**<br>Historial/identidad veraces, incluida advertencia ante modelo ejecutado distinto; sin métricas/pesos/versiones sintéticos ni CPU por defecto; participantes solo con evidencia del resultado; contrato sin duración/SR supuestos; audio original canal 1 sin escaneo simulado. Frontend: 44 pruebas y lint focal PASS. Backend: corrección y pruebas escritas, runner bloqueado (`pytest` ausente). Sin navegador real/typecheck, despliegue ni commits. [[KANBAN#Veracidad de la vista de Predicción|Detalle y evidencia]]
+
 - [ ] **LOCK-3 — Conflicto 409 en feedback 12**<br>La aprobación sigue pendiente por duplicado de audio; requiere decisión humana. [[KANBAN#Reparación puntual del bloqueo de aprobación feedback 12|Detalle y evidencia]]
 - [ ] **CORRECCION-2 — Resolver asociación de clase/procedencia**<br>Bloqueado: no hay procedencia verificable para asociar el modelo a un dataset; no hacer backfill por conjetura. [[KANBAN#Corrección de asociación de inferencia y controles compactos|Detalle]]
 
@@ -25,6 +27,8 @@ kanban-source-of-truth: docs/KANBAN.md
 - [ ] **Seguridad de subida de audio/WAV**<br>Validar contenido WAV real, entradas malformadas o peligrosas, saneamiento, límites de recursos y ausencia de residuos tras rechazos. [[KANBAN#Seguridad de la subida de archivos de audio|Detalle y criterios]]
 - [ ] **Selector de modelos: catálogo y pesos disponibles**<br>No ofrecer modelos que no puedan ejecutar inferencia; diagnosticar API, registro y BD. [[KANBAN#Frontend & UI / UX|Detalle]]
 - [ ] **Errores del frontend sin códigos HTTP visibles**<br>Explicar el resultado real, especialmente el duplicado 409 sin afirmar que el feedback finalizó. [[KANBAN#Frontend & UI / UX|Detalle]]
+- [ ] **Vista de métricas de modelos**<br>Mostrar todas las métricas disponibles de los modelos. [[KANBAN#Frontend & UI / UX|Detalle]]
+- [ ] **Descartar audio desde Predicción**<br>Agregar un botón para descartar el audio seleccionado en inferencia. [[KANBAN#Frontend & UI / UX|Detalle]]
 - [ ] **Definir Dashboard como vista inicial**<br>[[KANBAN#Frontend & UI / UX|Detalle]]
 - [ ] **Unificar icono de colapso del sidebar**<br>[[KANBAN#Frontend & UI / UX|Detalle]]
 - [ ] **Hacer tablas responsive con búsqueda y paginación**<br>[[KANBAN#Frontend & UI / UX|Detalle]]
