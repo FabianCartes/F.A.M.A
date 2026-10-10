@@ -79,7 +79,12 @@ export default function FeedbackSyncPanel({ refreshKey }: { refreshKey: number }
             <tbody>
               {records.map(record => (
                 <tr key={record.id_retroalimentacion} className="border-b border-[#23252e]">
-                  <td className="p-2"><p>{record.dataset_name}</p><p>{record.class_label}</p><p className="text-gray-400">Directorio: {record.storage_class}</p></td>
+                  <td className="p-2">
+                    <p>Feedback #{record.id_retroalimentacion} · Predicción #{record.id_prediccion}</p>
+                    <p>{record.dataset_name}</p>
+                    <p>{record.class_label}</p>
+                    <p className="text-gray-400">Directorio: {record.storage_class}</p>
+                  </td>
                   <td className="p-2 text-emerald-300">Incorporado localmente</td>
                   <td className="p-2">
                     <p>{record.sync_status === "synced" ? "Copia cloud confirmada" : "Pendiente de copia cloud"}</p>
