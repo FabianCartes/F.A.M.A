@@ -366,3 +366,13 @@ Después del cierre BEXEC, el usuario autorizó corregir la omisión de IDs y el
 RED/GREEN observado: IngestionSync pasó de 1 fallo / 6 aprobadas a 7/7; la prueba de ingesta pasó de 27/28 a 28/28 al acotar correctamente sus assertions por región. Verificación independiente final: **35/35 enfocadas en 5,30 s**, **235/235 frontend en 7,18 s** y TypeScript aprobado (`tsc --noEmit --incremental false`). Comandos ejecutados con bwrap, raíz read-only, red aislada y cache npm privada en tmpfs. Advertencia informativa de rendimiento jsdom; ninguna prueba falló. No se repitió build ni navegador para esta corrección; la evidencia funcional nueva es DOM renderizado.
 
 Revisión nativa `review-551468b6b8114f9d` aprobada y reconocida, autoridad burned: snapshot `sha256:ad755e7d2b1c8b861614b37bf75b277f82f7b7abb77314ffb39437a2efaf3d13`, 20 archivos y 1612 líneas cambiadas (incluye BEXEC y esta corrección). El assessment previo no pudo resolver la declaración de untracked; se cumplió su ruta conservadora con verificación independiente. Las cifras históricas 234/235 se preservan como evidencia anterior, **no como fallo vigente**. Esta nota administrativa es posterior al snapshot revisado y no modifica código. Sin commits, staging ni despliegue.
+
+
+### Commits autorizados posteriores al cierre
+
+El usuario autorizó guardar los cambios anteriores antes de investigar Colilarga. Rama: fix/limite-audio-inferencia.
+
+- e8a8f55ac36c83fbcb54127dc0c24dd8bad41b21: ejecución acotada, pruebas, proxy y documentación.
+- 0d7d5af6c5dbab036943f180eb7688ab01653d38: IDs de sincronización y regresión de privacidad de la cola.
+
+La autorización posterior sustituye la restricción histórica sobre commits para estos cambios. No autoriza push, despliegue ni ejecución de audio real. No hubo cambios de comportamiento ni nuevas ejecuciones de pruebas durante la entrega; se mantienen los resultados anteriores. Esta nota es documentación pasiva posterior a la revisión.
