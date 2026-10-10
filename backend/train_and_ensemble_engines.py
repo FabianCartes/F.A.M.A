@@ -26,6 +26,7 @@ def train_model(recipe_name: str, train_df, val_df, test_df, *, roots):
     recipe_path = project_root / f"backend/training/recipes/{recipe_name}"
     with open(recipe_path, "r", encoding="utf-8") as f:
         cfg = TrainingConfig.model_validate(yaml.safe_load(f))
+    cfg.dataset_name = "engine_diagnostics"
 
     print(f"\n" + "=" * 60)
     print(f"[Train] Iniciando entrenamiento: {cfg.model_name} ({cfg.architecture.type})")

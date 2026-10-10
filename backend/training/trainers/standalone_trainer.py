@@ -4,6 +4,8 @@ Entrenador desacoplado y parametrizado por TrainingConfig.
 Ejecuta el ciclo de entrenamiento, optimización, cálculo de métricas y exportación a Model Bundle.
 """
 from pathlib import Path
+import hashlib
+import uuid
 from typing import Dict, Any, Tuple, List, Optional, Mapping
 import time
 import yaml
@@ -12,13 +14,18 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 import pandas as pd
 import numpy as np
+import librosa
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 
 from training.schemas.config import TrainingConfig
 from training.pipelines.dataset import GenericAudioDataset
 from training.exporters.bundle_exporter import BundleExporter
+from training.schemas.manifest import ModelManifest
 from poc.preprocess import GPUAudioFrontEnd, GPUSpecAugment
-from poc.train import BioacousticModel, FocalLoss, apply_mixup, seed_worker
+from poc.train import AudioCNN, BioacousticModel, FocalLoss, apply_mixup, seed_worker
+from app.services.predictors.bundle_predictor import BundleAudioPredictor
+from app.services.recording_evaluator import LabelledRecording, RecordingEvaluator, validate_recording_splits
+from dataset_references import resolve_reference
 
 
 class GenericModelTrainer:
@@ -48,7 +55,29 @@ class GenericModelTrainer:
         roots declara las raíces físicas de las etapas de los tres índices canónicos.
         """
         roots = dict(roots)
-        classes = sorted(train_df["clase"].unique().tolist())
+        if type(self.config.dataset_name) is not str or not self.config.dataset_name.strip():
+            raise ValueError("Official standalone export requires explicit config.dataset_name")
+        if train_df.empty or val_df.empty or test_df.empty:
+            raise ValueError("Train, validation and test require labelled recordings")
+        raw_classes = train_df["clase"].unique().tolist()
+        if not raw_classes or any(type(label) is not str or not label.strip() for label in raw_classes):
+            raise ValueError("Training classes must be nonblank strings")
+        classes = sorted(raw_classes)
+        if any(not set(frame["clase"].unique()).issubset(classes) for frame in (val_df, test_df)):
+            raise ValueError("Validation/test contain classes absent from train")
+        recordings = self._recording_splits((train_df, val_df, test_df), roots)
+        validate_recording_splits(recordings)
+        for split_records in recordings.values():
+            for record in split_records:
+                if not record.identity.strip() or record.label not in classes or not record.path.is_file():
+                    raise ValueError("Split contains invalid recording identity, label or file")
+                samples, sample_rate = librosa.load(record.path, sr=None, mono=True)
+                if sample_rate <= 0 or not samples.size or not np.isfinite(samples).all():
+                    raise ValueError("Split contains undecodable audio")
+        output_checkpoints_dir = Path(output_checkpoints_dir)
+        official_path = output_checkpoints_dir / self.config.model_id
+        if official_path.exists():
+            raise FileExistsError(f"Official bundle already exists: {official_path}")
         num_classes = len(classes)
         label_to_idx = {c: i for i, c in enumerate(classes)}
 
@@ -131,15 +160,18 @@ class GenericModelTrainer:
             prob=self.config.augmentation.spec_augment_prob,
         ).to(self.device)
 
-        model = BioacousticModel(
-            model_name=self.config.architecture.type,
-            num_classes=num_classes,
-            pretrained=self.config.architecture.pretrained,
-            in_chans=self.config.architecture.in_chans,
-            drop_rate=self.config.architecture.drop_rate,
-            pool_type=self.config.architecture.pool_type,
-            use_gpu_frontend=False,  # Manejado externamente en el loop
-        ).to(self.device)
+        if "cnn" in self.config.architecture.type.lower():
+            model = AudioCNN(num_classes=num_classes, in_channels=self.config.architecture.in_chans).to(self.device)
+        else:
+            model = BioacousticModel(
+                model_name=self.config.architecture.type,
+                num_classes=num_classes,
+                pretrained=self.config.architecture.pretrained,
+                in_chans=self.config.architecture.in_chans,
+                drop_rate=self.config.architecture.drop_rate,
+                pool_type=self.config.architecture.pool_type,
+                use_gpu_frontend=False,  # Manejado externamente en el loop
+            ).to(self.device)
 
         # 3. Función de Coste y Optimizador con Ponderación de Clases
         class_counts = train_df["clase"].value_counts()
@@ -228,13 +260,18 @@ class GenericModelTrainer:
 
             if val_f1 > best_val_f1:
                 best_val_f1 = val_f1
-                best_state_dict = {k: v.cpu() for k, v in model.state_dict().items()}
+                best_state_dict = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
 
-        # 5. Evaluación Final en Test Set con el Mejor Modelo
-        if best_state_dict is not None:
-            model.load_state_dict({k: v.to(self.device) for k, v in best_state_dict.items()})
+        if best_state_dict is None:
+            raise RuntimeError("Training produced no selectable validation checkpoint")
 
+        # 5. Restore the selected validation-MacroF1 checkpoint, then evaluate the
+        # published bundle predictor in a hidden provisional directory.
+        model.load_state_dict({k: v.to(self.device) for k, v in best_state_dict.items()})
+        # Legacy batch metrics are retained only as training-loop diagnostics.
         test_loss, test_acc, test_f1 = self._evaluate_split(model, test_loader, frontend, criterion)
+        # Preserve selection even if an evaluation adapter mutates module state.
+        model.load_state_dict({k: v.to(self.device) for k, v in best_state_dict.items()})
         if verbose:
             print(f"\n[Trainer] Evaluación Test Final: Loss={test_loss:.4f}, Acc={test_acc*100:.2f}%, F1-Macro={test_f1:.4f}")
 
@@ -244,20 +281,61 @@ class GenericModelTrainer:
             "test_loss": round(float(test_loss), 4),
             "best_val_f1_macro": round(float(best_val_f1), 4),
             "classes_count": num_classes,
+            "legacy_metrics_scope": "training_loop",
         }
 
-        # 6. Exportar Model Bundle
-        bundle_path = BundleExporter.export(
-            output_dir=output_checkpoints_dir,
-            model=model,
-            config=self.config,
-            classes=classes,
-            metrics=metrics,
+        # 6. Stage weights/config privately, evaluate the exact public predictor,
+        # validate both envelopes, and only then move the complete directory into
+        # the official model-id path. Failures leave the provisional artifact intact.
+        output_checkpoints_dir.mkdir(parents=True, exist_ok=True)
+        provisional_root = output_checkpoints_dir / f".{self.config.model_id}.provisional-{uuid.uuid4().hex}"
+        provisional_root.mkdir()
+        provisional_bundle = BundleExporter.export(
+            output_dir=provisional_root, model=model, config=self.config,
+            classes=classes, metrics=metrics,
         )
+        manifest = ModelManifest.model_validate_json(
+            (provisional_bundle / "manifest.json").read_text(encoding="utf-8"))
+        weights_hash = hashlib.sha256((provisional_bundle / manifest.model_specs.weights_file).read_bytes()).hexdigest()
+        predictor = BundleAudioPredictor(provisional_bundle, device=self.device, lazy_load=False)
+        effective = predictor.evaluation_config
+        reports = {}
+        for split in ("val", "test"):
+            evaluator = RecordingEvaluator(
+                recordings[split], predictor, dataset=self.config.dataset_name,
+                split=split, checkpoint_sha256=weights_hash,
+                predictor_config=effective["predictor_config"],
+                preprocessing_config=effective["preprocessing_config"],
+                aggregation_config=effective["aggregation_config"],
+            )
+            reports[split] = {"provenance": evaluator.identity.model_dump(), "report": evaluator.evaluate()}
+        bundle_path = BundleExporter.publish_official(provisional_bundle, reports)
         if verbose:
             print(f"[Trainer] Model Bundle exportado exitosamente en: {bundle_path}")
 
         return bundle_path, metrics
+
+    @staticmethod
+    def _recording_splits(frames, roots):
+        result = {}
+        for split, frame in zip(("train", "val", "test"), frames):
+            if not {"clase", "file_path", "file_stage"}.issubset(frame.columns):
+                raise ValueError("Canonical split requires clase, file_path and file_stage")
+            records = []
+            for index, row in frame.reset_index(drop=True).iterrows():
+                stage = str(row["file_stage"])
+                reference = str(row["file_path"])
+                path = resolve_reference(reference, stage, roots)
+                raw_identity = row.get("id", row.get("source_id", f"{stage}:{reference}:{index}"))
+                if pd.isna(raw_identity) or not str(raw_identity).strip():
+                    raise ValueError("Recording identity must be present")
+                identity = str(raw_identity)
+                group_value = row.get("recordist", row.get("source_group"))
+                group = None if pd.isna(group_value) or not str(group_value).strip() else str(group_value)
+                records.append(LabelledRecording(identity, str(row["clase"]), path,
+                                                 reference, stage, group))
+            result[split] = tuple(records)
+        return result
 
     def _evaluate_split(
         self,

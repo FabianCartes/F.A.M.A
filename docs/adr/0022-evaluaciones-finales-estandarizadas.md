@@ -1,6 +1,6 @@
 # ADR 0022: Contrato de evaluaciones finales estandarizadas
 
-* **Estado:** Decisión aceptada. EVAL-1 (contrato/cálculo), EVAL-2 (persistencia aislada), EVAL-3A (helper por grabación) e integración MAIN de EVAL-3 implementados con pruebas SQLite. Bundles/API/UI y PostgreSQL/runtime real pendientes.
+* **Estado:** Decisión aceptada. EVAL-1 (contrato/cálculo), EVAL-2 (persistencia aislada), EVAL-3 (helper y MAIN) y EVAL-4A (standalone/bundle oficial) implementados con pruebas SQLite y fixtures sintéticos. Evaluación combinada de ensambles, API/UI y PostgreSQL/runtime real pendientes.
 * **Área:** Informes finales reproducibles de clasificación multiclase.
 
 ## Contexto y decisión
@@ -196,3 +196,49 @@ Los informes finales futuros deben asociarse explícitamente al artefacto evalua
 ## Alternativas y consecuencias
 
 Se descarta inferir clases con una biblioteca de métricas: si una clase no aparece en las observaciones, cambia el conjunto de macro-promedio y se oculta cobertura. Se descarta reinterpretar métricas históricas por época: carecen de una semántica final/identidad inequívoca. Un contrato y cálculo puros mantienen el alcance acotado y no introducen dependencias nuevas; una matriz densa requiere O(clases²) espacio y el cálculo O(muestras + clases²). La evaluación del predictor, procedencia verificable, persistencia, publicación, catálogo/UI y reevaluación requieren decisiones y pruebas de integración propias.
+
+## EVAL-4A: publicación standalone y bundle
+
+El entrenamiento standalone conserva la selección por MacroF1 de validación y
+captura un snapshot `detach().cpu().clone()` para evitar alias de tensores CPU. La
+evaluación final convierte las filas admitidas de val/test en grabaciones únicas y
+usa `BundleAudioPredictor.predict(Path)` sobre el bundle provisional real: filtros de
+silencio/ruido, conversión de tasa, ventanas densas, Mel, temperatura y agregación
+máxima no se sustituyen por el evaluador por lotes del entrenamiento. El test no
+participa en selección.
+
+El bundle manifiesta informes versionados por split, procedencia completa sin ID de
+modelo de base de datos y SHA-256 de pesos independiente del hash del manifiesto de
+grabaciones. `TrainingConfig.dataset_name` lo aporta explícitamente el caller (los
+scripts de motores enlazan el nombre `engine_diagnostics`, ya declarado en su lector
+prepared); el manifiesto guarda `dataset_name` opcional para mantener legacy legible,
+pero un manifiesto oficial con informes lo requiere y liga ambos informes a ese valor.
+No se infiere identidad desde rutas ni `model_id`.
+
+`ModelManifest.effective_inference_config()` es la única representación canónica de
+arquitectura, Mel/frontend, resampling/crop, filtros, temperatura y ventanas/agregación.
+El predictor la expone sin cargar pesos; el evaluador la registra y el validador exige
+coincidencia exacta con manifiesto/clases ordenadas/dataset, además de igualdad entre
+las identidades val/test (salvo split, hash de membresía y conteo). Tanto la carga del
+manifiesto como `publish_official` validan el contrato completo. `publish_official`
+valida el slug y rutas locales, hash de pesos y manifiesto completo antes de mover el
+provisional. Esto detecta inconsistencias accidentales o ediciones posteriores; no
+acredita autenticidad criptográfica de datos o procedencia declarada.
+
+El esquema comprueba split, coherencia del informe y que el checkpoint sea exactamente
+el SHA-256 de los pesos staged. `EvaluationProvenance` permite identidad standalone;
+`EvaluationIdentity` conserva el FK positivo obligatorio para `EvaluationService`.
+
+El exportador de bajo nivel continúa permitiendo bundles legacy/experimentales sin
+informes; solo `GenericModelTrainer.train_and_export` es ruta oficial obligatoria.
+Esa ruta rechaza un destino oficial ya existente, exporta a una ubicación provisional,
+evalúa y valida ambos splits y finalmente mueve el directorio completo al nombre
+oficial. Si falla el preflight, inferencia o validación, no se publica ese nombre y
+se conserva el provisional para diagnóstico/reintento manual. La separación no ofrece
+transacción entre filesystem/BD ni una operación de reintento automática. Las métricas
+históricas del loop se conservan etiquetadas como legado, no como informe final.
+
+Este corte no publica ensambles ni introduce enlaces a BD, catálogo, UI o runtime.
+Las pruebas sintéticas no descargan modelos pretrained ni usan checkpoints/datasets
+reales. Permanecen pendientes EVAL-4B (combinación real), EVAL-5 y EVAL-6, junto con
+validación en PostgreSQL/runtime real.

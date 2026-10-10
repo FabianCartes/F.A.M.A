@@ -35,8 +35,25 @@ def source(tmp_path):
         "augmentation": {"gain_prob": 0, "noise_prob": 0},
         "dataset": {"metadata_csv": roots["raw"] / "train_metadata.csv",
                     "raw_dir": roots["raw"], "num_workers": 0},
+        "dataset_name": "engine_diagnostics",
     })
     return roots, frame, config
+
+
+def make_disjoint_splits(roots, frame, stage="processed"):
+    """Build small canonical splits with independent recording and group identities."""
+    frames = []
+    for split in ("train", "val", "test"):
+        path = f"{split}-001.wav"
+        rows = frame.assign(
+            file_path=path, file_stage=stage, id=f"{split}-001",
+            source_group=f"source-{split}", recordist=f"recordist-{split}",
+        )
+        for physical_stage, root in roots.items():
+            value = 0.25 if physical_stage == "raw" else -0.5
+            sf.write(root / path, np.full(8000, value, dtype=np.float32), 8000)
+        frames.append(rows)
+    return tuple(frames)
 
 
 def stop_after_preparation(monkeypatch):
@@ -57,14 +74,14 @@ def stop_after_preparation(monkeypatch):
 @pytest.mark.parametrize("stage,level", [("raw", 0.25), ("processed", -0.5)])
 def test_trainer_prepares_all_splits_with_explicit_custom_roots(source, tmp_path, monkeypatch, stage, level):
     roots, frame, config = source
-    frame = frame.assign(file_stage=stage)
+    frames = make_disjoint_splits(roots, frame, stage=stage)
     prepared = stop_after_preparation(monkeypatch)
     trainer = GenericModelTrainer(config, project_root=tmp_path)
     with pytest.raises(PreparedSplits):
-        trainer.train_and_export(frame, frame, frame, tmp_path / "checkpoints", roots=roots)
+        trainer.train_and_export(*frames, tmp_path / "checkpoints", roots=roots)
     assert len(prepared) == 3
     for actual, waveform, label in prepared:
-        pd.testing.assert_frame_equal(actual, frame)
+        assert any(actual.equals(expected) for expected in frames)
         assert torch.allclose(waveform, torch.full((8000,), level))
         assert label.item() == 0
 
@@ -73,14 +90,14 @@ def test_trainer_prepares_all_splits_with_explicit_custom_roots(source, tmp_path
 @pytest.mark.parametrize("invalid", ["missing_stage", "missing_path", "absolute", "unknown_stage", "missing_file", "missing_root", "alias"])
 def test_trainer_rejects_invalid_split_before_ml(source, tmp_path, monkeypatch, split, invalid):
     roots, frame, config = source
+    frames = list(make_disjoint_splits(roots, frame))
     stop_after_preparation(monkeypatch)
-    frames = [frame.copy(deep=True) for _ in range(3)]
     if invalid == "missing_stage":
-        frames[split] = frame.drop(columns="file_stage")
+        frames[split] = frames[split].drop(columns="file_stage")
     elif invalid == "missing_path":
-        frames[split] = frame.drop(columns="file_path")
+        frames[split] = frames[split].drop(columns="file_path")
     elif invalid == "absolute":
-        frames[split].loc[0, "file_path"] = str(roots["processed"] / "001.wav")
+        frames[split].loc[0, "file_path"] = str(roots["processed"] / "val-001.wav")
     elif invalid == "unknown_stage":
         frames[split].loc[0, "file_stage"] = "legacy"
     elif invalid == "missing_file":
@@ -107,25 +124,26 @@ def test_car_entrypoint_preserves_canonical_csv_identity(source, tmp_path, monke
     import train_car_engine_model as script
 
     roots, frame, config = source
-    for split in ("train", "val", "test"):
-        frame.to_csv(roots["raw"] / f"{split}_metadata.csv", index=False)
+    frames = make_disjoint_splits(roots, frame)
+    for split, split_frame in zip(("train", "val", "test"), frames):
+        split_frame.to_csv(roots["raw"] / f"{split}_metadata.csv", index=False)
     recipe_dir = tmp_path / "backend/training/recipes"
     recipe_dir.mkdir(parents=True)
     (recipe_dir / "car_engine_diagnostics_resnet34d.yaml").write_text(
-        yaml.safe_dump(config.model_dump(mode="json")), encoding="utf-8")
+        yaml.safe_dump(config.model_copy(update={"dataset_name": None}).model_dump(mode="json")), encoding="utf-8")
     monkeypatch.setattr(script, "get_project_root", lambda: tmp_path)
     monkeypatch.setattr(script, "get_prepared_data_dir", lambda name: roots["raw"])
     monkeypatch.setattr(script, "get_dataset_roots", lambda name: dict(roots))
-    monkeypatch.setattr(script, "load_prepared_dataset", lambda *args, **kwargs: (frame, frame, frame))
+    monkeypatch.setattr(script, "load_prepared_dataset", lambda *args, **kwargs: frames)
     prepared = stop_after_preparation(monkeypatch)
     with pytest.raises(PreparedSplits):
         script.main()
     for actual, waveform, _ in prepared:
-        pd.testing.assert_frame_equal(actual, frame)
+        assert any(actual.equals(expected) for expected in frames)
         assert torch.allclose(waveform, torch.full((8000,), -0.5))
-    for split in ("train", "val", "test"):
+    for split, split_frame in zip(("train", "val", "test"), frames):
         pd.testing.assert_frame_equal(
-            pd.read_csv(roots["raw"] / f"{split}_metadata.csv", dtype=str, keep_default_na=False), frame)
+            pd.read_csv(roots["raw"] / f"{split}_metadata.csv", dtype=str, keep_default_na=False), split_frame)
 
 
 @pytest.mark.parametrize("module", [
@@ -256,17 +274,18 @@ def test_recipe_entrypoints_keep_custom_source_binding(source, tmp_path, monkeyp
 
     script = importlib.import_module(module)
     roots, frame, config = source
+    frames = make_disjoint_splits(roots, frame)
     recipe_dir = tmp_path / "backend/training/recipes"
     recipe_dir.mkdir(parents=True)
     (recipe_dir / "fixture.yaml").write_text(
-        yaml.safe_dump(config.model_dump(mode="json")), encoding="utf-8")
+        yaml.safe_dump(config.model_copy(update={"dataset_name": None}).model_dump(mode="json")), encoding="utf-8")
     monkeypatch.setattr(script, "get_project_root", lambda: tmp_path)
     prepared = stop_after_preparation(monkeypatch)
     with pytest.raises(PreparedSplits):
-        getattr(script, function)("fixture.yaml", frame, frame, frame, roots=roots)
+        getattr(script, function)("fixture.yaml", *frames, roots=roots)
     assert len(prepared) == 3
     for actual, waveform, _ in prepared:
-        pd.testing.assert_frame_equal(actual, frame)
+        assert any(actual.equals(expected) for expected in frames)
         assert torch.allclose(waveform, torch.full((8000,), -0.5))
 
 

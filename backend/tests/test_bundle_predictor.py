@@ -198,6 +198,9 @@ def test_bundle_audio_predictor_reads_manifest(created_bundle_dir):
     assert meta.target_sr == 32000
     assert meta.duration_seconds == 3.0
     assert meta.classes == ["Rana chilena", "Sapito de cuatro ojos"]
+    assert predictor.classes == ["Rana chilena", "Sapito de cuatro ojos"]
+    assert predictor.evaluation_config["predictor_config"]["backbone"] == "audio_cnn"
+    assert predictor.evaluation_config["aggregation_config"]["window_hop_seconds"] == 1.0
     assert meta.metrics["f1_macro"] == 0.885
 
 
@@ -278,16 +281,41 @@ def test_discover_bundles_handles_corrupted_manifest_gracefully():
         assert len(registry.list_models()) == 0
 
 
-def test_engine_diagnostics_bundle_predictor_predicts_audio(tmp_path):
-    import soundfile as sf
-    import numpy as np
+def test_engine_diagnostics_bundle_predictor_runs_public_pipeline_on_generated_bundle(tmp_path, monkeypatch):
+    class TinyEngineModel(nn.Module):
+        def __init__(self, num_classes=2):
+            super().__init__()
+            self.logits = nn.Parameter(torch.tensor([0.0, 1.5])[:num_classes])
 
-    bundle_dir = Path(__file__).resolve().parents[1] / "checkpoints/car-engine-diagnostics-resnet34d"
-    if not bundle_dir.exists():
-        pytest.skip("Car engine diagnostics bundle not found")
+        def forward(self, mel):
+            return self.logits.unsqueeze(0).expand(mel.shape[0], -1)
 
-    predictor = BundleAudioPredictor(bundle_dir=bundle_dir, lazy_load=False)
+    # Exercise the actual manifest loader, decoder, domain filters, Mel pipeline,
+    # temperature scaling and window aggregation; only timm construction is tiny.
+    monkeypatch.setattr("poc.train.BioacousticModel",
+                        lambda **kwargs: TinyEngineModel(kwargs["num_classes"]))
+    config = TrainingConfig(
+        experiment_id="engine-predictor-test",
+        model_id="car-engine-diagnostics-resnet34d",
+        model_name="Synthetic engine diagnostics",
+        description="Generated local fixture using the public engine preprocessing contract",
+        epochs=1,
+        batch_size=1,
+        architecture=ArchitectureConfig(type="resnet34d", pretrained=False),
+        audio=AudioConfig(target_sr=32000, duration_seconds=5.0, n_mels=128,
+                          n_fft=2048, hop_length=512, f_min=50, f_max=16000),
+        loss=LossConfig(name="cross_entropy"),
+        dataset=DatasetConfig(metadata_csv=tmp_path / "metadata.csv", raw_dir=tmp_path),
+        split=SplitConfig(),
+    )
+    bundle_dir = BundleExporter.export(
+        output_dir=tmp_path / "generated-bundles",
+        model=TinyEngineModel(), config=config, classes=["normal", "fault"],
+    )
+    predictor = BundleAudioPredictor(bundle_dir=bundle_dir, device=torch.device("cpu"), lazy_load=False)
     assert predictor.model_id == "car-engine-diagnostics-resnet34d"
+    assert predictor.classes == ["normal", "fault"]
+    assert predictor.evaluation_config["preprocessing_config"]["audio_specs"]["target_sr"] == 32000
 
     sr = 32000
     t = np.linspace(0, 5.0, int(sr * 5.0), endpoint=False)
@@ -296,9 +324,9 @@ def test_engine_diagnostics_bundle_predictor_predicts_audio(tmp_path):
     sf.write(wav_path, waveform, sr)
 
     result = predictor.predict(wav_path)
-    assert result.clase in predictor.metadata.classes
-    assert result.confianza > 0.0
+    assert result.clase == "fault"
+    assert result.confianza > 0.7
     assert result.detalles["status"] == "bundle_classified"
-    assert result.detalles.get("windows_count", 1) >= 1
+    assert result.detalles["windows_count"] == 1
 
 

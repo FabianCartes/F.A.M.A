@@ -15,6 +15,7 @@ def main():
     recipe_path = project_root / "backend/training/recipes/car_engine_diagnostics_resnet34d.yaml"
     with open(recipe_path, "r", encoding="utf-8") as f:
         cfg = TrainingConfig.model_validate(yaml.safe_load(f))
+    cfg.dataset_name = "engine_diagnostics"
 
     data_dir = get_prepared_data_dir("engine_diagnostics")
     roots = get_dataset_roots("engine_diagnostics")
