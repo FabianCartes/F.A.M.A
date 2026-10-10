@@ -4,6 +4,14 @@ from sqlalchemy.orm import relationship
 from app.database import Base
 
 
+from scripts.migrate_model_evaluations import evaluation_table
+
+
+class ModelEvaluation(Base):
+    """Independent attempts; state/provenance changes go through EvaluationService."""
+    __table__ = evaluation_table(Base.metadata)
+
+
 class Modelo(Base):
     """
     Modelo relacional para la tabla 'modelo' en PostgreSQL.
