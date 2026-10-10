@@ -1,6 +1,6 @@
 # ADR 0022: Contrato de evaluaciones finales estandarizadas
 
-* **Estado:** Decisión aceptada. EVAL-1 (contrato/cálculo) y EVAL-2 (persistencia aislada) implementados con pruebas SQLite; integración de entrenamiento, bundles, API/UI y reevaluación son cortes posteriores.
+* **Estado:** Decisión aceptada. EVAL-1 (contrato/cálculo), EVAL-2 (persistencia aislada) y EVAL-3A (evaluador por grabación independiente de MAIN) implementados con pruebas SQLite. La integración MAIN y los bundles/API/UI son cortes posteriores.
 * **Área:** Informes finales reproducibles de clasificación multiclase.
 
 ## Contexto y decisión
@@ -95,6 +95,33 @@ no se ha tocado la BD activa. Retirar código y pruebas de EVAL-2 antes de aplic
 la migración no afecta datos existentes. Después de aplicarla, el rollback de código
 no elimina la tabla ni intentos: cualquier reversión de datos requiere una operación
 separada autorizada. No se promete atomicidad entre filesystem y BD.
+
+## EVAL-3B: evaluador por grabación
+
+`LabelledRecording` es una entrada inmutable con identidad admitida, etiqueta,
+path local, referencia canónica, etapa y grupo opcional. `RecordingEvaluator`
+recibe la secuencia, el predictor y la procedencia/configuración; su construcción
+valida clases/archivos, decodifica localmente con librosa y fija hashes de audio.
+Expone `identity` para registrar un intento antes de inferencia; `evaluate()`
+devuelve el informe v2 o propaga el error, sin persistir ni activar.
+
+El manifiesto JSON canónico conserva el **orden admitido**, identidad, etiqueta,
+referencia, etapa, grupo y SHA-256 de contenido de cada audio; su hash no incorpora
+paths absolutos dependientes del host. La inferencia verifica contenido antes y
+después de cada llamada. Esta política detecta mutaciones ordinarias, no un cambio
+malicioso seguido de restauración ni garantiza un snapshot atómico de filesystem.
+Cada grabación produce exactamente una llamada al mismo predictor, con clases en
+su orden original. Solo estados `silence`/`noise` generan el sentinel reservado
+`__recording_rejected__`; etiqueta o estado desconocido falla explícitamente.
+`validate_recording_splits` rechaza cruces de identidades, paths resueltos y grupos
+conocidos entre train/val/test; el llamador debe invocarla antes de comenzar entrenamiento.
+
+**Límite de procedencia:** el llamador debe aportar configuraciones efectivas y el
+hash del checkpoint realmente cargado; el helper no acredita esos campos por sí
+solo. La prueba sintética restaura un checkpoint AudioCNN local usando el predictor
+real y evalúa un tono, sin red ni datos reales. Las pruebas de persistencia usan
+SQLite y la interfaz existente de intentos. No constituye evaluación de #11 ni del
+runtime publicado.
 
 ## Identidad y procedencia: requisitos para integraciones
 
