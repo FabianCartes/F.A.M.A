@@ -1,6 +1,6 @@
 # ADR 0022: Contrato de evaluaciones finales estandarizadas
 
-* **Estado:** Decisión aceptada. EVAL-1 (contrato/cálculo), EVAL-2 (persistencia aislada) y EVAL-3A (evaluador por grabación independiente de MAIN) implementados con pruebas SQLite. La integración MAIN y los bundles/API/UI son cortes posteriores.
+* **Estado:** Decisión aceptada. EVAL-1 (contrato/cálculo), EVAL-2 (persistencia aislada), EVAL-3A (helper por grabación) e integración MAIN de EVAL-3 implementados con pruebas SQLite. Bundles/API/UI y PostgreSQL/runtime real pendientes.
 * **Área:** Informes finales reproducibles de clasificación multiclase.
 
 ## Contexto y decisión
@@ -122,6 +122,72 @@ solo. La prueba sintética restaura un checkpoint AudioCNN local usando el predi
 real y evalúa un tono, sin red ni datos reales. Las pruebas de persistencia usan
 SQLite y la interfaz existente de intentos. No constituye evaluación de #11 ni del
 runtime publicado.
+
+### Integración MAIN: entrenamiento → evaluación → activación
+
+`TrainingService.start_training` admite el mismo trío preparado y produce grabaciones
+inmutables con referencias/etapas resueltas. Aves conserva `xc_id`; motores conserva
+identidad `(clase, source_id)` cuando está declarada y usa etapa/referencia solo si
+no existe ese ID, siguiendo el lector prepared. Ambos conservan el grupo canónico
+`recordist`, no un nombre de columna supuesto. Val y test
+no pueden introducir clases desconocidas; se rechazan etiquetas reservadas, archivos
+sin metadata de codec válida y cruces de identidades/paths/grupos antes de scheduling.
+El preflight usa `soundfile.info`: valida metadata, no acredita todos los frames; la
+decodificación completa y hashes ocurren en el evaluador. No mide calidad de test ni
+calibra. Las configuraciones DTO se separan a JSON antes de guardar el checkpoint.
+
+La selección mantiene val accuracy y early stopping por val loss. Tanto actualización
+como fallback del mejor snapshot usan `detach().cpu().clone()`, sin alias CPU. Las
+pruebas controlan dos épocas y comprueban pesos restaurados y predicciones finales
+del primer snapshot, incluido el caso de accuracy cero; no se reutilizan pesos vivos.
+
+El checkpoint se registra primero con métricas históricas intactas, `activo=False`
+y `estado=standard_eval_pending`. Luego el job entra en `evaluating`, que bloquea
+otro entrenamiento. Se crea `TrainedModelPredictor` desde el archivo exacto, con
+metadata lazy; el predictor restaura el modelo al inferir, en eval/no-grad. Antes
+de construir los evaluadores se revalidan referencias/raíces con el lector canónico,
+incluido rechazo de symlinks introducidos después de admisión. Se exige
+orden de clases admitido y SHA-256 antes/después de restauración/inferencia. Val y
+test tienen intentos independientes `pending → running → completed`, creados antes
+de inferencia y persistidos mediante EvaluationService con sesión dedicada.
+
+La procedencia registra constantes reales del predictor y defaults de las firmas de
+Mel, resampling y flatness, más crop central/padding, máscaras/umbrales, agregación
+por grabación, versiones de bibliotecas y hashes de implementación. Los literales
+internos no expuestos por firma se describen bajo `published-fixed-crop-v1` y el hash
+de su fuente. Training audio/windowing y defaults del frontend (incluida normalización) se guardan
+**separadamente**; diferencias
+emiten advertencia y nunca cambian el predictor ni convierten ventanas en muestras.
+El frontend training y el Mel publicado pueden ser distintos incluso sin overrides.
+
+Solo después de ambos commits y comprobación de identidad se pasa a
+`standard_eval_completed` y se activa el modelo individual. La transición automática
+preserva cualquier activo anterior hasta ese punto. `set_active_model` aplica el
+mismo guard al marcador `standard_*`: revisa archivo/hash, dataset, job del checkpoint,
+clases, versiones y coherencia de ambos informes/configs; pending/failed no son legacy.
+Legacy sin marcador conserva activación con sesión; sin sesión ya no se anuncia un
+éxito ficticio. No se reinterpretan campos históricos de precisión.
+
+Los componentes de un entrenamiento múltiple sí reciben informes individuales,
+quedan inactivos con `standard_component_evaluated` y el log declara explícitamente
+que la combinación no está evaluada/publicada. Este marcador bloquea también la
+activación manual: evaluación oficial del ensamble queda en EVAL-4.
+
+Fallos de inferencia o persistencia marcan job failed y, cuando la BD lo permite,
+`standard_eval_failed` e intentos pendientes/en curso fallidos, sin inventar informes.
+Se conserva todo checkpoint registrado. Intentos ya completados permanecen intactos.
+Si publicación pudo hacer commit antes de perder su acknowledgement, se intenta
+compensar nuevo activo y restaurar IDs activos anteriores; fallo de recuperación se
+registra explícitamente. No se promete atomicidad filesystem/BD, recuperación durante
+una indisponibilidad permanente ni serialización global con activaciones concurrentes.
+Fallos anteriores a construir una identidad válida pueden no producir intentos, pero
+conservan estado fallido del modelo y bloquean activación. La operación pública de
+reintento sin reentrenar sigue pendiente de EVAL-6; los artefactos quedan disponibles.
+
+Rollback de MAIN: retirar sus cambios de worker/admisión/guard y pruebas conjuntamente;
+no borrar checkpoints ni filas/intentos. Retirar el guard reabre la política legacy
+anterior, por lo que exige decisión explícita de publicación. PostgreSQL, despliegue,
+standalone y combinación de ensambles no están acreditados por las pruebas SQLite.
 
 ## Identidad y procedencia: requisitos para integraciones
 

@@ -3,6 +3,9 @@ import sys
 import time
 import uuid
 import hashlib
+import inspect
+import json
+import soundfile as sf
 import threading
 from pathlib import Path
 from datetime import datetime, timezone
@@ -18,7 +21,13 @@ if str(_BACKEND_DIR) not in sys.path:
 
 from app.database import SessionLocal
 from app.models.dataset import ConjuntoDatos, Audio
-from app.models.training import Modelo, MetricaEntrenamiento
+from app.models.training import Modelo, MetricaEntrenamiento, ModelEvaluation
+from app.services.evaluations import EvaluationService
+from app.services.recording_evaluator import (
+    LabelledRecording, RecordingEvaluator, validate_recording_splits, REJECTION_LABEL, EVALUATOR_VERSION,
+)
+from app.services.predictors import trained_predictor as published_predictor
+from app.schemas.evaluation import EvaluationIdentity, validate_report, strict_json
 import pandas as pd
 import gc
 from torch.utils.data import DataLoader
@@ -41,6 +50,16 @@ ARCHITECTURE_PRESETS: Dict[str, Dict[str, Any]] = {
 TRIAD_ARCHITECTURES: List[str] = ["EfficientNet-B0", "ConvNeXt-Nano", "ResNet-34d"]
 ENGINE_TRIAD_ARCHITECTURES: List[str] = ["ResNet-34d", "EfficientNet-B0", "PANNs-CNN14"]
 SUPPORTED_DATASETS = frozenset({"AvesChilenas", "engine_diagnostics"})
+
+
+def _json_config(value):
+    if value is None:
+        return None
+    if hasattr(value, 'model_dump'):
+        value = value.model_dump(mode='json')
+    elif not isinstance(value, dict):
+        value = vars(value)
+    return strict_json(value)
 
 
 class _AcceptedAudioDataset(AudioDataset):
@@ -71,7 +90,7 @@ class TrainingService:
 
         # Estado global del entrenamiento
         self._lock = threading.Lock()
-        self.status = "idle"  # idle | training | completed | failed | stopped
+        self.status = "idle"  # idle | training | evaluating | completed | failed | stopped
         self.current_job_id: Optional[str] = None
         self.current_epoch: int = 0
         self.total_epochs: int = 0
@@ -257,15 +276,17 @@ class TrainingService:
                 f"Dataset '{dataset_name}': preparación ausente o inválida en {prepared_dir}: {exc}"
             ) from exc
 
-        resolved_partitions = {}
+        recordings = {}
         for split, frame in (("train", train_df), ("val", val_df), ("test", test_df)):
             if frame.empty or "clase" not in frame or frame["clase"].isna().any():
                 raise ValueError(f"Dataset '{dataset_name}': partición {split} vacía o sin clases válidas.")
+            if REJECTION_LABEL in set(frame['clase']):
+                raise ValueError('La etiqueta reservada de rechazo no puede ser una clase real.')
             if not frame["clase"].map(lambda c: isinstance(c, str) and bool(c.strip())).all():
                 raise ValueError(f"Dataset '{dataset_name}': clases inválidas en {split}.")
             if not {"file_path", "file_stage"}.issubset(frame.columns):
                 raise ValueError("Índice histórico: se requieren file_path y file_stage; use conversión offline.")
-            paths = set()
+            admitted = []
             for _, row in frame.iterrows():
                 try:
                     path = resolve_reference(row["file_path"], row["file_stage"], roots)
@@ -273,14 +294,36 @@ class TrainingService:
                     raise ValueError(f"Dataset '{dataset_name}': referencia inválida en {split}: {exc}") from exc
                 if path.suffix.lower() not in {".wav", ".mp3", ".flac", ".ogg"} or path.stat().st_size == 0:
                     raise ValueError(f"Dataset '{dataset_name}': audio ausente o fuera de su fuente en {split}.")
-                paths.add(path)
-            resolved_partitions[split] = paths
-        if not set(val_df["clase"]).issubset(set(train_df["clase"])):
-            raise ValueError(f"Dataset '{dataset_name}': clases de validación ausentes en train.")
-        if resolved_partitions["train"] & resolved_partitions["val"]:
-            raise ValueError(f"Dataset '{dataset_name}': audios compartidos entre train y val.")
+                try:
+                    metadata = sf.info(path)
+                    if metadata.frames <= 0 or metadata.samplerate <= 0 or metadata.channels <= 0:
+                        raise ValueError('Audio vacío o metadata de codec inválida')
+                except Exception as exc:
+                    raise ValueError(f"Dataset '{dataset_name}': audio no decodificable en {split}: {path}") from exc
+                if dataset_name == 'AvesChilenas':
+                    identity = row.get('xc_id')
+                elif 'source_id' in row:
+                    source_id = row['source_id']
+                    if not isinstance(source_id, str) or not source_id.strip():
+                        raise ValueError('Identidad de origen de motor inválida')
+                    # Match the prepared reader: importer IDs are class-scoped.
+                    identity = json.dumps([row['clase'], source_id], ensure_ascii=False, separators=(',', ':'))
+                else:
+                    identity = f"{row['file_stage']}:{row['file_path']}"
+                group = row.get('recordist')
+                if not isinstance(identity, str) or not identity.strip():
+                    raise ValueError('Identidad de grabación inválida')
+                if group is not None and (not isinstance(group, str) or not group.strip()):
+                    raise ValueError('Grupo de grabación inválido')
+                admitted.append(LabelledRecording(identity, row['clase'], path,
+                                                  row['file_path'], row['file_stage'], group))
+            recordings[split] = tuple(admitted)
+        for split, frame in (('val', val_df), ('test', test_df)):
+            if not set(frame['clase']).issubset(set(train_df['clase'])):
+                raise ValueError(f"Dataset '{dataset_name}': clases de {split} ausentes en train.")
+        validate_recording_splits(recordings)
         return {"raw_dir": raw_dir, "roots": roots, "train_df": train_df,
-                "val_df": val_df, "test_df": test_df}
+                "val_df": val_df, "test_df": test_df, "recordings": recordings}
 
     def start_training(
         self,
@@ -304,7 +347,7 @@ class TrainingService:
         y parametrización universal multi-dominio de audio, ventaneo y regularización.
         """
         with self._lock:
-            if self.status == "training":
+            if self.status in {"training", "evaluating"}:
                 raise RuntimeError("Ya existe un proceso de entrenamiento en ejecución.")
 
             try:
@@ -317,6 +360,9 @@ class TrainingService:
                         raise ValueError(f"Dataset '{dataset_name}' requiere un registro exacto y único.")
                     dataset_id = matches[0].id_conjunto_datos
                 source = self._prepare_source(dataset_name)
+                audio_config = _json_config(audio_config)
+                windowing_config = _json_config(windowing_config)
+                regularization_config = _json_config(regularization_config)
             except Exception as exc:
                 self.status = "failed"
                 self.current_job_id = None
@@ -479,6 +525,161 @@ class TrainingService:
             if published:
                 path.unlink(missing_ok=True)
             raise
+
+    def _evaluation_config(self, config, training_audio):
+        """Describe effective published inference; training physics is separate."""
+        signature = inspect.signature(published_predictor.extract_mel_spectrogram)
+        mel = {k: signature.parameters[k].default for k in ('n_mels', 'n_fft', 'hop_length', 'fmin', 'fmax')}
+        effective = dict(target_sr=published_predictor.TARGET_SR,
+                         duration_seconds=published_predictor.DURATION_SECONDS,
+                         n_mels=mel['n_mels'], n_fft=mel['n_fft'], hop_length=mel['hop_length'],
+                         f_min=mel['fmin'], f_max=mel['fmax'])
+        comparison = {**effective, 'f_max': effective['f_max'] or effective['target_sr'] / 2}
+        frontend_signature = inspect.signature(GPUAudioFrontEnd)
+        training_frontend = {k: frontend_signature.parameters[k].default for k in ('normalize', 'top_db')}
+        training_frontend['implementation'] = 'GPUAudioFrontEnd'
+        mismatch = (any(training_audio.get(k) != v for k, v in comparison.items()) or
+                    bool(config.get('windowing_config')) or training_frontend['normalize'])
+        if mismatch:
+            self._add_log('WARN', 'Discrepancia training/predictor: evaluación usa configuración publicada, sin cambiar filtros ni ventanas.')
+        def source_hash(function):
+            return hashlib.sha256(inspect.getsource(function).encode()).hexdigest()
+        predictor_config = dict(implementation='TrainedModelPredictor', version='published-fixed-crop-v1', lazy_load=True,
+            implementation_sha256=source_hash(published_predictor.TrainedModelPredictor.predict),
+            job_id=config['job_id'], training_mismatch=mismatch,
+            runtime_versions=dict(torch=str(torch.__version__), librosa=published_predictor.librosa.__version__,
+                                  numpy=published_predictor.np.__version__),
+            training_config=dict(audio=training_audio, frontend=training_frontend,
+                                 windowing=config.get('windowing_config')))
+        preprocessing = dict(**effective, mono=True, crop='center', padding='right-zero',
+            mel_power=2.0, mel_db_reference='max', normalization='none', silence_rms_threshold=1e-4,
+            noise_flatness_threshold=published_predictor.SPECTRAL_FLATNESS_NOISE_THRESHOLD,
+            flatness_mask_abs_threshold=1e-4, flatness_mask_min_samples=512,
+            load_function_sha256=source_hash(published_predictor.load_and_fix_length),
+            mel_function_sha256=source_hash(published_predictor.extract_mel_spectrogram),
+            resampling=inspect.signature(published_predictor.librosa.load).parameters['res_type'].default,
+            flatness_defaults={k: parameter.default for k, parameter in
+                               inspect.signature(published_predictor.librosa.feature.spectral_flatness).parameters.items()
+                               if k not in {'y', 'S'}})
+        aggregation = dict(unit='recording', predictions_per_recording=1, windowing='fixed-center-crop',
+                           decision='softmax-argmax', rejection_statuses=['silence', 'noise'])
+        return predictor_config, preprocessing, aggregation
+
+    @staticmethod
+    def _checkpoint_hash(path):
+        digest = hashlib.sha256()
+        with path.open('rb') as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    def _require_standard_reports(self, target, db):
+        """Legacy remains usable; new artifacts require exact completed identities."""
+        if not target.estado.startswith('standard_'):
+            return
+        if target.estado != 'standard_eval_completed':
+            raise ValueError('Modelo nuevo sin evaluación estándar val/test completada; activación bloqueada.')
+        path = self.checkpoints_dir / Path(target.ruta_binario_gcp).name
+        if self._checkpoint_hash(path) != target.hash_binario:
+            raise ValueError('Checkpoint hash no coincide con la evaluación estándar.')
+        payload = torch.load(path, map_location='cpu', weights_only=True)
+        if self._checkpoint_hash(path) != target.hash_binario:
+            raise ValueError('Checkpoint cambió durante comprobación de activación.')
+        if not isinstance(payload.get('job_id'), str) or not payload['job_id'].strip():
+            raise ValueError('Checkpoint sin identidad de evaluación del entrenamiento.')
+        if (target.conjunto_datos is None or payload.get('dataset_name') != target.conjunto_datos.nombre or
+                payload.get('dataset_id') != target.id_conjunto_datos):
+            raise ValueError('Dataset del checkpoint no coincide con el modelo.')
+        matched = {}
+        for row in db.query(ModelEvaluation).filter_by(id_modelo=target.id_modelo).order_by(ModelEvaluation.id_evaluation):
+            if row.predictor_config.get('job_id') == payload.get('job_id'):
+                matched[row.split] = row
+        if set(matched) != {'val', 'test'}:
+            raise ValueError('Faltan evaluaciones estándar val/test del artefacto exacto.')
+        for row in matched.values():
+            if (row.status != 'completed' or row.checkpoint_sha256 != target.hash_binario or
+                    row.dataset != payload['dataset_name'] or row.classes != payload['classes'] or
+                    row.schema_version != 2 or row.evaluator_version != EVALUATOR_VERSION):
+                raise ValueError('Evaluación estándar incompleta o identidad incompatible.')
+            identity = EvaluationIdentity.model_validate({k: getattr(row, k) for k in EvaluationIdentity.model_fields})
+            validate_report(row.report, identity)
+        for key in ('predictor_config', 'preprocessing_config', 'aggregation_config', 'classes', 'evaluator_version'):
+            if getattr(matched['val'], key) != getattr(matched['test'], key):
+                raise ValueError('Procedencia val/test incompatible.')
+
+    def _evaluate_registered_checkpoint(self, model_id, checkpoint_path, checkpoint_hash,
+                                        config, classes, training_audio, is_ensemble):
+        """Registration is durable first; evaluation errors preserve the artifact."""
+        with self._lock:
+            self.status = 'evaluating'
+        attempt_ids = []
+        previous_active_ids = None
+        try:
+            if self._checkpoint_hash(checkpoint_path) != checkpoint_hash:
+                raise ValueError('Checkpoint cambió antes de evaluación')
+            predictor = published_predictor.TrainedModelPredictor(
+                checkpoint_path, model_id=str(model_id), dataset_name=config['dataset_name'], lazy_load=True)
+            if list(predictor.classes) != classes:
+                raise ValueError('Clases restauradas distintas de la fuente admitida')
+            if self._checkpoint_hash(checkpoint_path) != checkpoint_hash:
+                raise ValueError('Checkpoint cambió durante restauración')
+            for split in ('val', 'test'):
+                for record in config['source']['recordings'][split]:
+                    resolved = resolve_reference(record.reference, record.stage, config['source']['roots'])
+                    if resolved != record.path:
+                        raise ValueError('Referencia admitida cambió antes de evaluación')
+            settings = self._evaluation_config(config, training_audio)
+            evaluators = [RecordingEvaluator(config['source']['recordings'][split], predictor,
+                id_modelo=model_id, dataset=config['dataset_name'], split=split,
+                checkpoint_sha256=checkpoint_hash, predictor_config=settings[0],
+                preprocessing_config=settings[1], aggregation_config=settings[2]) for split in ('val', 'test')]
+            with SessionLocal() as evaluation_db:
+                service = EvaluationService(evaluation_db)
+                for evaluator in evaluators:
+                    attempt_ids.append(service.create(evaluator.identity)['id_evaluation'])
+                for attempt_id, evaluator in zip(attempt_ids, evaluators):
+                    service.start(attempt_id)
+                    report = evaluator.evaluate()
+                    if self._checkpoint_hash(checkpoint_path) != checkpoint_hash:
+                        raise ValueError('Checkpoint cambió durante inferencia')
+                    service.complete(attempt_id, report)
+            with SessionLocal() as publication_db:
+                target = publication_db.get(Modelo, model_id)
+                target.estado = 'standard_eval_completed'
+                self._require_standard_reports(target, publication_db)
+                if is_ensemble:
+                    target.estado = 'standard_component_evaluated'
+                else:
+                    previous_active_ids = [row.id_modelo for row in publication_db.query(Modelo)
+                                           .filter(Modelo.activo.is_(True), Modelo.id_modelo != model_id)
+                                           .with_for_update().all()]
+                    publication_db.query(Modelo).filter(Modelo.id_modelo != model_id).update({Modelo.activo: False})
+                    target.activo = True
+                publication_db.commit()
+        except Exception as exc:
+            try:
+                with SessionLocal() as failure_db:
+                    service = EvaluationService(failure_db)
+                    rows = failure_db.query(ModelEvaluation).filter_by(id_modelo=model_id).all()
+                    for row in rows:
+                        if ((row.id_evaluation in attempt_ids or row.predictor_config.get('job_id') == config['job_id'])
+                                and row.status in ('pending', 'running')):
+                            service.fail(row.id_evaluation, str(exc).strip()[:2000] or type(exc).__name__)
+                    target = failure_db.get(Modelo, model_id)
+                    target.estado = 'standard_eval_failed'
+                    target.activo = False
+                    if previous_active_ids is not None:
+                        # Compensation after a possibly committed publication, not
+                        # a promise of filesystem/DB atomicity or guaranteed recovery.
+                        failure_db.query(Modelo).filter(Modelo.id_modelo.in_(previous_active_ids)).update({Modelo.activo: True})
+                    failure_db.commit()
+            except Exception as failure_error:
+                self._add_log('WARN', f'No se pudo persistir fallo de evaluación: {failure_error}; checkpoint conservado.')
+            raise
+        finally:
+            with self._lock:
+                if self.status == 'evaluating':
+                    self.status = 'training'
 
     def _run_training_worker(self, config: Dict[str, Any]) -> None:
         """
@@ -827,9 +1028,9 @@ class TrainingService:
 
                     if val_acc > best_val_acc:
                         best_val_acc = val_acc
-                        best_weights = {k: v.cpu() for k, v in model.state_dict().items()}
+                        best_weights = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
                     elif best_weights is None:
-                        best_weights = {k: v.cpu() for k, v in model.state_dict().items()}
+                        best_weights = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
 
                     metric_entry = {
                         "epoca": epoch,
@@ -867,7 +1068,7 @@ class TrainingService:
                         break
 
                 # Guardar el artefacto de pesos real (.pt)
-                saved_state = best_weights if best_weights is not None else {k: v.cpu() for k, v in model.state_dict().items()}
+                saved_state = best_weights if best_weights is not None else {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
                 checkpoint_payload = {
                     "dataset_id": config["dataset_id"],
                     "dataset_name": dataset_name,
@@ -910,8 +1111,8 @@ class TrainingService:
                         ruta_binario_gcp=f"models/{checkpoint_filename}",
                         tamano_bytes=file_size,
                         hash_binario=file_hash,
-                        activo=(idx == 0 and not is_ensemble),
-                        estado="entrenado",
+                        activo=False,
+                        estado="standard_eval_pending",
                     )
                     db.add(nuevo_modelo)
                     db.flush()
@@ -961,6 +1162,12 @@ class TrainingService:
                     if db is not None:
                         db.close()
 
+                training_audio = dict(target_sr=target_sr, duration_seconds=duration_seconds,
+                                      n_mels=n_mels, n_fft=n_fft, hop_length=hop_length,
+                                      f_min=f_min, f_max=f_max)
+                self._evaluate_registered_checkpoint(model_id, checkpoint_path, file_hash,
+                                                     config, classes, training_audio, is_ensemble)
+
                 # Limpieza de memoria RAM y VRAM antes del siguiente modelo
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
@@ -973,7 +1180,7 @@ class TrainingService:
                 with self._lock:
                     self.status = "completed"
                 if is_ensemble:
-                    self._add_log("SUCCESS", f"Ensamble de {len(models_to_train)} modelos finalizado con éxito. Todos los modelos han sido registrados en PostgreSQL.")
+                    self._add_log("SUCCESS", f"Entrenamiento de {len(models_to_train)} componentes finalizado; informes individuales completos. Ensamble combinado sin evaluar ni publicar (EVAL-4).")
                 else:
                     self._add_log("SUCCESS", f"Pipeline de modelado finalizado exitosamente. Mejor Val Acc: {best_val_acc:.2f}%")
 
@@ -1222,9 +1429,12 @@ class TrainingService:
         """
         if db is not None:
             try:
-                db.query(Modelo).update({Modelo.activo: False})
-                target = db.query(Modelo).filter_by(id_modelo=model_id).first()
+                target = db.query(Modelo).filter_by(id_modelo=model_id).with_for_update().first()
+                if target is None:
+                    return {"success": False, "error": "Modelo inexistente"}
+                self._require_standard_reports(target, db)
                 if target:
+                    db.query(Modelo).update({Modelo.activo: False})
                     target.activo = True
                     db.commit()
 
@@ -1242,7 +1452,7 @@ class TrainingService:
                 db.rollback()
                 return {"success": False, "error": str(exc)}
 
-        return {"success": True, "active_model_id": model_id}
+        return {"success": False, "error": "Activación requiere una sesión de persistencia."}
 
 
 # Instancia singleton del servicio

@@ -1,5 +1,6 @@
 """Training admission tests at the public service interface; no real training."""
 import os
+import wave
 from unittest.mock import patch
 
 import numpy as np
@@ -57,7 +58,11 @@ def partitions(root, name, stage="raw", extension=".wav", classes=("Fixture",)):
         folder = "fixture" if class_index == 0 else "other"
         audio = audio_root / folder / f"{split}{extension}"
         audio.parent.mkdir(parents=True, exist_ok=True)
-        audio.write_bytes(b"tiny audio fixture")
+        with wave.open(str(audio), 'wb') as out:
+            out.setnchannels(1)
+            out.setsampwidth(2)
+            out.setframerate(22050)
+            out.writeframes(b'\x00\x00' * 2205)
         frame = pd.DataFrame([{"clase": clase, "nombre_archivo": audio.name,
                                "file_path": f"{folder}/{split}{extension}", "file_stage": stage,
                                "recordist": split, "source_group": f"group-{split}",
@@ -75,6 +80,49 @@ def partitions(root, name, stage="raw", extension=".wav", classes=("Fixture",)):
     for csv in prepared.glob("*.csv"):
         (raw / csv.name).write_bytes(csv.read_bytes())
     return raw
+
+
+@pytest.mark.parametrize('fault', ['decode', 'test_label', 'test_id', 'test_group', 'test_path', 'reserved_label'])
+def test_final_evaluation_preflight_blocks_invalid_admission(training_env, monkeypatch, fault):
+    service, sessions, root, thread = training_env
+    register(sessions, 'AvesChilenas')
+    raw = partitions(root, 'AvesChilenas')
+    real_load = training.load_prepared_dataset
+    def admitted(*args, **kwargs):
+        frames = list(real_load(*args, **kwargs))
+        if fault == 'decode':
+            (raw / frames[2].iloc[0]['file_path']).write_bytes(b'corrupt codec')
+        elif fault == 'reserved_label':
+            for frame in frames:
+                frame['clase'] = '__recording_rejected__'
+        else:
+            column = {'test_label': 'clase', 'test_id': 'xc_id',
+                      'test_group': 'recordist', 'test_path': 'file_path'}[fault]
+            frames[2][column] = 'unknown' if fault == 'test_label' else frames[0].iloc[0][column]
+        return tuple(frames)
+    monkeypatch.setattr(training, 'load_prepared_dataset', admitted)
+    with pytest.raises(ValueError):
+        service.start_training('AvesChilenas')
+    thread.assert_not_called()
+    assert service.get_progress()['status'] == 'failed'
+
+
+@pytest.mark.parametrize('fault', ['recordist', 'source_id'])
+def test_engine_admission_preserves_canonical_group_and_class_scoped_source_identity(training_env, monkeypatch, fault):
+    service, sessions, root, thread = training_env
+    register(sessions, 'engine_diagnostics')
+    partitions(root, 'engine_diagnostics')
+    real_load = training.load_prepared_dataset
+    def admitted(*args, **kwargs):
+        frames = list(real_load(*args, **kwargs))
+        for split, frame in zip(('train', 'val', 'test'), frames):
+            frame['source_id'] = split
+        frames[2][fault] = frames[0].iloc[0][fault]
+        return tuple(frames)
+    monkeypatch.setattr(training, 'load_prepared_dataset', admitted)
+    with pytest.raises(ValueError, match='overlap'):
+        service.start_training('engine_diagnostics')
+    thread.assert_not_called()
 
 
 @pytest.mark.parametrize("name", ["medical_cough", "MotoresVehiculares", "aveschilenas", " AvesChilenas", "../AvesChilenas"])

@@ -1,5 +1,6 @@
 """Training configuration and execution contracts through public service seams."""
 import re
+from functools import wraps
 from datetime import datetime, timezone
 
 import librosa
@@ -136,7 +137,12 @@ def test_start_training_worker_with_custom_audio_physics(execution, monkeypatch)
     decoded = []
     transforms = []
     mel_transform = torchaudio.transforms.MelSpectrogram
+    real_decode = librosa.load
+    @wraps(real_decode)
     def decode(path, sr, **kwargs):
+        if sr != 16000:
+            # Final reports decode the real temporary WAVs, with published physics.
+            return real_decode(path, sr=sr, **kwargs)
         decoded.append((str(path), sr))
         return np.zeros(16, dtype=np.float32), sr
     def observe_mel(**kwargs):
