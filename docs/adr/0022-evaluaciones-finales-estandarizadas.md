@@ -1,6 +1,6 @@
 # ADR 0022: Contrato de evaluaciones finales estandarizadas
 
-* **Estado:** Decisión aceptada. EVAL-1 (contrato/cálculo), EVAL-2 (persistencia aislada), EVAL-3 (helper y MAIN) y EVAL-4A (standalone/bundle oficial) implementados con pruebas SQLite y fixtures sintéticos. Evaluación combinada de ensambles, API/UI y PostgreSQL/runtime real pendientes.
+* **Estado:** Decisión aceptada. EVAL-1 a EVAL-4A implementados; EVAL-4B verifica sintéticamente la evaluación local del ensamble servido. API/UI, publicación oficial del ensamble, artefactos/datos reales y PostgreSQL/runtime real pendientes.
 * **Área:** Informes finales reproducibles de clasificación multiclase.
 
 ## Contexto y decisión
@@ -238,7 +238,38 @@ se conserva el provisional para diagnóstico/reintento manual. La separación no
 transacción entre filesystem/BD ni una operación de reintento automática. Las métricas
 históricas del loop se conservan etiquetadas como legado, no como informe final.
 
-Este corte no publica ensambles ni introduce enlaces a BD, catálogo, UI o runtime.
-Las pruebas sintéticas no descargan modelos pretrained ni usan checkpoints/datasets
-reales. Permanecen pendientes EVAL-4B (combinación real), EVAL-5 y EVAL-6, junto con
-validación en PostgreSQL/runtime real.
+## EVAL-4B: evaluación sintética local del ensamble servido de motores
+
+`backend/scripts/evaluate_engine_ensemble.py` es una operación explícita y separada del
+script experimental de dos modelos. Solo admite el `EngineEnsemblePredictor` servido
+(ResNet34d + EfficientNet-B0 + PANNs CNN14), pesos publicados 0.60/0.10/0.30 y clases
+ordenadas del servicio. No modifica APIs, entrenamiento, bundles, servicios, catálogo,
+activación o persistencia. No inserta en BD y usa `EvaluationProvenance` genérica sin
+FK de modelo.
+
+Antes de cargar componentes, la operación valida los CSV prepared y su marcador/hashes,
+raíces y referencias raw/processed, labels de taxonomía servida, separación de
+grabaciones/grupos train/val/test y hashes de audio antes de instanciar el predictor.
+Luego exige los tres archivos regulares explícitos,
+los carga mediante el predictor servido y vincula su identidad a SHA-256 por componente
+en orden, configuración efectiva y pesos. El digest compuesto es una identidad
+versionada del JSON canónico (no el hash de un archivo combinado ni una declaración de
+autenticidad). Los bytes se vuelven a comprobar después de cada split y antes de
+escribir el informe. Inyección arbitraria de módulos no se acepta como procedencia
+checkpoint-backed.
+
+Val y test se ejecutan una vez por grabación mediante `predict(Path)`, por lo que la
+métrica corresponde a la combinación ponderada real de probabilidades. Se conserva el
+rechazo silence/noise del predictor; solo `classified_super_ensemble` con clase conocida
+se admite como predicción. Estados o clases desconocidos, salida no finita, mutación de
+componente o identidad distinta fallan; no se genera informe de éxito. El destino JSON
+se proporciona de forma explícita, debe tener padre existente y rechaza sobrescritura.
+No hay calibración ni selección basada en test, publicación oficial, claims de runtime
+ni conexión a BD.
+
+La verificación usa únicamente WAVs y checkpoints pequeños sintéticos con los
+constructores de redes sustituidos en test; no descarga pretrained ni accede a datos,
+checkpoints privados, servicios u operaciones DB. EVAL-4B queda limitado a esa
+verificación sintética local; no acredita rendimiento, integridad externa o despliegue
+con artefactos reales. EVAL-5, EVAL-6 y validación en PostgreSQL/runtime real siguen
+pendientes.

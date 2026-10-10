@@ -128,7 +128,7 @@ class RecordingEvaluator:
             status = output.detalles.get('status')
             if status in ('silence', 'noise'):
                 predicted.append(REJECTION_LABEL)
-            elif status in ('classified', 'bundle_classified') and type(output.clase) is str and output.clase in self._classes:
+            elif status in ('classified', 'bundle_classified', 'classified_super_ensemble') and type(output.clase) is str and output.clase in self._classes:
                 predicted.append(output.clase)
             else:
                 raise ValueError('Unknown predictor output/status')

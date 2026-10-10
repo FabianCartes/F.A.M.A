@@ -125,6 +125,25 @@ def test_evaluator_identity_and_report_persist_through_sqlite(tmp_path, fail_inf
     engine.dispose()
 
 
+def test_served_engine_ensemble_status_is_classified_once_per_recording(tmp_path):
+    from app.schemas.evaluation import EvaluationProvenance
+
+    path = audio(tmp_path / 'ensemble.wav')
+    predictor = Predictor([result('b', 'classified_super_ensemble')])
+    evaluator = RecordingEvaluator(
+        (LabelledRecording('engine-1', 'b', path, 'engine.wav', 'raw', 'recordist-1'),),
+        predictor, dataset='engine_diagnostics', split='test', checkpoint_sha256='a' * 64,
+        predictor_config={'component_order': ['resnet', 'efficientnet', 'panns']},
+        preprocessing_config={'frontend': 'hpss-3ch'},
+        aggregation_config={'weights': [.6, .1, .3]},
+    )
+    report = evaluator.evaluate()
+    assert report['confusion_matrix'] == [[1, 0, 0], [0, 0, 0]]
+    assert predictor.paths == [path]
+    assert isinstance(evaluator.identity, EvaluationProvenance)
+    assert 'id_modelo' not in evaluator.identity.model_dump()
+
+
 def test_standalone_provenance_has_no_database_model_id_and_accepts_bundle_status(tmp_path):
     from app.schemas.evaluation import EvaluationIdentity, EvaluationProvenance
 
