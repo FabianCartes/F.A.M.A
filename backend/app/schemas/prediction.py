@@ -18,10 +18,10 @@ class PredictionResponse(BaseModel):
     gcp_upload: bool = Field(..., description="Estado de persistencia en Google Cloud Storage")
     db_id: int = Field(..., description="ID del registro histórico en PostgreSQL")
     clase: str = Field(..., description="Clase predicha")
-    confianza: float = Field(..., description="Nivel de confianza calibrado")
+    confianza: float = Field(..., description="Score o probabilidad reportada por el modelo; no necesariamente calibrada")
     modelo_id: str = Field(..., description="Identificador del modelo que generó la inferencia")
     modelo: Optional[str] = Field(None, description="Nombre descriptivo del modelo activo")
     is_fallback: Optional[bool] = Field(None, description="Indica si opera en modo fallback")
-    modelos_activos: Optional[list] = Field(None, description="Lista de modelos activos con ponderaciones")
+    modelos_activos: Optional[list] = Field(None, description="Participantes y ponderaciones acreditados por el resultado de esta inferencia; null si no hay evidencia")
     detalles: Optional[Dict[str, Any]] = Field(None, description="Telemetría y diagnósticos de inferencia (is_mock, latency_ms, device, checkpoint)")
 

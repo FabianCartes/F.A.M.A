@@ -32,6 +32,11 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("Catálogo público de Predicción", () => {
+  it("inicia el historial de sesión vacío, sin grabaciones demostrativas", async () => {
+    await show();
+    expect(screen.queryByText("eugralla_paradoxa_mocha_03.wav")).toBeNull();
+    expect(screen.getByText("Sin predicciones en esta sesión.")).toBeDefined();
+  });
   it("muestra publicación parcial sin descartar modelos sanos y limpia el aviso al reintentar", async () => {
     catalogue = async () => response([bird], bird.id, [
       { model_id: model11.id, code: "checkpoint_missing" },
@@ -179,7 +184,7 @@ describe("Catálogo público de Predicción", () => {
     catalogue = async () => response([model11], model11.id);
     await focus();
     expect(selection().value).toBe(model11.id);
-    await act(async () => { pending.resolve(new Response(JSON.stringify({ filename: "audio.wav", db_id: 201, clase: "Chucao", confianza: 0.9, gcp_upload: true, detalles: { dataset_name: "AvesChilenas" } }))); });
+    await act(async () => { pending.resolve(new Response(JSON.stringify({ filename: "audio.wav", db_id: 201, modelo: "Aves CNN", clase: "Chucao", confianza: 0.9, gcp_upload: true, detalles: { dataset_name: "AvesChilenas" } }))); });
     expect(screen.getByText("Modelo ejecutado:").parentElement?.textContent).toContain("Aves CNN");
     const feedback = within(screen.getByRole("region", { name: "Validar resultado" }));
     fireEvent.click(feedback.getByRole("button", { name: "Incorrecta" }));

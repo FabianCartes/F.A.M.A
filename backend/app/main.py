@@ -656,14 +656,24 @@ async def predict_audio(
             )
 
         # 6. Retorno del formato JSON enriquecido
-        status_info = ensemble_service.get_status(dataset_name=dataset_name, db=db)
-        active_labels = [
-            f"{m['name']} ({int(round(m['weight'] * 100))}%)"
-            for m in status_info.get("active_models", [])
-        ]
         detalles = dict(getattr(pred_result, "detalles", None) or {})
+        # Only result-level weights prove participation in this execution. Catalogue
+        # metadata/global readiness cannot establish members (e.g. silence bypasses).
+        execution_weights = detalles.get("ensemble_weights")
+        active_labels = None
+        if isinstance(execution_weights, dict) and execution_weights:
+            if all(
+                isinstance(name, str) and name.strip()
+                and isinstance(weight, (int, float)) and not isinstance(weight, bool)
+                and np.isfinite(weight) and 0 <= weight <= 1
+                for name, weight in execution_weights.items()
+            ):
+                active_labels = [
+                    f"{name} ({int(round(weight * 100))}%)"
+                    for name, weight in execution_weights.items()
+                ]
         detalles["dataset_name"] = registro_prediccion.dataset_name
-        is_fallback = getattr(predictor, "is_fallback", status_info.get("is_fallback", False))
+        is_fallback = getattr(predictor, "is_fallback", None)
         if detalles and detalles.get("is_mock") is False:
             is_fallback = False
 
@@ -674,7 +684,7 @@ async def predict_audio(
             "clase": clase,
             "confianza": confianza,
             "modelo_id": predictor.model_id,
-            "modelo": predictor.metadata.name if hasattr(predictor, "metadata") else status_info.get("model_name"),
+            "modelo": predictor.metadata.name if hasattr(predictor, "metadata") else None,
             "is_fallback": is_fallback,
             "modelos_activos": active_labels,
             "detalles": detalles,

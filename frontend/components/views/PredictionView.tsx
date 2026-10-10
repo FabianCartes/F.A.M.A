@@ -52,16 +52,17 @@ interface PredictionResponse {
   clase: string;
   confianza: number;
   modelo?: string;
+  modelo_id?: string;
   is_fallback?: boolean;
   modelos_activos?: string[];
 }
 
 interface HistoryItem {
-  id: string | number;
+  id: number | null;
   filename: string;
   timestamp: string;
   clase: string;
-  badgeCode: string;
+
   confianza: number;
   modelo?: string;
   domain?: string;
@@ -120,8 +121,11 @@ const ENGINE_FAULT_LABELS: Record<string, string> = {
 
 interface CurrentPrediction extends PredictionResponse {
   inferenceModel: string;
+  inferenceModelId: string;
+  modelMismatch: boolean;
   inferenceClasses: string[];
   inferenceDomain: string;
+  inferenceEnsemble: boolean;
   sequence: number;
 }
 
@@ -215,10 +219,10 @@ export default function PredictionView() {
   const [loading, setLoading] = useState<boolean>(false);
   const [result, setResult] = useState<CurrentPrediction | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [latency, setLatency] = useState<string>("0.14s");
+  const [latency, setLatency] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [classFilter, setClassFilter] = useState<string>("all");
-  const [modelStatus, setModelStatus] = useState<BackendModelStatus | null>(null);
+  const [modelStatusSnapshot, setModelStatus] = useState<(BackendModelStatus & { requestedDomain: string }) | null>(null);
   const [availableModels, setAvailableModels] = useState<RegisteredModel[]>([]);
   const [selectedModelId, setSelectedModelId] = useState<string>("");
   const [catalogueError, setCatalogueError] = useState<string | null>(null);
@@ -228,8 +232,6 @@ export default function PredictionView() {
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [isDecodingAudio, setIsDecodingAudio] = useState<boolean>(false);
-  const [revealProgress, setRevealProgress] = useState<number>(0);
-  const [isRevealing, setIsRevealing] = useState<boolean>(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const playheadRef = useRef<SVGGElement | null>(null);
   const timeLabelRef = useRef<HTMLSpanElement | null>(null);
@@ -243,6 +245,8 @@ export default function PredictionView() {
   const selectedDomain = useMemo(() => {
     return resolveModelDomain(selectedModel, selectedModelId);
   }, [selectedModel, selectedModelId]);
+
+  const modelStatus = modelStatusSnapshot?.requestedDomain === selectedDomain ? modelStatusSnapshot : null;
 
   const isEngineModel = useMemo(() => {
     return selectedDomain === "engine_diagnostics";
@@ -261,12 +265,12 @@ export default function PredictionView() {
 
   const classesCount = currentClasses.length;
 
-  const durationSeconds = selectedModel?.duration_seconds ?? (isEngineModel ? 2.0 : 5.0);
-  const formattedDuration = `${durationSeconds.toFixed(1)}s`;
+  const durationSeconds = selectedModel?.duration_seconds;
+  const formattedDuration = durationSeconds != null && durationSeconds > 0 ? `${durationSeconds.toFixed(1)}s` : "duración no publicada";
 
-  const targetSr = selectedModel?.target_sr ?? (isEngineModel ? 32000 : 22050);
-  const formattedSr = `${(targetSr / 1000).toFixed(0)} kHz`;
-  const formattedSrHz = `${targetSr.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")} Hz`;
+  const targetSr = selectedModel?.target_sr;
+  const formattedSr = targetSr != null && targetSr > 0 ? `${targetSr / 1000} kHz` : "frecuencia no publicada";
+  const formattedSrHz = targetSr != null && targetSr > 0 ? `${targetSr.toLocaleString("es-CL")} Hz` : "frecuencia no publicada";
 
   const formattedMetric = useMemo(() => {
     if (selectedModel?.metrics) {
@@ -277,8 +281,8 @@ export default function PredictionView() {
         return `${(Number(selectedModel.metrics.accuracy) * 100).toFixed(2)}% Acc`;
       }
     }
-    return isEngineModel ? "81.16% Acc" : "88.68% F1";
-  }, [selectedModel, isEngineModel]);
+    return "Sin métricas publicadas";
+  }, [selectedModel]);
 
   const bioModels = useMemo(() => {
     return availableModels.filter((m) => resolveModelDomain(m, m.id) === "AvesChilenas");
@@ -348,6 +352,7 @@ export default function PredictionView() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     async function fetchModelStatus() {
       try {
         const url = selectedDomain
@@ -356,13 +361,17 @@ export default function PredictionView() {
         const res = await fetch(url);
         if (res.ok) {
           const data = (await res.json()) as BackendModelStatus;
-          setModelStatus(data);
+          if (!cancelled) setModelStatus({ ...data, requestedDomain: selectedDomain });
+        } else if (!cancelled) {
+          setModelStatus(null);
         }
       } catch (err) {
+        if (!cancelled) setModelStatus(null);
         console.warn("No se pudo conectar a /api/model-info:", err);
       }
     }
     fetchModelStatus();
+    return () => { cancelled = true; };
   }, [selectedDomain]);
 
   useEffect(() => {
@@ -545,76 +554,7 @@ export default function PredictionView() {
     return ratio * 500;
   }, [currentTime, audioStats]);
 
-  // Animación progresiva de barrido de izquierda a derecha (efecto osciloscopio bioacústico)
-  const triggerRevealAnimation = useCallback(() => {
-    if (!audioStats) return;
-    setIsRevealing(true);
-    setRevealProgress(0);
-
-    const durationMs = 1200; // 1.2 segundos de barrido
-    const startTime = performance.now();
-
-    const animate = (now: number) => {
-      const elapsed = now - startTime;
-      const linear = Math.min(1, elapsed / durationMs);
-      // Easing cúbico para desaceleración suave y estética
-      const eased = 1 - Math.pow(1 - linear, 3);
-      setRevealProgress(eased);
-
-      if (linear < 1) {
-        requestAnimationFrame(animate);
-      } else {
-        setIsRevealing(false);
-        setRevealProgress(1);
-      }
-    };
-
-    requestAnimationFrame(animate);
-  }, [audioStats]);
-
-  useEffect(() => {
-    if (!audioStats) return;
-    const animId = requestAnimationFrame(() => {
-      triggerRevealAnimation();
-    });
-    return () => cancelAnimationFrame(animId);
-  }, [audioStats, triggerRevealAnimation]);
-
-  // Historial inicial con grabaciones reales de campo verificadas con el Super-Ensamble
-  const [history, setHistory] = useState<HistoryItem[]>([
-    {
-      id: "hist-01",
-      filename: "eugralla_paradoxa_mocha_03.wav",
-      timestamp: "07/09/2026, 10:45:30",
-      clase: "Churrín de la Mocha",
-      badgeCode: "AVE-005",
-      confianza: 0.998,
-    },
-    {
-      id: "hist-02",
-      filename: "scelorchilus_rubecula_campo_01.wav",
-      timestamp: "07/09/2026, 11:20:15",
-      clase: "Chucao",
-      badgeCode: "AVE-004",
-      confianza: 0.924,
-    },
-    {
-      id: "hist-03",
-      filename: "aphrastura_spinicauda_bosque_02.wav",
-      timestamp: "07/09/2026, 09:15:10",
-      clase: "Rayadito",
-      badgeCode: "AVE-010",
-      confianza: 0.941,
-    },
-    {
-      id: "hist-04",
-      filename: "turdus_falcklandii_patagonia_05.wav",
-      timestamp: "07/09/2026, 08:30:22",
-      clase: "Zorzal patagónico",
-      badgeCode: "AVE-015",
-      confianza: 0.887,
-    },
-  ]);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
 
   const handleFileSelection = useCallback(
     (selectedFile: File | null) => {
@@ -629,8 +569,6 @@ export default function PredictionView() {
       setAudioStats(null);
       setIsPlaying(false);
       setCurrentTime(0);
-      setRevealProgress(0);
-      setIsRevealing(false);
 
       if (!selectedFile) {
         setFile(null);
@@ -683,12 +621,14 @@ export default function PredictionView() {
     }
 
     setLoading(true);
+    setLatency(null);
     setError(null);
     setResult(null);
     const startTime = performance.now();
     const sequence = ++inferenceSequence.current;
     const inferenceClasses = [...(selectedModel?.classes || [])];
     const inferenceModel = selectedModel?.name || selectedModelId;
+    const inferenceModelId = selectedModelId;
 
     try {
       const formData = new FormData();
@@ -702,9 +642,6 @@ export default function PredictionView() {
         method: "POST",
         body: formData,
       });
-
-      const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
-      setLatency(`${elapsed}s`);
 
       let data;
       try {
@@ -733,9 +670,14 @@ export default function PredictionView() {
           data.confianza < 0 || data.confianza > 1 || typeof data.gcp_upload !== "boolean") {
         throw new Error("Respuesta de inferencia inválida. No se recibió una predicción válida del servidor.");
       }
+      const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
       const predData = data as PredictionResponse;
       if (sequence !== inferenceSequence.current) return;
-      setResult({ ...predData, inferenceClasses, inferenceModel, inferenceDomain: selectedDomain, sequence });
+      setLatency(`${elapsed}s`);
+      const modelMismatch = predData.modelo_id
+        ? predData.modelo_id !== inferenceModelId
+        : Boolean(predData.modelo && predData.modelo !== inferenceModel && predData.modelo !== inferenceModelId);
+      setResult({ ...predData, inferenceClasses, inferenceModel, inferenceModelId, modelMismatch, inferenceDomain: selectedDomain, inferenceEnsemble: isEnsemble, sequence });
 
       const isEngine =
         isEngineModel ||
@@ -743,22 +685,13 @@ export default function PredictionView() {
 
       // Agregar al inicio del historial de predicciones con badge code y modelo utilizado
       const newItem: HistoryItem = {
-        id: predData.db_id || `prediction-${sequence}`,
+        id: typeof predData.db_id === "number" && Number.isInteger(predData.db_id) && predData.db_id > 0 ? predData.db_id : null,
         filename: predData.filename,
         timestamp: new Date().toLocaleString(),
         clase: predData.clase,
-        badgeCode: isEngine
-          ? "ENG-" + String(predData.db_id).padStart(3, "0")
-          : "AVE-" + String(predData.db_id).padStart(3, "0"),
+
         confianza: predData.confianza,
-        modelo:
-          predData.modelo ||
-          selectedModel?.name ||
-          (isEngine
-            ? "Super-Ensamble Acústico de Motores"
-            : predData.is_fallback
-            ? "AudioCNN Fallback"
-            : "Super-Ensamble Tri-Modelo Bioacústico"),
+        modelo: predData.modelo || "No informado por la API",
         domain: isEngine ? "engine_diagnostics" : "AvesChilenas",
       };
 
@@ -843,10 +776,9 @@ export default function PredictionView() {
           {/* Indicador de Latencia / Estado a la derecha */}
           <div
             className="flex items-center gap-2 px-2.5 py-1.5 rounded-full bg-black/40 border border-green-800/40 text-green-400 text-xs font-mono shrink-0 whitespace-nowrap"
-            title={`Latencia de inferencia: ${latency}`}
+            title="Tiempo total observado por el navegador, incluida transferencia y lectura de respuesta"
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0" />
-            <span>Latencia: {latency}</span>
+            <span>Tiempo total de solicitud: {latency ?? "no disponible"}</span>
           </div>
         </div>
       </div>
@@ -916,9 +848,7 @@ export default function PredictionView() {
               </span>
             </div>
             <p className="text-[11px] text-gray-300 mt-0.5">
-              {isEngineModel
-                ? `Contrato de inferencia: Audios de ${formattedDuration} a ${formattedSrHz} · ${isEnsemble ? "Ensamble balanceado All-RMS (ResNet34d + EffNet + PANNs)" : selectedModel?.name || "Modelo individual"}`
-                : `Contrato de inferencia: Audios de ${formattedDuration} a ${formattedSrHz} · ${isEnsemble ? "Ensamble bayesiano óptimo (EffNet-B0 + ConvNeXt + ResNet34d)" : selectedModel?.name || "Modelo individual"}`}
+              {`Contrato publicado: Audios de ${formattedDuration} a ${formattedSrHz} · ${selectedModel?.name || "Sin modelo disponible"}`}
             </p>
           </div>
         </div>
@@ -952,20 +882,18 @@ export default function PredictionView() {
                   </h2>
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-950/80 border border-emerald-800/80 text-emerald-400 flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Tríada Completa Habilitada (3/3)
+                    Participantes disponibles en el resultado de inferencia
                   </span>
                 </div>
                 <p className="text-[11px] text-gray-400 mt-0.5">
-                  {isEngineModel
-                    ? "Ponderación balanceada All-RMS: ResNet-34d (40%) + EfficientNet-B0 (35%) + PANNs-CNN14 (25%)"
-                    : "Ponderación balanceada óptima de tesis: EfficientNet-B0 (55%) + ConvNeXt-Nano (30%) + ResNet-34d (15%)"}
+                  Sin inferencia no se acredita participación ni ponderación.
                 </p>
               </div>
             </div>
 
             <div className="text-[11px] text-gray-400 flex items-center gap-2 font-mono">
               <span className="bg-[#101114] px-2 py-1 rounded border border-[#23252e]">
-                Dispositivo: {modelStatus?.device || "CPU"}
+                Dispositivo: {modelStatus?.device || "Estado no disponible"}
               </span>
               <span className="bg-[#101114] px-2 py-1 rounded border border-[#23252e]">
                 {classesCount} {isEngineModel ? "fallas mecánicas" : "especies"}
@@ -973,95 +901,7 @@ export default function PredictionView() {
             </div>
           </div>
 
-          {/* Las 3 tarjetas de arquitectura de la Tríada */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {(isEngineModel
-              ? [
-                  {
-                    name: "ResNet-34d",
-                    weight: 0.4,
-                    is_ready: true,
-                    accuracy: 80.9,
-                    checkpoint: "resnet34d_engine_rms.pt",
-                  },
-                  {
-                    name: "EfficientNet-B0",
-                    weight: 0.35,
-                    is_ready: true,
-                    accuracy: 81.3,
-                    checkpoint: "efficientnet_b0_engine_rms.pt",
-                  },
-                  {
-                    name: "PANNs-CNN14",
-                    weight: 0.25,
-                    is_ready: true,
-                    accuracy: 79.5,
-                    checkpoint: "panns_cnn14_engine_rms.pt",
-                  },
-                ]
-              : modelStatus?.triad_status || [
-                  {
-                    name: "EfficientNet-B0",
-                    weight: 0.55,
-                    is_ready: true,
-                    accuracy: 88.31,
-                    checkpoint: "efficientnet_b0_aves.pt",
-                  },
-                  {
-                    name: "ConvNeXt-Nano",
-                    weight: 0.3,
-                    is_ready: true,
-                    accuracy: 87.15,
-                    checkpoint: "convnext_nano_aves.pt",
-                  },
-                  {
-                    name: "ResNet-34d",
-                    weight: 0.15,
-                    is_ready: true,
-                    accuracy: 85.4,
-                    checkpoint: "resnet34d_aves.pt",
-                  },
-                ]
-            ).map((model) => (
-              <div
-                key={model.name}
-                className="rounded-lg p-3.5 border transition-all bg-[#111215] border-[#252834]"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-white font-mono">{model.name}</span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-950/60 border border-blue-800/50 text-blue-300 font-semibold">
-                    Peso: {Math.round(model.weight * 100)}%
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between text-[11px] mb-2">
-                  <span className="text-gray-400">Estado:</span>
-                  <span className="text-emerald-400 font-medium flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                    Entrenado y Operativo
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#1e2028] text-[10px]">
-                  <div>
-                    <span className="text-gray-500 block">Precisión (Test)</span>
-                    <span className="font-mono font-semibold text-white">
-                      {model.accuracy != null ? `${Number(model.accuracy).toFixed(1)}%` : "—"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-gray-500 block">Checkpoint</span>
-                    <span
-                      className="font-mono text-gray-300 truncate block"
-                      title={model.checkpoint || "No generado"}
-                    >
-                      {model.checkpoint ? model.checkpoint : "—"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <p className="text-xs text-gray-400">Los participantes y pesos informados por la API se muestran únicamente junto al resultado correspondiente.</p>
         </div>
       ) : (
         <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4">
@@ -1090,7 +930,7 @@ export default function PredictionView() {
 
             <div className="text-[11px] text-gray-400 flex items-center gap-2 font-mono">
               <span className="bg-[#101114] px-2 py-1 rounded border border-[#23252e]">
-                Dispositivo: {modelStatus?.device || "CPU"}
+                Dispositivo: {modelStatus?.device || "Estado no disponible"}
               </span>
               <span className="bg-[#101114] px-2 py-1 rounded border border-[#23252e]">
                 {classesCount} {isEngineModel ? "fallas mecánicas" : "especies"}
@@ -1115,7 +955,7 @@ export default function PredictionView() {
               <div className="flex items-center gap-1.5 mt-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                 <span className="text-xs font-semibold text-emerald-400">
-                  {!selectedModel ? "Sin modelo disponible" : selectedModel.has_weights !== false ? "Pesos Verificados" : "No inicializado"}
+                  {!selectedModel ? "Sin modelo disponible" : selectedModel.has_weights === true ? "Pesos publicados" : selectedModel.has_weights === false ? "Sin pesos publicados" : "Estado no disponible"}
                 </span>
               </div>
               <span className="text-[10px] text-gray-400 mt-1 block">
@@ -1155,7 +995,7 @@ export default function PredictionView() {
               <span className="text-xs text-gray-400 font-medium">Modelo activo en producción</span>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-950/60 border border-green-800/60 text-green-400 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                {!selectedModel ? "Sin modelo disponible" : isEnsemble ? "Super-Ensamble Activo (3/3)" : "Modelo Individual Activo (1/1)"}
+                {selectedModel ? "Modelo seleccionado" : "Sin modelo disponible"}
               </span>
             </div>
             <div className="flex items-start justify-between">
@@ -1164,21 +1004,15 @@ export default function PredictionView() {
                   {selectedModel?.name || "Sin modelo disponible"}
                 </h2>
                 <p className="text-[11px] text-gray-400 mt-0.5">
-                  {isEnsemble
-                    ? isEngineModel
-                      ? "ResNet-34d (40%) · EfficientNet-B0 (35%) · PANNs-CNN14 (25%)"
-                      : modelStatus?.is_fallback
-                      ? "AudioCNN Baseline (augmented_best.pt)"
-                      : "EfficientNet-B0 (55%) · ConvNeXt-Nano (30%) · ResNet34d (15%)"
-                    : selectedModel?.description || "Inferencia individual autónoma"}
+                  {selectedModel?.description || "Descripción no publicada"}
                 </p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <span className="text-[10px] text-gray-400 font-mono bg-[#1d1f27] border border-[#2b2d38] px-1.5 py-0.5 rounded uppercase">
-                  {modelStatus?.device || "CPU"}
+                  {modelStatus?.device || "Estado no disponible"}
                 </span>
                 <span className="text-xs text-blue-400 font-mono bg-blue-950/50 border border-blue-800/50 px-2 py-0.5 rounded">
-                  v3.0.0
+                  Versión no publicada
                 </span>
               </div>
             </div>
@@ -1188,11 +1022,7 @@ export default function PredictionView() {
             <div>
               <span className="text-gray-400 block text-[11px]">Accuracy Test</span>
               <span className="text-sm font-bold text-white font-mono mt-0.5 block">
-                {selectedModel?.metrics?.accuracy != null
-                  ? `${(Number(selectedModel.metrics.accuracy) * 100).toFixed(2)}%`
-                  : isEngineModel
-                  ? "81.16%"
-                  : "88.31%"}
+                {selectedModel?.metrics?.accuracy != null ? `${(Number(selectedModel.metrics.accuracy) * 100).toFixed(2)}%` : "Sin métricas publicadas"}
               </span>
             </div>
             <div>
@@ -1200,11 +1030,7 @@ export default function PredictionView() {
                 {isEngineModel ? "Balanced F1" : "Macro F1"}
               </span>
               <span className="text-sm font-bold text-green-400 font-mono mt-0.5 block">
-                {selectedModel?.metrics?.f1_macro != null
-                  ? `${(Number(selectedModel.metrics.f1_macro) * 100).toFixed(2)}%`
-                  : isEngineModel
-                  ? "81.44%"
-                  : "88.68%"}
+                {selectedModel?.metrics?.f1_macro != null ? `${(Number(selectedModel.metrics.f1_macro) * 100).toFixed(2)}%` : "Sin métricas publicadas"}
               </span>
             </div>
             <div>
@@ -1212,21 +1038,13 @@ export default function PredictionView() {
                 {isEngineModel ? "Precision" : "Macro Precision"}
               </span>
               <span className="text-sm font-bold text-blue-400 font-mono mt-0.5 block">
-                {selectedModel?.metrics?.precision_macro != null
-                  ? `${(Number(selectedModel.metrics.precision_macro) * 100).toFixed(2)}%`
-                  : isEngineModel
-                  ? "81.16%"
-                  : "90.15%"}
+                {selectedModel?.metrics?.precision_macro != null ? `${(Number(selectedModel.metrics.precision_macro) * 100).toFixed(2)}%` : "Sin métricas publicadas"}
               </span>
             </div>
             <div className="col-span-3 flex items-center justify-between pt-2 border-t border-[#23252e]/40 text-[11px] text-gray-400">
               <span className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                {isEnsemble
-                  ? isEngineModel
-                    ? "Balanceo All-RMS + Calibración Softmax"
-                    : "Dense TTA (hop 1.0s) + Micro-Batch O(1)"
-                  : `Inferencia Standalone · Contrato ${formattedDuration} @ ${formattedSr}`}
+                {`Contrato publicado: ${formattedDuration} @ ${formattedSr}`}
               </span>
               <span className="text-gray-500 font-mono">
                 {isEngineModel ? `${classesCount} fallas mecánicas` : `${classesCount} especies`}
@@ -1307,11 +1125,12 @@ export default function PredictionView() {
             {/* Header del Oscilograma con Audio y Metadatos Reales */}
             <div className="flex items-center justify-between mb-2.5">
               <div>
-                <span className="text-xs text-gray-300 font-medium block">Visualización de señal acústica</span>
+                <span className="text-xs text-gray-300 font-medium block">Audio original · canal 1 (mono/estéreo)</span>
+                <span className="text-[10px] text-gray-500 block">Oscilograma, RMS y pico calculados en el navegador; no representan el audio preprocesado por el modelo.</span>
                 <span className="text-[10px] text-gray-500 mt-0.5 block">
                   {audioStats
                     ? `${(audioStats.sampleRate / 1000).toFixed(1)} kHz · ${audioStats.channels === 1 ? "Mono" : "Estéreo"} · ${audioStats.duration.toFixed(2)}s`
-                    : "Oscilograma en tiempo real"}
+                    : "Sin audio decodificado"}
                 </span>
               </div>
 
@@ -1383,10 +1202,6 @@ export default function PredictionView() {
                         <stop offset="50%" stopColor="#2563eb" stopOpacity="0.16" />
                         <stop offset="100%" stopColor="#1d4ed8" stopOpacity="0.48" />
                       </linearGradient>
-                      {/* Máscara de recorte animada para el barrido progresivo */}
-                      <clipPath id="waveformRevealClip">
-                        <rect x="0" y="0" width={revealProgress * 500} height="120" />
-                      </clipPath>
                     </defs>
 
                     {/* Líneas guía de amplitud */}
@@ -1395,7 +1210,7 @@ export default function PredictionView() {
                     <line x1="0" y1="100" x2="500" y2="100" stroke="#1c1f2b" strokeWidth="1" strokeDasharray="2 4" />
 
                     {/* Grupo de forma de onda recortado progresivamente */}
-                    <g clipPath="url(#waveformRevealClip)">
+                    <g>
                       {/* Polígono relleno de la envolvente simétrica */}
                       <path d={waveformPaths.fillD} fill="url(#waveformGradient)" />
 
@@ -1404,48 +1219,8 @@ export default function PredictionView() {
                       <path d={waveformPaths.bottomStrokeD} fill="none" stroke="#3b82f6" strokeWidth="1.2" />
                     </g>
 
-                    {/* Haz láser de escaneo en la vanguardia del barrido */}
-                    {isRevealing && (
-                      <g>
-                        {/* Resplandor exterior del haz */}
-                        <line
-                          x1={revealProgress * 500}
-                          y1="0"
-                          x2={revealProgress * 500}
-                          y2="120"
-                          stroke="#38bdf8"
-                          strokeWidth="4"
-                          strokeOpacity="0.35"
-                        />
-                        {/* Línea central del láser */}
-                        <line
-                          x1={revealProgress * 500}
-                          y1="0"
-                          x2={revealProgress * 500}
-                          y2="120"
-                          stroke="#e0f2fe"
-                          strokeWidth="1.5"
-                          strokeOpacity="0.95"
-                        />
-                        {/* Puntos luminosos en el frente de onda */}
-                        <circle
-                          cx={revealProgress * 500}
-                          cy="60"
-                          r="4"
-                          fill="#38bdf8"
-                          fillOpacity="0.8"
-                        />
-                        <circle
-                          cx={revealProgress * 500}
-                          cy="60"
-                          r="2"
-                          fill="#ffffff"
-                        />
-                      </g>
-                    )}
-
                     {/* Cabezal de reproducción (Playhead) interactivo con animación suave */}
-                    {audioUrl && !isRevealing && (
+                    {audioUrl && (
                       <g ref={playheadRef} transform={`translate(${playheadX}, 0)`}>
                         <line
                           x1={0}
@@ -1501,29 +1276,9 @@ export default function PredictionView() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {isRevealing ? (
-                    <span className="text-cyan-400 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
-                      Escaneando: {Math.round(revealProgress * 100)}%
-                    </span>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        onClick={triggerRevealAnimation}
-                        className="text-[9px] text-gray-500 hover:text-cyan-400 transition-colors flex items-center gap-1 cursor-pointer"
-                        title="Repetir animación de escaneo"
-                      >
-                        <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                        Re-escanear
-                      </button>
-                      <span ref={timeLabelRef} className="text-gray-500">
-                        {currentTime > 0 ? `${currentTime.toFixed(2)}s / ${audioStats.duration.toFixed(2)}s` : `${audioStats.duration.toFixed(2)}s`}
-                      </span>
-                    </>
-                  )}
+                  <span ref={timeLabelRef} className="text-gray-500">
+                    {currentTime.toFixed(2)}s / {audioStats.duration.toFixed(2)}s
+                  </span>
                 </div>
               </div>
             )}
@@ -1556,7 +1311,7 @@ export default function PredictionView() {
         {/* Tarjeta: Resultado */}
         <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 flex flex-col justify-between">
           <span className="text-xs text-gray-400 font-medium block mb-2">
-            {isEnsemble ? "Veredicto del Super-Ensamble" : "Veredicto del Modelo"}
+            {result?.inferenceEnsemble ? "Veredicto del Super-Ensamble" : "Veredicto del Modelo"}
           </span>
 
           {result ? (
@@ -1590,10 +1345,16 @@ export default function PredictionView() {
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="text-gray-400">Modelo ejecutado:</span>
                   <span className="text-blue-400 font-mono font-semibold">
-                    {result.modelo || result.inferenceModel}
+                    {result.modelo || result.modelo_id || "No informado por la API"}
+                    {result.modelo && result.modelo_id && ` (${result.modelo_id})`}
                   </span>
                 </div>
-                {result.modelos_activos && result.modelos_activos.length > 0 && (
+                {result.modelMismatch && (
+                  <p role="alert" className="text-xs text-amber-300">
+                    El modelo ejecutado difiere del modelo solicitado: {result.inferenceModel} ({result.inferenceModelId}). El resultado corresponde al modelo informado por la API.
+                  </p>
+                )}
+                {result.inferenceEnsemble && result.modelos_activos && result.modelos_activos.length > 0 && (
                   <div className="flex flex-wrap gap-1 pt-1 border-t border-[#23252e]/70">
                     {result.modelos_activos.map((m, idx) => (
                       <span
@@ -1619,7 +1380,7 @@ export default function PredictionView() {
               {/* Nivel de confianza */}
               <div>
                 <div className="flex justify-between items-center text-xs text-gray-300 mb-1">
-                  <span>Confianza calibrada:</span>
+                  <span>Puntuación del modelo (sin calibración acreditada):</span>
                   <span className="font-mono font-bold text-white">
                     {(result.confianza * 100).toFixed(2)}%
                   </span>
@@ -1670,7 +1431,7 @@ export default function PredictionView() {
 
       {/* Fila 3: Historial de Predicciones */}
       <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4">
-        <span className="text-xs text-gray-300 font-semibold block">Historial de predicciones en campo</span>
+        <span className="text-xs text-gray-300 font-semibold block">Historial de predicciones de esta sesión</span>
 
         {/* Filtros de Búsqueda y Clases */}
         <div className="flex flex-col sm:flex-row gap-2.5">
@@ -1713,9 +1474,10 @@ export default function PredictionView() {
 
         {/* Lista de Registros */}
         <div className="space-y-2">
+          {history.length === 0 && <p className="text-xs text-gray-400">Sin predicciones en esta sesión.</p>}
           {filteredHistory.map((item) => (
             <div
-              key={item.id}
+              key={`${item.timestamp}-${item.filename}-${history.indexOf(item)}`}
               className="bg-[#111215] border border-[#1f2128] hover:border-[#2d303b] transition-colors rounded-lg px-4 py-3 flex items-center justify-between"
             >
               <div>
@@ -1735,7 +1497,7 @@ export default function PredictionView() {
 
               <div className="flex items-center gap-2">
                 <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-[#1e2027] border border-[#2d303b] text-gray-300">
-                  {item.badgeCode || "PRED"}
+                  {item.id !== null ? `ID de predicción: ${item.id}` : "ID de predicción no disponible"}
                 </span>
                 <span className="text-xs font-bold text-green-400 font-mono">
                   {(item.confianza * 100).toFixed(1)}%

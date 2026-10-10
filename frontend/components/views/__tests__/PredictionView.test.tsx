@@ -38,6 +38,72 @@ async function preparePrediction({ classes = ['alarm', 'normal'], dbId = 201, da
 describe('PredictionView validation and responsive controls', () => {
   beforeEach(() => { vi.resetAllMocks(); global.fetch = vi.fn(async (input) => String(input).includes('/api/models') ? { ok: true, json: async () => ({ models: mockModels }) } as Response : { ok: false } as Response); });
 
+  it('shows response identity, uncalibrated score and real history IDs without synthetic badges', async () => {
+    const api = await preparePrediction();
+    api.setPrediction(async () => Response.json({ filename: 'actual.wav', db_id: 305, modelo: 'Executed CNN', clase: 'alarm', confianza: 0.8, gcp_upload: false }));
+    await api.infer();
+    expect(screen.getByText('Modelo ejecutado:').parentElement?.textContent).toContain('Executed CNN');
+    expect(screen.getByText('Puntuación del modelo (sin calibración acreditada):')).toBeDefined();
+    expect(screen.getByText('ID de predicción: 305')).toBeDefined();
+    expect(screen.queryByText(/AVE-|ENG-/)).toBeNull();
+    api.setPrediction(async () => Response.json({ filename: 'unpersisted.wav', db_id: null, clase: 'alarm', confianza: 0.7, gcp_upload: false }));
+    await api.infer();
+    expect(screen.getByText('Modelo ejecutado:').parentElement?.textContent).toContain('No informado por la API');
+    expect(screen.getByText('ID de predicción no disponible')).toBeDefined();
+  });
+
+  it('warns when executed identity differs from the request snapshot, not the current selection', async () => {
+    const api = await preparePrediction();
+    let resolve!: (response: Response) => void;
+    api.setPrediction(() => new Promise(done => { resolve = done; }));
+    fireEvent.click(screen.getByRole('button', { name: /Ejecutar inferencia/ }));
+    fireEvent.change(screen.getByLabelText('Modelo:'), { target: { value: mockModels[2].id } });
+    await act(async () => { resolve(Response.json({ filename: 'different.wav', modelo_id: mockModels[2].id, modelo: 'Executed industrial', clase: 'bad_ignition', confianza: 0.8, gcp_upload: false })); });
+    expect(screen.getByText('Modelo ejecutado:').parentElement?.textContent).toContain(mockModels[2].id);
+    expect(screen.getByRole('alert').textContent).toContain('difiere del modelo solicitado');
+    expect(screen.getByRole('alert').textContent).toContain('machine-model');
+    api.setPrediction(async () => Response.json({ filename: 'matching.wav', modelo_id: mockModels[2].id, modelo: 'Executed industrial', clase: 'bad_ignition', confianza: 0.8, gcp_upload: false }));
+    await api.infer();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('does not invent model health, metrics, versions or ensemble participants for an individual result', async () => {
+    const api = await preparePrediction();
+    expect(screen.getAllByText(/Estado no disponible/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Sin métricas publicadas').length).toBeGreaterThan(0);
+    expect(screen.queryByText('v3.0.0')).toBeNull();
+    expect(screen.queryByText(/Dispositivo: CPU/)).toBeNull();
+    api.setPrediction(async () => Response.json({ filename: 'individual.wav', clase: 'alarm', confianza: 0.8, gcp_upload: false, modelos_activos: ['Invented participant (55%)'] }));
+    await api.infer();
+    expect(screen.queryByText(/Invented participant/)).toBeNull();
+    fireEvent.change(screen.getByLabelText('Modelo:'), { target: { value: 'chilean-birds-ensemble' } });
+    expect(screen.queryByText(/Invented participant/)).toBeNull();
+    expect(screen.getByText('Veredicto del Modelo')).toBeDefined();
+  });
+
+  it('keeps ensemble participants attached to the executed result after selection changes', async () => {
+    const api = await preparePrediction();
+    fireEvent.change(screen.getByLabelText('Modelo:'), { target: { value: 'chilean-birds-ensemble' } });
+    api.setPrediction(async () => Response.json({ filename: 'ensemble.wav', clase: 'Chucao', confianza: 0.8, gcp_upload: false, modelo: 'Executed ensemble', modelos_activos: ['Actual CNN (42%)'] }));
+    await api.infer();
+    expect(screen.getByText('✓ Actual CNN (42%)')).toBeDefined();
+    fireEvent.change(screen.getByLabelText('Modelo:'), { target: { value: 'machine-model' } });
+    expect(screen.getByText('✓ Actual CNN (42%)')).toBeDefined();
+    expect(screen.getByText('Veredicto del Super-Ensamble')).toBeDefined();
+    expect(screen.getByText('Audio original · canal 1 (mono/estéreo)')).toBeDefined();
+    expect(screen.queryByText(/Escaneando:|Re-escanear/)).toBeNull();
+  });
+
+  it('does not fabricate an acoustic contract when catalogue fields are absent', async () => {
+    global.fetch = vi.fn(async (input) => String(input).includes('/api/models')
+      ? Response.json({ models: [{ id: 'efficientnet', name: 'EfficientNet', classes: ['Chucao'] }] })
+      : new Response('', { status: 503 }));
+    await act(async () => { render(<PredictionView />); });
+    expect(screen.getByText(/Contrato publicado: Audios de duración no publicada a frecuencia no publicada/)).toBeDefined();
+    expect(screen.queryByText(/5\.0s|22 kHz|Operativo|55%/)).toBeNull();
+    expect(screen.getByText('Tiempo total de solicitud: no disponible')).toBeDefined();
+  });
+
   it('rejects oversized WAV before browser decoding or prediction HTTP', async () => {
     const api = await preparePrediction();
     const file = new File(['audio'], 'large.wav');
@@ -135,7 +201,7 @@ describe('PredictionView validation and responsive controls', () => {
     expect(panel().getByLabelText('Clase correcta')).toBe(correction);
     expect(panel().queryByRole('option', { name: 'low_oil' })).toBeNull();
     expect(screen.getByText(/Dataset de inferencia/).parentElement?.textContent).toContain('maquinaria-canonical');
-    expect(screen.getByText('Modelo ejecutado:').parentElement?.textContent).toContain('Clasificador de maquinaria');
+    expect(screen.getByText('Modelo ejecutado:').parentElement?.textContent).toContain('No informado por la API');
     await act(async () => { fireEvent.click(submit()); });
     expect(JSON.parse(String(api.feedbackCalls()[0][1]?.body))).toEqual({ id_prediccion: 201, fue_correcta: false, etiqueta_corregida: 'normal', id_usuario: 1 });
   });
@@ -201,7 +267,7 @@ describe('PredictionView validation and responsive controls', () => {
     fireEvent.click(choice('Incorrecta'));
     expect(panel().getByRole('option', { name: 'normal' })).toBeDefined();
     expect(screen.getByText(/Dataset de inferencia/).parentElement?.textContent).toContain('executed-target');
-    expect(screen.getByText('Modelo ejecutado:').parentElement?.textContent).toContain('Clasificador de maquinaria');
+    expect(screen.getByText('Modelo ejecutado:').parentElement?.textContent).toContain('No informado por la API');
   });
 
   it('honestly disables correction with missing catalog but allows correct feedback', async () => {
@@ -242,7 +308,7 @@ describe('PredictionView validation and responsive controls', () => {
     await screen.findByRole('option', { name: mockModels[2].name });
     expect(select.className).toContain('truncate');
     expect(select.className).toContain('min-w-0');
-    const latency = screen.getByText(/Latencia:\s*0\.14s/).closest('div');
+    const latency = screen.getByText('Tiempo total de solicitud: no disponible').closest('div');
     expect(latency?.className).toContain('shrink-0');
     expect(latency?.className).toContain('whitespace-nowrap');
     expect(select.querySelector('optgroup[label="Bioacústica (Aves Chilenas)"]')).not.toBeNull();

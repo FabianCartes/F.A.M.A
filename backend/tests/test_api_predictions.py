@@ -308,6 +308,53 @@ def test_unconfirmed_source_never_produces_success(mock_upload, client, mock_db,
     mock_db.commit.assert_not_called()
 
 
+@pytest.mark.parametrize(
+    "details, expected_members",
+    [
+        (None, None),
+        ({"status": "silence"}, None),
+        ({"status": "noise"}, None),
+        ({"ensemble_weights": {}}, None),
+        ({"ensemble_weights": {"unverified": "0.5"}}, None),
+        ({"ensemble_weights": {"invalid": -0.1}}, None),
+        ({"ensemble_weights": {"invalid": True}}, None),
+        ({"ensemble_weights": {"resnet": 0.60, "efficientnet": 0.10, "panns": 0.30}},
+         ["resnet (60%)", "efficientnet (10%)", "panns (30%)"]),
+    ],
+)
+@patch("app.main.upload_audio_to_gcp", new_callable=AsyncMock)
+def test_predict_reports_only_execution_members(
+    mock_upload, client, mock_registry, details, expected_members,
+):
+    mock_upload.return_value = True
+
+    class ExecutionPredictor(DummyPredictor):
+        def predict(self, audio_file_path):
+            return PredictionResult(clase=self.label, confianza=self.conf, detalles=details)
+
+    predictor = ExecutionPredictor("execution-model")
+    predictor._meta.metrics = {"optimal_weights": {"catalogue-only": 1.0}}
+    mock_registry.register(predictor)
+    # Global readiness belongs to a different predictor and is not execution evidence.
+    with patch("app.main.ensemble_service.get_status", return_value={
+        "active_models": [{"name": "Unrelated model", "weight": 1.0}],
+        "is_fallback": True,
+    }):
+        response = client.post(
+            "/api/predict?model_id=execution-model",
+            data={"dataset_name": "unrelated-domain"},
+            files={"file": ("canto.wav", create_dummy_wav_bytes(), "audio/wav")},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["modelos_activos"] == expected_members
+    assert data["modelo"] == "Dummy execution-model"
+    assert data["modelo_id"] == "execution-model"
+    assert data["clase"] == "Chincol"
+    assert data["confianza"] == 0.95
+
+
 def test_predict_invalid_format_returns_400(client):
     response = client.post(
         "/api/predict",
