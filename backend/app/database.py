@@ -1,9 +1,13 @@
 import os
 from pathlib import Path
+from threading import RLock
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import declarative_base, sessionmaker
+
+# Public ORM metadata is independent of runtime connection configuration.
+Base = declarative_base()
 
 # ============================================================================
 # CONFIGURACIÓN DE CONEXIÓN A POSTGRESQL (RNF_03)
@@ -13,10 +17,17 @@ if _BACKEND_DIR.name == "app":
     _BACKEND_DIR = _BACKEND_DIR.parent
 
 _ENV_FILE = _BACKEND_DIR / ".env"
-if _ENV_FILE.exists():
-    load_dotenv(dotenv_path=_ENV_FILE)
-else:
-    load_dotenv()
+_RUNTIME = {}
+_RUNTIME_LOCK = RLock()
+
+
+def _load_runtime_environment():
+    if not _RUNTIME.get("dotenv_loaded"):
+        if _ENV_FILE.exists():
+            load_dotenv(dotenv_path=_ENV_FILE)
+        else:
+            load_dotenv()
+        _RUNTIME["dotenv_loaded"] = True
 
 # Driver exigido por requirements.txt (psycopg2-binary) y por el Dockerfile
 # (libpq-dev). El dialecto por defecto de `postgresql://` cambió de psycopg2 a
@@ -45,24 +56,48 @@ def normalize_database_url(url: str) -> str:
     ).render_as_string(hide_password=False)
 
 
-# Cadena de conexión obtenida de variables de entorno
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://postgres:postgres@localhost:5432/fama_db",
-)
-DATABASE_URL = normalize_database_url(DATABASE_URL)
+def _runtime_database_url():
+    with _RUNTIME_LOCK:
+        if "DATABASE_URL" not in _RUNTIME:
+            _load_runtime_environment()
+            value = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/fama_db")
+            _RUNTIME["DATABASE_URL"] = normalize_database_url(value)
+        return _RUNTIME["DATABASE_URL"]
 
-# Motor de base de datos SQLAlchemy con verificación de conexión activa (pool_pre_ping)
-engine = create_engine(
-    DATABASE_URL,
-    pool_pre_ping=True,
-)
 
-# Creador de sesiones para transacciones
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+def _runtime_engine():
+    with _RUNTIME_LOCK:
+        if "engine" not in _RUNTIME:
+            _RUNTIME["engine"] = create_engine(_runtime_database_url(), pool_pre_ping=True)
+        return _RUNTIME["engine"]
 
-# Base declarativa para modelos relacionales
-Base = declarative_base()
+
+def _runtime_session_factory():
+    with _RUNTIME_LOCK:
+        if "SessionLocal" not in _RUNTIME:
+            _RUNTIME["SessionLocal"] = sessionmaker(
+                autocommit=False, autoflush=False, bind=_runtime_engine())
+        return _RUNTIME["SessionLocal"]
+
+
+def __getattr__(name):
+    if name == "DATABASE_URL":
+        value = _runtime_database_url()
+    elif name == "engine":
+        value = _runtime_engine()
+    elif name == "SessionLocal":
+        value = _runtime_session_factory()
+    else:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    globals()[name] = value
+    return value
+
+
+def __dir__():
+    return sorted(set(globals()) | {"DATABASE_URL", "engine", "SessionLocal"})
+
+
+__all__ = ["Base", "DATABASE_URL", "engine", "SessionLocal", "get_db", "normalize_database_url"]
 
 
 def get_db():
@@ -70,7 +105,10 @@ def get_db():
     Generador de sesiones de base de datos para inyección de dependencias en FastAPI.
     Garantiza el cierre seguro de la conexión al finalizar cada petición HTTP.
     """
-    db = SessionLocal()
+    factory = globals().get("SessionLocal")
+    if factory is None:
+        factory = _runtime_session_factory()
+    db = factory()
     try:
         yield db
     finally:
