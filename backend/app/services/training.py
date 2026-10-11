@@ -893,7 +893,15 @@ class TrainingService:
                     "classes": classes,
                     "ensemble_weight": model_weights.get(arch, 1.0),
                     "ensemble_models": config.get("models"),
-                    "audio_config": config.get("audio_config"),
+                    "audio_config": {
+                        "target_sr": target_sr, "duration_seconds": duration_seconds,
+                        "n_mels": n_mels, "n_fft": n_fft, "hop_length": hop_length,
+                        "f_min": f_min, "f_max": f_max,
+                    },
+                    "preprocessing": {
+                        "version": 1, "frontend": "gpu_mel_zscore",
+                        "window_selection": "max_rms" if is_engine or config.get("audio_config") is not None else "active_max_rms",
+                    },
                     "windowing_config": config.get("windowing_config"),
                     "regularization_config": config.get("regularization_config"),
                     "state_dict": saved_state,

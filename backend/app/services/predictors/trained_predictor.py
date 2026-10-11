@@ -32,6 +32,9 @@ except ImportError:
 
 from app.schemas.model_info import ModelMetadata
 from app.schemas.prediction import PredictionResult
+from app.schemas.training import AudioConfigSchema
+from poc.preprocess import GPUAudioFrontEnd, extract_active_windows
+from training.pipelines.dataset import load_and_resample
 from app.services.predictors.base import (
     AudioPredictor,
     ModelWeightsError,
@@ -63,6 +66,8 @@ class TrainedModelPredictor(AudioPredictor):
         self.architecture_name: str = "BioacousticModel"
         self.best_val_acc: Optional[float] = None
         self.model: Optional[nn.Module] = None
+        self.audio_config: Optional[dict] = None
+        self.window_selection = "max_rms"
 
         if not self.checkpoint_path.exists():
             raise ModelWeightsError(
@@ -79,8 +84,8 @@ class TrainedModelPredictor(AudioPredictor):
             dataset_name=dataset_name,
             name=self.custom_name or f"Modelo Entrenado: {self.architecture_name} ({self.checkpoint_path.name})",
             description=f"Inferencia bioacústica con pesos reales entrenados ({self.architecture_name})",
-            target_sr=TARGET_SR,
-            duration_seconds=DURATION_SECONDS,
+            target_sr=self.audio_config.get("target_sr", TARGET_SR) if self.audio_config else TARGET_SR,
+            duration_seconds=self.audio_config.get("duration_seconds", DURATION_SECONDS) if self.audio_config else DURATION_SECONDS,
             classes=self.classes,
             is_default=self.is_default,
             metrics={"accuracy": round(self.best_val_acc / 100.0 if self.best_val_acc and self.best_val_acc > 1 else (self.best_val_acc or 0.0), 4)},
@@ -111,7 +116,30 @@ class TrainedModelPredictor(AudioPredictor):
         self.architecture_name = checkpoint.get("architecture", "EfficientNet-B0")
         self.classes = checkpoint.get("classes", list(DEFAULT_CHILEAN_BIRD_CLASSES))
         self.best_val_acc = checkpoint.get("best_val_acc")
+        self._configure_audio(checkpoint)
         self.model = None
+
+    def _configure_audio(self, checkpoint: dict) -> None:
+        configuration = checkpoint.get("audio_config")
+        self.window_selection = "max_rms"
+        if "preprocessing" in checkpoint:
+            profile = checkpoint["preprocessing"]
+            if (not isinstance(profile, dict) or type(profile.get("version")) is not int
+                    or profile.get("version") != 1 or profile.get("frontend") != "gpu_mel_zscore"
+                    or profile.get("window_selection") not in ("max_rms", "active_max_rms")
+                    or configuration is None):
+                raise ModelWeightsError("Perfil de preprocesamiento del checkpoint no soportado")
+            self.window_selection = profile["window_selection"]
+        if configuration is None:
+            self.audio_config = None
+            return
+        try:
+            if (not isinstance(configuration, dict)
+                    or not set(AudioConfigSchema.model_fields).issubset(configuration)):
+                raise ValueError("Incomplete audio configuration")
+            self.audio_config = AudioConfigSchema.model_validate(configuration, strict=True).model_dump()
+        except (ValueError, TypeError) as error:
+            raise ModelWeightsError("Checkpoint con configuración acústica inválida o incompleta") from error
 
     def _load_model(self) -> None:
         """Carga y valida los pesos binarios en memoria."""
@@ -145,6 +173,7 @@ class TrainedModelPredictor(AudioPredictor):
         self.architecture_name = checkpoint.get("architecture", "EfficientNet-B0")
         self.classes = checkpoint.get("classes", list(DEFAULT_CHILEAN_BIRD_CLASSES))
         self.best_val_acc = checkpoint.get("best_val_acc")
+        self._configure_audio(checkpoint)
 
         arch_lower = self.architecture_name.lower().replace("-", "_")
         num_classes = len(self.classes)
@@ -210,9 +239,24 @@ class TrainedModelPredictor(AudioPredictor):
         if self.model is None:
             self._load_model()
 
-        waveform = load_and_fix_length(
-            audio_file_path, target_sr=TARGET_SR, duration_seconds=DURATION_SECONDS
-        )
+        if self.audio_config:
+            if self.window_selection == "active_max_rms":
+                windows = extract_active_windows(
+                    audio_file_path, target_sr=self.audio_config["target_sr"],
+                    duration_seconds=self.audio_config["duration_seconds"],
+                    hop_seconds=2.5, top_db=25.0,
+                )
+                waveform = max(windows, key=compute_rms)
+            else:
+                waveform = load_and_resample(
+                    audio_file_path, target_sr=self.audio_config["target_sr"],
+                    duration_seconds=self.audio_config["duration_seconds"], strict=True,
+                )
+        else:
+            # Historical checkpoints retain their explicitly legacy preprocessing.
+            waveform = load_and_fix_length(
+                audio_file_path, target_sr=TARGET_SR, duration_seconds=DURATION_SECONDS
+            )
 
         # 1. Filtro de Silencio (RMS)
         energy_rms = float(compute_rms(waveform))
@@ -226,6 +270,7 @@ class TrainedModelPredictor(AudioPredictor):
                     "checkpoint_name": self.checkpoint_path.name,
                     "device": str(self.device),
                     "is_mock": False,
+                    "preprocessing_mode": "gpu_mel_zscore" if self.audio_config else "legacy_librosa",
                 },
             )
 
@@ -244,12 +289,22 @@ class TrainedModelPredictor(AudioPredictor):
                     "checkpoint_name": self.checkpoint_path.name,
                     "device": str(self.device),
                     "is_mock": False,
+                    "preprocessing_mode": "gpu_mel_zscore" if self.audio_config else "legacy_librosa",
                 },
             )
 
         # 3. Extracción de Mel-Spectrogram y pasada PyTorch
-        mel = extract_mel_spectrogram(waveform, sr=TARGET_SR)
-        mel_tensor = torch.from_numpy(mel).unsqueeze(0).unsqueeze(0).float().to(self.device)
+        if self.audio_config:
+            config = self.audio_config
+            frontend = GPUAudioFrontEnd(
+                sample_rate=config["target_sr"], n_mels=config["n_mels"],
+                n_fft=config["n_fft"], hop_length=config["hop_length"],
+                f_min=config["f_min"], f_max=config["f_max"],
+            ).to(self.device)
+            mel_tensor = frontend(torch.from_numpy(waveform).to(self.device))
+        else:
+            mel = extract_mel_spectrogram(waveform, sr=TARGET_SR)
+            mel_tensor = torch.from_numpy(mel).unsqueeze(0).unsqueeze(0).float().to(self.device)
 
         t_start = time.perf_counter()
         with torch.no_grad():
@@ -272,5 +327,6 @@ class TrainedModelPredictor(AudioPredictor):
                 "latency_ms": latency_ms,
                 "status": "classified",
                 "is_mock": False,
+                "preprocessing_mode": "gpu_mel_zscore" if self.audio_config else "legacy_librosa",
             },
         )
