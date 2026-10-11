@@ -356,3 +356,30 @@ pero no construye `TrainingService`, no predice ni evalúa. Las regresiones usan
 y checkpoints sintéticos para configuración igual-e-incorrecta, rutas catálogo/startup,
 cache/alias/default, retries fallidos y activación; PostgreSQL, runtime desplegado y
 checkpoints o datasets reales no están acreditados.
+
+## EVAL-5C: presentación de informes finales en Predicción
+
+La vista `PredictionView` consume los informes incluidos en la respuesta existente de
+`GET /api/models`; no agrega endpoints ni solicita ni ejecuta evaluaciones. Para el modelo
+seleccionado presenta validación (`val`) y test por separado, con estado e identificador
+del último intento y, de forma independiente, el identificador y el informe del último
+intento completado. Así, un fallo nuevo no sustituye ni oculta un informe completado
+anterior. Los informes v1/v2 muestran cantidad de muestras, accuracy, precision/recall/F1
+macro, F1 ponderado, balanced accuracy, cobertura/clases ausentes, schema y versión del
+evaluador. El rechazo v2 se muestra cuando sus campos opcionales están presentes; v1 no
+requiere esos campos. Un valor válido de cero se representa como `0.00%`; métricas nulas,
+ausentes o no finitas se muestran como no disponibles.
+
+El catálogo `unavailable`, el catálogo disponible sin informes para el modelo y la
+respuesta legacy sin `evaluation_catalogue_status` se distinguen explícitamente. Los
+reintentos actualizan la selección desde la nueva respuesta y una respuesta unavailable
+no deja visible un informe anterior como si siguiera vigente. La provenance visible se
+limita a dataset, schema, versión de evaluador y SHA-256 de checkpoint validado; no se
+renderizan configuraciones ni rutas. Cada informe se identifica como histórico y la UI
+advierte que no garantiza correspondencia con los pesos cargados actualmente. Las
+métricas legacy del catálogo siguen en una sección separada y rotulada como históricas;
+no se recalculan ni reinterpretan como informes finales.
+
+La verificación de UI usa fixtures públicos v1/v2 y Vitest con jsdom. No acredita
+navegadores reales, PostgreSQL, modelos/datasets reales, ni cambios en publicación,
+activación, pesos o ejecución de inferencia/evaluación.
