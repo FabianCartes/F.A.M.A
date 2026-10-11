@@ -1,0 +1,88 @@
+{
+  "receipt_version": 1,
+  "operation": "additive model_evaluation migration for model 11 evaluation development",
+  "target": {
+    "host": "localhost",
+    "port": 5432,
+    "database": "fama_db",
+    "schema": "public",
+    "postgres_system_identifier": "7690712141469122594"
+  },
+  "credential_handling": "DATABASE_URL loaded in process from environment/dotenv; never emitted or stored",
+  "runtime": {
+    "working_directory": "backend",
+    "python": ".venv/bin/python",
+    "database_driver": "postgresql+psycopg2 selected in memory because generic postgresql resolved to unavailable psycopg",
+    "python_dont_write_bytecode": true,
+    "pgoptions": "-c lock_timeout=3s -c statement_timeout=30s"
+  },
+  "prewrite": {
+    "identity_verified": true,
+    "model_evaluation_absent_in_all_schemas": true,
+    "model_11_row_count": 1,
+    "model_11_full_row_sha256": "277d85233ce0fb07cb29dbfbbdba8751fe6be764f5e6db1beaa2e8484987de4b",
+    "modelo_row_count": 2,
+    "conjunto_datos_row_count": 1,
+    "user_table_inventory": ["audio", "conjunto_datos", "feedback_sync", "metrica_entrenamiento", "modelo", "prediccion", "retroalimentacion", "usuario"]
+  },
+  "migration": {
+    "script": "backend/scripts/migrate_model_evaluations.py",
+    "first_apply_argv": [".venv/bin/python", "scripts/migrate_model_evaluations.py", "--apply"],
+    "first_apply_exit_code": 0,
+    "first_apply_stdout": "evaluation table added",
+    "second_apply_argv": [".venv/bin/python", "scripts/migrate_model_evaluations.py", "--apply"],
+    "second_apply_exit_code": 1,
+    "second_apply_result": "idempotence verification failed: migration verifier rejected PostgreSQL-rendered spellings for all six named check constraints; no replay after failure"
+  },
+  "postwrite_reconciliation": {
+    "identity_verified": true,
+    "inventory_is_baseline_plus_only_model_evaluation": true,
+    "model_11_full_row_sha256_unchanged": "277d85233ce0fb07cb29dbfbbdba8751fe6be764f5e6db1beaa2e8484987de4b",
+    "modelo_row_count": 2,
+    "conjunto_datos_row_count": 1,
+    "model_evaluation_row_count": 0,
+    "primary_key": ["id_evaluation"],
+    "foreign_key": {
+      "columns": ["id_modelo"],
+      "references": "modelo(id_modelo)",
+      "on_delete": "RESTRICT"
+    },
+    "unique_constraints": [],
+    "unique_indexes": [],
+    "check_constraints_present": ["evaluation_counts", "evaluation_error", "evaluation_report", "evaluation_split", "evaluation_status", "evaluation_times"],
+    "migration_verifier_check_spelling_match": false,
+    "columns": [
+      ["id_evaluation", "INTEGER", false, true],
+      ["id_modelo", "INTEGER", false, false],
+      ["schema_version", "INTEGER", false, false],
+      ["evaluator_version", "VARCHAR(100)", false, false],
+      ["checkpoint_sha256", "VARCHAR(64)", false, false],
+      ["dataset", "VARCHAR(255)", false, false],
+      ["split", "VARCHAR(10)", false, false],
+      ["manifest_sha256", "VARCHAR(64)", false, false],
+      ["classes", "JSON", false, false],
+      ["predictor_config", "JSON", false, false],
+      ["preprocessing_config", "JSON", false, false],
+      ["aggregation_config", "JSON", false, false],
+      ["sample_count", "INTEGER", false, false],
+      ["report", "JSON", true, false],
+      ["status", "VARCHAR(10)", false, false],
+      ["error_reason", "VARCHAR(2000)", true, false],
+      ["created_at", "TIMESTAMP", false, false],
+      ["started_at", "TIMESTAMP", true, false],
+      ["finished_at", "TIMESTAMP", true, false],
+      ["code_revision", "VARCHAR(255)", true, false]
+    ],
+    "column_tuple_fields": ["name", "type", "nullable", "has_default"]
+  },
+  "backup": {
+    "performed": false,
+    "reason": "user-authorized transactional creation of a verified-absent empty table; no existing rows were written or changed"
+  },
+  "scope_exclusions_observed": [
+    "No inference or evaluation artifact repair/copy/chmod/activation was run",
+    "No other migrations, source edits, service operations, or Git mutations were run"
+  ],
+  "status": "partial",
+  "risk": "The table exists with zero evaluation rows, but the migration's second-apply verifier rejects PostgreSQL's catalog-rendered check expressions. No source change or repair was authorized."
+}

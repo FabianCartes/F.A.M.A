@@ -17,7 +17,7 @@ docs/
 ├── arquitectura/                # Diseño de sistemas, pipelines, MLOps y despliegue
 ├── limites/                     # Límites matemáticos, físicos y problemas conocidos
 ├── manuales/                    # Manual de usuario, revisión, despliegue e índices canónicos
-├── adr/                         # Architectural Decision Records (ADR 0001 a 0021)
+├── adr/                         # Architectural Decision Records (ADR 0001 a 0022)
 ├── receipts/                    # Recibos técnicos reproducibles en formato JSON (RDD)
 ├── duplicados-exactos/           # Tarea acotada: admisión de feedback sin duplicados SHA-256
 └── images/                      # Diagramas, matrices de confusión y gráficos vectoriales
@@ -67,6 +67,8 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 
 ### 4. [`docs/manuales/`](./manuales/) — Manuales y Guías Operativas
 * [`ejecucion_acotada_inferencia.md`](./manuales/ejecucion_acotada_inferencia.md): Plan aprobado, evidencia de admisión por proceso y ownership del predictor; ingreso, GCS y timeout pendientes.
+* [`evaluacion-ensamble-motores.md`](./manuales/evaluacion-ensamble-motores.md): Evaluación local explícita del predictor servido de tres componentes; snapshots preparados, provenance compuesta y reporte no sobrescribible, sin BD ni publicación.
+* [`reevaluacion-modelos.md`](./manuales/reevaluacion-modelos.md): Reevaluación MAIN con preflight y ejecución explícita append-only; incluye evidencia real EVAL-6B y sus límites de calidad.
 * [`limite_audio_inferencia.md`](./manuales/limite_audio_inferencia.md): Límite WAV de 100 MiB, margen multipart del proxy, errores HTTP, evidencia aislada y activación con reconstrucción pendiente de autorización.
 * [`contrato_referencias_dataset_canonicas.md`](./manuales/contrato_referencias_dataset_canonicas.md): Contrato relativo por etapa, raíces físicas, conversión offline dry-run y preservación; publicación, corte operativo y recuperación requieren autorización separada.
 * [`manual_usuario_plataforma.md`](./manuales/manual_usuario_plataforma.md): Guía integral de operación para investigadores y administradores; incluye [admisión, procedencia y guardado del entrenamiento](./manuales/manual_usuario_plataforma.md#55-requisitos-de-la-fuente-local-y-procedencia) y siguiente comprobación autorizada; distingue [disponibilidad, activación y refresco de Predicción](./manuales/manual_usuario_plataforma.md#611-disponibilidad-del-catálogo-y-activación) de inferencia comprobada.
@@ -80,11 +82,13 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`04_limitacion_subida_directorios_completos_data_lake.md`](./limites/04_limitacion_subida_directorios_completos_data_lake.md): Limitaciones de I/O en la ingesta masiva hacia GCS.
 * [`05_restriccion_formato_audio_y_captura_microfono.md`](./limites/05_restriccion_formato_audio_y_captura_microfono.md): Restricción estricta de formato PCM .wav y pipeline de captura por micrófono web.
 
-### Evidencia operacional de permisos
+### Evidencia operacional
 * [`backend_permissions_integration.json`](./receipts/backend_permissions_integration.json): Verificación PERM-3 del servicio público de feedback en contenedor aislado; propietario y modos tras aprobaciones, reinicio y replay. Contexto mínimo, no prueba del despliegue completo ni autoridad de entrega.
+* [`model-11-evaluation-migration.json`](./receipts/model-11-evaluation-migration.json): Historial inmutable de migración EVAL-6B: primera creación exitosa, segundo intento fallido y contexto de la corrección verificada.
+* [`model-11-real-evaluation.json`](./receipts/model-11-real-evaluation.json): Informe inmutable de reevaluación real del modelo #11 (val/test); no certifica calidad ni autoriza activación.
 
 ### 6. [`docs/adr/`](./adr/) — Architectural Decision Records
-Registro de las 21 decisiones de arquitectura fundamentales del sistema:
+Registro de las 22 decisiones de arquitectura fundamentales del sistema:
 * `ADR 0001`: Migración de AudioCNN a EfficientNet-B0.
 * `ADR 0002`: Particionamiento Estratificado a Nivel de Grabador (Zero Leakage).
 * `ADR 0003`: Adopción de Focal Loss frente a Cross-Entropy estándar.
@@ -104,6 +108,6 @@ Registro de las 21 decisiones de arquitectura fundamentales del sistema:
 * [`ADR 0017`](./adr/0017-disponibilidad-y-activacion-modelos.md): Reconciliación del catálogo por solicitud y refresco predecible de Predicción; disponibilidad sin activación implícita ni garantía de inferencia.
 * [`ADR 0018`](./adr/0018-incorporacion-local-y-sincronizacion-gcs.md): Incorporación local antes de GCS, intención recuperable y outbox durable; aceptación, acuse cloud y entrenamiento sin atomicidad distribuida ni reparación histórica implícita.
 * [`ADR 0019`](./adr/0019-referencias-canonicas-por-etapa.md): Referencias relativas con etapa raw/processed obligatoria y raíces físicas explícitas; contrato compartido estricto, sin inferencia ni activación automática de productores/consumidores legacy.
-* [`ADR 0022`](./adr/0022-evaluaciones-finales-estandarizadas.md): Contrato/cálculo, persistencia, MAIN/standalone y evaluación sintética del ensamble servido implementados; API/UI, publicación oficial del ensamble y PostgreSQL/runtime real pendientes.
+* [`ADR 0022`](./adr/0022-evaluaciones-finales-estandarizadas.md): EVAL-1 a EVAL-6B cerrados en sus alcances; #11 reevaluado en desarrollo con calidad no aprobada. No implica upgrade de tabla v1, API/browser desplegados ni aprobación/activación; backend global 12 FAIL/5 SKIP pendiente.
 * [`ADR 0021`](./adr/0021-ejecucion-acotada-inferencia.md): Cupo y temporal conservados por el trabajo real del predictor tras cancelación HTTP; límites de GCS y cierre explícitos.
 * [`ADR 0020`](./adr/0020-raices-fisicas-en-localizadores-publicos.md): Getters raw/processed y PathResolver conservan la escritura declarada; raíces con alias no soportadas para asociación canónica, sin validación física implícita ni migración de URIs.

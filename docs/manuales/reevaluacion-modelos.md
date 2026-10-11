@@ -15,7 +15,7 @@ operación no crea esquemas ni migra. Proporcione explícitamente:
 - `--checkpoint-root` y `--checkpoint`: raíz local confiable y ruta exacta contenida.
 - `--expected-sha256`: hash esperado, que debe coincidir con la fila y los bytes.
 - `--prepared-dir`, `--dataset` y ambos `--root raw=...` y
-  `--root processed=...`.
+  `--root processed=...`; las dos raíces físicas deben ser rutas absolutas existentes.
 
 La primera invocación es de solo lectura: carga el marcador y el trío CSV con
 `load_prepared_dataset`, valida identidad de dataset, clases, IDs, paths y grupos,
@@ -27,10 +27,11 @@ guard de publicación. Metadata legacy ausente o ambigua falla cerrada; no se de
 dataset desde una ruta. El preflight no carga el predictor, infiere, crea intentos ni
 cambia filas.
 
-Ejemplo de preflight, ejecutado desde `backend`:
+Ejemplo de preflight, ejecutado desde `backend` (el entorno virtual está en la raíz
+del repositorio, por eso se usa `../.venv`, no `backend/.venv`):
 
 ```sh
-PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/reevaluate_model.py \
+PYTHONDONTWRITEBYTECODE=1 ../.venv/bin/python scripts/reevaluate_model.py \
   --database-url '<URL explícita>' \
   --model-id '<ID>' \
   --checkpoint-root '<raíz local de checkpoints>' \
@@ -75,12 +76,25 @@ completarlas automáticamente.
 
 ## Límite operacional
 
-Las regresiones usan únicamente SQLite temporal, checkpoints pequeños y WAVs
-sintéticos con constructor de red sustituido; comprueban los seams reales del
-predictor, snapshot y persistencia, pero no calidad externa, PostgreSQL desplegado ni
-los artefactos/datasets operacionales. No se evaluó el modelo #11 ni se verifican aquí
-las afirmaciones de 1.208 filas, 15 clases o particiones 850/177/181. Una ejecución
-operacional del #11 requiere autorización separada y sus rutas/hash/destino explícitos.
+Las regresiones automatizadas usan SQLite temporal, checkpoints pequeños y WAVs
+sintéticos con constructor de red sustituido; no certifican calidad ni despliegue. La
+reevaluación real de #11 en `fama_db` fijada se resume abajo por separado.
+
+### EVAL-6B: ejecución real verificada
+
+Intentos inmutables: ID 1 (`val`, 177 muestras) y 2 (`test`, 181), 15 clases, schema
+informe v2 / evaluator recording v1. Preflight e invariantes incluidos; duración 65.419 s.
+Hash de fila del modelo verificado `277d8523…`; SHA esperado del checkpoint `070d…`.
+Accuracy val/test: 6.779661% / 3.867403%; macro F1: 5.6262% / 3.9644%; rechazos:
+31/177 y 63/181. **Calidad no aprobada**; no reconstruir ni reinterpretar la métrica
+histórica y no alterar activación.
+
+El informe original es [`model-11-real-evaluation.json`](../receipts/model-11-real-evaluation.json).
+La verificación independiente `mv3a8v51` cotejó snapshots/digests observados con el
+recibo fuente y comprobó la integridad del runtime separadamente; no se afirma una
+comprobación offline adicional de los archivos de manifiesto. Los diagnósticos MPEG
+requieren seguimiento de calidad exclusivamente de solo lectura; ese diagnóstico no
+se ejecutó como parte del cierre.
 
 ## Verificación de la migración
 
@@ -90,9 +104,11 @@ verifica columnas y restricciones sin alterarla. PostgreSQL puede representar lo
 verificador añade una allowlist literal para esas seis formas observadas, sin normalizar
 paréntesis ni cambiar condiciones; escrituras no contempladas siguen fallando cerradas.
 
-El recibo `docs/receipts/model-11-evaluation-migration.json` conserva el historial: la
-primera aplicación creó la tabla vacía y la segunda falló al verificar esas formas. No
-reescribir ni tratar ese fallo como una reparación de la tabla. Este cambio corrige el
-verificador, no reintenta la migración ni modifica filas. La reevaluación del #11 sigue
-bloqueada por falta de permisos sobre dos audios; no se repararon artefactos, ejecutó
-inferencia ni activó el modelo. Esas acciones requieren autorización independiente.
+El recibo [`model-11-evaluation-migration.json`](../receipts/model-11-evaluation-migration.json)
+conserva el historial: primera creación exit 0 y segundo intento exit 1 al comparar
+CHECK PostgreSQL. La corrección `ab25519` (102 PASS independientes; revisión nativa
+APPROVED/ACK) reconoce las formas exactas y aceptó el esquema existente con
+`migrate(engine) -> False` en conexión de solo lectura, sin DDL nueva. No reescribir el
+recibo ni describir el segundo intento como éxito. No se verificó upgrade de una tabla
+v1 ni se afirma RED histórico; la evaluación EVAL-6B y su límite de calidad constan
+arriba.

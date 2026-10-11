@@ -1,35 +1,85 @@
-# ADR 0022: Contrato de evaluaciones finales estandarizadas
+# ADR 0022: Evaluaciones finales estandarizadas
 
-* **Estado:** Decisión aceptada. EVAL-1 a EVAL-4A implementados; EVAL-4B verifica sintéticamente la evaluación local del ensamble servido. API/UI, publicación oficial del ensamble, artefactos/datos reales y PostgreSQL/runtime real pendientes.
-* **Área:** Informes finales reproducibles de clasificación multiclase.
+* **Estado:** EVAL-1 a EVAL-6B cerrados en los alcances documentados. EVAL-6B reevaluó #11 en `fama_db` de desarrollo; la calidad resultó baja y no está aprobada. La tabla nueva se verificó en solo lectura, no se probó upgrade de tabla v1. API/browser desplegados y suite backend global (12 FAIL/5 SKIP) siguen pendientes.
+* **Área:** Informes finales de clasificación multiclase de aves y motores.
 
-## Contexto y decisión
+## Decisión y alcance actual
 
-Las métricas por época describen el proceso de optimización, no un informe final con identidad estable. Además, defaults de bibliotecas y clases ausentes pueden alterar las macros o esconder cobertura. Se define un cálculo puro compartido, con clases objetivo explícitas y orden conservado:
+Separar el informe final del historial por época y compartir un cálculo puro con
+clases explícitas. Esto evita que defaults de bibliotecas, clases ausentes o métricas
+históricas ambiguas cambien el significado del resultado. EVAL-1 implementa solamente
+`calculate_classification_report(y_true, y_pred, classes)` en
+[`classification_metrics.py`](../../backend/ml_core/classification_metrics.py), con
+biblioteca estándar y sin inferencia, agregación de ventanas, BD ni archivos.
+El [tablero](../KANBAN.md#evaluaciones-finales-estandarizadas) gobierna la continuación.
 
-`calculate_classification_report(y_true, y_pred, classes, *, rejection_label=None)`.
+## Contrato del informe v1
 
-El módulo calcula informes; no realiza inferencia, acceso a archivos, persistencia ni selección de modelo.
-
-## Contrato v1
-
-Las tres entradas son secuencias no vacías. Las etiquetas deben ser `str` no blancos o `int` nativos homogéneos; no se convierten implícitamente booleanos, nulos, flotantes ni tipos numéricos externos. Las listas real/predicha deben tener el mismo largo, cada etiqueta observada debe estar declarada y las clases deben ser únicas. Se conserva exactamente el orden de clases. Una entrada inválida produce `ValueError`, no un resultado parcial.
+Las tres entradas son secuencias no vacías. Las etiquetas son `str` no blancos o
+`int` nativos, del mismo tipo en todas las entradas; no se convierten implícitamente
+booleanos, nulos, flotantes ni tipos numéricos de bibliotecas. El consumidor deberá
+normalizar explícitamente esos tipos. Las clases son únicas y conservan su orden;
+las etiquetas observadas deben pertenecer a ellas y ambas listas tener igual longitud.
+Entradas inválidas producen `ValueError`, no informes parciales.
 
 | Campo | Significado |
 | --- | --- |
-| `schema_version` | Entero `1`; cambios incompatibles requieren otra versión. |
-| `classes`, `sample_count` | Orden de clases objetivo y cantidad de observaciones. |
-| `confusion_matrix` | Conteos enteros: filas reales, columnas predichas, orden de `classes`. |
-| `support` | Soporte real por clase, alineado con el orden declarado. |
-| `per_class` | Precision, recall, F1, soporte e indicadores de denominador cero. |
-| `coverage` | Clases sin soporte real (`absent_classes`) e indicador `complete`. |
-| `metrics` | Accuracy, precision/recall/F1 macro, F1 ponderado y balanced accuracy. |
+| `schema_version` | Entero `1`; cambios incompatibles exigirán otra versión. |
+| `classes`, `sample_count` | Clases ordenadas y cantidad entera de pares evaluados. |
+| `confusion_matrix` | Conteos enteros: filas reales, columnas predichas, mismo orden que `classes`. |
+| `support` | Conteo real por clase, alineado con `classes`. |
+| `per_class` | Lista ordenada de `label`, `precision`, `recall`, `f1`, `support` y `zero_denominator`. |
+| `zero_denominator` | Indicadores booleanos de denominador nulo para precision, recall y F1; no significan valores JSON nulos. |
+| `coverage` | `absent_classes` sin soporte real y `complete`; incluye clases que solo fueron predichas. |
+| `metrics` | accuracy, precision_macro, recall_macro, f1_macro, f1_weighted y balanced_accuracy. |
 
-Todas las tasas son fracciones sin redondeo ni porcentajes persistidos. Denominador cero produce `0.0` y un indicador booleano explícito. Las macros promedian todas las clases declaradas; F1 ponderado usa soporte real; balanced accuracy promedia solo clases con soporte. Cobertura incompleta se informa y no se convierte en cero observado ni falla automática. El informe debe ser JSON estricto y finito.
+Todas las tasas son fracciones de precisión flotante completa, sin redondeo ni
+porcentajes persistidos. Para cada clase, precision usa TP/(TP+FP), recall usa
+TP/(TP+FN) y F1 usa 2TP/(2TP+FP+FN). Denominador cero devuelve `0.0` acompañado de
+su indicador. Macros promedian **todas** las clases declaradas; weighted F1 pondera
+por soporte real. Balanced accuracy promedia recall **solo** de clases con soporte.
+Accuracy usa aciertos/total. El resultado es serializable con JSON estricto, sin NaN.
+Cobertura incompleta se informa y no implica por sí sola fallo; ausencia de clase
+no equivale a un cero observado con denominador válido.
 
-## Rechazo explícito v2
+## Extensión opt-in v2: abstenciones (primer corte EVAL-3)
 
-`rejection_label=None` conserva el contrato v1. Una etiqueta de rechazo explícita y distinta, no blanca y del mismo tipo nativo habilita schema v2, incluso cuando no hubo rechazos. La matriz añade una columna final para rechazo; las clases objetivo siguen siendo las únicas clases reales y las únicas incluidas en macros. Cada rechazo cuenta como error/abstención, incluido en soporte real y falsos negativos; la tasa y cantidad de rechazos se informan separadamente. Etiquetas reales desconocidas y predicciones no declaradas siguen rechazándose. No se cambian umbrales ni se decide qué predictor genera un rechazo.
+La llamada de tres argumentos mantiene exactamente el contrato estricto v1.
+`calculate_classification_report(..., rejection_label=etiqueta)` habilita v2;
+`None` mantiene v1. La etiqueta debe ser del mismo tipo nativo que las clases,
+no blanca y distinta de todas ellas. Solo se permite en predicciones: etiquetas
+reales desconocidas o predicciones arbitrarias siguen fallando.
+
+V2 conserva clases objetivo y añade `prediction_columns = classes + [rejection_label]`
+y `rejection = {label, count, rate}`. La matriz tiene N filas reales y N+1 columnas
+predichas, incluida la última columna aun con cero rechazos. Count suma esa columna;
+rate es count/total. Todas las grabaciones cuentan: los rechazos silencio/ruido son
+abstenciones incorrectas, incluidas en soporte real y falsos negativos. Precision
+usa solo predicciones de la clase objetivo; recall usa todo su soporte; F1 usa
+2TP/(soporte real + predicciones objetivo). Accuracy y weighted F1 usan el total;
+macros incluyen N objetivos, nunca la abstención; balanced accuracy mantiene solo
+objetivos con soporte. No se cambian filtros, umbrales ni inferencia.
+
+Persistencia admite identidades v1/v2 y exige coincidencia exacta de versión del
+informe, columnas ordenadas, etiqueta de rechazo, conteos, tasas y álgebra. V1 no
+admite los campos nuevos ni matrices rectangulares; sus informes siguen legibles.
+Esta extensión de cálculo no ejecuta inferencia. Su integración MAIN se describe abajo.
+
+### Compatibilidad de tabla y plan de upgrade separado
+
+La definición para tablas nuevas permite `schema_version IN (1, 2)`. La migración
+aditiva conserva comparación conservadora de agrupaciones CHECK. Una tabla instalada
+con el CHECK antiguo `schema_version = 1` **no** se considera compatible: falla cerrada
+y no se modifica. En #11 se creó la tabla nueva; el verificador corregido aceptó su
+esquema en conexión PostgreSQL de solo lectura. Esto no acredita upgrade de un CHECK v1.
+
+Si se descubre una tabla v1 instalada, hace falta autorización operacional separada:
+respaldar/restaurar y verificar destino, drenar escritores, inventariar restricciones
+y filas, y reemplazar únicamente el CHECK `evaluation_counts` por el de versiones
+1/2 en PostgreSQL con transacción; verificar filas e informes v1 intactos y nueva
+restricción antes de reanudar. SQLite requiere diseñar y aprobar por separado su
+reconstrucción de tabla conservando datos/FK; este script no la hace. No existe aquí
+un upgrade automático ni garantía operacional PostgreSQL.
 
 ## EVAL-2: persistencia e identidad implementadas
 
@@ -66,7 +116,7 @@ finito. Cobertura incompleta sigue siendo válida. Ausencia/fallo conserva `repo
 no fabrica ceros. No altera `Modelo.precision`, `perdida`, `activo` ni historial por época.
 Los hashes son identidad declarada; este módulo no lee ni acredita archivos reales.
 
-### Operación explícita de migración (pendiente)
+### Operación explícita de migración (historial de #11; upgrade v1 separado)
 
 El operador debe respaldar, verificar destino y drenar escritores antes de ejecutar
 `backend/scripts/migrate_model_evaluations.py --apply` con `DATABASE_URL` explícita.
@@ -84,17 +134,15 @@ incluso wrappers redundantes no enumerados, se rechazan sin modificar la tabla.
 Esto evita que una agrupación distinta de AND/OR pase como esquema compatible.
 
 Las pruebas usan SQLite temporal, con FK habilitada para persistencia. La regresión
-de migración construye una tabla real temporal con agrupación CHECK alterada y
-verifica rechazo y preservación; el esquema esperado sigue siendo idempotente.
-Las representaciones PostgreSQL se prueban con fixtures escritos explícitamente:
-es evidencia estructural, no salida observada de un servidor ni prueba de idempotencia
-PostgreSQL. Variantes de deparser no enumeradas pueden fallar cerradas y necesitan
-verificación aislada antes de ampliar el conjunto permitido. PostgreSQL
-real/aislado, respaldo/restauración y aplicación operacional siguen pendientes;
-no se ha tocado la BD activa. Retirar código y pruebas de EVAL-2 antes de aplicar
-la migración no afecta datos existentes. Después de aplicarla, el rollback de código
-no elimina la tabla ni intentos: cualquier reversión de datos requiere una operación
-separada autorizada. No se promete atomicidad entre filesystem y BD.
+de migración construye una tabla temporal con CHECK alterado y verifica rechazo y
+preservación. Las fixtures PostgreSQL siguen siendo evidencia estructural, no prueba
+general de idempotencia: la migración real de #11 creó la tabla (exit 0), el segundo
+intento falló en la comparación de CHECK (exit 1) y el recibo conserva ambos resultados.
+La corrección `ab25519` amplió la allowlist exacta; obtuvo 102 PASS independientes y
+`migrate(engine) -> False` aceptó el esquema existente en conexión solo lectura, sin
+DDL nueva. La revisión nativa quedó APPROVED/ACK. No se verificó upgrade de un CHECK v1,
+respaldo/restauración ni despliegue; un rollback de código no elimina tabla o intentos.
+No se promete atomicidad entre filesystem y BD ni se atribuye RED histórico.
 
 ## EVAL-3B: evaluador por grabación
 
@@ -114,7 +162,7 @@ Cada grabación produce exactamente una llamada al mismo predictor, con clases e
 su orden original. Solo estados `silence`/`noise` generan el sentinel reservado
 `__recording_rejected__`; etiqueta o estado desconocido falla explícitamente.
 `validate_recording_splits` rechaza cruces de identidades, paths resueltos y grupos
-conocidos entre train/val/test; el llamador debe invocarla antes de comenzar entrenamiento.
+conocidos entre train/val/test; MAIN lo invoca antes de lanzar el worker.
 
 **Límite de procedencia:** el llamador debe aportar configuraciones efectivas y el
 hash del checkpoint realmente cargado; el helper no acredita esos campos por sí
@@ -189,13 +237,44 @@ no borrar checkpoints ni filas/intentos. Retirar el guard reabre la política le
 anterior, por lo que exige decisión explícita de publicación. PostgreSQL, despliegue,
 standalone y combinación de ensambles no están acreditados por las pruebas SQLite.
 
-## Identidad y procedencia: requisitos para integraciones
+## Diseño objetivo para las integraciones restantes
 
-Los informes finales futuros deben asociarse explícitamente al artefacto evaluado: clases ordenadas, split, dataset, configuración efectiva de predictor/preprocesamiento/agregación, versión del evaluador y hashes de pesos y de membresía/manifiesto. Los consumidores deben distinguir identidad genérica de procedencia de evaluación de cualquier identidad persistida que requiera FK real; nunca fabricar identificadores. Los hashes identifican bytes declarados, no acreditan autenticidad, congelamiento de audios ni equivalencia del predictor. Una llamada por grabación con el predictor publicado debe ser responsabilidad de la integración, no una garantía de este cálculo puro.
+Las siguientes reglas rigen EVAL-4 a EVAL-6; MAIN implementa el subconjunto anterior:
+
+- Mantener informes independientes para validación y test del checkpoint seleccionado,
+  no del último estado mutable. La identidad incluirá hash del checkpoint, configuración
+  del predictor, orden de clases, split, manifiesto y procedencia del dataset. Un hash
+  CSV no congela audios: documentar/verificar su política de integridad. El snapshot de
+  pesos debe quedar aislado también en CPU, sin alias con pesos posteriores.
+- Obtener una predicción por grabación con el preprocesamiento y agregación del predictor
+  publicado, sin aumentos aleatorios ni gradientes. En ensambles evaluar la combinación
+  real, no deducir calidad de sus miembros. Este calculador recibe las etiquetas ya
+  obtenidas y no verifica por sí solo esa paridad.
+- Test nunca selecciona, calibra ni ajusta. Conservar selección principal por val accuracy,
+  early stopping por val loss y standalone por val Macro F1. El historial por época es
+  seguimiento del entrenamiento, no el informe final del artefacto exacto.
+- Separar estados de entrenamiento, evaluación y publicación. Una evaluación tendrá
+  estados pendientes, en curso, completados o fallidos y procedencia de cada intento.
+  Un fallo conserva el checkpoint, bloquea éxito/publicación y permite reintentar sin
+  reentrenar. No prometer atomicidad entre filesystem y BD.
+- Nuevas publicaciones oficiales requerirán informes completados de val/test del
+  artefacto exacto. Legacy continúa legible y operativo: no reinterpretar su campo
+  histórico `precision` como accuracy, macro precision ni otra métrica sin evidencia.
+  Catálogo/UI distinguirán cero, ausencia, legacy y fallo. Reevaluar agregará informes
+  sin reemplazar anteriores ni activar modelos.
+
+Estas reglas complementan [ADR 0016](0016-procedencia-y-persistencia-entrenamiento.md)
+y [ADR 0017](0017-disponibilidad-y-activacion-modelos.md), sin cambiar en EVAL-1/EVAL-2 sus
+flujos actuales de persistencia, reconciliación o activación.
 
 ## Alternativas y consecuencias
 
-Se descarta inferir clases con una biblioteca de métricas: si una clase no aparece en las observaciones, cambia el conjunto de macro-promedio y se oculta cobertura. Se descarta reinterpretar métricas históricas por época: carecen de una semántica final/identidad inequívoca. Un contrato y cálculo puros mantienen el alcance acotado y no introducen dependencias nuevas; una matriz densa requiere O(clases²) espacio y el cálculo O(muestras + clases²). La evaluación del predictor, procedencia verificable, persistencia, publicación, catálogo/UI y reevaluación requieren decisiones y pruebas de integración propias.
+Se descarta depender del conjunto de clases inferido por sklearn: omitir una clase
+cambia las macros y oculta cobertura. También se descarta reutilizar métricas por
+época o sobrescribir informes previos, porque pierden identidad y trazabilidad.
+Una sola función concentra el contrato, sin adaptadores hipotéticos ni dependencias
+nuevas. La matriz densa cuesta O(clases²) memoria; el cálculo cuesta O(muestras +
+clases²). No es un evaluador de modelos ni acredita reproducibilidad de los audios.
 
 ## EVAL-4A: publicación standalone y bundle
 
@@ -271,8 +350,8 @@ La verificación usa únicamente WAVs y checkpoints pequeños sintéticos con lo
 constructores de redes sustituidos en test; no descarga pretrained ni accede a datos,
 checkpoints privados, servicios u operaciones DB. EVAL-4B queda limitado a esa
 verificación sintética local; no acredita rendimiento, integridad externa o despliegue
-con artefactos reales. EVAL-5, EVAL-6 y validación en PostgreSQL/runtime real siguen
-pendientes.
+con artefactos reales. La evaluación real de #11 está documentada en EVAL-6B; no extiende
+la evidencia sintética de EVAL-4B ni acredita API o despliegue.
 
 ## EVAL-5A: catálogo de informes existentes
 
@@ -286,12 +365,14 @@ como null, nunca como métricas cero; las métricas históricas del predictor pe
 sin reinterpretar.
 
 La respuesta distingue catálogo de evaluaciones `available` vacío de almacenamiento
-`unavailable`/registro inválido, con códigos acotados y sin detalles internos. Esta
-lectura no crea intentos, calcula hashes, carga pesos ni ejecuta predicción/evaluación;
-la reconciliación del registro aplica el guard de integridad EVAL-5B a artefactos estándar. Informes genéricos sin FK,
-como la identidad del ensamble EVAL-4B, no se atribuyen a modelos del catálogo. La
-verificación del slice usa API en proceso y SQLite aislado; PostgreSQL y la semántica
-operacional del catálogo siguen sin acreditarse.
+`unavailable`/registro inválido, con códigos acotados y sin detalles internos. La
+serialización de informes no crea intentos, calcula hashes, carga pesos ni ejecuta
+predicción/evaluación. La reconciliación del registro durante la misma petición es una
+operación separada y aplica el guard de integridad EVAL-5B a artefactos estándar.
+Informes genéricos sin FK, como la identidad del ensamble EVAL-4B, no se atribuyen a
+modelos del catálogo. Este slice se verificó con API en proceso y SQLite; la ejecución
+real de reevaluación en PostgreSQL descrita en EVAL-6B no acredita despliegue ni
+semántica operacional general del catálogo.
 
 ## EVAL-5B: guard canónico de publicación y activación
 
@@ -409,8 +490,28 @@ para la operación. La metadata ORM `Base` puede importarse sin resolver dotenv 
 un engine: `DATABASE_URL`, `engine` y `SessionLocal` conservan sus nombres públicos y
 se inicializan al accederlos. La normalización explícita del driver PostgreSQL no cambia.
 
-La verificación disponible es sintética: SQLite temporal, WAVs y checkpoint pequeño,
-con constructor de red sustituido; no acredita PostgreSQL ni ejecución operacional. No
-se ejecutó ni se afirma una evaluación del modelo #11, sus 1.208 filas/15 clases o sus
-particiones declaradas 850/177/181. Evaluarlo operacionalmente requiere autorización
-separada y especificar sus artefactos/datos/hash.
+La regresión automatizada de EVAL-6A es sintética: SQLite temporal, WAVs y checkpoint
+pequeño, con constructor de red sustituido; no sustituye la evidencia operacional de
+EVAL-6B. La ejecución real y sus límites de calidad se documentan por separado abajo.
+
+## EVAL-6B: reevaluación real de #11 en desarrollo
+
+Se ejecutó en `fama_db` fijada, con preflight e invariantes, sin alterar activación ni
+métricas históricas. Los intentos inmutables son ID 1 (`val`, 177 muestras) e ID 2
+(`test`, 181); 15 clases, informe schema v2 y evaluator recording v1; duración total
+65.419 s. La identidad de fila #11 se verificó con hash `277d8523…`; el SHA esperado
+del checkpoint comienza `070d…`.
+
+Accuracy: val 6.779661%, test 3.867403%; macro F1: val 5.6262%, test 3.9644%.
+Rechazos: 31/177 y 63/181. **Calidad no aprobada**; los resultados no habilitan ni
+cambian activación y no reinterpretan la `precision` histórica. Diagnósticos
+MPEG quedan para seguimiento de calidad exclusivamente de solo lectura; no se ejecuta
+otra inferencia como parte de ese seguimiento.
+
+El recibo `docs/receipts/model-11-real-evaluation.json` conserva los reportes originales.
+La verificación independiente `mv3a8v51` cotejó snapshots/digests observados con el
+recibo de origen y comprobó integridad del runtime por separado; no se afirma una
+verificación offline adicional de archivos de manifiesto. La tabla de evaluaciones se
+creó en la migración inicial y luego fue aceptada por el verificador corregido en modo
+solo lectura; no hubo upgrade de un CHECK v1 ni despliegue de API/browser. El informe
+inmutable no certifica calidad ni aprobación operacional.
