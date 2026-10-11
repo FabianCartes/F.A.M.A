@@ -274,6 +274,7 @@ Si el usuario detecta divergencia en la pérdida o necesita liberar la GPU para 
 ### 5.4. Activación de Modelos en Caliente (`CU_INV_05`)
 En la parte inferior del módulo se ubica la tabla de **Historial de Modelos**:
 * El historial consultado con BD incluye `dataset_id`, `dataset_name`, `filename`, `sha256` y métricas persistidas por época. Los nombres amigables, versiones y fichas descriptivas no sustituyen esa evidencia de origen ni la inspección del checkpoint.
+* Para entrenamientos web nuevos, `accuracy` y `loss` corresponden a la misma época del checkpoint seleccionado por mayor accuracy de validación. Un empate conserva la primera época seleccionada, aunque después baje la pérdida. El payload identifica `checkpoint_epoch` y `checkpoint_val_loss`; las curvas siguen conservando todas las épocas ejecutadas. No se corrigen automáticamente métricas de modelos históricos.
 * **[Activar Modelo]** invoca `POST /api/training/models/{id}/activate`: cambia la selección activa en BD e intenta actualizar el predeterminado del registro. Es una operación explícita, separada del descubrimiento del catálogo.
 * No garantiza carga inmediata, latencia inferior a un segundo ni inferencia correcta. La implementación confirma el commit de BD **antes** de intentar registrar los predictores; no ofrece atomicidad entre activación y carga.
 * `register_from_db()` en `training.py:1246` pertenece a `set_active_model()`, no al worker de entrenamiento. No es un mecanismo de publicación al finalizar el trabajo.

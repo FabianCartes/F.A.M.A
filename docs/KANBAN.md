@@ -19,7 +19,9 @@ Tablero de seguimiento del ciclo de vida del proyecto **F.A.M.A** (*Flujo de Cla
 
 **Hallazgo adicional — snapshots en scripts experimentales:** la misma captura con `v.cpu()` permanece en diez scripts: `train_multitask_hpss.py`, `train_multitask_hpss_additive.py`, `train_efficientnet_hpss_additive.py`, `train_multitask_hpss_balanced_additive.py`, `train_multitask_hpss_rms_balanced.py`, `train_panns_transfer.py`, `train_multitask_hpss_wideband.py`, `train_panns_hpss_additive.py`, `train_multitask_hpss_asl.py` y `train_multitask_multires_hpss.py`, todos bajo `backend/`. Seguimiento separado acordado; no modificados ni ejecutados, sin afirmar validación de sus checkpoints históricos.
 
-**Siguiente unidad:** coherencia del historial técnico y de las métricas asociadas al checkpoint seleccionado: el registro web todavía usa la pérdida de la última época junto a la mejor accuracy, que puede pertenecer a otra época. El resto del diagnóstico (seguridad, catálogo, ingesta, telemetría, operación y documentación) sigue pendiente. Los cambios previos del usuario en cinco archivos no forman parte de estos commits.
+- [x] **AFIN-3 — Métricas del checkpoint seleccionado:** pérdida e índice de época se capturan junto a los mejores pesos; `Modelo.perdida` usa esa pérdida, no la última del progreso. Payload nuevo expone `checkpoint_epoch`/`checkpoint_val_loss`, sin cambio de esquema ni backfill. RED: cuatro pruebas públicas con pérdidas de otra época; GREEN/regresión focal: 93 aprobadas (22,71 s), sin fallos/omisiones/avisos. Se conservan la selección por accuracy, los empates y las curvas completas; incluye primera época con 0 % de accuracy. Manual actualizado. Sin datos/BD/cloud reales ni despliegue.
+
+**Siguiente unidad:** coherencia de la ficha técnica del historial; el resto del diagnóstico (seguridad, catálogo, ingesta, telemetría, operación y documentación) sigue pendiente. Los cambios previos del usuario en cinco archivos no forman parte de estos commits.
 
 ### Permisos del backend y ejecución sin root
 

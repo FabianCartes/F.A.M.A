@@ -77,14 +77,14 @@ def snapshot_env(training_env, monkeypatch):
     return service, sessions, root, margins
 
 
-@pytest.mark.parametrize("margins,expected_accuracy,expected_margin,expected_revision", [
-    ([1.0, -1.0], 100.0, 1.0, 1),
-    ([-1.0, -2.0], 0.0, -1.0, 1),
-    ([-1.0, 1.0, -2.0], 100.0, 1.0, 2),
-    ([1.0, 2.0], 100.0, 1.0, 1),
+@pytest.mark.parametrize("margins,expected_accuracy,expected_margin,expected_revision,expected_loss", [
+    ([1.0, -1.0], 100.0, 1.0, 1, 0.1051),
+    ([-1.0, -2.0], 0.0, -1.0, 1, 1.9530),
+    ([-1.0, 1.0, -2.0], 100.0, 1.0, 2, 0.0868),
+    ([1.0, 2.0], 100.0, 1.0, 1, 0.1051),
 ])
 def test_web_checkpoint_keeps_best_epoch_after_later_cpu_updates(
-    snapshot_env, margins, expected_accuracy, expected_margin, expected_revision,
+    snapshot_env, margins, expected_accuracy, expected_margin, expected_revision, expected_loss,
 ):
     service, sessions, _, schedule = snapshot_env
     schedule[:] = margins
@@ -106,6 +106,12 @@ def test_web_checkpoint_keeps_best_epoch_after_later_cpu_updates(
     assert payload["best_val_acc"] == expected_accuracy
     assert payload["state_dict"]["backbone.margin"].item() == expected_margin
     assert payload["state_dict"]["backbone.revision"].item() == expected_revision
+    # Cross-entropy of the selected synthetic logits, independently worked out.
+    # An equal accuracy keeps the first checkpoint even if a later loss is lower.
+    assert entry["accuracy"] == expected_accuracy
+    assert entry["loss"] == expected_loss
+    assert payload["checkpoint_epoch"] == expected_revision
+    assert payload["checkpoint_val_loss"] == expected_loss
 
 
 @pytest.mark.parametrize("margins,expected_f1,expected_margin,expected_revision", [

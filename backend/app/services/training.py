@@ -736,6 +736,8 @@ class TrainingService:
                 checkpoint_path = self.checkpoints_dir / checkpoint_filename
                 best_val_acc = 0.0
                 best_weights = None
+                checkpoint_epoch = None
+                checkpoint_val_loss = None
                 early_stopping_enabled = bool(config.get("early_stopping", True))
                 patience = max(5, int(arch_epochs * 0.20))
                 best_val_loss = float("inf")
@@ -842,8 +844,12 @@ class TrainingService:
                         best_val_acc = val_acc
                         # cpu() alone aliases tensors when the model is already on CPU.
                         best_weights = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+                        checkpoint_epoch = epoch
+                        checkpoint_val_loss = val_loss
                     elif best_weights is None:
                         best_weights = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+                        checkpoint_epoch = epoch
+                        checkpoint_val_loss = val_loss
 
                     metric_entry = {
                         "epoca": epoch,
@@ -891,6 +897,8 @@ class TrainingService:
                     "architecture": arch,
                     "epochs": arch_epochs,
                     "best_val_acc": best_val_acc,
+                    "checkpoint_epoch": checkpoint_epoch,
+                    "checkpoint_val_loss": checkpoint_val_loss,
                     "classes": classes,
                     "ensemble_weight": model_weights.get(arch, 1.0),
                     "ensemble_models": config.get("models"),
@@ -928,7 +936,7 @@ class TrainingService:
                         tasa_aprendizaje=arch_lr,
                         tamano_lote=arch_batch,
                         precision=best_val_acc,
-                        perdida=self.current_val_loss,
+                        perdida=checkpoint_val_loss,
                         ruta_binario_gcp=f"models/{checkpoint_filename}",
                         tamano_bytes=file_size,
                         hash_binario=file_hash,
