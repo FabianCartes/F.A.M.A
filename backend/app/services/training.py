@@ -477,11 +477,14 @@ class TrainingService:
             published = True
             temporary.unlink()
             owned_temporary = False
-            directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
-            try:
-                os.fsync(directory_fd)
-            finally:
-                os.close(directory_fd)
+            # Windows does not expose directory descriptors. Preserve file fsync
+            # and no-replace publication; directory fsync remains POSIX-only.
+            if hasattr(os, "O_DIRECTORY"):
+                directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+                try:
+                    os.fsync(directory_fd)
+                finally:
+                    os.close(directory_fd)
             return file_size, file_hash
         except Exception:
             if owned_temporary:

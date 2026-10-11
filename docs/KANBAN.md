@@ -8,6 +8,13 @@ Tablero de seguimiento del ciclo de vida del proyecto **F.A.M.A** (*Flujo de Cla
 
 ## ⏳ En Progreso (In Progress)
 
+### Afinamiento integral — entorno Windows (11 de octubre de 2026)
+
+**Rama:** `fix/afinamiento-integral`. Correcciones incrementales con TDD y commits en español; preservar los cambios locales previos. Sin despliegue, migración, datos/BD/GCS reales ni push.
+**Interfaces acordadas para la primera unidad:** `TrainingService.start_training/get_progress/get_history` y `TrainedModelPredictor.metadata/predict`, con CPU, audio/checkpoints sintéticos y SQLite temporal.
+- [x] **AFIN-0 — Publicación portable de checkpoints:** prueba pública RED por ausencia de `os.O_DIRECTORY`; GREEN con fsync de directorio solo cuando la plataforma lo soporta. Se mantienen fsync de archivo y hard link sin reemplazo. Regresión focal: 18 aprobadas (4,96 s), sin omisiones. Windows no ofrece la misma garantía de persistencia del directorio ante pérdida de energía que POSIX. Primer intento de prueba detenido por fixture no importada; no cuenta como RED funcional.
+- [ ] **AFIN-1 — Coherencia entrenamiento/inferencia:** reproducir configuración acústica efectiva y registrar compatibilidad explícita para checkpoints históricos. Pruebas de metadatos y representación espectral en curso; sin inferencia real ni cambios sobre pesos existentes.
+
 ### Permisos del backend y ejecución sin root
 
 **Objetivo:** metadata publicada con 0644; audio/intents privados con 0600; backend Docker con UID/GID del host, sin perder atomicidad ni recuperación.
