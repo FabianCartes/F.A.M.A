@@ -81,3 +81,18 @@ predictor, snapshot y persistencia, pero no calidad externa, PostgreSQL desplega
 los artefactos/datasets operacionales. No se evaluó el modelo #11 ni se verifican aquí
 las afirmaciones de 1.208 filas, 15 clases o particiones 850/177/181. Una ejecución
 operacional del #11 requiere autorización separada y sus rutas/hash/destino explícitos.
+
+## Verificación de la migración
+
+La migración de `model_evaluation` solo crea la tabla cuando falta; si ya existe,
+verifica columnas y restricciones sin alterarla. PostgreSQL puede representar los seis
+`CHECK` con una escritura de catálogo distinta a la compilada por SQLAlchemy. El
+verificador añade una allowlist literal para esas seis formas observadas, sin normalizar
+paréntesis ni cambiar condiciones; escrituras no contempladas siguen fallando cerradas.
+
+El recibo `docs/receipts/model-11-evaluation-migration.json` conserva el historial: la
+primera aplicación creó la tabla vacía y la segunda falló al verificar esas formas. No
+reescribir ni tratar ese fallo como una reparación de la tabla. Este cambio corrige el
+verificador, no reintenta la migración ni modifica filas. La reevaluación del #11 sigue
+bloqueada por falta de permisos sobre dos audios; no se repararon artefactos, ejecutó
+inferencia ni activó el modelo. Esas acciones requieren autorización independiente.

@@ -162,6 +162,93 @@ def test_postgresql_unknown_or_changed_fixture_rejected_structural_only(sql):
     assert not module._checks_match(table, dialect(), checks)
 
 
+# SQLAlchemy's PostgreSQL inspector exposes sqltext without the outer CHECK (...) wrapper.
+# These bodies are the exact pg_get_constraintdef results captured from PostgreSQL.
+_POSTGRES_INSPECTOR_CHECKS = [
+    ('evaluation_counts', 'sample_count > 0 AND (schema_version = ANY (ARRAY[1, 2]))'),
+    ('evaluation_error', "status::text = 'failed'::text AND error_reason IS NOT NULL OR status::text <> 'failed'::text AND error_reason IS NULL"),
+    ('evaluation_report', "status::text = 'completed'::text AND report IS NOT NULL AND error_reason IS NULL OR status::text <> 'completed'::text AND report IS NULL"),
+    ('evaluation_split', "split::text = ANY (ARRAY['val'::character varying, 'test'::character varying]::text[])"),
+    ('evaluation_status', "status::text = ANY (ARRAY['pending'::character varying, 'running'::character varying, 'completed'::character varying, 'failed'::character varying]::text[])"),
+    ('evaluation_times', "status::text = 'pending'::text AND started_at IS NULL AND finished_at IS NULL OR status::text = 'running'::text AND started_at IS NOT NULL AND finished_at IS NULL OR (status::text = ANY (ARRAY['completed'::character varying, 'failed'::character varying]::text[])) AND finished_at IS NOT NULL"),
+]
+
+
+def _run_postgresql_catalog_verification(monkeypatch, checks):
+    from sqlalchemy import MetaData
+    from sqlalchemy.dialects.postgresql import dialect as postgresql_dialect
+    module = migration()
+    table = module.evaluation_table(MetaData())
+
+    class Inspector:
+        def has_table(self, name):
+            return name in {'modelo', 'model_evaluation'}
+
+        def get_columns(self, name):
+            return [{'name': column.name, 'nullable': column.nullable,
+                     'type': column.type, 'default': None} for column in table.columns]
+
+        def get_pk_constraint(self, name):
+            return {'constrained_columns': ['id_evaluation']}
+
+        def get_foreign_keys(self, name):
+            return [{'constrained_columns': ['id_modelo'], 'referred_table': 'modelo',
+                     'referred_columns': ['id_modelo'], 'options': {'ondelete': 'RESTRICT'}}]
+
+        def get_unique_constraints(self, name):
+            return []
+
+        def get_indexes(self, name):
+            return []
+
+        def get_check_constraints(self, name):
+            return [{'name': check_name, 'sqltext': sqltext} for check_name, sqltext in checks]
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    class Engine:
+        dialect = postgresql_dialect()
+
+        def begin(self):
+            return Connection()
+
+    monkeypatch.setattr(module, 'inspect', lambda connection: Inspector())
+    return module.migrate(Engine())
+
+
+def test_migration_accepts_exact_postgresql_catalog_check_bodies(monkeypatch):
+    assert _run_postgresql_catalog_verification(
+        monkeypatch, _POSTGRES_INSPECTOR_CHECKS) is False
+
+
+@pytest.mark.parametrize('case', ['changed_condition', 'missing_status', 'changed_split',
+                                  'changed_schema_versions', 'regrouped_and_or'])
+def test_migration_rejects_nonmatching_postgresql_catalog_checks(monkeypatch, case):
+    checks = list(_POSTGRES_INSPECTOR_CHECKS)
+    if case == 'changed_condition':
+        index = next(i for i, (name, _) in enumerate(checks) if name == 'evaluation_counts')
+        checks[index] = (checks[index][0], checks[index][1].replace('sample_count > 0', 'sample_count >= 0'))
+    elif case == 'missing_status':
+        checks = [check for check in checks if check[0] != 'evaluation_status']
+    elif case == 'changed_split':
+        index = next(i for i, (name, _) in enumerate(checks) if name == 'evaluation_split')
+        checks[index] = (checks[index][0], checks[index][1].replace("'test'", "'other'"))
+    elif case == 'changed_schema_versions':
+        index = next(i for i, (name, _) in enumerate(checks) if name == 'evaluation_counts')
+        checks[index] = (checks[index][0], checks[index][1].replace('ARRAY[1, 2]', 'ARRAY[1, 3]'))
+    else:
+        index = next(i for i, (name, _) in enumerate(checks) if name == 'evaluation_report')
+        checks[index] = (checks[index][0], "(status::text = 'completed'::text AND report IS NOT NULL AND error_reason IS NULL OR status::text <> 'completed'::text) AND report IS NULL")
+
+    with pytest.raises(ValueError, match='Incompatible evaluation check constraints'):
+        _run_postgresql_catalog_verification(monkeypatch, checks)
+
+
 def test_cli_requires_explicit_apply_and_url(tmp_path):
     import subprocess
     import sys

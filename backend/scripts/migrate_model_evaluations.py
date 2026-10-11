@@ -58,6 +58,17 @@ _POSTGRES_CHECKS = {
     'evaluation_times': "((((status)::text = 'pending'::text) AND (started_at IS NULL) AND (finished_at IS NULL)) OR (((status)::text = 'running'::text) AND (started_at IS NOT NULL) AND (finished_at IS NULL)) OR (((status)::text = ANY ((ARRAY['completed'::character varying, 'failed'::character varying])::text[])) AND (finished_at IS NOT NULL)))",
 }
 
+# Exact pg_get_constraintdef bodies observed in PostgreSQL after SQLAlchemy
+# removes the surrounding CHECK (...) wrapper. Keep this allowlist literal.
+_POSTGRES_CATALOG_CHECKS = {
+    'evaluation_status': "status::text = ANY (ARRAY['pending'::character varying, 'running'::character varying, 'completed'::character varying, 'failed'::character varying]::text[])",
+    'evaluation_split': "split::text = ANY (ARRAY['val'::character varying, 'test'::character varying]::text[])",
+    'evaluation_counts': 'sample_count > 0 AND (schema_version = ANY (ARRAY[1, 2]))',
+    'evaluation_report': "status::text = 'completed'::text AND report IS NOT NULL AND error_reason IS NULL OR status::text <> 'completed'::text AND report IS NULL",
+    'evaluation_error': "status::text = 'failed'::text AND error_reason IS NOT NULL OR status::text <> 'failed'::text AND error_reason IS NULL",
+    'evaluation_times': "status::text = 'pending'::text AND started_at IS NULL AND finished_at IS NULL OR status::text = 'running'::text AND started_at IS NOT NULL AND finished_at IS NULL OR (status::text = ANY (ARRAY['completed'::character varying, 'failed'::character varying]::text[])) AND finished_at IS NOT NULL",
+}
+
 
 def _check_spelling(sql):
     """Ignore whitespace outside quoted literals; retain grouping and all tokens."""
@@ -69,8 +80,9 @@ def _checks_match(table, dialect, checks):
     expected = {str(c.name): {_check_spelling(str(c.sqltext.compile(dialect=dialect)))}
                 for c in table.constraints if isinstance(c, CheckConstraint)}
     if dialect.name == 'postgresql':
-        for name, sql in _POSTGRES_CHECKS.items():
-            expected[name].add(_check_spelling(sql))
+        for catalog_spellings in (_POSTGRES_CHECKS, _POSTGRES_CATALOG_CHECKS):
+            for name, sql in catalog_spellings.items():
+                expected[name].add(_check_spelling(sql))
     # Reject missing, extra and duplicate names, as well as unknown spellings.
     return (len(checks) == len(expected) and {c['name'] for c in checks} == expected.keys()
             and all(_check_spelling(c['sqltext']) in expected[c['name']] for c in checks))
