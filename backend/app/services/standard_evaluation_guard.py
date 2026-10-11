@@ -1,4 +1,5 @@
 """Canonical integrity guard for persisted standard-evaluated artifacts."""
+from dataclasses import dataclass
 import hashlib
 import inspect
 import json
@@ -43,6 +44,78 @@ def checkpoint_sha256(path: Path) -> str:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _file_signature(path):
+    info = Path(path).stat()
+    return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+
+
+@dataclass(frozen=True)
+class CheckpointInspection:
+    path: Path
+    sha256: str
+    size_bytes: int
+    signature: tuple
+    payload: dict
+    configurations: tuple
+
+
+def inspect_checkpoint(checkpoints_root, checkpoint_path, expected_sha256, *, expected_size=None):
+    """Safely inspect explicit checkpoint bytes and require complete MAIN provenance."""
+    try:
+        root = Path(checkpoints_root).resolve(strict=True)
+        path = Path(checkpoint_path).resolve(strict=True)
+        if (not root.is_dir() or not path.is_relative_to(root) or not path.is_file() or
+                type(expected_sha256) is not str or len(expected_sha256) != 64 or
+                any(char not in "0123456789abcdef" for char in expected_sha256)):
+            _invalid("Checkpoint fuera de la raíz confiable o hash inválido.")
+        before = _file_signature(path)
+        if before[2] <= 0 or expected_size is not None and expected_size > 0 and before[2] != expected_size:
+            _invalid("Tamaño de checkpoint no coincide con la identidad esperada.")
+        digest = checkpoint_sha256(path)
+        if digest != expected_sha256:
+            _invalid("Checkpoint hash no coincide con la identidad esperada.")
+        payload = torch.load(path, map_location="cpu", weights_only=True)
+        after = _file_signature(path)
+        if before != after or checkpoint_sha256(path) != digest:
+            _invalid("Checkpoint cambió durante su inspección.")
+        if type(payload) is not dict:
+            _invalid("Checkpoint sin metadata de evaluación MAIN.")
+        job_id, classes = payload.get("job_id"), payload.get("classes")
+        dataset_name, dataset_id = payload.get("dataset_name"), payload.get("dataset_id")
+        architecture = payload.get("architecture")
+        if (type(job_id) is not str or not job_id.strip() or type(classes) is not list or not classes or
+                any(type(label) is not str or not label.strip() for label in classes) or
+                len(set(classes)) != len(classes) or type(dataset_name) is not str or not dataset_name.strip() or
+                type(dataset_id) is not int or dataset_id <= 0 or
+                type(architecture) is not str or not architecture.strip() or
+                "audio_config" not in payload or "windowing_config" not in payload or
+                (payload["audio_config"] is not None and type(payload["audio_config"]) is not dict) or
+                (payload["windowing_config"] is not None and type(payload["windowing_config"]) is not dict)):
+            _invalid("Checkpoint sin identidad estándar válida.")
+        configurations = build_evaluation_configuration(
+            {"job_id": job_id, "architecture": architecture,
+             "windowing_config": payload["windowing_config"]},
+            resolve_training_audio(dataset_name, payload["audio_config"]))
+        return CheckpointInspection(path, digest, before[2], before, payload, configurations)
+    except StandardEvaluationError:
+        raise
+    except Exception:
+        _invalid("No se pudo comprobar el checkpoint estándar.")
+
+
+def assert_checkpoint_unchanged(inspection):
+    """Fail closed if the admitted file was replaced or changed after inspection."""
+    try:
+        if (_file_signature(inspection.path) != inspection.signature or
+                checkpoint_sha256(inspection.path) != inspection.sha256 or
+                _file_signature(inspection.path) != inspection.signature):
+            _invalid("Checkpoint cambió durante la evaluación.")
+    except StandardEvaluationError:
+        raise
+    except Exception:
+        _invalid("No se pudo comprobar el checkpoint durante la evaluación.")
 
 
 def _invalid(message="Evaluación estándar incompleta o identidad incompatible."):
@@ -160,51 +233,23 @@ def _validate_standard_reports(target, db, checkpoints_root: Path) -> None:
     if state != "standard_eval_completed":
         _invalid("Modelo nuevo sin evaluación estándar val/test completada; activación/publicación bloqueada.")
 
-    try:
-        root = Path(checkpoints_root).resolve(strict=True)
-        basename = Path(target.ruta_binario_gcp).name
-        if not basename:
-            _invalid("Checkpoint estándar ausente.")
-        path = root / basename
-        resolved = path.resolve(strict=True)
-        if not resolved.is_relative_to(root) or not resolved.is_file():
-            _invalid("Checkpoint estándar fuera del almacenamiento local confiable.")
-        checkpoint_hash = checkpoint_sha256(resolved)
-        if not target.hash_binario or checkpoint_hash != target.hash_binario:
-            _invalid("Checkpoint hash no coincide con la evaluación estándar.")
-        payload = torch.load(resolved, map_location="cpu", weights_only=True)
-        if checkpoint_sha256(resolved) != checkpoint_hash:
-            _invalid("Checkpoint cambió durante comprobación de evaluación estándar.")
-    except StandardEvaluationError:
-        raise
-    except Exception:
-        _invalid("No se pudo comprobar el checkpoint estándar.")
-
-    if type(payload) is not dict:
-        _invalid("Checkpoint sin metadata de evaluación estándar.")
-    job_id = payload.get("job_id")
-    classes = payload.get("classes")
-    dataset_name = payload.get("dataset_name")
-    dataset_id = payload.get("dataset_id")
-    architecture = payload.get("architecture")
-    if (type(job_id) is not str or not job_id.strip() or type(classes) is not list or not classes or
-            any(type(label) is not str or not label.strip() for label in classes) or
-            len(set(classes)) != len(classes) or type(dataset_name) is not str or not dataset_name.strip() or
-            type(dataset_id) is not int or dataset_id <= 0 or
-            type(architecture) is not str or not architecture.strip() or
-            "audio_config" not in payload or "windowing_config" not in payload or
-            (payload["audio_config"] is not None and type(payload["audio_config"]) is not dict) or
-            (payload["windowing_config"] is not None and type(payload["windowing_config"]) is not dict)):
-        _invalid("Checkpoint sin identidad estándar válida.")
+    root = Path(checkpoints_root).resolve(strict=True)
+    basename = Path(target.ruta_binario_gcp).name
+    if not basename or not target.hash_binario:
+        _invalid("Checkpoint estándar ausente.")
+    inspection = inspect_checkpoint(root, root / basename, target.hash_binario,
+                                    expected_size=target.tamano_bytes)
+    payload = inspection.payload
+    checkpoint_hash = inspection.sha256
+    job_id, classes = payload["job_id"], payload["classes"]
+    dataset_name, dataset_id = payload["dataset_name"], payload["dataset_id"]
+    architecture = payload["architecture"]
     if (target.conjunto_datos is None or target.conjunto_datos.nombre != dataset_name or
             target.id_conjunto_datos != dataset_id or target.arquitectura != architecture):
         _invalid("Dataset o arquitectura del checkpoint no coincide con el modelo.")
 
     try:
-        expected_configs = build_evaluation_configuration(
-            {"job_id": job_id, "architecture": architecture,
-             "windowing_config": payload["windowing_config"]},
-            resolve_training_audio(dataset_name, payload["audio_config"]))
+        expected_configs = inspection.configurations
         rows = (db.query(ModelEvaluation)
                 .filter_by(id_modelo=target.id_modelo)
                 .order_by(ModelEvaluation.id_evaluation.desc())

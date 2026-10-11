@@ -383,3 +383,34 @@ no se recalculan ni reinterpretan como informes finales.
 La verificación de UI usa fixtures públicos v1/v2 y Vitest con jsdom. No acredita
 navegadores reales, PostgreSQL, modelos/datasets reales, ni cambios en publicación,
 activación, pesos o ejecución de inferencia/evaluación.
+
+## EVAL-6A: reevaluación explícita de checkpoints MAIN
+
+`app.services.reevaluation.reevaluate_model(session, *, model_id, checkpoint_root,
+checkpoint_path, expected_sha256, prepared_dir, dataset_name, roots, execute=False)`
+usa sesión inyectada y es solo preflight por defecto. Exige identidad MAIN explícita,
+metadata actual verificable y coincidencia entre DB, ruta confiable, tamaño/hash,
+dataset, arquitectura, job, clases ordenadas y configuraciones. Comparte el inspector
+seguro de checkpoint y el builder efectivo con `standard_evaluation_guard`; no intenta
+reconstruir procedencia ausente ni inferir el dataset desde una ruta.
+
+El preflight admite el trío completo con `load_prepared_dataset`, valida cobertura,
+referencias y grupos/identidades disjuntas, y construye snapshots de manifiesto val/test
+mediante `RecordingEvaluator` (hash y decodificación completos), sin instanciar predictor,
+crear intentos, inferir ni modificar datos. `backend/scripts/reevaluate_model.py`
+requiere URL, modelo, checkpoint/root/hash, prepared-dir, dataset y raíces explícitos.
+Solo `--execute` crea dos intentos append-only con digest de pareja compartido; carga
+`TrainedModelPredictor` desde el path exacto, y comprueba el checkpoint alrededor de la
+carga y cada inferencia. Reintentos generan IDs nuevos; los informes previos y cualquier
+split completado antes de un fallo permanecen intactos. No altera activo/estado,
+precisión/pérdida histórica, alias/default, entrenamiento, registro global, checkpoint,
+esquema ni migraciones. La CLI cierra su engine/sesión local y no usa una sesión global
+para la operación. La metadata ORM `Base` puede importarse sin resolver dotenv ni crear
+un engine: `DATABASE_URL`, `engine` y `SessionLocal` conservan sus nombres públicos y
+se inicializan al accederlos. La normalización explícita del driver PostgreSQL no cambia.
+
+La verificación disponible es sintética: SQLite temporal, WAVs y checkpoint pequeño,
+con constructor de red sustituido; no acredita PostgreSQL ni ejecución operacional. No
+se ejecutó ni se afirma una evaluación del modelo #11, sus 1.208 filas/15 clases o sus
+particiones declaradas 850/177/181. Evaluarlo operacionalmente requiere autorización
+separada y especificar sus artefactos/datos/hash.
