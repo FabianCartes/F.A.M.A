@@ -228,7 +228,8 @@ class GenericModelTrainer:
 
             if val_f1 > best_val_f1:
                 best_val_f1 = val_f1
-                best_state_dict = {k: v.cpu() for k, v in model.state_dict().items()}
+                # Preserve parameters and buffers independently of later CPU updates.
+                best_state_dict = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
 
         # 5. Evaluación Final en Test Set con el Mejor Modelo
         if best_state_dict is not None:

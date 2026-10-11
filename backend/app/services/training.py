@@ -840,9 +840,10 @@ class TrainingService:
 
                     if val_acc > best_val_acc:
                         best_val_acc = val_acc
-                        best_weights = {k: v.cpu() for k, v in model.state_dict().items()}
+                        # cpu() alone aliases tensors when the model is already on CPU.
+                        best_weights = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
                     elif best_weights is None:
-                        best_weights = {k: v.cpu() for k, v in model.state_dict().items()}
+                        best_weights = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
 
                     metric_entry = {
                         "epoca": epoch,
