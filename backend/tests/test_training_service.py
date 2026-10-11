@@ -28,7 +28,7 @@ def service_env(training_env):
         audio.parent.mkdir(exist_ok=True)
         audio.write_bytes(b"synthetic audio fixture")
         other = {"clase": "Other", "nombre_archivo": audio.name,
-                 "file_path": f"other/{split}.wav", "recordist": split}
+                 "file_path": f"other/{split}.wav", "file_stage": "raw", "recordist": split}
         pd.concat([frame, pd.DataFrame([other])]).to_csv(csv, index=False)
     return service, sessions, root, thread
 
