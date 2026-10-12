@@ -239,6 +239,9 @@ export default function PredictionView() {
   const selectedModel = useMemo(() => {
     return availableModels.find((m) => m.id === selectedModelId);
   }, [availableModels, selectedModelId]);
+  const selectedModelHasWeights = selectedModel?.has_weights === true;
+  const hasSelectableModels = availableModels.some((model) => model.has_weights === true);
+  const hasUnavailableModels = availableModels.some((model) => model.has_weights !== true);
 
   const selectedDomain = useMemo(() => {
     return resolveModelDomain(selectedModel, selectedModelId);
@@ -320,13 +323,14 @@ export default function PredictionView() {
         previousModels = models;
         setAvailableModels(models);
         setSelectedModelId((current) => {
-          if (models.some((m) => m.id === current)) return current;
-          const defaultModel = models.find((m) => m.id === data.default_model_id);
+          const selectable = models.filter((m) => m.has_weights === true);
+          if (selectable.some((m) => m.id === current)) return current;
+          const defaultModel = selectable.find((m) => m.id === data.default_model_id);
           const domain = resolveModelDomain(priorCatalogue.find((m) => m.id === current), current);
-          const sameDomain = models.filter((m) => resolveModelDomain(m) === domain);
+          const sameDomain = selectable.filter((m) => resolveModelDomain(m) === domain);
           const replacement = current
-            ? sameDomain.find((m) => m.id === defaultModel?.id) || sameDomain[0] || defaultModel || models[0]
-            : defaultModel || models[0];
+            ? sameDomain.find((m) => m.id === defaultModel?.id) || sameDomain[0] || defaultModel || selectable[0]
+            : defaultModel || selectable[0];
           return replacement?.id || "";
         });
       } catch (err) {
@@ -668,6 +672,10 @@ export default function PredictionView() {
       setError("No hay un modelo disponible para ejecutar la inferencia.");
       return;
     }
+    if (!selectedModelHasWeights) {
+      setError("No hay confirmación de pesos disponibles para el modelo seleccionado. Actualiza el catálogo antes de ejecutar.");
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -782,11 +790,12 @@ export default function PredictionView() {
             >
               {availableModels.length > 0 ? (
                 <>
+                  {!hasSelectableModels && <option value="" disabled>Sin modelos con pesos disponibles</option>}
                   {bioModels.length > 0 && (
                     <optgroup label="Bioacústica (Aves Chilenas)">
                       {bioModels.map((m) => (
-                        <option key={m.id} value={m.id} className="bg-[#16171b] text-white">
-                          {m.name || m.id}
+                        <option key={m.id} value={m.id} disabled={m.has_weights !== true} className="bg-[#16171b] text-white">
+                          {m.name || m.id}{m.has_weights === true ? "" : " (no disponible)"}
                         </option>
                       ))}
                     </optgroup>
@@ -794,8 +803,8 @@ export default function PredictionView() {
                   {engineModels.length > 0 && (
                     <optgroup label="Diagnóstico Industrial (Motores)">
                       {engineModels.map((m) => (
-                        <option key={m.id} value={m.id} className="bg-[#16171b] text-white">
-                          {m.name || m.id}
+                        <option key={m.id} value={m.id} disabled={m.has_weights !== true} className="bg-[#16171b] text-white">
+                          {m.name || m.id}{m.has_weights === true ? "" : " (no disponible)"}
                         </option>
                       ))}
                     </optgroup>
@@ -819,6 +828,11 @@ export default function PredictionView() {
       </div>
 
       {catalogueError && <p role="alert" className="text-xs text-red-300">{catalogueError}</p>}
+      {hasUnavailableModels && (
+        <p role="status" aria-label="Disponibilidad de modelos" className="text-xs text-amber-300">
+          Los modelos sin confirmación de pesos disponibles aparecen deshabilitados. Verifica sus archivos y vuelve a esta ventana para actualizar el catálogo. La disponibilidad de archivos no garantiza una inferencia correcta.
+        </p>
+      )}
       {publicationErrors.length > 0 && (
         <div role="status" aria-label="Publicación de modelos" className="text-xs text-amber-300">
           <p>Algunos modelos no pudieron publicarse. Los modelos disponibles siguen siendo seleccionables.</p>
@@ -1082,7 +1096,7 @@ export default function PredictionView() {
               <div className="flex items-center gap-1.5 mt-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                 <span className="text-xs font-semibold text-emerald-400">
-                  {!selectedModel ? "Sin modelo disponible" : selectedModel.has_weights !== false ? "Pesos Verificados" : "No inicializado"}
+                  {!selectedModel ? "Sin modelo disponible" : selectedModelHasWeights ? "Archivos de pesos disponibles" : "Disponibilidad no confirmada"}
                 </span>
               </div>
               <span className="text-[10px] text-gray-400 mt-1 block">
@@ -1500,7 +1514,7 @@ export default function PredictionView() {
           <button
             type="button"
             onClick={handleExecuteInference}
-            disabled={loading || !file || !selectedModel}
+            disabled={loading || !file || !selectedModelHasWeights}
             className="mt-4 w-full py-2.5 px-4 rounded-lg text-xs font-semibold text-white bg-[#2b2d35] hover:bg-[#343740] active:bg-[#23242b] disabled:opacity-40 disabled:cursor-not-allowed border border-[#373a46] transition-all flex items-center justify-center gap-2 shadow-sm"
           >
             {loading ? (

@@ -32,6 +32,70 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("Catálogo público de Predicción", () => {
+  it("no selecciona un predeterminado sin pesos y lo muestra deshabilitado", async () => {
+    const unavailable = { ...bird, id: "missing-bird", name: "Modelo sin pesos", has_weights: false };
+    catalogue = async () => response([unavailable, model11, engine], unavailable.id);
+
+    await show();
+
+    expect(selection().value).toBe(model11.id);
+    const option = within(selection()).getByRole("option", { name: /Modelo sin pesos.*no disponible/i });
+    expect((option as HTMLOptionElement).disabled).toBe(true);
+  });
+
+  it.each([false, undefined])("bloquea inferencia cuando ningún modelo confirma pesos (%s)", async hasWeights => {
+    catalogue = async () => response([
+      { ...bird, has_weights: hasWeights }, { ...engine, has_weights: hasWeights },
+    ], bird.id);
+    const view = await show();
+
+    expect(selection().value).toBe("");
+    expect(within(selection()).getByRole("option", { name: "Sin modelos con pesos disponibles" })).toBeDefined();
+    expect(screen.getByRole("status", { name: "Disponibilidad de modelos" }).textContent).toContain("pesos");
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:test");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    await act(async () => {
+      fireEvent.change(view.container.querySelector('input[type="file"]')!, {
+        target: { files: [new File(["audio"], "audio.wav")] },
+      });
+    });
+    // Even a synthetic change event cannot enable an unavailable option.
+    fireEvent.change(selection(), { target: { value: bird.id } });
+    expect((screen.getByRole("button", { name: /Ejecutar inferencia/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("/api/predict"))).toBe(false);
+  });
+
+  it("reemplaza un modelo que pierde pesos por otro disponible del mismo dominio y permite recuperación", async () => {
+    await show();
+    fireEvent.change(selection(), { target: { value: engine.id } });
+    const nextEngine = { ...engine, id: "engine-v3", name: "Motor v3" };
+    catalogue = async () => response([bird, { ...engine, has_weights: false }, nextEngine], bird.id);
+
+    await focus();
+
+    expect(selection().value).toBe(nextEngine.id);
+    const unavailable = within(selection()).getByRole("option", { name: /Motor v2.*no disponible/i });
+    expect((unavailable as HTMLOptionElement).disabled).toBe(true);
+    catalogue = async () => response([bird, engine, nextEngine], engine.id);
+    await focus();
+    expect(selection().value).toBe(nextEngine.id);
+    expect((within(selection()).getByRole("option", { name: "Motor v2" }) as HTMLOptionElement).disabled).toBe(false);
+    fireEvent.change(selection(), { target: { value: engine.id } });
+    expect(selection().value).toBe(engine.id);
+  });
+
+  it("un catálogo sin pesos recupera una selección solo cuando aparecen pesos confirmados", async () => {
+    catalogue = async () => response([{ ...bird, has_weights: false }], bird.id);
+    await show();
+    expect(selection().value).toBe("");
+
+    catalogue = async () => response([bird, model11], model11.id);
+    await focus();
+
+    expect(selection().value).toBe(model11.id);
+    expect(screen.queryByRole("status", { name: "Disponibilidad de modelos" })).toBeNull();
+  });
+
   it("muestra publicación parcial sin descartar modelos sanos y limpia el aviso al reintentar", async () => {
     catalogue = async () => response([bird], bird.id, [
       { model_id: model11.id, code: "checkpoint_missing" },

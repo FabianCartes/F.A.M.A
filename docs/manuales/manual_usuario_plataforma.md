@@ -399,12 +399,13 @@ La vista muestra avisos parciales en español; una advertencia no revierte la pe
 
 - Predicción solicita el catálogo al montar la vista, recuperar el foco y volver al estado visible.
   No realiza polling; regresar a la ventana permite reintentar una consulta fallida.
-- Conserva una selección que siga presente. Si desaparece, prioriza opciones del mismo dominio
-  y después opciones existentes del catálogo; no inventa un modelo de respaldo.
+- Solo permite elegir entradas con `has_weights=true`; las demás aparecen deshabilitadas como «no disponible». Conserva una selección que siga presente y con pesos confirmados. Si desaparece o pierde disponibilidad, prioriza opciones disponibles del mismo dominio y después del catálogo; no inventa un modelo de respaldo.
 - Descarta respuestas y errores tardíos con generación de solicitudes y cancelación.
   Retira los listeners y cancela la solicitud pendiente al desmontar la vista.
 - Ante un fallo de actualización, incluido HTTP 503, mantiene el catálogo previo y muestra el error.
   Un catálogo vacío no inventa opciones ni habilita inferencia.
+- Si ninguna entrada confirma pesos, muestra «Sin modelos con pesos disponibles» y bloquea ejecución. Tras verificar/restaurar archivos, volver a la ventana permite consultar su disponibilidad actualizada. Esto no implica activación en BD ni inferencia garantizada.
+- El backend revalida disponibilidad al recibir `POST /api/predict`: ausencia/estado desconocido o error de comprobación devuelven HTTP 503 antes de subir el audio a GCS. No garantiza ausencia de subidas ante corrupción, incompatibilidad o fallos descubiertos después del preflight; véase [ADR 0023](../adr/0023-seleccion-con-pesos-confirmados.md).
 - El refresco no cambia la identificación del modelo ya ejecutado ni los metadatos de clases
   usados por el feedback de ese resultado. Elegir otro modelo afecta la siguiente inferencia.
 

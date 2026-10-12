@@ -552,6 +552,14 @@ async def predict_audio(
         )
 
     try:
+        # Catalogue metadata can be stale; recheck the adapter before any upload.
+        # This checks storage availability, not architecture compatibility.
+        try:
+            has_weights = predictor.has_weights
+        except Exception as availability_error:
+            raise ModelWeightsError("No se pudo comprobar la disponibilidad de pesos.") from availability_error
+        if has_weights is not True:
+            raise ModelWeightsError(f"Modelo '{predictor.model_id}': archivos de pesos no disponibles.")
         audio_bytes = await file.read()
         from uuid import uuid4
         source_filename = f"{uuid4().hex}.wav"
