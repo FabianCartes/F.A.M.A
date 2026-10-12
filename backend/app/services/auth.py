@@ -4,6 +4,8 @@ import base64
 import hmac
 import hashlib
 import secrets
+import math
+import re
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 
@@ -92,7 +94,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 def decode_access_token(token: str) -> dict:
     """Decodifica y valida la firma y vigencia de un token JWT."""
     parts = token.split(".")
-    if len(parts) != 3:
+    if len(parts) != 3 or any(re.fullmatch(r"[A-Za-z0-9_-]+", part) is None for part in parts):
         raise ValueError("Token inválido: formato no corresponde a JWT")
 
     header_b64, payload_b64, signature_b64 = parts
@@ -104,15 +106,29 @@ def decode_access_token(token: str) -> dict:
         raise ValueError("Firma de token inválida")
 
     try:
+        header = json.loads(_b64url_decode(header_b64).decode("utf-8"))
+    except Exception as exc:
+        raise ValueError("Cabecera JWT inválida") from exc
+    if not isinstance(header, dict) or header.get("alg") != ALGORITHM:
+        raise ValueError("Algoritmo JWT no permitido")
+
+    try:
         payload_json = _b64url_decode(payload_b64).decode("utf-8")
         payload = json.loads(payload_json)
     except Exception as exc:
-        raise ValueError(f"Carga útil del token corrupta: {exc}")
+        raise ValueError("Carga útil del token corrupta") from exc
 
-    if "exp" in payload:
-        now_ts = int(datetime.now(timezone.utc).timestamp())
-        if now_ts > payload["exp"]:
-            raise ValueError("Token expirado")
+    if not isinstance(payload, dict):
+        raise ValueError("Carga útil JWT inválida: se requiere un objeto")
+    if "exp" not in payload:
+        raise ValueError("Token inválido: expiración requerida")
+    expiration = payload["exp"]
+    if (type(expiration) not in (int, float)
+            or (isinstance(expiration, float) and not math.isfinite(expiration))):
+        raise ValueError("Token inválido: expiración numérica finita requerida")
+    now_ts = datetime.now(timezone.utc).timestamp()
+    if now_ts >= expiration:
+        raise ValueError("Token expirado")
 
     return payload
 
@@ -229,14 +245,21 @@ def get_current_user(
         )
 
     user_id_raw = payload.get("sub")
-    if not user_id_raw:
+    user_id = None
+    if isinstance(user_id_raw, str) and user_id_raw.isascii() and user_id_raw.isdecimal():
+        try:
+            user_id = int(user_id_raw)
+        except ValueError:
+            pass
+    # Usuario.id is PostgreSQL INTEGER (signed 32-bit), not an arbitrary integer.
+    if user_id is None or not 1 <= user_id <= 2 ** 31 - 1:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token no contiene sujeto de usuario válido.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user = get_user_by_id(db, int(user_id_raw))
+    user = get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

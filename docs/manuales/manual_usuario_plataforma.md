@@ -51,7 +51,7 @@ Tradicionalmente, los investigadores se ven forzados a elegir entre dos extremos
 
 ## 2. Modelo de Roles, Permisos y Autenticación
 
-El sistema implementa un esquema de Control de Acceso Basado en Roles (**RBAC**) que salvaguarda la integridad de los recursos computacionales y del almacenamiento en la nube sin entorpecer el trabajo analítico cotidiano.
+La matriz siguiente describe el modelo de permisos objetivo, no garantías de autorización ya aplicadas. El backend dispone de autenticación JWT y dependencias de roles, pero las rutas sensibles de datos, entrenamiento y feedback aún requieren su integración. No exponer la plataforma como si el RBAC estuviera cerrado.
 
 ### 2.1. Matriz de Roles y Responsabilidades
 
@@ -74,6 +74,8 @@ El sistema implementa un esquema de Control de Acceso Basado en Roles (**RBAC**)
 
 ### 2.2. Flujo de Acceso Inicial y Asistente de Configuración (Setup Wizard)
 
+El asistente y las pantallas `/setup`/`/login` que se describen a continuación son una propuesta de producto; no constituyen el flujo web implementado actualmente. Los endpoints de autenticación del backend no sustituyen esas pantallas ni la autorización de todas las rutas.
+
 1. **Detección Automática de Primer Inicio:**  
    Al desplegar la plataforma por primera vez, el sistema detecta si la base de datos PostgreSQL contiene una cuenta de Administrador configurada y si existe un enlace válido con Google Cloud Storage.
 2. **Asistente de Bienvenida (`/setup`):**  
@@ -85,6 +87,14 @@ El sistema implementa un esquema de Control de Acceso Basado en Roles (**RBAC**)
    Una vez completada la configuración, los usuarios inician sesión con sus credenciales institucionales, recibiendo un token criptográfico de sesión (JWT) que determina su interfaz y alcance operativo.
 
 ---
+
+### 2.3. Validación JWT del Backend y Límites de Seguridad
+
+- El consumidor acepta tokens compactos con segmentos Base64URL, firma HMAC válida y algoritmo declarado `HS256`. Cabecera y payload deben ser objetos JSON.
+- `exp` es obligatorio y debe ser una fecha numérica finita, no texto ni booleano. El token vence cuando el reloj alcanza esa fecha, incluyendo expiraciones fraccionarias; no se concede un segundo adicional por redondeo.
+- En `/api/auth/me`, `sub` debe representar un ID positivo como texto decimal ASCII dentro del rango `INTEGER` de PostgreSQL. Sujetos malformados o fuera de rango se rechazan con HTTP 401, sin convertir booleanos/decimales en usuarios ni responder 500 por esa entrada.
+- Un token válido no concede un rol por su payload: el perfil y rol retornados proceden del usuario activo en la BD. Las pruebas de esta fase usan claves/reloj sintéticos y una app de rutas aislada, no el lifespan productivo.
+- Esta corrección **no cambia secretos, contraseñas iniciales, registro, login web ni permisos del resto de rutas**. Siguen pendientes eliminar valores predeterminados inseguros, acordar administración de cuentas y aplicar autenticación/roles, CORS y límites de cargas/peticiones. No equivale a una auditoría JWT completa ni a una garantía de despliegue seguro.
 
 ## 3. Módulo 1: Dashboard MLOps de Doble Campeón
 
