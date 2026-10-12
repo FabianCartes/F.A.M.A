@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, act, within } from '@testing-library/react';
+import { render, screen, fireEvent, act, within, getDefaultNormalizer } from '@testing-library/react';
 import IngestionView from '../IngestionView';
 import * as feedbackApi from '@/lib/api/feedbackApi';
 
@@ -71,7 +71,9 @@ describe('IngestionView persisted inference dataset and curation', () => {
       year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit', second: '2-digit',
     });
-    expect(queue().getByText(`Cargado el ${local}`)).toBeDefined();
+    // Apply the query's own whitespace normalization to the expected Intl text;
+    // Windows/ICU may use nonbreaking spaces without changing the local time.
+    expect(queue().getByText(getDefaultNormalizer()(`Cargado el ${local}`))).toBeDefined();
     expect(screen.queryByText(/#42|#101|technical-uuid/)).toBeNull();
     expect(screen.queryByRole('columnheader', { name: 'Feedback / Predicción' })).toBeNull();
     const sync = within(screen.getByRole('region', { name: 'Sincronización de audios incorporados' }));
