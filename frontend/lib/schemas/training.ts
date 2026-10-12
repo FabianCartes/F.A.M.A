@@ -174,6 +174,9 @@ export type StopTrainingResponse = z.infer<typeof StopTrainingResponseSchema>;
 // ============================================================================
 export const ModelHistoryItemSchema = z.object({
   id: z.number(),
+  name: z.string().optional(),
+  version: z.number().int().positive().optional(),
+  dataset: z.string().optional(),
   architecture: z.string(),
   epochs: z.number(),
   accuracy: z.number().nullable().optional(),
@@ -182,6 +185,24 @@ export const ModelHistoryItemSchema = z.object({
   status: z.string(),
   filename: z.string(),
   created_at: z.string().nullable().optional(),
+  hyperparameters: z.object({
+    learning_rate: z.number().nullable(),
+    batch_size: z.number().nullable(),
+    optimizer: z.string().nullable(),
+    loss_type: z.string().nullable(),
+  }).nullable().optional(),
+  audio_specs: z.object({
+    target_sr: z.number(),
+    duration_seconds: z.number(),
+    n_mels: z.number(),
+    n_fft: z.number(),
+    hop_length: z.number(),
+    fmin: z.number(),
+    fmax: z.number(),
+  }).nullable().optional(),
+  classes: z.array(z.string()).optional(),
+  classes_count: z.number().int().nonnegative().nullable().optional(),
+  file_size_bytes: z.number().nonnegative().nullable().optional(),
 });
 export type ModelHistoryItem = z.infer<typeof ModelHistoryItemSchema>;
 

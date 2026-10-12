@@ -213,7 +213,7 @@ def seed_model(db, **kwargs):
 
 
 def test_get_history_enriches_model_technical_sheet(service_env):
-    """Historical models retain their complete technical sheets and first versions."""
+    """History retains recorded facts without guessing specs of missing artifacts."""
     service, sessions, _, _ = service_env
     with sessions() as db:
         seed_model(db, id_modelo=1, clase_objetivo="13 Clases (engine_diagnostics)", arquitectura="EfficientNet-B0",
@@ -233,12 +233,11 @@ def test_get_history_enriches_model_technical_sheet(service_env):
     assert item_1["filename"] == "fama_efficientnet_b0_1790642923_efficientnet_b0_best.pt"
     assert item_1["hyperparameters"]["learning_rate"] == 0.001
     assert item_1["hyperparameters"]["batch_size"] == 16
-    assert item_1["hyperparameters"]["optimizer"] == "AdamW"
-    assert item_1["hyperparameters"]["loss_type"] in ["Focal Loss", "CrossEntropy"]
-    assert item_1["audio_specs"]["target_sr"] == 32000
-    assert item_1["audio_specs"]["duration_seconds"] == 1.5
-    assert item_1["audio_specs"]["fmax"] == 16000
-    assert item_1["classes_count"] == 13
+    assert item_1["hyperparameters"]["optimizer"] is None
+    assert item_1["hyperparameters"]["loss_type"] is None
+    assert item_1["audio_specs"] is None
+    assert item_1["classes"] == []
+    assert item_1["classes_count"] is None
     assert item_1["file_size_bytes"] == 48822960
     item_6 = next(h for h in entries if h["id"] == 6)
     assert item_6["version"] == 1
@@ -247,10 +246,9 @@ def test_get_history_enriches_model_technical_sheet(service_env):
     assert item_6["filename"] == "fama_efficientnet_b0_1790539191_efficientnet_b0_best.pt"
     assert item_6["hyperparameters"]["learning_rate"] == 0.001
     assert item_6["hyperparameters"]["batch_size"] == 32
-    assert item_6["audio_specs"]["target_sr"] == 22050
-    assert item_6["audio_specs"]["duration_seconds"] == 5.0
-    assert item_6["audio_specs"]["fmax"] == 11025
-    assert item_6["classes_count"] == 15
+    assert item_6["audio_specs"] is None
+    assert item_6["classes"] == []
+    assert item_6["classes_count"] is None
     assert item_6["file_size_bytes"] == 48822960
 
 

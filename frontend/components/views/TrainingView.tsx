@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { API_BASE_URL } from "@/lib/api";
+import type { ModelHistoryItem } from "@/lib/schemas/training";
 import { rebalanceWeights, sumWeights, normalizeWeightsTo100 } from "@/lib/utils/ensembleWeights";
 import {
   AUDIO_DOMAIN_PRESETS,
@@ -55,39 +56,6 @@ interface LogEntry {
   timestamp: string;
   level: string;
   message: string;
-}
-
-interface ModelHistoryItem {
-  id: number;
-  name?: string;
-  version?: number;
-  dataset?: string;
-  architecture: string;
-  epochs: number;
-  accuracy: number;
-  loss: number;
-  active: boolean;
-  status: string;
-  filename: string;
-  hyperparameters?: {
-    learning_rate: number;
-    batch_size: number;
-    optimizer: string;
-    loss_type: string;
-  };
-  audio_specs?: {
-    target_sr: number;
-    duration_seconds: number;
-    n_mels: number;
-    n_fft: number;
-    hop_length: number;
-    fmin: number;
-    fmax: number;
-  };
-  classes?: string[];
-  classes_count?: number;
-  file_size_bytes?: number;
-  created_at: string | null;
 }
 
 const ARCHITECTURE_PRESETS: Record<
@@ -2641,12 +2609,12 @@ export default function TrainingView() {
                     </td>
                     <td className="py-3 text-gray-400 font-mono">{item.epochs}</td>
                     <td className="py-3 font-mono font-semibold">
-                      <span className={item.accuracy >= 75 ? "text-emerald-400" : "text-amber-400"}>
-                        {item.accuracy ? `${item.accuracy.toFixed(2)}%` : "—"}
+                      <span className={item.accuracy != null && item.accuracy >= 75 ? "text-emerald-400" : "text-amber-400"}>
+                        {item.accuracy != null ? `${item.accuracy.toFixed(2)}%` : "—"}
                       </span>
                     </td>
                     <td className="py-3 text-gray-400 font-mono">
-                      {item.loss ? item.loss.toFixed(4) : "—"}
+                      {item.loss != null ? item.loss.toFixed(4) : "—"}
                     </td>
                     <td className="py-3 text-gray-400 font-mono text-[11px] max-w-[220px] truncate" title={item.filename}>
                       {item.filename}
@@ -2719,25 +2687,25 @@ export default function TrainingView() {
                     <div className="flex justify-between items-center gap-2">
                       <span className="text-gray-400 shrink-0">Learning Rate:</span>
                       <span className="text-gray-200 font-mono font-medium text-right">
-                        {selectedModelModal.hyperparameters?.learning_rate ?? "0.001"}
+                         {selectedModelModal.hyperparameters?.learning_rate ?? "No disponible"}
                       </span>
                     </div>
                     <div className="flex justify-between items-center gap-2">
                       <span className="text-gray-400 shrink-0">Batch Size:</span>
                       <span className="text-gray-200 font-mono font-medium text-right">
-                        {selectedModelModal.hyperparameters?.batch_size ?? 16}
+                         {selectedModelModal.hyperparameters?.batch_size ?? "No disponible"}
                       </span>
                     </div>
                     <div className="flex justify-between items-center gap-2">
                       <span className="text-gray-400 shrink-0">Optimizer:</span>
                       <span className="text-cyan-400 font-mono font-medium text-right">
-                        {selectedModelModal.hyperparameters?.optimizer ?? "AdamW"}
+                         {selectedModelModal.hyperparameters?.optimizer ?? "No disponible"}
                       </span>
                     </div>
                     <div className="flex justify-between items-center gap-2">
                       <span className="text-gray-400 shrink-0">Loss Function:</span>
                       <span className="text-emerald-400 font-mono font-medium text-right">
-                        {selectedModelModal.hyperparameters?.loss_type ?? "Focal Loss"}
+                         {selectedModelModal.hyperparameters?.loss_type ?? "No disponible"}
                       </span>
                     </div>
                   </div>
@@ -2755,25 +2723,31 @@ export default function TrainingView() {
                     <div className="flex justify-between items-center gap-2">
                       <span className="text-gray-400 shrink-0">Sample Rate:</span>
                       <span className="text-gray-200 font-mono font-medium whitespace-nowrap text-right">
-                        {selectedModelModal.audio_specs?.target_sr ?? 22050} Hz
+                         {selectedModelModal.audio_specs?.target_sr != null
+                           ? `${selectedModelModal.audio_specs.target_sr} Hz` : "No disponible"}
                       </span>
                     </div>
                     <div className="flex justify-between items-center gap-2">
                       <span className="text-gray-400 shrink-0">Duración Ventana:</span>
                       <span className="text-gray-200 font-mono font-medium whitespace-nowrap text-right">
-                        {selectedModelModal.audio_specs?.duration_seconds ?? 5.0} s
+                         {selectedModelModal.audio_specs?.duration_seconds != null
+                           ? `${selectedModelModal.audio_specs.duration_seconds} s` : "No disponible"}
                       </span>
                     </div>
                     <div className="flex justify-between items-center gap-2">
                       <span className="text-gray-400 shrink-0">Bandas Mel:</span>
                       <span className="text-gray-200 font-mono font-medium whitespace-nowrap text-right">
-                        {selectedModelModal.audio_specs?.n_mels ?? 128} mels (FFT {selectedModelModal.audio_specs?.n_fft ?? 2048})
+                         {selectedModelModal.audio_specs?.n_mels != null && selectedModelModal.audio_specs?.n_fft != null
+                           ? `${selectedModelModal.audio_specs.n_mels} mels (FFT ${selectedModelModal.audio_specs.n_fft})`
+                           : "No disponible"}
                       </span>
                     </div>
                     <div className="flex justify-between items-center gap-2">
                       <span className="text-gray-400 shrink-0">Rango Frecuencia:</span>
                       <span className="text-gray-200 font-mono font-medium whitespace-nowrap text-right">
-                        {selectedModelModal.audio_specs?.fmin ?? 50} - {selectedModelModal.audio_specs?.fmax ?? 11025} Hz
+                         {selectedModelModal.audio_specs?.fmin != null && selectedModelModal.audio_specs?.fmax != null
+                           ? `${selectedModelModal.audio_specs.fmin} - ${selectedModelModal.audio_specs.fmax} Hz`
+                           : "No disponible"}
                       </span>
                     </div>
                   </div>
@@ -2803,15 +2777,18 @@ export default function TrainingView() {
                     <div className="flex justify-between pt-1">
                       <span className="text-gray-400">Tamaño:</span>
                       <span className="text-gray-200 font-mono font-medium">
-                        {selectedModelModal.file_size_bytes
+                         {selectedModelModal.file_size_bytes != null
                           ? `${(selectedModelModal.file_size_bytes / (1024 * 1024)).toFixed(2)} MB`
-                          : "46.56 MB"}
+                           : "No disponible"}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-400">Clases soportadas:</span>
                       <span className="text-emerald-400 font-mono font-semibold">
-                        {selectedModelModal.classes_count ?? (selectedModelModal.classes?.length ?? 15)} clases
+                         {selectedModelModal.classes_count != null
+                           ? `${selectedModelModal.classes_count} clases`
+                           : selectedModelModal.classes?.length
+                             ? `${selectedModelModal.classes.length} clases` : "No disponible"}
                       </span>
                     </div>
                   </div>

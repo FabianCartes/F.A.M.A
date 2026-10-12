@@ -17,7 +17,7 @@ docs/
 ├── arquitectura/                # Diseño de sistemas, pipelines, MLOps y despliegue
 ├── limites/                     # Límites matemáticos, físicos y problemas conocidos
 ├── manuales/                    # Manual de usuario, revisión, despliegue e índices canónicos
-├── adr/                         # Architectural Decision Records (ADR 0001 a 0021)
+├── adr/                         # Architectural Decision Records (ADR 0001 a 0022)
 ├── receipts/                    # Recibos técnicos reproducibles en formato JSON (RDD)
 ├── duplicados-exactos/           # Tarea acotada: admisión de feedback sin duplicados SHA-256
 └── images/                      # Diagramas, matrices de confusión y gráficos vectoriales
@@ -82,7 +82,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`backend_permissions_integration.json`](./receipts/backend_permissions_integration.json): Verificación PERM-3 del servicio público de feedback en contenedor aislado; propietario y modos tras aprobaciones, reinicio y replay. Contexto mínimo, no prueba del despliegue completo ni autoridad de entrega.
 
 ### 6. [`docs/adr/`](./adr/) — Architectural Decision Records
-Registro de las 21 decisiones de arquitectura fundamentales del sistema:
+Registro de las 22 decisiones de arquitectura fundamentales del sistema:
 * `ADR 0001`: Migración de AudioCNN a EfficientNet-B0.
 * `ADR 0002`: Particionamiento Estratificado a Nivel de Grabador (Zero Leakage).
 * `ADR 0003`: Adopción de Focal Loss frente a Cross-Entropy estándar.
@@ -104,3 +104,4 @@ Registro de las 21 decisiones de arquitectura fundamentales del sistema:
 * [`ADR 0019`](./adr/0019-referencias-canonicas-por-etapa.md): Referencias relativas con etapa raw/processed obligatoria y raíces físicas explícitas; contrato compartido estricto, sin inferencia ni activación automática de productores/consumidores legacy.
 * [`ADR 0020`](./adr/0020-raices-fisicas-en-localizadores-publicos.md): Getters raw/processed y PathResolver conservan la escritura declarada; raíces con alias no soportadas para asociación canónica, sin validación física implícita ni migración de URIs.
 * [`ADR 0021`](./adr/0021-preprocesamiento-efectivo-en-checkpoints.md): Configuración acústica efectiva y perfil versionado en checkpoints web; inferencia coherente para nuevos artefactos y compatibilidad legacy explícita, sin reinterpretación de pesos históricos.
+* [`ADR 0022`](./adr/0022-ficha-tecnica-sin-valores-inventados.md): Ficha técnica con metadatos explícitos del checkpoint, lectura mapeada y valores desconocidos sin presets fabricados; contrato backend/cliente/UI sin migraciones ni certificación de inferencia.

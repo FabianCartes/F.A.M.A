@@ -21,6 +21,7 @@ from app.models.dataset import ConjuntoDatos, Audio
 from app.models.training import Modelo, MetricaEntrenamiento
 import pandas as pd
 import gc
+import math
 from torch.utils.data import DataLoader
 from poc.preprocess import GPUAudioFrontEnd, GPUSpecAugment
 from poc.train import BioacousticModel, AudioCNN, AudioDataset, FocalLoss, apply_mixup
@@ -913,6 +914,10 @@ class TrainingService:
                     },
                     "windowing_config": config.get("windowing_config"),
                     "regularization_config": config.get("regularization_config"),
+                    "hyperparameters": {
+                        "optimizer": "AdamW",
+                        "loss_type": "CrossEntropy" if loss_type == "cross_entropy" else "Focal Loss",
+                    },
                     "state_dict": saved_state,
                     "created_at": datetime.now(timezone.utc).isoformat(),
                 }
@@ -1014,19 +1019,29 @@ class TrainingService:
                 self.error_message = str(exc)
             self._add_log("ERROR", f"Fallo catastrófico en el entrenamiento: {exc}")
 
+    def _history_checkpoint(self, filename: str) -> tuple[Dict[str, Any], Optional[int]]:
+        """Read only a local artifact under the configured checkpoint root."""
+        try:
+            root = self.checkpoints_dir.resolve(strict=True)
+            checkpoint = (root / filename).resolve(strict=True)
+            if not checkpoint.is_relative_to(root) or not checkpoint.is_file():
+                return {}, None
+            size = checkpoint.stat().st_size
+            try:
+                # Keep tensor storage mapped rather than materializing weights
+                # for a technical sheet. Unsupported legacy formats stay unknown.
+                payload = torch.load(checkpoint, map_location="cpu", weights_only=True, mmap=True)
+            except Exception:
+                return {}, size
+            return (payload if isinstance(payload, dict) else {}), size
+        except Exception:
+            return {}, None
+
     def get_history(self, db: Optional[Session] = None) -> List[Dict[str, Any]]:
         """
         Retorna el historial de modelos entrenados enriquecido con la Ficha Técnica (CU_INV_04).
         """
         import re
-        from training.pipelines.multitask_mapping import CLASS_NAMES_13
-
-        aves_classes = [
-            "Canastero", "Chercán", "Chincol", "Chucao", "Churrín de la Mocha",
-            "Churrín del sur", "Colilarga", "Fío-fío", "Picaflor chico", "Rayadito",
-            "Tapaculo", "Tijeral", "Tordo", "Turca", "Zorzal patagónico"
-        ]
-        engine_classes = list(CLASS_NAMES_13)
 
         history = []
         if db is not None:
@@ -1069,51 +1084,64 @@ class TrainingService:
 
                 for m in modelos:
                     filename = Path(m.ruta_binario_gcp).name if m.ruta_binario_gcp else f"modelo_{m.id_modelo}.pt"
+                    checkpoint, local_file_size = self._history_checkpoint(filename)
                     target_lower = (m.clase_objetivo or "").lower()
 
                     is_birds = "aves" in target_lower or "chilenas" in target_lower
                     is_engine = "engine" in target_lower or "motores" in target_lower
 
+                    classes_list = []
                     if is_birds:
                         dataset_display = "Aves Chilenas"
-                        classes_list = aves_classes
                     elif is_engine:
                         dataset_display = "Motores"
-                        classes_list = engine_classes
                     else:
                         dataset_display = m.clase_objetivo or "Personalizado"
-                        classes_list = aves_classes
 
                     version = calculated_versions.get(m.id_modelo, 1)
 
                     friendly_name = f"{dataset_display} · {m.arquitectura} (v{version})"
 
-                    lr_val = float(m.tasa_aprendizaje) if m.tasa_aprendizaje is not None else 0.001
-                    batch_val = int(m.tamano_lote) if m.tamano_lote is not None else 16
+                    lr_val = float(m.tasa_aprendizaje) if m.tasa_aprendizaje is not None else None
+                    batch_val = int(m.tamano_lote) if m.tamano_lote is not None else None
                     hyperparameters = {
                         "learning_rate": lr_val,
                         "batch_size": batch_val,
-                        "optimizer": "AdamW",
-                        "loss_type": "Focal Loss",
+                        "optimizer": None,
+                        "loss_type": None,
                     }
+                    recorded_hyperparameters = checkpoint.get("hyperparameters")
+                    if isinstance(recorded_hyperparameters, dict):
+                        for key in ("optimizer", "loss_type"):
+                            value = recorded_hyperparameters.get(key)
+                            if isinstance(value, str) and value.strip():
+                                hyperparameters[key] = value
 
-                    audio_specs = {
-                        "target_sr": 22050 if is_birds else 32000,
-                        "duration_seconds": 5.0 if is_birds else 1.5,
-                        "n_mels": 128,
-                        "n_fft": 2048,
-                        "hop_length": 512,
-                        "fmin": 50,
-                        "fmax": 11025 if is_birds else 16000,
-                    }
+                    audio_specs = None
+                    labels = checkpoint.get("classes")
+                    if (isinstance(labels, list) and labels
+                            and all(isinstance(label, str) and label.strip() for label in labels)
+                            and len(set(labels)) == len(labels)):
+                        classes_list = labels
+                    audio_config = checkpoint.get("audio_config")
+                    if isinstance(audio_config, dict) and {
+                        "target_sr", "duration_seconds", "n_mels", "n_fft", "hop_length", "f_min", "f_max"
+                    }.issubset(audio_config):
+                        try:
+                            validated = AudioConfig.model_validate(audio_config, strict=True)
+                            if (validated.target_sr <= 0 or validated.f_max is None
+                                    or validated.f_max > validated.target_sr / 2
+                                    or not all(math.isfinite(value) for value in (
+                                        validated.duration_seconds, validated.f_min, validated.f_max))):
+                                raise ValueError("Invalid acoustic metadata")
+                            audio_specs = {key: getattr(validated, key) for key in (
+                                "target_sr", "duration_seconds", "n_mels", "n_fft", "hop_length"
+                            )}
+                            audio_specs.update(fmin=validated.f_min, fmax=validated.f_max)
+                        except (ValueError, TypeError):
+                            pass
 
-                    file_size = m.tamano_bytes or 0
-                    if file_size == 0:
-                        candidate_path = self.checkpoints_dir / filename
-                        if candidate_path.exists():
-                            file_size = candidate_path.stat().st_size
-                        else:
-                            file_size = 48822960
+                    file_size = m.tamano_bytes if m.tamano_bytes and m.tamano_bytes > 0 else local_file_size
 
                     history.append({
                         "id": m.id_modelo,
@@ -1136,113 +1164,12 @@ class TrainingService:
                         "hyperparameters": hyperparameters,
                         "audio_specs": audio_specs,
                         "classes": classes_list,
-                        "classes_count": len(classes_list),
+                        "classes_count": len(classes_list) if classes_list else None,
                         "file_size_bytes": file_size,
                         "created_at": m.fecha_entrenamiento.isoformat() if m.fecha_entrenamiento else None,
                     })
             except Exception:
                 pass
-
-        # Si la base de datos está vacía, mostrar los checkpoints históricos de referencia
-        if not history and db is None:
-            history = [
-                {
-                    "id": 1,
-                    "name": "Aves Chilenas · Super-Ensamble Tri-Modelo (v1)",
-                    "version": 1,
-                    "dataset": "Aves Chilenas",
-                    "architecture": "Super-Ensamble Tri-Modelo",
-                    "epochs": 50,
-                    "accuracy": 86.75,
-                    "loss": 0.4521,
-                    "active": True,
-                    "status": "activo",
-                    "filename": "super_ensemble_calibrated.pt",
-                    "hyperparameters": {
-                        "learning_rate": 0.0005,
-                        "batch_size": 16,
-                        "optimizer": "AdamW",
-                        "loss_type": "Focal Loss",
-                    },
-                    "audio_specs": {
-                        "target_sr": 22050,
-                        "duration_seconds": 5.0,
-                        "n_mels": 128,
-                        "n_fft": 2048,
-                        "hop_length": 512,
-                        "fmin": 50,
-                        "fmax": 11025,
-                    },
-                    "classes": aves_classes,
-                    "classes_count": len(aves_classes),
-                    "file_size_bytes": 48822960,
-                    "created_at": "2026-09-10T14:30:00Z",
-                },
-                {
-                    "id": 2,
-                    "name": "Aves Chilenas · EfficientNet-B0 (Pitch Shift) (v2)",
-                    "version": 2,
-                    "dataset": "Aves Chilenas",
-                    "architecture": "EfficientNet-B0 (Pitch Shift)",
-                    "epochs": 40,
-                    "accuracy": 83.71,
-                    "loss": 0.5218,
-                    "active": False,
-                    "status": "entrenado",
-                    "filename": "augmented_best.pt",
-                    "hyperparameters": {
-                        "learning_rate": 0.001,
-                        "batch_size": 32,
-                        "optimizer": "AdamW",
-                        "loss_type": "Focal Loss",
-                    },
-                    "audio_specs": {
-                        "target_sr": 22050,
-                        "duration_seconds": 5.0,
-                        "n_mels": 128,
-                        "n_fft": 2048,
-                        "hop_length": 512,
-                        "fmin": 50,
-                        "fmax": 11025,
-                    },
-                    "classes": aves_classes,
-                    "classes_count": len(aves_classes),
-                    "file_size_bytes": 48822960,
-                    "created_at": "2026-09-08T18:15:00Z",
-                },
-                {
-                    "id": 3,
-                    "name": "Aves Chilenas · AudioCNN Baseline (v3)",
-                    "version": 3,
-                    "dataset": "Aves Chilenas",
-                    "architecture": "AudioCNN Baseline",
-                    "epochs": 15,
-                    "accuracy": 55.56,
-                    "loss": 1.1250,
-                    "active": False,
-                    "status": "entrenado",
-                    "filename": "baseline_best.pt",
-                    "hyperparameters": {
-                        "learning_rate": 0.001,
-                        "batch_size": 32,
-                        "optimizer": "AdamW",
-                        "loss_type": "CrossEntropy",
-                    },
-                    "audio_specs": {
-                        "target_sr": 22050,
-                        "duration_seconds": 5.0,
-                        "n_mels": 128,
-                        "n_fft": 2048,
-                        "hop_length": 512,
-                        "fmin": 50,
-                        "fmax": 11025,
-                    },
-                    "classes": aves_classes,
-                    "classes_count": len(aves_classes),
-                    "file_size_bytes": 4313077,
-                    "created_at": "2026-09-03T10:00:00Z",
-                },
-            ]
 
         return history
 
