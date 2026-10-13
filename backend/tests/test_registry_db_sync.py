@@ -1,5 +1,6 @@
 """Registry and activation through public interfaces, with temporary SQLite/ML fixtures."""
 from pathlib import Path
+import hashlib
 
 import pytest
 from sqlalchemy import create_engine
@@ -23,10 +24,22 @@ def isolated_db(tmp_path, monkeypatch):
 
     class MetadataPredictor(FakeAudioPredictor):
         """No inference or tensor deserialization at the external ML seam."""
-        def __init__(self, checkpoint_path, model_id, name, is_default, lazy_load, dataset_name):
+        def __init__(self, checkpoint_path, model_id, name, is_default, lazy_load, dataset_name,
+                     expected_checkpoint_sha256):
+            actual_hash = hashlib.sha256(checkpoint_path.read_bytes()).hexdigest()
+            assert expected_checkpoint_sha256 == actual_hash
             super().__init__(model_id, name, is_default)
             self.checkpoint_path = checkpoint_path
+            self.expected_checkpoint_sha256 = expected_checkpoint_sha256
             self._meta.dataset_name = dataset_name
+
+        @property
+        def is_default(self):
+            return self._meta.is_default
+
+        @is_default.setter
+        def is_default(self, value):
+            self._meta.is_default = value
 
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
@@ -49,10 +62,13 @@ def seeded_models(isolated_db):
     rows = []
     for model_id, active in ((41, True), (42, False)):
         filename = f"trained_{model_id}.pt"
-        (checkpoints / filename).write_bytes(b"synthetic metadata fixture" * 500)
+        checkpoint = checkpoints / filename
+        checkpoint.write_bytes(b"synthetic metadata fixture" * 500)
+        expected_hash = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
         rows.append(Modelo(id_modelo=model_id, arquitectura="fixture", epocas=1,
                            tasa_aprendizaje=0.001, tamano_lote=1,
-                           ruta_binario_gcp=f"models/{filename}", activo=active))
+                           ruta_binario_gcp=f"models/{filename}", activo=active,
+                           hash_binario=expected_hash))
     db.add_all(rows)
     db.commit()
     return db, checkpoints, rows[0], rows[1]
@@ -168,7 +184,14 @@ def test_startup_rejects_standard_model_with_coherently_wrong_effective_config(i
     key = f"fama_trained_model_{model.id_modelo}"
     assert not registry.has_model(key)
     assert registry.get_default_model_id() is None
-    assert {item.id for item in registry.list_models()} == {"fama_trained_model_70"}
+    assert registry.list_models() == []
+    legacy_model = db.get(Modelo, 70)
+    assert legacy_model.hash_binario is None
+    from app.services.predictors.base import ModelWeightsError
+    with pytest.raises(ModelWeightsError, match="falta el hash SHA-256 registrado"):
+        registry.get("70")
+    with pytest.raises(ModelWeightsError, match="falta el hash SHA-256 registrado"):
+        registry.get(legacy_path.name)
     assert db.get(Modelo, model.id_modelo).activo is True
 
 

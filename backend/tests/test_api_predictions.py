@@ -362,3 +362,112 @@ def test_predict_invalid_format_returns_400(client):
     )
     assert response.status_code == 400
     assert "Solo se permiten archivos de audio con extensión .wav" in response.json()["detail"]
+
+
+@patch("app.main.upload_audio_to_gcp", new_callable=AsyncMock)
+def test_predict_rejects_persisted_model_without_hash_before_persistence(
+    mock_upload, client, mock_registry, mock_db, tmp_path,
+):
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    checkpoint = tmp_path / "fama_missing_identity_best.pt"
+    checkpoint.write_bytes(b"synthetic checkpoint bytes" * 500)
+    model = SimpleNamespace(
+        id_modelo=712,
+        activo=False,
+        arquitectura="fixture",
+        ruta_binario_gcp=f"models/{checkpoint.name}",
+        conjunto_datos=None,
+        hash_binario=None,
+    )
+    db = MagicMock()
+    db.query.return_value.order_by.return_value.all.return_value = [model]
+    mock_registry.register_from_db(db, tmp_path)
+
+    from fastapi.testclient import TestClient
+    safe_client = TestClient(app, raise_server_exceptions=False)
+    response = safe_client.post(
+        "/api/predict?model_id=fama_trained_model_712",
+        files={"file": ("canto.wav", create_dummy_wav_bytes(), "audio/wav")},
+    )
+    safe_client.close()
+
+    assert response.status_code == 503
+    assert "hash SHA-256 registrado" in response.json()["detail"]
+    mock_upload.assert_not_awaited()
+    mock_db.add.assert_not_called()
+    mock_db.commit.assert_not_called()
+    mock_db.refresh.assert_not_called()
+    assert set(response.json()) == {"detail"}
+
+
+def test_predict_rejects_replaced_persisted_checkpoint_without_saving_prediction(
+    client, mock_registry, mock_db, tmp_path,
+):
+    import hashlib
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    import torch
+
+    checkpoint = tmp_path / "fama_replaced_identity_best.pt"
+    torch.save({
+        "architecture": "AudioCNN",
+        "classes": ["A", "B"],
+        "padding": "x" * 12000,
+    }, checkpoint)
+    expected_hash = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+    model = SimpleNamespace(
+        id_modelo=713,
+        activo=False,
+        arquitectura="fixture",
+        ruta_binario_gcp=f"models/{checkpoint.name}",
+        conjunto_datos=None,
+        hash_binario=expected_hash,
+    )
+    db = MagicMock()
+    db.query.return_value.order_by.return_value.all.return_value = [model]
+    mock_registry.register_from_db(db, tmp_path)
+    checkpoint.write_bytes(checkpoint.read_bytes() + b"replacement")
+
+    with patch("app.main.upload_audio_to_gcp", new_callable=AsyncMock, return_value=True) as upload:
+        response = client.post(
+            "/api/predict?model_id=fama_trained_model_713",
+            files={"file": ("canto.wav", create_dummy_wav_bytes(), "audio/wav")},
+        )
+
+    assert response.status_code == 503
+    assert "no coincide con el hash SHA-256 registrado" in response.json()["detail"]
+    assert set(response.json()) == {"detail"}
+    upload.assert_awaited_once()
+    mock_db.add.assert_not_called()
+    mock_db.commit.assert_not_called()
+    mock_db.refresh.assert_not_called()
+
+
+@patch("app.main.upload_audio_to_gcp", new_callable=AsyncMock)
+def test_predict_exposes_loaded_checkpoint_identity_in_details(
+    mock_upload, client, mock_registry, mock_db,
+):
+    mock_upload.return_value = True
+    loaded_hash = "a" * 64
+
+    class ProvenancePredictor(DummyPredictor):
+        def predict(self, audio_file_path):
+            return PredictionResult(
+                clase=self.label,
+                confianza=self.conf,
+                detalles={"loaded_checkpoint_sha256": loaded_hash, "status": "classified"},
+            )
+
+    mock_registry.register(ProvenancePredictor("checkpoint-provenance"))
+    response = client.post(
+        "/api/predict?model_id=checkpoint-provenance",
+        files={"file": ("canto.wav", create_dummy_wav_bytes(), "audio/wav")},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["detalles"]["loaded_checkpoint_sha256"] == loaded_hash
+    assert mock_db.add.called
+    assert mock_db.commit.called

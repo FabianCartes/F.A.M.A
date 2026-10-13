@@ -51,7 +51,11 @@ class ModelMetadata(BaseModel):
     has_weights: bool = Field(True, description="Indica si los pesos binarios (.pt) existen físicamente en disco y están listos")
     checkpoint_sha256: Optional[str] = Field(
         None,
-        description="SHA-256 de los bytes del archivo checkpoint registrado; no acredita los parámetros cargados en memoria",
+        description="SHA-256 de los bytes actuales del archivo checkpoint registrado; no acredita los parámetros cargados en memoria",
+    )
+    loaded_checkpoint_sha256: Optional[str] = Field(
+        None,
+        description="SHA-256 de la instantánea de checkpoint deserializada por esta instancia predictora",
     )
     metrics: Optional[Dict[str, Any]] = Field(None, description="Métricas históricas existentes del modelo")
     evaluations: Optional[ModelEvaluations] = Field(None, description="Últimos intentos e informes finales por split")

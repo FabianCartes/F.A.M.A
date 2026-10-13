@@ -5,6 +5,8 @@ Garantiza inferencia real en PyTorch, telemetría ODD y fail-fast si faltan peso
 """
 from pathlib import Path
 from typing import Optional, List, Dict, Any
+from io import BytesIO
+from threading import RLock
 import hashlib
 import time
 import torch
@@ -66,8 +68,20 @@ class TrainedModelPredictor(AudioPredictor):
         is_default: bool = False,
         lazy_load: bool = False,
         dataset_name: Optional[str] = None,
+        expected_checkpoint_sha256: Optional[str] = None,
     ):
         self.checkpoint_path = Path(checkpoint_path)
+        if expected_checkpoint_sha256 is not None and (
+            not isinstance(expected_checkpoint_sha256, str)
+            or len(expected_checkpoint_sha256) != 64
+            or any(char not in "0123456789abcdefABCDEF" for char in expected_checkpoint_sha256)
+        ):
+            raise ModelWeightsError("El hash SHA-256 esperado del checkpoint registrado no es válido.")
+        self.expected_checkpoint_sha256 = (
+            expected_checkpoint_sha256.lower() if expected_checkpoint_sha256 is not None else None
+        )
+        self._load_lock = RLock()
+        self._loaded_checkpoint_sha256: Optional[str] = None
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.is_default = is_default
         self._model_id = model_id or self.checkpoint_path.stem
@@ -101,7 +115,35 @@ class TrainedModelPredictor(AudioPredictor):
             classes=self.classes,
             is_default=self.is_default,
             metrics={"accuracy": round(self.best_val_acc / 100.0 if self.best_val_acc and self.best_val_acc > 1 else (self.best_val_acc or 0.0), 4)},
+            loaded_checkpoint_sha256=self._loaded_checkpoint_sha256,
         )
+
+    def _read_checkpoint_snapshot(self) -> tuple[bytes, str]:
+        try:
+            snapshot = self.checkpoint_path.read_bytes()
+        except Exception as err:
+            raise ModelWeightsError(
+                f"No se pudo leer el checkpoint para inferencia: {err}"
+            ) from err
+        digest = hashlib.sha256(snapshot).hexdigest()
+        if self.expected_checkpoint_sha256 is not None and digest != self.expected_checkpoint_sha256:
+            raise ModelWeightsError(
+                "El checkpoint disponible no coincide con el hash SHA-256 registrado para este modelo."
+            )
+        return snapshot, digest
+
+    def _deserialize_checkpoint(self, snapshot: bytes, map_location):
+        try:
+            checkpoint = torch.load(BytesIO(snapshot), map_location=map_location)
+        except Exception as err:
+            raise ModelWeightsError(
+                f"Error al deserializar checkpoint {self.checkpoint_path}: {err}"
+            ) from err
+        if not isinstance(checkpoint, dict):
+            raise ModelWeightsError(
+                f"El checkpoint {self.checkpoint_path} no tiene un formato válido (se esperaba un diccionario)."
+            )
+        return checkpoint
 
     def _load_metadata(self) -> None:
         """
@@ -113,102 +155,109 @@ class TrainedModelPredictor(AudioPredictor):
                 f"Archivo de checkpoint inexistente: {self.checkpoint_path}"
             )
 
-        try:
-            checkpoint = torch.load(self.checkpoint_path, map_location="cpu")
-        except Exception as err:
-            raise ModelWeightsError(
-                f"Error al deserializar checkpoint {self.checkpoint_path}: {err}"
-            ) from err
+        snapshot, _ = self._read_checkpoint_snapshot()
+        checkpoint = self._deserialize_checkpoint(snapshot, map_location="cpu")
+        contract = _standard_frontend_contract(checkpoint)
+        architecture_name = checkpoint.get("architecture", "EfficientNet-B0")
+        classes = checkpoint.get("classes", list(DEFAULT_CHILEAN_BIRD_CLASSES))
+        best_val_acc = checkpoint.get("best_val_acc")
 
-        if not isinstance(checkpoint, dict):
-            raise ModelWeightsError(
-                f"El checkpoint {self.checkpoint_path} no tiene un formato válido (se esperaba un diccionario)."
-            )
-
-        self.preprocessing_contract = _standard_frontend_contract(checkpoint)
-        self.architecture_name = checkpoint.get("architecture", "EfficientNet-B0")
-        self.classes = checkpoint.get("classes", list(DEFAULT_CHILEAN_BIRD_CLASSES))
-        self.best_val_acc = checkpoint.get("best_val_acc")
-        self.model = None
+        self.preprocessing_contract = contract
+        self.architecture_name = architecture_name
+        self.classes = classes
+        self.best_val_acc = best_val_acc
 
     def _load_model(self) -> None:
-        """Carga y valida los pesos binarios en memoria."""
-        if not self.checkpoint_path.exists():
-            raise ModelWeightsError(
-                f"Archivo de checkpoint inexistente: {self.checkpoint_path}"
-            )
-
-        try:
-            checkpoint = torch.load(self.checkpoint_path, map_location=self.device)
-        except Exception as err:
-            raise ModelWeightsError(
-                f"Error al deserializar checkpoint {self.checkpoint_path}: {err}"
-            ) from err
-
-        if not isinstance(checkpoint, dict):
-            raise ModelWeightsError(
-                f"El checkpoint {self.checkpoint_path} no tiene un formato válido (se esperaba un diccionario)."
-            )
-
-        self.preprocessing_contract = _standard_frontend_contract(checkpoint)
-        state_dict = checkpoint.get("state_dict") or checkpoint.get("model_state_dict")
-        if state_dict is None:
-            # Verificar si el diccionario en sí contiene tensores
-            if any(isinstance(v, torch.Tensor) for v in checkpoint.values()):
-                state_dict = checkpoint
-            else:
+        """Carga y valida los pesos binarios en memoria desde una instantánea única."""
+        with self._load_lock:
+            if self.model is not None:
+                return
+            if not self.checkpoint_path.exists():
                 raise ModelWeightsError(
-                    f"No se encontró state_dict en el checkpoint {self.checkpoint_path}"
+                    f"Archivo de checkpoint inexistente: {self.checkpoint_path}"
                 )
 
-        self.architecture_name = checkpoint.get("architecture", "EfficientNet-B0")
-        self.classes = checkpoint.get("classes", list(DEFAULT_CHILEAN_BIRD_CLASSES))
-        self.best_val_acc = checkpoint.get("best_val_acc")
+            snapshot, loaded_hash = self._read_checkpoint_snapshot()
+            checkpoint = self._deserialize_checkpoint(snapshot, map_location=self.device)
+            contract = _standard_frontend_contract(checkpoint)
+            state_dict = checkpoint.get("state_dict") or checkpoint.get("model_state_dict")
+            if state_dict is None:
+                # Verificar si el diccionario en sí contiene tensores.
+                if any(isinstance(value, torch.Tensor) for value in checkpoint.values()):
+                    state_dict = checkpoint
+                else:
+                    raise ModelWeightsError(
+                        f"No se encontró state_dict en el checkpoint {self.checkpoint_path}"
+                    )
 
-        arch_lower = self.architecture_name.lower().replace("-", "_")
-        num_classes = len(self.classes)
+            architecture_name = checkpoint.get("architecture", "EfficientNet-B0")
+            classes = checkpoint.get("classes", list(DEFAULT_CHILEAN_BIRD_CLASSES))
+            best_val_acc = checkpoint.get("best_val_acc")
+            arch_lower = architecture_name.lower().replace("-", "_")
+            num_classes = len(classes)
 
-        if "audiocnn" in arch_lower or "audio_cnn" in arch_lower:
-            model = AudioCNN(num_classes=num_classes)
-        elif "panns" in arch_lower:
             try:
-                from training.models.panns_cnn14 import PannsCNN14
-                model = PannsCNN14(in_chans=1, num_classes=num_classes)
-            except ImportError:
-                model = BioacousticModel(model_name="panns_cnn14", num_classes=num_classes, in_chans=1, pretrained=False)
-        else:
-            if "resnet" in arch_lower:
-                target_arch = "resnet34d"
-            elif "convnext" in arch_lower:
-                target_arch = "convnext_nano"
-            elif "efficient" in arch_lower:
-                target_arch = "efficientnet_b0"
-            else:
-                target_arch = arch_lower
+                if "audiocnn" in arch_lower or "audio_cnn" in arch_lower:
+                    model = AudioCNN(num_classes=num_classes)
+                elif "panns" in arch_lower:
+                    try:
+                        from training.models.panns_cnn14 import PannsCNN14
+                        model = PannsCNN14(in_chans=1, num_classes=num_classes)
+                    except ImportError:
+                        model = BioacousticModel(
+                            model_name="panns_cnn14", num_classes=num_classes,
+                            in_chans=1, pretrained=False,
+                        )
+                else:
+                    if "resnet" in arch_lower:
+                        target_arch = "resnet34d"
+                    elif "convnext" in arch_lower:
+                        target_arch = "convnext_nano"
+                    elif "efficient" in arch_lower:
+                        target_arch = "efficientnet_b0"
+                    else:
+                        target_arch = arch_lower
+                    model = BioacousticModel(
+                        model_name=target_arch,
+                        num_classes=num_classes,
+                        in_chans=1,
+                        pretrained=False,
+                    )
 
-            model = BioacousticModel(
-                model_name=target_arch,
-                num_classes=num_classes,
-                in_chans=1,
-                pretrained=False,
-            )
+                model.load_state_dict(state_dict)
+                model.to(self.device)
+                model.eval()
+                frontend = None
+                if contract is not None:
+                    frontend = GPUAudioFrontEnd(
+                        sample_rate=contract["sample_rate"], **contract["parameters"]
+                    ).to(self.device)
+                    frontend.eval()
+            except Exception as err:
+                if isinstance(err, ModelWeightsError):
+                    raise
+                raise ModelWeightsError(
+                    f"Incompatibilidad de arquitectura o pesos en {self.checkpoint_path}: {err}"
+                ) from err
 
-        try:
-            model.load_state_dict(state_dict)
-        except Exception as load_err:
-            raise ModelWeightsError(
-                f"Incompatibilidad de arquitectura o pesos en {self.checkpoint_path}: {load_err}"
-            ) from load_err
-
-        model.to(self.device)
-        model.eval()
-        self.model = model
-        if self.preprocessing_contract is not None:
-            contract = self.preprocessing_contract
-            self.frontend = GPUAudioFrontEnd(
-                sample_rate=contract["sample_rate"], **contract["parameters"]
-            ).to(self.device)
-            self.frontend.eval()
+            # Publish identity and metadata only after every load step succeeds.
+            self.preprocessing_contract = contract
+            self.architecture_name = architecture_name
+            self.classes = classes
+            self.best_val_acc = best_val_acc
+            self.frontend = frontend
+            self._loaded_checkpoint_sha256 = loaded_hash
+            if hasattr(self, "_metadata"):
+                self._metadata.name = self.custom_name or f"Modelo Entrenado: {architecture_name} ({self.checkpoint_path.name})"
+                self._metadata.description = f"Inferencia bioacústica con pesos reales entrenados ({architecture_name})"
+                self._metadata.target_sr = contract["sample_rate"] if contract else TARGET_SR
+                self._metadata.duration_seconds = contract["duration_seconds"] if contract else DURATION_SECONDS
+                self._metadata.classes = classes
+                self._metadata.metrics = {
+                    "accuracy": round(best_val_acc / 100.0 if best_val_acc and best_val_acc > 1 else (best_val_acc or 0.0), 4)
+                }
+                self._metadata.loaded_checkpoint_sha256 = loaded_hash
+            self.model = model
 
     @property
     def has_weights(self) -> bool:
@@ -228,10 +277,12 @@ class TrainedModelPredictor(AudioPredictor):
 
     @property
     def metadata(self) -> ModelMetadata:
-        self._metadata.is_default = self.is_default
-        self._metadata.has_weights = self.has_weights
-        self._metadata.checkpoint_sha256 = self._checkpoint_sha256()
-        return self._metadata
+        with self._load_lock:
+            self._metadata.is_default = self.is_default
+            self._metadata.has_weights = self.has_weights
+            self._metadata.checkpoint_sha256 = self._checkpoint_sha256()
+            self._metadata.loaded_checkpoint_sha256 = self._loaded_checkpoint_sha256
+            return self._metadata
 
     @property
     def model_id(self) -> str:
@@ -249,6 +300,7 @@ class TrainedModelPredictor(AudioPredictor):
             self._load_model()
 
         contract = self.preprocessing_contract
+        loaded_checkpoint_sha256 = self._loaded_checkpoint_sha256
         waveform = load_and_fix_length(
             audio_file_path,
             target_sr=contract["sample_rate"] if contract else TARGET_SR,
@@ -267,6 +319,7 @@ class TrainedModelPredictor(AudioPredictor):
                     "checkpoint_name": self.checkpoint_path.name,
                     "device": str(self.device),
                     "is_mock": False,
+                    "loaded_checkpoint_sha256": loaded_checkpoint_sha256,
                 },
             )
 
@@ -285,6 +338,7 @@ class TrainedModelPredictor(AudioPredictor):
                     "checkpoint_name": self.checkpoint_path.name,
                     "device": str(self.device),
                     "is_mock": False,
+                    "loaded_checkpoint_sha256": loaded_checkpoint_sha256,
                 },
             )
 
@@ -317,6 +371,7 @@ class TrainedModelPredictor(AudioPredictor):
                 "latency_ms": latency_ms,
                 "status": "classified",
                 "is_mock": False,
+                "loaded_checkpoint_sha256": loaded_checkpoint_sha256,
             },
         )
 

@@ -572,7 +572,11 @@ async def predict_audio(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(err),
         )
-
+    except ModelWeightsError as weights_err:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Modelo no disponible para inferencia: {weights_err}",
+        )
     lease = getattr(request.state, "inference_lease", None) if request is not None else None
     owns_lease = lease is None
     if owns_lease:

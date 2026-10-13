@@ -17,7 +17,7 @@ docs/
 ├── arquitectura/                # Diseño de sistemas, pipelines, MLOps y despliegue
 ├── limites/                     # Límites matemáticos, físicos y problemas conocidos
 ├── manuales/                    # Manual de usuario, revisión, despliegue e índices canónicos
-├── adr/                         # Architectural Decision Records (ADR 0001 a 0022)
+├── adr/                         # Architectural Decision Records (ADR 0001 a 0023)
 ├── receipts/                    # Recibos técnicos reproducibles en formato JSON (RDD)
 ├── duplicados-exactos/           # Tarea acotada: admisión de feedback sin duplicados SHA-256
 └── images/                      # Diagramas, matrices de confusión y gráficos vectoriales
@@ -58,6 +58,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`informe_consolidado_diagnostico_acustico_motores.md`](./modelos/informe_consolidado_diagnostico_acustico_motores.md): Informe del ensamble industrial para fallas de motor (81.16% Acc).
 
 ### 3. [`docs/arquitectura/`](./arquitectura/) — Arquitectura de Software y MLOps
+* [`identidad-checkpoint-cargado.md`](./arquitectura/identidad-checkpoint-cargado.md): Contrato de identidad de carga, bloqueo de registros sin hash y evidencia de implementación; no implica atestación continua de tensores.
 * [`03_orquestador_fastapi_gcs_postgresql.md`](./arquitectura/03_orquestador_fastapi_gcs_postgresql.md): Arquitectura del orquestador backend con FastAPI.
 * [`04_saneamiento_y_transcodificacion_audio.md`](./arquitectura/04_saneamiento_y_transcodificacion_audio.md): Pipeline de saneamiento y normalización de audio crudo.
 * [`18_soporte_multimodelo_backend_rdd.md`](./arquitectura/18_soporte_multimodelo_backend_rdd.md): Desacoplamiento de inferencia con Patrón Strategy y ModelRegistry.
@@ -68,6 +69,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`22_propuesta_vista_ayuda_y_centro_de_conocimiento.md`](./arquitectura/22_propuesta_vista_ayuda_y_centro_de_conocimiento.md): Diseño y especificación del centro de conocimiento e interactividad en frontend.
 
 ### 4. [`docs/manuales/`](./manuales/) — Manuales y Guías Operativas
+* [`identidad-checkpoint-prediccion.md`](./manuales/identidad-checkpoint-prediccion.md): Interpretación de hashes de catálogo, carga e informe; bloqueo de modelos persistidos sin hash y límites operativos.
 * [`integracion-flujo-entrenamiento.md`](./manuales/integracion-flujo-entrenamiento.md): Alcance, preservación y evidencia de integración local del flujo de entrenamiento; sin ejecución real ni cambios de activación.
 * [`ejecucion_acotada_inferencia.md`](./manuales/ejecucion_acotada_inferencia.md): Plan aprobado, evidencia de admisión por proceso y ownership del predictor; ingreso, GCS y timeout pendientes.
 * [`evaluacion-ensamble-motores.md`](./manuales/evaluacion-ensamble-motores.md): Evaluación local explícita del predictor servido de tres componentes; snapshots preparados, provenance compuesta y reporte no sobrescribible, sin BD ni publicación.
@@ -92,7 +94,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`model-11-real-evaluation.json`](./receipts/model-11-real-evaluation.json): Informe inmutable de reevaluación real del modelo #11 (val/test); no certifica calidad ni autoriza activación.
 
 ### 6. [`docs/adr/`](./adr/) — Architectural Decision Records
-Registro de las 22 decisiones de arquitectura fundamentales del sistema:
+Registro de las 23 decisiones de arquitectura fundamentales del sistema:
 * `ADR 0001`: Migración de AudioCNN a EfficientNet-B0.
 * `ADR 0002`: Particionamiento Estratificado a Nivel de Grabador (Zero Leakage).
 * `ADR 0003`: Adopción de Focal Loss frente a Cross-Entropy estándar.
@@ -112,6 +114,7 @@ Registro de las 22 decisiones de arquitectura fundamentales del sistema:
 * [`ADR 0017`](./adr/0017-disponibilidad-y-activacion-modelos.md): Reconciliación del catálogo por solicitud y refresco predecible de Predicción; disponibilidad sin activación implícita ni garantía de inferencia.
 * [`ADR 0018`](./adr/0018-incorporacion-local-y-sincronizacion-gcs.md): Incorporación local antes de GCS, intención recuperable y outbox durable; aceptación, acuse cloud y entrenamiento sin atomicidad distribuida ni reparación histórica implícita.
 * [`ADR 0019`](./adr/0019-referencias-canonicas-por-etapa.md): Referencias relativas con etapa raw/processed obligatoria y raíces físicas explícitas; contrato compartido estricto, sin inferencia ni activación automática de productores/consumidores legacy.
+* [`ADR 0023`](./adr/0023-identidad-checkpoint-cargado.md): Procedencia de carga vinculada a la instancia y bloqueo de modelos persistidos sin hash esperado; no atestación continua de tensores.
 * [`ADR 0022`](./adr/0022-evaluaciones-finales-estandarizadas.md): EVAL-1 a EVAL-6B cerrados en sus alcances; #11 reevaluado en desarrollo con calidad no aprobada. No implica upgrade de tabla v1, API/browser desplegados ni aprobación/activación; backend global 12 FAIL/5 SKIP pendiente.
 * [`ADR 0021`](./adr/0021-ejecucion-acotada-inferencia.md): Cupo y temporal conservados por el trabajo real del predictor tras cancelación HTTP; límites de GCS y cierre explícitos.
 * [`ADR 0020`](./adr/0020-raices-fisicas-en-localizadores-publicos.md): Getters raw/processed y PathResolver conservan la escritura declarada; raíces con alias no soportadas para asociación canónica, sin validación física implícita ni migración de URIs.

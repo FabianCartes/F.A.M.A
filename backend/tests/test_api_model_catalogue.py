@@ -24,7 +24,8 @@ def catalogue(tmp_path, monkeypatch):
 
     class MetadataPredictor(FakeAudioPredictor):
         """Controlled external ML adapter: metadata parsing, no tensor execution."""
-        def __init__(self, checkpoint_path, model_id, name, is_default, lazy_load, dataset_name):
+        def __init__(self, checkpoint_path, model_id, name, is_default, lazy_load, dataset_name,
+                     expected_checkpoint_sha256):
             if not lazy_load:
                 raise RuntimeError("Catalogue must not initialize tensor inference")
             payload = json.loads(checkpoint_path.read_text())
@@ -32,6 +33,7 @@ def catalogue(tmp_path, monkeypatch):
             self._meta.classes = payload["classes"]
             self._meta.dataset_name = dataset_name
             self._meta.metrics = payload.get("metrics")
+            self.expected_checkpoint_sha256 = expected_checkpoint_sha256
 
     monkeypatch.setattr(trained_predictor, "TrainedModelPredictor", MetadataPredictor)
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False},
@@ -58,13 +60,16 @@ def catalogue(tmp_path, monkeypatch):
         checkpoint.write_text(contents if contents is not None else json.dumps({
             "classes": ["Motor sano", "Falla"], "padding": "x" * 11000,
         }))
+        import hashlib
+        checkpoint_hash = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
         with sessions() as db:
             if dataset is not None:
                 db.add(dataset)
             db.add(Modelo(id_modelo=model_id, conjunto_datos=dataset,
                           arquitectura="EfficientNet-B0", epocas=1,
                           tasa_aprendizaje=0.001, tamano_lote=2, activo=active,
-                          ruta_binario_gcp=route or checkpoint.as_uri()))
+                          ruta_binario_gcp=route or checkpoint.as_uri(),
+                          hash_binario=checkpoint_hash))
             db.commit()
         return checkpoint
 
@@ -234,12 +239,14 @@ def install_torch_metadata_adapter(monkeypatch):
     from tests.test_model_registry import FakeAudioPredictor
 
     class CheckpointMetadataPredictor(FakeAudioPredictor):
-        def __init__(self, checkpoint_path, model_id, name, is_default, lazy_load, dataset_name):
+        def __init__(self, checkpoint_path, model_id, name, is_default, lazy_load, dataset_name,
+                     expected_checkpoint_sha256):
             assert lazy_load is True
             payload = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
             super().__init__(model_id, name, is_default)
             self._meta.classes = payload["classes"]
             self._meta.dataset_name = dataset_name
+            self.expected_checkpoint_sha256 = expected_checkpoint_sha256
             self.model = None
 
         def predict(self, audio_path):
@@ -816,13 +823,17 @@ def test_one_failed_checkpoint_does_not_prevent_other_publications(catalogue):
 
 @pytest.mark.parametrize("malformed", [False, True])
 def test_real_lazy_adapter_reads_only_synthetic_checkpoint(catalogue, monkeypatch, malformed):
+    import hashlib
     import torch
     from app.services.predictors import trained_predictor
-    client, registry, persist, _ = catalogue
+    client, registry, persist, engine = catalogue
     checkpoint = persist()
     torch.save({"architecture": "AudioCNN", "classes": 42 if malformed else ["Synthetic A", "Synthetic B"],
                 "best_val_acc": 85.0, "padding": "x" * 12000,
                 "state_dict": {"synthetic": torch.zeros(1)}}, checkpoint)
+    with Session(engine) as db:
+        db.get(Modelo, 11).hash_binario = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+        db.commit()
     monkeypatch.setattr(trained_predictor, "TrainedModelPredictor", TrainedModelPredictor)
     response = client.get("/api/models")
     if malformed:
@@ -919,7 +930,7 @@ def test_catalogue_exposes_sha256_of_registered_checkpoint_bytes(catalogue, monk
         "best_val_acc": 99.0, "padding": "x" * 12000,
     }, checkpoint)
     with Session(engine) as db:
-        db.get(Modelo, 11).hash_binario = "f" * 64
+        db.get(Modelo, 11).hash_binario = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
         db.commit()
     monkeypatch.setattr(trained_predictor, "TrainedModelPredictor", TrainedModelPredictor)
 
@@ -929,7 +940,7 @@ def test_catalogue_exposes_sha256_of_registered_checkpoint_bytes(catalogue, monk
     model = next(item for item in response.json()["models"] if item["id"] == "fama_trained_model_11")
     first_digest = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
     assert model.get("checkpoint_sha256") == first_digest
-    assert model["checkpoint_sha256"] != "f" * 64
+    assert model["loaded_checkpoint_sha256"] is None
     assert registry.get("11").model is None
 
     checkpoint.write_bytes(checkpoint.read_bytes() + b"different synthetic checkpoint bytes")
@@ -947,15 +958,19 @@ def test_catalogue_returns_null_checkpoint_hash_when_file_is_unavailable(
     catalogue, monkeypatch, unavailable,
 ):
     from pathlib import Path
+    import hashlib
     import torch
     from app.services.predictors import trained_predictor
 
-    client, registry, persist, _ = catalogue
+    client, registry, persist, engine = catalogue
     checkpoint = persist()
     torch.save({
         "architecture": "AudioCNN", "classes": ["Synthetic A", "Synthetic B"],
         "padding": "x" * 12000,
     }, checkpoint)
+    with Session(engine) as db:
+        db.get(Modelo, 11).hash_binario = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+        db.commit()
     monkeypatch.setattr(trained_predictor, "TrainedModelPredictor", TrainedModelPredictor)
     assert client.get("/api/models").status_code == 200
 

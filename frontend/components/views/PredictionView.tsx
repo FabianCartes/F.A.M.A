@@ -45,7 +45,7 @@ interface BackendModelStatus {
 }
 
 interface PredictionResponse {
-  detalles?: { dataset_name?: string | null } | null;
+  detalles?: { dataset_name?: string | null; loaded_checkpoint_sha256?: unknown } | null;
   filename: string;
   gcp_upload: boolean;
   db_id?: number | null;
@@ -136,6 +136,7 @@ export interface RegisteredModel {
   is_default: boolean;
   has_weights?: boolean;
   checkpoint_sha256?: string | null;
+  loaded_checkpoint_sha256?: string | null;
   metrics?: ModelEvaluationMetrics;
   evaluations?: ModelEvaluations | null;
 }
@@ -159,12 +160,15 @@ function formatFinalCount(value: unknown): string {
     : "No disponible";
 }
 
+function validCheckpointHash(value: unknown): string | null {
+  return typeof value === "string" && /^[a-f0-9]{64}$/i.test(value) ? value : null;
+}
+
 function registeredCheckpointMatch(modelHash: unknown, reportHash: unknown): "Coincide" | "No coincide" | "No verificable" {
-  if (typeof modelHash !== "string" || !/^[a-f0-9]{64}$/i.test(modelHash) ||
-      typeof reportHash !== "string" || !/^[a-f0-9]{64}$/i.test(reportHash)) {
-    return "No verificable";
-  }
-  return modelHash.toLowerCase() === reportHash.toLowerCase() ? "Coincide" : "No coincide";
+  const validModelHash = validCheckpointHash(modelHash);
+  const validReportHash = validCheckpointHash(reportHash);
+  if (!validModelHash || !validReportHash) return "No verificable";
+  return validModelHash.toLowerCase() === validReportHash.toLowerCase() ? "Coincide" : "No coincide";
 }
 
 function evaluationAttemptLabel(attempt?: EvaluationAttempt | null): string | null {
@@ -379,6 +383,7 @@ interface CurrentPrediction extends PredictionResponse {
   inferenceClasses: string[];
   inferenceDomain: string;
   inferenceEnsemble: boolean;
+  inferenceRegisteredCheckpointHash: string | null;
   sequence: number;
 }
 
@@ -928,6 +933,7 @@ export default function PredictionView() {
     const inferenceClasses = [...(selectedModel?.classes || [])];
     const inferenceModel = selectedModel?.name || selectedModelId;
     const inferenceModelId = selectedModelId;
+    const inferenceRegisteredCheckpointHash = validCheckpointHash(selectedModel.checkpoint_sha256);
 
     try {
       const formData = new FormData();
@@ -976,7 +982,7 @@ export default function PredictionView() {
       const modelMismatch = predData.modelo_id
         ? predData.modelo_id !== inferenceModelId
         : Boolean(predData.modelo && predData.modelo !== inferenceModel && predData.modelo !== inferenceModelId);
-      setResult({ ...predData, inferenceClasses, inferenceModel, inferenceModelId, modelMismatch, inferenceDomain: selectedDomain, inferenceEnsemble: isEnsemble, sequence });
+      setResult({ ...predData, inferenceClasses, inferenceModel, inferenceModelId, modelMismatch, inferenceDomain: selectedDomain, inferenceEnsemble: isEnsemble, inferenceRegisteredCheckpointHash, sequence });
 
       const isEngine =
         isEngineModel ||
@@ -1310,6 +1316,15 @@ export default function PredictionView() {
             </div>
           </div>
 
+          <section aria-label="Identidad de checkpoints del modelo seleccionado" className="mt-4 border-t border-[#23252e]/70 pt-3 space-y-2">
+            <h3 className="text-xs font-semibold text-gray-200">Checkpoint registrado y cargado</h3>
+            <dl className="grid min-w-0 grid-cols-1 gap-1 text-[11px] text-gray-400 sm:grid-cols-2">
+              <div className="min-w-0 break-all"><dt className="inline">Checkpoint registrado:</dt> <dd className="inline font-mono">{validCheckpointHash(selectedModel?.checkpoint_sha256) || "No disponible"}</dd></div>
+              <div className="min-w-0 break-all"><dt className="inline">Checkpoint cargado por la instancia:</dt> <dd className="inline font-mono">{validCheckpointHash(selectedModel?.loaded_checkpoint_sha256) || "No disponible"}</dd></div>
+              <div><dt className="inline">Correspondencia instancia / registro:</dt> <dd className="inline">{registeredCheckpointMatch(selectedModel?.checkpoint_sha256, selectedModel?.loaded_checkpoint_sha256)}</dd></div>
+            </dl>
+            <p className="text-[11px] text-gray-400">La procedencia se registra al cargar; no acredita continuamente los parámetros en memoria.</p>
+          </section>
           <section aria-label="Evaluaciones finales del modelo seleccionado" className="mt-5 border-t border-[#23252e]/70 pt-4 space-y-3">
             <div>
               <h3 className="text-xs font-semibold text-gray-200">Evaluación final · checkpoint registrado</h3>
@@ -1742,6 +1757,15 @@ export default function PredictionView() {
                     El modelo ejecutado difiere del modelo solicitado: {result.inferenceModel} ({result.inferenceModelId}). El resultado corresponde al modelo informado por la API.
                   </p>
                 )}
+                <section aria-label="Identidad del checkpoint del resultado" className="border-t border-[#23252e]/70 pt-2 space-y-1">
+                  <h3 className="text-[11px] font-semibold text-gray-300">Identidad del checkpoint del resultado</h3>
+                  <dl className="grid min-w-0 grid-cols-1 gap-1 text-[10px] text-gray-400">
+                    <div className="min-w-0 break-all"><dt className="inline">Checkpoint registrado al solicitar:</dt> <dd className="inline font-mono">{result.inferenceRegisteredCheckpointHash || "No disponible"}</dd></div>
+                    <div className="min-w-0 break-all"><dt className="inline">Checkpoint cargado informado por el predictor:</dt> <dd className="inline font-mono">{validCheckpointHash(result.detalles?.loaded_checkpoint_sha256) || "No disponible"}</dd></div>
+                    <div><dt className="inline">Correspondencia con el registro solicitado:</dt> <dd className="inline">{registeredCheckpointMatch(result.inferenceRegisteredCheckpointHash, result.detalles?.loaded_checkpoint_sha256)}</dd></div>
+                  </dl>
+                  <p className="text-[10px] text-gray-500">El hash describe la procedencia informada al cargar; no acredita continuamente los parámetros en memoria.</p>
+                </section>
                 {result.inferenceEnsemble && result.modelos_activos && result.modelos_activos.length > 0 && (
                   <div className="flex flex-wrap gap-1 pt-1 border-t border-[#23252e]/70">
                     {result.modelos_activos.map((m, idx) => (
