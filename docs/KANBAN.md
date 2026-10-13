@@ -5,7 +5,7 @@ kanban-plugin: basic
 ## Identidad del checkpoint cargado — implementación local verificada
 - [x] **LOAD-1:** snapshot/procedencia y bloqueo estricto PASS independiente S1-S4/S6; alias/default corregidos, focal 109 PASS. Global final 1564 PASS/5 SKIP/12 FAIL con nodeids presentes en base (no equivalencia total de causas). Sin datos reales ni despliegue.
 - [x] **LOAD-2:** identidades separadas y resultado estable; focal 67/67, suite frontend 264/264 y typecheck final exit 0. Navegador real no ejecutado; evidencia T2 en contrato.
-- [x] **LOAD-3:** documentos, independiente S1-S6 PASS y review nativo approved/acuse completado (`review-76f37188eaeaea7a`, autoridad burned). Backend global 12 FAIL/5 SKIP explícitos; frontend 264 PASS y tsc. Sin navegador real ni despliegue. Commit local autorizado posteriormente; identidad pendiente.
+- [x] **LOAD-3:** documentos, independiente S1-S6 PASS y review nativo approved/acuse completado (`review-76f37188eaeaea7a`, autoridad burned). Backend global 12 FAIL/5 SKIP explícitos; frontend 264 PASS y tsc. Sin navegador real ni despliegue. Commit local `845dff8`; código/pruebas sin modificaciones tras verificación. Sin push.
 Contrato y evidencia: [identidad-checkpoint-cargado](arquitectura/identidad-checkpoint-cargado.md). Sin regularización de registros históricos, migración ni despliegue autorizado. Commits locales autorizados posteriormente.
 
 # Tablero Kanban - Proyecto F.A.M.A
