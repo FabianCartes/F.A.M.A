@@ -70,7 +70,7 @@ describe('PredictionView validation and responsive controls', () => {
   it('does not invent model health, metrics, versions or ensemble participants for an individual result', async () => {
     const api = await preparePrediction();
     expect(screen.getAllByText(/Estado no disponible/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Sin métricas publicadas').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Sin métricas publicadas|Accuracy histórica|F1 histórico|Precision histórica|Evaluación en test set/)).toBeNull();
     expect(screen.queryByText('v3.0.0')).toBeNull();
     expect(screen.queryByText(/Dispositivo: CPU/)).toBeNull();
     api.setPrediction(async () => Response.json({ filename: 'individual.wav', clase: 'alarm', confianza: 0.8, gcp_upload: false, modelos_activos: ['Invented participant (55%)'] }));

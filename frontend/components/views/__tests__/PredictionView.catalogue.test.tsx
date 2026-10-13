@@ -17,6 +17,10 @@ let predict: () => Promise<Response>;
 const selection = () => screen.getByRole("combobox", { name: "Modelo:" }) as HTMLSelectElement;
 const focus = async () => { await act(async () => { fireEvent(window, new Event("focus")); }); };
 const show = async () => { let view!: ReturnType<typeof render>; await act(async () => { view = render(<PredictionView />); }); return view; };
+const openDetails = async () => {
+  fireEvent.click(screen.getByRole("button", { name: "Ver detalle de evaluación" }));
+  return screen.findByRole("dialog", { name: "Detalle de evaluación final" });
+};
 const provenance = (split: "val" | "test", schema_version: 1 | 2 = 1, sample_count = 4) => ({
   schema_version,
   evaluator_version: "classification-report-v1",
@@ -115,7 +119,7 @@ describe("Catálogo público de Predicción", () => {
 
     await show();
 
-    const evaluations = screen.getByRole("region", { name: "Evaluaciones finales" });
+    const evaluations = await openDetails();
     expect(evaluations.textContent).toContain("Validación (val)");
     expect(evaluations.textContent).toContain("Test (test)");
     expect(evaluations.textContent).toContain("Informe histórico completado #41");
@@ -132,7 +136,7 @@ describe("Catálogo público de Predicción", () => {
     expect(evaluations.textContent).toContain("Cobertura completa");
     expect(evaluations.textContent).toContain("classification-report-v1");
     expect(evaluations.textContent).toContain("a".repeat(64));
-    expect(evaluations.textContent).toContain("no garantiza correspondencia con los pesos cargados actualmente");
+    expect(evaluations.textContent).toContain("no acreditan qué parámetros están cargados actualmente en runtime");
     expect(evaluations.textContent).not.toContain("Rechazos:");
   });
 
@@ -154,7 +158,15 @@ describe("Catálogo público de Predicción", () => {
 
     await show();
 
-    const evaluations = screen.getByRole("region", { name: "Evaluaciones finales" });
+    const summary = screen.getByRole("region", { name: "Evaluaciones finales del modelo seleccionado" });
+    const summaryRow = within(summary).getByRole("row", { name: /^Validación/ });
+    if (status === "failed") {
+      expect(summaryRow.textContent).toContain("100.00%");
+      expect(summaryRow.textContent).not.toContain("Fallido");
+    } else {
+      expect(summaryRow.textContent).toContain("No disponible");
+    }
+    const evaluations = await openDetails();
     expect(evaluations.textContent).toContain(`Último intento #52: ${label}`);
     if (status === "failed") {
       expect(evaluations.textContent).toContain("Informe histórico completado #51");
@@ -163,6 +175,26 @@ describe("Catálogo público de Predicción", () => {
     } else {
       expect(evaluations.textContent).not.toContain("Informe histórico completado #51");
     }
+  });
+
+  it("distingue un estado de intento no reconocido de la ausencia de informes", async () => {
+    const evaluatedModel = {
+      ...model11,
+      evaluations: {
+        val: { latest_attempt: { id_evaluation: 95, status: "future_status", created_at: "2025-02-01T10:00:00Z" } },
+        test: null,
+      },
+    } as unknown as RegisteredModel;
+    catalogue = async () => response([evaluatedModel], model11.id, [], { evaluation_catalogue_status: "available" });
+    await show();
+
+    const summary = screen.getByRole("region", { name: "Evaluaciones finales del modelo seleccionado" });
+    expect(summary.textContent).not.toContain("Catálogo de evaluaciones disponible; no hay informes finales para este modelo.");
+    expect(summary.textContent).toContain("Estado no reconocido");
+    expect(summary.textContent).not.toContain("Sin métricas publicadas");
+    const details = await openDetails();
+    expect(details.textContent).toContain("Último intento #95: Estado no reconocido");
+    expect(details.textContent).toContain("No hay un informe completado para este split.");
   });
 
   it("muestra cobertura incompleta y conserva el cero como 0%, sin convertir una métrica nula en cero", async () => {
@@ -186,7 +218,10 @@ describe("Catálogo público de Predicción", () => {
 
     await show();
 
-    const evaluations = screen.getByRole("region", { name: "Evaluaciones finales" });
+    const summary = screen.getByRole("region", { name: "Evaluaciones finales del modelo seleccionado" });
+    const summaryRow = within(summary).getByRole("row", { name: /^Validación 0\.00% 0\.00% No verificable/ });
+    expect(summaryRow.textContent).toContain("Informe histórico; no es aplicable al checkpoint registrado.");
+    const evaluations = await openDetails();
     expect(evaluations.textContent).toContain("Muestras: 4");
     expect(evaluations.textContent).toContain("0.00%");
     expect(evaluations.textContent).toContain("Cobertura completa");
@@ -202,8 +237,8 @@ describe("Catálogo público de Predicción", () => {
 
     await show();
 
-    const evaluations = screen.getByRole("region", { name: "Evaluaciones finales" });
-    expect(evaluations.textContent).toContain("Schema: 2");
+    const evaluations = await openDetails();
+    expect(evaluations.textContent).toContain("Schema del informe: 2");
     expect(evaluations.textContent).toContain("Rechazos: 1 (50.00%)");
     expect(evaluations.textContent).toContain("Cobertura incompleta · clases ausentes: Rayadito");
   });
@@ -218,15 +253,19 @@ describe("Catálogo público de Predicción", () => {
     catalogue = async () => response([first, second], first.id, [], { evaluation_catalogue_status: "available" });
 
     await show();
-    let evaluations = screen.getByRole("region", { name: "Evaluaciones finales" });
+    let summary = screen.getByRole("region", { name: "Evaluaciones finales del modelo seleccionado" });
+    let evaluations = await openDetails();
     expect(evaluations.textContent).toContain("Informe histórico completado #71");
+    fireEvent.click(within(evaluations).getByRole("button", { name: "Cerrar detalle" }));
     expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes("/api/models"))).toHaveLength(1);
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("/api/evaluations"))).toBe(false);
 
     fireEvent.change(selection(), { target: { value: bird.id } });
-    evaluations = screen.getByRole("region", { name: "Evaluaciones finales" });
+    summary = screen.getByRole("region", { name: "Evaluaciones finales del modelo seleccionado" });
+    expect(summary.textContent).not.toContain("#71");
+    evaluations = await openDetails();
     expect(evaluations.textContent).toContain("Informe histórico completado #70");
-    expect(evaluations.textContent).not.toContain("#71");
+    fireEvent.click(within(evaluations).getByRole("button", { name: "Cerrar detalle" }));
 
     fireEvent.change(selection(), { target: { value: first.id } });
     catalogue = async () => response([first, second], first.id, [], {
@@ -235,15 +274,20 @@ describe("Catálogo público de Predicción", () => {
       error_reason: "/private/backend/path",
     });
     await focus();
-    evaluations = screen.getByRole("region", { name: "Evaluaciones finales" });
+    summary = screen.getByRole("region", { name: "Evaluaciones finales del modelo seleccionado" });
+    expect(summary.textContent).toContain("Catálogo de evaluaciones no disponible");
+    expect(summary.textContent).toContain("registros que no se pueden mostrar");
+    expect(summary.textContent).not.toContain("#71");
+    expect(summary.textContent).not.toContain("/private/backend/path");
+    evaluations = await openDetails();
     expect(evaluations.textContent).toContain("Catálogo de evaluaciones no disponible");
-    expect(evaluations.textContent).toContain("registros que no se pueden mostrar");
     expect(evaluations.textContent).not.toContain("#71");
     expect(evaluations.textContent).not.toContain("/private/backend/path");
+    fireEvent.click(within(evaluations).getByRole("button", { name: "Cerrar detalle" }));
 
     catalogue = async () => response([withReport(model11, 74), second], model11.id, [], { evaluation_catalogue_status: "available" });
     await focus();
-    evaluations = screen.getByRole("region", { name: "Evaluaciones finales" });
+    evaluations = await openDetails();
     expect(evaluations.textContent).toContain("Informe histórico completado #74");
     expect(evaluations.textContent).not.toContain("#71");
   });
@@ -251,34 +295,132 @@ describe("Catálogo público de Predicción", () => {
   it("distingue una respuesta legacy sin el estado del catálogo de evaluaciones vacío disponible", async () => {
     catalogue = async () => response([model11], model11.id, [], { evaluation_catalogue_status: "available" });
     await show();
-    let evaluations = screen.getByRole("region", { name: "Evaluaciones finales" });
+    let evaluations = screen.getByRole("region", { name: "Evaluaciones finales del modelo seleccionado" });
     expect(evaluations.textContent).toContain("Catálogo de evaluaciones disponible; no hay informes finales para este modelo.");
 
     catalogue = async () => response([model11], model11.id);
     await focus();
-    evaluations = screen.getByRole("region", { name: "Evaluaciones finales" });
+    evaluations = screen.getByRole("region", { name: "Evaluaciones finales del modelo seleccionado" });
     expect(evaluations.textContent).toContain("respuesta antigua del catálogo");
     expect(evaluations.textContent).not.toContain("no hay informes finales para este modelo");
   });
 
-  it("mantiene las métricas legacy bajo nombres históricos separados y sin reinterpretar precision", async () => {
-    const legacyModel = {
+  it("retira las métricas legacy y concentra el resumen final en la tarjeta del modelo seleccionado", async () => {
+    const evaluatedModel = {
       ...model11,
+      checkpoint_sha256: "a".repeat(64),
       metrics: { accuracy: 0.5, f1_macro: 0.4, precision_macro: 0.3 },
+      evaluations: {
+        val: { latest_attempt: attempt(81, "completed", "val"), latest_completed: completed(81, "val") },
+        test: { latest_attempt: attempt(82, "completed", "test"), latest_completed: completed(82, "test") },
+      },
     } as RegisteredModel;
-    catalogue = async () => response([legacyModel], legacyModel.id);
+    catalogue = async () => response([evaluatedModel], evaluatedModel.id, [], { evaluation_catalogue_status: "available" });
 
     await show();
 
-    const legacyMetrics = screen.getByRole("group", { name: "Métricas históricas" });
-    expect(legacyMetrics.textContent).toContain("Accuracy histórica (legacy)");
-    expect(legacyMetrics.textContent).toContain("F1 histórico (legacy)");
-    expect(legacyMetrics.textContent).toContain("Precision histórica (legacy)");
-    expect(legacyMetrics.textContent).toContain("50.00%");
-    expect(legacyMetrics.textContent).toContain("40.00%");
-    expect(legacyMetrics.textContent).toContain("30.00%");
-    expect(legacyMetrics.textContent).not.toContain("Accuracy Test");
-    expect(legacyMetrics.textContent).not.toContain("Balanced F1");
+    expect(screen.queryByText(/Accuracy histórica|F1 histórico|Precision histórica|Evaluación en test set|Rendimiento \/ Métrica/)).toBeNull();
+    expect(screen.queryByText("Informes finales por split")).toBeNull();
+    const summary = screen.getByRole("region", { name: "Evaluaciones finales del modelo seleccionado" });
+    expect(within(summary).getByRole("row", { name: "Validación 100.00% 100.00% Coincide" })).toBeDefined();
+    expect(within(summary).getByRole("row", { name: "Test 100.00% 100.00% Coincide" })).toBeDefined();
+    expect(summary.textContent).toContain("checkpoint registrado");
+    expect(summary.textContent).not.toContain("50.00%");
+    expect(screen.queryByRole("region", { name: "Evaluaciones finales" })).toBeNull();
+  });
+
+  it("abre un diálogo accesible con métricas completas, clases, matriz, rechazos y hash legible", async () => {
+    const evaluatedModel = {
+      ...model11,
+      checkpoint_sha256: "a".repeat(64),
+      evaluations: {
+        val: { latest_attempt: attempt(91, "completed", "val", 2, 2), latest_completed: completed(91, "val", v2Report, 2, 2) },
+      },
+    } as RegisteredModel;
+    catalogue = async () => response([evaluatedModel], evaluatedModel.id, [], { evaluation_catalogue_status: "available" });
+    await show();
+
+    const trigger = screen.getByRole("button", { name: "Ver detalle de evaluación" });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const dialog = await screen.findByRole("dialog", { name: "Detalle de evaluación final" });
+    expect(document.activeElement).toBe(within(dialog).getByRole("button", { name: "Cerrar detalle" }));
+    expect(dialog.textContent).toContain("Balanced accuracy");
+    expect(dialog.textContent).toContain("Precision macro");
+    expect(dialog.textContent).toContain("Recall macro");
+    expect(dialog.textContent).toContain("F1 ponderado");
+    expect(dialog.textContent).toContain("Chucao");
+    expect(dialog.textContent).toContain("__rejected__");
+    expect(dialog.textContent).toContain("Rechazos: 1 (50.00%)");
+    expect(dialog.textContent).toContain("a".repeat(64));
+    expect(within(dialog).getByRole("table", { name: "Matriz de confusión Validación (val)" })).toBeDefined();
+
+    const close = within(dialog).getByRole("button", { name: "Cerrar detalle" });
+    fireEvent.click(close);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it.each([
+    ["SHA válido case-insensitive", "A".repeat(64), "a".repeat(64), "Coincide"],
+    ["SHA válido distinto", "a".repeat(64), "b".repeat(64), "No coincide"],
+    ["hash del informe malformado", "a".repeat(64), "not-a-sha256", "No verificable"],
+    ["hash del informe ausente", "a".repeat(64), null, "No verificable"],
+    ["hash del modelo ausente", null, "a".repeat(64), "No verificable"],
+  ] as const)("clasifica la identidad de checkpoint: %s", async (_case, modelHash, reportHash, expected) => {
+    const reportProvenance = provenance("val") as Record<string, unknown>;
+    if (reportHash === null) delete reportProvenance.checkpoint_sha256;
+    else reportProvenance.checkpoint_sha256 = reportHash;
+    const evaluatedModel = {
+      ...model11,
+      ...(modelHash === null ? {} : { checkpoint_sha256: modelHash }),
+      evaluations: {
+        val: {
+          latest_completed: {
+            ...completed(101, "val"),
+            provenance: reportProvenance,
+          },
+        },
+      },
+    } as RegisteredModel;
+    catalogue = async () => response([evaluatedModel], model11.id, [], { evaluation_catalogue_status: "available" });
+    await show();
+
+    const summary = screen.getByRole("region", { name: "Evaluaciones finales del modelo seleccionado" });
+    const validation = within(summary).getByRole("row", { name: /^Validación/ });
+    expect(within(validation).getByText(expected)).toBeDefined();
+    if (expected === "No coincide") {
+      expect(validation.textContent).toContain("no es aplicable al checkpoint registrado");
+      const details = await openDetails();
+      expect(details.textContent).toContain("NO es aplicable al checkpoint registrado");
+    }
+  });
+
+  it("cierra y reinicia el detalle al cambiar el modelo, atrapa foco y no consulta ni infiere", async () => {
+    const first = { ...model11, evaluations: { val: { latest_attempt: attempt(111, "failed", "val") } } } as RegisteredModel;
+    const second = { ...bird, evaluations: { test: { latest_attempt: attempt(112, "pending", "test") } } } as RegisteredModel;
+    catalogue = async () => response([first, second], first.id, [], { evaluation_catalogue_status: "available" });
+    await show();
+    const trigger = screen.getByRole("button", { name: "Ver detalle de evaluación" });
+    fireEvent.click(trigger);
+    const dialog = await screen.findByRole("dialog", { name: "Detalle de evaluación final" });
+    const close = within(dialog).getByRole("button", { name: "Cerrar detalle" });
+    fireEvent.keyDown(dialog, { key: "Tab" });
+    expect(document.activeElement).toBe(close);
+    fireEvent.keyDown(dialog, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(close);
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+
+    fireEvent.click(trigger);
+    expect(screen.getByRole("dialog")).toBeDefined();
+    fireEvent.change(selection(), { target: { value: second.id } });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.change(selection(), { target: { value: first.id } });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes("/api/models"))).toHaveLength(1);
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("/api/evaluations") || String(url).includes("/api/predict"))).toBe(false);
   });
 
   it("inicia el historial de sesión vacío, sin grabaciones demostrativas", async () => {
