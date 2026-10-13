@@ -27,6 +27,8 @@ docs/
 
 ## Índice Detallado por Carpeta
 
+* [`seguimiento-frontend-definitivo.md`](./seguimiento-frontend-definitivo.md): Contrato de preprocesamiento de nuevos checkpoints estándar, evidencia focal y límites antes de entrenar.
+
 ### Tarea acotada: duplicados exactos
 * [`docs/duplicados-exactos/tasks.md`](./duplicados-exactos/tasks.md): Alcance, decisiones locales, checklist y evidencia TDD de aprobación de feedback sin duplicados SHA-256; revisión y commit pendientes del orquestador.
 
@@ -66,6 +68,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`22_propuesta_vista_ayuda_y_centro_de_conocimiento.md`](./arquitectura/22_propuesta_vista_ayuda_y_centro_de_conocimiento.md): Diseño y especificación del centro de conocimiento e interactividad en frontend.
 
 ### 4. [`docs/manuales/`](./manuales/) — Manuales y Guías Operativas
+* [`integracion-flujo-entrenamiento.md`](./manuales/integracion-flujo-entrenamiento.md): Alcance, preservación y evidencia de integración local del flujo de entrenamiento; sin ejecución real ni cambios de activación.
 * [`ejecucion_acotada_inferencia.md`](./manuales/ejecucion_acotada_inferencia.md): Plan aprobado, evidencia de admisión por proceso y ownership del predictor; ingreso, GCS y timeout pendientes.
 * [`evaluacion-ensamble-motores.md`](./manuales/evaluacion-ensamble-motores.md): Evaluación local explícita del predictor servido de tres componentes; snapshots preparados, provenance compuesta y reporte no sobrescribible, sin BD ni publicación.
 * [`reevaluacion-modelos.md`](./manuales/reevaluacion-modelos.md): Reevaluación MAIN con preflight y ejecución explícita append-only; incluye evidencia real EVAL-6B y sus límites de calidad.
@@ -73,6 +76,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`contrato_referencias_dataset_canonicas.md`](./manuales/contrato_referencias_dataset_canonicas.md): Contrato relativo por etapa, raíces físicas, conversión offline dry-run y preservación; publicación, corte operativo y recuperación requieren autorización separada.
 * [`manual_usuario_plataforma.md`](./manuales/manual_usuario_plataforma.md): Guía integral de operación para investigadores y administradores; incluye [admisión, procedencia y guardado del entrenamiento](./manuales/manual_usuario_plataforma.md#55-requisitos-de-la-fuente-local-y-procedencia) y siguiente comprobación autorizada; distingue [disponibilidad, activación y refresco de Predicción](./manuales/manual_usuario_plataforma.md#611-disponibilidad-del-catálogo-y-activación) de inferencia comprobada.
 * [`flujo_revision_audios.md`](./manuales/flujo_revision_audios.md): Validación e incorporación local de audios, sincronización recuperable con GCS y [próximos pasos del operador](./manuales/flujo_revision_audios.md#próximos-pasos-del-operador); distingue hitos aceptados de auditorías actuales.
+* [`fuentes-locales-frontend.md`](./manuales/fuentes-locales-frontend.md): Montserrat y Open Sans locales para Next.js, con licencias, procedencia de WOFF2 y evidencia de build.
 * [`guia_despliegue_operativo_docker.md`](./manuales/guia_despliegue_operativo_docker.md): Manual de instalación y despliegue institucional con Docker; incluye [arranque diario, reconstrucción explícita y espera de disponibilidad](./manuales/guia_despliegue_operativo_docker.md#7-puesta-en-marcha-y-scripts-de-automatización).
 
 ### 5. [`docs/limites/`](./limites/) — Límites Matemáticos y Problemas Conocidos
