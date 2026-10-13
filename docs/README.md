@@ -17,7 +17,7 @@ docs/
 ├── arquitectura/                # Diseño de sistemas, pipelines, MLOps y despliegue
 ├── limites/                     # Límites matemáticos, físicos y problemas conocidos
 ├── manuales/                    # Manual de usuario, revisión, despliegue e índices canónicos
-├── adr/                         # Architectural Decision Records (ADR 0001 a 0024)
+├── adr/                         # Architectural Decision Records (ADR 0001 a 0025)
 ├── receipts/                    # Recibos técnicos reproducibles en formato JSON (RDD)
 ├── duplicados-exactos/           # Tarea acotada: admisión de feedback sin duplicados SHA-256
 └── images/                      # Diagramas, matrices de confusión y gráficos vectoriales
@@ -83,7 +83,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`backend_permissions_integration.json`](./receipts/backend_permissions_integration.json): Verificación PERM-3 del servicio público de feedback en contenedor aislado; propietario y modos tras aprobaciones, reinicio y replay. Contexto mínimo, no prueba del despliegue completo ni autoridad de entrega.
 
 ### 6. [`docs/adr/`](./adr/) — Architectural Decision Records
-Registro de las 24 decisiones de arquitectura fundamentales del sistema:
+Registro de las 25 decisiones de arquitectura fundamentales del sistema:
 * `ADR 0001`: Migración de AudioCNN a EfficientNet-B0.
 * `ADR 0002`: Particionamiento Estratificado a Nivel de Grabador (Zero Leakage).
 * `ADR 0003`: Adopción de Focal Loss frente a Cross-Entropy estándar.
@@ -108,3 +108,4 @@ Registro de las 24 decisiones de arquitectura fundamentales del sistema:
 * [`ADR 0022`](./adr/0022-ficha-tecnica-sin-valores-inventados.md): Ficha técnica con metadatos explícitos del checkpoint, lectura mapeada y valores desconocidos sin presets fabricados; contrato backend/cliente/UI sin migraciones ni certificación de inferencia.
 * [`ADR 0023`](./adr/0023-seleccion-con-pesos-confirmados.md): Entradas indisponibles visibles/deshabilitadas, selección con pesos confirmados y preflight HTTP antes de GCS; no cambia la política de inclusión ni certifica inferencia.
 * [`ADR 0024`](./adr/0024-configuracion-explicita-de-autenticacion.md): Clave JWT y alta inicial sin defaults, indisponibilidad explícita y preservación de cuentas; política de creación por administradores acordada pero aún pendiente de aplicación.
+* [`ADR 0025`](./adr/0025-configuracion-runtime-y-contexto-sin-credenciales.md): Configuración existente transmitida por Compose y JSON externos excluidos del contexto backend; prueba con cliente Docker/API simulada, sin imágenes ni servicios reales.

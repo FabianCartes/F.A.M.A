@@ -17,6 +17,6 @@ Se retiran la clave JWT y credenciales iniciales implícitas: una instancia no d
 
 Las variables se leen en el proceso; la clave JWT se captura al importar el módulo. Aplicar valores reales/reiniciar servicios requiere autorización operativa propia. Cambiar de clave invalida sesiones anteriores; cuentas con contraseñas históricas inseguras no se reparan automáticamente.
 
-La plantilla contiene campos vacíos, no credenciales listas para usar. Compose todavía debe propagar estas variables al backend; editar `backend/.env` no configura por sí solo un contenedor que no monta ese archivo. También queda separar credenciales GCS del contexto de construcción. Sin build, despliegue ni cambios sobre datos/credenciales reales en esta unidad.
+La plantilla contiene campos vacíos, no credenciales listas para usar. La corrección posterior de [ADR 0025](0025-configuracion-runtime-y-contexto-sin-credenciales.md) propaga estas variables mediante Compose y excluye JSON del contexto backend; editar `backend/.env` no configura por sí solo un contenedor que no monta ese archivo. Sin build, despliegue ni cambios sobre datos/credenciales reales. Login y permisos permanecen pospuestos a la etapa de funcionalidades nuevas por decisión del usuario.
 
 Evidencia por interfaces públicas en [KANBAN.md](../KANBAN.md): entorno de importación limpio sin dotenv, claves/credenciales sintéticas y SQLite temporal; no prueba configuración del despliegue real.

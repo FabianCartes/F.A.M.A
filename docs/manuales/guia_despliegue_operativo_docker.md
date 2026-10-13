@@ -566,6 +566,8 @@ networks:
 
 ### 6.4. Archivo de Variables de Entorno (`.env.production`)
 
+Los ejemplos heredados de esta guía no garantizan que todas sus variables estén consumidas. La fuente vigente es [`docker-compose.yml`](../../docker-compose.yml); no ejecutar operaciones publicadas sobre servicios/datos existentes sin autorización propia.
+
 Cree un archivo `.env` en la raíz del proyecto junto al `docker-compose.yml`:
 
 ```env
@@ -592,6 +594,14 @@ BACKEND_PORT=8000
 NEXT_PUBLIC_API_URL=http://localhost:8000
 CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://192.168.1.100:3000
 ```
+
+#### Corrección vigente: autenticación existente y exclusión de credenciales
+
+Compose transmite al backend `JWT_SECRET_KEY`, `ADMIN_INITIAL_EMAIL`, `ADMIN_INITIAL_PASSWORD`, `ADMIN_INITIAL_NAME` y `ACCESS_TOKEN_EXPIRE_MINUTES`. Los valores de clave/email/password ausentes quedan vacíos: no habilitan una sesión ni un administrador por defecto. Definirlos en el entorno de Compose o su archivo de variables es responsabilidad del operador; `backend/.env` es la configuración local de Python y no se monta automáticamente en el contenedor. No usar las contraseñas ilustrativas ni valores de pruebas como secretos reales.
+
+El contexto backend excluye JSON en raíz/subdirectorios, además de `.env`; código Python y recetas YAML se conservan. Credenciales GCS, manifiestos y datos externos se proporcionan mediante los montajes runtime existentes, no dentro de la imagen. Un futuro recurso JSON público de código requiere una excepción revisada.
+
+Verificación de alcance específico: Compose sobre copia temporal y cliente Docker con API simulada en loopback, sin daemon real, imágenes, contenedores ni archivos privados. No acredita GPU, BuildKit/build real, arranque completo o acceso GCS. La autorización por roles y el login web todavía son funcionalidades pendientes, no garantías del despliegue descrito. [ADR 0025](../adr/0025-configuracion-runtime-y-contexto-sin-credenciales.md).
 
 ---
 
