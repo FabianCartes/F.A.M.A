@@ -100,7 +100,7 @@ def auth_client():
     Base.metadata.create_all(engine)
     sessions = sessionmaker(bind=engine)
     with sessions() as db:
-        db.add(Usuario(id=1, email="fixture@example.test", password_hash="unused",
+        db.add(Usuario(id=1, email="fixture@example.test", password_hash=auth.hash_password("FixturePassword2026!"),
                        nombre_completo="Isolated fixture", rol="investigador", activo=True))
         db.commit()
 

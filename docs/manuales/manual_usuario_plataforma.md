@@ -94,7 +94,16 @@ El asistente y las pantallas `/setup`/`/login` que se describen a continuación 
 - `exp` es obligatorio y debe ser una fecha numérica finita, no texto ni booleano. El token vence cuando el reloj alcanza esa fecha, incluyendo expiraciones fraccionarias; no se concede un segundo adicional por redondeo.
 - En `/api/auth/me`, `sub` debe representar un ID positivo como texto decimal ASCII dentro del rango `INTEGER` de PostgreSQL. Sujetos malformados o fuera de rango se rechazan con HTTP 401, sin convertir booleanos/decimales en usuarios ni responder 500 por esa entrada.
 - Un token válido no concede un rol por su payload: el perfil y rol retornados proceden del usuario activo en la BD. Las pruebas de esta fase usan claves/reloj sintéticos y una app de rutas aislada, no el lifespan productivo.
-- Esta corrección **no cambia secretos, contraseñas iniciales, registro, login web ni permisos del resto de rutas**. Siguen pendientes eliminar valores predeterminados inseguros, acordar administración de cuentas y aplicar autenticación/roles, CORS y límites de cargas/peticiones. No equivale a una auditoría JWT completa ni a una garantía de despliegue seguro.
+- Validar un JWT **no aplica por sí solo permisos al resto de rutas**. Registro, login web, autenticación/roles, CORS y límites de cargas/peticiones siguen pendientes. No equivale a una auditoría JWT completa ni a una garantía de despliegue seguro.
+
+### 2.4. Configuración Explícita y Alta Inicial sin Defaults
+
+- Para ejecución local, el operador configura `JWT_SECRET_KEY` en el entorno del backend; debe ser una clave aleatoria, única y de al menos 32 bytes UTF-8, nunca la antigua clave pública ni valores de pruebas. La [plantilla](../../backend/.env.example) deja estos campos vacíos: copiarla sin completar configuración no habilita sesiones.
+- Login verifica configuración antes de comprobar credenciales y actualizar último acceso. Sin clave válida, login y comprobación de perfil con token devuelven HTTP 503 sanitizado; no se emite una sesión usando un fallback. La clave se lee al importar el módulo: aplicar valores reales y reiniciar requiere autorización separada.
+- Si la tabla de usuarios está vacía, `ADMIN_INITIAL_EMAIL` y `ADMIN_INITIAL_PASSWORD` deben ser explícitos. La contraseña tiene un mínimo de 12 caracteres y no puede ser la antigua contraseña pública; el email tiene validación básica, no verificación de propiedad. Sin esos datos no se crea un administrador por defecto.
+- Si ya hay usuarios, no se restablecen contraseñas, promueven roles ni añaden administradores automáticamente. Recuperar un administrador ausente y rotar credenciales históricas requieren operaciones propias autorizadas.
+- Se acordó que solo administradores autenticados podrán crear cuentas; **`/api/auth/register` aún no aplica esa política**. No exponer esta transición como seguridad cerrada. Compose aún necesita propagación explícita de variables y revisión del contexto de credenciales; configurar `backend/.env` por sí solo no habilita el contenedor actual.
+- Decisión y límites: [ADR 0024](../adr/0024-configuracion-explicita-de-autenticacion.md). No se modificó ningún `.env` real, cuenta desplegada, configuración de servicios ni credencial GCS.
 
 ## 3. Módulo 1: Dashboard MLOps de Doble Campeón
 

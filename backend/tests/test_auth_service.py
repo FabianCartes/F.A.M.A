@@ -12,6 +12,12 @@ if str(_BACKEND_ROOT) not in sys.path:
 from app.database import Base
 
 
+@pytest.fixture(autouse=True)
+def explicit_test_signing_key(monkeypatch):
+    from app.services import auth
+    monkeypatch.setattr(auth, "SECRET_KEY", "isolated-auth-service-test-key-with-more-than-32-bytes")
+
+
 @pytest.fixture
 def db_session():
     """Crea una base de datos SQLite en memoria aislada para las pruebas unitarias."""
@@ -119,10 +125,13 @@ def test_usuario_role_validation(db_session):
         )
 
 
-def test_seed_initial_admin_when_empty(db_session):
-    """Verifica el seeding automático del administrador cuando la tabla de usuarios está vacía."""
+def test_seed_initial_admin_when_empty(db_session, monkeypatch):
+    """Bootstrap uses explicit synthetic credentials and never a default password."""
     from app.models.user import Usuario
     from app.services.auth import seed_initial_admin, verify_password
+    monkeypatch.setenv("ADMIN_INITIAL_EMAIL", "bootstrap@example.test")
+    monkeypatch.setenv("ADMIN_INITIAL_PASSWORD", "ExplicitAdministratorPassword2026!")
+    monkeypatch.setenv("ADMIN_INITIAL_NAME", "Synthetic administrator")
 
     # Confirmar que la tabla está vacía
     assert db_session.query(Usuario).count() == 0
@@ -131,8 +140,9 @@ def test_seed_initial_admin_when_empty(db_session):
     assert admin is not None
     assert admin.rol == "administrador"
     assert admin.activo is True
-    assert admin.email in ["admin@fama.cl", "admin@ubiobio.cl"]
-    assert verify_password("AdminFama2026!", admin.password_hash)
+    assert admin.email == "bootstrap@example.test"
+    assert verify_password("ExplicitAdministratorPassword2026!", admin.password_hash)
+    assert not verify_password("AdminFama2026!", admin.password_hash)
 
     # Segundo llamado no debe duplicar al administrador
     count_after_first = db_session.query(Usuario).count()
