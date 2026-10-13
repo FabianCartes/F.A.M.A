@@ -9,6 +9,10 @@ import torch
 from app.models.training import ModelEvaluation
 from app.schemas.evaluation import EvaluationIdentity, validate_report
 from app.services.recording_evaluator import EVALUATOR_VERSION
+from poc.preprocess import (
+    GPUAudioFrontEnd, build_gpu_audio_frontend_contract,
+    validate_gpu_audio_frontend_contract,
+)
 
 
 class StandardEvaluationError(ValueError):
@@ -94,10 +98,33 @@ def inspect_checkpoint(checkpoints_root, checkpoint_path, expected_sha256, *, ex
                 (payload["audio_config"] is not None and type(payload["audio_config"]) is not dict) or
                 (payload["windowing_config"] is not None and type(payload["windowing_config"]) is not dict)):
             _invalid("Checkpoint sin identidad estándar válida.")
+        training_audio = resolve_training_audio(dataset_name, payload["audio_config"])
+        try:
+            preprocessing_contract = validate_gpu_audio_frontend_contract(
+                payload.get("preprocessing_contract"))
+        except ValueError:
+            _invalid("Checkpoint sin contrato de preprocessing GPU válido.")
+        expected_contract = build_gpu_audio_frontend_contract(
+            sample_rate=training_audio["target_sr"],
+            duration_seconds=training_audio["duration_seconds"],
+            n_mels=training_audio["n_mels"], n_fft=training_audio["n_fft"],
+            hop_length=training_audio["hop_length"], f_min=training_audio["f_min"],
+            f_max=training_audio["f_max"],
+            top_db=preprocessing_contract["parameters"]["top_db"],
+            normalize=preprocessing_contract["parameters"]["normalize"])
+        acoustic_fields = ("n_mels", "n_fft", "hop_length", "f_min", "f_max")
+        contract_parameters = preprocessing_contract["parameters"]
+        expected_parameters = expected_contract["parameters"]
+        acoustic_mismatch = (
+            preprocessing_contract["sample_rate"] != expected_contract["sample_rate"] or
+            preprocessing_contract["duration_seconds"] != expected_contract["duration_seconds"] or
+            any(contract_parameters[key] != expected_parameters[key] for key in acoustic_fields))
+        if acoustic_mismatch:
+            _invalid("Checkpoint frontend contract differs from its effective training audio settings.")
         configurations = build_evaluation_configuration(
             {"job_id": job_id, "architecture": architecture,
              "windowing_config": payload["windowing_config"]},
-            resolve_training_audio(dataset_name, payload["audio_config"]))
+            training_audio, preprocessing_contract)
         return CheckpointInspection(path, digest, before[2], before, payload, configurations)
     except StandardEvaluationError:
         raise
@@ -143,36 +170,46 @@ def resolve_training_audio(dataset_name: str, audio_config) -> dict:
     return settings
 
 
-def build_evaluation_configuration(config: dict, training_audio: dict) -> tuple:
+def build_evaluation_configuration(config: dict, training_audio: dict,
+                                   preprocessing_contract=None) -> tuple:
     """Describe the effective published predictor once for training and validation.
 
     Hashes are intentionally taken from inference implementations, never this builder
     or the guard, so moving the integrity code cannot create a self-hash cycle.
     """
-    from poc.preprocess import GPUAudioFrontEnd
     from app.services.predictors import trained_predictor as published_predictor
 
-    signature = inspect.signature(published_predictor.extract_mel_spectrogram)
-    mel = {key: signature.parameters[key].default
-           for key in ("n_mels", "n_fft", "hop_length", "fmin", "fmax")}
-    effective = dict(target_sr=published_predictor.TARGET_SR,
-                     duration_seconds=published_predictor.DURATION_SECONDS,
-                     n_mels=mel["n_mels"], n_fft=mel["n_fft"], hop_length=mel["hop_length"],
-                     f_min=mel["fmin"], f_max=mel["fmax"])
-    comparison = {**effective, "f_max": effective["f_max"] or effective["target_sr"] / 2}
-    frontend_signature = inspect.signature(GPUAudioFrontEnd)
-    training_frontend = {key: frontend_signature.parameters[key].default
-                         for key in ("normalize", "top_db")}
-    training_frontend["implementation"] = "GPUAudioFrontEnd"
+    if preprocessing_contract is None:
+        preprocessing_contract = build_gpu_audio_frontend_contract(
+            sample_rate=training_audio["target_sr"],
+            duration_seconds=training_audio["duration_seconds"],
+            n_mels=training_audio["n_mels"], n_fft=training_audio["n_fft"],
+            hop_length=training_audio["hop_length"], f_min=training_audio["f_min"],
+            f_max=training_audio["f_max"])
+    preprocessing_contract = validate_gpu_audio_frontend_contract(preprocessing_contract)
+    frontend_params = preprocessing_contract["parameters"]
+    effective = dict(
+        target_sr=preprocessing_contract["sample_rate"],
+        duration_seconds=preprocessing_contract["duration_seconds"],
+        n_mels=frontend_params["n_mels"], n_fft=frontend_params["n_fft"],
+        hop_length=frontend_params["hop_length"], f_min=frontend_params["f_min"],
+        f_max=frontend_params["f_max"])
+    comparison = dict(effective)
+    training_frontend = {
+        "implementation": "GPUAudioFrontEnd",
+        "version": preprocessing_contract["version"],
+        "normalize": frontend_params["normalize"],
+        "top_db": frontend_params["top_db"],
+    }
     windowing = config.get("windowing_config")
     mismatch = (any(training_audio.get(key) != value for key, value in comparison.items()) or
-                bool(windowing) or training_frontend["normalize"])
+                bool(windowing))
 
     def source_hash(function):
         return hashlib.sha256(inspect.getsource(function).encode()).hexdigest()
 
     predictor_config = dict(
-        implementation="TrainedModelPredictor", version="published-fixed-crop-v1", lazy_load=True,
+        implementation="TrainedModelPredictor", version="gpu-audio-frontend-v1", lazy_load=True,
         implementation_sha256=source_hash(published_predictor.PREDICT_IMPLEMENTATION),
         model_loader_sha256=source_hash(published_predictor.MODEL_LOADER_IMPLEMENTATION),
         architecture=config["architecture"], job_id=config["job_id"], training_mismatch=mismatch,
@@ -181,12 +218,14 @@ def build_evaluation_configuration(config: dict, training_audio: dict) -> tuple:
         training_config=dict(audio=training_audio, frontend=training_frontend, windowing=windowing))
     preprocessing = dict(
         **effective, mono=True, crop="center", padding="right-zero", mel_power=2.0,
-        mel_db_reference="max", normalization="none", silence_rms_threshold=1e-4,
+        mel_db_reference=1.0, silence_rms_threshold=1e-4,
         noise_flatness_threshold=published_predictor.SPECTRAL_FLATNESS_NOISE_THRESHOLD,
         flatness_mask_abs_threshold=1e-4, flatness_mask_min_samples=512,
+        normalization=("per-example-zscore" if frontend_params["normalize"] else "none"),
+        frontend_contract=preprocessing_contract,
         load_function_sha256=source_hash(published_predictor.LENGTH_IMPLEMENTATION),
         rms_function_sha256=source_hash(published_predictor.RMS_IMPLEMENTATION),
-        mel_function_sha256=source_hash(published_predictor.MEL_IMPLEMENTATION),
+        mel_function_sha256=source_hash(GPUAudioFrontEnd.forward),
         resampling=inspect.signature(published_predictor.librosa.load).parameters["res_type"].default,
         flatness_defaults={key: parameter.default for key, parameter in
                            inspect.signature(published_predictor.librosa.feature.spectral_flatness).parameters.items()

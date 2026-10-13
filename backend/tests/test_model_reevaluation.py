@@ -15,6 +15,7 @@ import pytest
 import torch
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 from torch import nn
 
 from app.database import Base
@@ -47,7 +48,8 @@ def wav(path, frequency):
 
 @pytest.fixture
 def reevaluation_case(tmp_path):
-    engine = create_engine(f"sqlite:///{tmp_path / 'models.sqlite'}")
+    engine = create_engine("sqlite:///:memory:", poolclass=StaticPool,
+                           connect_args={"check_same_thread": False})
     Base.metadata.create_all(engine)
     session = sessionmaker(bind=engine)()
 
@@ -65,6 +67,17 @@ def reevaluation_case(tmp_path):
         "classes": ["a", "b"],
         "audio_config": None,
         "windowing_config": None,
+        "preprocessing_contract": {
+            "version": 1,
+            "implementation": "GPUAudioFrontEnd",
+            "sample_rate": 32000,
+            "duration_seconds": 2.0,
+            "parameters": {
+                "n_mels": 128, "n_fft": 1024, "hop_length": 512,
+                "f_min": 50.0, "f_max": 16000.0,
+                "top_db": 80.0, "normalize": True, "top_db_scope": "per_sample",
+            },
+        },
         "state_dict": {"logits": torch.tensor([4.0, -4.0])},
     }, checkpoint_path)
     checkpoint_hash = hashlib.sha256(checkpoint_path.read_bytes()).hexdigest()
@@ -99,7 +112,7 @@ def reevaluation_case(tmp_path):
     }), encoding="utf-8")
     yield {"session": session, "engine": engine, "model": model, "checkpoint_root": checkpoint_root,
            "checkpoint_path": checkpoint_path, "checkpoint_hash": checkpoint_hash,
-           "prepared": prepared, "roots": roots, "database_url": f"sqlite:///{tmp_path / 'models.sqlite'}"}
+           "prepared": prepared, "roots": roots, "database_url": "sqlite:///:memory:"}
     session.close()
     engine.dispose()
 
@@ -370,6 +383,58 @@ def _replace_checkpoint(case, **changes):
     case["session"].commit()
 
 
+@pytest.mark.parametrize("invalid_contract", [
+    "missing",
+    {
+        "version": 999,
+        "implementation": "GPUAudioFrontEnd",
+        "sample_rate": 32000,
+        "duration_seconds": 2.0,
+        "parameters": {
+            "n_mels": 128, "n_fft": 1024, "hop_length": 512,
+            "f_min": 50.0, "f_max": 16000.0,
+            "top_db": 80.0, "normalize": True, "top_db_scope": "per_sample",
+        },
+    },
+    {
+        "version": 1,
+        "implementation": "GPUAudioFrontEnd",
+        "sample_rate": 32000,
+        "duration_seconds": 2.0,
+        "parameters": {
+            "n_mels": 128, "n_fft": 1024, "hop_length": 512,
+            "f_min": 50.0, "f_max": 16000.0,
+            "top_db": -1.0, "normalize": True, "top_db_scope": "per_sample",
+        },
+    },
+])
+def test_preflight_rejects_missing_invalid_or_unsupported_frontend_contract(
+    reevaluation_case, monkeypatch, invalid_contract
+):
+    from app.services.reevaluation import ReevaluationError, reevaluate_model
+    from app.services.predictors.trained_predictor import TrainedModelPredictor
+
+    case = reevaluation_case
+    if invalid_contract == "missing":
+        payload = torch.load(case["checkpoint_path"], map_location="cpu", weights_only=True)
+        payload.pop("preprocessing_contract")
+        torch.save(payload, case["checkpoint_path"])
+        digest = hashlib.sha256(case["checkpoint_path"].read_bytes()).hexdigest()
+        case["checkpoint_hash"] = digest
+        case["model"].hash_binario = digest
+        case["model"].tamano_bytes = case["checkpoint_path"].stat().st_size
+        case["session"].commit()
+    else:
+        _replace_checkpoint(case, preprocessing_contract=invalid_contract)
+
+    monkeypatch.setattr(TrainedModelPredictor, "__init__", lambda *a, **k: pytest.fail(
+        "Invalid standard preprocessing metadata must be rejected before predictor construction"
+    ))
+    with pytest.raises(ReevaluationError):
+        reevaluate_model(**operation_args(case), execute=True)
+    assert case["session"].query(ModelEvaluation).count() == 0
+
+
 def test_preflight_rejects_unknown_classes_and_missing_legacy_dataset_metadata(reevaluation_case):
     from app.services.reevaluation import ReevaluationError, reevaluate_model
 
@@ -401,6 +466,15 @@ def test_cli_defaults_to_preflight_and_requires_execute_for_attempts(reevaluatio
     monkeypatch.setattr(database, "_runtime_engine", forbid_ambient_engine)
     monkeypatch.setattr(trained_predictor, "AudioCNN", lambda num_classes: TinyModel(num_classes))
     case = reevaluation_case
+    # Reuse the fixture's real in-memory DB at the external engine boundary.
+    # CLI disposal must not erase the fixture before its public output is checked.
+    import sqlalchemy
+    def isolated_engine(url, **options):
+        assert url == "sqlite:///:memory:"
+        assert options == {"pool_pre_ping": True}
+        return case["engine"]
+    monkeypatch.setattr(sqlalchemy, "create_engine", isolated_engine)
+    monkeypatch.setattr(case["engine"], "dispose", lambda: None)
     args = ["--database-url", case["database_url"], "--model-id", "81",
             "--checkpoint-root", str(case["checkpoint_root"]), "--checkpoint", str(case["checkpoint_path"]),
             "--expected-sha256", case["checkpoint_hash"], "--prepared-dir", str(case["prepared"]),
@@ -424,3 +498,87 @@ def test_cli_requires_explicit_inputs_before_database_access():
     with pytest.raises(SystemExit) as error:
         main([])
     assert error.value.code == 2
+
+
+def test_reevaluation_reports_torchaudio_mel_reference_as_one(reevaluation_case, monkeypatch):
+    from app.services.reevaluation import reevaluate_model
+    from app.services.predictors import trained_predictor
+
+    monkeypatch.setattr(trained_predictor, "AudioCNN", lambda num_classes: TinyModel(num_classes))
+    case = reevaluation_case
+    reevaluate_model(**operation_args(case), execute=True)
+    rows = case["session"].query(ModelEvaluation).order_by(ModelEvaluation.id_evaluation).all()
+
+    assert len(rows) == 2
+    assert all(
+        type(row.preprocessing_config["mel_db_reference"]) in (int, float)
+        and row.preprocessing_config["mel_db_reference"] == 1.0
+        for row in rows
+    )
+
+
+def test_preflight_accepts_checkpoint_frontend_overrides_and_keeps_provenance(
+    reevaluation_case, monkeypatch
+):
+    from app.services.reevaluation import reevaluate_model
+    from app.services.predictors import trained_predictor
+    from app.services.predictors.trained_predictor import TrainedModelPredictor
+
+    case = reevaluation_case
+    audio_config = {
+        "target_sr": 32000, "duration_seconds": 2.0, "n_mels": 128,
+        "n_fft": 1024, "hop_length": 512, "f_min": 50.0, "f_max": 16000.0,
+    }
+    preprocessing_contract = {
+        "version": 1,
+        "implementation": "GPUAudioFrontEnd",
+        "sample_rate": 32000,
+        "duration_seconds": 2.0,
+        "parameters": {
+            "n_mels": 128, "n_fft": 1024, "hop_length": 512,
+            "f_min": 50.0, "f_max": 16000.0,
+            "top_db": 40.0, "normalize": False, "top_db_scope": "per_sample",
+        },
+    }
+    _replace_checkpoint(
+        case, audio_config=audio_config, preprocessing_contract=preprocessing_contract
+    )
+
+    original_init = TrainedModelPredictor.__init__
+    monkeypatch.setattr(TrainedModelPredictor, "__init__", lambda *a, **k: pytest.fail(
+        "Preflight must not instantiate a predictor"
+    ))
+    preflight = reevaluate_model(**operation_args(case))
+    assert preflight["mode"] == "preflight"
+    assert case["session"].query(ModelEvaluation).count() == 0
+
+    monkeypatch.setattr(TrainedModelPredictor, "__init__", original_init)
+    monkeypatch.setattr(trained_predictor, "AudioCNN", lambda num_classes: TinyModel(num_classes))
+    reevaluate_model(**operation_args(case), execute=True)
+    rows = case["session"].query(ModelEvaluation).order_by(ModelEvaluation.id_evaluation).all()
+    assert len(rows) == 2
+    assert all(
+        row.preprocessing_config["frontend_contract"]["parameters"]["normalize"] is False
+        and row.preprocessing_config["frontend_contract"]["parameters"]["top_db"] == 40.0
+        for row in rows
+    )
+
+
+@pytest.mark.parametrize("field,value", [
+    ("target_sr", 44100), ("duration_seconds", 1.5), ("n_mels", 64),
+    ("n_fft", 2048), ("hop_length", 256), ("f_min", 80.0), ("f_max", 12000.0),
+])
+def test_preflight_rejects_frontend_acoustic_mismatch(reevaluation_case, field, value):
+    from app.services.reevaluation import ReevaluationError, reevaluate_model
+
+    case = reevaluation_case
+    audio_config = {
+        "target_sr": 32000, "duration_seconds": 2.0, "n_mels": 128,
+        "n_fft": 1024, "hop_length": 512, "f_min": 50.0, "f_max": 16000.0,
+    }
+    audio_config[field] = value
+    _replace_checkpoint(case, audio_config=audio_config)
+
+    with pytest.raises(ReevaluationError, match="integrity"):
+        reevaluate_model(**operation_args(case))
+    assert case["session"].query(ModelEvaluation).count() == 0

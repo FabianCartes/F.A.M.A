@@ -78,6 +78,7 @@ def seed_standard_model(db, checkpoints, model_id, *, wrong_config=False, failed
         ADMITTED_MANIFEST_PAIR_KEY, admitted_manifest_pair_provenance,
     )
     from ml_core.classification_metrics import calculate_classification_report
+    from poc.preprocess import build_gpu_audio_frontend_contract
 
     dataset = ConjuntoDatos(nombre="engine_diagnostics", ruta_gcp="datasets/engine_diagnostics/")
     db.add(dataset)
@@ -85,10 +86,20 @@ def seed_standard_model(db, checkpoints, model_id, *, wrong_config=False, failed
     job_id = f"synthetic-startup-job-{model_id}"
     filename = f"trained_{model_id}.pt"
     checkpoint = checkpoints / filename
+    training_audio = dict(target_sr=32000, duration_seconds=2.0, n_mels=128,
+                          n_fft=1024, hop_length=512, f_min=50.0, f_max=16000.0)
+    preprocessing_contract = build_gpu_audio_frontend_contract(
+        sample_rate=training_audio["target_sr"],
+        duration_seconds=training_audio["duration_seconds"],
+        n_mels=training_audio["n_mels"], n_fft=training_audio["n_fft"],
+        hop_length=training_audio["hop_length"], f_min=training_audio["f_min"],
+        f_max=training_audio["f_max"],
+    )
     payload = {
         "dataset_id": dataset.id_conjunto_datos, "dataset_name": dataset.nombre,
         "job_id": job_id, "architecture": "AudioCNN", "classes": ["a", "b"],
-        "audio_config": None, "windowing_config": None, "state_dict": {},
+        "audio_config": None, "windowing_config": None,
+        "preprocessing_contract": preprocessing_contract, "state_dict": {},
         "padding": "x" * 11000,
     }
     torch.save(payload, checkpoint)
@@ -99,11 +110,9 @@ def seed_standard_model(db, checkpoints, model_id, *, wrong_config=False, failed
                    estado="standard_eval_completed", hash_binario=digest)
     db.add(model)
     db.flush()
-    training_audio = dict(target_sr=32000, duration_seconds=2.0, n_mels=128,
-                          n_fft=1024, hop_length=512, f_min=50.0, f_max=16000.0)
     settings = training_service._evaluation_config(
         {"job_id": job_id, "architecture": "AudioCNN", "windowing_config": None},
-        training_audio)
+        training_audio, payload["preprocessing_contract"])
     configs = dict(zip(("predictor_config", "preprocessing_config", "aggregation_config"), settings))
     if wrong_config:
         configs["preprocessing_config"] = {

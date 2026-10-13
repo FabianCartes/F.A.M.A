@@ -1,7 +1,8 @@
 """Training admission tests at the public service interface; no real training."""
 import os
 import wave
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import librosa
@@ -23,6 +24,8 @@ from training.prepare_data import prepare_dataset
 
 @pytest.fixture
 def training_env(tmp_path, monkeypatch):
+    monkeypatch.delenv("FAMA_TRAINING_AVESCHILENAS_RAW_READ_ROOT", raising=False)
+    monkeypatch.delenv("FAMA_TRAINING_AVESCHILENAS_PREPARED_READ_DIR", raising=False)
     engine = create_engine("sqlite:///:memory:", poolclass=StaticPool,
                            connect_args={"check_same_thread": False})
     Base.metadata.create_all(engine)
@@ -31,11 +34,13 @@ def training_env(tmp_path, monkeypatch):
     monkeypatch.setattr(training, "get_raw_data_dir", lambda name=None: tmp_path / "raw" / (name or ""))
     monkeypatch.setattr(paths, "get_raw_data_dir", lambda name=None: tmp_path / "raw" / (name or ""))
     monkeypatch.setattr(paths, "get_processed_data_dir", lambda name=None: tmp_path / "processed" / (name or ""))
-    monkeypatch.setattr(training, "get_prepared_data_dir", lambda name: tmp_path / "prepared" / name)
+    monkeypatch.setattr(paths, "get_prepared_data_dir", lambda name: tmp_path / "prepared" / name)
     monkeypatch.setattr(training, "_BACKEND_DIR", tmp_path)
     service = training.TrainingService(tmp_path / "checkpoints")
-    # Thread scheduling is an external execution boundary. Never run ML here.
-    with patch("app.services.training.threading.Thread") as thread:
+    # Only intercept the service worker; HTTP/framework threads must stay real.
+    thread = MagicMock(name="Thread")
+    local_threading = SimpleNamespace(Lock=training.threading.Lock, Thread=thread)
+    with patch("app.services.training.threading", local_threading):
         yield service, sessions, tmp_path, thread
     engine.dispose()
 
@@ -217,7 +222,7 @@ def test_invalid_source_is_rejected_before_scheduling(training_env, name, defect
 
 
 @pytest.mark.parametrize("name", ["AvesChilenas", "engine_diagnostics"])
-@pytest.mark.parametrize("audio_config", [None, {"target_sr": 16000}])
+@pytest.mark.parametrize("audio_config", [None, {"target_sr": 16000, "f_max": 8000}])
 @pytest.mark.parametrize("stage,extension", [("raw", ".wav"), ("raw", ".mp3"), ("processed", ".wav")])
 def test_accepted_source_reaches_ml_boundary_without_training(training_env, monkeypatch, name, audio_config,
                                                               stage, extension):
@@ -298,6 +303,43 @@ def test_accepted_source_reaches_ml_boundary_without_training(training_env, monk
     progress = service.get_progress()
     assert progress["status"] == "failed"
     assert progress["error_message"] == "ML execution disabled at DataLoader boundary"
+    assert list(service.checkpoints_dir.iterdir()) == []
+
+
+def test_training_admission_reads_configured_external_bird_roots(training_env, monkeypatch):
+    service, sessions, root, thread = training_env
+    name = "AvesChilenas"
+    register(sessions, name)
+    external_root = root / "external"
+    monkeypatch.setattr(paths, "get_raw_data_dir",
+                        lambda name=None: external_root / "raw" / (name or ""))
+    external_raw = partitions(external_root, name, classes=("ExternalFixture",))
+    external_prepared = external_root / "prepared" / name
+    before = {path: path.read_bytes() for path in (*external_raw.rglob("*"), *external_prepared.rglob("*"))
+              if path.is_file()}
+    monkeypatch.setenv("FAMA_TRAINING_AVESCHILENAS_RAW_READ_ROOT", str(external_raw))
+    monkeypatch.setenv("FAMA_TRAINING_AVESCHILENAS_PREPARED_READ_DIR", str(external_prepared))
+
+    assert service.start_training(name)["status"] == "started"
+    config = thread.call_args.kwargs["args"][0]
+    assert config["source"]["raw_dir"] == external_raw
+    assert config["source"]["roots"]["raw"] == external_raw
+    assert config["source"]["train_df"]["clase"].tolist() == ["ExternalFixture"]
+    assert {path: path.read_bytes() for path in before} == before
+    assert service.checkpoints_dir == root / "checkpoints"
+    thread.assert_called_once()
+
+
+def test_training_admission_rejects_invalid_configured_external_root(training_env, monkeypatch):
+    service, sessions, root, thread = training_env
+    register(sessions, "AvesChilenas")
+    partitions(root, "AvesChilenas")
+    monkeypatch.setenv("FAMA_TRAINING_AVESCHILENAS_RAW_READ_ROOT", str(root / "missing-raw"))
+
+    with pytest.raises(ValueError, match="physical"):
+        service.start_training("AvesChilenas")
+    assert service.get_progress()["status"] == "failed"
+    thread.assert_not_called()
     assert list(service.checkpoints_dir.iterdir()) == []
 
 
@@ -420,6 +462,28 @@ def test_prepared_trio_is_required_before_job_admission(training_env, name, stag
     thread.assert_not_called()
     assert {csv: csv.read_bytes() for csv in raw.glob("*.csv")} == legacy_before
     assert list(service.checkpoints_dir.iterdir()) == []
+
+
+@pytest.mark.parametrize("seed", [True, False, None, 1.5, "42", -1, 2**32])
+def test_invalid_seed_has_no_admission_or_state_effects(training_env, monkeypatch, seed):
+    service, _, _, thread = training_env
+    before = service.get_progress()
+    def forbidden():
+        raise AssertionError("invalid seed reached registration")
+    monkeypatch.setattr(training, "SessionLocal", forbidden)
+    with pytest.raises(ValueError, match="seed"):
+        service.start_training("AvesChilenas", seed=seed)
+    assert service.get_progress() == before
+    thread.assert_not_called()
+
+
+@pytest.mark.parametrize(("options", "expected"), [({}, 42), ({"seed": 0}, 0), ({"seed": 2**32 - 1}, 2**32 - 1)])
+def test_training_seed_default_and_uint32_limits_reach_worker(training_env, options, expected):
+    service, sessions, root, thread = training_env
+    register(sessions, "AvesChilenas")
+    partitions(root, "AvesChilenas")
+    assert service.start_training("AvesChilenas", **options)["status"] == "started"
+    assert thread.call_args.kwargs["args"][0]["seed"] == expected
 
 
 def test_unavailable_registration_store_fails_closed(training_env, monkeypatch):

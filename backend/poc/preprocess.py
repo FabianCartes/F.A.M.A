@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Union, Optional, List
+import math
 import numpy as np
 import librosa
 import soundfile as sf
@@ -197,9 +198,13 @@ class GPUAudioFrontEnd(nn.Module):
         f_max: Optional[float] = 10000.0,
         top_db: float = 80.0,
         normalize: bool = True,
+        top_db_scope: str = "batch",
     ):
         super().__init__()
+        if top_db_scope not in {"batch", "per_sample"}:
+            raise ValueError(f"Unsupported top_db_scope: {top_db_scope}")
         self.normalize = normalize
+        self.top_db_scope = top_db_scope
         self.mel_spectrogram = T.MelSpectrogram(
             sample_rate=sample_rate,
             n_fft=n_fft,
@@ -223,7 +228,12 @@ class GPUAudioFrontEnd(nn.Module):
             waveform = waveform.squeeze(1)
 
         mel = self.mel_spectrogram(waveform)
-        mel_db = self.amplitude_to_db(mel)
+        if self.top_db_scope == "per_sample":
+            # torchaudio applies top_db per channel for 4D input; the channel axis
+            # isolates each batch item's cutoff instead of sharing one batch maximum.
+            mel_db = self.amplitude_to_db(mel.unsqueeze(1)).squeeze(1)
+        else:
+            mel_db = self.amplitude_to_db(mel)
 
         if self.normalize:
             mean = mel_db.mean(dim=(-2, -1), keepdim=True)
@@ -231,6 +241,85 @@ class GPUAudioFrontEnd(nn.Module):
             mel_db = (mel_db - mean) / (std + 1e-6)
 
         return mel_db.unsqueeze(1)
+
+
+GPU_AUDIO_FRONTEND_CONTRACT_VERSION = 1
+GPU_AUDIO_FRONTEND_IMPLEMENTATION = "GPUAudioFrontEnd"
+
+
+def build_gpu_audio_frontend_contract(
+    *, sample_rate: int, duration_seconds: float, n_mels: int, n_fft: int,
+    hop_length: int, f_min: float, f_max: float, top_db: float = 80.0,
+    normalize: bool = True,
+) -> dict:
+    """Capture frontend settings with a per-sample dB top_db cutoff."""
+    return validate_gpu_audio_frontend_contract({
+        "version": GPU_AUDIO_FRONTEND_CONTRACT_VERSION,
+        "implementation": GPU_AUDIO_FRONTEND_IMPLEMENTATION,
+        "sample_rate": int(sample_rate),
+        "duration_seconds": float(duration_seconds),
+        "parameters": {
+            "n_mels": int(n_mels),
+            "n_fft": int(n_fft),
+            "hop_length": int(hop_length),
+            "f_min": float(f_min),
+            "f_max": float(f_max),
+            "top_db": float(top_db),
+            "normalize": normalize,
+            "top_db_scope": "per_sample",
+        },
+    })
+
+
+def _finite_number(value) -> bool:
+    if type(value) not in (int, float):
+        return False
+    try:
+        return math.isfinite(value)
+    except (OverflowError, TypeError, ValueError):
+        return False
+
+
+def validate_gpu_audio_frontend_contract(contract: dict) -> dict:
+    """Validate and normalize the only currently supported frontend contract."""
+    fields = {"version", "implementation", "sample_rate", "duration_seconds", "parameters"}
+    parameter_fields = {
+        "n_mels", "n_fft", "hop_length", "f_min", "f_max", "top_db",
+        "normalize", "top_db_scope",
+    }
+    if (type(contract) is not dict or set(contract) != fields or
+            type(contract.get("version")) is not int or
+            contract["version"] != GPU_AUDIO_FRONTEND_CONTRACT_VERSION or
+            type(contract.get("implementation")) is not str or
+            contract["implementation"] != GPU_AUDIO_FRONTEND_IMPLEMENTATION or
+            type(contract.get("sample_rate")) is not int or contract["sample_rate"] <= 0 or
+            not _finite_number(contract.get("duration_seconds")) or contract["duration_seconds"] <= 0 or
+            type(contract.get("parameters")) is not dict or
+            set(contract["parameters"]) != parameter_fields):
+        raise ValueError("Invalid or unsupported GPUAudioFrontEnd preprocessing contract")
+
+    params = contract["parameters"]
+    top_db_scope = params["top_db_scope"]
+    if (any(type(params[key]) is not int or params[key] <= 0 for key in ("n_mels", "n_fft", "hop_length")) or
+            any(not _finite_number(params[key]) for key in ("f_min", "f_max", "top_db")) or
+            type(top_db_scope) is not str or top_db_scope != "per_sample" or
+            params["f_min"] < 0 or params["f_max"] <= params["f_min"] or
+            params["f_max"] > contract["sample_rate"] / 2 or params["top_db"] <= 0 or
+            type(params["normalize"]) is not bool):
+        raise ValueError("Invalid or unsupported GPUAudioFrontEnd preprocessing parameters")
+
+    return {
+        "version": GPU_AUDIO_FRONTEND_CONTRACT_VERSION,
+        "implementation": GPU_AUDIO_FRONTEND_IMPLEMENTATION,
+        "sample_rate": contract["sample_rate"],
+        "duration_seconds": float(contract["duration_seconds"]),
+        "parameters": {
+            "n_mels": params["n_mels"], "n_fft": params["n_fft"],
+            "hop_length": params["hop_length"], "f_min": float(params["f_min"]),
+            "f_max": float(params["f_max"]), "top_db": float(params["top_db"]),
+            "normalize": params["normalize"], "top_db_scope": top_db_scope,
+        },
+    }
 
 
 class GPUSpecAugment(nn.Module):

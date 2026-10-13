@@ -49,6 +49,10 @@ class ModelMetadata(BaseModel):
     classes: List[str] = Field(default_factory=list, description="Lista de clases/especies reconocidas")
     is_default: bool = Field(False, description="Indica si es el modelo por defecto del sistema")
     has_weights: bool = Field(True, description="Indica si los pesos binarios (.pt) existen físicamente en disco y están listos")
+    checkpoint_sha256: Optional[str] = Field(
+        None,
+        description="SHA-256 de los bytes del archivo checkpoint registrado; no acredita los parámetros cargados en memoria",
+    )
     metrics: Optional[Dict[str, Any]] = Field(None, description="Métricas históricas existentes del modelo")
     evaluations: Optional[ModelEvaluations] = Field(None, description="Últimos intentos e informes finales por split")
 

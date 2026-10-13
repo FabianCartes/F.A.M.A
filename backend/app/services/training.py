@@ -1,4 +1,5 @@
 import os
+import random
 import sys
 import time
 import uuid
@@ -10,6 +11,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional
 
+import numpy as np
 import torch
 import psutil
 from sqlalchemy.orm import Session
@@ -30,10 +32,15 @@ from app.schemas.evaluation import strict_json
 import pandas as pd
 import gc
 from torch.utils.data import DataLoader
-from poc.preprocess import GPUAudioFrontEnd, GPUSpecAugment
+from poc.preprocess import (
+    GPUAudioFrontEnd, GPUSpecAugment, build_gpu_audio_frontend_contract,
+)
 from poc.train import BioacousticModel, AudioCNN, AudioDataset, FocalLoss, apply_mixup
 from training.prepare_data import load_prepared_dataset
-from training.paths import get_raw_data_dir, get_dataset_roots, get_prepared_data_dir
+from training.paths import (
+    get_raw_data_dir, get_dataset_roots, get_training_raw_read_root,
+    get_training_prepared_read_dir,
+)
 from training.schemas.config import AudioConfig
 from training.pipelines.dataset import GenericAudioDataset
 from dataset_references import resolve_reference
@@ -265,8 +272,9 @@ class TrainingService:
     def _prepare_source(self, dataset_name: str) -> Dict[str, Any]:
         """Validate and freeze partitions before a job is admitted."""
         roots = get_dataset_roots(dataset_name)
+        roots["raw"] = get_training_raw_read_root(dataset_name)
         raw_dir = roots["raw"]
-        prepared_dir = get_prepared_data_dir(dataset_name)
+        prepared_dir = get_training_prepared_read_dir(dataset_name)
         try:
             train_df, val_df, test_df = load_prepared_dataset(
                 prepared_dir, roots=roots, dataset_name=dataset_name)
@@ -339,12 +347,16 @@ class TrainingService:
         regularization_config: Optional[Any] = None,
         weight_decay: float = 0.01,
         early_stopping: bool = True,
+        seed: int = 42,
     ) -> Dict[str, Any]:
         """
         Inicia un nuevo ciclo de entrenamiento bioacústico en un hilo desacoplado.
         Soporta modo individual, pipeline secuencial de la Tríada Completa o Ensamble Dinámico (1 a 3 modelos),
         y parametrización universal multi-dominio de audio, ventaneo y regularización.
         """
+        if type(seed) is not int or not 0 <= seed <= 2**32 - 1:
+            raise ValueError("seed debe ser un entero entre 0 y 2**32 - 1.")
+
         with self._lock:
             if self.status in {"training", "evaluating"}:
                 raise RuntimeError("Ya existe un proceso de entrenamiento en ejecución.")
@@ -448,6 +460,7 @@ class TrainingService:
             "regularization_config": regularization_config,
             "weight_decay": weight_decay,
             "early_stopping": early_stopping,
+            "seed": seed,
         }
 
         # Lanzar en hilo de fondo para no bloquear el servidor FastAPI
@@ -475,10 +488,14 @@ class TrainingService:
     def _build_model_instance(self, arch: str, num_classes: int, device: torch.device) -> torch.nn.Module:
         arch_lower = arch.lower().replace("-", "_")
         if "audiocnn" in arch_lower or "audio_cnn" in arch_lower:
-            return AudioCNN(num_classes=num_classes).to(device)
+            model = AudioCNN(num_classes=num_classes).to(device)
+            model._fama_initialization_mode = "constructor_default"
+            return model
         elif "panns" in arch_lower:
             from training.models.panns_cnn14 import PannsCNN14
-            return PannsCNN14(in_chans=1, num_classes=num_classes).to(device)
+            model = PannsCNN14(in_chans=1, num_classes=num_classes).to(device)
+            model._fama_initialization_mode = "constructor_default"
+            return model
         elif "resnet" in arch_lower:
             target_arch = "resnet34d"
         elif "convnext" in arch_lower:
@@ -488,10 +505,9 @@ class TrainingService:
         else:
             target_arch = arch_lower
 
-        try:
-            return BioacousticModel(model_name=target_arch, num_classes=num_classes, pretrained=True, in_chans=1).to(device)
-        except Exception:
-            return BioacousticModel(model_name=target_arch, num_classes=num_classes, pretrained=False, in_chans=1).to(device)
+        model = BioacousticModel(model_name=target_arch, num_classes=num_classes, pretrained=True, in_chans=1).to(device)
+        model._fama_initialization_mode = "pretrained_constructor"
+        return model
 
     def _write_checkpoint(self, path: Path, payload: Dict[str, Any]) -> tuple:
         """Publish a durable local checkpoint without replacing an existing file."""
@@ -525,11 +541,11 @@ class TrainingService:
                 path.unlink(missing_ok=True)
             raise
 
-    def _evaluation_config(self, config, training_audio):
+    def _evaluation_config(self, config, training_audio, preprocessing_contract=None):
         """Use the shared effective inference provenance builder."""
         from app.services.standard_evaluation_guard import build_evaluation_configuration
 
-        settings = build_evaluation_configuration(config, training_audio)
+        settings = build_evaluation_configuration(config, training_audio, preprocessing_contract)
         if settings[0]['training_mismatch']:
             self._add_log('WARN', 'Discrepancia training/predictor: evaluación usa configuración publicada, sin cambiar filtros ni ventanas.')
         return settings
@@ -545,7 +561,8 @@ class TrainingService:
         require_standard_reports(target, db, self.checkpoints_dir)
 
     def _evaluate_registered_checkpoint(self, model_id, checkpoint_path, checkpoint_hash,
-                                        config, classes, training_audio, is_ensemble, architecture):
+                                        config, classes, training_audio, preprocessing_contract,
+                                        is_ensemble, architecture):
         """Registration is durable first; evaluation errors preserve the artifact."""
         with self._lock:
             self.status = 'evaluating'
@@ -565,7 +582,8 @@ class TrainingService:
                     resolved = resolve_reference(record.reference, record.stage, config['source']['roots'])
                     if resolved != record.path:
                         raise ValueError('Referencia admitida cambió antes de evaluación')
-            settings = self._evaluation_config({**config, 'architecture': architecture}, training_audio)
+            settings = self._evaluation_config(
+                {**config, 'architecture': architecture}, training_audio, preprocessing_contract)
             evaluators = [RecordingEvaluator(config['source']['recordings'][split], predictor,
                 id_modelo=model_id, dataset=config['dataset_name'], split=split,
                 checkpoint_sha256=checkpoint_hash, predictor_config=settings[0],
@@ -636,6 +654,13 @@ class TrainingService:
         calcula las métricas reales época a época, guarda el checkpoint binario con pesos
         y persiste los resultados en PostgreSQL.
         """
+        seed = config["seed"]
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+
         job_id = config["job_id"]
         dataset_name = config["dataset_name"]
         is_tri_model = config.get("is_tri_model", False)
@@ -679,6 +704,9 @@ class TrainingService:
             target_sr, duration_seconds, n_mels, n_fft, hop_length, f_min, f_max = (
                 training_audio[key] for key in (
                     "target_sr", "duration_seconds", "n_mels", "n_fft", "hop_length", "f_min", "f_max"))
+            preprocessing_contract = build_gpu_audio_frontend_contract(
+                sample_rate=target_sr, duration_seconds=duration_seconds, n_mels=n_mels,
+                n_fft=n_fft, hop_length=hop_length, f_min=f_min, f_max=f_max)
 
             self._add_log(
                 "INFO",
@@ -795,12 +823,8 @@ class TrainingService:
 
                 # Frontend espectral y data augmentation en GPU
                 frontend = GPUAudioFrontEnd(
-                    sample_rate=target_sr,
-                    n_mels=n_mels,
-                    n_fft=n_fft,
-                    hop_length=hop_length,
-                    f_min=f_min,
-                    f_max=f_max,
+                    sample_rate=preprocessing_contract["sample_rate"],
+                    **preprocessing_contract["parameters"],
                 ).to(device)
                 spec_augment = GPUSpecAugment(
                     freq_mask_param=8,
@@ -828,6 +852,7 @@ class TrainingService:
                         mixup_alpha = float(getattr(reg_cfg_input, "mixup_alpha", 0.2))
 
                 model = self._build_model_instance(arch, len(classes), device)
+                initialization_mode = getattr(model, "_fama_initialization_mode", "unspecified")
                 if loss_type == "cross_entropy":
                     criterion = torch.nn.CrossEntropyLoss().to(device)
                 else:
@@ -994,6 +1019,8 @@ class TrainingService:
                     "source_directory": str(raw_dir),
                     "model_index": idx + 1,
                     "architecture": arch,
+                    "seed": seed,
+                    "initialization_mode": initialization_mode,
                     "epochs": arch_epochs,
                     "best_val_acc": best_val_acc,
                     "classes": classes,
@@ -1001,6 +1028,7 @@ class TrainingService:
                     "ensemble_models": config.get("models"),
                     "audio_config": config.get("audio_config"),
                     "windowing_config": config.get("windowing_config"),
+                    "preprocessing_contract": preprocessing_contract,
                     "regularization_config": config.get("regularization_config"),
                     "state_dict": saved_state,
                     "created_at": datetime.now(timezone.utc).isoformat(),
@@ -1080,8 +1108,9 @@ class TrainingService:
                     if db is not None:
                         db.close()
 
-                self._evaluate_registered_checkpoint(model_id, checkpoint_path, file_hash,
-                                                     config, classes, training_audio, is_ensemble, arch)
+                self._evaluate_registered_checkpoint(
+                    model_id, checkpoint_path, file_hash, config, classes, training_audio,
+                    preprocessing_contract, is_ensemble, arch)
 
                 # Limpieza de memoria RAM y VRAM antes del siguiente modelo
                 if torch.cuda.is_available():

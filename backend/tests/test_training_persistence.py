@@ -76,6 +76,7 @@ def test_main_persists_two_final_reports_before_success_and_activation(persisten
     start(service)
     assert service.get_progress()['status'] == 'completed', service.get_progress()['error_message']
     entry, = history(service, sessions)
+    payload = torch.load(service.checkpoints_dir / entry['filename'], weights_only=True)
     assert registered == [(False, 'standard_eval_pending')]
     attempts = evaluations(sessions, entry['id'])
     assert [(a['split'], a['status']) for a in attempts] == [('val', 'completed'), ('test', 'completed')]
@@ -95,12 +96,13 @@ def test_main_persists_two_final_reports_before_success_and_activation(persisten
     assert entry['active'] is True
     assert entry['status'] == 'standard_eval_completed'
     assert publications == [('evaluating', ['completed', 'completed'])]
-    assert attempts[0]['preprocessing_config']['target_sr'] == 22050
+    assert attempts[0]['preprocessing_config']['target_sr'] == 8000
     assert attempts[0]['predictor_config']['training_config']['audio']['target_sr'] == 8000
-    assert attempts[0]['predictor_config']['training_mismatch'] is True
+    assert attempts[0]['predictor_config']['training_mismatch'] is False
     assert attempts[0]['predictor_config']['training_config']['frontend']['normalize'] is True
-    assert attempts[0]['preprocessing_config']['normalization'] == 'none'
-    assert any('discrepancia' in log['message'].lower() for log in service.logs)
+    assert attempts[0]['preprocessing_config']['normalization'] == 'per-example-zscore'
+    assert attempts[0]['preprocessing_config']['frontend_contract'] == payload['preprocessing_contract']
+    assert not any('discrepancia' in log['message'].lower() for log in service.logs)
 
 
 def test_main_accepts_schema_configs_without_substituting_training_physics(persistence_env):
@@ -114,10 +116,10 @@ def test_main_accepts_schema_configs_without_substituting_training_physics(persi
                            regularization_config=RegularizationConfigSchema(loss_type='cross_entropy'))
     assert service.get_progress()['status'] == 'completed', service.get_progress()['error_message']
     entry, = history(service, sessions)
+    payload = torch.load(service.checkpoints_dir / entry['filename'], weights_only=True)
     attempts = evaluations(sessions, entry['id'])
     assert attempts[0]['predictor_config']['training_config']['windowing'] == windowing.model_dump()
     assert attempts[0]['aggregation_config']['windowing'] == 'fixed-center-crop'
-    payload = torch.load(service.checkpoints_dir / entry['filename'], weights_only=True)
     assert payload['audio_config'] == audio.model_dump()
 
 
@@ -450,6 +452,33 @@ def test_dataset_identity_must_still_match_when_registering(persistence_env, mon
     assert "dataset" in service.get_progress()["error_message"].lower()
     assert history(service, sessions) == []
     assert list(service.checkpoints_dir.iterdir()) == []
+
+
+def test_new_checkpoint_persists_effective_gpu_frontend_contract(persistence_env):
+    service, sessions, _, _ = persistence_env
+    start(service)
+    entry, = history(service, sessions)
+    payload = torch.load(service.checkpoints_dir / entry["filename"], weights_only=True)
+    contract = {
+        "version": 1,
+        "implementation": "GPUAudioFrontEnd",
+        "sample_rate": 8000,
+        "duration_seconds": 0.064,
+        "parameters": {
+            "n_mels": 32,
+            "n_fft": 256,
+            "hop_length": 64,
+            "f_min": 0.0,
+            "f_max": 4000.0,
+            "top_db": 80.0,
+            "normalize": True,
+            "top_db_scope": "per_sample",
+        },
+    }
+
+    assert payload["preprocessing_contract"] == contract
+    attempts = evaluations(sessions, entry["id"])
+    assert attempts[0]["preprocessing_config"]["frontend_contract"] == contract
 
 
 def test_completed_history_and_checkpoint_expose_verified_provenance(persistence_env):

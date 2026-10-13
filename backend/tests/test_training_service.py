@@ -1,5 +1,6 @@
 """Training configuration and execution contracts through public service seams."""
 import re
+import random
 from functools import wraps
 from datetime import datetime, timezone
 
@@ -161,7 +162,7 @@ def test_start_training_worker_with_custom_audio_physics(execution, monkeypatch)
     run(service, architecture="EfficientNet-B0", audio_config=physics)
     expected = [pd.read_csv(root / f"prepared/AvesChilenas/{split}.csv").iloc[0]["file_path"]
                 for split in ("train", "val")]
-    assert decoded == [(str(root / "raw/AvesChilenas" / path), 16000) for path in expected]
+    assert decoded[:len(expected)] == [(str(root / "raw/AvesChilenas" / path), 16000) for path in expected]
     assert transforms
     for transform in transforms:
         assert transform["sample_rate"] == 16000
@@ -364,3 +365,39 @@ def test_training_worker_disabled_early_stopping_runs_all_epochs(execution):
     assert not any("Early Stopping activado" in log["message"] for log in progress["logs"])
     entry, = history(service, sessions)
     assert len(entry["metrics"]) == 10
+
+
+def test_seed_replays_worker_rngs_and_checkpoint_records_initialization(execution, monkeypatch):
+    service, sessions, _ = execution
+    draws = []
+    def synthetic_loader(dataset, **kwargs):
+        if kwargs["shuffle"]:
+            draws.append((random.random(), float(np.random.random()), float(torch.rand(1).item())))
+        return [(torch.ones(1, 4096), torch.zeros(1, dtype=torch.long))]
+    monkeypatch.setattr(training, "DataLoader", synthetic_loader)
+    run(service, architecture="AudioCNN", seed=17)
+    run(service, architecture="AudioCNN", seed=17)
+    run(service, architecture="AudioCNN", seed=18)
+    assert draws[0] == draws[1]
+    assert draws[0] != draws[2]
+    saved = [torch.load(service.checkpoints_dir / item["filename"], map_location="cpu", weights_only=True)
+             for item in history(service, sessions)]
+    assert sorted(payload["seed"] for payload in saved) == [17, 17, 18]
+    assert {payload["initialization_mode"] for payload in saved} == {"constructor_default"}
+
+
+def test_pretrained_constructor_failure_fails_job_without_untrained_retry(execution, monkeypatch):
+    service, sessions, _ = execution
+    attempted = []
+    def unavailable_pretrained(**options):
+        attempted.append(options["pretrained"])
+        raise RuntimeError("pretrained constructor unavailable")
+    monkeypatch.setattr(training, "BioacousticModel", unavailable_pretrained)
+    assert service.start_training("AvesChilenas", architecture="ConvNeXt-Nano", epochs=1)["status"] == "started"
+    progress = service.get_progress()
+    assert progress["status"] == "failed"
+    assert "pretrained constructor unavailable" in progress["error_message"]
+    assert attempted == [True]
+    assert history(service, sessions) == []
+    assert progress['metrics_history'] == []
+    assert list(service.checkpoints_dir.iterdir()) == []

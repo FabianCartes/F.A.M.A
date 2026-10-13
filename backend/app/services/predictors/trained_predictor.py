@@ -5,6 +5,7 @@ Garantiza inferencia real en PyTorch, telemetría ODD y fail-fast si faltan peso
 """
 from pathlib import Path
 from typing import Optional, List, Dict, Any
+import hashlib
 import time
 import torch
 import torch.nn as nn
@@ -30,6 +31,7 @@ except ImportError:
     )
     from poc.train import BioacousticModel, AudioCNN
 
+from poc.preprocess import GPUAudioFrontEnd, validate_gpu_audio_frontend_contract
 from app.schemas.model_info import ModelMetadata
 from app.schemas.prediction import PredictionResult
 from app.services.predictors.base import (
@@ -38,6 +40,17 @@ from app.services.predictors.base import (
     DEFAULT_CHILEAN_BIRD_CLASSES,
     SPECTRAL_FLATNESS_NOISE_THRESHOLD,
 )
+
+
+def _standard_frontend_contract(checkpoint):
+    if "job_id" not in checkpoint:
+        return None
+    try:
+        return validate_gpu_audio_frontend_contract(checkpoint.get("preprocessing_contract"))
+    except ValueError as err:
+        raise ModelWeightsError(
+            "El checkpoint estándar tiene un contrato de preprocessing GPU inválido o no soportado."
+        ) from err
 
 
 class TrainedModelPredictor(AudioPredictor):
@@ -63,6 +76,8 @@ class TrainedModelPredictor(AudioPredictor):
         self.architecture_name: str = "BioacousticModel"
         self.best_val_acc: Optional[float] = None
         self.model: Optional[nn.Module] = None
+        self.frontend: Optional[GPUAudioFrontEnd] = None
+        self.preprocessing_contract: Optional[Dict[str, Any]] = None
 
         if not self.checkpoint_path.exists():
             raise ModelWeightsError(
@@ -79,8 +94,10 @@ class TrainedModelPredictor(AudioPredictor):
             dataset_name=dataset_name,
             name=self.custom_name or f"Modelo Entrenado: {self.architecture_name} ({self.checkpoint_path.name})",
             description=f"Inferencia bioacústica con pesos reales entrenados ({self.architecture_name})",
-            target_sr=TARGET_SR,
-            duration_seconds=DURATION_SECONDS,
+            target_sr=(self.preprocessing_contract["sample_rate"]
+                       if self.preprocessing_contract else TARGET_SR),
+            duration_seconds=(self.preprocessing_contract["duration_seconds"]
+                              if self.preprocessing_contract else DURATION_SECONDS),
             classes=self.classes,
             is_default=self.is_default,
             metrics={"accuracy": round(self.best_val_acc / 100.0 if self.best_val_acc and self.best_val_acc > 1 else (self.best_val_acc or 0.0), 4)},
@@ -108,6 +125,7 @@ class TrainedModelPredictor(AudioPredictor):
                 f"El checkpoint {self.checkpoint_path} no tiene un formato válido (se esperaba un diccionario)."
             )
 
+        self.preprocessing_contract = _standard_frontend_contract(checkpoint)
         self.architecture_name = checkpoint.get("architecture", "EfficientNet-B0")
         self.classes = checkpoint.get("classes", list(DEFAULT_CHILEAN_BIRD_CLASSES))
         self.best_val_acc = checkpoint.get("best_val_acc")
@@ -132,6 +150,7 @@ class TrainedModelPredictor(AudioPredictor):
                 f"El checkpoint {self.checkpoint_path} no tiene un formato válido (se esperaba un diccionario)."
             )
 
+        self.preprocessing_contract = _standard_frontend_contract(checkpoint)
         state_dict = checkpoint.get("state_dict") or checkpoint.get("model_state_dict")
         if state_dict is None:
             # Verificar si el diccionario en sí contiene tensores
@@ -184,15 +203,34 @@ class TrainedModelPredictor(AudioPredictor):
         model.to(self.device)
         model.eval()
         self.model = model
+        if self.preprocessing_contract is not None:
+            contract = self.preprocessing_contract
+            self.frontend = GPUAudioFrontEnd(
+                sample_rate=contract["sample_rate"], **contract["parameters"]
+            ).to(self.device)
+            self.frontend.eval()
 
     @property
     def has_weights(self) -> bool:
         return self.checkpoint_path.exists() and self.checkpoint_path.stat().st_size > 10000
 
+    def _checkpoint_sha256(self) -> Optional[str]:
+        """Hash the registered checkpoint file bytes without loading its tensor state."""
+        try:
+            digest = hashlib.sha256()
+            with self.checkpoint_path.open("rb") as stream:
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    digest.update(chunk)
+            return digest.hexdigest()
+        except Exception:
+            # Catalogue metadata is best-effort; never expose filesystem details.
+            return None
+
     @property
     def metadata(self) -> ModelMetadata:
         self._metadata.is_default = self.is_default
         self._metadata.has_weights = self.has_weights
+        self._metadata.checkpoint_sha256 = self._checkpoint_sha256()
         return self._metadata
 
     @property
@@ -210,8 +248,11 @@ class TrainedModelPredictor(AudioPredictor):
         if self.model is None:
             self._load_model()
 
+        contract = self.preprocessing_contract
         waveform = load_and_fix_length(
-            audio_file_path, target_sr=TARGET_SR, duration_seconds=DURATION_SECONDS
+            audio_file_path,
+            target_sr=contract["sample_rate"] if contract else TARGET_SR,
+            duration_seconds=contract["duration_seconds"] if contract else DURATION_SECONDS,
         )
 
         # 1. Filtro de Silencio (RMS)
@@ -248,8 +289,12 @@ class TrainedModelPredictor(AudioPredictor):
             )
 
         # 3. Extracción de Mel-Spectrogram y pasada PyTorch
-        mel = extract_mel_spectrogram(waveform, sr=TARGET_SR)
-        mel_tensor = torch.from_numpy(mel).unsqueeze(0).unsqueeze(0).float().to(self.device)
+        if self.frontend is not None:
+            audio_tensor = torch.from_numpy(waveform).unsqueeze(0).float().to(self.device)
+            mel_tensor = self.frontend(audio_tensor)
+        else:
+            mel = extract_mel_spectrogram(waveform, sr=TARGET_SR)
+            mel_tensor = torch.from_numpy(mel).unsqueeze(0).unsqueeze(0).float().to(self.device)
 
         t_start = time.perf_counter()
         with torch.no_grad():

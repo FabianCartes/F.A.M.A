@@ -100,6 +100,115 @@ def test_api_reports_checkpoint_registration_outcome(client, persistence_env, co
         assert (service.checkpoints_dir / entry["filename"]).is_file()
 
 
+def test_training_fixture_preserves_external_background_threads(training_env):
+    import threading
+
+    caller_id = threading.get_ident()
+    worker_ids = []
+    worker = threading.Thread(
+        target=lambda: worker_ids.append(threading.get_ident()), args=(),
+    )
+    worker.start()
+    worker.join(timeout=1)
+
+    assert len(worker_ids) == 1, "External thread callback must execute exactly once"
+    assert worker_ids[0] != caller_id
+    assert not worker.is_alive()
+
+
+def test_api_completes_training_with_saved_reports_and_available_model(
+    client, persistence_env, monkeypatch,
+):
+    import hashlib
+    import timm
+    import torch
+    from app.services.registry import ModelRegistry, get_model_registry
+
+    service, _, root, dataset_id = persistence_env
+
+    def small_classifier(*args, num_classes, **kwargs):
+        # Genuine CPU weights meet catalogue admission without padding or bypasses.
+        model = torch.nn.Sequential(
+            torch.nn.AdaptiveAvgPool2d(1), torch.nn.Flatten(),
+            torch.nn.Linear(1, 1024), torch.nn.ReLU(),
+            torch.nn.Linear(1024, num_classes),
+        )
+        for parameter in model.parameters():
+            torch.nn.init.zeros_(parameter)
+        return model
+
+    monkeypatch.setattr(timm, "create_model", small_classifier)
+    registry = ModelRegistry(raw_data_root=root / "raw")
+    monkeypatch.setitem(app.dependency_overrides, get_model_registry, lambda: registry)
+
+    response = client.post("/api/training/start", json={
+        "dataset_name": "engine_diagnostics", "architecture": "EfficientNet-B0",
+        "epochs": 1, "batch_size": 1,
+        "audio_config": {"target_sr": 8000, "duration_seconds": 0.5, "n_mels": 32,
+                         "n_fft": 256, "hop_length": 64, "f_min": 0.0, "f_max": 4000.0},
+        "regularization_config": {"loss_type": "cross_entropy"}, "early_stopping": False,
+    })
+    assert response.status_code == 200
+    assert response.json()["status"] == "started"
+    assert response.json()["job_id"]
+
+    progress_response = client.get("/api/training/progress")
+    assert progress_response.status_code == 200
+    progress = progress_response.json()
+    assert progress["status"] == "completed", progress["error_message"]
+    assert progress["job_id"] == response.json()["job_id"]
+    assert not progress["error_message"]
+    assert len(progress["metrics_history"]) == 1
+
+    history_response = client.get("/api/training/history")
+    assert history_response.status_code == 200
+    entry, = history_response.json()["history"]
+    assert entry["dataset_id"] == dataset_id
+    assert entry["dataset_name"] == "engine_diagnostics"
+    assert entry["status"] == "standard_eval_completed"
+    assert len(entry["metrics"]) == 1
+    assert entry["metrics"][0]["epoca"] == 1
+    checkpoint = service.checkpoints_dir / entry["filename"]
+    assert checkpoint.is_file()
+    assert hashlib.sha256(checkpoint.read_bytes()).hexdigest() == entry["sha256"]
+
+    catalogue_response = client.get("/api/models")
+    assert catalogue_response.status_code == 200
+    catalogue = catalogue_response.json()
+    assert catalogue["publication_errors"] == []
+    assert catalogue["evaluation_catalogue_status"] == "available"
+    assert catalogue["total"] == 1
+    model, = catalogue["models"]
+    assert model["id"] == f"fama_trained_model_{entry['id']}"
+    assert model["dataset_name"] == "engine_diagnostics"
+    assert model["classes"] == ["Fixture"]
+    assert model["has_weights"] is True
+
+    attempts = []
+    for split in ("val", "test"):
+        summary = model["evaluations"][split]
+        attempt, completed = summary["latest_attempt"], summary["latest_completed"]
+        assert attempt["status"] == "completed"
+        assert attempt["id_evaluation"] == completed["id_evaluation"]
+        assert attempt["provenance"] == completed["provenance"]
+        assert completed["provenance"]["split"] == split
+        assert completed["provenance"]["dataset"] == "engine_diagnostics"
+        assert completed["provenance"]["checkpoint_sha256"] == entry["sha256"]
+        assert completed["provenance"]["sample_count"] == 1
+        assert completed["report"]["schema_version"] == 2
+        assert completed["report"]["classes"] == ["Fixture"]
+        assert completed["report"]["sample_count"] == 1
+        # The isolated source contains one silent recording per split.
+        assert completed["report"]["confusion_matrix"] == [[0, 1]]
+        assert completed["report"]["rejection"]["count"] == 1
+        assert completed["report"]["metrics"]["accuracy"] == 0.0
+        attempts.append(completed)
+    assert attempts[0]["id_evaluation"] != attempts[1]["id_evaluation"]
+    assert attempts[0]["provenance"]["manifest_sha256"] != attempts[1]["provenance"]["manifest_sha256"]
+    # Reading the catalogue must not rewrite training history or publication state.
+    assert client.get("/api/training/history").json() == history_response.json()
+
+
 def test_get_training_hardware(client):
     """GET /api/training/hardware retorna telemetría de GPU/CPU y memoria."""
     res = client.get("/api/training/hardware")

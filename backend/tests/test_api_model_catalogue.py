@@ -118,6 +118,7 @@ def seed_standard_model(catalogue, model_id, *, state="standard_eval_completed",
         ADMITTED_MANIFEST_PAIR_KEY, admitted_manifest_pair_provenance,
         build_evaluation_configuration, resolve_training_audio,
     )
+    from poc.preprocess import build_gpu_audio_frontend_contract
 
     client, _, persist, engine = catalogue
     with Session(engine, expire_on_commit=False) as db:
@@ -128,10 +129,19 @@ def seed_standard_model(catalogue, model_id, *, state="standard_eval_completed",
         db.expunge(dataset)
     checkpoint = persist(model_id, dataset=dataset, active=active)
     job_id = f"synthetic-job-{model_id}"
+    training_audio = resolve_training_audio(dataset_name, None)
+    preprocessing_contract = build_gpu_audio_frontend_contract(
+        sample_rate=training_audio["target_sr"],
+        duration_seconds=training_audio["duration_seconds"],
+        n_mels=training_audio["n_mels"], n_fft=training_audio["n_fft"],
+        hop_length=training_audio["hop_length"], f_min=training_audio["f_min"],
+        f_max=training_audio["f_max"],
+    )
     payload = {
         "dataset_id": dataset_id, "dataset_name": dataset_name,
         "job_id": job_id, "classes": ["a", "b"], "architecture": "EfficientNet-B0",
         "audio_config": None, "windowing_config": None,
+        "preprocessing_contract": preprocessing_contract,
         "state_dict": {}, "test_padding": "x" * 11000,
         "source_directory": "/private/synthetic/path", "secret_marker": "synthetic-secret-marker",
     }
@@ -147,7 +157,7 @@ def seed_standard_model(catalogue, model_id, *, state="standard_eval_completed",
         ("predictor_config", "preprocessing_config", "aggregation_config"),
         build_evaluation_configuration(
             {"job_id": job_id, "architecture": payload["architecture"], "windowing_config": None},
-            resolve_training_audio(dataset_name, None))))
+            training_audio, payload["preprocessing_contract"])))
     if fault == "wrong_architecture":
         configs["predictor_config"] = {**configs["predictor_config"], "architecture": "Other"}
     if fault in ("config", "coherent_wrong_config"):
@@ -895,3 +905,77 @@ def test_concurrent_catalogue_requests_keep_one_predictor(catalogue):
     payload, predictor = results[0]
     assert payload["total"] == 2
     assert all(result == payload and instance is predictor for result, instance in results)
+
+
+def test_catalogue_exposes_sha256_of_registered_checkpoint_bytes(catalogue, monkeypatch):
+    import hashlib
+    import torch
+    from app.services.predictors import trained_predictor
+
+    client, registry, persist, engine = catalogue
+    checkpoint = persist()
+    torch.save({
+        "architecture": "AudioCNN", "classes": ["Synthetic A", "Synthetic B"],
+        "best_val_acc": 99.0, "padding": "x" * 12000,
+    }, checkpoint)
+    with Session(engine) as db:
+        db.get(Modelo, 11).hash_binario = "f" * 64
+        db.commit()
+    monkeypatch.setattr(trained_predictor, "TrainedModelPredictor", TrainedModelPredictor)
+
+    response = client.get("/api/models")
+
+    assert response.status_code == 200
+    model = next(item for item in response.json()["models"] if item["id"] == "fama_trained_model_11")
+    first_digest = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+    assert model.get("checkpoint_sha256") == first_digest
+    assert model["checkpoint_sha256"] != "f" * 64
+    assert registry.get("11").model is None
+
+    checkpoint.write_bytes(checkpoint.read_bytes() + b"different synthetic checkpoint bytes")
+    changed_response = client.get("/api/models")
+    changed_model = next(item for item in changed_response.json()["models"]
+                         if item["id"] == "fama_trained_model_11")
+    changed_digest = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+    assert changed_model.get("checkpoint_sha256") == changed_digest
+    assert changed_digest != first_digest
+    assert registry.get("11").model is None
+
+
+@pytest.mark.parametrize("unavailable", ["missing", "unreadable"])
+def test_catalogue_returns_null_checkpoint_hash_when_file_is_unavailable(
+    catalogue, monkeypatch, unavailable,
+):
+    from pathlib import Path
+    import torch
+    from app.services.predictors import trained_predictor
+
+    client, registry, persist, _ = catalogue
+    checkpoint = persist()
+    torch.save({
+        "architecture": "AudioCNN", "classes": ["Synthetic A", "Synthetic B"],
+        "padding": "x" * 12000,
+    }, checkpoint)
+    monkeypatch.setattr(trained_predictor, "TrainedModelPredictor", TrainedModelPredictor)
+    assert client.get("/api/models").status_code == 200
+
+    if unavailable == "missing":
+        checkpoint.unlink()
+    else:
+        original_open = Path.open
+
+        def deny_checkpoint(path, *args, **kwargs):
+            if path == checkpoint:
+                raise PermissionError(f"Private checkpoint path: {checkpoint}")
+            return original_open(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "open", deny_checkpoint)
+
+    response = client.get("/api/models")
+
+    assert response.status_code == 200
+    model = next(item for item in response.json()["models"] if item["id"] == "fama_trained_model_11")
+    assert model["checkpoint_sha256"] is None
+    assert str(checkpoint) not in response.text
+    assert "Private checkpoint path" not in response.text
+    assert registry.get("11").model is None
