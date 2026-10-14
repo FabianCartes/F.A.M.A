@@ -2,9 +2,13 @@
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import event
+from sqlalchemy.exc import OperationalError
 
 from app import main
+from app.services import training
 from tests.test_ingestion_upload_integrity import upload_environment, synthetic_wav
+from tests.test_ingestion_sync_integrity import BlobFixture
 
 
 @pytest.fixture
@@ -92,3 +96,71 @@ def test_valid_sync_still_reaches_fake_cloud_and_persists(client, monkeypatch):
     assert response.status_code == 200
     assert calls == ["datasets/AvesChilenas/"]
     assert response.json()["results"][0]["db_persisted"] is True, response.json()["results"][0]["db_error"]
+
+
+@pytest.mark.parametrize("failing_statement", ["SELECT", "INSERT"])
+def test_upload_database_failure_is_sanitized_and_does_not_claim_persistence(client, upload_environment, failing_statement):
+    _, db, objects = upload_environment
+    engine = db.get_bind()
+
+    def fail_database(conn, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().upper().startswith(failing_statement):
+            raise OperationalError(statement, parameters, RuntimeError("synthetic-secret /private/database"))
+
+    event.listen(engine, "before_cursor_execute", fail_database)
+    try:
+        response = client.post("/api/ingestion/upload", data={"dataset_name": "AvesChilenas"},
+                               files={"files": ("audio.wav", synthetic_wav(), "audio/wav")})
+    finally:
+        event.remove(engine, "before_cursor_execute", fail_database)
+
+    assert response.status_code == 200  # Preserve the existing partial-result contract.
+    assert response.json()["db_persisted"] is False
+    assert response.json()["db_error"] == "No se pudieron guardar los registros de ingesta."
+    assert "synthetic-secret" not in response.text
+    assert "SELECT" not in response.text
+    assert len(objects) == 1  # Cloud transfer is not undone by a database failure.
+    assert training.training_service.get_available_datasets(db=db) == []
+    retry = client.post("/api/ingestion/upload", data={"dataset_name": "AvesChilenas"},
+                        files={"files": ("audio.wav", synthetic_wav(), "audio/wav")})
+    assert retry.status_code == 200
+    assert retry.json()["db_persisted"] is True
+    assert retry.json()["db_error"] is None
+    dataset, = training.training_service.get_available_datasets(db=db)
+    assert dataset["audio_count"] == 1
+
+
+@pytest.mark.parametrize("failing_statement", ["SELECT", "INSERT"])
+def test_sync_database_failure_is_sanitized_without_erasing_download(client, upload_environment, monkeypatch, failing_statement):
+    service, db, _ = upload_environment
+    blob = BlobFixture(synthetic_wav())
+    monkeypatch.setattr("google.cloud.storage.Client.list_blobs", lambda *args, **kwargs: [blob], raising=False)
+    engine = db.get_bind()
+
+    def fail_database(conn, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().upper().startswith(failing_statement):
+            raise OperationalError(statement, parameters, RuntimeError("synthetic-secret /private/database"))
+
+    event.listen(engine, "before_cursor_execute", fail_database)
+    try:
+        response = client.post("/api/ingestion/sync", json={"datasets": ["AvesChilenas"]})
+    finally:
+        event.remove(engine, "before_cursor_execute", fail_database)
+
+    assert response.status_code == 200
+    result, = response.json()["results"]
+    assert result["db_persisted"] is False
+    assert result["db_error"] == "No se pudieron guardar los registros de ingesta."
+    assert result["downloaded"] == 1
+    assert "synthetic-secret" not in response.text
+    assert "SELECT" not in response.text
+    assert (service.local_base_dir / "AvesChilenas" / "Chucao" / "audio.wav").read_bytes() == blob.content
+    assert training.training_service.get_available_datasets(db=db) == []
+    retry = client.post("/api/ingestion/sync", json={"datasets": ["AvesChilenas"]})
+    assert retry.status_code == 200
+    retried, = retry.json()["results"]
+    assert retried["db_persisted"] is True
+    assert retried["db_error"] is None
+    assert retried["skipped"] == 1
+    dataset, = training.training_service.get_available_datasets(db=db)
+    assert dataset["audio_count"] == 1

@@ -626,9 +626,9 @@ class IngestionService:
                 ds.tamano_total_bytes = size
                 db.commit()
                 db_persisted = True
-            except Exception as exc:
+            except Exception:
                 db.rollback()
-                db_error = str(exc)
+                db_error = "No se pudieron guardar los registros de ingesta."
 
         return {
             "dataset": dataset_name,
@@ -734,9 +734,9 @@ class IngestionService:
                 ds.tamano_total_bytes = size
                 db.commit()
                 db_persisted = True
-            except Exception as exc:
+            except Exception:
                 db.rollback()
-                db_error = str(exc)
+                db_error = "No se pudieron guardar los registros de ingesta."
 
         return {
             "dataset": safe_ds,

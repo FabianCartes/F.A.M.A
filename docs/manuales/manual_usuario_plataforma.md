@@ -238,7 +238,8 @@ Cuando el equipo de campo regresa con nuevas grabaciones:
    * La identidad registrada es la URI completa del objeto: un mismo nombre en clases diferentes conserva audios distintos. Reemplazar el mismo objeto actualiza sus bytes sin aumentar el número de audios; los contadores se calculan desde las filas persistidas.
    * `uploaded` cuenta transferencias, no objetos únicos: repetir un destino dos veces en un lote produce dos transferencias pero un solo registro final. No hay garantía nueva para escritores concurrentes.
    * Dataset, clase y filenames deben ser componentes portables, no rutas; no se recortan ni renombran silenciosamente. La clase omitida usa `General`; vacía explícita se rechaza. Un nombre inválido produce 422 sanitizado y se valida todo el lote antes de transferir el primer archivo.
-   * Frecuencia y duración prefijadas, validación de formatos/longitudes/límites, sanitización de errores SQL y recuperación de fallos parciales de subida siguen pendientes. «Carga Segura» es el texto del botón, no una certificación de seguridad ni de calidad acústica.
+   * Si falla la persistencia, `db_persisted=false` y `db_error` informa «No se pudieron guardar los registros de ingesta.» sin SQL ni detalles internos; también aplica a sincronización. No borra automáticamente el objeto subido/archivo descargado. Se mantiene el resultado parcial HTTP 200 existente: revisar estos campos, no interpretar el código o `status=completed` global como éxito integral.
+   * Frecuencia y duración prefijadas, validación de formatos/longitudes/límites, sanitización de otros errores y recuperación de fallos parciales de subida siguen pendientes. «Carga Segura» es el texto del botón, no una certificación de seguridad ni de calidad acústica.
 
 ---
 
