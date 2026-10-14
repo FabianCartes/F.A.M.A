@@ -17,4 +17,12 @@ La subida anterior abortaba al primer error de transferencia y podía dejar obje
 
 No añade idempotencia de peticiones, retries automáticos, atomicidad, backfill, control de concurrencia, validación acústica ni límites de carga. Una llamada sin archivos mantiene el comportamiento previo de operación vacía; no acredita datos disponibles. `db_persisted=true` solo confirma la transacción de registros, no que todas las transferencias hayan funcionado ni que los audios sean válidos para entrenar.
 
-La sincronización descendente y su UI todavía pueden presentar un estado global de éxito pese a fallos; quedan separadas. No se añade interfaz nueva de subida. Pruebas por servicio, lectura pública de datasets y HTTP con adaptador GCS falso/SQLite; sin datos/servicios reales. Evidencia en [KANBAN](../KANBAN.md).
+No se añade interfaz nueva de subida. Pruebas por servicio, lectura pública de datasets y HTTP con adaptador GCS falso/SQLite; sin datos/servicios reales. Evidencia en [KANBAN](../KANBAN.md).
+
+## Extensión: estado global de sincronización y presentación (AFIN-18)
+
+La API descendente deja de devolver `completed` incondicionalmente. Errores de descarga, `db_error` o fallos declarados de preprocesamiento producen `partial` si hubo descargas/omisiones verificadas/tensores procesados, y `failed` si no hubo esos resultados. Sin errores declarados conserva `completed`, incluso para un recorrido vacío: no certifica disponibilidad ni calidad para entrenamiento. Se mantienen HTTP 200 y los contadores existentes; `total_failed` sigue contando descargas fallidas, no fallos SQL o de preprocesamiento.
+
+Si el preprocesamiento reporta fallos, el estado BD pasa a `sincronizacion_parcial`, no `procesado`. No cambia la política de aceptación de bytes descargados: un archivo decodificable/calidad acústica sigue siendo una validación distinta. Excepciones que abortan la llamada antes de producir resultado no se convierten automáticamente en un lote parcial.
+
+`IngestionView` muestra resumen completo/parcial/fallido y advierte persistencia no confirmada, errores de preprocesamiento y limpieza pendiente. No presenta éxito completo si hay fallos de etapa explícitos aunque el estado global diga completed (compatibilidad defensiva con respuestas anteriores). Los contadores por dataset se presentan como INFO, no como éxito integral; no añade retries ni reparación automática. No hay parser exhaustivo nuevo de respuestas HTTP ni garantías de seguridad/operación real.

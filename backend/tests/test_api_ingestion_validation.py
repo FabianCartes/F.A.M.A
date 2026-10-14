@@ -172,6 +172,7 @@ def test_sync_database_failure_is_sanitized_without_erasing_download(client, upl
 
     assert response.status_code == 200
     result, = response.json()["results"]
+    assert response.json()["status"] == "partial"
     assert result["db_persisted"] is False
     assert result["db_error"] == "No se pudieron guardar los registros de ingesta."
     assert result["downloaded"] == 1
@@ -202,6 +203,7 @@ def test_sync_local_failure_returns_partial_result_and_registers_only_accepted_a
 
     assert response.status_code == 200
     assert response.json()["total_failed"] == 1
+    assert response.json()["status"] == "partial"
     assert response.json()["total_downloaded"] == 1
     result, = response.json()["results"]
     assert result["db_persisted"] is True
@@ -232,3 +234,47 @@ def test_upload_partial_transfer_reports_status_and_keeps_successful_registratio
     dataset, = training.training_service.get_available_datasets(db=db)
     assert dataset["audio_count"] == 1
     assert dataset["estado"] == "subida_parcial"
+
+
+def test_sync_total_transfer_failure_is_not_reported_as_completed(client, monkeypatch):
+    blob = BlobFixture(synthetic_wav())
+    blob.fail = True
+    monkeypatch.setattr("google.cloud.storage.Client.list_blobs", lambda *args, **kwargs: [blob], raising=False)
+
+    response = client.post("/api/ingestion/sync", json={"datasets": ["AvesChilenas"]})
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "failed"
+    assert response.json()["total_downloaded"] == 0
+    assert response.json()["total_failed"] == 1
+    assert response.json()["results"][0]["db_persisted"] is True
+
+
+def test_sync_preprocessing_failure_is_partial_not_processed(client, upload_environment, monkeypatch):
+    _, db, _ = upload_environment
+    blob = BlobFixture(b"synthetic invalid wav content")
+    monkeypatch.setattr("google.cloud.storage.Client.list_blobs", lambda *args, **kwargs: [blob], raising=False)
+
+    response = client.post("/api/ingestion/sync", json={"datasets": ["AvesChilenas"], "preprocess": True})
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "partial"
+    assert response.json()["results"][0]["preprocess_info"]["failed"] == 1
+    dataset, = training.training_service.get_available_datasets(db=db)
+    assert dataset["estado"] == "sincronizacion_parcial"
+
+
+def test_sync_successful_preprocessing_is_completed(client, upload_environment, monkeypatch):
+    service, db, _ = upload_environment
+    blob = BlobFixture(synthetic_wav())
+    monkeypatch.setattr("google.cloud.storage.Client.list_blobs", lambda *args, **kwargs: [blob], raising=False)
+
+    response = client.post("/api/ingestion/sync", json={"datasets": ["AvesChilenas"], "preprocess": True})
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "completed"
+    assert response.json()["total_preprocessed"] == 1
+    assert response.json()["results"][0]["preprocess_info"]["failed"] == 0
+    assert (service.local_processed_dir / "AvesChilenas" / "Chucao" / "audio.npy").is_file()
+    dataset, = training.training_service.get_available_datasets(db=db)
+    assert dataset["estado"] == "procesado"

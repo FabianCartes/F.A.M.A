@@ -49,6 +49,17 @@ interface DatasetFile {
   updated: string | null;
 }
 
+interface SyncDatasetResult {
+  dataset: string;
+  downloaded: number;
+  skipped: number;
+  failed: number;
+  preprocessed: number;
+  db_persisted?: boolean;
+  preprocess_info?: { failed?: number } | null;
+  files?: { cleanup_pending?: boolean }[];
+}
+
 interface LogEntry {
   id: string;
   timestamp: string;
@@ -360,12 +371,13 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
         total: totalDownload + totalSkip + totalFail,
       });
 
-      for (const item of data.results || []) {
+      const results: SyncDatasetResult[] = data.results || [];
+      for (const item of results) {
         if (item.failed > 0) {
           addLog("ERROR", `Dataset '${item.dataset}': ${item.failed} error(es) en la descarga.`);
         }
         addLog(
-          "SUCCESS",
+          "INFO",
           `Dataset '${item.dataset}': ${item.downloaded} descargados nuevos, ${item.skipped} omitidos (ya actualizados localmente).`
         );
         if (autoPreprocess && item.preprocessed > 0) {
@@ -374,17 +386,29 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
             `Dataset '${item.dataset}': ${item.preprocessed} espectrograma(s) Mel generados en backend/data/processed/.`
           );
         }
+        if ((item.preprocess_info?.failed || 0) > 0) {
+          addLog("ERROR", `Dataset '${item.dataset}': ${item.preprocess_info?.failed} error(es) en preprocesamiento.`);
+        }
+        if (item.files?.some(file => file.cleanup_pending)) {
+          addLog("WARN", `Dataset '${item.dataset}': limpieza de temporales pendiente.`);
+        }
         if (item.db_persisted) {
           addLog(
             "INFO",
             `Dataset '${item.dataset}': Registrado y actualizado en PostgreSQL (tablas conjunto_datos y audio).`
           );
+        } else {
+          addLog("WARN", `Dataset '${item.dataset}': persistencia en BD no confirmada.`);
         }
       }
 
-      addLog(
-        "SUCCESS",
-        `Sincronización completada: ${totalDownload} archivo(s) descargados, ${totalSkip} omitidos, ${totalPrep} tensores procesados.`
+      const hasStageErrors = totalFail > 0 || results.some(item =>
+        item.failed > 0 || item.db_persisted !== true || (item.preprocess_info?.failed || 0) > 0
+      );
+      const complete = data.status === "completed" && !hasStageErrors;
+      const failed = data.status === "failed";
+      addLog(failed ? "ERROR" : complete ? "SUCCESS" : "WARN",
+        `Sincronización ${failed ? "fallida" : complete ? "completada" : "parcial"}: ${totalDownload} archivo(s) descargados, ${totalSkip} omitidos, ${totalPrep} tensores procesados, ${totalFail} errores de descarga.`
       );
 
       await fetchDatasets();

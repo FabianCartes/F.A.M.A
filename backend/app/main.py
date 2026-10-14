@@ -730,8 +730,13 @@ def sync_ingestion_datasets(req: SyncRequest, db: Session = Depends(get_db)):
         total_fail += res.get("failed", 0)
         total_prep += res.get("preprocessed", 0)
 
+    has_errors = total_fail > 0 or any(
+        item.get("db_error") or (item.get("preprocess_info") or {}).get("failed", 0) > 0
+        for item in results
+    )
+    status = ("partial" if total_dl + total_skip + total_prep > 0 else "failed") if has_errors else "completed"
     return {
-        "status": "completed",
+        "status": status,
         "results": results,
         "total_downloaded": total_dl,
         "total_skipped": total_skip,

@@ -590,7 +590,8 @@ class IngestionService:
 
                 gcp_path = f"gs://{self.bucket_name}/datasets/{dataset_name}/"
                 ds = db.query(ConjuntoDatos).filter_by(nombre=dataset_name).first()
-                new_status = "sincronizacion_parcial" if failed else "procesado" if preprocess else "sincronizado"
+                preprocessing_failed = (prep_info or {}).get("failed", 0) > 0
+                new_status = "sincronizacion_parcial" if failed or preprocessing_failed else "procesado" if preprocess else "sincronizado"
                 accepted_files = [item for item in processed_files if item["status"] in ("downloaded", "skipped")]
                 total_audios = len(accepted_files)
                 total_bytes = sum(item["size"] for item in accepted_files)
