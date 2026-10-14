@@ -233,7 +233,10 @@ Cuando el equipo de campo regresa con nuevas grabaciones:
    * **Seleccionar Dataset Destino:** Elija un dataset existente o introduzca el nombre de uno nuevo.
    * **Definir la Etiqueta de Clase:** Seleccione una especie de la lista precargada (15 aves chilenas oficiales), una falla mecánica (13 fallas vehiculares) o escriba una clase personalizada.
    * **Arrastrar o Seleccionar Archivos:** Arrastre uno o múltiples archivos de audio en formato `.wav`.
-3. Presione **[Iniciar Carga Segura]**: Los audios se subirán directamente al bucket institucional y se registrarán de inmediato en la base de datos PostgreSQL.
+3. Presione **[Iniciar Carga Segura]**: La operación intenta subir los archivos al bucket y registrar sus datos en PostgreSQL. Son operaciones separadas: un fallo SQL puede dejar objetos subidos sin registro actualizado; no existe una transacción distribuida ni rollback cloud automático.
+   * La identidad registrada es la URI completa del objeto: un mismo nombre en clases diferentes conserva audios distintos. Reemplazar el mismo objeto actualiza sus bytes sin aumentar el número de audios; los contadores se calculan desde las filas persistidas.
+   * `uploaded` cuenta transferencias, no objetos únicos: repetir un destino dos veces en un lote produce dos transferencias pero un solo registro final. No hay garantía nueva para escritores concurrentes.
+   * Frecuencia y duración prefijadas, validación de formatos/rutas y recuperación de fallos parciales de subida siguen pendientes. «Carga Segura» es el texto del botón, no una certificación de seguridad ni de calidad acústica.
 
 ---
 

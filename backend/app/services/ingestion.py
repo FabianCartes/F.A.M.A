@@ -648,42 +648,49 @@ class IngestionService:
 
                 gcp_path = f"gs://{self.bucket_name}/datasets/{safe_ds}/"
                 ds = db.query(ConjuntoDatos).filter_by(nombre=safe_ds).first()
-                upload_bytes = sum(len(c) for _, c in files)
 
                 if ds is None:
                     ds = ConjuntoDatos(
                         nombre=safe_ds,
                         ruta_gcp=gcp_path,
                         estado="subido",
-                        tamano_total_bytes=upload_bytes,
-                        cantidad_audios=uploaded,
+                        tamano_total_bytes=0,
+                        cantidad_audios=0,
                     )
                     db.add(ds)
                     db.flush()
                 else:
-                    ds.cantidad_audios = (ds.cantidad_audios or 0) + uploaded
-                    ds.tamano_total_bytes = (ds.tamano_total_bytes or 0) + upload_bytes
                     db.flush()
 
                 for filename, content in files:
                     safe_file = Path(filename).name
+                    object_route = f"{gcp_path}{safe_class}/{safe_file}"
                     audio_obj = (
                         db.query(Audio)
-                        .filter_by(id_conjunto_datos=ds.id_conjunto_datos, nombre_archivo=safe_file)
+                        .filter_by(id_conjunto_datos=ds.id_conjunto_datos, ruta_gcp=object_route)
                         .first()
                     )
                     if audio_obj is None:
                         audio_obj = Audio(
                             id_conjunto_datos=ds.id_conjunto_datos,
                             nombre_archivo=safe_file,
-                            ruta_gcp=f"{gcp_path}{safe_class}/{safe_file}",
+                            ruta_gcp=object_route,
                             clase=safe_class,
                             frecuencia_muestreo=22050,
                             duracion_segundos=5.0,
                             tamano_bytes=len(content),
                         )
                         db.add(audio_obj)
+                    else:
+                        audio_obj.tamano_bytes = len(content)
 
+                from sqlalchemy import func
+                db.flush()
+                count, size = db.query(
+                    func.count(Audio.id_audio), func.coalesce(func.sum(Audio.tamano_bytes), 0)
+                ).filter(Audio.id_conjunto_datos == ds.id_conjunto_datos).one()
+                ds.cantidad_audios = count
+                ds.tamano_total_bytes = size
                 db.commit()
                 db_persisted = True
             except Exception as exc:

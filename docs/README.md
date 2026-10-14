@@ -16,7 +16,7 @@ docs/
 ├── modelos/                     # Informes experimentales, optimizaciones y ensambles
 ├── arquitectura/                # Diseño de sistemas, pipelines, MLOps y despliegue
 ├── limites/                     # Límites matemáticos, físicos y problemas conocidos
-├── manuales/                    # Manual de usuario, revisión, despliegue e índices canónicos
+├── manuales/                    # Uso, estado para retomar, revisión y despliegue
 ├── adr/                         # Architectural Decision Records (ADR 0001 a 0026)
 ├── receipts/                    # Recibos técnicos reproducibles en formato JSON (RDD)
 ├── duplicados-exactos/           # Tarea acotada: admisión de feedback sin duplicados SHA-256
@@ -26,6 +26,8 @@ docs/
 ---
 
 ## Índice Detallado por Carpeta
+
+**Para retomar el proyecto:** [`manuales/estado_actual_y_pendientes.md`](./manuales/estado_actual_y_pendientes.md) separa correcciones verificadas, defectos pendientes, funcionalidades aplazadas y validación operacional necesaria (corte del 14 de octubre de 2026).
 
 ### Tarea acotada: duplicados exactos
 * [`docs/duplicados-exactos/tasks.md`](./duplicados-exactos/tasks.md): Alcance, decisiones locales, checklist y evidencia TDD de aprobación de feedback sin duplicados SHA-256; revisión y commit pendientes del orquestador.
