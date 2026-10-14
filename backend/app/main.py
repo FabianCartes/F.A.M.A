@@ -47,7 +47,7 @@ except ImportError:
     from poc.train import BioacousticModel
 
 from app.services.storage import upload_audio_to_gcp
-from app.services.ingestion import ingestion_service
+from app.services.ingestion import ingestion_service, IngestionValidationError
 from app.services.training import training_service
 from app.services.dashboard import dashboard_service
 from app.services.feedback import feedback_service
@@ -714,8 +714,16 @@ def sync_ingestion_datasets(req: SyncRequest, db: Session = Depends(get_db)):
     total_fail = 0
     total_prep = 0
 
+    try:
+        ingestion_service.validate_dataset_names(req.datasets)
+    except IngestionValidationError:
+        raise HTTPException(status_code=422, detail="Nombres de dataset inválidos.") from None
+
     for ds_name in req.datasets:
-        res = ingestion_service.sync_dataset_to_local(ds_name, preprocess=req.preprocess, db=db)
+        try:
+            res = ingestion_service.sync_dataset_to_local(ds_name, preprocess=req.preprocess, db=db)
+        except IngestionValidationError:
+            raise HTTPException(status_code=422, detail="Destino de dataset inválido.") from None
         results.append(res)
         total_dl += res.get("downloaded", 0)
         total_skip += res.get("skipped", 0)
@@ -749,7 +757,10 @@ async def upload_ingestion_files(
         content = await f.read()
         prepared_files.append((f.filename, content))
 
-    result = ingestion_service.upload_files_to_gcs(prepared_files, dataset_name, class_label, db=db)
+    try:
+        result = ingestion_service.upload_files_to_gcs(prepared_files, dataset_name, class_label, db=db)
+    except IngestionValidationError:
+        raise HTTPException(status_code=422, detail="Nombres de carga inválidos.") from None
     return result
 
 

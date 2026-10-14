@@ -5,6 +5,7 @@ import wave
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.database import Base
 from app.services.ingestion import IngestionService
@@ -44,7 +45,7 @@ def upload_environment(tmp_path, monkeypatch):
     service = IngestionService(bucket_name="test-bucket", local_base_dir=tmp_path / "raw",
                                local_processed_dir=tmp_path / "processed")
     monkeypatch.setattr(training, "get_raw_data_dir", lambda name=None: service.local_base_dir / (name or ""))
-    engine = create_engine("sqlite:///:memory:")
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     try:
         with sessionmaker(bind=engine)() as db:
@@ -97,3 +98,39 @@ def test_duplicate_object_in_one_batch_counts_final_object_once(upload_environme
     assert dataset["audio_count"] == 1
     assert dataset["size_mb"] == 2.0
     assert len(objects) == 1
+
+
+@pytest.mark.parametrize("name", ["../outside", "Aves/Chilenas", "Aves\\Chilenas", "NUL", "C:escape", "", "AvesChilenas "])
+def test_invalid_upload_dataset_is_rejected_without_transferring(upload_environment, name):
+    service, db, objects = upload_environment
+
+    with pytest.raises(ValueError, match="dataset"):
+        service.upload_files_to_gcs([("audio.wav", synthetic_wav())], name, db=db)
+
+    assert objects == {}
+    assert training.training_service.get_available_datasets(db=db) == []
+
+
+@pytest.mark.parametrize("label", ["../Chucao", "Chucao/Rayadito", "Chucao\\Rayadito", "NUL", "", "Chucao."])
+def test_invalid_class_is_rejected_without_transferring(upload_environment, label):
+    service, db, objects = upload_environment
+
+    with pytest.raises(ValueError, match="class"):
+        service.upload_files_to_gcs([("audio.wav", synthetic_wav())], "AvesChilenas", label, db=db)
+
+    assert objects == {}
+    assert training.training_service.get_available_datasets(db=db) == []
+
+
+@pytest.mark.parametrize("filename", ["../audio.wav", "folder/audio.wav", "folder\\audio.wav", "C:audio.wav", "audio.wav:stream", "NUL.wav", "", "audio.wav."])
+def test_invalid_filename_rejects_entire_batch_before_first_transfer(upload_environment, filename):
+    service, db, objects = upload_environment
+    content = synthetic_wav()
+
+    with pytest.raises(ValueError, match="filename"):
+        service.upload_files_to_gcs(
+            [("valid.wav", content), (filename, content)], "AvesChilenas", "Chucao", db=db
+        )
+
+    assert objects == {}
+    assert training.training_service.get_available_datasets(db=db) == []

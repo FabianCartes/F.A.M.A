@@ -10,6 +10,10 @@ from typing import Optional, List, Dict, Any, Tuple
 from dotenv import load_dotenv
 from google.cloud import storage
 
+
+class IngestionValidationError(ValueError):
+    """Invalid ingestion input, distinct from provider/transport errors."""
+
 # ============================================================================
 # CONFIGURACIÓN DE ENTORNO Y RUTAS BASE
 # ============================================================================
@@ -428,6 +432,11 @@ class IngestionService:
         reserved.update(f"{prefix}{number}" for prefix in ("COM", "LPT") for number in "123456789¹²³")
         return stem not in reserved
 
+    def validate_dataset_names(self, names: List[str]) -> None:
+        """Validate a complete batch before any dataset can be transferred."""
+        if any(not self._valid_path_component(name) for name in names):
+            raise IngestionValidationError("Invalid dataset name")
+
     def sync_dataset_to_local(
         self,
         dataset_name: str,
@@ -441,8 +450,7 @@ class IngestionService:
         RF_03: Si preprocess=True, extrae tensores matemáticos y espectrogramas Mel.
         Persistencia: Si db es provisto, sincroniza 'conjunto_datos' y 'audio' en PostgreSQL.
         """
-        if not self._valid_path_component(dataset_name):
-            raise ValueError("Invalid dataset name")
+        self.validate_dataset_names([dataset_name])
         client = self._get_client()
         prefix = f"datasets/{dataset_name}/"
         blobs = list(client.list_blobs(self.bucket_name, prefix=prefix))
@@ -453,7 +461,7 @@ class IngestionService:
             if slug_dir.is_dir():
                 target_base_dir = slug_dir
         if not target_base_dir.resolve().is_relative_to(self.local_base_dir.resolve()):
-            raise ValueError("Invalid dataset destination outside raw root")
+            raise IngestionValidationError("Invalid dataset destination outside raw root")
         target_base_dir.mkdir(parents=True, exist_ok=True)
 
         downloaded = 0
@@ -647,18 +655,24 @@ class IngestionService:
         datasets/{dataset_name}/{class_label}/{filename}
         Registra opcionalmente en PostgreSQL las tablas 'conjunto_datos' y 'audio'.
         """
+        self.validate_dataset_names([dataset_name])
+        if not self._valid_path_component(class_label):
+            raise IngestionValidationError("Invalid class label")
+        for filename, _ in files:
+            if not self._valid_path_component(filename):
+                raise IngestionValidationError("Invalid filename")
         client = self._get_client()
         bucket = client.bucket(self.bucket_name)
 
         uploaded = 0
         uploaded_names = []
 
-        # Sanitizar nombres para evitar barras accidentales
-        safe_ds = dataset_name.strip().replace("/", "_")
-        safe_class = class_label.strip().replace("/", "_") or "General"
+        # Keep validated identities instead of silently renaming destinations.
+        safe_ds = dataset_name
+        safe_class = class_label
 
         for filename, content in files:
-            safe_file = Path(filename).name
+            safe_file = filename
             blob_name = f"datasets/{safe_ds}/{safe_class}/{safe_file}"
             blob = bucket.blob(blob_name)
             content_type = "audio/wav" if safe_file.lower().endswith(".wav") else "application/octet-stream"
@@ -690,7 +704,7 @@ class IngestionService:
                     db.flush()
 
                 for filename, content in files:
-                    safe_file = Path(filename).name
+                    safe_file = filename
                     object_route = f"{gcp_path}{safe_class}/{safe_file}"
                     audio_obj = (
                         db.query(Audio)

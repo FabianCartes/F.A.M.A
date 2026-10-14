@@ -24,6 +24,14 @@
 
 Objetos antes aceptados con nombres no portables se rechazan ahora; corregirlos requiere una decisión sobre datos reales, fuera de este cambio. No hay garantía contra sustitución concurrente de enlaces entre validación y escritura (TOCTOU), ni detección completa de alias/collisiones por mayúsculas o normalización Unicode. La raíz raw configurada se considera confiable.
 
-Este contrato cubre la descarga por el servicio, no sanea todavía la subida, otros lectores, formatos de audio ni límites de peticiones. El mapeo HTTP de validaciones de ingesta queda pendiente; no se acredita una respuesta 4xx nueva en la API. Tampoco certifica seguridad de despliegue.
+La unidad inicial cubre la descarga por el servicio. La extensión siguiente incorpora nombres de subida y respuestas HTTP; otros lectores, formatos de audio y límites de peticiones siguen pendientes. Tampoco certifica seguridad de despliegue.
 
 Pruebas públicas con GCS falso y temporales: escapes POSIX/Windows, prefijos ajenos, componentes vacíos, jerarquías anidadas, nombres Unicode y junctions Windows reales creadas/eliminadas exclusivamente dentro de las fixtures. En otras plataformas la fixture usa symlinks; solo se ejecutó aquí Windows. Evidencia: [KANBAN](../KANBAN.md).
+
+## Extensión: nombres de subida y validación HTTP (14 de octubre de 2026)
+
+La subida usa la misma política portable para dataset, clase y filename. No reemplaza barras por guiones ni recorta rutas a basename: entradas inválidas se rechazan sin inventar identidades. La clase omitida sigue usando `General`; una clase explícitamente vacía se rechaza. Se valida el lote completo antes de obtener el cliente cloud, evitando transferencias anteriores a un filename inválido.
+
+La API traduce únicamente `IngestionValidationError` (subclase de `ValueError`) a HTTP 422 con texto fijo, sin eco de nombres/rutas. Un `ValueError` ajeno del proveedor no se presenta como validación del usuario. La sincronización prevalida todos los nombres de dataset antes del primer recorrido; no promete prevalidación de todos los destinos locales, éxito de todos los datasets ni atomicidad del lote. Una validación del destino local también produce 422, pero puede ocurrir después de otras sincronizaciones válidas del mismo lote.
+
+No se validan aún longitudes contra columnas SQL, contenido/formato acústico, tamaño de carga ni colisiones por case/Unicode. Errores SQL retornados en `db_error`, recuperación de errores del proveedor y estado parcial de subida requieren correcciones separadas. Pruebas HTTP reutilizan endpoints reales en una app sin lifespan productivo, con dependencia SQLite aislada y adaptador GCS falso.
