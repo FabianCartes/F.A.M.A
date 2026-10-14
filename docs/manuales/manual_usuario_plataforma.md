@@ -221,8 +221,9 @@ Para descargar audios desde Google Cloud hacia el hardware local:
    Active el interruptor *"Generar tensores espectrales optimizados (.pt) post-descarga"*. Cuando esta opción está habilitada, el pipeline no solo descarga el archivo `.wav`, sino que ejecuta inmediatamente la conversión a espectrogramas Mel normalizados en GPU, guardándolos en la caché local para acelerar el entrenamiento subsecuente en más de un 400%.
 3. **Pulsar [Sincronizar Seleccionados]:**  
    El sistema inicia la descarga diferencial:
-   * **Idempotencia:** Si un archivo ya existe localmente con el mismo tamaño y suma de verificación, se omite (`skipped`).
-   * Solo los audios faltantes o actualizados se transfieren por la red (`downloaded`).
+   * **Contenido confirmado:** Un archivo existente se omite (`skipped`) cuando coincide con MD5/CRC32C declarado por el proveedor; igual tamaño por sí solo no prueba identidad. Si el checksum no está disponible, se descarga conservadoramente.
+   * La descarga usa un temporal y comprueba tamaño/checksum disponibles antes de reemplazar el destino. Un fallo normal conserva el archivo anterior; no implica recuperación garantizada ante caída ni una transacción con la BD.
+   * Solo las transferencias aceptadas se registran como audios. Ante errores el dataset queda `sincronizacion_parcial`, conservando registros previos y sus contadores. Un mismo basename en clases distintas conserva identidades por objeto completo, no se fusiona. Esto no prueba existencia cloud actual ni calidad acústica; véase [ADR 0026](../adr/0026-sincronizacion-por-contenido-y-publicacion-local.md).
 4. **Consola de Telemetría en Vivo:** Una consola interactiva en la parte inferior de la pantalla muestra el progreso en tiempo real, contabilizando archivos procesados y reportando cualquier inconsistencia de red.
 
 ### 4.4. Procedimiento de Ingesta Ascendente (Subir Audios Locales a la Nube)

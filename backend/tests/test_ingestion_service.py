@@ -3,6 +3,15 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 from datetime import datetime, timezone
 import pytest
+import base64
+import hashlib
+
+
+def blob_transfers_bytes(blob, content):
+    """External SDK fixture must actually write the advertised verified bytes."""
+    blob.md5_hash = base64.b64encode(hashlib.md5(content).digest()).decode()
+    blob.crc32c = None
+    blob.download_to_filename.side_effect = lambda filename, **kwargs: Path(filename).write_bytes(content)
 
 _BACKEND_ROOT = Path(__file__).resolve().parent.parent
 if str(_BACKEND_ROOT) not in sys.path:
@@ -103,17 +112,19 @@ def test_sync_dataset_only_new_files(tmp_path):
 
         now = datetime.now(timezone.utc)
         
-        # Blob 1: ya existe localmente con el mismo tamaño -> debe ignorarse
+        # Blob 1: ya existe con checksum confirmado -> debe ignorarse
         blob1 = MagicMock()
         blob1.name = "datasets/Chucao/existing.wav"
         blob1.size = 100
         blob1.updated = now
+        blob_transfers_bytes(blob1, b"x" * 100)
         
         # Blob 2: nuevo -> debe descargarse
         blob2 = MagicMock()
         blob2.name = "datasets/Chucao/new_file.wav"
         blob2.size = 200
         blob2.updated = now
+        blob_transfers_bytes(blob2, b"y" * 200)
         
         mock_client.list_blobs.return_value = [blob1, blob2]
 
@@ -183,6 +194,7 @@ def test_sync_dataset_with_db_persistence(tmp_path):
         blob1 = MagicMock()
         blob1.name = "datasets/TestPersist/Chucao/audio1.wav"
         blob1.size = 200
+        blob_transfers_bytes(blob1, b"x" * 200)
         mock_client.list_blobs.return_value = [blob1]
 
         local_dir = tmp_path / "raw"
@@ -220,6 +232,7 @@ def test_sync_dataset_with_preprocess_trigger(tmp_path):
         blob1 = MagicMock()
         blob1.name = "datasets/ChucaoDS/Chucao/audio1.wav"
         blob1.size = 200
+        blob_transfers_bytes(blob1, b"x" * 200)
         mock_client.list_blobs.return_value = [blob1]
 
         mock_prep.return_value = {
@@ -299,6 +312,5 @@ def test_list_dataset_files_falls_back_to_local(tmp_path):
         assert "class_name" in first_file
         assert "size_bytes" in first_file
         assert first_file["size_bytes"] > 0
-
 
 

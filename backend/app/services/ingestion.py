@@ -1,5 +1,9 @@
 import os
 import asyncio
+import base64
+import hashlib
+import tempfile
+import google_crc32c
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any, Tuple
@@ -392,6 +396,27 @@ class IngestionService:
             "duration_seconds": duration,
         }
 
+    @staticmethod
+    def _matches_remote_content(path: Path, blob) -> bool:
+        """Size alone is not identity; stream the provider checksum without a cache."""
+        expected = getattr(blob, "md5_hash", None)
+        if isinstance(expected, str) and expected:
+            digest = hashlib.md5(usedforsecurity=False)
+        else:
+            expected = getattr(blob, "crc32c", None)
+            if not isinstance(expected, str) or not expected:
+                return False
+            digest = google_crc32c.Checksum()
+        if not path.is_file():
+            return False
+        try:
+            with path.open("rb") as source:
+                for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                    digest.update(chunk)
+            return base64.b64encode(digest.digest()).decode() == expected
+        except OSError:
+            return False
+
     def sync_dataset_to_local(
         self,
         dataset_name: str,
@@ -401,7 +426,7 @@ class IngestionService:
         """
         Descarga los archivos de un dataset desde GCS a local manteniendo la estructura
         de carpetas por clase/etiqueta.
-        RF_02: SÓLO descarga archivos nuevos o actualizados (compara existencia y tamaño).
+        RF_02: omite únicamente contenido confirmado mediante checksum del proveedor.
         RF_03: Si preprocess=True, extrae tensores matemáticos y espectrogramas Mel.
         Persistencia: Si db es provisto, sincroniza 'conjunto_datos' y 'audio' en PostgreSQL.
         """
@@ -440,26 +465,42 @@ class IngestionService:
             dest_path.parent.mkdir(parents=True, exist_ok=True)
             blob_size = blob.size or 0
 
-            # Verificar si ya existe idéntico en disco local (mismo tamaño)
-            if dest_path.exists() and dest_path.stat().st_size == blob_size:
+            # A same-sized replacement can still contain different audio bytes.
+            if self._matches_remote_content(dest_path, blob):
                 skipped += 1
                 processed_files.append({
                     "filename": filename,
                     "class_name": class_name,
                     "status": "skipped",
                     "reason": "already_up_to_date",
-                    "size": blob_size,
+                    "size": dest_path.stat().st_size,
+                    "object_key": blob.name,
                 })
                 continue
 
+            temporary = None
             try:
-                blob.download_to_filename(str(dest_path))
+                # Publish only a completed transfer; never download over good bytes.
+                with tempfile.NamedTemporaryFile(dir=dest_path.parent, prefix=f".{dest_path.name}.",
+                                                 suffix=".download", delete=False) as staging:
+                    temporary = Path(staging.name)
+                blob.download_to_filename(str(temporary))
+                observed_size = temporary.stat().st_size
+                expected_size = getattr(blob, "size", None)
+                if type(expected_size) is int and observed_size != expected_size:
+                    raise ValueError("Downloaded content does not match provider size")
+                checksums = (getattr(blob, "md5_hash", None), getattr(blob, "crc32c", None))
+                if (any(isinstance(value, str) and value for value in checksums)
+                        and not self._matches_remote_content(temporary, blob)):
+                    raise ValueError("Downloaded content does not match provider checksum")
+                temporary.replace(dest_path)
                 downloaded += 1
                 processed_files.append({
                     "filename": filename,
                     "class_name": class_name,
                     "status": "downloaded",
-                    "size": blob_size,
+                    "size": observed_size,
+                    "object_key": blob.name,
                 })
             except Exception as exc:
                 failed += 1
@@ -470,6 +511,9 @@ class IngestionService:
                     "error": str(exc),
                     "size": blob_size,
                 })
+            finally:
+                if temporary is not None:
+                    temporary.unlink(missing_ok=True)
 
         # Preprocesamiento tensorial opcional (RF_03)
         preprocessed_count = 0
@@ -484,12 +528,14 @@ class IngestionService:
         if db is not None:
             try:
                 from app.models.dataset import ConjuntoDatos, Audio
+                from sqlalchemy import func
 
                 gcp_path = f"gs://{self.bucket_name}/datasets/{dataset_name}/"
                 ds = db.query(ConjuntoDatos).filter_by(nombre=dataset_name).first()
-                new_status = "procesado" if preprocess else "sincronizado"
-                total_audios = len(processed_files)
-                total_bytes = sum(b.size or 0 for b in blobs)
+                new_status = "sincronizacion_parcial" if failed else "procesado" if preprocess else "sincronizado"
+                accepted_files = [item for item in processed_files if item["status"] in ("downloaded", "skipped")]
+                total_audios = len(accepted_files)
+                total_bytes = sum(item["size"] for item in accepted_files)
 
                 if ds is None:
                     ds = ConjuntoDatos(
@@ -510,20 +556,21 @@ class IngestionService:
                     ds.ruta_gcp = gcp_path
                     db.flush()
 
-                for f in processed_files:
+                for f in accepted_files:
                     fname = f.get("filename")
                     cname = f.get("class_name", "General")
                     fsize = f.get("size", 0)
+                    object_route = f"gs://{self.bucket_name}/{f['object_key']}"
                     audio_obj = (
                         db.query(Audio)
-                        .filter_by(id_conjunto_datos=ds.id_conjunto_datos, nombre_archivo=fname)
+                        .filter_by(id_conjunto_datos=ds.id_conjunto_datos, ruta_gcp=object_route)
                         .first()
                     )
                     if audio_obj is None:
                         audio_obj = Audio(
                             id_conjunto_datos=ds.id_conjunto_datos,
                             nombre_archivo=fname,
-                            ruta_gcp=f"{gcp_path}{cname}/{fname}",
+                            ruta_gcp=object_route,
                             clase=cname,
                             frecuencia_muestreo=22050,
                             duracion_segundos=5.0,
@@ -535,6 +582,13 @@ class IngestionService:
                         if fsize > 0:
                             audio_obj.tamano_bytes = fsize
 
+                # Failures do not erase previously accepted rows or their counters.
+                db.flush()
+                count, size = db.query(
+                    func.count(Audio.id_audio), func.coalesce(func.sum(Audio.tamano_bytes), 0)
+                ).filter(Audio.id_conjunto_datos == ds.id_conjunto_datos).one()
+                ds.cantidad_audios = count
+                ds.tamano_total_bytes = size
                 db.commit()
                 db_persisted = True
             except Exception as exc:
