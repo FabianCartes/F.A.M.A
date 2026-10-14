@@ -417,6 +417,17 @@ class IngestionService:
         except OSError:
             return False
 
+    @staticmethod
+    def _valid_path_component(value: str) -> bool:
+        if not value or value in (".", "..") or value.endswith((".", " ")):
+            return False
+        if any(ord(char) < 32 or char in '/\\:<>"|?*' for char in value):
+            return False
+        stem = value.split(".", 1)[0].upper()
+        reserved = {"CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"}
+        reserved.update(f"{prefix}{number}" for prefix in ("COM", "LPT") for number in "123456789¹²³")
+        return stem not in reserved
+
     def sync_dataset_to_local(
         self,
         dataset_name: str,
@@ -430,6 +441,8 @@ class IngestionService:
         RF_03: Si preprocess=True, extrae tensores matemáticos y espectrogramas Mel.
         Persistencia: Si db es provisto, sincroniza 'conjunto_datos' y 'audio' en PostgreSQL.
         """
+        if not self._valid_path_component(dataset_name):
+            raise ValueError("Invalid dataset name")
         client = self._get_client()
         prefix = f"datasets/{dataset_name}/"
         blobs = list(client.list_blobs(self.bucket_name, prefix=prefix))
@@ -439,8 +452,9 @@ class IngestionService:
             slug_dir = self.local_base_dir / dataset_name.lower().replace(" ", "_")
             if slug_dir.is_dir():
                 target_base_dir = slug_dir
-            else:
-                target_base_dir.mkdir(parents=True, exist_ok=True)
+        if not target_base_dir.resolve().is_relative_to(self.local_base_dir.resolve()):
+            raise ValueError("Invalid dataset destination outside raw root")
+        target_base_dir.mkdir(parents=True, exist_ok=True)
 
         downloaded = 0
         skipped = 0
@@ -448,11 +462,19 @@ class IngestionService:
         processed_files = []
 
         for blob in blobs:
+            if blob.name.startswith(prefix) and blob.name.endswith("/"):
+                continue  # GCS directory markers are not files.
             parts = blob.name.split("/")
+            if (not blob.name.startswith(prefix)
+                    or any(not self._valid_path_component(part) for part in parts)):
+                failed += 1
+                processed_files.append({"filename": blob.name, "status": "error",
+                                        "error": "Invalid object path", "size": blob.size or 0})
+                continue
             if len(parts) >= 4 and parts[3]:
                 class_name = parts[2]
-                filename = parts[3]
-                rel_path = Path(class_name) / filename
+                filename = parts[-1]
+                rel_path = Path(*parts[2:])
             elif len(parts) == 3 and parts[2]:
                 class_name = "General"
                 filename = parts[2]
@@ -462,6 +484,11 @@ class IngestionService:
 
             # Determinar destino respetando estructura jerárquica por dataset y clase
             dest_path = target_base_dir / rel_path
+            if not dest_path.resolve().is_relative_to(target_base_dir.resolve()):
+                failed += 1
+                processed_files.append({"filename": filename, "status": "error",
+                                        "error": "Destination outside dataset", "size": blob.size or 0})
+                continue
             dest_path.parent.mkdir(parents=True, exist_ok=True)
             blob_size = blob.size or 0
 

@@ -1,6 +1,8 @@
 """Sync integrity through public ingestion interfaces with fake GCS bytes."""
 import base64
 import hashlib
+import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -103,6 +105,21 @@ def test_crc32c_can_confirm_an_object_without_md5(sync_environment):
     assert result["skipped"] == 1
     assert result["downloaded"] == 0
     assert blob.downloads == 0
+
+
+def test_nested_object_paths_keep_their_full_relative_hierarchy(sync_environment):
+    service, blobs, local = sync_environment
+    blobs.extend([
+        BlobFixture(b"first", "datasets/AvesChilenas/Chucao/session1/audio.wav"),
+        BlobFixture(b"second", "datasets/AvesChilenas/Chucao/session2/audio.wav"),
+    ])
+
+    result = service.sync_dataset_to_local("AvesChilenas")
+
+    assert result["downloaded"] == 2
+    assert (local.parent / "session1" / "audio.wav").read_bytes() == b"first"
+    assert (local.parent / "session2" / "audio.wav").read_bytes() == b"second"
+    assert [item["filename"] for item in result["files"]] == ["audio.wav", "audio.wav"]
 
 
 def test_incomplete_download_without_checksum_is_not_published(sync_environment):
@@ -244,3 +261,123 @@ def test_missing_provider_size_uses_observed_local_bytes(sync_environment):
 
     assert result["downloaded"] == 1
     assert result["files"][0]["size"] == 4
+
+
+def test_remote_parent_component_cannot_escape_dataset(sync_environment):
+    service, blobs, _ = sync_environment
+    blob = BlobFixture(b"unsafe", "datasets/AvesChilenas/../escaped.wav")
+    blobs.append(blob)
+
+    result = service.sync_dataset_to_local("AvesChilenas")
+
+    assert result["failed"] == 1
+    assert result["downloaded"] == 0
+    assert blob.downloads == 0
+    assert not (service.local_base_dir / "escaped.wav").exists()
+
+
+def test_dataset_parent_path_is_rejected_before_contacting_cloud(sync_environment):
+    service, blobs, _ = sync_environment
+    blobs.append(BlobFixture(name="datasets/../outside/Chucao/audio.wav"))
+
+    with pytest.raises(ValueError, match="dataset"):
+        service.sync_dataset_to_local("../outside")
+
+    assert blobs[0].downloads == 0
+    assert not (service.local_base_dir.parent / "outside").exists()
+
+
+@pytest.mark.parametrize("name", ["C:escape", "CON", "NUL.wav", "AvesChilenas.", "AvesChilenas ", "bad\x00name"])
+def test_windows_ambiguous_dataset_names_are_rejected(sync_environment, name):
+    service, _, _ = sync_environment
+
+    with pytest.raises(ValueError, match="dataset"):
+        service.sync_dataset_to_local(name)
+
+
+@pytest.mark.parametrize("relative", ["..\\escaped.wav", "Chucao/..\\..\\escaped.wav", "Chucao/audio.wav:stream", "NUL/audio.wav"])
+def test_remote_windows_paths_are_rejected_without_downloading(sync_environment, relative):
+    service, blobs, _ = sync_environment
+    blob = BlobFixture(name=f"datasets/AvesChilenas/{relative}")
+    blobs.append(blob)
+
+    result = service.sync_dataset_to_local("AvesChilenas")
+
+    assert result["failed"] == 1
+    assert blob.downloads == 0
+
+
+@pytest.mark.parametrize("name", ["datasets/Other/Chucao/audio.wav", "datasets/AvesChilenas/Chucao//audio.wav"])
+def test_wrong_prefix_and_empty_components_are_not_downloaded(sync_environment, name):
+    service, blobs, _ = sync_environment
+    blob = BlobFixture(name=name)
+    blobs.append(blob)
+
+    result = service.sync_dataset_to_local("AvesChilenas")
+
+    assert result["failed"] == 1
+    assert blob.downloads == 0
+
+
+def test_local_directory_link_cannot_redirect_download_outside_dataset(sync_environment):
+    service, blobs, local = sync_environment
+    outside = service.local_base_dir.parent / "outside"
+    outside.mkdir()
+    local.parent.rmdir()  # Empty synthetic class directory, not user data.
+    if os.name == "nt":
+        subprocess.run(["cmd.exe", "/c", "mklink", "/J", str(local.parent), str(outside)],
+                       check=True, capture_output=True)
+    else:
+        local.parent.symlink_to(outside, target_is_directory=True)
+    blobs.append(BlobFixture())
+    try:
+        result = service.sync_dataset_to_local("AvesChilenas")
+
+        assert result["failed"] == 1
+        assert blobs[0].downloads == 0
+        assert not (outside / "audio.wav").exists()
+    finally:
+        if os.name == "nt":
+            os.rmdir(local.parent)  # Remove only our junction, never its target.
+        else:
+            local.parent.unlink()
+
+
+def test_dataset_link_outside_raw_root_is_rejected(sync_environment):
+    service, blobs, local = sync_environment
+    outside = service.local_base_dir.parent / "outside"
+    outside.mkdir()
+    dataset_dir = local.parent.parent
+    local.parent.rmdir()
+    dataset_dir.rmdir()
+    if os.name == "nt":
+        subprocess.run(["cmd.exe", "/c", "mklink", "/J", str(dataset_dir), str(outside)],
+                       check=True, capture_output=True)
+    else:
+        dataset_dir.symlink_to(outside, target_is_directory=True)
+    blobs.append(BlobFixture())
+    try:
+        with pytest.raises(ValueError, match="dataset"):
+            service.sync_dataset_to_local("AvesChilenas")
+        assert blobs[0].downloads == 0
+        assert not (outside / "Chucao").exists()
+    finally:
+        if os.name == "nt":
+            os.rmdir(dataset_dir)
+        else:
+            dataset_dir.unlink()
+
+
+def test_directory_markers_are_ignored_and_unicode_audio_names_are_preserved(sync_environment):
+    service, blobs, _ = sync_environment
+    blobs.extend([
+        BlobFixture(b"", "datasets/AvesChilenas/"),
+        BlobFixture(b"", "datasets/AvesChilenas/Churrín del sur/"),
+        BlobFixture(b"audio", "datasets/AvesChilenas/Churrín del sur/grabación.wav"),
+    ])
+
+    result = service.sync_dataset_to_local("AvesChilenas")
+
+    assert result["downloaded"] == 1
+    assert result["failed"] == 0
+    assert (service.local_base_dir / "AvesChilenas" / "Churrín del sur" / "grabación.wav").read_bytes() == b"audio"

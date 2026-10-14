@@ -15,11 +15,12 @@ Este resumen distingue correcciones comprobadas, defectos pendientes y funcional
 | Autenticación existente | JWT estricto; clave/bootstrap explícitos sin defaults inseguros; cuentas existentes preservadas | No implementa login web, gestión administrada ni permisos generales |
 | Configuración de contenedores | Variables necesarias transmitidas y JSON excluidos del contexto backend | Sin nuevo build/despliegue real; Docker Engine observado inactivo en este afinamiento |
 | Descarga de datasets | Comparación MD5/CRC32C; staging y validación antes de replace; fallos conservan bytes previos y no crean audios nuevos | Sin transacción archivos/BD, limpieza cloud ni certificación acústica |
+| Rutas de descarga | Componentes portables, jerarquía remota completa y destinos resueltos dentro de raw/dataset; bloquea escapes por junctions preexistentes | No bloquea cambios concurrentes de enlaces ni todas las colisiones de nombres; validación HTTP y subida pendientes |
 | Subida de audios | Identidad por objeto completo; clases sin colisión de basename; reemplazos actualizan tamaño sin inflar contadores | Sin atomicidad cloud/BD, tratamiento nuevo de fallos parciales ni validación acústica |
 
 ### Evidencia disponible
 
-- Última regresión backend acotada: **198 aprobadas**, una prueba de calidad Chucao real deseleccionada, 17 archivos; tres avisos de deprecación. Incluye entrenamiento, contratos de checkpoint, autenticación, disponibilidad, ingesta y pruebas existentes de bundles; no implica que todos los defectos de bundles estén resueltos.
+- Última regresión backend acotada: **216 aprobadas**, una prueba de calidad Chucao real deseleccionada, 17 archivos; tres avisos de deprecación. Incluye entrenamiento, contratos de checkpoint, autenticación, disponibilidad, ingesta y pruebas existentes de bundles; no implica que todos los defectos de bundles estén resueltos.
 - Última suite frontend completa observada anteriormente: **232 aprobadas / 22 archivos**; no se volvió a ejecutar en esta unidad de backend. Node 22.20.0 sigue fuera del requisito del jsdom instalado.
 - Configuración/contexto Docker: **8 pruebas aprobadas**, con cliente y API simulada; no valida el arranque integral.
 - Pruebas con temporales, SQLite y adaptadores falsos. Sin cambios a `.env`, credenciales, cuentas, datasets, pesos, PostgreSQL/GCS reales ni servicios existentes. Cinco cambios locales previos del usuario preservados y fuera de los commits de afinamiento.
@@ -28,7 +29,7 @@ Este resumen distingue correcciones comprobadas, defectos pendientes y funcional
 
 Orden recomendado para continuar, no garantía de duración ni lista exhaustiva:
 
-1. **Ingesta:** reemplazar frecuencia/duración prefijadas por datos observados o desconocidos explícitos. Acordar lectura pública de metadatos individuales para probarlos. Validar rutas/formatos y definir resultados veraces para subidas parcialmente fallidas.
+1. **Ingesta:** reemplazar frecuencia/duración prefijadas por datos observados o desconocidos explícitos. Acordar lectura pública de metadatos individuales para probarlos. Completar validación de rutas en subida/otros lectores, formatos, respuestas HTTP de validación y resultados veraces para subidas parcialmente fallidas. Descarga por servicio ya corregida para los escapes descritos en [ADR 0027](../adr/0027-rutas-portables-y-confinadas-en-descarga.md).
 2. **Catálogo y telemetría:** retirar cifras/estados ficticios y diferenciar inventario cloud, registros BD y disponibilidad local. Resolver catálogo BD-exclusivo frente a ensambles estáticos sin sobrescribir los cambios previos de `registry.py`.
 3. **Inferencia y bundles:** revisar fuentes duplicadas y coherencia del preprocesamiento efectivo en exportación/consumo y ensambles; no basta con que las pruebas actuales de exportación pasen.
 4. **Parámetros ofrecidos:** identificar los ignorados y hacer que se apliquen o se rechacen explícitamente, sin anunciar capacidades que no existen.
