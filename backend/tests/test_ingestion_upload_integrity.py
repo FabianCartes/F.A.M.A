@@ -111,6 +111,19 @@ def test_invalid_upload_dataset_is_rejected_without_transferring(upload_environm
     assert training.training_service.get_available_datasets(db=db) == []
 
 
+def test_combined_object_uri_cannot_exceed_database_route_limit(upload_environment):
+    original, db, objects = upload_environment
+    service = IngestionService(bucket_name="b" * 63, local_base_dir=original.local_base_dir,
+                               local_processed_dir=original.local_processed_dir)
+
+    with pytest.raises(ValueError, match="object"):
+        service.upload_files_to_gcs([("f" * 251 + ".wav", synthetic_wav())],
+                                    "d" * 100, "c" * 100, db=db)
+
+    assert objects == {}
+    assert training.training_service.get_available_datasets(db=db) == []
+
+
 @pytest.mark.parametrize("label", ["../Chucao", "Chucao/Rayadito", "Chucao\\Rayadito", "NUL", "", "Chucao."])
 def test_invalid_class_is_rejected_without_transferring(upload_environment, label):
     service, db, objects = upload_environment
@@ -134,3 +147,41 @@ def test_invalid_filename_rejects_entire_batch_before_first_transfer(upload_envi
 
     assert objects == {}
     assert training.training_service.get_available_datasets(db=db) == []
+
+
+@pytest.mark.parametrize("field", ["dataset", "class", "filename"])
+def test_names_exceeding_database_columns_are_rejected_before_upload(upload_environment, field):
+    service, db, objects = upload_environment
+    dataset = "d" * 101 if field == "dataset" else "AvesChilenas"
+    label = "c" * 101 if field == "class" else "Chucao"
+    filename = "f" * 252 + ".wav" if field == "filename" else "audio.wav"
+
+    with pytest.raises(ValueError, match=field):
+        service.upload_files_to_gcs([("valid.wav", synthetic_wav()), (filename, synthetic_wav())],
+                                    dataset, label, db=db)
+
+    assert objects == {}
+
+
+def test_names_at_database_column_limits_can_be_uploaded(upload_environment):
+    service, db, objects = upload_environment
+
+    result = service.upload_files_to_gcs([("f" * 251 + ".wav", synthetic_wav())],
+                                         "d" * 100, "c" * 100, db=db)
+
+    assert result["uploaded"] == 1
+    assert result["db_persisted"] is True
+    assert len(objects) == 1
+
+
+def test_object_uri_at_500_characters_can_be_uploaded(upload_environment):
+    original, db, objects = upload_environment
+    service = IngestionService(bucket_name="b" * 63, local_base_dir=original.local_base_dir,
+                               local_processed_dir=original.local_processed_dir)
+
+    result = service.upload_files_to_gcs([("f" * 216 + ".wav", synthetic_wav())],
+                                         "d" * 100, "c" * 100, db=db)
+
+    assert result["uploaded"] == 1
+    assert result["db_persisted"] is True
+    assert len(objects) == 1

@@ -47,6 +47,27 @@ def test_sync_rejects_invalid_dataset_in_batch_before_cloud_access(client, uploa
     assert response.json()["detail"] == "Nombres de dataset inválidos."
 
 
+def test_sync_rejects_overlong_dataset_in_batch_before_cloud_access(client, monkeypatch):
+    def forbidden_cloud_access(*args, **kwargs):
+        raise AssertionError("Cloud must not be contacted for an overlong name")
+
+    monkeypatch.setattr("google.cloud.storage.Client", forbidden_cloud_access)
+    response = client.post("/api/ingestion/sync", json={"datasets": ["AvesChilenas", "d" * 101]})
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Nombres de dataset inválidos."
+
+
+def test_upload_rejects_overlong_filename_with_sanitized_422(client, upload_environment):
+    _, _, objects = upload_environment
+    response = client.post("/api/ingestion/upload", data={"dataset_name": "AvesChilenas"},
+                           files={"files": ("f" * 252 + ".wav", synthetic_wav(), "audio/wav")})
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Nombres de carga inválidos."
+    assert objects == {}
+
+
 def test_upload_valid_unicode_names_still_transfers_and_registers(client, upload_environment):
     _, _, objects = upload_environment
     response = client.post("/api/ingestion/upload",

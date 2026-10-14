@@ -307,6 +307,19 @@ def test_remote_windows_paths_are_rejected_without_downloading(sync_environment,
     assert blob.downloads == 0
 
 
+@pytest.mark.parametrize("relative", ["Chucao/" + "f" * 252 + ".wav", "Chucao/" + "s" * 200 + "/" + "t" * 200 + "/" + "f" * 96 + ".wav"], ids=["filename", "object-uri"])
+def test_remote_names_exceeding_database_limits_are_rejected(sync_environment, relative):
+    service, blobs, _ = sync_environment
+    blob = BlobFixture(name=f"datasets/AvesChilenas/{relative}")
+    blobs.append(blob)
+
+    result = service.sync_dataset_to_local("AvesChilenas")
+
+    assert result["failed"] == 1
+    assert blob.downloads == 0
+    assert result["files"][0]["error"] == "Invalid object metadata length"
+
+
 @pytest.mark.parametrize("name", ["datasets/Other/Chucao/audio.wav", "datasets/AvesChilenas/Chucao//audio.wav"])
 def test_wrong_prefix_and_empty_components_are_not_downloaded(sync_environment, name):
     service, blobs, _ = sync_environment
@@ -381,3 +394,14 @@ def test_directory_markers_are_ignored_and_unicode_audio_names_are_preserved(syn
     assert result["downloaded"] == 1
     assert result["failed"] == 0
     assert (service.local_base_dir / "AvesChilenas" / "Churrín del sur" / "grabación.wav").read_bytes() == b"audio"
+
+
+def test_remote_class_exceeding_database_column_is_rejected_before_download(sync_environment):
+    service, blobs, _ = sync_environment
+    blob = BlobFixture(name=f"datasets/AvesChilenas/{'c' * 101}/audio.wav")
+    blobs.append(blob)
+
+    result = service.sync_dataset_to_local("AvesChilenas")
+
+    assert result["failed"] == 1
+    assert blob.downloads == 0

@@ -434,7 +434,7 @@ class IngestionService:
 
     def validate_dataset_names(self, names: List[str]) -> None:
         """Validate a complete batch before any dataset can be transferred."""
-        if any(not self._valid_path_component(name) for name in names):
+        if any(not self._valid_path_component(name) or len(name) > 100 for name in names):
             raise IngestionValidationError("Invalid dataset name")
 
     def sync_dataset_to_local(
@@ -488,6 +488,13 @@ class IngestionService:
                 filename = parts[2]
                 rel_path = Path(filename)
             else:
+                continue
+
+            if (len(class_name) > 100 or len(filename) > 255
+                    or len(f"gs://{self.bucket_name}/{blob.name}") > 500):
+                failed += 1
+                processed_files.append({"filename": filename, "status": "error",
+                                        "error": "Invalid object metadata length", "size": blob.size or 0})
                 continue
 
             # Determinar destino respetando estructura jerárquica por dataset y clase
@@ -656,11 +663,13 @@ class IngestionService:
         Registra opcionalmente en PostgreSQL las tablas 'conjunto_datos' y 'audio'.
         """
         self.validate_dataset_names([dataset_name])
-        if not self._valid_path_component(class_label):
+        if not self._valid_path_component(class_label) or len(class_label) > 100:
             raise IngestionValidationError("Invalid class label")
         for filename, _ in files:
-            if not self._valid_path_component(filename):
+            if not self._valid_path_component(filename) or len(filename) > 255:
                 raise IngestionValidationError("Invalid filename")
+            if len(f"gs://{self.bucket_name}/datasets/{dataset_name}/{class_label}/{filename}") > 500:
+                raise IngestionValidationError("Invalid object URI length")
         client = self._get_client()
         bucket = client.bucket(self.bucket_name)
 
