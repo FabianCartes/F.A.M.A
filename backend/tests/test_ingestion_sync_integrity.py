@@ -405,3 +405,108 @@ def test_remote_class_exceeding_database_column_is_rejected_before_download(sync
 
     assert result["failed"] == 1
     assert blob.downloads == 0
+
+
+def test_maximum_filename_downloads_without_inflating_temporary_name(sync_environment):
+    service, blobs, local = sync_environment
+    filename = "f" * 251 + ".wav"  # 255 characters, valid NTFS/SQL component.
+    blob = BlobFixture(b"verified bytes", f"datasets/AvesChilenas/Chucao/{filename}")
+    blobs.append(blob)
+
+    result = service.sync_dataset_to_local("AvesChilenas")
+
+    assert result["failed"] == 0
+    assert result["downloaded"] == 1
+    destination = local.parent / filename
+    if os.name == "nt":
+        destination = Path("\\\\?\\" + str(destination))
+    assert destination.read_bytes() == b"verified bytes"
+    assert {path.name for path in local.parent.iterdir()} == {filename}
+
+
+def test_long_nested_destination_can_be_downloaded_and_skipped_on_retry(sync_environment):
+    service, blobs, local = sync_environment
+    folder = "session-" + "s" * 92
+    blob = BlobFixture(b"nested verified bytes", f"datasets/AvesChilenas/Chucao/{folder}/audio.wav")
+    blobs.append(blob)
+
+    first = service.sync_dataset_to_local("AvesChilenas")
+    second = service.sync_dataset_to_local("AvesChilenas")
+
+    assert first["downloaded"] == 1
+    assert second["skipped"] == 1
+    assert blob.downloads == 1
+    assert first["local_dir"] == str(local.parent.parent)
+    destination = local.parent / folder / "audio.wav"
+    if os.name == "nt":
+        destination = Path("\\\\?\\" + str(destination))
+    assert destination.read_bytes() == b"nested verified bytes"
+
+
+def test_long_configured_root_still_reuses_existing_slug_dataset(sync_environment):
+    original, blobs, _ = sync_environment
+    raw_root = original.local_base_dir / ("r" * 100) / ("s" * 100)
+    existing = raw_root / "aves_chilenas"
+    filesystem_existing = Path("\\\\?\\" + str(existing)) if os.name == "nt" else existing
+    filesystem_existing.mkdir(parents=True)
+    service = IngestionService(bucket_name="fixture-bucket", local_base_dir=raw_root,
+                               local_processed_dir=original.local_processed_dir)
+    blobs.append(BlobFixture(b"long root bytes", "datasets/Aves Chilenas/Chucao/audio.wav"))
+
+    result = service.sync_dataset_to_local("Aves Chilenas")
+
+    assert result["local_dir"] == str(existing)
+    assert result["downloaded"] == 1
+    assert (filesystem_existing / "Chucao" / "audio.wav").read_bytes() == b"long root bytes"
+
+
+def test_local_parent_conflict_fails_one_transfer_without_aborting_batch(sync_environment):
+    service, blobs, local = sync_environment
+    blocked = local.parent / "blocked"
+    blocked.write_bytes(b"previous local file")
+    blobs.extend([
+        BlobFixture(b"rejected", "datasets/AvesChilenas/Chucao/blocked/audio.wav"),
+        BlobFixture(b"accepted"),
+    ])
+
+    result = service.sync_dataset_to_local("AvesChilenas")
+
+    assert result["failed"] == 1
+    assert result["downloaded"] == 1
+    assert result["files"][0]["error"] == "No se pudo sincronizar el archivo."
+    assert blobs[0].downloads == 0
+    assert blocked.read_bytes() == b"previous local file"
+    assert local.read_bytes() == b"accepted"
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows file handles block temporary deletion")
+def test_locked_temporary_reports_cleanup_pending_without_aborting_batch(sync_environment):
+    service, blobs, local = sync_environment
+
+    class LockedInterruptedBlob(BlobFixture):
+        handle = None
+        temporary = None
+
+        def download_to_filename(self, path, **kwargs):
+            self.temporary = Path(path)
+            self.temporary.write_bytes(b"partial")
+            self.handle = self.temporary.open("rb")
+            raise OSError("Synthetic failure /private/provider")
+
+    interrupted = LockedInterruptedBlob(b"replacement")
+    local.write_bytes(b"previous")
+    blobs.extend([interrupted, BlobFixture(b"accepted", "datasets/AvesChilenas/Chucao/other.wav")])
+    try:
+        result = service.sync_dataset_to_local("AvesChilenas")
+
+        assert result["failed"] == 1
+        assert result["downloaded"] == 1
+        assert result["files"][0]["cleanup_pending"] is True
+        assert result["files"][0]["error"] == "No se pudo sincronizar el archivo."
+        assert local.read_bytes() == b"previous"
+        assert (local.parent / "other.wav").read_bytes() == b"accepted"
+    finally:
+        if interrupted.handle is not None:
+            interrupted.handle.close()
+        if interrupted.temporary is not None:
+            interrupted.temporary.unlink(missing_ok=True)

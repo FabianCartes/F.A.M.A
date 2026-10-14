@@ -437,6 +437,18 @@ class IngestionService:
         if any(not self._valid_path_component(name) or len(name) > 100 for name in names):
             raise IngestionValidationError("Invalid dataset name")
 
+    @staticmethod
+    def _filesystem_path(path: Path) -> Path:
+        """Use Windows extended paths only for I/O, not public dataset identity."""
+        if os.name != "nt":
+            return path
+        absolute = str(path.absolute())
+        if absolute.startswith("\\\\?\\"):
+            return Path(absolute)
+        if absolute.startswith("\\\\"):
+            return Path("\\\\?\\UNC\\" + absolute[2:])
+        return Path("\\\\?\\" + absolute)
+
     def sync_dataset_to_local(
         self,
         dataset_name: str,
@@ -456,13 +468,13 @@ class IngestionService:
         blobs = list(client.list_blobs(self.bucket_name, prefix=prefix))
 
         target_base_dir = self.local_base_dir / dataset_name
-        if not target_base_dir.is_dir():
+        if not self._filesystem_path(target_base_dir).is_dir():
             slug_dir = self.local_base_dir / dataset_name.lower().replace(" ", "_")
-            if slug_dir.is_dir():
+            if self._filesystem_path(slug_dir).is_dir():
                 target_base_dir = slug_dir
         if not target_base_dir.resolve().is_relative_to(self.local_base_dir.resolve()):
             raise IngestionValidationError("Invalid dataset destination outside raw root")
-        target_base_dir.mkdir(parents=True, exist_ok=True)
+        self._filesystem_path(target_base_dir).mkdir(parents=True, exist_ok=True)
 
         downloaded = 0
         skipped = 0
@@ -499,31 +511,32 @@ class IngestionService:
 
             # Determinar destino respetando estructura jerárquica por dataset y clase
             dest_path = target_base_dir / rel_path
-            if not dest_path.resolve().is_relative_to(target_base_dir.resolve()):
-                failed += 1
-                processed_files.append({"filename": filename, "status": "error",
-                                        "error": "Destination outside dataset", "size": blob.size or 0})
-                continue
-            dest_path.parent.mkdir(parents=True, exist_ok=True)
             blob_size = blob.size or 0
-
-            # A same-sized replacement can still contain different audio bytes.
-            if self._matches_remote_content(dest_path, blob):
-                skipped += 1
-                processed_files.append({
-                    "filename": filename,
-                    "class_name": class_name,
-                    "status": "skipped",
-                    "reason": "already_up_to_date",
-                    "size": dest_path.stat().st_size,
-                    "object_key": blob.name,
-                })
-                continue
-
             temporary = None
             try:
+                if not dest_path.resolve().is_relative_to(target_base_dir.resolve()):
+                    failed += 1
+                    processed_files.append({"filename": filename, "status": "error",
+                                            "error": "Destination outside dataset", "size": blob_size})
+                    continue
+                dest_path = self._filesystem_path(dest_path)
+                dest_path.parent.mkdir(parents=True, exist_ok=True)
+
+                # A same-sized replacement can still contain different audio bytes.
+                if self._matches_remote_content(dest_path, blob):
+                    skipped += 1
+                    processed_files.append({
+                        "filename": filename,
+                        "class_name": class_name,
+                        "status": "skipped",
+                        "reason": "already_up_to_date",
+                        "size": dest_path.stat().st_size,
+                        "object_key": blob.name,
+                    })
+                    continue
+
                 # Publish only a completed transfer; never download over good bytes.
-                with tempfile.NamedTemporaryFile(dir=dest_path.parent, prefix=f".{dest_path.name}.",
+                with tempfile.NamedTemporaryFile(dir=dest_path.parent, prefix=".fama-",
                                                  suffix=".download", delete=False) as staging:
                     temporary = Path(staging.name)
                 blob.download_to_filename(str(temporary))
@@ -544,18 +557,21 @@ class IngestionService:
                     "size": observed_size,
                     "object_key": blob.name,
                 })
-            except Exception as exc:
+            except Exception:
                 failed += 1
                 processed_files.append({
                     "filename": filename,
                     "class_name": class_name,
                     "status": "error",
-                    "error": str(exc),
+                    "error": "No se pudo sincronizar el archivo.",
                     "size": blob_size,
                 })
             finally:
                 if temporary is not None:
-                    temporary.unlink(missing_ok=True)
+                    try:
+                        temporary.unlink(missing_ok=True)
+                    except OSError:
+                        processed_files[-1]["cleanup_pending"] = True
 
         # Preprocesamiento tensorial opcional (RF_03)
         preprocessed_count = 0

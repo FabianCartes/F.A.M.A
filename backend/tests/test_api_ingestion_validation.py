@@ -185,3 +185,26 @@ def test_sync_database_failure_is_sanitized_without_erasing_download(client, upl
     assert retried["skipped"] == 1
     dataset, = training.training_service.get_available_datasets(db=db)
     assert dataset["audio_count"] == 1
+
+
+def test_sync_local_failure_returns_partial_result_and_registers_only_accepted_audio(client, upload_environment, monkeypatch):
+    service, db, _ = upload_environment
+    blocked = service.local_base_dir / "AvesChilenas" / "Chucao" / "blocked"
+    blocked.parent.mkdir(parents=True)
+    blocked.write_bytes(b"previous local file")
+    blobs = [BlobFixture(synthetic_wav(), "datasets/AvesChilenas/Chucao/blocked/audio.wav"),
+             BlobFixture(synthetic_wav())]
+    monkeypatch.setattr("google.cloud.storage.Client.list_blobs", lambda *args, **kwargs: blobs, raising=False)
+
+    response = client.post("/api/ingestion/sync", json={"datasets": ["AvesChilenas"]})
+
+    assert response.status_code == 200
+    assert response.json()["total_failed"] == 1
+    assert response.json()["total_downloaded"] == 1
+    result, = response.json()["results"]
+    assert result["db_persisted"] is True
+    assert result["files"][0]["error"] == "No se pudo sincronizar el archivo."
+    dataset, = training.training_service.get_available_datasets(db=db)
+    assert dataset["audio_count"] == 1
+    assert dataset["estado"] == "sincronizacion_parcial"
+    assert blocked.read_bytes() == b"previous local file"
