@@ -21,6 +21,7 @@ class BlobFixture:
         self.size = len(content)
         self.md5_hash = base64.b64encode(hashlib.md5(content).digest()).decode()
         self.crc32c = None
+        self.updated = None
         self.downloads = 0
         self.fail = False
 

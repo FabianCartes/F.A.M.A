@@ -17,7 +17,8 @@ def client(upload_environment, monkeypatch):
     monkeypatch.setattr(main, "ingestion_service", service)
     app = FastAPI()
     for route in main.app.routes:
-        if getattr(route, "path", "") in {"/api/ingestion/upload", "/api/ingestion/sync"}:
+        if getattr(route, "path", "") in {"/api/ingestion/upload", "/api/ingestion/sync",
+                                          "/api/ingestion/datasets/{dataset_name}/files"}:
             app.add_api_route(route.path, route.endpoint, methods=list(route.methods))
     app.dependency_overrides[main.get_db] = lambda: db
     with TestClient(app, raise_server_exceptions=False) as client:
@@ -278,3 +279,222 @@ def test_sync_successful_preprocessing_is_completed(client, upload_environment, 
     assert (service.local_processed_dir / "AvesChilenas" / "Chucao" / "audio.npy").is_file()
     dataset, = training.training_service.get_available_datasets(db=db)
     assert dataset["estado"] == "procesado"
+
+
+def test_inspector_reads_observed_upload_metadata_from_database(client):
+    uploaded = client.post("/api/ingestion/upload", data={"dataset_name": "AvesChilenas"},
+                           files={"files": ("audio.wav", synthetic_wav(), "audio/wav")})
+    assert uploaded.json()["db_persisted"] is True
+
+    response = client.get("/api/ingestion/datasets/AvesChilenas/files")
+
+    assert response.status_code == 200
+    audio, = response.json()["files"]
+    assert audio.get("recorded_metadata") == {
+        "sample_rate_hz": 8000, "duration_seconds": 1.0, "source": "database"
+    }
+
+
+def test_unreadable_upload_does_not_invent_audio_metadata(client):
+    uploaded = client.post("/api/ingestion/upload", data={"dataset_name": "AvesChilenas"},
+                           files={"files": ("audio.wav", b"synthetic invalid audio", "audio/wav")})
+    assert uploaded.json()["db_persisted"] is True
+
+    response = client.get("/api/ingestion/datasets/AvesChilenas/files")
+
+    assert response.status_code == 200
+    audio, = response.json()["files"]
+    assert audio["recorded_metadata"] == {
+        "sample_rate_hz": None, "duration_seconds": None, "source": "database"
+    }
+
+
+def test_replacing_upload_updates_recorded_metadata(client):
+    for content in (synthetic_wav(), synthetic_wav(frames=22050, sample_rate=11025)):
+        uploaded = client.post("/api/ingestion/upload", data={"dataset_name": "AvesChilenas"},
+                               files={"files": ("audio.wav", content, "audio/wav")})
+        assert uploaded.json()["db_persisted"] is True
+
+    audio, = client.get("/api/ingestion/datasets/AvesChilenas/files").json()["files"]
+
+    assert audio["recorded_metadata"] == {
+        "sample_rate_hz": 11025, "duration_seconds": 2.0, "source": "database"
+    }
+
+
+def test_sync_records_metadata_from_downloaded_audio(client, monkeypatch):
+    blob = BlobFixture(synthetic_wav(frames=4000))
+    monkeypatch.setattr("google.cloud.storage.Client.list_blobs", lambda *args, **kwargs: [blob])
+    synced = client.post("/api/ingestion/sync", json={"datasets": ["AvesChilenas"]})
+    assert synced.json()["results"][0]["db_persisted"] is True
+
+    audio, = client.get("/api/ingestion/datasets/AvesChilenas/files").json()["files"]
+
+    assert audio["recorded_metadata"] == {
+        "sample_rate_hz": 8000, "duration_seconds": 0.5, "source": "database"
+    }
+
+
+def test_sync_refresh_updates_metadata_and_verified_retry_keeps_it(client, monkeypatch):
+    blobs = [BlobFixture(synthetic_wav(frames=4000))]
+    monkeypatch.setattr("google.cloud.storage.Client.list_blobs", lambda *args, **kwargs: blobs)
+    first = client.post("/api/ingestion/sync", json={"datasets": ["AvesChilenas"]})
+    assert first.json()["results"][0]["db_persisted"] is True
+    blobs[:] = [BlobFixture(synthetic_wav(frames=22050, sample_rate=11025))]
+
+    second = client.post("/api/ingestion/sync", json={"datasets": ["AvesChilenas"]})
+    third = client.post("/api/ingestion/sync", json={"datasets": ["AvesChilenas"]})
+    audio, = client.get("/api/ingestion/datasets/AvesChilenas/files").json()["files"]
+
+    assert second.json()["results"][0]["downloaded"] == 1
+    assert third.json()["results"][0]["skipped"] == 1
+    assert audio["recorded_metadata"] == {
+        "sample_rate_hz": 11025, "duration_seconds": 2.0, "source": "database"
+    }
+
+
+def test_inspector_matches_metadata_by_full_object_route_not_basename(client):
+    for label, content in [("Chucao", synthetic_wav()),
+                           ("Rayadito", synthetic_wav(frames=22050, sample_rate=11025))]:
+        response = client.post("/api/ingestion/upload", data={"dataset_name": "AvesChilenas", "class_label": label},
+                               files={"files": ("audio.wav", content, "audio/wav")})
+        assert response.json()["db_persisted"] is True
+
+    files = client.get("/api/ingestion/datasets/AvesChilenas/files").json()["files"]
+    by_class = {item["class_name"]: item["recorded_metadata"] for item in files}
+
+    assert by_class == {
+        "Chucao": {"sample_rate_hz": 8000, "duration_seconds": 1.0, "source": "database"},
+        "Rayadito": {"sample_rate_hz": 11025, "duration_seconds": 2.0, "source": "database"},
+    }
+
+
+def test_unreadable_replacement_clears_old_metadata_instead_of_preserving_it(client):
+    for content in (synthetic_wav(), b"synthetic unreadable replacement"):
+        response = client.post("/api/ingestion/upload", data={"dataset_name": "AvesChilenas"},
+                               files={"files": ("audio.wav", content, "audio/wav")})
+        assert response.json()["db_persisted"] is True
+
+    audio, = client.get("/api/ingestion/datasets/AvesChilenas/files").json()["files"]
+
+    assert audio["recorded_metadata"] == {"sample_rate_hz": None, "duration_seconds": None, "source": "database"}
+
+
+def test_zero_duration_is_recorded_without_defaulting_to_five_seconds(client):
+    response = client.post("/api/ingestion/upload", data={"dataset_name": "AvesChilenas"},
+                           files={"files": ("audio.wav", synthetic_wav(frames=0), "audio/wav")})
+    assert response.json()["db_persisted"] is True
+
+    audio, = client.get("/api/ingestion/datasets/AvesChilenas/files").json()["files"]
+
+    assert audio["recorded_metadata"] == {"sample_rate_hz": 8000, "duration_seconds": 0.0, "source": "database"}
+
+
+def test_unregistered_cloud_object_has_no_invented_recorded_metadata(client, upload_environment):
+    _, _, objects = upload_environment
+    objects["datasets/AvesChilenas/Chucao/audio.wav"] = synthetic_wav()
+
+    response = client.get("/api/ingestion/datasets/AvesChilenas/files")
+
+    assert response.status_code == 200
+    audio, = response.json()["files"]
+    assert audio["recorded_metadata"] is None
+
+
+def test_inspector_database_failure_returns_inventory_without_leaking_sql(client, upload_environment):
+    _, db, _ = upload_environment
+    uploaded = client.post("/api/ingestion/upload", data={"dataset_name": "AvesChilenas"},
+                           files={"files": ("audio.wav", synthetic_wav(), "audio/wav")})
+    assert uploaded.json()["db_persisted"] is True
+    engine = db.get_bind()
+
+    def fail_database(conn, cursor, statement, parameters, context, executemany):
+        raise OperationalError(statement, parameters, RuntimeError("synthetic-secret /private/database"))
+
+    event.listen(engine, "before_cursor_execute", fail_database)
+    try:
+        response = client.get("/api/ingestion/datasets/AvesChilenas/files")
+    finally:
+        event.remove(engine, "before_cursor_execute", fail_database)
+
+    assert response.status_code == 200
+    audio, = response.json()["files"]
+    assert audio["recorded_metadata"] is None
+    assert "synthetic-secret" not in response.text
+    assert "SELECT" not in response.text
+    retry, = client.get("/api/ingestion/datasets/AvesChilenas/files").json()["files"]
+    assert retry["recorded_metadata"]["sample_rate_hz"] == 8000
+
+
+def test_recorded_metadata_is_not_a_probe_of_changed_cloud_content(client, upload_environment):
+    _, _, objects = upload_environment
+    uploaded = client.post("/api/ingestion/upload", data={"dataset_name": "AvesChilenas"},
+                           files={"files": ("audio.wav", synthetic_wav(), "audio/wav")})
+    assert uploaded.json()["db_persisted"] is True
+    objects["datasets/AvesChilenas/General/audio.wav"] = synthetic_wav(frames=22050, sample_rate=11025)
+
+    audio, = client.get("/api/ingestion/datasets/AvesChilenas/files").json()["files"]
+
+    assert audio["recorded_metadata"] == {"sample_rate_hz": 8000, "duration_seconds": 1.0, "source": "database"}
+
+
+def test_failed_upload_refresh_keeps_previous_recorded_metadata(client, monkeypatch):
+    first = client.post("/api/ingestion/upload", data={"dataset_name": "AvesChilenas"},
+                        files={"files": ("audio.wav", synthetic_wav(), "audio/wav")})
+    assert first.json()["db_persisted"] is True
+    monkeypatch.setattr("google.cloud.storage.Client.failures", {"datasets/AvesChilenas/General/audio.wav"})
+
+    failed = client.post("/api/ingestion/upload", data={"dataset_name": "AvesChilenas"},
+                         files={"files": ("audio.wav", synthetic_wav(frames=22050, sample_rate=11025), "audio/wav")})
+    audio, = client.get("/api/ingestion/datasets/AvesChilenas/files").json()["files"]
+
+    assert failed.json()["status"] == "failed"
+    assert audio["recorded_metadata"] == {"sample_rate_hz": 8000, "duration_seconds": 1.0, "source": "database"}
+
+
+def test_unreadable_sync_refresh_clears_previous_metadata(client, monkeypatch):
+    blobs = [BlobFixture(synthetic_wav())]
+    monkeypatch.setattr("google.cloud.storage.Client.list_blobs", lambda *args, **kwargs: blobs)
+    first = client.post("/api/ingestion/sync", json={"datasets": ["AvesChilenas"]})
+    assert first.json()["results"][0]["db_persisted"] is True
+    blobs[:] = [BlobFixture(b"synthetic unreadable replacement")]
+
+    second = client.post("/api/ingestion/sync", json={"datasets": ["AvesChilenas"]})
+    audio, = client.get("/api/ingestion/datasets/AvesChilenas/files").json()["files"]
+
+    assert second.json()["results"][0]["db_persisted"] is True
+    assert audio["recorded_metadata"] == {"sample_rate_hz": None, "duration_seconds": None, "source": "database"}
+
+
+@pytest.mark.parametrize("relative, label", [("audio.wav", "General"), ("Chucao/session/audio.wav", "Chucao")])
+def test_offline_inspector_preserves_object_identity_for_recorded_metadata(client, monkeypatch, relative, label):
+    blob = BlobFixture(synthetic_wav(), f"datasets/AvesChilenas/{relative}")
+    monkeypatch.setattr("google.cloud.storage.Client.list_blobs", lambda *args, **kwargs: [blob])
+    synced = client.post("/api/ingestion/sync", json={"datasets": ["AvesChilenas"]})
+    assert synced.json()["results"][0]["db_persisted"] is True
+
+    def offline_client():
+        raise OSError("Synthetic cloud offline")
+
+    monkeypatch.setattr("google.cloud.storage.Client", offline_client)
+    response = client.get("/api/ingestion/datasets/AvesChilenas/files")
+
+    assert response.status_code == 200
+    audio, = response.json()["files"]
+    assert audio["path"] == f"datasets/AvesChilenas/{relative}"
+    assert audio["class_name"] == label
+    assert audio["recorded_metadata"] == {"sample_rate_hz": 8000, "duration_seconds": 1.0, "source": "database"}
+
+
+def test_cloud_inspector_keeps_nested_filename_and_ignores_directory_markers(client, upload_environment):
+    _, _, objects = upload_environment
+    objects["datasets/AvesChilenas/Chucao/session/"] = b""
+    objects["datasets/AvesChilenas/Chucao/session/audio.wav"] = synthetic_wav()
+
+    response = client.get("/api/ingestion/datasets/AvesChilenas/files")
+
+    assert response.status_code == 200
+    audio, = response.json()["files"]
+    assert audio["name"] == "audio.wav"
+    assert audio["class_name"] == "Chucao"
+    assert audio["path"] == "datasets/AvesChilenas/Chucao/session/audio.wav"

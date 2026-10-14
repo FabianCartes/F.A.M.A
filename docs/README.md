@@ -17,7 +17,7 @@ docs/
 ├── arquitectura/                # Diseño de sistemas, pipelines, MLOps y despliegue
 ├── limites/                     # Límites matemáticos, físicos y problemas conocidos
 ├── manuales/                    # Uso, estado para retomar, revisión y despliegue
-├── adr/                         # Architectural Decision Records (ADR 0001 a 0028)
+├── adr/                         # Architectural Decision Records (ADR 0001 a 0029)
 ├── receipts/                    # Recibos técnicos reproducibles en formato JSON (RDD)
 ├── duplicados-exactos/           # Tarea acotada: admisión de feedback sin duplicados SHA-256
 └── images/                      # Diagramas, matrices de confusión y gráficos vectoriales
@@ -58,7 +58,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`informe_consolidado_diagnostico_acustico_motores.md`](./modelos/informe_consolidado_diagnostico_acustico_motores.md): Informe del ensamble industrial para fallas de motor (81.16% Acc).
 
 ### 3. [`docs/arquitectura/`](./arquitectura/) — Arquitectura de Software y MLOps
-* [`CONTEXT.md`](./arquitectura/CONTEXT.md): Glosario de catálogo, disponibilidad de pesos, activación, inferencia comprobada y alta inicial de administrador.
+* [`CONTEXT.md`](./arquitectura/CONTEXT.md): Glosario de catálogo, disponibilidad de pesos, activación, inferencia comprobada, alta inicial de administrador y metadatos acústicos registrados.
 * [`03_orquestador_fastapi_gcs_postgresql.md`](./arquitectura/03_orquestador_fastapi_gcs_postgresql.md): Arquitectura del orquestador backend con FastAPI.
 * [`04_saneamiento_y_transcodificacion_audio.md`](./arquitectura/04_saneamiento_y_transcodificacion_audio.md): Pipeline de saneamiento y normalización de audio crudo.
 * [`18_soporte_multimodelo_backend_rdd.md`](./arquitectura/18_soporte_multimodelo_backend_rdd.md): Desacoplamiento de inferencia con Patrón Strategy y ModelRegistry.
@@ -85,7 +85,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`backend_permissions_integration.json`](./receipts/backend_permissions_integration.json): Verificación PERM-3 del servicio público de feedback en contenedor aislado; propietario y modos tras aprobaciones, reinicio y replay. Contexto mínimo, no prueba del despliegue completo ni autoridad de entrega.
 
 ### 6. [`docs/adr/`](./adr/) — Architectural Decision Records
-Registro de las 28 decisiones de arquitectura fundamentales del sistema:
+Registro de las 29 decisiones de arquitectura fundamentales del sistema:
 * `ADR 0001`: Migración de AudioCNN a EfficientNet-B0.
 * `ADR 0002`: Particionamiento Estratificado a Nivel de Grabador (Zero Leakage).
 * `ADR 0003`: Adopción de Focal Loss frente a Cross-Entropy estándar.
@@ -114,3 +114,4 @@ Registro de las 28 decisiones de arquitectura fundamentales del sistema:
 * [`ADR 0026`](./adr/0026-sincronizacion-por-contenido-y-publicacion-local.md): Sincronización por MD5/CRC32C, staging local y registros de transferencias aceptadas por URI completa; preservación previa y límites de atomicidad.
 * [`ADR 0027`](./adr/0027-rutas-portables-y-confinadas-en-descarga.md): Componentes portables, jerarquía y confinamiento en descarga; extensión a nombres de subida y HTTP 422 sanitizado; límites de concurrencia y atomicidad de lotes.
 * [`ADR 0028`](./adr/0028-resultados-parciales-en-subida-de-audios.md): Subida continúa por archivo y registra solo transferencias confirmadas; subida/sync distinguen completed/partial/failed y la UI informa fallos de etapa; sin rollback cloud ni atomicidad.
+* [`ADR 0029`](./adr/0029-metadatos-acusticos-observados-y-lectura-registrada.md): Ingesta registra frecuencia/duración de cabecera o null, sin defaults ficticios; inspector existente devuelve metadatos registrados por URI, no certificación del objeto actual.

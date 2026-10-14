@@ -692,11 +692,14 @@ def list_ingestion_datasets():
 
 
 @app.get("/api/ingestion/datasets/{dataset_name}/files")
-def list_ingestion_dataset_files(dataset_name: str):
+def list_ingestion_dataset_files(dataset_name: str, db: Session = Depends(get_db)):
     """
     Lista los archivos individuales contenidos en un dataset en GCS.
     """
-    files = ingestion_service.list_dataset_files(dataset_name)
+    try:
+        files = ingestion_service.list_dataset_files(dataset_name, db=db)
+    except IngestionValidationError:
+        raise HTTPException(status_code=422, detail="Nombre de dataset inválido.") from None
     return {"dataset": dataset_name, "files": files}
 
 

@@ -2,8 +2,10 @@ import os
 import asyncio
 import base64
 import hashlib
+import io
 import tempfile
 import google_crc32c
+import soundfile as sf
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any, Tuple
@@ -284,8 +286,8 @@ class IngestionService:
         files = []
         for f in sorted(target_dir.rglob("*")):
             if f.is_file() and f.suffix.lower() in SUPPORTED_EXTS:
-                rel_parents = f.relative_to(target_dir).parts[:-1]
-                class_name = rel_parents[-1] if rel_parents else "General"
+                relative = f.relative_to(target_dir)
+                class_name = relative.parts[0] if len(relative.parts) > 1 else "General"
 
                 try:
                     stat = f.stat()
@@ -298,14 +300,14 @@ class IngestionService:
                 files.append({
                     "name": f.name,
                     "class_name": class_name,
-                    "path": f"datasets/{dataset_name}/{class_name}/{f.name}",
+                    "path": f"datasets/{dataset_name}/{relative.as_posix()}",
                     "size_bytes": size_bytes,
                     "updated": mod_iso,
                     "source": "local",
                 })
         return files
 
-    def list_dataset_files(self, dataset_name: str) -> List[Dict[str, Any]]:
+    def _list_dataset_file_inventory(self, dataset_name: str) -> List[Dict[str, Any]]:
         """
         Lista todos los archivos de audio dentro de un dataset específico.
         Intenta consultar GCS; si GCS no está disponible o falla, degrada grácilmente a los archivos locales.
@@ -316,10 +318,12 @@ class IngestionService:
             blobs = list(client.list_blobs(self.bucket_name, prefix=prefix))
             files = []
             for blob in blobs:
+                if blob.name.endswith("/"):
+                    continue
                 parts = blob.name.split("/")
                 if len(parts) >= 4 and parts[3]:
                     class_name = parts[2]
-                    filename = parts[3]
+                    filename = parts[-1]
                 elif len(parts) == 3 and parts[2]:
                     class_name = "General"
                     filename = parts[2]
@@ -340,6 +344,42 @@ class IngestionService:
             return files
         except Exception:
             return self.list_local_dataset_files(dataset_name)
+
+    def list_dataset_files(self, dataset_name: str, db: Optional[Any] = None) -> List[Dict[str, Any]]:
+        """Inventory with optional recorded metadata, not current cloud verification."""
+        self.validate_dataset_names([dataset_name])
+        files = self._list_dataset_file_inventory(dataset_name)
+        if db is None:
+            return files
+        for item in files:
+            item["recorded_metadata"] = None
+        try:
+            from app.models.dataset import ConjuntoDatos, Audio
+
+            rows = db.query(Audio).join(ConjuntoDatos).filter(ConjuntoDatos.nombre == dataset_name).all()
+            by_route = {row.ruta_gcp: row for row in rows}
+            for item in files:
+                row = by_route.get(f"gs://{self.bucket_name}/{item['path']}")
+                if row is not None:
+                    item["recorded_metadata"] = {
+                        "sample_rate_hz": row.frecuencia_muestreo,
+                        "duration_seconds": row.duracion_segundos,
+                        "source": "database",
+                    }
+        except Exception:
+            db.rollback()
+        return files
+
+    @staticmethod
+    def _read_audio_metadata(source) -> Tuple[Optional[int], Optional[float]]:
+        """Observe container metadata without decoding/resampling the recording."""
+        try:
+            info = sf.info(io.BytesIO(source) if isinstance(source, bytes) else str(source))
+            if info.samplerate > 0 and info.frames >= 0:
+                return int(info.samplerate), info.frames / info.samplerate
+        except Exception:
+            pass
+        return None, None
 
     def preprocess_dataset_to_tensors(self, dataset_name: str) -> Dict[str, Any]:
         """
@@ -620,6 +660,8 @@ class IngestionService:
                     cname = f.get("class_name", "General")
                     fsize = f.get("size", 0)
                     object_route = f"gs://{self.bucket_name}/{f['object_key']}"
+                    local_path = self._filesystem_path(target_base_dir / Path(f["object_key"][len(prefix):]))
+                    sample_rate, duration = self._read_audio_metadata(local_path)
                     audio_obj = (
                         db.query(Audio)
                         .filter_by(id_conjunto_datos=ds.id_conjunto_datos, ruta_gcp=object_route)
@@ -631,13 +673,15 @@ class IngestionService:
                             nombre_archivo=fname,
                             ruta_gcp=object_route,
                             clase=cname,
-                            frecuencia_muestreo=22050,
-                            duracion_segundos=5.0,
+                            frecuencia_muestreo=sample_rate,
+                            duracion_segundos=duration,
                             tamano_bytes=fsize,
                         )
                         db.add(audio_obj)
                     else:
                         audio_obj.clase = cname
+                        audio_obj.frecuencia_muestreo = sample_rate
+                        audio_obj.duracion_segundos = duration
                         if fsize > 0:
                             audio_obj.tamano_bytes = fsize
 
@@ -740,6 +784,7 @@ class IngestionService:
 
                 for filename, content in accepted_files:
                     safe_file = filename
+                    sample_rate, duration = self._read_audio_metadata(content)
                     object_route = f"{gcp_path}{safe_class}/{safe_file}"
                     audio_obj = (
                         db.query(Audio)
@@ -752,13 +797,15 @@ class IngestionService:
                             nombre_archivo=safe_file,
                             ruta_gcp=object_route,
                             clase=safe_class,
-                            frecuencia_muestreo=22050,
-                            duracion_segundos=5.0,
+                            frecuencia_muestreo=sample_rate,
+                            duracion_segundos=duration,
                             tamano_bytes=len(content),
                         )
                         db.add(audio_obj)
                     else:
                         audio_obj.tamano_bytes = len(content)
+                        audio_obj.frecuencia_muestreo = sample_rate
+                        audio_obj.duracion_segundos = duration
 
                 from sqlalchemy import func
                 db.flush()

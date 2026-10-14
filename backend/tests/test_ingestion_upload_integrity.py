@@ -1,6 +1,7 @@
 """Upload identity and counters through public interfaces, without cloud access."""
 import io
 import wave
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import create_engine
@@ -12,12 +13,12 @@ from app.services.ingestion import IngestionService
 from app.services import training
 
 
-def synthetic_wav(frames=8000):
+def synthetic_wav(frames=8000, sample_rate=8000):
     output = io.BytesIO()
     with wave.open(output, "wb") as audio:
         audio.setnchannels(1)
         audio.setsampwidth(2)
-        audio.setframerate(8000)
+        audio.setframerate(sample_rate)
         audio.writeframes(b"\0\0" * frames)
     return output.getvalue()
 
@@ -44,6 +45,10 @@ def upload_environment(tmp_path, monkeypatch):
 
         def bucket(self, name):
             return Bucket()
+
+        def list_blobs(self, bucket, prefix):
+            return [SimpleNamespace(name=name, size=len(content), updated=None)
+                    for name, content in objects.items() if name.startswith(prefix)]
 
     monkeypatch.setattr("google.cloud.storage.Client", Client)
     service = IngestionService(bucket_name="test-bucket", local_base_dir=tmp_path / "raw",

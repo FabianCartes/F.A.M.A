@@ -7,3 +7,4 @@
 | Inferencia comprobada | Ejecución exitosa de un modelo sobre una entrada concreta. No demuestra calidad general ni garantiza ejecuciones posteriores. |
 | Activación | Designación explícita del modelo predeterminado. Descubrir, seleccionar o recuperar disponibilidad no constituye por sí solo una activación. |
 | Alta inicial de administrador | Creación de la primera cuenta de administración a cargo del operador. No es registro público ni cambio de rol de una cuenta existente. |
+| Metadatos acústicos registrados | Frecuencia y duración conservadas de una observación anterior. Su presencia no certifica el contenido actual, la calidad ni la aptitud del audio para entrenar. |
