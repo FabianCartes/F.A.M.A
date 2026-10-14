@@ -31,6 +31,8 @@ def upload_environment(tmp_path, monkeypatch):
             self.name = name
 
         def upload_from_string(self, content, **kwargs):
+            if self.name in Client.failures:
+                raise OSError("Synthetic provider failure /private/credentials.json")
             objects[self.name] = content
 
     class Bucket:
@@ -38,6 +40,8 @@ def upload_environment(tmp_path, monkeypatch):
             return Blob(name)
 
     class Client:
+        failures = set()
+
         def bucket(self, name):
             return Bucket()
 
@@ -185,3 +189,83 @@ def test_object_uri_at_500_characters_can_be_uploaded(upload_environment):
     assert result["uploaded"] == 1
     assert result["db_persisted"] is True
     assert len(objects) == 1
+
+
+def test_partial_upload_continues_and_registers_only_accepted_files(upload_environment, monkeypatch):
+    service, db, objects = upload_environment
+    monkeypatch.setattr("google.cloud.storage.Client.failures", {"datasets/AvesChilenas/Chucao/failed.wav"})
+    content = synthetic_wav(frames=524288)
+
+    result = service.upload_files_to_gcs(
+        [("first.wav", content), ("failed.wav", content), ("last.wav", content)],
+        "AvesChilenas", "Chucao", db=db
+    )
+
+    assert result["uploaded"] == 2
+    assert result["failed"] == 1
+    assert result["files"] == ["first.wav", "last.wav"]
+    assert result["errors"] == [{"filename": "failed.wav", "error": "No se pudo subir el archivo."}]
+    assert result["db_persisted"] is True
+    dataset, = training.training_service.get_available_datasets(db=db)
+    assert dataset["audio_count"] == 2
+    assert dataset["size_mb"] == 2.0
+    assert dataset["estado"] == "subida_parcial"
+    assert set(objects) == {"datasets/AvesChilenas/Chucao/first.wav", "datasets/AvesChilenas/Chucao/last.wav"}
+
+
+def test_total_upload_failure_registers_no_new_audio(upload_environment, monkeypatch):
+    service, db, objects = upload_environment
+    monkeypatch.setattr("google.cloud.storage.Client.failures", {"datasets/AvesChilenas/Chucao/audio.wav"})
+
+    result = service.upload_files_to_gcs([("audio.wav", synthetic_wav())], "AvesChilenas", "Chucao", db=db)
+
+    assert result["status"] == "failed"
+    assert result["uploaded"] == 0
+    assert result["failed"] == 1
+    assert result["files"] == []
+    assert objects == {}
+    dataset, = training.training_service.get_available_datasets(db=db)
+    assert dataset["audio_count"] == 0
+    assert dataset["size_mb"] == 0
+    assert dataset["estado"] == "subida_parcial"
+
+
+def test_failed_refresh_preserves_previous_audio_and_retry_updates_it(upload_environment, monkeypatch):
+    service, db, objects = upload_environment
+    original = synthetic_wav(frames=524288)
+    replacement = synthetic_wav(frames=1048576)
+    first = service.upload_files_to_gcs([("audio.wav", original)], "AvesChilenas", "Chucao", db=db)
+    assert first["status"] == "completed"
+    monkeypatch.setattr("google.cloud.storage.Client.failures", {"datasets/AvesChilenas/Chucao/audio.wav"})
+
+    failed = service.upload_files_to_gcs([("audio.wav", replacement)], "AvesChilenas", "Chucao", db=db)
+
+    assert failed["status"] == "failed"
+    assert failed["db_persisted"] is True
+    dataset, = training.training_service.get_available_datasets(db=db)
+    assert dataset["audio_count"] == 1
+    assert dataset["size_mb"] == 1.0
+    assert dataset["estado"] == "subida_parcial"
+    assert objects["datasets/AvesChilenas/Chucao/audio.wav"] == original
+
+    monkeypatch.setattr("google.cloud.storage.Client.failures", set())
+    retried = service.upload_files_to_gcs([("audio.wav", replacement)], "AvesChilenas", "Chucao", db=db)
+
+    assert retried["status"] == "completed"
+    assert retried["failed"] == 0
+    assert retried["errors"] == []
+    dataset, = training.training_service.get_available_datasets(db=db)
+    assert dataset["audio_count"] == 1
+    assert dataset["size_mb"] == 2.0
+    assert dataset["estado"] == "subido"
+
+
+def test_upload_without_database_reports_only_transfer_completion(upload_environment):
+    service, _, _ = upload_environment
+
+    result = service.upload_files_to_gcs([("audio.wav", synthetic_wav())], "AvesChilenas", "Chucao")
+
+    assert result["status"] == "completed"
+    assert result["db_persisted"] is False
+    assert result["db_error"] is None
+    assert result["failed"] == 0

@@ -691,6 +691,8 @@ class IngestionService:
 
         uploaded = 0
         uploaded_names = []
+        accepted_files = []
+        errors = []
 
         # Keep validated identities instead of silently renaming destinations.
         safe_ds = dataset_name
@@ -699,11 +701,16 @@ class IngestionService:
         for filename, content in files:
             safe_file = filename
             blob_name = f"datasets/{safe_ds}/{safe_class}/{safe_file}"
-            blob = bucket.blob(blob_name)
-            content_type = "audio/wav" if safe_file.lower().endswith(".wav") else "application/octet-stream"
-            blob.upload_from_string(content, content_type=content_type)
+            try:
+                blob = bucket.blob(blob_name)
+                content_type = "audio/wav" if safe_file.lower().endswith(".wav") else "application/octet-stream"
+                blob.upload_from_string(content, content_type=content_type)
+            except Exception:
+                errors.append({"filename": filename, "error": "No se pudo subir el archivo."})
+                continue
             uploaded += 1
             uploaded_names.append(safe_file)
+            accepted_files.append((filename, content))
 
         # Persistencia en PostgreSQL
         db_persisted = False
@@ -714,21 +721,23 @@ class IngestionService:
 
                 gcp_path = f"gs://{self.bucket_name}/datasets/{safe_ds}/"
                 ds = db.query(ConjuntoDatos).filter_by(nombre=safe_ds).first()
+                upload_status = "subida_parcial" if errors else "subido"
 
                 if ds is None:
                     ds = ConjuntoDatos(
                         nombre=safe_ds,
                         ruta_gcp=gcp_path,
-                        estado="subido",
+                        estado=upload_status,
                         tamano_total_bytes=0,
                         cantidad_audios=0,
                     )
                     db.add(ds)
                     db.flush()
                 else:
+                    ds.estado = upload_status
                     db.flush()
 
-                for filename, content in files:
+                for filename, content in accepted_files:
                     safe_file = filename
                     object_route = f"{gcp_path}{safe_class}/{safe_file}"
                     audio_obj = (
@@ -765,9 +774,12 @@ class IngestionService:
 
         return {
             "dataset": safe_ds,
+            "status": ("partial" if uploaded else "failed") if (errors or db_error) else "completed",
             "class_label": safe_class,
             "uploaded": uploaded,
+            "failed": len(errors),
             "files": uploaded_names,
+            "errors": errors,
             "db_persisted": db_persisted,
             "db_error": db_error,
         }

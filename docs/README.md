@@ -17,7 +17,7 @@ docs/
 ├── arquitectura/                # Diseño de sistemas, pipelines, MLOps y despliegue
 ├── limites/                     # Límites matemáticos, físicos y problemas conocidos
 ├── manuales/                    # Uso, estado para retomar, revisión y despliegue
-├── adr/                         # Architectural Decision Records (ADR 0001 a 0027)
+├── adr/                         # Architectural Decision Records (ADR 0001 a 0028)
 ├── receipts/                    # Recibos técnicos reproducibles en formato JSON (RDD)
 ├── duplicados-exactos/           # Tarea acotada: admisión de feedback sin duplicados SHA-256
 └── images/                      # Diagramas, matrices de confusión y gráficos vectoriales
@@ -85,7 +85,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`backend_permissions_integration.json`](./receipts/backend_permissions_integration.json): Verificación PERM-3 del servicio público de feedback en contenedor aislado; propietario y modos tras aprobaciones, reinicio y replay. Contexto mínimo, no prueba del despliegue completo ni autoridad de entrega.
 
 ### 6. [`docs/adr/`](./adr/) — Architectural Decision Records
-Registro de las 27 decisiones de arquitectura fundamentales del sistema:
+Registro de las 28 decisiones de arquitectura fundamentales del sistema:
 * `ADR 0001`: Migración de AudioCNN a EfficientNet-B0.
 * `ADR 0002`: Particionamiento Estratificado a Nivel de Grabador (Zero Leakage).
 * `ADR 0003`: Adopción de Focal Loss frente a Cross-Entropy estándar.
@@ -113,3 +113,4 @@ Registro de las 27 decisiones de arquitectura fundamentales del sistema:
 * [`ADR 0025`](./adr/0025-configuracion-runtime-y-contexto-sin-credenciales.md): Configuración existente transmitida por Compose y JSON externos excluidos del contexto backend; prueba con cliente Docker/API simulada, sin imágenes ni servicios reales.
 * [`ADR 0026`](./adr/0026-sincronizacion-por-contenido-y-publicacion-local.md): Sincronización por MD5/CRC32C, staging local y registros de transferencias aceptadas por URI completa; preservación previa y límites de atomicidad.
 * [`ADR 0027`](./adr/0027-rutas-portables-y-confinadas-en-descarga.md): Componentes portables, jerarquía y confinamiento en descarga; extensión a nombres de subida y HTTP 422 sanitizado; límites de concurrencia y atomicidad de lotes.
+* [`ADR 0028`](./adr/0028-resultados-parciales-en-subida-de-audios.md): Subida continúa por archivo, registra solo transferencias confirmadas y distingue estados completed/partial/failed; sin rollback cloud ni atomicidad.

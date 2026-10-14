@@ -136,6 +136,7 @@ def test_upload_database_failure_is_sanitized_and_does_not_claim_persistence(cli
         event.remove(engine, "before_cursor_execute", fail_database)
 
     assert response.status_code == 200  # Preserve the existing partial-result contract.
+    assert response.json()["status"] == "partial"
     assert response.json()["db_persisted"] is False
     assert response.json()["db_error"] == "No se pudieron guardar los registros de ingesta."
     assert "synthetic-secret" not in response.text
@@ -145,6 +146,7 @@ def test_upload_database_failure_is_sanitized_and_does_not_claim_persistence(cli
     retry = client.post("/api/ingestion/upload", data={"dataset_name": "AvesChilenas"},
                         files={"files": ("audio.wav", synthetic_wav(), "audio/wav")})
     assert retry.status_code == 200
+    assert retry.json()["status"] == "completed"
     assert retry.json()["db_persisted"] is True
     assert retry.json()["db_error"] is None
     dataset, = training.training_service.get_available_datasets(db=db)
@@ -208,3 +210,25 @@ def test_sync_local_failure_returns_partial_result_and_registers_only_accepted_a
     assert dataset["audio_count"] == 1
     assert dataset["estado"] == "sincronizacion_parcial"
     assert blocked.read_bytes() == b"previous local file"
+
+
+def test_upload_partial_transfer_reports_status_and_keeps_successful_registration(client, upload_environment, monkeypatch):
+    _, db, objects = upload_environment
+    monkeypatch.setattr("google.cloud.storage.Client.failures", {"datasets/AvesChilenas/General/failed.wav"})
+    response = client.post("/api/ingestion/upload", data={"dataset_name": "AvesChilenas"}, files=[
+        ("files", ("accepted.wav", synthetic_wav(), "audio/wav")),
+        ("files", ("failed.wav", synthetic_wav(), "audio/wav")),
+    ])
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["status"] == "partial"
+    assert result["uploaded"] == 1
+    assert result["failed"] == 1
+    assert result["db_persisted"] is True
+    assert result["errors"] == [{"filename": "failed.wav", "error": "No se pudo subir el archivo."}]
+    assert "/private" not in response.text
+    assert len(objects) == 1
+    dataset, = training.training_service.get_available_datasets(db=db)
+    assert dataset["audio_count"] == 1
+    assert dataset["estado"] == "subida_parcial"
