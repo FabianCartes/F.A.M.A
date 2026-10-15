@@ -1,5 +1,7 @@
 # Informe Técnico: Ensamble Heterogéneo ConvNeXt-Nano + EfficientNet-B0 con Diversificación Inductiva (RDD)
 
+> **Nota de vigencia — retiro del entrenamiento legacy:** este documento conserva decisiones y resultados históricos. Los scripts standalone, las recetas de entrenamiento y las CLI PoC que menciona fueron retirados; no son instrucciones operativas vigentes. El entrenamiento soportado parte de la UI y `POST /api/training/start`. Los módulos importables compartidos y la evaluación independiente se conservan. Véase la [revisión actual de FastAPI y entrenamiento](../arquitectura/revision-fastapi.md).
+
 **Proyecto:** Framework MLOps Híbrido para Clasificación de Audio (F.A.M.A.)  
 **Fecha:** Septiembre 2026  
 **Fase:** Iteración 13 - Ensamble Heterogéneo con Diversidad de Inductores Bioacústicos  

@@ -1,5 +1,7 @@
 # Resumen Técnico de Integración: Novedades del Repositorio y Resolución de Conflictos
 
+> **Nota de vigencia:** el contenido siguiente preserva el estado histórico descrito durante aquella integración. Las recetas YAML, el entrenador genérico y los scripts CLI de entrenamiento mencionados aquí fueron retirados por T1; sus comandos quedan retirados y no son el flujo operativo vigente. El flujo actual para entrenar parte de la UI y llega a `POST /api/training/start`. `backend/poc/train.py` y `backend/poc/benchmark.py` siguen siendo módulos importables para compatibilidad compartida, no CLIs soportadas. Esta nota no modifica la evidencia histórica del informe.
+
 Este documento detalla todas las nuevas implementaciones, cambios arquitectónicos y correcciones aplicadas al integrar los 16 commits remotos de **Kevin Cárdenas** en la rama principal de F.A.M.A.
 
 ---
@@ -55,7 +57,7 @@ El compañero de equipo implementó dos grandes hitos de ingeniería acústica y
 | `training/pipelines/` | - `hpss_frontend.py`: Separación armónica-percusiva en 3 canales.<br>- `additive_mixing.py`: Mezcla aditiva con audio de fondo.<br>- `multitask_mapping.py`: Mapeo multi-etiqueta (falla mecánica + subsistema).<br>- `dataset.py`: `GenericAudioDataset` parametrizado por `AudioConfig`.<br>- `split.py`: Particionamiento estratificado a prueba de fugas de datos.<br>- `losses.py`: Soporte para Cross-Entropy, Focal Loss y Asymmetric Loss (ASL). |
 | `training/models/` | `multitask_bioacoustic.py` (ResNet34d/EfficientNet multitarea) y `panns_cnn14.py` (PANNs CNN14). |
 | `training/exporters/` | `bundle_exporter.py`: Exportación a bundles desacoplados con pesos y manifiesto. |
-| `training/recipes/` | Recetas YAML para entrenamiento reproducible de motores con ConvNeXt, EfficientNet y ResNet. |
+| `training/recipes/` | Subsistema histórico retirado: recetas YAML de entrenamiento de motores con ConvNeXt, EfficientNet y ResNet. |
 
 ---
 

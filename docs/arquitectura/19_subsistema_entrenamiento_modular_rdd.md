@@ -1,5 +1,7 @@
 # Informe RDD Hito 19: Subsistema Modular de Entrenamiento y Empaquetado de Modelos
 
+> **Nota de vigencia:** este informe conserva la descripción y la evidencia histórica del subsistema de recetas YAML, `GenericModelTrainer` y exportación de bundles. Ese entrenador, sus recetas y scripts CLI de entrenamiento fueron retirados por T1; los comandos que los invocaban quedan retirados. No es una guía del flujo operativo actual: el entrenamiento soportado se inicia desde la UI mediante `POST /api/training/start` y `backend/app/services/training.py`. Los módulos PoC `backend/poc/train.py` y `backend/poc/benchmark.py` permanecen importables para compatibilidad compartida, pero ya no exponen esos bloques CLI ni son vías de entrenamiento soportadas. Esta nota no reescribe la evidencia histórica del informe.
+
 **Fecha:** 15 de Septiembre de 2026  
 **Rama:** `feat/backend-multi-model-support`  
 **Metodología:** SDD (OpenSpec) + TDD Estricto + RDD (Receipt-Driven Development)  

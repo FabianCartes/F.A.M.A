@@ -62,9 +62,11 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`03_orquestador_fastapi_gcs_postgresql.md`](./arquitectura/03_orquestador_fastapi_gcs_postgresql.md): Arquitectura del orquestador backend con FastAPI.
 * [`04_saneamiento_y_transcodificacion_audio.md`](./arquitectura/04_saneamiento_y_transcodificacion_audio.md): Pipeline de saneamiento y normalización de audio crudo.
 * [`18_soporte_multimodelo_backend_rdd.md`](./arquitectura/18_soporte_multimodelo_backend_rdd.md): Desacoplamiento de inferencia con Patrón Strategy y ModelRegistry.
-* [`19_subsistema_entrenamiento_modular_rdd.md`](./arquitectura/19_subsistema_entrenamiento_modular_rdd.md): Subsistema modular de recetas YAML y exportación de bundles.
+* [`19_subsistema_entrenamiento_modular_rdd.md`](./arquitectura/19_subsistema_entrenamiento_modular_rdd.md): Informe histórico del subsistema modular de recetas YAML y exportación de bundles; no describe el flujo operativo vigente.
+* [`limpieza-entrenamiento-legacy.md`](./arquitectura/limpieza-entrenamiento-legacy.md): Seguimiento de la retirada aprobada de herramientas legacy y revisión FastAPI.
+* [`revision-fastapi.md`](./arquitectura/revision-fastapi.md): Revisión documental de patrones FastAPI, deuda de mantenibilidad y límites del worker de entrenamiento; propuestas no implementadas.
 * [`20_modelo_de_producto_despliegue_y_arquitectura_operativa.md`](./arquitectura/20_modelo_de_producto_despliegue_y_arquitectura_operativa.md): Estrategia de producto on-premise, concurrencia y contenedores Docker.
-* [`21_resumen_actualizacion_remota_y_nuevas_capacidades.md`](./arquitectura/21_resumen_actualizacion_remota_y_nuevas_capacidades.md): Resumen de integración remota y resolución de conflictos.
+* [`21_resumen_actualizacion_remota_y_nuevas_capacidades.md`](./arquitectura/21_resumen_actualizacion_remota_y_nuevas_capacidades.md): Informe histórico de integración remota; las recetas de entrenamiento descritas no son el flujo operativo vigente.
 * [`22_arquitectura_universal_multidominio_y_limites_acusticos.md`](./arquitectura/22_arquitectura_universal_multidominio_y_limites_acusticos.md): Especificación de F.A.M.A. como motor No-Code para cualquier dataset y límites físicos/computacionales.
 * [`22_propuesta_vista_ayuda_y_centro_de_conocimiento.md`](./arquitectura/22_propuesta_vista_ayuda_y_centro_de_conocimiento.md): Diseño y especificación del centro de conocimiento e interactividad en frontend.
 
@@ -89,6 +91,8 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`05_restriccion_formato_audio_y_captura_microfono.md`](./limites/05_restriccion_formato_audio_y_captura_microfono.md): Restricción estricta de formato PCM .wav y pipeline de captura por micrófono web.
 
 ### Evidencia operacional
+* [`training-legacy-final-verification.json`](./receipts/training-legacy-final-verification.json): Verificación independiente del candidato final, incluido el retiro de orquestadores Python y reexportación: 297 pruebas aprobadas, stdout/stderr y selección aislada preservados; sin validación de servicios reales ni revisión nativa.
+* [`training-legacy-independent-verification.json`](./receipts/training-legacy-independent-verification.json): Evidencia histórica del retiro inicial de CLI/entrenador legacy: 322 pruebas aprobadas; la salvedad de funciones Python todavía invocables fue resuelta posteriormente y no describe el candidato final.
 * [`backend_permissions_integration.json`](./receipts/backend_permissions_integration.json): Verificación PERM-3 del servicio público de feedback en contenedor aislado; propietario y modos tras aprobaciones, reinicio y replay. Contexto mínimo, no prueba del despliegue completo ni autoridad de entrega.
 * [`model-11-evaluation-migration.json`](./receipts/model-11-evaluation-migration.json): Historial inmutable de migración EVAL-6B: primera creación exitosa, segundo intento fallido y contexto de la corrección verificada.
 * [`model-11-real-evaluation.json`](./receipts/model-11-real-evaluation.json): Informe inmutable de reevaluación real del modelo #11 (val/test); no certifica calidad ni autoriza activación.

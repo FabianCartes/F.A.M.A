@@ -1,5 +1,7 @@
 # ADR 0012: Unificación de Almacenamiento de Datos Crudos (SSOT) en `backend/data/raw`
 
+> **Nota de vigencia — retiro del entrenamiento legacy:** este documento conserva decisiones y resultados históricos. Los scripts standalone, las recetas de entrenamiento y las CLI PoC que menciona fueron retirados; no son instrucciones operativas vigentes. El entrenamiento soportado parte de la UI y `POST /api/training/start`. Los módulos importables compartidos y la evaluación independiente se conservan. Véase la [revisión actual de FastAPI y entrenamiento](../arquitectura/revision-fastapi.md).
+
 * **Estado:** Aceptado / Implementado  
 * **Fecha:** 2026-09-26  
 * **Decisores:** Equipo F.A.M.A.  
@@ -12,7 +14,7 @@
 Durante la evolución del proyecto y la incorporación de la vista de **Ingesta y Data Lake** conectada a Google Cloud Storage (GCS), se originó una inconsistencia de almacenamiento denominada *"split-brain"* entre los subsistemas de entrenamiento y el servicio de ingesta:
 
 1. **Scripts CLI y Recetas de Entrenamiento Preexistentes:**  
-   Los scripts de entrenamiento de diagnóstico industrial de motores ([`backend/train_car_engine_model.py`](../../backend/train_car_engine_model.py), [`backend/train_and_ensemble_engines.py`](../../backend/train_and_ensemble_engines.py), [`backend/training/prepare_engine_data.py`](../../backend/training/prepare_engine_data.py)), las recetas YAML en [`backend/training/recipes/`](../../backend/training/recipes/) y los scripts PoC bioacústicos ([`backend/poc/`](../../backend/poc/)) consumían los audios y metadatos desde carpetas en la raíz del repositorio:
+   Los scripts de entrenamiento de diagnóstico industrial de motores (`backend/train_car_engine_model.py`, `backend/train_and_ensemble_engines.py`, [`backend/training/prepare_engine_data.py`](../../backend/training/prepare_engine_data.py)), las recetas YAML en `backend/training/recipes/` y los scripts PoC bioacústicos ([`backend/poc/`](../../backend/poc/)) consumían los audios y metadatos desde carpetas en la raíz del repositorio:
    ```
    data/raw/
    data/engine_diagnostics/

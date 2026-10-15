@@ -1,5 +1,7 @@
 # Informe Maestro: Super-Ensamble Tri-Modelo Heterogéneo y Estado del Arte en Bioacústica F.A.M.A. (88.68% Macro F1)
 
+> **Nota de vigencia — retiro del entrenamiento legacy:** este documento conserva decisiones y resultados históricos. Los scripts standalone, las recetas de entrenamiento y las CLI PoC que menciona fueron retirados; no son instrucciones operativas vigentes. El entrenamiento soportado parte de la UI y `POST /api/training/start`. Los módulos importables compartidos y la evaluación independiente se conservan. Véase la [revisión actual de FastAPI y entrenamiento](../arquitectura/revision-fastapi.md).
+
 **Proyecto:** Framework MLOps Híbrido para Clasificación de Audio (F.A.M.A.)  
 **Fecha:** Septiembre 2026  
 **Fase:** Consolidado Final de Laboratorio - Optimización Multi-Arquitectura y Récord Absoluto  

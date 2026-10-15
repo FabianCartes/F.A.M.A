@@ -1,5 +1,7 @@
 # Metodología y Arquitectura del Modelo Campeón F.A.M.A. (83.76% Macro F1)
 
+> **Nota de vigencia — retiro del entrenamiento legacy:** este documento conserva decisiones y resultados históricos. Los scripts standalone, las recetas de entrenamiento y las CLI PoC que menciona fueron retirados; no son instrucciones operativas vigentes. El entrenamiento soportado parte de la UI y `POST /api/training/start`. Los módulos importables compartidos y la evaluación independiente se conservan. Véase la [revisión actual de FastAPI y entrenamiento](../arquitectura/revision-fastapi.md).
+
 **Proyecto:** Framework MLOps Híbrido para Clasificación de Audio (F.A.M.A.)  
 **Fecha:** Septiembre 2026  
 **Checkpoint Oficial:** [`checkpoints/efficientnet_gpu_pipeline_35e_best.pt`](../checkpoints/efficientnet_gpu_pipeline_35e_best.pt)  
