@@ -323,6 +323,9 @@ def test_catalogue_rejects_val_test_from_different_admitted_manifest_pairs(catal
 
     assert response.status_code == 200
     assert all(model["id"] != "fama_trained_model_400" for model in response.json()["models"])
+    assert all("admitted_completed" not in split
+               for model in response.json()["models"]
+               for split in (model.get("evaluations") or {}).values())
     assert response.json()["publication_errors"] == [{
         "model_id": "fama_trained_model_400",
         "code": "standard_evaluation_invalid",
@@ -337,7 +340,7 @@ def test_catalogue_keeps_unrecognized_standard_failure_generic_and_sanitized(cat
     secret = "/private/guard/path token=synthetic-secret"
     def unexpected_failure(*args, **kwargs):
         raise RuntimeError(secret)
-    monkeypatch.setattr(standard_evaluation_guard, "require_standard_reports", unexpected_failure)
+    monkeypatch.setattr(standard_evaluation_guard, "select_admitted_standard_pair", unexpected_failure)
 
     response = client.get("/api/models")
 
@@ -378,6 +381,64 @@ def test_catalogue_accepts_shared_manifest_pair_with_independent_split_manifests
         "test_manifest_sha256": test["manifest_sha256"],
     }, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8")
     assert val_pair == {"version": 1, "sha256": hashlib.sha256(canonical).hexdigest()}
+
+
+def test_catalogue_marks_the_guard_admitted_pair_separately_from_newer_incompatible_reports(
+    catalogue, monkeypatch,
+):
+    from app.models.training import ModelEvaluation
+    from app.schemas.evaluation import EvaluationIdentity
+    from app.services.evaluations import EvaluationService
+    from app.services.standard_evaluation_guard import (
+        ADMITTED_MANIFEST_PAIR_KEY, admitted_manifest_pair_provenance,
+    )
+
+    client, _, _, engine = catalogue
+    seed_standard_model(catalogue, 405)
+    install_torch_metadata_adapter(monkeypatch)
+    original_ids = {}
+    with Session(engine) as db:
+        originals = db.query(ModelEvaluation).filter_by(
+            id_modelo=405, status="completed").all()
+        for row in originals:
+            original_ids[row.split] = row.id_evaluation
+    assert set(original_ids) == {"val", "test"}
+
+    newer_ids = {}
+    manifests = {"val": "f" * 64, "test": "e" * 64}
+    pair = admitted_manifest_pair_provenance(manifests["val"], manifests["test"])
+    for split in ("val", "test"):
+        with Session(engine) as db:
+            original = db.get(ModelEvaluation, original_ids[split])
+            identity = {field: getattr(original, field) for field in EvaluationIdentity.model_fields}
+            identity["manifest_sha256"] = manifests[split]
+            identity["predictor_config"] = {
+                **identity["predictor_config"],
+                "job_id": "newer-incompatible-runtime",
+                ADMITTED_MANIFEST_PAIR_KEY: pair,
+            }
+            evaluations = EvaluationService(db)
+            attempt = evaluations.create(identity)
+            evaluations.start(attempt["id_evaluation"])
+            newer_ids[split] = evaluations.complete(
+                attempt["id_evaluation"], original.report)["id_evaluation"]
+
+    response = client.get("/api/models")
+
+    assert response.status_code == 200
+    model = next(item for item in response.json()["models"] if item["id"] == "fama_trained_model_405")
+    evaluations = model["evaluations"]
+    assert evaluations["val"]["latest_completed"]["id_evaluation"] == newer_ids["val"]
+    assert evaluations["test"]["latest_completed"]["id_evaluation"] == newer_ids["test"]
+    admitted_val = evaluations["val"]["admitted_completed"]
+    admitted_test = evaluations["test"]["admitted_completed"]
+    assert admitted_val["id_evaluation"] == original_ids["val"]
+    assert admitted_test["id_evaluation"] == original_ids["test"]
+    assert admitted_val["provenance"]["manifest_sha256"] == "d" * 64
+    assert admitted_test["provenance"]["manifest_sha256"] == "e" * 64
+    assert admitted_val["id_evaluation"] != evaluations["val"]["latest_completed"]["id_evaluation"]
+    assert admitted_test["id_evaluation"] != evaluations["test"]["latest_completed"]["id_evaluation"]
+    assert "/private/" not in response.text
 
 
 def test_catalogue_keeps_valid_standard_and_legacy_predictors_lazy(catalogue, monkeypatch):
@@ -443,6 +504,7 @@ def test_catalogue_preserves_old_coherent_pair_after_new_incomplete_attempt(
     with Session(engine) as db:
         old_val = db.query(ModelEvaluation).filter_by(
             id_modelo=403, split="val", status="completed").one()
+        old_val_id = old_val.id_evaluation
         old_manifest = old_val.manifest_sha256
         identity = {field: getattr(old_val, field) for field in EvaluationIdentity.model_fields}
         identity["manifest_sha256"] = "f" * 64
@@ -462,6 +524,7 @@ def test_catalogue_preserves_old_coherent_pair_after_new_incomplete_attempt(
     assert response.status_code == 200
     assert val["latest_attempt"]["status"] == retry_status
     assert val["latest_completed"]["provenance"]["manifest_sha256"] == old_manifest
+    assert val["admitted_completed"]["id_evaluation"] == old_val_id
     assert response.json()["publication_errors"] == []
     assert registry.get("fama_trained_model_403") is cached
     assert registry.get("403") is cached

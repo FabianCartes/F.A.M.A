@@ -31,6 +31,7 @@ class CompletedEvaluationSummary(BaseModel):
 class EvaluationSplitSummary(BaseModel):
     latest_attempt: Optional[EvaluationAttemptSummary] = None
     latest_completed: Optional[CompletedEvaluationSummary] = None
+    admitted_completed: Optional[CompletedEvaluationSummary] = None
 
 
 class ModelEvaluations(BaseModel):

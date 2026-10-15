@@ -219,6 +219,7 @@ class ModelRegistry:
 
     def publish_from_db(
         self, db: Any, checkpoints_root: Optional[Path] = None,
+        admitted_pair_ids: Optional[Dict[str, tuple[int, int]]] = None,
     ) -> List[Dict[str, Any]]:
         """Reconcile and publish persisted predictors without activation or DB writes.
 
@@ -232,6 +233,8 @@ class ModelRegistry:
         root = Path(checkpoints_root) if checkpoints_root is not None else Path(__file__).resolve().parents[2] / "checkpoints"
         errors = []
         with self._publication_lock:
+            if admitted_pair_ids is not None:
+                admitted_pair_ids.clear()
             try:
                 models = db.query(Modelo).order_by(Modelo.id_modelo.desc()).all()
             except Exception:
@@ -247,17 +250,18 @@ class ModelRegistry:
                     self._block_db_model(model, key, basename, hash_error)
                     errors.append({"model_id": key, "code": hash_error})
                     continue
+                admitted_pair = None
                 if str(model.estado or "").startswith("standard_"):
                     try:
                         from app.services.standard_evaluation_guard import (
-                            StandardEvaluationError, require_standard_reports,
+                            StandardEvaluationError, select_admitted_standard_pair,
                         )
                     except Exception:
                         self._discard_invalid_standard_predictor(key)
                         errors.append({"model_id": key, "code": "standard_evaluation_invalid"})
                         continue
                     try:
-                        require_standard_reports(model, db, root)
+                        admitted_pair = select_admitted_standard_pair(model, db, root)
                     except StandardEvaluationError as err:
                         self._discard_invalid_standard_predictor(key)
                         publication_error = {
@@ -274,6 +278,8 @@ class ModelRegistry:
                 cached = self._db_predictors.get(key)
                 if cached is not None:
                     if getattr(cached, "expected_checkpoint_sha256", None) == expected_hash:
+                        if admitted_pair is not None and admitted_pair_ids is not None:
+                            admitted_pair_ids[key] = (admitted_pair.val_id, admitted_pair.test_id)
                         continue
                     self._discard_invalid_standard_predictor(key)
                 elif self.has_model(key):
@@ -310,6 +316,8 @@ class ModelRegistry:
                     self._db_predictors[key] = pred
                     for alias in (basename, Path(basename).stem, str(model.id_modelo)):
                         self._predictors.setdefault(alias, pred)
+                    if admitted_pair is not None and admitted_pair_ids is not None:
+                        admitted_pair_ids[key] = (admitted_pair.val_id, admitted_pair.test_id)
                 except Exception as err:
                     if isinstance(err, ModelWeightsError) and "no coincide con el hash SHA-256 registrado" in str(err):
                         self._block_db_model(model, key, basename, "checkpoint_hash_mismatch")

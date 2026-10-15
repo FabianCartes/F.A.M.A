@@ -140,6 +140,40 @@ describe("Catálogo público de Predicción", () => {
     expect(evaluations.textContent).not.toContain("Rechazos:");
   });
 
+  it("muestra solo el par admitido como aplicable y conserva los informes nuevos incompatibles como historia", async () => {
+    const evaluatedModel = {
+      ...model11,
+      checkpoint_sha256: "a".repeat(64),
+      evaluations: {
+        val: {
+          latest_attempt: attempt(142, "failed", "val", 2, 2),
+          latest_completed: completed(141, "val", v2Report, 2, 2),
+          admitted_completed: completed(131, "val", completeV1Report),
+        },
+        test: {
+          latest_attempt: attempt(144, "completed", "test", 2, 2),
+          latest_completed: completed(143, "test", v2Report, 2, 2),
+          admitted_completed: completed(132, "test", completeV1Report),
+        },
+      },
+    } as RegisteredModel;
+    catalogue = async () => response([evaluatedModel], evaluatedModel.id, [], { evaluation_catalogue_status: "available" });
+
+    await show();
+
+    const summary = screen.getByRole("region", { name: "Evaluaciones finales del modelo seleccionado" });
+    const validation = within(summary).getByRole("row", { name: /^Validación/ });
+    expect(validation.textContent).toContain("100.00%");
+    expect(validation.textContent).toContain("Par admitido");
+    expect(validation.textContent).toBe("Validación100.00%100.00%Par admitido");
+    const details = await openDetails();
+    expect(details.textContent).toContain("Informe aplicable del par admitido #131");
+    expect(details.textContent).toContain("Informe histórico completado #141");
+    expect(details.textContent).toContain("Informe aplicable del par admitido #132");
+    expect(details.textContent).toContain("Informe histórico completado #143");
+    expect(details.textContent).toContain("no acredita los parámetros cargados actualmente en runtime");
+  });
+
   it.each([
     ["pending", "Pendiente"],
     ["running", "En curso"],
@@ -322,8 +356,8 @@ describe("Catálogo público de Predicción", () => {
     expect(screen.queryByText(/Accuracy histórica|F1 histórico|Precision histórica|Evaluación en test set|Rendimiento \/ Métrica/)).toBeNull();
     expect(screen.queryByText("Informes finales por split")).toBeNull();
     const summary = screen.getByRole("region", { name: "Evaluaciones finales del modelo seleccionado" });
-    expect(within(summary).getByRole("row", { name: "Validación 100.00% 100.00% Coincide" })).toBeDefined();
-    expect(within(summary).getByRole("row", { name: "Test 100.00% 100.00% Coincide" })).toBeDefined();
+    expect(within(summary).getByRole("row", { name: "Validación 100.00% 100.00% CoincideSolo histórico; coincidir en SHA-256 no acredita compatibilidad de configuración ni runtime." })).toBeDefined();
+    expect(within(summary).getByRole("row", { name: "Test 100.00% 100.00% CoincideSolo histórico; coincidir en SHA-256 no acredita compatibilidad de configuración ni runtime." })).toBeDefined();
     expect(summary.textContent).toContain("checkpoint registrado");
     expect(summary.textContent).not.toContain("50.00%");
     expect(screen.queryByRole("region", { name: "Evaluaciones finales" })).toBeNull();

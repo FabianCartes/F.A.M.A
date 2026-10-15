@@ -72,6 +72,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`22_propuesta_vista_ayuda_y_centro_de_conocimiento.md`](./arquitectura/22_propuesta_vista_ayuda_y_centro_de_conocimiento.md): Diseño y especificación del centro de conocimiento e interactividad en frontend.
 
 ### 4. [`docs/manuales/`](./manuales/) — Manuales y Guías Operativas
+* [`evaluaciones-admitidas.md`](./manuales/evaluaciones-admitidas.md): Distingue el par val/test admitido por la guarda de los intentos y reportes históricos más recientes; documenta los límites de la evidencia.
 * [`preflight-publicacion.md`](./manuales/preflight-publicacion.md): CLI explícito de publicación de solo lectura, identidad requerida y smoke separado de inferencia; SQLite nativo read-only y límites de verificación.
 * [`diagnostico-publicacion-modelos.md`](./manuales/diagnostico-publicacion-modelos.md): Causas sanitizadas de rechazo y mensajes de catálogo vacío o indisponible; no modifica activación ni validación.
 * [`fragmentacion-limpieza-legacy.md`](./manuales/fragmentacion-limpieza-legacy.md): Seguimiento de la división local autorizada del commit de limpieza, respaldo, verificaciones y límites de revisión nativa; sin publicación. [Evidencia de los cortes](./receipts/fragmentacion-limpieza-legacy.json).

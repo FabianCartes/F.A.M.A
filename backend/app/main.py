@@ -499,14 +499,18 @@ def list_models(
     Retorna la lista de todos los modelos bioacústicos disponibles en el catálogo,
     sus especificaciones técnicas, clases soportadas, disponibilidad de pesos y el modelo por defecto.
     """
-    publication_errors = registry.publish_from_db(db, checkpoints_root=training_service.checkpoints_dir)
+    admitted_pair_ids = {}
+    publication_errors = registry.publish_from_db(
+        db, checkpoints_root=training_service.checkpoints_dir,
+        admitted_pair_ids=admitted_pair_ids,
+    )
     if any(error["code"] == "database_unavailable" for error in publication_errors):
         raise HTTPException(status_code=503, detail={
             "message": "Model catalogue publication incomplete",
             "errors": publication_errors,
         })
     models = registry.list_models(only_with_weights=only_available)
-    evaluations = read_model_evaluations(db, models)
+    evaluations = read_model_evaluations(db, models, admitted_pair_ids)
     for model in models:
         model.evaluations = evaluations.by_model_id.get(model.id)
     default_id = registry.get_default_model_id() or ""

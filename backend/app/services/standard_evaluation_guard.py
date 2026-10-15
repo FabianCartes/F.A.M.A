@@ -80,6 +80,15 @@ class CheckpointInspection:
     configurations: tuple
 
 
+@dataclass(frozen=True)
+class AdmittedStandardEvaluationPair:
+    """Path-free identities for the exact completed pair accepted by the guard."""
+    val_id: int
+    val_identity: EvaluationIdentity
+    test_id: int
+    test_identity: EvaluationIdentity
+
+
 def inspect_checkpoint(checkpoints_root, checkpoint_path, expected_sha256, *, expected_size=None):
     """Safely inspect explicit checkpoint bytes and require complete MAIN provenance."""
     try:
@@ -290,24 +299,26 @@ def _effective_predictor_config_matches(actual, expected) -> bool:
 def require_standard_reports(target, db, checkpoints_root: Path) -> None:
     """Validate standard artifacts and expose only bounded, path-free errors."""
     try:
-        _validate_standard_reports(target, db, checkpoints_root)
+        select_admitted_standard_pair(target, db, checkpoints_root)
     except StandardEvaluationError:
         raise
     except Exception:
         raise StandardEvaluationError("No se pudieron validar los informes estándar.") from None
 
 
-def _validate_standard_reports(target, db, checkpoints_root: Path) -> None:
-    """Require a coherent completed val/test pair for the exact trusted artifact.
+def select_admitted_standard_pair(
+    target, db, checkpoints_root: Path,
+) -> AdmittedStandardEvaluationPair | None:
+    """Return the exact coherent val/test pair admitted for a standard artifact.
 
-    Newer failed attempts do not revoke a matching completed pair. Legacy model states
-    remain outside this guard. Standard artifacts are read only:
-    the checkpoint is hashed and metadata-deserialized on CPU, but no predictor is
-    instantiated and no inference/evaluation is run.
+    Non-standard legacy states have no guard-selected pair and return ``None``.
+    Newer failed attempts do not revoke a matching completed pair. Standard artifacts
+    are read only: checkpoint metadata is deserialized on CPU without instantiating a
+    predictor or running inference/evaluation. Returned identities are path-free.
     """
     state = target.estado or ""
     if not state.startswith("standard_"):
-        return
+        return None
     if state != "standard_eval_completed":
         _invalid(StandardEvaluationReason.MODEL_STATE_INCOMPLETE,
                  "Modelo nuevo sin evaluación estándar val/test completada; activación/publicación bloqueada.")
@@ -361,7 +372,7 @@ def _validate_standard_reports(target, db, checkpoints_root: Path) -> None:
         if (_effective_predictor_config_matches(identity.predictor_config, expected_configs[0]) and
                 _json_matches(identity.preprocessing_config, expected_configs[1]) and
                 _json_matches(identity.aggregation_config, expected_configs[2])):
-            candidates[row.split].append(identity)
+            candidates[row.split].append((identity, row.id_evaluation))
 
     if not matching_identity["val"] or not matching_identity["test"]:
         _invalid(StandardEvaluationReason.EVALUATION_PAIR_INCOMPLETE,
@@ -369,8 +380,8 @@ def _validate_standard_reports(target, db, checkpoints_root: Path) -> None:
     if not candidates["val"] or not candidates["test"]:
         _invalid(StandardEvaluationReason.RUNTIME_CONFIGURATION_INCOMPATIBLE,
                  "Los informes completados no corresponden a la configuración efectiva del predictor.")
-    for val in candidates["val"]:
-        for test in candidates["test"]:
+    for val, val_id in candidates["val"]:
+        for test, test_id in candidates["test"]:
             try:
                 expected_pair = admitted_manifest_pair_provenance(
                     val.manifest_sha256, test.manifest_sha256)
@@ -383,7 +394,8 @@ def _validate_standard_reports(target, db, checkpoints_root: Path) -> None:
                 "checkpoint_sha256", "dataset", "classes", "schema_version", "evaluator_version",
                 "predictor_config", "preprocessing_config", "aggregation_config", "code_revision",
             )):
-                return
+                return AdmittedStandardEvaluationPair(
+                    val_id=val_id, val_identity=val, test_id=test_id, test_identity=test)
     _invalid(StandardEvaluationReason.PAIR_PROVENANCE_INVALID,
              "No existe un par val/test coherente ligado a una identidad conjunta de manifiestos; "
              "los informes estándar sin esa identidad requieren reevaluación explícita.")

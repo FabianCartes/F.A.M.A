@@ -57,7 +57,10 @@ def _provenance(row):
     return EvaluationProvenance.model_validate(values), identity
 
 
-def read_model_evaluations(session, metadata: Iterable[object]) -> EvaluationCatalogueRead:
+def read_model_evaluations(
+    session, metadata: Iterable[object],
+    admitted_pair_ids: Optional[Dict[str, tuple[int, int]]] = None,
+) -> EvaluationCatalogueRead:
     """Read all matching attempts in one ordered query; never infer or mutate models.
 
     ``metadata`` contains the model entries actually returned by the registry. Only
@@ -65,6 +68,11 @@ def read_model_evaluations(session, metadata: Iterable[object]) -> EvaluationCat
     predictors and generic ensembles are never associated by name guessing.
     """
     db_ids = _registered_db_ids(metadata)
+    admitted_pair_ids = admitted_pair_ids or {}
+    admitted_by_split = {
+        slug: {"val": pair[0], "test": pair[1]}
+        for slug, pair in admitted_pair_ids.items() if slug in db_ids.values()
+    }
     try:
         rows = (
             session.query(ModelEvaluation)
@@ -79,8 +87,10 @@ def read_model_evaluations(session, metadata: Iterable[object]) -> EvaluationCat
         grouped = {}
         for row in rows:
             provenance, identity = _provenance(row)
+            slug = db_ids.get(row.id_modelo)
+            admitted_id = admitted_by_split.get(slug, {}).get(row.split)
             bucket = grouped.setdefault((row.id_modelo, row.split), {
-                "latest_attempt": None, "latest_completed": None,
+                "latest_attempt": None, "latest_completed": None, "admitted_completed": None,
             })
             if bucket["latest_attempt"] is None:
                 bucket["latest_attempt"] = EvaluationAttemptSummary(
@@ -88,21 +98,43 @@ def read_model_evaluations(session, metadata: Iterable[object]) -> EvaluationCat
                     provenance=provenance, created_at=row.created_at,
                     started_at=row.started_at, finished_at=row.finished_at,
                 )
-            if row.status == "completed" and bucket["latest_completed"] is None:
+            if row.status == "completed":
                 report = validate_report(row.report, identity)
-                bucket["latest_completed"] = CompletedEvaluationSummary(
-                    id_evaluation=row.id_evaluation, provenance=provenance,
-                    report=report, created_at=row.created_at,
-                    started_at=row.started_at, finished_at=row.finished_at,
-                )
+                if bucket["latest_completed"] is None:
+                    bucket["latest_completed"] = CompletedEvaluationSummary(
+                        id_evaluation=row.id_evaluation, provenance=provenance,
+                        report=report, created_at=row.created_at,
+                        started_at=row.started_at, finished_at=row.finished_at,
+                    )
+                if row.id_evaluation == admitted_id:
+                    bucket["admitted_completed"] = CompletedEvaluationSummary(
+                        id_evaluation=row.id_evaluation, provenance=provenance,
+                        report=report, created_at=row.created_at,
+                        started_at=row.started_at, finished_at=row.finished_at,
+                    )
 
-        result = {}
+        grouped_by_model = {}
         for (model_id, split), values in grouped.items():
             slug = db_ids.get(model_id)
             if slug is None:
                 continue
-            per_model = result.setdefault(slug, {})
-            per_model[split] = EvaluationSplitSummary(**values)
+            grouped_by_model.setdefault(slug, {})[split] = values
+
+        result = {}
+        for slug, splits in grouped_by_model.items():
+            selected = admitted_by_split.get(slug)
+            if selected is not None:
+                pair_found = all(
+                    splits.get(split, {}).get("admitted_completed") is not None
+                    and splits[split]["admitted_completed"].id_evaluation == evaluation_id
+                    for split, evaluation_id in selected.items()
+                )
+                if not pair_found:
+                    for values in splits.values():
+                        values["admitted_completed"] = None
+            result[slug] = {
+                split: EvaluationSplitSummary(**values) for split, values in splits.items()
+            }
         return EvaluationCatalogueRead({
             slug: ModelEvaluations(**result[slug]) for slug in result
         })

@@ -119,6 +119,7 @@ interface CompletedEvaluation {
 interface EvaluationSplit {
   latest_attempt?: EvaluationAttempt | null;
   latest_completed?: CompletedEvaluation | null;
+  admitted_completed?: CompletedEvaluation | null;
 }
 
 interface ModelEvaluations {
@@ -196,7 +197,9 @@ function EvaluationSplitCard({
 }) {
   const latestAttempt = split?.latest_attempt;
   const latestCompleted = split?.latest_completed;
-  const report = latestCompleted?.report;
+  const admittedCompleted = split?.admitted_completed;
+  const displayedCompleted = admittedCompleted || latestCompleted;
+  const report = displayedCompleted?.report;
   const metrics = report?.metrics;
   const metricRows = [
     ["Accuracy", metrics?.accuracy],
@@ -220,7 +223,7 @@ function EvaluationSplitCard({
   const predictionColumns = Array.isArray(report?.prediction_columns)
     ? report.prediction_columns.filter((value): value is string | number => typeof value === "string" || (typeof value === "number" && Number.isFinite(value)))
     : classNames;
-  const provenance = latestCompleted?.provenance;
+  const provenance = displayedCompleted?.provenance;
   const checkpointHash = typeof provenance?.checkpoint_sha256 === "string" && /^[0-9a-f]{64}$/i.test(provenance.checkpoint_sha256)
     ? provenance.checkpoint_sha256
     : null;
@@ -228,8 +231,8 @@ function EvaluationSplitCard({
   const attemptId = Number.isSafeInteger(latestAttempt?.id_evaluation) && Number(latestAttempt?.id_evaluation) > 0
     ? Number(latestAttempt?.id_evaluation)
     : null;
-  const completedId = Number.isSafeInteger(latestCompleted?.id_evaluation) && Number(latestCompleted?.id_evaluation) > 0
-    ? Number(latestCompleted?.id_evaluation)
+  const completedId = Number.isSafeInteger(displayedCompleted?.id_evaluation) && Number(displayedCompleted?.id_evaluation) > 0
+    ? Number(displayedCompleted?.id_evaluation)
     : null;
   const rejection = report?.schema_version === 2 ? report.rejection : null;
   const rejectionCount = rejection && Number.isSafeInteger(rejection.count) && Number(rejection.count) >= 0
@@ -256,17 +259,17 @@ function EvaluationSplitCard({
         </> : <p className="text-[11px] text-gray-400">Sin intentos registrados para este split.</p>}
       </section>
 
-      {report && latestCompleted ? (
+      {report && displayedCompleted ? (
         <div className="space-y-4 rounded-lg border border-[#252834] bg-[#111215] p-3">
           <div>
-            <p className="text-xs font-semibold text-emerald-300">Informe histórico completado{completedId ? ` #${completedId}` : ""}</p>
+            <p className="text-xs font-semibold text-emerald-300">{admittedCompleted ? "Informe aplicable del par admitido" : "Informe histórico completado"}{completedId ? ` #${completedId}` : ""}</p>
             <p className="mt-1 text-xs text-gray-300">Muestras: {formatFinalCount(report.sample_count)}</p>
-            {safeTimestamp(latestCompleted.created_at) && <p className="break-all text-[11px] text-gray-400">Informe creado: {safeTimestamp(latestCompleted.created_at)}</p>}
-            {safeTimestamp(latestCompleted.started_at) && <p className="break-all text-[11px] text-gray-400">Informe iniciado: {safeTimestamp(latestCompleted.started_at)}</p>}
-            {safeTimestamp(latestCompleted.finished_at) && <p className="break-all text-[11px] text-gray-400">Informe finalizado: {safeTimestamp(latestCompleted.finished_at)}</p>}
+            {safeTimestamp(displayedCompleted.created_at) && <p className="break-all text-[11px] text-gray-400">Informe creado: {safeTimestamp(displayedCompleted.created_at)}</p>}
+            {safeTimestamp(displayedCompleted.started_at) && <p className="break-all text-[11px] text-gray-400">Informe iniciado: {safeTimestamp(displayedCompleted.started_at)}</p>}
+            {safeTimestamp(displayedCompleted.finished_at) && <p className="break-all text-[11px] text-gray-400">Informe finalizado: {safeTimestamp(displayedCompleted.finished_at)}</p>}
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[18rem] text-left text-xs" aria-label={`Métricas del informe histórico ${label}`}>
+            <table className="w-full min-w-[18rem] text-left text-xs" aria-label={`Métricas del ${admittedCompleted ? "informe admitido" : "informe histórico"} ${label}`}>
               <thead className="text-gray-400">
                 <tr><th scope="col" className="py-1 pr-3">Métrica</th><th scope="col" className="py-1">Valor</th></tr>
               </thead>
@@ -334,12 +337,22 @@ function EvaluationSplitCard({
             <div className="break-words"><dt className="inline">Dataset:</dt> <dd className="inline">{provenance?.dataset || "No disponible"}</dd></div>
             <div className="min-w-0 break-all"><dt className="inline">SHA-256 del checkpoint:</dt> <dd className="inline font-mono">{checkpointHash || "No disponible"}</dd></div>
           </dl>
-          <p className="text-[11px] text-amber-200">{checkpointMatch === "Coincide"
-            ? "El SHA-256 del informe coincide con el checkpoint registrado; esto no acredita los parámetros cargados actualmente en runtime."
-            : "Informe histórico; NO es aplicable al checkpoint registrado porque la identidad no coincide o no se puede verificar."}</p>
+          <p className="text-[11px] text-amber-200">{admittedCompleted
+            ? "La guarda admitió este informe junto con su split par; esto no acredita los parámetros cargados actualmente en runtime."
+            : checkpointMatch === "Coincide"
+              ? "Informe histórico: el SHA-256 coincide con el checkpoint registrado, pero esto no acredita compatibilidad de evaluación ni parámetros cargados actualmente en runtime."
+              : "Informe histórico; NO es aplicable al checkpoint registrado porque la identidad no coincide o no se puede verificar."}</p>
         </div>
       ) : (
         <p className="rounded-lg border border-[#252834] bg-[#111215] p-3 text-xs text-gray-400">No hay un informe completado para este split.</p>
+      )}
+      {admittedCompleted && latestCompleted && latestCompleted.id_evaluation !== admittedCompleted.id_evaluation && (
+        <section aria-label={`Informe histórico más reciente ${label}`} className="rounded-lg border border-[#252834] bg-[#111215] p-3 space-y-2 text-xs text-gray-300">
+          <h4 className="font-semibold text-gray-200">Informe histórico completado #{Number.isSafeInteger(latestCompleted.id_evaluation) ? Number(latestCompleted.id_evaluation) : "No disponible"}</h4>
+          <p>Muestras: {formatFinalCount(latestCompleted.report?.sample_count)}</p>
+          <p>Accuracy: {formatFinalRate(latestCompleted.report?.metrics?.accuracy)} · F1 macro: {formatFinalRate(latestCompleted.report?.metrics?.f1_macro)}</p>
+          <p className="text-[11px] text-amber-200">No pertenece al par admitido y se conserva como historial; su hash no acredita compatibilidad runtime.</p>
+        </section>
       )}
     </article>
   );
@@ -1392,10 +1405,14 @@ export default function PredictionView() {
                 <tbody>
                   {([ ["Validación", selectedModel?.evaluations?.val], ["Test", selectedModel?.evaluations?.test] ] as const).map(([label, candidateSplit]) => {
                     const split = evaluationCatalogueStatus === "available" ? candidateSplit : null;
-                    const report = split?.latest_completed?.report;
-                    const match = evaluationCatalogueStatus === "available"
-                      ? registeredCheckpointMatch(selectedModel?.checkpoint_sha256, split?.latest_completed?.provenance?.checkpoint_sha256)
-                      : "No verificable";
+                    const admittedCompleted = split?.admitted_completed;
+                    const completedReport = admittedCompleted || split?.latest_completed;
+                    const report = completedReport?.report;
+                    const match = admittedCompleted
+                      ? "Par admitido"
+                      : evaluationCatalogueStatus === "available"
+                        ? registeredCheckpointMatch(selectedModel?.checkpoint_sha256, split?.latest_completed?.provenance?.checkpoint_sha256)
+                        : "No verificable";
                     const attemptLabel = evaluationAttemptLabel(split?.latest_attempt);
                     return (
                       <tr key={label} className="border-t border-[#252834] align-top">
@@ -1405,7 +1422,9 @@ export default function PredictionView() {
                         <td className="py-2 text-gray-200">
                           <span>{match}</span>
                           {!split?.latest_completed && attemptLabel && <span className="block text-[11px] text-gray-400">Sin informe completado · último intento: {attemptLabel}</span>}
-                          {split?.latest_completed && match !== "Coincide" && <span className="block max-w-xs text-[11px] text-amber-200">Informe histórico; no es aplicable al checkpoint registrado.</span>}
+                          {split?.latest_completed && !admittedCompleted && (match === "Coincide"
+                            ? <span className="block max-w-xs text-[11px] text-amber-200">Solo histórico; coincidir en SHA-256 no acredita compatibilidad de configuración ni runtime.</span>
+                            : <span className="block max-w-xs text-[11px] text-amber-200">Informe histórico; no es aplicable al checkpoint registrado.</span>)}
                         </td>
                       </tr>
                     );
