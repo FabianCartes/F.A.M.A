@@ -14,8 +14,6 @@ def test_prepare_engine_dataset_default_path():
         assert Path(param.default).resolve() == get_raw_data_dir("engine_diagnostics")
 
 
-
-
 def test_poc_scripts_no_hardcoded_root_data_dir():
     root = get_project_root()
     poc_dir = root / "backend" / "poc"

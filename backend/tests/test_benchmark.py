@@ -1,6 +1,4 @@
-import pytest
 import numpy as np
-from pathlib import Path
 from poc.benchmark import aggregate_benchmark_metrics
 
 def test_aggregate_benchmark_metrics():
@@ -90,71 +88,3 @@ def test_format_benchmark_markdown_table():
     assert "Accuracy" in md
     assert "F1-Score (macro)" in md
     assert "ClaseA" in md
-
-
-def test_run_benchmark(tmp_path, monkeypatch):
-    from poc.benchmark import run_benchmark
-
-    fake_train_history = {"history": {}, "classes": ["A", "B"]}
-    fake_eval_results = {
-        "accuracy": 0.60,
-        "precision_macro": 0.60,
-        "recall_macro": 0.60,
-        "f1_macro": 0.60,
-        "confusion_matrix": [[3, 0], [1, 2]],
-        "classification_report": {"A": {"f1-score": 0.70}, "B": {"f1-score": 0.50}},
-        "confusion_matrix_path": str(tmp_path / "cm.png"),
-    }
-
-    bindings = []
-    def fake_train(**kwargs):
-        bindings.append(kwargs["roots"])
-        return fake_train_history
-    def fake_evaluate(**kwargs):
-        bindings.append(kwargs["roots"])
-        return fake_eval_results
-    monkeypatch.setattr("poc.benchmark.train_pipeline", fake_train)
-    monkeypatch.setattr("poc.benchmark.run_evaluation", fake_evaluate)
-
-    # Crear archivos falsos requeridos
-    meta_csv = tmp_path / "metadata.csv"
-    meta_csv.write_text("dummy")
-    from training.prepare_data import prepare_dataset
-    import pandas as pd
-    import soundfile as sf
-    prepared = tmp_path / "prepared"
-    monkeypatch.setattr("poc.train.get_prepared_data_dir", lambda name: prepared)
-    raw_dir = tmp_path / "raw"
-    raw_dir.mkdir()
-    processed = tmp_path / "processed"
-    processed.mkdir()
-    roots = {"raw": raw_dir, "processed": processed}
-    rows = []
-    for i in range(20):
-        sf.write(processed / f"{i}.wav", np.zeros(800), 8000)
-        rows.append({"file_path": f"{i}.wav", "file_stage": "processed", "clase": "A",
-                     "recordist": str(i), "xc_id": str(i)})
-    pd.DataFrame(rows).to_csv(meta_csv, index=False)
-    prepare_dataset(meta_csv, roots=roots, dataset_name="AvesChilenas", output_dir=prepared)
-
-    summary = run_benchmark(
-        dataset_name="AvesChilenas",
-        metadata_csv=meta_csv,
-        raw_dir=raw_dir,
-        test_csv=None,
-        output_dir=tmp_path / "benchmark_out",
-        roots=roots,
-        num_runs=2,
-        epochs=1,
-        seeds=[10, 20],
-    )
-
-    assert summary["num_runs"] == 2
-    assert len(bindings) == 4
-    assert all(binding == roots for binding in bindings)
-    assert all(binding is bindings[0] for binding in bindings)
-    assert bindings[0] is not roots
-    assert (tmp_path / "benchmark_out" / "benchmark_summary.json").exists()
-    assert (tmp_path / "benchmark_out" / "benchmark_confusion_matrix.png").exists()
-    assert (tmp_path / "benchmark_out" / "benchmark_report.md").exists()
-

@@ -7,7 +7,6 @@ from poc.train import (
     AudioCNN,
     FocalLoss,
     apply_mixup,
-    train_pipeline,
 )
 
 __all__ = [
@@ -15,5 +14,4 @@ __all__ = [
     "AudioCNN",
     "FocalLoss",
     "apply_mixup",
-    "train_pipeline",
 ]
