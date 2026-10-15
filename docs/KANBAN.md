@@ -10,7 +10,7 @@ kanban-plugin: basic
 - [x] NAME-2: RED→GREEN para presentación de versión y conservación de metadatos frontend; 123 PASS y TypeScript correcto. Lint global: 26 errores/3 avisos reproducidos en base; lint focal correcto.
 - [x] NAME-3: regresión focal y revisión nativa independiente R2/R3 sin hallazgos; candidato de 325 líneas aprobado y acuse consumido. Recibo reproducible; cierre local anterior sin entrenamiento real, despliegue ni commit. La integración autorizada posteriormente se sigue en NAME-4.
 Detalles de uso, comandos, alcance y reversión: [nombres de modelos](manuales/nombres-modelos.md); [recibo](receipts/model-names.json).
-- [ ] NAME-4: integración autorizada por el usuario en `/home/kevin/Work/fama`: confirmar el candidato, fast-forward a `dev`, verificaciones desde destino y `./iniciar_fama.sh --build`; comprobar API/navegador y preservar modelo/dataset/checkpoint/volumen. Estado previo observado: catálogo #14 con nombre antiguo, historial con `Aves Chilenas · EfficientNet-B0 (v1)`; hash coincidente. Sin push solicitado.
+- [x] NAME-4: commit `89590d0` integrado por fast-forward en `dev` de `/home/kevin/Work/fama`; nueva ejecución 174 PASS backend/0 deselecciones, 123 PASS frontend, TypeScript/lint focal correctos. `./iniciar_fama.sh --build` exit 0 y tres servicios healthy. API directa/proxy y Chromium real coinciden en `Aves Chilenas · EfficientNet-B0 (v1)`, selector #14 e insignia `Versión v1`; historial y navegación de ida/vuelta comprobados, sin errores de página. Modelo/dataset/hash y contenedor/volumen PostgreSQL preservados. Revisión del commit R2/R3 sin hallazgos y acuse consumido; detalles en recibo. Sin inferencia real, entrenamiento ni push.
 
 
 ## Recuperación del modelo 14 y retirada legacy — verificado en despliegue

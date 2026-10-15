@@ -25,8 +25,10 @@ npm test -- components/views/__tests__/PredictionView.catalogue.test.tsx compone
 npx tsc --noEmit --incremental false
 ```
 
-Evidencia y límites en el [recibo](../receipts/model-names.json). Las comprobaciones usan SQLite en memoria, adaptadores ML/GCS sintéticos y jsdom; no acreditan navegador real, Docker, GPU, PostgreSQL/GCS reales o calidad ML. La reproducción de `main` evalúa sus expresiones fuente inmutables, no el servicio desplegado.
+Evidencia y límites en el [recibo](../receipts/model-names.json). Las pruebas focales usan SQLite en memoria, adaptadores ML/GCS sintéticos y jsdom; por sí solas no acreditan el despliegue o calidad ML. La reproducción histórica de `main` evalúa sus expresiones fuente inmutables.
+
+La integración posterior del commit `89590d0` en `dev` se comprobó desde `/home/kevin/Work/fama`: reconstrucción con `./iniciar_fama.sh --build`, API directa/proxy y Chromium real. El modelo #14 muestra `Aves Chilenas · EfficientNet-B0 (v1)` en ambas vistas y `Versión v1` en predicción. Se preservaron ID, relación de dataset, hash de checkpoint y contenedor/volumen PostgreSQL. Esta comprobación visual no ejecutó inferencia ni entrenamiento y no acredita calidad ML.
 
 ## Reversión
 
-Revertir conjuntamente el commit del módulo de nombres y sus consumidores de historial/registro, campos opcionales del catálogo y presentación frontend, junto a sus pruebas/documentos; después reconstruir desde la carpeta principal. No hay migración ni cambios en pesos/datasets que revertir. Integración, commit y reconstrucción autorizados; sus resultados se registran separadamente en el recibo.
+Revertir el commit `89590d0` (módulo de nombres, consumidores, campos opcionales, presentación y pruebas) y reconstruir desde la carpeta principal. No hay migración ni cambios en pesos/datasets que revertir. Se conservó la imagen backend anterior como `fama-backend:rollback-model-names-ea25565df94e`; la imagen frontend antigua ya no estaba disponible en Docker y su reversión requiere reconstruir el código anterior. Conservar los montajes operativos y el volumen PostgreSQL.
