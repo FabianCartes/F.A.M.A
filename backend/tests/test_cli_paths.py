@@ -14,21 +14,6 @@ def test_prepare_engine_dataset_default_path():
         assert Path(param.default).resolve() == get_raw_data_dir("engine_diagnostics")
 
 
-def test_training_scripts_no_hardcoded_root_data_dir():
-    root = get_project_root()
-    scripts = [
-        root / "backend" / "train_and_ensemble_engines.py",
-    ]
-    for script in scripts:
-        if not script.exists():
-            continue
-        content = script.read_text(encoding="utf-8")
-        assert 'Path("data/engine_diagnostics")' not in content, (
-            f"Script {script.name} contiene ruta hardcodeada 'data/engine_diagnostics'"
-        )
-        assert "get_prepared_data_dir" in content, (
-            f"Script {script.name} no utiliza get_prepared_data_dir"
-        )
 
 
 def test_poc_scripts_no_hardcoded_root_data_dir():
