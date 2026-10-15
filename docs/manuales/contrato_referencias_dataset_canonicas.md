@@ -7,14 +7,16 @@ Esta guía describe el contrato disponible y la preparación de una transición
 **futura, con autorización propia**; no acredita migración ni despliegue real.
 La decisión está en el [ADR 0019](../adr/0019-referencias-canonicas-por-etapa.md).
 
-## Ruta rápida: preparar → entrenar → evaluar
+## Ruta rápida: preparar → iniciar desde la UI → revisar resultados
 
 1. Elegir un índice canónico explícito y raíces físicas aprobadas; no descubrir
    audio ni reparar raíces durante el entrenamiento.
-2. Preparar una vez las particiones en un destino nuevo mediante la API siguiente
-   (Aves) o el adaptador CLI (motores). Revisar conteos y proporciones efectivas.
-3. Entrenar desde el trío preparado completo. Usar **val únicamente** para
-   seleccionar checkpoint/configuración; reservar **test para evaluación final**.
+2. Preparar una vez el trío completo en un destino nuevo mediante la API siguiente
+   (Aves) o el adaptador CLI de preparación (motores). Revisar conteos y
+   proporciones efectivas; los consumidores exigen el marcador `.complete`.
+3. Abrir la vista **Entrenamiento** y lanzar el trabajo desde la interfaz. La UI
+   usa `POST /api/training/start`; el servicio consume el trío preparado admitido.
+   No usar los antiguos scripts de entrenamiento como ruta operativa.
 4. Si falla la admisión, detenerse: conversión histórica, reparación de datos,
    regeneración y limpieza offline requieren autorización separada. Esta guía
    no realizó ninguna de esas operaciones ni reparó problemas de raíces.
@@ -48,15 +50,15 @@ restricciones. Una interrupción sin solución admisible del solver es un error
 separado. La preparación exige `file_path`, `file_stage`, `clase`, `recordist`
 y además `xc_id` para Aves; valida referencias y duplicados antes de publicar.
 
-**Ejemplo Aves, Python desde `backend`, ilustrativo y no ejecutado:** el índice
-canónico y las raíces son explícitos; se omite `output_dir` para usar el destino
-fijo. Las rutas `/synthetic/...` no autorizan operaciones reales.
+**Ejemplo Aves, Python desde `backend`, ilustrativo y no ejecutado:** prepara
+solo el trío canónico; se omite `output_dir` para usar el destino fijo. Tras
+validar su marcador y contenido, el entrenamiento se inicia desde la vista
+**Entrenamiento** de la UI, no desde este fragmento. Las rutas `/synthetic/...`
+no autorizan operaciones reales.
 
 ```python
 from pathlib import Path
 from training.prepare_data import prepare_dataset
-from poc.train import train_pipeline
-from poc.evaluate import run_evaluation
 
 roots = {
     "raw": Path("/synthetic/data/raw/AvesChilenas"),
@@ -64,34 +66,29 @@ roots = {
 }
 index = Path("/synthetic/indices/aves_canonico.csv")
 summary = prepare_dataset(index, roots=roots, dataset_name="AvesChilenas")
-trained = train_pipeline(
-    metadata_csv=index, raw_dir=roots["raw"], roots=roots,
-    dataset_name="AvesChilenas", checkpoint_dir=Path("/synthetic/checkpoints"),
-)
-metrics = run_evaluation(
-    checkpoint_path=trained["best_checkpoint_path"], roots=roots,
-    dataset_name="AvesChilenas",
-    output_image_path=Path("/synthetic/results/aves_test.png"),
-)
 ```
 
-`metadata_csv` en entrenamiento conserva compatibilidad posicional: **no lee
-ese índice ni genera splits**. Las CLIs `python -m poc.train` y
-`python -m poc.evaluate` fijan Aves y sus raíces; no exponen argumentos de
-`dataset_name`, índice, trío preparado o raíces. No son una CLI unificada para
-motores. Por ejemplo, desde `backend` (no ejecutado):
+**Retirado como flujo operativo:** los ejemplos históricos de
+`python -m poc.train`, `python -m poc.evaluate` y las invocaciones de scripts
+standalone no describen la vía soportada para entrenar desde la plataforma.
+Se retiraron las CLI y los orquestadores Python `train_pipeline()` y
+`run_benchmark()`, incluida la reexportación de `train_pipeline` desde
+`ml_core.train`. `backend/poc/train.py` y `backend/poc/benchmark.py` permanecen
+como módulos de piezas compartidas, no como flujos alternativos de entrenamiento.
+Esto no afirma que
+se haya retirado una CLI de evaluación independiente. Para entrenar desde la
+plataforma, seleccione en la UI el dataset admitido y sus parámetros y use
+**Comenzar Entrenamiento**; la interfaz envía `POST /api/training/start` y
+permite seguir el estado del trabajo. La revisión de `val` y `test` sigue las
+reglas de evaluación y no convierte la preparación offline en una ruta CLI de
+entrenamiento.
 
-```bash
-python -m poc.train --epochs 15 --checkpoint-name augmented_best.pt
-python -m poc.evaluate --checkpoint augmented_best.pt --no-tta
-```
-
-**Motores, desde `backend`, ejemplo de preparación no ejecutado:** preparar con el
-[adaptador](../../backend/training/prepare_engine_data.py). El CLI
-`train_car_engine_model.py` fue retirado; para entrenar desde la plataforma,
-use la vista **Entrenamiento**, que envía `POST /api/training/start`.
-Las raíces declaradas al preparar deben corresponder a las que valida el
-servicio para el dataset admitido.
+**Motores, desde `backend`, ejemplo de preparación no ejecutado:** preparar con
+el [adaptador](../../backend/training/prepare_engine_data.py). El antiguo
+`train_car_engine_model.py` y las recetas YAML de motores no son el flujo de
+entrenamiento operativo; después de preparar, iniciar el job desde la vista
+**Entrenamiento** de la UI. Las raíces declaradas al preparar deben corresponder
+a las que valida el servicio para el dataset admitido.
 
 ```bash
 python -m training.prepare_engine_data \

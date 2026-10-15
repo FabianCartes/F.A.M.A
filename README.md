@@ -33,7 +33,7 @@ El sistema opera bajo un enfoque **multi-dominio acústico**, soportando simult�
                                 ARQUITECTURA GENERAL F.A.M.A.
 
          [ Frontend Next.js / TypeScript ]  <────  RESTful API / SSE  ────>  [ Orquestador FastAPI ]
-         ├── Dashboard (Doble Campeón)                                      ├── Controladores Desacoplados
+         ├── Dashboard (Doble Campeón)                                      ├── Rutas FastAPI (entrenamiento en app/main.py)
          ├── Ingesta (Sincronización GCS)                                   ├── Model Registry Dinámico
          ├── Entrenamiento (Orquestador Triadas)                            ├── Pipeline Acústico (HPSS + VAD)
          └── Predicción (Selector Multi-Dominio)                            └── Persistencia Híbrida
@@ -50,6 +50,15 @@ El sistema opera bajo un enfoque **multi-dominio acústico**, soportando simult�
         └── prediccion y métricas de calibración                                                    ├── EfficientNet-B0
                                                                                                     └── PANNs-CNN14 (AudioSet)
 ```
+
+El flujo operativo de entrenamiento parte de la vista **Entrenamiento** en la UI,
+que envía `POST /api/training/start`; `TrainingService` inicia el worker de cómputo.
+Las CLIs de entrenamiento experimental y las recetas YAML fueron retiradas y no
+son una ruta operativa alternativa. También se retiraron `train_pipeline()`,
+`run_benchmark()` y la reexportación de `train_pipeline` desde `ml_core.train`.
+`backend/poc/train.py` y `backend/poc/benchmark.py` conservan únicamente sus piezas
+compartidas (modelos, datasets, evaluación y presentación de métricas), no esos
+orquestadores legacy ni sus CLI.
 
 ---
 

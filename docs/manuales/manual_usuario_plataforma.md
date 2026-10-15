@@ -64,7 +64,7 @@ El sistema implementa un esquema de Control de Acceso Basado en Roles (**RBAC**)
 | **Consulta del Catálogo en GCS** (`RF_01`, `CU_INV_01`) | Total | Total |
 | **Sincronización Masiva Descendente** (`RF_02`) | Autorizado en datasets asignados | Control global y purga de caché |
 | **Carga de Audios hacia GCS** (`RF_01`) | Autorizado por lote o archivo | Control global de cuotas |
-| **Lanzamiento de Entrenamientos** (`RF_04`, `CU_INV_03`) | Encolamiento de tareas | Ejecución prioritaria y cola |
+| **Lanzamiento de Entrenamientos** (`RF_04`, `CU_INV_03`) | Inicio de trabajos desde la interfaz | Supervisión del proceso local |
 | **Interrupción de Procesos (Kill Job)** (`CU_ADM_05`) | Solo sus propios procesos | Interrupción forzada global |
 | **Activación de Modelos en Producción** (`CU_INV_05`) | Sugerir activación | Aprobación / Activación final |
 | **Inferencia en Tiempo Real** (`RF_05`, `CU_INV_06`) | Total con oscilograma dinámico | Total |
@@ -261,9 +261,9 @@ El panel siguiente es ilustrativo; sus cifras y acciones no acreditan resultados
    * **Tasa de Aprendizaje (Learning Rate):** Por defecto `0.001` para EfficientNet, `0.0005` para ConvNeXt y `0.0003` para ResNet.
    * **Épocas:** Rango recomendado entre 10 y 25 épocas.
    * **Tamaño del Lote (Batch Size):** Valor predeterminado `16` (en GPUs con 6-8 GB de VRAM) u `8` para ResNet-34d.
-5. **Iniciar Pipeline:** Haga clic en **[Comenzar Entrenamiento]**.
+5. **Iniciar Pipeline:** Haga clic en **[Comenzar Entrenamiento]** en la vista Entrenamiento; la UI envía `POST /api/training/start`.
    * La respuesta `started` incluye un `job_id`; supervise el progreso y su `error_message` hasta el estado final. Una admisión inválida devuelve HTTP 400 y progreso `failed`, sin lanzar el worker ni sustituir el dataset por otro.
-   * El servicio rechaza otro inicio mientras está en `training`; este control dentro del proceso no es una cola FIFO ni un bloqueo global de la GPU frente a otros procesos.
+   * El servicio rechaza otro inicio mientras está en `training` o `evaluating`; este control dentro del proceso no es una cola FIFO ni un bloqueo global de la GPU frente a otros procesos.
    * Las curvas y logs en vivo son telemetría; las métricas se insertan en BD al finalizar cada modelo, no mediante un commit por época.
 
 ### 5.3. Control de Procesos y Detención Segura (`CU_ADM_05`)
@@ -283,12 +283,12 @@ En la parte inferior del módulo se ubica la tabla de **Historial de Modelos**:
 
 Los índices se vinculan a `backend/data/raw/<dataset>` y a un mapa explícito de raíces físicas: raw en ese directorio y processed en `backend/data/processed/<dataset>/processed_wav`, no mediante el enlace bajo raw. Los CSV se leen con `pandas.read_csv(dtype=str, keep_default_na=False)`, con encabezados exactos:
 
-| Dataset | Particiones admitidas | Columnas obligatorias |
+| Dataset | Particiones preparadas obligatorias | Columnas obligatorias |
 | --- | --- | --- |
-| `AvesChilenas` | `train.csv` y `val.csv`; si ambos faltan, partición desde `metadata.csv` canónico | `clase`, `file_path` y `file_stage` |
-| `engine_diagnostics` | `train_metadata.csv` y `val_metadata.csv` obligatorios | `clase`, `file_path` y `file_stage` |
+| `AvesChilenas` | `train.csv`, `val.csv` y `test.csv`, con marcador `.complete` válido | `clase`, `file_path` y `file_stage` |
+| `engine_diagnostics` | `train_metadata.csv`, `val_metadata.csv` y `test_metadata.csv`, con marcador `.complete` válido | `clase`, `file_path` y `file_stage` |
 
-- Si falta solo una partición, se rechaza el inicio. La generación desde metadata de Aves necesita además `recordist` para el particionador agrupado; no promete separación por grabador cuando hay menos de tres grupos. Las particiones explícitas no reciben esa comprobación de agrupación.
+- El entrenamiento de aplicación consume únicamente el trío completo previamente preparado; no genera particiones desde `metadata.csv` ni admite una combinación parcial. La preparación y validación de ese trío es un paso offline distinto del inicio desde la UI.
 - Train y val deben ser no vacíos, con clases de texto no nulas ni en blanco; cada clase de val debe existir en train. No pueden compartir una ruta de audio resuelta.
 - `file_path` debe ser texto relativo POSIX seguro y no vacío; `file_stage` debe declarar `raw` o `processed`. No se admiten absolutas persistidas, búsqueda por nombre/`xc_id`, variantes de clase/slug ni fallback de referencias inválidas. La etapa es independiente de la extensión: un WAV puede ser raw.
 - Cada referencia debe señalar un archivo regular no vacío, con extensión `.wav`, `.mp3`, `.flac` u `.ogg`, bajo la raíz física de su etapa. Se rechazan symlinks en archivo, raíz o cualquier ancestro; no pre-resolver aliases antes de validar. Etiqueta semántica, carpeta y nombre original no son intercambiables.
@@ -493,7 +493,7 @@ sequenceDiagram
 | :--- | :--- | :--- |
 | **"Error de conexión con Google Cloud Storage" en Ingesta** | La credencial JSON de GCP expiró, fue revocada o el bucket no existe. | El Administrador debe verificar en `/setup` o en el archivo de entorno que la variable `GOOGLE_APPLICATION_CREDENTIALS` apunte a una llave válida con rol `Storage Object Admin`. |
 | **"Predicción clasificada como Ruido Blanco / No Biológico"** | La señal grabada presenta una planitud espectral excesiva o está vacía/acolchada con ceros. | Verifique que el micrófono no haya grabado silencio plano o ruido de interferencia estática pura. |
-| **"Entrenamiento en Cola / Hardware Ocupado"** | Otro investigador tiene un entrenamiento activo en la GPU local. | El sistema no permite dos entrenamientos simultáneos para prevenir `CUDA OOM`. Espere a que concluya el trabajo en curso o consulte la posición en cola. |
+| **"Entrenamiento ocupado"** | El proceso backend que recibió la solicitud ya tiene un entrenamiento activo. El control de admisión es local a ese proceso; no existe una cola FIFO ni una posición de espera. | Consulte el progreso del trabajo activo desde la vista Entrenamiento y espere a que termine antes de volver a iniciarlo. El sistema no coordina otros procesos que utilicen la GPU. |
 | **"Audio no se reproduce en el navegador"** | Formato de audio incompatible o archivo WAV con códec no estándar (ej. float64 poco común). | Asegúrese de que el audio sea PCM estándar de 16 o 24 bits. F.A.M.A. transcodifica internamente en backend si se envía a inferencia. |
 | **"Memoria de Video (VRAM) Crítica"** | Un proceso externo de la máquina está consumiendo la GPU física. | El Administrador debe acceder al nodo on-premise y verificar procesos con `nvidia-smi`, cerrando aplicaciones recreativas o instancias huérfanas de PyTorch. |
 
