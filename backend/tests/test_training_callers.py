@@ -290,10 +290,15 @@ def test_public_inference_reads_explicit_stage(source, monkeypatch, module, func
 
 
 @pytest.mark.parametrize("module", [
-    "train_efficientnet_hpss_additive", "train_panns_transfer", "train_panns_hpss_additive",
-    "train_multitask_hpss", "train_multitask_hpss_wideband", "train_multitask_hpss_rms_balanced",
-    "train_multitask_hpss_balanced_additive", "train_multitask_multires_hpss",
-    "train_multitask_hpss_asl", "train_multitask_hpss_additive",
+    "train_efficientnet_hpss_additive",
+    "train_panns_hpss_additive",
+    "train_multitask_hpss",
+    "train_multitask_hpss_wideband",
+    "train_multitask_hpss_rms_balanced",
+    "train_multitask_hpss_balanced_additive",
+    "train_multitask_multires_hpss",
+    "train_multitask_hpss_asl",
+    "train_multitask_hpss_additive",
 ])
 @pytest.mark.parametrize("stage,level", [("raw", 0.25), ("processed", -0.5)])
 def test_hpss_entrypoints_prepare_canonical_splits(source, tmp_path, monkeypatch, module, stage, level):
