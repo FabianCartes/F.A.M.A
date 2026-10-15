@@ -1,0 +1,800 @@
+{
+  "schema": "fama/legacy-cleanup-split-verification/v1",
+  "originalCommit": "6ef368794385aceee3eed832f69f4175e90dfc33",
+  "base": "bc2729ec59581ecb928ca74b0d87afc2cf4df8c7",
+  "firstUnit": {
+    "commit": "eaedb3d3e6c9147f3a4747cf8a8723735ff455f9",
+    "tests": {
+      "exitCode": 0,
+      "passed": 56,
+      "log": "/tmp/gentle-jobs-N3xa91/job-7.log"
+    },
+    "lineage": "review-b5bdf57e180f58fb",
+    "state": "approved",
+    "authority": "burned",
+    "targetIdentity": "sha256:9ea5ae6497f000040c67e73b791cb8a9c6bd08208a96edd681ee2dabf12dbcdf",
+    "consumedRevision": "sha256:81d9faf00bcdc20981f8c356e0f2e139ea267f410716e14757f63436ac5a4652"
+  },
+  "secondUnit": {
+    "unit": "train_panns_transfer",
+    "parent": "eaedb3d3e6c9147f3a4747cf8a8723735ff455f9",
+    "test_exit_code": 0,
+    "stdout": "......................................................                   [100%]\n54 passed in 1.52s\n",
+    "stderr": "",
+    "argv": [
+      "/home/kevin/Work/fama/.venv/bin/python",
+      "-B",
+      "-c",
+      "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in split checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--basetemp",
+      "/home/kevin/Work/fama/backend/tests/.legacy-split-unit-lcr8r0sd/pytest",
+      "tests/test_training_callers.py",
+      "tests/test_cli_paths.py::test_training_scripts_no_hardcoded_root_data_dir"
+    ],
+    "commit": "94573d59fcd334d006fa2ed979cb7f73cc5cb6ea",
+    "numstat": "9\t4\tbackend/tests/test_training_callers.py\n0\t207\tbackend/train_panns_transfer.py\n",
+    "lineage": "review-99cbd192da0a3889",
+    "nativeStatus": {
+      "state": "escalated",
+      "action": "stop",
+      "reasonCode": "native_stop_required",
+      "horizon": "terminal",
+      "escalation": {
+        "cause": "unknown_causality",
+        "finding_ids": [
+          "R3-training-entrypoint-removed"
+        ]
+      },
+      "revision": "sha256:74939d0b0d79e91b0dced299cc58b795b35393a05e6e5c23ca6ce73771d7503c",
+      "targetIdentity": "sha256:f28dd7265f66c6614871ed8e88242b31b8204c87a38b0b7d2dff4bc3557df952"
+    },
+    "acknowledged": false
+  },
+  "finalTreeEquivalent": true,
+  "originalBranchMoved": true,
+  "remainingUnitsBuilt": true,
+  "pushed": false,
+  "finalAssemblyTests": "own_and_independent_passed",
+  "blocker": null,
+  "rddDisposition": {
+    "scope": "clone",
+    "enabled": false,
+    "authorization": "authorize_disable_clone_rdd_finish_split"
+  },
+  "followingUnits": [
+    {
+      "unit": "train_efficientnet_hpss_additive",
+      "parent": "94573d59fcd334d006fa2ed979cb7f73cc5cb6ea",
+      "test_exit_code": 0,
+      "stdout": "....................................................                     [100%]\n52 passed in 1.39s\n",
+      "stderr": "",
+      "argv": [
+        "/home/kevin/Work/fama/.venv/bin/python",
+        "-B",
+        "-c",
+        "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in split checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "--basetemp",
+        "/home/kevin/Work/fama/backend/tests/.legacy-split-hpss-nqaugvfv/train_efficientnet_hpss_additive",
+        "tests/test_training_callers.py",
+        "tests/test_cli_paths.py::test_training_scripts_no_hardcoded_root_data_dir"
+      ],
+      "nativeReview": "not_run_rdd_disabled_by_user",
+      "commit": "2a425e9db41c61ba12c481cea0d25b965a2921e0",
+      "numstat": "0\t1\tbackend/tests/test_training_callers.py\n0\t261\tbackend/train_efficientnet_hpss_additive.py\n"
+    },
+    {
+      "unit": "train_panns_hpss_additive",
+      "parent": "2a425e9db41c61ba12c481cea0d25b965a2921e0",
+      "test_exit_code": 0,
+      "stdout": "..................................................                       [100%]\n50 passed in 1.39s\n",
+      "stderr": "",
+      "argv": [
+        "/home/kevin/Work/fama/.venv/bin/python",
+        "-B",
+        "-c",
+        "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in split checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "--basetemp",
+        "/home/kevin/Work/fama/backend/tests/.legacy-split-hpss-nqaugvfv/train_panns_hpss_additive",
+        "tests/test_training_callers.py",
+        "tests/test_cli_paths.py::test_training_scripts_no_hardcoded_root_data_dir"
+      ],
+      "nativeReview": "not_run_rdd_disabled_by_user",
+      "commit": "1c579670b79290daf777f3217f2644908108106e",
+      "numstat": "0\t1\tbackend/tests/test_training_callers.py\n0\t269\tbackend/train_panns_hpss_additive.py\n"
+    },
+    {
+      "unit": "train_multitask_hpss",
+      "parent": "1c579670b79290daf777f3217f2644908108106e",
+      "test_exit_code": 0,
+      "stdout": "................................................                         [100%]\n48 passed in 1.32s\n",
+      "stderr": "",
+      "argv": [
+        "/home/kevin/Work/fama/.venv/bin/python",
+        "-B",
+        "-c",
+        "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in split checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "--basetemp",
+        "/home/kevin/Work/fama/backend/tests/.legacy-split-hpss-nqaugvfv/train_multitask_hpss",
+        "tests/test_training_callers.py",
+        "tests/test_cli_paths.py::test_training_scripts_no_hardcoded_root_data_dir"
+      ],
+      "nativeReview": "not_run_rdd_disabled_by_user",
+      "commit": "c6f1d2aab41187709cc8450307fb295b4dc78900",
+      "numstat": "0\t1\tbackend/tests/test_training_callers.py\n0\t247\tbackend/train_multitask_hpss.py\n"
+    },
+    {
+      "unit": "train_multitask_hpss_wideband",
+      "parent": "c6f1d2aab41187709cc8450307fb295b4dc78900",
+      "test_exit_code": 0,
+      "stdout": "..............................................                           [100%]\n46 passed in 1.27s\n",
+      "stderr": "",
+      "argv": [
+        "/home/kevin/Work/fama/.venv/bin/python",
+        "-B",
+        "-c",
+        "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in split checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "--basetemp",
+        "/home/kevin/Work/fama/backend/tests/.legacy-split-hpss-nqaugvfv/train_multitask_hpss_wideband",
+        "tests/test_training_callers.py",
+        "tests/test_cli_paths.py::test_training_scripts_no_hardcoded_root_data_dir"
+      ],
+      "nativeReview": "not_run_rdd_disabled_by_user",
+      "commit": "428354ad5bf0bf001a2db8b3d7b94d78defa0277",
+      "numstat": "0\t1\tbackend/tests/test_training_callers.py\n0\t289\tbackend/train_multitask_hpss_wideband.py\n"
+    },
+    {
+      "unit": "train_multitask_hpss_rms_balanced",
+      "parent": "428354ad5bf0bf001a2db8b3d7b94d78defa0277",
+      "test_exit_code": 0,
+      "stdout": "............................................                             [100%]\n44 passed in 1.24s\n",
+      "stderr": "",
+      "argv": [
+        "/home/kevin/Work/fama/.venv/bin/python",
+        "-B",
+        "-c",
+        "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in split checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "--basetemp",
+        "/home/kevin/Work/fama/backend/tests/.legacy-split-hpss-nqaugvfv/train_multitask_hpss_rms_balanced",
+        "tests/test_training_callers.py",
+        "tests/test_cli_paths.py::test_training_scripts_no_hardcoded_root_data_dir"
+      ],
+      "nativeReview": "not_run_rdd_disabled_by_user",
+      "commit": "7ab670f55e48dca1823d5e5a8969aec23ffa90b2",
+      "numstat": "0\t1\tbackend/tests/test_training_callers.py\n0\t289\tbackend/train_multitask_hpss_rms_balanced.py\n"
+    },
+    {
+      "unit": "train_multitask_hpss_balanced_additive",
+      "parent": "7ab670f55e48dca1823d5e5a8969aec23ffa90b2",
+      "test_exit_code": 0,
+      "stdout": "..........................................                               [100%]\n42 passed in 1.15s\n",
+      "stderr": "",
+      "argv": [
+        "/home/kevin/Work/fama/.venv/bin/python",
+        "-B",
+        "-c",
+        "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in split checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "--basetemp",
+        "/home/kevin/Work/fama/backend/tests/.legacy-split-hpss-nqaugvfv/train_multitask_hpss_balanced_additive",
+        "tests/test_training_callers.py",
+        "tests/test_cli_paths.py::test_training_scripts_no_hardcoded_root_data_dir"
+      ],
+      "nativeReview": "not_run_rdd_disabled_by_user",
+      "commit": "fe6199922108e1a0bbdcbb361fcd8f01dfb0ffee",
+      "numstat": "0\t1\tbackend/tests/test_training_callers.py\n0\t263\tbackend/train_multitask_hpss_balanced_additive.py\n"
+    },
+    {
+      "unit": "train_multitask_multires_hpss",
+      "parent": "fe6199922108e1a0bbdcbb361fcd8f01dfb0ffee",
+      "test_exit_code": 0,
+      "stdout": "........................................                                 [100%]\n40 passed in 1.13s\n",
+      "stderr": "",
+      "argv": [
+        "/home/kevin/Work/fama/.venv/bin/python",
+        "-B",
+        "-c",
+        "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in split checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "--basetemp",
+        "/home/kevin/Work/fama/backend/tests/.legacy-split-hpss-nqaugvfv/train_multitask_multires_hpss",
+        "tests/test_training_callers.py",
+        "tests/test_cli_paths.py::test_training_scripts_no_hardcoded_root_data_dir"
+      ],
+      "nativeReview": "not_run_rdd_disabled_by_user",
+      "commit": "d644c072cf991f4a75e0f856c1779763176049dd",
+      "numstat": "0\t1\tbackend/tests/test_training_callers.py\n0\t289\tbackend/train_multitask_multires_hpss.py\n"
+    },
+    {
+      "unit": "train_multitask_hpss_asl",
+      "parent": "d644c072cf991f4a75e0f856c1779763176049dd",
+      "test_exit_code": 0,
+      "stdout": "......................................                                   [100%]\n38 passed in 1.04s\n",
+      "stderr": "",
+      "argv": [
+        "/home/kevin/Work/fama/.venv/bin/python",
+        "-B",
+        "-c",
+        "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in split checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "--basetemp",
+        "/home/kevin/Work/fama/backend/tests/.legacy-split-hpss-nqaugvfv/train_multitask_hpss_asl",
+        "tests/test_training_callers.py",
+        "tests/test_cli_paths.py::test_training_scripts_no_hardcoded_root_data_dir"
+      ],
+      "nativeReview": "not_run_rdd_disabled_by_user",
+      "commit": "6c8f6b4682ce80a4b0d1285cbb17e939c7927de8",
+      "numstat": "0\t1\tbackend/tests/test_training_callers.py\n0\t259\tbackend/train_multitask_hpss_asl.py\n"
+    },
+    {
+      "parent": "6c8f6b4682ce80a4b0d1285cbb17e939c7927de8",
+      "test_exit_code": 0,
+      "stdout": "36 passed in 0.97s\n",
+      "stderr": "",
+      "summary": "36passed/exit0; diffcheck inicial2 por blankEOF, corregido a0 sin cambio sem\u00e1ntico",
+      "prior_execution": "job-9",
+      "unit": "train_multitask_hpss_additive",
+      "commit": "b195f6851b7e18f063b69369003d09edc7cb5c69",
+      "nativeReview": "not_run_rdd_disabled_by_user",
+      "numstat": "0\t51\tbackend/tests/test_training_callers.py\n0\t261\tbackend/train_multitask_hpss_additive.py"
+    },
+    {
+      "unit": "train_v2_and_compare",
+      "parent": "b195f6851b7e18f063b69369003d09edc7cb5c69",
+      "test_exit_code": 0,
+      "stdout": "..................................                                       [100%]\n34 passed in 0.93s\n",
+      "stderr": "",
+      "argv": [
+        "/home/kevin/Work/fama/.venv/bin/python",
+        "-B",
+        "-c",
+        "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in split checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "--basetemp",
+        "/home/kevin/Work/fama/backend/tests/.legacy-split-rest-18cp5ft_/train_v2_and_compare",
+        "tests/test_training_callers.py",
+        "tests/test_cli_paths.py::test_prepare_engine_dataset_default_path",
+        "tests/test_cli_paths.py::test_poc_scripts_no_hardcoded_root_data_dir",
+        "tests/test_cli_paths.py::test_root_data_dir_completely_removed",
+        "tests/test_cli_paths.py::test_training_scripts_no_hardcoded_root_data_dir"
+      ],
+      "summary": "34 passed in 0.93s",
+      "commit": "d33fe7b07a84170c172a4b71efb5f682e7f17e4f",
+      "nativeReview": "not_run_rdd_disabled_by_user",
+      "numstat": "0\t1\tbackend/tests/test_cli_paths.py\n6\t8\tbackend/tests/test_training_callers.py\n0\t170\tbackend/train_v2_and_compare.py"
+    },
+    {
+      "unit": "train_and_ensemble_engines",
+      "parent": "d33fe7b07a84170c172a4b71efb5f682e7f17e4f",
+      "test_exit_code": 0,
+      "stdout": "...........................                                              [100%]\n27 passed in 0.78s\n",
+      "stderr": "",
+      "argv": [
+        "/home/kevin/Work/fama/.venv/bin/python",
+        "-B",
+        "-c",
+        "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in split checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "--basetemp",
+        "/home/kevin/Work/fama/backend/tests/.legacy-split-rest-18cp5ft_/train_and_ensemble_engines",
+        "tests/test_training_callers.py",
+        "tests/test_cli_paths.py::test_prepare_engine_dataset_default_path",
+        "tests/test_cli_paths.py::test_poc_scripts_no_hardcoded_root_data_dir",
+        "tests/test_cli_paths.py::test_root_data_dir_completely_removed"
+      ],
+      "summary": "27 passed in 0.78s",
+      "commit": "9f4224297468ebfb6adaa1ad95a3a2fce64e46a7",
+      "nativeReview": "not_run_rdd_disabled_by_user",
+      "numstat": "0\t15\tbackend/tests/test_cli_paths.py\n0\t167\tbackend/tests/test_training_callers.py\n0\t232\tbackend/train_and_ensemble_engines.py"
+    },
+    {
+      "unit": "recetas-retiradas",
+      "parent": "9f4224297468ebfb6adaa1ad95a3a2fce64e46a7",
+      "test_exit_code": 0,
+      "stdout": "...........................                                              [100%]\n27 passed in 0.82s\n",
+      "stderr": "",
+      "argv": [
+        "/home/kevin/Work/fama/.venv/bin/python",
+        "-B",
+        "-c",
+        "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in split checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "--basetemp",
+        "/home/kevin/Work/fama/backend/tests/.legacy-split-rest-18cp5ft_/recetas-retiradas",
+        "tests/test_training_callers.py",
+        "tests/test_cli_paths.py::test_prepare_engine_dataset_default_path",
+        "tests/test_cli_paths.py::test_poc_scripts_no_hardcoded_root_data_dir",
+        "tests/test_cli_paths.py::test_root_data_dir_completely_removed"
+      ],
+      "summary": "27 passed in 0.82s",
+      "commit": "febbbb5e0ab2557c75252187e43bf065ff95f808",
+      "nativeReview": "not_run_rdd_disabled_by_user",
+      "numstat": "0\t32\tbackend/tests/test_recipes.py\n0\t59\tbackend/training/recipes/car_engine_diagnostics_convnext_nano.yaml\n0\t59\tbackend/training/recipes/car_engine_diagnostics_efficientnet_b0.yaml\n0\t60\tbackend/training/recipes/car_engine_diagnostics_efficientnet_b0_v2.yaml\n0\t60\tbackend/training/recipes/car_engine_diagnostics_resnet34d.yaml\n0\t60\tbackend/training/recipes/car_engine_diagnostics_resnet34d_multitask_hpss.yaml\n0\t60\tbackend/training/recipes/car_engine_diagnostics_resnet34d_v2.yaml"
+    },
+    {
+      "unit": "entrenador-standalone",
+      "parent": "febbbb5e0ab2557c75252187e43bf065ff95f808",
+      "test_exit_code": 0,
+      "stdout": "..............                                                           [100%]\n14 passed in 0.57s\n",
+      "stderr": "",
+      "argv": [
+        "/home/kevin/Work/fama/.venv/bin/python",
+        "-B",
+        "-c",
+        "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in split checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "--basetemp",
+        "/home/kevin/Work/fama/backend/tests/.legacy-split-rest-18cp5ft_/entrenador-standalone",
+        "tests/test_standalone_evaluation.py",
+        "tests/test_bundle_exporter.py",
+        "tests/test_cli_paths.py::test_prepare_engine_dataset_default_path",
+        "tests/test_cli_paths.py::test_poc_scripts_no_hardcoded_root_data_dir",
+        "tests/test_cli_paths.py::test_root_data_dir_completely_removed"
+      ],
+      "summary": "14 passed in 0.57s",
+      "commit": "43950eef041c9521035cfa7620d67e1a76d390a2",
+      "nativeReview": "not_run_rdd_disabled_by_user",
+      "numstat": "57\t133\tbackend/tests/test_standalone_evaluation.py\n0\t120\tbackend/tests/test_training_callers.py\n0\t3\tbackend/training/trainers/__init__.py\n0\t377\tbackend/training/trainers/standalone_trainer.py"
+    },
+    {
+      "unit": "orquestadores-poc",
+      "parent": "43950eef041c9521035cfa7620d67e1a76d390a2",
+      "test_exit_code": 0,
+      "stdout": "...........................................                              [100%]\n43 passed in 3.54s\n",
+      "stderr": "",
+      "argv": [
+        "/home/kevin/Work/fama/.venv/bin/python",
+        "-B",
+        "-c",
+        "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in split checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "--basetemp",
+        "/home/kevin/Work/fama/backend/tests/.legacy-split-rest-18cp5ft_/orquestadores-poc",
+        "tests/test_training_entrypoints.py",
+        "tests/test_poc_dataset_references.py",
+        "tests/test_benchmark.py",
+        "tests/test_standalone_evaluation.py",
+        "tests/test_cli_paths.py::test_prepare_engine_dataset_default_path",
+        "tests/test_cli_paths.py::test_poc_scripts_no_hardcoded_root_data_dir",
+        "tests/test_cli_paths.py::test_root_data_dir_completely_removed"
+      ],
+      "summary": "43 passed in 3.54s",
+      "commit": "3c0b20f5c6cda40953df17f5659d20373a760f50",
+      "nativeReview": "not_run_rdd_disabled_by_user",
+      "numstat": "0\t2\tbackend/ml_core/train.py\n1\t226\tbackend/poc/benchmark.py\n0\t257\tbackend/poc/train.py\n0\t70\tbackend/tests/test_benchmark.py\n0\t2\tbackend/tests/test_cli_paths.py\n22\t199\tbackend/tests/test_poc_dataset_references.py\n27\t0\tbackend/tests/test_training_entrypoints.py"
+    },
+    {
+      "parent": "3c0b20f5c6cda40953df17f5659d20373a760f50",
+      "summary": "Documentaci\u00f3n pasiva: sin RED significativo; diffcheck0 y lectura estructural",
+      "structural_exit_code": 0,
+      "unit": "documentacion-operativa",
+      "commit": "6a0fb2ae234a746bbaeba7b9d94d46145d6937c8",
+      "nativeReview": "not_run_rdd_disabled_by_user",
+      "numstat": "10\t1\tREADME.md\n2\t1\tbackend/README.md\n32\t35\tdocs/manuales/contrato_referencias_dataset_canonicas.md\n8\t8\tdocs/manuales/manual_usuario_plataforma.md"
+    },
+    {
+      "parent": "6a0fb2ae234a746bbaeba7b9d94d46145d6937c8",
+      "summary": "Documentaci\u00f3n hist\u00f3rica/arquitectura y recibos originales; diffcheck0",
+      "structural_exit_code": 0,
+      "unit": "documentacion-historica-y-arquitectura",
+      "commit": "c194f8c0c0366cec3b00ef46f61fc2af18edeccf",
+      "nativeReview": "not_run_rdd_disabled_by_user",
+      "numstat": "6\t2\tdocs/README.md\n3\t1\tdocs/adr/0012_unificacion_fuente_datos_raw.md\n3\t1\tdocs/adr/0014_delimitacion_hiperparametros_frontend_deep_modules.md\n2\t0\tdocs/adr/0022-evaluaciones-finales-estandarizadas.md\n2\t0\tdocs/arquitectura/19_subsistema_entrenamiento_modular_rdd.md\n3\t1\tdocs/arquitectura/21_resumen_actualizacion_remota_y_nuevas_capacidades.md\n41\t0\tdocs/arquitectura/limpieza-entrenamiento-legacy.md\n83\t0\tdocs/arquitectura/revision-fastapi.md\n2\t0\tdocs/modelos/10_metodo_campeon_bioacustica_fama.md\n2\t0\tdocs/modelos/12_ensemble_multimodelo_rdd.md\n2\t0\tdocs/modelos/13_ensamble_heterogeneo_convnext_rdd.md\n2\t0\tdocs/modelos/16_informe_maestro_super_ensamble_fama.md\n11\t4\tdocs/modelos/fundamentacion_tecnica_efficientnet_focal_loss.md\n49\t0\tdocs/receipts/training-legacy-final-verification.json\n25\t0\tdocs/receipts/training-legacy-independent-verification.json"
+    }
+  ],
+  "assembledCommit": "c194f8c0c0366cec3b00ef46f61fc2af18edeccf",
+  "assembledTree": "97d30788ba2ac092b565f12fa3485f53a2370012",
+  "ownFinalVerification": {
+    "commit": "c194f8c0c0366cec3b00ef46f61fc2af18edeccf",
+    "exitCode": 0,
+    "stdout": "........................................................................ [ 24%]\n........................................................................ [ 48%]\n........................................................................ [ 72%]\n........................................................................ [ 96%]\n.........                                                                [100%]\n=============================== warnings summary ===============================\ntests/test_training_persistence.py::test_cpu_checkpoint_and_final_predictor_use_first_best_not_last[1.0--1.0]\ntests/test_training_persistence.py::test_cpu_checkpoint_and_final_predictor_use_first_best_not_last[-1.0--2.0]\n  /home/kevin/Work/fama/.venv/lib/python3.14/site-packages/librosa/core/spectrum.py:3004: UserWarning: n_fft=2048 is too large for input signal of length=512\n    stft(\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n297 passed, 2 warnings in 20.64s\n",
+    "stderr": "",
+    "selectors": [
+      "tests/test_training_entrypoints.py",
+      "tests/test_api_training.py",
+      "tests/test_training_flow.py",
+      "tests/test_training_service.py",
+      "tests/test_training_persistence.py",
+      "tests/test_training_schemas.py",
+      "tests/test_training_models.py",
+      "tests/test_bundle_exporter.py",
+      "tests/test_bundle_predictor.py",
+      "tests/test_standalone_evaluation.py",
+      "tests/test_poc_dataset_references.py",
+      "tests/test_benchmark.py",
+      "tests/test_cli_paths.py::test_prepare_engine_dataset_default_path",
+      "tests/test_cli_paths.py::test_poc_scripts_no_hardcoded_root_data_dir",
+      "tests/test_cli_paths.py::test_root_data_dir_completely_removed"
+    ],
+    "argv": [
+      "/home/kevin/Work/fama/.venv/bin/python",
+      "-B",
+      "-c",
+      "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in cleanup checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--basetemp",
+      "/home/kevin/Work/fama/backend/tests/.legacy-split-final-94nx583w/pytest",
+      "tests/test_training_entrypoints.py",
+      "tests/test_api_training.py",
+      "tests/test_training_flow.py",
+      "tests/test_training_service.py",
+      "tests/test_training_persistence.py",
+      "tests/test_training_schemas.py",
+      "tests/test_training_models.py",
+      "tests/test_bundle_exporter.py",
+      "tests/test_bundle_predictor.py",
+      "tests/test_standalone_evaluation.py",
+      "tests/test_poc_dataset_references.py",
+      "tests/test_benchmark.py",
+      "tests/test_cli_paths.py::test_prepare_engine_dataset_default_path",
+      "tests/test_cli_paths.py::test_poc_scripts_no_hardcoded_root_data_dir",
+      "tests/test_cli_paths.py::test_root_data_dir_completely_removed"
+    ],
+    "isolation": "Private HOME/caches/temp, SQLite, dotenv off, CUDA hidden, offline and all socket connects blocked; synthetic tests only"
+  },
+  "ownStructuralVerification": {
+    "exitCode": 0,
+    "linearCommits": 18,
+    "allowedChangedPaths": 50,
+    "astPythonFiles": 182,
+    "retiredDefinitionsOrImports": 0,
+    "treeEqual": true,
+    "sourceWorktreeClean": true,
+    "originalAndBackupUnchanged": true,
+    "metadataLinksExist": true
+  },
+  "independentVerification": {
+    "task": "mv90mat6-9-e9aa",
+    "verdicts": {
+      "S1": "PASS",
+      "S2": "PASS_LOCAL_SCOPE",
+      "S3": "PASS_CLEANUP_DOCUMENTATION",
+      "S4": "PASS_NO_NATIVE_APPROVAL"
+    },
+    "evidence": {
+      "scope": "independent read-only verification; only own receipt and isolated scratch permitted",
+      "scratch": "/home/kevin/Work/fama/backend/tests/.legacy-split-independent-verify-20260312",
+      "receipt": "/home/kevin/Work/fama/backend/tests/.legacy-split-independent-result.json",
+      "structural": {
+        "assembled_tree": "97d30788ba2ac092b565f12fa3485f53a2370012",
+        "backup_tree": "97d30788ba2ac092b565f12fa3485f53a2370012",
+        "tree_equal": true,
+        "original_tip": "6ef368794385aceee3eed832f69f4175e90dfc33",
+        "backup_tip": "6ef368794385aceee3eed832f69f4175e90dfc33",
+        "assembled_branch_tip": "c194f8c0c0366cec3b00ef46f61fc2af18edeccf",
+        "refs_intact": true,
+        "base": "bc2729ec59581ecb928ca74b0d87afc2cf4df8c7",
+        "commit_count": 18,
+        "linear": true,
+        "delta_path_violations": [],
+        "commits": [
+          {
+            "commit": "eaedb3d3e6c9147f3a4747cf8a8723735ff455f9",
+            "subject": "refactor(entrenamiento): retirar el lanzador legacy de motores",
+            "paths": [
+              "backend/tests/test_cli_paths.py",
+              "backend/tests/test_training_callers.py",
+              "backend/train_car_engine_model.py",
+              "docs/manuales/contrato_referencias_dataset_canonicas.md"
+            ]
+          },
+          {
+            "commit": "94573d59fcd334d006fa2ed979cb7f73cc5cb6ea",
+            "subject": "refactor(entrenamiento): retirar el CLI panns_transfer",
+            "paths": [
+              "backend/tests/test_training_callers.py",
+              "backend/train_panns_transfer.py"
+            ]
+          },
+          {
+            "commit": "2a425e9db41c61ba12c481cea0d25b965a2921e0",
+            "subject": "refactor(entrenamiento): retirar el CLI efficientnet_hpss_additive",
+            "paths": [
+              "backend/tests/test_training_callers.py",
+              "backend/train_efficientnet_hpss_additive.py"
+            ]
+          },
+          {
+            "commit": "1c579670b79290daf777f3217f2644908108106e",
+            "subject": "refactor(entrenamiento): retirar el CLI panns_hpss_additive",
+            "paths": [
+              "backend/tests/test_training_callers.py",
+              "backend/train_panns_hpss_additive.py"
+            ]
+          },
+          {
+            "commit": "c6f1d2aab41187709cc8450307fb295b4dc78900",
+            "subject": "refactor(entrenamiento): retirar el CLI multitask_hpss",
+            "paths": [
+              "backend/tests/test_training_callers.py",
+              "backend/train_multitask_hpss.py"
+            ]
+          },
+          {
+            "commit": "428354ad5bf0bf001a2db8b3d7b94d78defa0277",
+            "subject": "refactor(entrenamiento): retirar el CLI multitask_hpss_wideband",
+            "paths": [
+              "backend/tests/test_training_callers.py",
+              "backend/train_multitask_hpss_wideband.py"
+            ]
+          },
+          {
+            "commit": "7ab670f55e48dca1823d5e5a8969aec23ffa90b2",
+            "subject": "refactor(entrenamiento): retirar el CLI multitask_hpss_rms_balanced",
+            "paths": [
+              "backend/tests/test_training_callers.py",
+              "backend/train_multitask_hpss_rms_balanced.py"
+            ]
+          },
+          {
+            "commit": "fe6199922108e1a0bbdcbb361fcd8f01dfb0ffee",
+            "subject": "refactor(entrenamiento): retirar el CLI multitask_hpss_balanced_additive",
+            "paths": [
+              "backend/tests/test_training_callers.py",
+              "backend/train_multitask_hpss_balanced_additive.py"
+            ]
+          },
+          {
+            "commit": "d644c072cf991f4a75e0f856c1779763176049dd",
+            "subject": "refactor(entrenamiento): retirar el CLI multitask_multires_hpss",
+            "paths": [
+              "backend/tests/test_training_callers.py",
+              "backend/train_multitask_multires_hpss.py"
+            ]
+          },
+          {
+            "commit": "6c8f6b4682ce80a4b0d1285cbb17e939c7927de8",
+            "subject": "refactor(entrenamiento): retirar el CLI multitask_hpss_asl",
+            "paths": [
+              "backend/tests/test_training_callers.py",
+              "backend/train_multitask_hpss_asl.py"
+            ]
+          },
+          {
+            "commit": "b195f6851b7e18f063b69369003d09edc7cb5c69",
+            "subject": "refactor(entrenamiento): retirar el CLI multitask_hpss_additive",
+            "paths": [
+              "backend/tests/test_training_callers.py",
+              "backend/train_multitask_hpss_additive.py"
+            ]
+          },
+          {
+            "commit": "d33fe7b07a84170c172a4b71efb5f682e7f17e4f",
+            "subject": "refactor(entrenamiento): retirar el CLI v2_and_compare",
+            "paths": [
+              "backend/tests/test_cli_paths.py",
+              "backend/tests/test_training_callers.py",
+              "backend/train_v2_and_compare.py"
+            ]
+          },
+          {
+            "commit": "9f4224297468ebfb6adaa1ad95a3a2fce64e46a7",
+            "subject": "refactor(entrenamiento): retirar el CLI and_ensemble_engines",
+            "paths": [
+              "backend/tests/test_cli_paths.py",
+              "backend/tests/test_training_callers.py",
+              "backend/train_and_ensemble_engines.py"
+            ]
+          },
+          {
+            "commit": "febbbb5e0ab2557c75252187e43bf065ff95f808",
+            "subject": "refactor(recetas): retirar configuraciones sin consumidores",
+            "paths": [
+              "backend/tests/test_recipes.py",
+              "backend/training/recipes/car_engine_diagnostics_convnext_nano.yaml",
+              "backend/training/recipes/car_engine_diagnostics_efficientnet_b0.yaml",
+              "backend/training/recipes/car_engine_diagnostics_efficientnet_b0_v2.yaml",
+              "backend/training/recipes/car_engine_diagnostics_resnet34d.yaml",
+              "backend/training/recipes/car_engine_diagnostics_resnet34d_multitask_hpss.yaml",
+              "backend/training/recipes/car_engine_diagnostics_resnet34d_v2.yaml"
+            ]
+          },
+          {
+            "commit": "43950eef041c9521035cfa7620d67e1a76d390a2",
+            "subject": "refactor(entrenamiento): retirar entrenador independiente y preservar publicaci\u00f3n",
+            "paths": [
+              "backend/tests/test_standalone_evaluation.py",
+              "backend/tests/test_training_callers.py",
+              "backend/training/trainers/__init__.py",
+              "backend/training/trainers/standalone_trainer.py"
+            ]
+          },
+          {
+            "commit": "3c0b20f5c6cda40953df17f5659d20373a760f50",
+            "subject": "refactor(entrenamiento): retirar orquestadores PoC y conservar m\u00f3dulos compartidos",
+            "paths": [
+              "backend/ml_core/train.py",
+              "backend/poc/benchmark.py",
+              "backend/poc/train.py",
+              "backend/tests/test_benchmark.py",
+              "backend/tests/test_cli_paths.py",
+              "backend/tests/test_poc_dataset_references.py",
+              "backend/tests/test_training_entrypoints.py"
+            ]
+          },
+          {
+            "commit": "6a0fb2ae234a746bbaeba7b9d94d46145d6937c8",
+            "subject": "docs(entrenamiento): documentar \u00fanicamente el flujo web soportado",
+            "paths": [
+              "README.md",
+              "backend/README.md",
+              "docs/manuales/contrato_referencias_dataset_canonicas.md",
+              "docs/manuales/manual_usuario_plataforma.md"
+            ]
+          },
+          {
+            "commit": "c194f8c0c0366cec3b00ef46f61fc2af18edeccf",
+            "subject": "docs(arquitectura): registrar retiro legacy y revisi\u00f3n de FastAPI",
+            "paths": [
+              "docs/README.md",
+              "docs/adr/0012_unificacion_fuente_datos_raw.md",
+              "docs/adr/0014_delimitacion_hiperparametros_frontend_deep_modules.md",
+              "docs/adr/0022-evaluaciones-finales-estandarizadas.md",
+              "docs/arquitectura/19_subsistema_entrenamiento_modular_rdd.md",
+              "docs/arquitectura/21_resumen_actualizacion_remota_y_nuevas_capacidades.md",
+              "docs/arquitectura/limpieza-entrenamiento-legacy.md",
+              "docs/arquitectura/revision-fastapi.md",
+              "docs/modelos/10_metodo_campeon_bioacustica_fama.md",
+              "docs/modelos/12_ensemble_multimodelo_rdd.md",
+              "docs/modelos/13_ensamble_heterogeneo_convnext_rdd.md",
+              "docs/modelos/16_informe_maestro_super_ensamble_fama.md",
+              "docs/modelos/fundamentacion_tecnica_efficientnet_focal_loss.md",
+              "docs/receipts/training-legacy-final-verification.json",
+              "docs/receipts/training-legacy-independent-verification.json"
+            ]
+          }
+        ],
+        "receipt_units": [
+          "train_efficientnet_hpss_additive",
+          "train_panns_hpss_additive",
+          "train_multitask_hpss",
+          "train_multitask_hpss_wideband",
+          "train_multitask_hpss_rms_balanced",
+          "train_multitask_hpss_balanced_additive",
+          "train_multitask_multires_hpss",
+          "train_multitask_hpss_asl",
+          "train_multitask_hpss_additive",
+          "train_v2_and_compare",
+          "train_and_ensemble_engines",
+          "recetas-retiradas",
+          "entrenador-standalone",
+          "orquestadores-poc",
+          "documentacion-operativa",
+          "documentacion-historica-y-arquitectura"
+        ],
+        "receipt_commits_match_chain": true,
+        "recipes_before_trainer": true,
+        "trainer_after_cli_consumers": true,
+        "poc_orchestrator_cut": 13,
+        "shared_exports_expected": [
+          "AudioCNN",
+          "BioacousticModel",
+          "FocalLoss",
+          "apply_mixup"
+        ]
+      },
+      "suite": {
+        "argv": [
+          "/home/kevin/Work/fama/.venv/bin/python",
+          "-B",
+          "-c",
+          "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in cleanup checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
+          "-q",
+          "-p",
+          "no:cacheprovider",
+          "--basetemp",
+          "/home/kevin/Work/fama/backend/tests/.legacy-split-independent-verify-20260312/runtime/pytest",
+          "tests/test_training_entrypoints.py",
+          "tests/test_api_training.py",
+          "tests/test_training_flow.py",
+          "tests/test_training_service.py",
+          "tests/test_training_persistence.py",
+          "tests/test_training_schemas.py",
+          "tests/test_training_models.py",
+          "tests/test_bundle_exporter.py",
+          "tests/test_bundle_predictor.py",
+          "tests/test_standalone_evaluation.py",
+          "tests/test_poc_dataset_references.py",
+          "tests/test_benchmark.py",
+          "tests/test_cli_paths.py::test_prepare_engine_dataset_default_path",
+          "tests/test_cli_paths.py::test_poc_scripts_no_hardcoded_root_data_dir",
+          "tests/test_cli_paths.py::test_root_data_dir_completely_removed"
+        ],
+        "cwd": "/home/kevin/Work/fama/backend/tests/.legacy-split-independent-verify-20260312/backend",
+        "exit_code": 0,
+        "stdout": "........................................................................ [ 24%]\n........................................................................ [ 48%]\n........................................................................ [ 72%]\n........................................................................ [ 96%]\n.........                                                                [100%]\n=============================== warnings summary ===============================\ntests/test_training_persistence.py::test_cpu_checkpoint_and_final_predictor_use_first_best_not_last[1.0--1.0]\ntests/test_training_persistence.py::test_cpu_checkpoint_and_final_predictor_use_first_best_not_last[-1.0--2.0]\n  /home/kevin/Work/fama/.venv/lib/python3.14/site-packages/librosa/core/spectrum.py:3004: UserWarning: n_fft=2048 is too large for input signal of length=512\n    stft(\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n297 passed, 2 warnings in 20.27s\n",
+        "stderr": ""
+      },
+      "selectors": [
+        "tests/test_training_entrypoints.py",
+        "tests/test_api_training.py",
+        "tests/test_training_flow.py",
+        "tests/test_training_service.py",
+        "tests/test_training_persistence.py",
+        "tests/test_training_schemas.py",
+        "tests/test_training_models.py",
+        "tests/test_bundle_exporter.py",
+        "tests/test_bundle_predictor.py",
+        "tests/test_standalone_evaluation.py",
+        "tests/test_poc_dataset_references.py",
+        "tests/test_benchmark.py",
+        "tests/test_cli_paths.py::test_prepare_engine_dataset_default_path",
+        "tests/test_cli_paths.py::test_poc_scripts_no_hardcoded_root_data_dir",
+        "tests/test_cli_paths.py::test_root_data_dir_completely_removed"
+      ],
+      "ast": {
+        "argv": [
+          "/home/kevin/Work/fama/.venv/bin/python",
+          "-B",
+          "-c",
+          "<AST parser>"
+        ],
+        "cwd": "/home/kevin/Work/fama/backend",
+        "exit_code": 0,
+        "stdout": "{\"python_files_parsed\": 182, \"retired_import_or_definition_findings\": [], \"shared_exports_missing_public_test_reference\": []}\n",
+        "stderr": "",
+        "note": "Initial AST attempt in receipt had a verifier-script syntax typo; this is the bounded corrected AST-only rerun. Suite was not rerun."
+      },
+      "ast_assembled_archive": {
+        "argv": [
+          "/home/kevin/Work/fama/.venv/bin/python",
+          "-B",
+          "-c",
+          "<AST and metadata-link parser>"
+        ],
+        "cwd": "/home/kevin/Work/fama/backend/tests/.legacy-split-independent-ast-20260312",
+        "exit_code": 0,
+        "stdout": "{\"python_files_parsed\": 182, \"retired_import_or_definition_findings\": [], \"shared_exports_missing_public_test_reference\": [], \"broken_links_in_metadata_docs\": []}\n",
+        "stderr": ""
+      },
+      "reported_controller_incidents": [
+        "Two verifier-controller attempts failed on receipt-key references before pytest; no suite run in those attempts.",
+        "Initial AST script had missing parenthesis; corrected AST-only probe passed.",
+        "No environment recovery or installation; pytest suite executed exactly once as reported by verifier."
+      ]
+    }
+  },
+  "branchRewrite": {
+    "branch": "refs/heads/fix/prediction-view-truthfulness",
+    "fromCommit": "6ef368794385aceee3eed832f69f4175e90dfc33",
+    "sourceCommit": "c194f8c0c0366cec3b00ef46f61fc2af18edeccf",
+    "backupRef": "backup/limpieza-entrenamiento-6ef3687",
+    "backupCommit": "6ef368794385aceee3eed832f69f4175e90dfc33",
+    "method": "atomic compare-and-swap; source and index preserved"
+  }
+}

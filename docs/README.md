@@ -71,6 +71,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`22_propuesta_vista_ayuda_y_centro_de_conocimiento.md`](./arquitectura/22_propuesta_vista_ayuda_y_centro_de_conocimiento.md): Diseño y especificación del centro de conocimiento e interactividad en frontend.
 
 ### 4. [`docs/manuales/`](./manuales/) — Manuales y Guías Operativas
+* [`fragmentacion-limpieza-legacy.md`](./manuales/fragmentacion-limpieza-legacy.md): Seguimiento de la división local autorizada del commit de limpieza, respaldo, verificaciones y límites de revisión nativa; sin publicación. [Evidencia de los cortes](./receipts/fragmentacion-limpieza-legacy.json).
 * [`identidad-checkpoint-prediccion.md`](./manuales/identidad-checkpoint-prediccion.md): Interpretación de hashes de catálogo, carga e informe; bloqueo de modelos persistidos sin hash y límites operativos.
 * [`integracion-flujo-entrenamiento.md`](./manuales/integracion-flujo-entrenamiento.md): Alcance, preservación y evidencia de integración local del flujo de entrenamiento; sin ejecución real ni cambios de activación.
 * [`ejecucion_acotada_inferencia.md`](./manuales/ejecucion_acotada_inferencia.md): Plan aprobado, evidencia de admisión por proceso y ownership del predictor; ingreso, GCS y timeout pendientes.
