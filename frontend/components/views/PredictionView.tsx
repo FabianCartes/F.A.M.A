@@ -130,6 +130,9 @@ interface ModelEvaluations {
 export interface RegisteredModel {
   id: string;
   name: string;
+  architecture?: string | null;
+  dataset?: string | null;
+  version?: number | null;
   description: string;
   target_sr: number;
   duration_seconds: number;
@@ -1356,7 +1359,7 @@ export default function PredictionView() {
                   {modelStatus?.device || "Estado no disponible"}
                 </span>
                 <span className="text-xs text-blue-400 font-mono bg-blue-950/50 border border-blue-800/50 px-2 py-0.5 rounded">
-                  Versión no publicada
+                  {Number.isInteger(selectedModel?.version) ? `Versión v${selectedModel?.version}` : "Versión no publicada"}
                 </span>
               </div>
             </div>

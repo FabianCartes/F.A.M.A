@@ -43,6 +43,9 @@ class ModelMetadata(BaseModel):
     """Metadatos descriptivos de un modelo de inferencia acústica."""
     id: str = Field(..., description="Identificador único del modelo (slug)")
     name: str = Field(..., description="Nombre amigable del modelo")
+    architecture: Optional[str] = None
+    dataset: Optional[str] = Field(None, description="Etiqueta visual; no acredita procedencia")
+    version: Optional[int] = Field(None, description="Versión visual calculada, no identidad inmutable")
     description: str = Field(..., description="Descripción técnica de la arquitectura y entrenamiento")
     target_sr: int = Field(22050, description="Tasa de muestreo requerida en Hz")
     duration_seconds: float = Field(5.0, description="Duración de ventana de análisis en segundos")

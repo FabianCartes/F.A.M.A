@@ -82,6 +82,82 @@ def catalogue(tmp_path, monkeypatch):
         engine.dispose()
 
 
+@pytest.mark.parametrize("sync", ["publish_from_db", "register_from_db"])
+@pytest.mark.parametrize("dataset_name,label", [
+    ("engine_diagnostics", "Motores"), ("AvesChilenas", "Aves Chilenas"),
+    (None, "Dataset no verificado"),
+])
+def test_trained_names_match_history_in_both_registry_paths(catalogue, monkeypatch, sync, dataset_name, label):
+    from datetime import datetime
+    from unittest.mock import AsyncMock
+    from app.models.dataset import ConjuntoDatos
+    from tests.test_prediction_audio_metadata import synthetic_wav
+
+    client, registry, persist, engine = catalogue
+    dataset = ConjuntoDatos(nombre=dataset_name, ruta_gcp=f"datasets/{dataset_name}") if dataset_name else None
+    missing = persist(10, dataset=dataset, active=False)
+    checkpoint = persist(11, active=False)
+    missing.unlink()  # Unpublished rows still participate in display versioning.
+    with Session(engine) as db:
+        first, second = db.get(Modelo, 10), db.get(Modelo, 11)
+        second.id_conjunto_datos = first.id_conjunto_datos
+        for row in (first, second):
+            row.fecha_entrenamiento = datetime(2026, 1, row.id_modelo)
+            row.clase_objetivo = "15 Clases (AvesChilenas)"  # Not dataset provenance.
+        db.commit()
+        getattr(registry, sync)(db, checkpoints_root=checkpoint.parent)
+    item = next(m for m in client.get("/api/models").json()["models"] if m["id"] == "fama_trained_model_11")
+    history = client.get("/api/training/history").json()["history"]
+    trained = next(m for m in history if m["id"] == 11)
+    assert item["name"] == trained["name"] == f"{label} · EfficientNet-B0 (v2)"
+    assert item["architecture"] == "EfficientNet-B0"
+    assert item["dataset"] == label
+    assert item["version"] == trained["version"] == 2
+    assert item["dataset_name"] is None or item["dataset_name"] == dataset_name
+    with Session(engine) as db:
+        db.get(Modelo, 11).activo = True
+        db.commit()
+        registry.register_from_db(db, checkpoint.parent)
+    assert registry.get().metadata.name == item["name"]
+    assert registry.get().model_id == "fama_trained_model_11"
+    monkeypatch.setattr(main, "upload_audio_to_gcp", AsyncMock(return_value=True))
+    prediction = client.post("/api/predict?model_id=fama_trained_model_11",
+                             files={"file": ("fixture.wav", synthetic_wav(), "audio/wav")})
+    assert prediction.status_code == 200, prediction.text
+    assert prediction.json()["modelo"] == trained["name"]
+    assert prediction.json()["modelo_id"] == "fama_trained_model_11"
+
+
+def test_names_refresh_without_reloading_weights_and_keep_explicit_versions(catalogue):
+    from datetime import datetime
+
+    client, registry, persist, engine = catalogue
+    checkpoint = persist(11, active=False)
+    explicit = persist(12, active=False)
+    renamed = explicit.with_name("reference_v7.pt")
+    explicit.rename(renamed)
+    with Session(engine) as db:
+        db.get(Modelo, 12).ruta_binario_gcp = renamed.as_uri()
+        for row in db.query(Modelo).all():
+            row.fecha_entrenamiento = datetime(2026, 1, row.id_modelo)
+        db.commit()
+    assert client.get("/api/models").status_code == 200
+    predictor = registry.get("fama_trained_model_11")
+    original_hash = predictor.expected_checkpoint_sha256
+    assert predictor.metadata.version == 1
+    older = persist(10, active=False)
+    older.unlink()
+    with Session(engine) as db:
+        db.get(Modelo, 10).fecha_entrenamiento = datetime(2026, 1, 1)
+        db.commit()
+    items = {m["id"]: m for m in client.get("/api/models").json()["models"]}
+    assert registry.get("fama_trained_model_11") is predictor
+    assert predictor.expected_checkpoint_sha256 == original_hash
+    assert items["fama_trained_model_11"]["name"] == "Dataset no verificado · EfficientNet-B0 (v2)"
+    assert items["fama_trained_model_12"]["version"] == 7
+    assert checkpoint.is_file()
+
+
 def add_evaluation(engine, model_id, split, status, *, y_true=None, y_pred=None,
                    schema_version=1, rejection_label=None,
                    failure_reason="synthetic internal failure"):

@@ -241,6 +241,8 @@ def test_registry_register_from_db_inactive_models_lazy_loaded(tmp_path):
     m_active.activo = True
     m_active.ruta_binario_gcp = f"models/{ckpt_file.name}"
     m_active.conjunto_datos = None
+    m_active.fecha_entrenamiento = None
+    m_active.clase_objetivo = None
     import hashlib
     checkpoint_hash = hashlib.sha256(ckpt_file.read_bytes()).hexdigest()
     m_active.hash_binario = checkpoint_hash
@@ -251,6 +253,8 @@ def test_registry_register_from_db_inactive_models_lazy_loaded(tmp_path):
     m_inactive.activo = False
     m_inactive.ruta_binario_gcp = f"models/{ckpt_file.name}"
     m_inactive.conjunto_datos = None
+    m_inactive.fecha_entrenamiento = None
+    m_inactive.clase_objetivo = None
     m_inactive.hash_binario = checkpoint_hash
 
     mock_db = MagicMock()
@@ -323,7 +327,6 @@ def test_discover_and_register_checkpoints_inactive_models_lazy_loaded(tmp_path)
 
     # El modelo no activo debe ser lazy_loaded (model is None)
     assert pred2.model is None
-
 
 
 

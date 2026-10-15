@@ -1279,7 +1279,7 @@ class TrainingService:
         """
         Retorna el historial de modelos entrenados enriquecido con la Ficha Técnica (CU_INV_04).
         """
-        import re
+        from app.services.model_names import model_display_names
         from training.pipelines.multitask_mapping import CLASS_NAMES_13
 
         aves_classes = [
@@ -1294,39 +1294,7 @@ class TrainingService:
             try:
                 modelos = db.query(Modelo).order_by(Modelo.fecha_entrenamiento.desc()).all()
 
-                # Para calcular la versión correlativa cronológica (v1, v2, ...) por par (dataset, arquitectura)
-                # ordenamos cronológicamente (ascendente)
-                from collections import defaultdict
-                def _get_sort_key(m_obj):
-                    dt = m_obj.fecha_entrenamiento
-                    if dt is None:
-                        return (0, m_obj.id_modelo or 0)
-                    ts = dt.timestamp() if hasattr(dt, "timestamp") else 0
-                    return (ts, m_obj.id_modelo or 0)
-
-                modelos_asc = sorted(modelos, key=_get_sort_key)
-                pair_counts: Dict[tuple, int] = defaultdict(int)
-                calculated_versions: Dict[int, int] = {}
-
-                for m in modelos_asc:
-                    filename = Path(m.ruta_binario_gcp).name if m.ruta_binario_gcp else f"modelo_{m.id_modelo}.pt"
-                    v_match = re.search(r"_v(\d+)\.pt$", filename)
-                    if v_match:
-                        v = int(v_match.group(1))
-                    else:
-                        target_lower = (m.clase_objetivo or "").lower()
-                        is_birds = "aves" in target_lower or "chilenas" in target_lower
-                        is_engine = "engine" in target_lower or "motores" in target_lower
-                        if is_birds:
-                            ds_key = "Aves Chilenas"
-                        elif is_engine:
-                            ds_key = "Motores"
-                        else:
-                            ds_key = m.clase_objetivo or "Personalizado"
-                        arch_key = m.arquitectura or "AudioCNN"
-                        pair_counts[(ds_key, arch_key)] += 1
-                        v = pair_counts[(ds_key, arch_key)]
-                    calculated_versions[m.id_modelo] = v
+                names = model_display_names(modelos)
 
                 for m in modelos:
                     filename = Path(m.ruta_binario_gcp).name if m.ruta_binario_gcp else f"modelo_{m.id_modelo}.pt"
@@ -1336,18 +1304,13 @@ class TrainingService:
                     is_engine = "engine" in target_lower or "motores" in target_lower
 
                     if is_birds:
-                        dataset_display = "Aves Chilenas"
                         classes_list = aves_classes
                     elif is_engine:
-                        dataset_display = "Motores"
                         classes_list = engine_classes
                     else:
-                        dataset_display = m.clase_objetivo or "Personalizado"
                         classes_list = aves_classes
 
-                    version = calculated_versions.get(m.id_modelo, 1)
-
-                    friendly_name = f"{dataset_display} · {m.arquitectura} (v{version})"
+                    display = names[m.id_modelo]
 
                     lr_val = float(m.tasa_aprendizaje) if m.tasa_aprendizaje is not None else 0.001
                     batch_val = int(m.tamano_lote) if m.tamano_lote is not None else 16
@@ -1378,9 +1341,9 @@ class TrainingService:
 
                     history.append({
                         "id": m.id_modelo,
-                        "name": friendly_name,
-                        "version": version,
-                        "dataset": dataset_display,
+                        "name": display["name"],
+                        "version": display["version"],
+                        "dataset": display["dataset"],
                         "dataset_id": m.id_conjunto_datos,
                         "dataset_name": m.conjunto_datos.nombre if m.conjunto_datos else None,
                         "sha256": m.hash_binario,

@@ -247,7 +247,7 @@ def test_get_history_enriches_model_technical_sheet(service_env):
     item_1 = next(h for h in entries if h["id"] == 1)
     assert item_1["version"] == 1
     assert "v1" in item_1["name"]
-    assert "Motores" in item_1["name"]
+    assert "Dataset no verificado" in item_1["name"]
     assert item_1["filename"] == "fama_efficientnet_b0_1790642923_efficientnet_b0_best.pt"
     assert item_1["hyperparameters"]["learning_rate"] == 0.001
     assert item_1["hyperparameters"]["batch_size"] == 16
@@ -261,7 +261,7 @@ def test_get_history_enriches_model_technical_sheet(service_env):
     item_6 = next(h for h in entries if h["id"] == 6)
     assert item_6["version"] == 1
     assert "v1" in item_6["name"]
-    assert "Aves Chilenas" in item_6["name"]
+    assert "Dataset no verificado" in item_6["name"]
     assert item_6["filename"] == "fama_efficientnet_b0_1790539191_efficientnet_b0_best.pt"
     assert item_6["hyperparameters"]["learning_rate"] == 0.001
     assert item_6["hyperparameters"]["batch_size"] == 32
@@ -288,15 +288,15 @@ def test_get_history_semantic_versioning_per_dataset_and_architecture(service_en
                        ruta_binario_gcp=f"models/{filename}")
         db.commit()
     by_id = {h["id"]: h for h in history(service, sessions)}
-    assert by_id[1]["name"] == "Motores · EfficientNet-B0 (v1)"
+    assert by_id[1]["name"] == "Dataset no verificado · EfficientNet-B0 (v1)"
     assert by_id[1]["version"] == 1
-    assert by_id[6]["name"] == "Aves Chilenas · EfficientNet-B0 (v1)"
+    assert by_id[6]["name"] == "Dataset no verificado · EfficientNet-B0 (v1)"
     assert by_id[6]["version"] == 1
-    assert by_id[7]["name"] == "Aves Chilenas · EfficientNet-B0 (v2)"
+    assert by_id[7]["name"] == "Dataset no verificado · EfficientNet-B0 (v2)"
     assert by_id[7]["version"] == 2
-    assert by_id[8]["name"] == "Aves Chilenas · ResNet-34d (v1)"
+    assert by_id[8]["name"] == "Dataset no verificado · ResNet-34d (v1)"
     assert by_id[8]["version"] == 1
-    assert by_id[9]["name"] == "Motores · ResNet-34d (v1)"
+    assert by_id[9]["name"] == "Dataset no verificado · ResNet-34d (v1)"
     assert by_id[9]["version"] == 1
 
 

@@ -2,6 +2,17 @@
 kanban-plugin: basic
 ---
 
+## Nombres coherentes de modelos — issue #2
+
+**Contrato aprobado:** `Dataset · Arquitectura (vN)` compartido por historial, publicación, activación y predicción; IDs y checkpoints estables. Versión visual calculada, no versión inmutable. Dataset relacionado preferente; legacy identificado como no verificado.
+**Superficies TDD aprobadas:** historial/catálogo/predicción públicos y presentación UI. RDD activado; issue [#2](https://github.com/FabianCartes/F.A.M.A/issues/2) aprobada explícitamente por el usuario. Rama `fix/unify-model-names`; worktree dedicado. Sin PR abierta en conflicto. Presupuesto previsto: hasta 390 líneas añadidas/eliminadas; detener y dividir si supera 400.
+- [x] NAME-1: RED→GREEN para nombre/metadatos compartidos, versiones completas, activación y legacy; regresión backend 174 PASS, sin deselecciones.
+- [x] NAME-2: RED→GREEN para presentación de versión y conservación de metadatos frontend; 123 PASS y TypeScript correcto. Lint global: 26 errores/3 avisos reproducidos en base; lint focal correcto.
+- [x] NAME-3: regresión focal y revisión nativa independiente R2/R3 sin hallazgos; candidato de 325 líneas aprobado y acuse consumido. Recibo reproducible; cierre local anterior sin entrenamiento real, despliegue ni commit. La integración autorizada posteriormente se sigue en NAME-4.
+Detalles de uso, comandos, alcance y reversión: [nombres de modelos](manuales/nombres-modelos.md); [recibo](receipts/model-names.json).
+- [ ] NAME-4: integración autorizada por el usuario en `/home/kevin/Work/fama`: confirmar el candidato, fast-forward a `dev`, verificaciones desde destino y `./iniciar_fama.sh --build`; comprobar API/navegador y preservar modelo/dataset/checkpoint/volumen. Estado previo observado: catálogo #14 con nombre antiguo, historial con `Aves Chilenas · EfficientNet-B0 (v1)`; hash coincidente. Sin push solicitado.
+
+
 ## Recuperación del modelo 14 y retirada legacy — verificado en despliegue
 
 - [x] Corregir compatibilidad semántica del predictor con TDD; huellas fuente diagnósticas y controles efectivos estrictos. [ADR 0025](adr/0025-compatibilidad-semantica-evaluacion.md).

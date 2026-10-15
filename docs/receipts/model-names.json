@@ -1,0 +1,40 @@
+{
+  "issue": "https://github.com/FabianCartes/F.A.M.A/issues/2",
+  "branch": "fix/unify-model-names",
+  "base": "b27edd7",
+  "rdd_mode": "on (global)",
+  "issue_approval": "Explicit user approval recorded in issue comment and status:approved label",
+  "causal_invariant": "One persisted model has the same display name in training and prediction; technical identity stays separate",
+  "main_reproduction": {
+    "revision": "831573761709ad65a9b2e9aed722a8ee5bed306d",
+    "remote_head_verified": true,
+    "method": "Evaluate original AST label expressions from immutable git source with dataset Motores, architecture EfficientNet-B0, version 2, id 12",
+    "history": "Motores · EfficientNet-B0 (v2)",
+    "registry": "EfficientNet-B0 (Entrenado #12)",
+    "runtime_e2e": false,
+    "open_conflicting_prs": 0
+  },
+  "tdd": {
+    "backend_red": "Public history/catalogue name mismatch, exit 1; stopped at first failing parameter",
+    "backend_green": "6 parameterized cases passed across publication/registration and both datasets/unknown legacy",
+    "frontend_red": "2 failures: missing version badge and history parser dropping name/dataset/version; 57 unselected cases",
+    "frontend_green": "2 passed, 57 unselected cases",
+    "additional_regressions": "Explicit filename versions, cached-name refresh, HTTP prediction name/ID and session display already passed; no fabricated RED",
+    "fixture_adjustment": "Existing MagicMock rows explicitly supply nullable date/target; legacy history expectations now identify unknown provenance"
+  },
+  "operator_flows": ["training history", "catalogue publication", "startup registration", "cached activation", "HTTP prediction", "UI selection/result/session history"],
+  "negative_controls": ["missing checkpoint still counts toward version", "misleading target cannot override related dataset", "unlinked legacy dataset remains unknown", "predefined model without version retains unavailable label", "technical ID and cached predictor preserved"],
+  "tests": {
+    "backend": {"passed": 174, "deselected": 0, "exit": 0, "python": "3.14", "runner": "backend/tests/run_isolated_training_checks.py", "selectors": ["tests/test_api_model_catalogue.py", "tests/test_model_registry.py", "tests/test_training_service.py", "tests/test_training_persistence.py", "tests/test_loaded_checkpoint_identity.py", "-q"], "environment": {"PYTHONDONTWRITEBYTECODE": "1", "PYTHON_DOTENV_DISABLED": "1", "DATABASE_URL": "sqlite://", "CUDA_VISIBLE_DEVICES": "", "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1", "OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"}, "protected_paths_unchanged": 30, "private_scratch_cleanup": true, "network_blocked": true},
+    "frontend": {"passed": 123, "files": 5, "exit": 0, "command": "See nombres-modelos.md for exact selector list"},
+    "typescript": {"command": "npx tsc --noEmit --incremental false", "exit": 0},
+    "lint": {"command": "npm run lint", "exit": 1, "errors": 26, "warnings": 3, "baseline_reproduced": "Same counts and locations on clean dev checkout; existing no-explicit-any violations", "changed_view_schema_catalogue_test": "Focused ESLint passed"}
+  },
+  "journey_runtime_evidence": "Synthetic public HTTP contracts and jsdom interaction, not deployed runtime E2E",
+  "rollback": "Revert naming module and consumers, optional metadata/UI fields and accompanying tests/docs together; no persisted data migration",
+  "candidate_review": {"lineage": "review-59dbfaa6bea52aa0", "target": "sha256:8a1ce7aa284a0edff71e85c149571e67e8e850e88ccc7c916c7594bd789dd6be", "candidate_tree": "5d4dfbc91ba07ca7d1bcf5d886eca1d57cf00d7f", "changed_lines": 325, "lenses": ["readability", "reliability"], "findings": [], "state": "approved", "acknowledged": true, "authority": "burned", "scope_note": "Frozen candidate before this receipt/KANBAN closeout; no source changes after review"},
+  "changed_line_budget": {"forecast": 390, "hard_limit": 400, "reviewed_candidate": 325},
+  "integration": {"authorization": "User approved the integration plan with Procede", "destination": "/home/kevin/Work/fama", "branch": "dev", "status": "authorized_pending", "before": {"model_id": "fama_trained_model_14", "catalogue_name": "EfficientNet-B0 (Entrenado #14)", "history_name": "Aves Chilenas · EfficientNet-B0 (v1)", "checkpoint_sha256": "d6ede3c7f343d8a2945209bd13d3fcbc0b497a2863dcd7e8afee18c0be7cbc4d", "dataset_name": "AvesChilenas"}},
+  "unresolved_authority_decisions": ["Push or PR not requested", "Integration/runtime checks still pending; previous tests and review are historical evidence"],
+  "limits": ["No immutable versioning", "No real training or weights/data changes", "No global backend suite; prior isolated checks use Python 3.14", "No push or PR"]
+}

@@ -107,6 +107,29 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("Catálogo público de Predicción", () => {
+  it("shows the training display version without changing the technical selection", async () => {
+    const trained = { ...model11, name: "Aves Chilenas · EfficientNet-B0 (v2)", version: 2,
+      architecture: "EfficientNet-B0", dataset: "Aves Chilenas" };
+    catalogue = async () => response([trained], trained.id);
+    const view = await show();
+    expect(selection().value).toBe("fama_trained_model_11");
+    expect(selection().selectedOptions[0].textContent).toContain(trained.name);
+    expect(screen.getByRole("heading", { name: trained.name })).toBeTruthy();
+    expect(screen.getByText("Versión v2")).toBeTruthy();
+    expect(screen.queryByText("Versión no publicada")).toBeNull();
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:test");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    predict = async () => new Response(JSON.stringify({ filename: "audio.wav", db_id: 201,
+      clase: "Chucao", confianza: 0.9, modelo: trained.name, modelo_id: trained.id, gcp_upload: true }));
+    await act(async () => { fireEvent.change(view.container.querySelector('input[type="file"]')!, { target: { files: [new File(["audio"], "audio.wav")] } }); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Ejecutar inferencia/ })); });
+    expect(screen.getByText("Modelo ejecutado:").parentElement?.textContent).toContain(trained.name);
+    expect(screen.getByText("ID de predicción: 201").parentElement?.parentElement?.textContent).toContain(trained.name);
+    catalogue = async () => response([bird], bird.id);
+    await focus();
+    expect(screen.getByText("Versión no publicada")).toBeTruthy();
+  });
+
   it("presenta los informes finales val/test del catálogo con versión, muestra y provenance", async () => {
     const evaluatedModel = {
       ...model11,

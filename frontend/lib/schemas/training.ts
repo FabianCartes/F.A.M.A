@@ -175,6 +175,9 @@ export type StopTrainingResponse = z.infer<typeof StopTrainingResponseSchema>;
 // ============================================================================
 export const ModelHistoryItemSchema = z.object({
   id: z.number(),
+  name: z.string().optional(),
+  dataset: z.string().optional(),
+  version: z.number().int().nonnegative().optional(),
   architecture: z.string(),
   epochs: z.number(),
   accuracy: z.number().nullable().optional(),

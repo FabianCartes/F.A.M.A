@@ -72,6 +72,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`22_propuesta_vista_ayuda_y_centro_de_conocimiento.md`](./arquitectura/22_propuesta_vista_ayuda_y_centro_de_conocimiento.md): Diseño y especificación del centro de conocimiento e interactividad en frontend.
 
 ### 4. [`docs/manuales/`](./manuales/) — Manuales y Guías Operativas
+* [`nombres-modelos.md`](./manuales/nombres-modelos.md): Nomenclatura compartida de entrenamiento/predicción, versiones visuales, legacy y [evidencia focal](./receipts/model-names.json).
 * [`recuperacion-modelo-14.md`](./manuales/recuperacion-modelo-14.md): Corrección del contrato de compatibilidad, reevaluación real del modelo 14, retirada de modelos 11–13 y comprobación HTTP/navegador del despliegue.
 * [`consolidacion-worktrees.md`](./manuales/consolidacion-worktrees.md): Retirada de los 58 secundarios, recuperación de respaldos y entornos CUDA, integración spawn y verificaciones locales.
 * [`evaluaciones-admitidas.md`](./manuales/evaluaciones-admitidas.md): Distingue el par val/test admitido por la guarda de los intentos y reportes históricos más recientes; documenta los límites de la evidencia.

@@ -457,6 +457,9 @@ describe("trainingApi (TDD Contract Tests)", () => {
           {
             id: 1,
             architecture: "Super-Ensamble Tri-Modelo",
+            name: "Aves Chilenas · Super-Ensamble Tri-Modelo (v3)",
+            dataset: "Aves Chilenas",
+            version: 3,
             epochs: 50,
             accuracy: 86.75,
             loss: 0.4521,
@@ -482,6 +485,9 @@ describe("trainingApi (TDD Contract Tests)", () => {
       );
       expect(history).toHaveLength(1);
       expect(history[0].architecture).toBe("Super-Ensamble Tri-Modelo");
+      expect(history[0].name).toBe("Aves Chilenas · Super-Ensamble Tri-Modelo (v3)");
+      expect(history[0].dataset).toBe("Aves Chilenas");
+      expect(history[0].version).toBe(3);
       expect(history[0].active).toBe(true);
     });
   });

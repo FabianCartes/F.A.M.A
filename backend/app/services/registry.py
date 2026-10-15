@@ -239,6 +239,8 @@ class ModelRegistry:
                 models = db.query(Modelo).order_by(Modelo.id_modelo.desc()).all()
             except Exception:
                 return [{"code": "database_unavailable"}]
+            from app.services.model_names import model_display_names
+            names = model_display_names(models)
             self._reconcile_db_models(models)
             self._reset_db_identity_errors(models)
             for model in models:
@@ -278,6 +280,7 @@ class ModelRegistry:
                 cached = self._db_predictors.get(key)
                 if cached is not None:
                     if getattr(cached, "expected_checkpoint_sha256", None) == expected_hash:
+                        self._apply_display_name(cached, names[model.id_modelo])
                         if admitted_pair is not None and admitted_pair_ids is not None:
                             admitted_pair_ids[key] = (admitted_pair.val_id, admitted_pair.test_id)
                         continue
@@ -304,12 +307,13 @@ class ModelRegistry:
                     pred = TrainedModelPredictor(
                         checkpoint_path=checkpoint,
                         model_id=key,
-                        name=f"{model.arquitectura} (Entrenado #{model.id_modelo})",
+                        name=names[model.id_modelo]["name"],
                         is_default=False,
                         lazy_load=True,
                         dataset_name=_verified_dataset_name(model.conjunto_datos, self._raw_data_root),
                         expected_checkpoint_sha256=expected_hash,
                     )
+                    self._apply_display_name(pred, names[model.id_modelo])
                     # register() selects a default on an empty catalogue. Publication
                     # deliberately preserves even an unset default instead.
                     self._predictors[key] = pred
@@ -324,6 +328,12 @@ class ModelRegistry:
                         code = "checkpoint_hash_mismatch"
                     errors.append({"model_id": key, "code": code})
         return errors
+
+    @staticmethod
+    def _apply_display_name(predictor, display):
+        predictor.custom_name = display["name"]
+        for field, value in display.items():
+            setattr(predictor.metadata, field, value)
 
     def register_from_db(
         self,
@@ -346,6 +356,8 @@ class ModelRegistry:
 
         with self._publication_lock:
             db_models = db.query(Modelo).order_by(Modelo.id_modelo.desc()).all()
+            from app.services.model_names import model_display_names
+            names = model_display_names(db_models)
             self._reconcile_db_models(db_models)
             self._reset_db_identity_errors(db_models)
             active_predictor = None
@@ -377,6 +389,7 @@ class ModelRegistry:
                 cached = self._db_predictors.get(model_key)
                 if cached is not None:
                     if getattr(cached, "expected_checkpoint_sha256", None) == expected_hash:
+                        self._apply_display_name(cached, names[m.id_modelo])
                         if is_active:
                             active_predictor = cached
                             self.set_default_model(model_key)
@@ -389,12 +402,13 @@ class ModelRegistry:
                         pred = TrainedModelPredictor(
                             checkpoint_path=ckpt_file,
                             model_id=model_key,
-                            name=f"{m.arquitectura} (Entrenado #{m.id_modelo})",
+                            name=names[m.id_modelo]["name"],
                             is_default=is_active,
                             lazy_load=not is_active,
                             dataset_name=_verified_dataset_name(m.conjunto_datos, self._raw_data_root),
                             expected_checkpoint_sha256=expected_hash,
                         )
+                        self._apply_display_name(pred, names[m.id_modelo])
                         self._predictors[model_key] = pred
                         self._db_predictors[model_key] = pred
                         # Registrar alias útiles para consultas directas.
