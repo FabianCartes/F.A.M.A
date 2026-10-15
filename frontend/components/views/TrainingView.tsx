@@ -139,6 +139,7 @@ export default function TrainingView() {
   const [epochs, setEpochs] = useState<string>("10");
   const [batchSize, setBatchSize] = useState<string>("16");
   const [framework, setFramework] = useState<string>("pytorch");
+  const [seed, setSeed] = useState<string>("42");
   const [architecture, setArchitecture] = useState<string>("EfficientNet-B0");
   const [earlyStoppingEnabled, setEarlyStoppingEnabled] = useState<boolean>(true);
   const [ensembleSize, setEnsembleSize] = useState<1 | 2 | 3>(1);
@@ -277,6 +278,11 @@ export default function TrainingView() {
         break;
       case "weight_decay":
         if (isNaN(num) || num < 0 || num > 1) error = "El campo 'Weight Decay (AdamW L2)' debe ser un número entre 0 y 1.";
+        break;
+      case "seed":
+        if (!Number.isInteger(Number(strVal)) || Number(strVal) < 0 || Number(strVal) > 4_294_967_295) {
+          error = "La semilla debe ser un número entero entre 0 y 4294967295.";
+        }
         break;
       case "batch_size":
         if (isNaN(num) || num < 1) error = "El campo 'Batch Size' debe ser un número entero mayor a 0.";
@@ -890,6 +896,11 @@ export default function TrainingView() {
       errors.weight_decay = "El campo 'Weight Decay (AdamW L2)' debe ser un número entre 0 y 1.";
     }
 
+    const numSeed = Number(seed);
+    if (seed.trim() === "" || !Number.isInteger(numSeed) || numSeed < 0 || numSeed > 4_294_967_295) {
+      errors.seed = "La semilla debe ser un número entero entre 0 y 4294967295.";
+    }
+
     // 4. Validar Batch Size
     const numBatch = parseInt(String(batchSize), 10);
     if (String(batchSize).trim() === "" || isNaN(numBatch) || numBatch < 1) {
@@ -941,6 +952,7 @@ export default function TrainingView() {
       ...prev,
       learning_rate: true,
       weight_decay: true,
+      seed: true,
       batch_size: true,
       epochs: true,
       target_sr: true,
@@ -1091,6 +1103,7 @@ export default function TrainingView() {
           epochs: parseInt(String(epochs), 10) || 10,
           learning_rate: parseFloat(String(learningRate)) || 0.001,
           weight_decay: parseFloat(String(weightDecay)) || 0.01,
+          seed: numSeed,
           batch_size: parseInt(String(batchSize), 10) || 16,
           framework,
           is_tri_model: ensembleSize === 3,
@@ -1948,6 +1961,27 @@ export default function TrainingView() {
               </span>
             )}
           </div>
+        </div>
+
+        <div>
+          <label htmlFor="training-seed" className="text-[11px] text-gray-400 font-medium">
+            Semilla aleatoria
+          </label>
+          <input
+            id="training-seed" type="number" value={seed} disabled={isTraining}
+            min={0} max={4_294_967_295} step={1}
+            aria-invalid={Boolean(fieldErrors.seed)}
+            aria-describedby="training-seed-help"
+            onChange={(event) => {
+              setSeed(event.target.value);
+              validateFieldOnChange("seed", event.target.value);
+            }}
+            onBlur={(event) => validateFieldOnBlur("seed", event.target.value)}
+            className={`w-full bg-[#111215] border ${fieldErrors.seed ? "border-red-500" : "border-[#23252e]"} rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono`}
+          />
+          <p id="training-seed-help" className="text-[11px] text-gray-400">
+            {fieldErrors.seed || "Controla los RNG del entrenamiento; no garantiza resultados idénticos entre hardware y versiones."}
+          </p>
         </div>
 
         {/* Selección de Framework */}

@@ -97,6 +97,8 @@ class StartTrainingRequest(BaseModel):
     batch_size: int = 16
     framework: str = "pytorch"
     is_tri_model: bool = False
+    seed: int = Field(default=42, strict=True, ge=0, le=4_294_967_295,
+                      description='Semilla de RNG del entrenamiento')
     early_stopping: bool = Field(
         default=True,
         description="Habilitar detención temprana automática (Early Stopping) según convergencia de validación",

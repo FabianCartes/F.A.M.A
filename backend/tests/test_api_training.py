@@ -21,6 +21,27 @@ from tests.test_training_persistence import persistence_env
 app = main.app
 
 
+@pytest.mark.parametrize('seed', [0, 314, 4_294_967_295])
+def test_api_propagates_selected_seed(client, training_env, seed):
+    _, sessions, root, thread = training_env
+    register(sessions, 'engine_diagnostics')
+    partitions(root, 'engine_diagnostics')
+    response = client.post('/api/training/start', json={'dataset_name': 'engine_diagnostics', 'seed': seed})
+    assert response.status_code == 200
+    config = thread.call_args.kwargs['args'][0]
+    assert config['seed'] == seed
+
+
+@pytest.mark.parametrize('seed', [-1, 4_294_967_296, 1.5, True, '42', None])
+def test_api_rejects_invalid_seed_without_admission(client, training_env, seed):
+    service, _, _, thread = training_env
+    before = service.get_progress()
+    response = client.post('/api/training/start', json={'seed': seed})
+    assert response.status_code == 422
+    assert service.get_progress() == before
+    thread.assert_not_called()
+
+
 @pytest.fixture
 def client(training_env, monkeypatch):
     service, sessions, _, _ = training_env
@@ -329,6 +350,7 @@ def test_training_lifecycle_triad(client):
             batch_size=16,
             framework="pytorch",
             is_tri_model=True,
+            seed=42,
             early_stopping=True,
         )
 
@@ -365,6 +387,7 @@ def test_training_lifecycle_dynamic_ensemble(client):
             batch_size=16,
             framework="pytorch",
             is_tri_model=False,
+            seed=42,
             early_stopping=True,
             models=[
                 {"architecture": "ConvNeXt-Nano", "weight": 0.6, "epochs": None, "learning_rate": None, "batch_size": None},
@@ -470,7 +493,5 @@ def test_start_training_api_passes_model_epochs(client):
         assert "models" in call_kwargs
         assert call_kwargs["models"][0]["epochs"] == 35
         assert call_kwargs["models"][1]["epochs"] == 10
-
-
 
 

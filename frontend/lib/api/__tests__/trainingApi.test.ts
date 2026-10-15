@@ -144,6 +144,7 @@ describe("trainingApi (TDD Contract Tests)", () => {
       batch_size: 16,
       framework: "pytorch",
       is_tri_model: false,
+      seed: 42,
       early_stopping: true,
     };
 
@@ -522,6 +523,15 @@ describe("trainingApi (TDD Contract Tests)", () => {
   });
 
   describe("StartTrainingRequestSchema", () => {
+    it("defaults and validates the selected uint32 seed", () => {
+      expect(StartTrainingRequestSchema.parse({ dataset_name: "AvesChilenas" }).seed).toBe(42);
+      for (const seed of [0, 314, 4_294_967_295]) {
+        expect(StartTrainingRequestSchema.parse({ dataset_name: "AvesChilenas", seed }).seed).toBe(seed);
+      }
+      for (const seed of [-1, 4_294_967_296, 1.5, true, "42", null]) {
+        expect(StartTrainingRequestSchema.safeParse({ dataset_name: "AvesChilenas", seed }).success).toBe(false);
+      }
+    });
     it("defaults early_stopping to true and allows explicit false", () => {
       const parsedDefault = StartTrainingRequestSchema.parse({
         dataset_name: "AvesChilenas",

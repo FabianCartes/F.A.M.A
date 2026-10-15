@@ -871,6 +871,24 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     expect(screen.getByText("El campo 'Batch Size del Modelo #1' no puede estar vacío.")).toBeDefined();
   });
 
+  it("sends the selected seed and rejects fractional seeds before submission", async () => {
+    await act(async () => { render(<TrainingView />); });
+    const input = screen.getByLabelText("Semilla aleatoria") as HTMLInputElement;
+    expect(input.value).toBe("42");
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "1.5" } });
+      fireEvent.click(screen.getByRole("button", { name: /Iniciar Entrenamiento/i }));
+    });
+    expect(vi.mocked(global.fetch).mock.calls.some(([url]) => url === `${API_BASE_URL}/api/training/start`)).toBe(false);
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "314" } });
+      fireEvent.click(screen.getByRole("button", { name: /Iniciar Entrenamiento/i }));
+    });
+    const call = vi.mocked(global.fetch).mock.calls.find(([url]) => url === `${API_BASE_URL}/api/training/start`);
+    expect(call).toBeDefined();
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual(expect.objectContaining({ seed: 314 }));
+  });
+
   it("renders early stopping toggle checked by default with info tooltip", async () => {
     await act(async () => {
       render(<TrainingView />);
@@ -926,7 +944,6 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     expect(payload.early_stopping).toBe(true);
   });
 });
-
 
 
 
