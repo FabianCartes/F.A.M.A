@@ -122,8 +122,8 @@ def test_trainer_requires_root_binding(source, tmp_path):
 
 
 
-@pytest.mark.parametrize("module", [
-    "train_v2_and_compare", "train_and_ensemble_engines",
+@pytest.mark.parametrize('module', [
+    'train_and_ensemble_engines',
 ])
 @pytest.mark.parametrize("invalid", [False, True])
 def test_engine_main_loads_validated_prepared_trio_before_training(source, tmp_path, monkeypatch, module, invalid):
@@ -241,9 +241,8 @@ def test_engine_ensemble_evaluates_same_admitted_snapshot_without_historic_hash(
         script.main()
 
 
-@pytest.mark.parametrize("module,function", [
-    ("train_v2_and_compare", "train_recipe"),
-    ("train_and_ensemble_engines", "train_model"),
+@pytest.mark.parametrize('module,function', [
+    ('train_and_ensemble_engines', 'train_model'),
 ])
 def test_recipe_entrypoints_keep_custom_source_binding(source, tmp_path, monkeypatch, module, function):
     import importlib
@@ -265,9 +264,8 @@ def test_recipe_entrypoints_keep_custom_source_binding(source, tmp_path, monkeyp
         assert torch.allclose(waveform, torch.full((8000,), -0.5))
 
 
-@pytest.mark.parametrize("module,function", [
-    ("train_v2_and_compare", "evaluate_models"),
-    ("train_and_ensemble_engines", "evaluate_ensemble"),
+@pytest.mark.parametrize('module,function', [
+    ('train_and_ensemble_engines', 'evaluate_ensemble'),
 ])
 @pytest.mark.parametrize("stage,level", [("raw", 0.25), ("processed", -0.5)])
 def test_public_inference_reads_explicit_stage(source, monkeypatch, module, function, stage, level):

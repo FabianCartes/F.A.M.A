@@ -18,7 +18,6 @@ def test_training_scripts_no_hardcoded_root_data_dir():
     root = get_project_root()
     scripts = [
         root / "backend" / "train_and_ensemble_engines.py",
-        root / "backend" / "train_v2_and_compare.py",
     ]
     for script in scripts:
         if not script.exists():
