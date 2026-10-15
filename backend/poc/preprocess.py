@@ -249,7 +249,7 @@ GPU_AUDIO_FRONTEND_IMPLEMENTATION = "GPUAudioFrontEnd"
 
 def build_gpu_audio_frontend_contract(
     *, sample_rate: int, duration_seconds: float, n_mels: int, n_fft: int,
-    hop_length: int, f_min: float, f_max: float, top_db: float = 80.0,
+    hop_length: int, f_min: float, f_max: Optional[float], top_db: float = 80.0,
     normalize: bool = True,
 ) -> dict:
     """Capture frontend settings with a per-sample dB top_db cutoff."""
@@ -263,7 +263,7 @@ def build_gpu_audio_frontend_contract(
             "n_fft": int(n_fft),
             "hop_length": int(hop_length),
             "f_min": float(f_min),
-            "f_max": float(f_max),
+            "f_max": None if f_max is None else float(f_max),
             "top_db": float(top_db),
             "normalize": normalize,
             "top_db_scope": "per_sample",
@@ -300,11 +300,13 @@ def validate_gpu_audio_frontend_contract(contract: dict) -> dict:
 
     params = contract["parameters"]
     top_db_scope = params["top_db_scope"]
+    effective_f_max = contract['sample_rate'] / 2 if params['f_max'] is None else params['f_max']
     if (any(type(params[key]) is not int or params[key] <= 0 for key in ("n_mels", "n_fft", "hop_length")) or
-            any(not _finite_number(params[key]) for key in ("f_min", "f_max", "top_db")) or
+            any(not _finite_number(params[key]) for key in ("f_min", "top_db")) or
+            not _finite_number(effective_f_max) or
             type(top_db_scope) is not str or top_db_scope != "per_sample" or
-            params["f_min"] < 0 or params["f_max"] <= params["f_min"] or
-            params["f_max"] > contract["sample_rate"] / 2 or params["top_db"] <= 0 or
+            params["f_min"] < 0 or effective_f_max <= params["f_min"] or
+            effective_f_max > contract["sample_rate"] / 2 or params["top_db"] <= 0 or
             type(params["normalize"]) is not bool):
         raise ValueError("Invalid or unsupported GPUAudioFrontEnd preprocessing parameters")
 
@@ -316,7 +318,7 @@ def validate_gpu_audio_frontend_contract(contract: dict) -> dict:
         "parameters": {
             "n_mels": params["n_mels"], "n_fft": params["n_fft"],
             "hop_length": params["hop_length"], "f_min": float(params["f_min"]),
-            "f_max": float(params["f_max"]), "top_db": float(params["top_db"]),
+            "f_max": None if params['f_max'] is None else float(params["f_max"]), "top_db": float(params["top_db"]),
             "normalize": params["normalize"], "top_db_scope": top_db_scope,
         },
     }
@@ -421,4 +423,3 @@ class GeM(nn.Module):
         if self.flatten:
             x = x.flatten(1)
         return x
-

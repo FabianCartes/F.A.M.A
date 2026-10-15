@@ -43,7 +43,7 @@ def start(service, **kwargs):
     return service.start_training(
         "engine_diagnostics", architecture="fixture", epochs=1, batch_size=1,
         audio_config={"target_sr": 8000, "duration_seconds": 0.064, "n_mels": 32,
-                      "n_fft": 256, "hop_length": 64, "f_min": 0.0, "f_max": 4000.0},
+                      "n_fft": 256, "hop_length": 64, "f_min": 0.0, "f_max": kwargs.pop('f_max', 4000.0)},
         regularization_config={"loss_type": "cross_entropy"}, early_stopping=False, **kwargs)
 
 
@@ -454,9 +454,11 @@ def test_dataset_identity_must_still_match_when_registering(persistence_env, mon
     assert list(service.checkpoints_dir.iterdir()) == []
 
 
-def test_new_checkpoint_persists_effective_gpu_frontend_contract(persistence_env):
+@pytest.mark.parametrize('f_max', [None, 4000.0])
+def test_new_checkpoint_persists_effective_gpu_frontend_contract(persistence_env, f_max):
     service, sessions, _, _ = persistence_env
-    start(service)
+    start(service, f_max=f_max)
+    assert service.get_progress()['status'] == 'completed', service.get_progress()['error_message']
     entry, = history(service, sessions)
     payload = torch.load(service.checkpoints_dir / entry["filename"], weights_only=True)
     contract = {
@@ -469,7 +471,7 @@ def test_new_checkpoint_persists_effective_gpu_frontend_contract(persistence_env
             "n_fft": 256,
             "hop_length": 64,
             "f_min": 0.0,
-            "f_max": 4000.0,
+            "f_max": f_max,
             "top_db": 80.0,
             "normalize": True,
             "top_db_scope": "per_sample",
@@ -477,8 +479,36 @@ def test_new_checkpoint_persists_effective_gpu_frontend_contract(persistence_env
     }
 
     assert payload["preprocessing_contract"] == contract
+    assert payload['audio_config']['f_max'] == f_max
     attempts = evaluations(sessions, entry["id"])
-    assert attempts[0]["preprocessing_config"]["frontend_contract"] == contract
+    assert [(attempt['split'], attempt['status']) for attempt in attempts] == [
+        ('val', 'completed'), ('test', 'completed')]
+    assert all(attempt['preprocessing_config']['frontend_contract'] == contract for attempt in attempts)
+    assert all(attempt['preprocessing_config']['f_max'] == f_max for attempt in attempts)
+
+
+@pytest.mark.parametrize('f_max', [None, 4000.0])
+def test_frontend_roundtrip_preserves_optional_nyquist(f_max):
+    from copy import deepcopy
+    from app.services.standard_evaluation_guard import resolve_training_audio
+    from poc.preprocess import build_gpu_audio_frontend_contract, validate_gpu_audio_frontend_contract
+
+    audio = resolve_training_audio('engine_diagnostics', {
+        'target_sr': 8000, 'duration_seconds': 0.064, 'n_mels': 32,
+        'n_fft': 256, 'hop_length': 64, 'f_min': 0.0, 'f_max': f_max})
+    contract = build_gpu_audio_frontend_contract(
+        sample_rate=audio['target_sr'], duration_seconds=audio['duration_seconds'],
+        **{key: audio[key] for key in ('n_mels', 'n_fft', 'hop_length', 'f_min', 'f_max')})
+    before = deepcopy(contract)
+    assert validate_gpu_audio_frontend_contract(contract)['parameters']['f_max'] == f_max
+    assert contract == before
+    for invalid_max, invalid_min in [(5000.0, 0.0), (None, 4000.0)]:
+        invalid = deepcopy(contract)
+        invalid['parameters'].update(f_max=invalid_max, f_min=invalid_min)
+        original = deepcopy(invalid)
+        with pytest.raises(ValueError):
+            validate_gpu_audio_frontend_contract(invalid)
+        assert invalid == original
 
 
 def test_completed_history_and_checkpoint_expose_verified_provenance(persistence_env):

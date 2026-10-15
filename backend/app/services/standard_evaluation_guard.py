@@ -214,7 +214,7 @@ def resolve_training_audio(dataset_name: str, audio_config) -> dict:
     else:
         settings.update({key: getattr(audio_config, key, settings[key]) for key in settings})
     settings["f_min"] = float(settings["f_min"])
-    settings["f_max"] = float(settings["f_max"])
+    settings["f_max"] = None if settings['f_max'] is None else float(settings["f_max"])
     return settings
 
 
