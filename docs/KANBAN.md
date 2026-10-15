@@ -10,6 +10,15 @@ Contrato y evidencia: [identidad-checkpoint-cargado](arquitectura/identidad-chec
 
 # Tablero Kanban - Proyecto F.A.M.A
 
+## Publicación y evaluaciones coherentes — cierre local T1–T3
+
+- [x] **PUB-1:** diagnóstico de publicación y catálogo vacío; commit `bc3e65a`, RDD aprobado y acuse consumido.
+- [x] **PUB-2:** par val/test admitido; commit `308bf16`, RDD aprobado y acuse consumido.
+- [x] **PUB-3:** preflight de solo lectura y smoke separado; commit `22835a2`, cuatro revisiones aprobadas y acuse consumido (`review-d908f6ced8868a25`, `authority=burned`).
+- [x] **PUB-5:** cierre de verificación T5; evidencia integrada previa 245 aprobadas/2 avisos, UI T2 34 aprobadas y TypeScript correcto. Observaciones R3-001 de T2 y R2-001 de T3 no bloqueantes.
+
+T4 diferido. Navegador/PostgreSQL reales no verificados; sin despliegue ni operaciones sobre modelos. Detalle y límites: [seguimiento de publicación](arquitectura/publicacion-evaluaciones-coherentes.md).
+
 Tablero de seguimiento del ciclo de vida del proyecto **F.A.M.A** (*Flujo de Clasificación de Audio y Machine-learning Avanzado*). Diseñado para coordinar tareas entre el equipo de desarrollo, investigación y agentes.
 
 **Revisión documental: 2 de octubre de 2026.** Las tareas completadas indican implementación presente, no validación integral del despliegue. Los recibos aportan evidencia histórica de alcance específico; no se ejecutaron pruebas ni Docker durante esta revisión. El estado y sus límites se detallan en [análisis de objetivos](tesis/analisis_objetivos_fama.md).
