@@ -149,6 +149,7 @@ def test_sync_dataset_only_new_files(tmp_path):
 def test_upload_files_with_class_label(tmp_path):
     """Verifica que la subida construya la ruta de dos niveles datasets/{dataset}/{class}/{file}."""
     from app.services.ingestion import IngestionService
+    from tests.test_ingestion_upload_integrity import synthetic_wav
 
     with patch("google.cloud.storage.Client") as mock_client_cls:
         mock_client = MagicMock()
@@ -161,7 +162,7 @@ def test_upload_files_with_class_label(tmp_path):
         service = IngestionService(bucket_name="test-bucket", local_base_dir=tmp_path / "raw",
                                    local_processed_dir=tmp_path / "processed")
         result = service.upload_files_to_gcs(
-            files=[("audio1.wav", b"dummy")],
+            files=[("audio1.wav", synthetic_wav())],
             dataset_name="AvesChilenas",
             class_label="Chucao",
         )
@@ -312,5 +313,4 @@ def test_list_dataset_files_falls_back_to_local(tmp_path):
         assert "class_name" in first_file
         assert "size_bytes" in first_file
         assert first_file["size_bytes"] > 0
-
 

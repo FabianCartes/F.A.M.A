@@ -85,6 +85,29 @@ def test_compose_does_not_fill_missing_authentication_with_shared_credentials(tm
         assert resolved[key] == ""
 
 
+@pytest.mark.parametrize("overrides,expected", [
+    ({}, ("67108864", "268435456")),
+    ({"FAMA_UPLOAD_MAX_FILE_BYTES": "20000", "FAMA_UPLOAD_MAX_BATCH_BYTES": "30000"}, ("20000", "30000")),
+])
+def test_compose_preserves_configurable_upload_limits(tmp_path, overrides, expected):
+    compose = tmp_path / "compose.yml"
+    compose.write_bytes((ROOT / "docker-compose.yml").read_bytes())
+    environment_file = tmp_path / "empty.env"
+    environment_file.write_text("")
+    environment = isolated_environment(tmp_path) | {"HOST_UID": "1000", "HOST_GID": "1000"} | overrides
+
+    result = subprocess.run(
+        ["docker", "compose", "--project-name", "fama-config-test", "--env-file",
+         str(environment_file), "-f", str(compose), "config", "--format", "json"],
+        env=environment, cwd=tmp_path, capture_output=True, text=True, timeout=30,
+    )
+
+    assert result.returncode == 0, result.stderr
+    resolved = json.loads(result.stdout)["services"]["backend"]["environment"]
+    assert resolved.get("FAMA_UPLOAD_MAX_FILE_BYTES") == expected[0]
+    assert resolved.get("FAMA_UPLOAD_MAX_BATCH_BYTES") == expected[1]
+
+
 @pytest.mark.parametrize("credential", [
     "proyectotesis-fama-de4426cc102e.json", "custom-gcs.json", "credentials/nested-key.json",
 ])

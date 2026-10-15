@@ -1,6 +1,6 @@
 # Estado actual y pendientes para retomar F.A.M.A.
 
-**Corte: 14 de octubre de 2026. Rama: `fix/afinamiento-integral`.**
+**Corte: 15 de octubre de 2026. Rama: `fix/afinamiento-integral`.**
 
 Este resumen distingue correcciones comprobadas, defectos pendientes y funcionalidades aplazadas. No certifica que toda la plataforma funcione en producción. Evidencia y detalle por unidad: [KANBAN](../KANBAN.md).
 
@@ -23,19 +23,20 @@ Este resumen distingue correcciones comprobadas, defectos pendientes y funcional
 | I/O local de descarga | Rutas extendidas Windows y temporal corto: filename 255, destino anidado y raíz larga comprobados; conflicto local falla por archivo y continúa el lote; temporal bloqueado informa `cleanup_pending=true` | No valida UNC real ni todos los filesystems/lectores; raíz del dataset y limpieza diferida requieren trabajo adicional |
 | Estado global y UI de sync | Distingue completed/partial/failed por descarga/SQL/preprocesamiento; pantalla advierte persistencia, preprocesamiento y limpieza pendientes; DB no marca procesado si hubo fallos | No equivale a calidad acústica, catálogo auditado ni entrenabilidad; errores que abortan la llamada quedan separados |
 | Metadatos de ingesta | Frecuencia/duración observadas de cabecera, null si desconocidas, cero conservado; reemplazos actualizados; inspector lee metadatos de BD por URI exacta | No valida muestras/calidad; datos históricos y cambios cloud posteriores no se reinterpretan; sin nueva pantalla |
+| Validación de subida | WAV/MP3/FLAC/OGG con cabecera/extensión compatibles y decodificación en bloques; rechaza ilegibles/vacíos/cero frames antes de GCS; límites configurables 64 MiB/archivo y 256 MiB/lote | No se extiende a sync; límites no cubren RAM total, recepción/spooling previo, CPU, concurrencia ni RNF de 50 GB |
 
 ### Evidencia disponible
 
-- Última regresión backend acotada: **304 aprobadas**, una prueba de calidad Chucao real deseleccionada, 19 archivos; tres avisos de deprecación. Incluye modelos relacionales, entrenamiento, contratos de checkpoint, autenticación, disponibilidad, ingesta y pruebas existentes de bundles; no implica que todos los defectos de bundles estén resueltos. Aprobación local de feedback: prueba pública focal adicional, **1 aprobada**, sin modificar su implementación previa.
+- Última regresión backend acotada: **325 aprobadas**, una prueba de calidad Chucao real deseleccionada, 20 archivos; tres avisos de deprecación. Incluye modelos relacionales, entrenamiento, contratos de checkpoint, autenticación, disponibilidad, ingesta y pruebas existentes de bundles; no implica que todos los defectos de bundles estén resueltos. Aprobación local de feedback: prueba pública focal adicional anterior, **1 aprobada**, sin modificar su implementación previa.
 - Última suite frontend completa: **238 aprobadas / 22 archivos**. TypeScript sin incremental y ESLint focal sin diagnósticos. Node observado 22.20.0 sigue fuera del requisito del jsdom instalado.
-- Configuración/contexto Docker: **8 pruebas aprobadas**, con cliente y API simulada; no valida el arranque integral.
+- Configuración/contexto Docker: **10 pruebas aprobadas**, con Compose config y cliente/API simulada; no valida el arranque integral. Incluye transmisión/defaults de los límites de carga.
 - Pruebas con temporales, SQLite y adaptadores falsos. Sin cambios a `.env`, credenciales, cuentas, datasets, pesos, PostgreSQL/GCS reales ni servicios existentes. Cinco cambios locales previos del usuario preservados y fuera de los commits de afinamiento.
 
 ## 2. Correcciones pendientes de lo ya implementado
 
 Orden recomendado para continuar, no garantía de duración ni lista exhaustiva:
 
-1. **Ingesta:** completar validación/portabilidad de otros lectores, formatos/contenido, límites de carga/memoria, fallos de raíz del dataset/cliente cloud, limpieza diferida y sanitización de otros errores. Frecuencia/duración y lectura de BD corregidas en [ADR 0029](../adr/0029-metadatos-acusticos-observados-y-lectura-registrada.md), sin certificar calidad ni reparar registros históricos. Subida parcial, persistencia fallida y estado global/UI veraz de sincronización corregidos en [ADR 0028](../adr/0028-resultados-parciales-en-subida-de-audios.md). Longitudes de identidad, `db_error`, rutas locales largas de descarga y conflictos por archivo ya corregidos para los casos documentados; nombres, respuestas HTTP de validación y escapes de descarga descritos en [ADR 0027](../adr/0027-rutas-portables-y-confinadas-en-descarga.md) ya corregidos.
+1. **Ingesta:** completar validación/seguridad/portabilidad de otros lectores, formatos de sync, límites previos de recepción multipart/proxy, recursos RAM/CPU/concurrencia, fallos de raíz del dataset/cliente cloud, limpieza diferida y sanitización de otros errores. Subida estructural y límites de contenidos corregidos en [ADR 0030](../adr/0030-cargas-acusticas-validadas-y-acotadas.md), sin acreditar 50 GB ni seguridad integral. Frecuencia/duración y lectura de BD corregidas en [ADR 0029](../adr/0029-metadatos-acusticos-observados-y-lectura-registrada.md), sin certificar calidad ni reparar registros históricos. Subida parcial, persistencia fallida y estado global/UI veraz de sincronización corregidos en [ADR 0028](../adr/0028-resultados-parciales-en-subida-de-audios.md). Longitudes de identidad, `db_error`, rutas locales largas de descarga y conflictos por archivo ya corregidos para los casos documentados; nombres, respuestas HTTP de validación y escapes de descarga descritos en [ADR 0027](../adr/0027-rutas-portables-y-confinadas-en-descarga.md) ya corregidos.
 2. **Catálogo y telemetría:** retirar cifras/estados ficticios y diferenciar inventario cloud, registros BD y disponibilidad local. Resolver catálogo BD-exclusivo frente a ensambles estáticos sin sobrescribir los cambios previos de `registry.py`.
 3. **Inferencia y bundles:** revisar fuentes duplicadas y coherencia del preprocesamiento efectivo en exportación/consumo y ensambles; no basta con que las pruebas actuales de exportación pasen.
 4. **Parámetros ofrecidos:** identificar los ignorados y hacer que se apliquen o se rechacen explícitamente, sin anunciar capacidades que no existen.

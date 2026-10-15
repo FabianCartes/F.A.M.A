@@ -16,6 +16,18 @@ from google.cloud import storage
 class IngestionValidationError(ValueError):
     """Invalid ingestion input, distinct from provider/transport errors."""
 
+
+class IngestionConfigurationError(RuntimeError):
+    """Unavailable upload policy; never expose environment values to callers."""
+
+
+class IngestionPayloadTooLarge(IngestionValidationError):
+    """The configured file or aggregate upload limit was exceeded."""
+
+
+class IngestionAudioError(IngestionValidationError):
+    """An upload is not a supported, structurally readable audio recording."""
+
 # ============================================================================
 # CONFIGURACIÓN DE ENTORNO Y RUTAS BASE
 # ============================================================================
@@ -381,6 +393,25 @@ class IngestionService:
             pass
         return None, None
 
+    @staticmethod
+    def _validate_audio_upload(filename: str, content: bytes) -> None:
+        formats = {".wav": {"WAV", "WAVEX", "RF64"}, ".mp3": {"MP3", "MPEG"},
+                   ".flac": {"FLAC"}, ".ogg": {"OGG"}}
+        supported = formats.get(Path(filename).suffix.lower(), set())
+        try:
+            with sf.SoundFile(io.BytesIO(content)) as audio:
+                if (audio.format not in supported or audio.frames <= 0
+                        or audio.samplerate <= 0 or audio.channels <= 0):
+                    raise ValueError("Invalid audio header")
+                block_frames = max(1, (1024 * 1024) // (4 * audio.channels))
+                decoded_frames = 0
+                while len(block := audio.read(block_frames, dtype="float32", always_2d=True)):
+                    decoded_frames += len(block)
+                if decoded_frames != audio.frames:
+                    raise ValueError("Incomplete decoded audio")
+        except Exception:
+            raise IngestionAudioError("Invalid audio content") from None
+
     def preprocess_dataset_to_tensors(self, dataset_name: str) -> Dict[str, Any]:
         """
         Extrae características matemáticas (espectrogramas Mel y tensores) para los audios
@@ -476,6 +507,18 @@ class IngestionService:
         """Validate a complete batch before any dataset can be transferred."""
         if any(not self._valid_path_component(name) or len(name) > 100 for name in names):
             raise IngestionValidationError("Invalid dataset name")
+
+    @staticmethod
+    def get_upload_limits() -> Tuple[int, int]:
+        """Read file/batch policy without accepting invalid or unbounded limits."""
+        try:
+            file_limit = int(os.getenv("FAMA_UPLOAD_MAX_FILE_BYTES", str(64 * 1024 * 1024)))
+            batch_limit = int(os.getenv("FAMA_UPLOAD_MAX_BATCH_BYTES", str(256 * 1024 * 1024)))
+            if not 0 < file_limit <= batch_limit:
+                raise ValueError("Invalid limits")
+        except ValueError:
+            raise IngestionConfigurationError("Upload configuration unavailable") from None
+        return file_limit, batch_limit
 
     @staticmethod
     def _filesystem_path(path: Path) -> Path:
@@ -726,11 +769,18 @@ class IngestionService:
         self.validate_dataset_names([dataset_name])
         if not self._valid_path_component(class_label) or len(class_label) > 100:
             raise IngestionValidationError("Invalid class label")
-        for filename, _ in files:
+        file_limit, batch_limit = self.get_upload_limits()
+        total_bytes = 0
+        for filename, content in files:
             if not self._valid_path_component(filename) or len(filename) > 255:
                 raise IngestionValidationError("Invalid filename")
             if len(f"gs://{self.bucket_name}/datasets/{dataset_name}/{class_label}/{filename}") > 500:
                 raise IngestionValidationError("Invalid object URI length")
+            total_bytes += len(content)
+            if len(content) > file_limit or total_bytes > batch_limit:
+                raise IngestionPayloadTooLarge("Upload exceeds limits")
+        for filename, content in files:
+            self._validate_audio_upload(filename, content)
         client = self._get_client()
         bucket = client.bucket(self.bucket_name)
 

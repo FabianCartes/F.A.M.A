@@ -295,10 +295,11 @@ def test_inspector_reads_observed_upload_metadata_from_database(client):
     }
 
 
-def test_unreadable_upload_does_not_invent_audio_metadata(client):
-    uploaded = client.post("/api/ingestion/upload", data={"dataset_name": "AvesChilenas"},
-                           files={"files": ("audio.wav", b"synthetic invalid audio", "audio/wav")})
-    assert uploaded.json()["db_persisted"] is True
+def test_unreadable_sync_does_not_invent_audio_metadata(client, monkeypatch):
+    blob = BlobFixture(b"synthetic invalid audio")
+    monkeypatch.setattr("google.cloud.storage.Client.list_blobs", lambda *args, **kwargs: [blob])
+    synced = client.post("/api/ingestion/sync", json={"datasets": ["AvesChilenas"]})
+    assert synced.json()["results"][0]["db_persisted"] is True
 
     response = client.get("/api/ingestion/datasets/AvesChilenas/files")
 
@@ -369,21 +370,24 @@ def test_inspector_matches_metadata_by_full_object_route_not_basename(client):
     }
 
 
-def test_unreadable_replacement_clears_old_metadata_instead_of_preserving_it(client):
-    for content in (synthetic_wav(), b"synthetic unreadable replacement"):
-        response = client.post("/api/ingestion/upload", data={"dataset_name": "AvesChilenas"},
-                               files={"files": ("audio.wav", content, "audio/wav")})
-        assert response.json()["db_persisted"] is True
+def test_invalid_upload_replacement_preserves_old_metadata(client):
+    first = client.post("/api/ingestion/upload", data={"dataset_name": "AvesChilenas"},
+                        files={"files": ("audio.wav", synthetic_wav(), "audio/wav")})
+    assert first.json()["db_persisted"] is True
+    replacement = client.post("/api/ingestion/upload", data={"dataset_name": "AvesChilenas"},
+                              files={"files": ("audio.wav", b"synthetic unreadable replacement", "audio/wav")})
+    assert replacement.status_code == 422
 
     audio, = client.get("/api/ingestion/datasets/AvesChilenas/files").json()["files"]
 
-    assert audio["recorded_metadata"] == {"sample_rate_hz": None, "duration_seconds": None, "source": "database"}
+    assert audio["recorded_metadata"] == {"sample_rate_hz": 8000, "duration_seconds": 1.0, "source": "database"}
 
 
-def test_zero_duration_is_recorded_without_defaulting_to_five_seconds(client):
-    response = client.post("/api/ingestion/upload", data={"dataset_name": "AvesChilenas"},
-                           files={"files": ("audio.wav", synthetic_wav(frames=0), "audio/wav")})
-    assert response.json()["db_persisted"] is True
+def test_zero_duration_is_recorded_without_defaulting_to_five_seconds(client, monkeypatch):
+    blob = BlobFixture(synthetic_wav(frames=0))
+    monkeypatch.setattr("google.cloud.storage.Client.list_blobs", lambda *args, **kwargs: [blob])
+    response = client.post("/api/ingestion/sync", json={"datasets": ["AvesChilenas"]})
+    assert response.json()["results"][0]["db_persisted"] is True
 
     audio, = client.get("/api/ingestion/datasets/AvesChilenas/files").json()["files"]
 

@@ -17,7 +17,7 @@ docs/
 ├── arquitectura/                # Diseño de sistemas, pipelines, MLOps y despliegue
 ├── limites/                     # Límites matemáticos, físicos y problemas conocidos
 ├── manuales/                    # Uso, estado para retomar, revisión y despliegue
-├── adr/                         # Architectural Decision Records (ADR 0001 a 0029)
+├── adr/                         # Architectural Decision Records (ADR 0001 a 0030)
 ├── receipts/                    # Recibos técnicos reproducibles en formato JSON (RDD)
 ├── duplicados-exactos/           # Tarea acotada: admisión de feedback sin duplicados SHA-256
 └── images/                      # Diagramas, matrices de confusión y gráficos vectoriales
@@ -27,7 +27,7 @@ docs/
 
 ## Índice Detallado por Carpeta
 
-**Para retomar el proyecto:** [`manuales/estado_actual_y_pendientes.md`](./manuales/estado_actual_y_pendientes.md) separa correcciones verificadas, defectos pendientes, funcionalidades aplazadas y validación operacional necesaria (corte del 14 de octubre de 2026).
+**Para retomar el proyecto:** [`manuales/estado_actual_y_pendientes.md`](./manuales/estado_actual_y_pendientes.md) separa correcciones verificadas, defectos pendientes, funcionalidades aplazadas y validación operacional necesaria (corte del 15 de octubre de 2026).
 
 ### Tarea acotada: duplicados exactos
 * [`docs/duplicados-exactos/tasks.md`](./duplicados-exactos/tasks.md): Alcance, decisiones locales, checklist y evidencia TDD de aprobación de feedback sin duplicados SHA-256; revisión y commit pendientes del orquestador.
@@ -85,7 +85,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`backend_permissions_integration.json`](./receipts/backend_permissions_integration.json): Verificación PERM-3 del servicio público de feedback en contenedor aislado; propietario y modos tras aprobaciones, reinicio y replay. Contexto mínimo, no prueba del despliegue completo ni autoridad de entrega.
 
 ### 6. [`docs/adr/`](./adr/) — Architectural Decision Records
-Registro de las 29 decisiones de arquitectura fundamentales del sistema:
+Registro de las 30 decisiones de arquitectura fundamentales del sistema:
 * `ADR 0001`: Migración de AudioCNN a EfficientNet-B0.
 * `ADR 0002`: Particionamiento Estratificado a Nivel de Grabador (Zero Leakage).
 * `ADR 0003`: Adopción de Focal Loss frente a Cross-Entropy estándar.
@@ -115,3 +115,4 @@ Registro de las 29 decisiones de arquitectura fundamentales del sistema:
 * [`ADR 0027`](./adr/0027-rutas-portables-y-confinadas-en-descarga.md): Componentes portables, jerarquía y confinamiento en descarga; extensión a nombres de subida y HTTP 422 sanitizado; límites de concurrencia y atomicidad de lotes.
 * [`ADR 0028`](./adr/0028-resultados-parciales-en-subida-de-audios.md): Subida continúa por archivo y registra solo transferencias confirmadas; subida/sync distinguen completed/partial/failed y la UI informa fallos de etapa; sin rollback cloud ni atomicidad.
 * [`ADR 0029`](./adr/0029-metadatos-acusticos-observados-y-lectura-registrada.md): Ingesta registra frecuencia/duración de cabecera o null, sin defaults ficticios; inspector existente devuelve metadatos registrados por URI, no certificación del objeto actual.
+* [`ADR 0030`](./adr/0030-cargas-acusticas-validadas-y-acotadas.md): Subida valida WAV/MP3/FLAC/OGG por decodificación en bloques y limita contenidos a 64 MiB/archivo y 256 MiB/lote configurables; no acredita RNF de 50 GB ni protección integral de recepción.

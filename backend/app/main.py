@@ -47,7 +47,10 @@ except ImportError:
     from poc.train import BioacousticModel
 
 from app.services.storage import upload_audio_to_gcp
-from app.services.ingestion import ingestion_service, IngestionValidationError
+from app.services.ingestion import (
+    ingestion_service, IngestionValidationError, IngestionConfigurationError,
+    IngestionPayloadTooLarge, IngestionAudioError,
+)
 from app.services.training import training_service
 from app.services.dashboard import dashboard_service
 from app.services.feedback import feedback_service
@@ -760,13 +763,30 @@ async def upload_ingestion_files(
     datasets/{dataset_name}/{class_label}/{filename}
     Registra metadatos en PostgreSQL.
     """
+    try:
+        max_file_bytes, max_batch_bytes = ingestion_service.get_upload_limits()
+    except IngestionConfigurationError:
+        raise HTTPException(status_code=503, detail="Configuración de carga no disponible.") from None
     prepared_files = []
+    total_bytes = 0
     for f in files:
-        content = await f.read()
-        prepared_files.append((f.filename, content))
+        content = bytearray()
+        while chunk := await f.read(min(1024 * 1024, max_file_bytes - len(content) + 1,
+                                      max_batch_bytes - total_bytes + 1)):
+            content.extend(chunk)
+            total_bytes += len(chunk)
+            if len(content) > max_file_bytes or total_bytes > max_batch_bytes:
+                raise HTTPException(status_code=413, detail="La carga supera los límites permitidos.")
+        prepared_files.append((f.filename, bytes(content)))
 
     try:
         result = ingestion_service.upload_files_to_gcs(prepared_files, dataset_name, class_label, db=db)
+    except IngestionPayloadTooLarge:
+        raise HTTPException(status_code=413, detail="La carga supera los límites permitidos.") from None
+    except IngestionConfigurationError:
+        raise HTTPException(status_code=503, detail="Configuración de carga no disponible.") from None
+    except IngestionAudioError:
+        raise HTTPException(status_code=422, detail="Archivo de audio inválido o formato no admitido.") from None
     except IngestionValidationError:
         raise HTTPException(status_code=422, detail="Nombres de carga inválidos.") from None
     return result
