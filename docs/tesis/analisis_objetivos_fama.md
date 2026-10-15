@@ -1,7 +1,42 @@
 # Análisis de Objetivos del Proyecto F.A.M.A.
-### Estado del código vs. Tesis — Revisión documental del 2 de octubre de 2026
+### Estado del código vs. Tesis — Revisión histórica del 2 y actualización acotada del 15 de octubre de 2026
 
-Esta revisión distingue **implementado** (código presente), **evidencia histórica** (resultados registrados en recibos) y **pendiente de validación** (comportamiento aún no acreditado en el entorno objetivo). No se ejecutaron pruebas, contenedores ni benchmarks durante esta revisión. Los pendientes se mantienen en [KANBAN.md](../KANBAN.md).
+La revisión histórica del 2 de octubre distingue **implementado** (código presente), **evidencia histórica** (resultados registrados en recibos) y **pendiente de validación** (comportamiento aún no acreditado en el entorno objetivo). En esa revisión no se ejecutaron pruebas, contenedores ni benchmarks. Se conserva debajo como antecedente; no debe leerse como inventario vigente de cada defecto. Los pendientes actuales se mantienen en [KANBAN.md](../KANBAN.md).
+
+## Actualización vigente de alcance limitado — 15 de octubre de 2026
+
+**Conclusión:** la implementación mantiene el propósito híbrido —almacenamiento centralizado y cómputo local orquestado por web— y tiene recorridos corregidos con pruebas aisladas. **No está acreditado que todo funcione según todos los objetivos y requisitos, ni que esté listo para producción.** Esta actualización contrasta la matriz existente, código seleccionado y evidencia del afinamiento; no es una revisión exhaustiva de literatura/tesis, auditoría integral ni nuevo experimento de precisión/costos.
+
+| Objetivo/requisito | Evaluación actual y evidencia | Qué falta para cerrarlo |
+| --- | --- | --- |
+| Objetivo general: pipeline MLOps híbrido | Arquitectura y módulos presentes; contratos de ingesta, entrenamiento, selección e inferencia corregidos en pruebas aisladas | Recorrido completo con configuración, datos/pesos y servicios reales autorizados |
+| OE1, OE2 y OE3: análisis, requisitos y diseño | Documentados en la revisión histórica; diseño respaldado por implementación y ADRs | No confundir documentación/diseño con cumplimiento operativo; no se reevalúa aquí su contenido completo |
+| OE4: construir módulos de sincronización, preprocesamiento, interfaz y telemetría | Implementación presente. RF02: checksums, publicación local, subida parcial, validación estructural/límites. RF03: casos sintéticos reales de generación de tensores y errores. RF04/RF05: contratos de checkpoint/selección y disponibilidad comprobados de alcance específico | Telemetría/catálogo veraces, opciones ofrecidas, bundles/ensambles, otros lectores y seguridad/operación integral |
+| OE5: rendimiento, viabilidad y ciclo de reentrenamiento | Permanecen los recibos/experimentos históricos; estas pruebas no recalculan accuracy/F1, ahorro ni viabilidad económica | Feedback → curación → preparación → reentrenamiento → nuevo modelo → nueva inferencia; trazabilidad de artefactos/métricas/costos y evaluación reproducible |
+| RF01 y RF02: acceso y sincronización cloud | Adaptadores y rutas presentes; transferencias y errores comprobados con GCS falso/SQLite | IAM, PostgreSQL/GCS reales, volumen, concurrencia y recuperación operacional |
+| RF03 y RNF01: extracción y ≤2 s | Extracción implementada y caso sintético probado | Benchmark reproducible del umbral en hardware/configuración objetivo; duración de pytest no es ese benchmark |
+| RF04: entrenamiento web local | Mejores pesos, época/pérdida seleccionadas, preprocesamiento efectivo, publicación y persistencia confirmada antes de completed comprobados en suites acotadas | Entrenamiento real autorizado, parámetros pendientes y integración GPU/BD; scripts experimentales aún con snapshots pendientes |
+| RF05 y RNF04: predicción visible y ≤3 s | Selección exige disponibilidad; API rechaza temprano sin pesos. Hay recibo histórico de un caso real | Compatibilidad/calidad de todos los modelos y ensambles, coherencia de bundles y medición desde carga hasta pantalla |
+| RF06: retroalimentación y mejora continua | Captura/curación presentes; una prueba focal reciente confirma aprobación local utilizable antes de copia cloud | No hay evidencia nueva del ciclo completo hasta un modelo reentrenado y su efecto medido |
+| RNF02: dataset de 50 GB sin OOM | Cargas HTTP ahora acotadas a 64 MiB/archivo y 256 MiB/lote configurables, con lectura/decodificación por bloques | No acredita 50 GB, RAM total, parser multipart, CPU ni concurrencia: faltan ensayo de volumen y presupuestos de recursos |
+| RNF03: credenciales y operación segura | JWT/bootstrap sin secretos compartidos por defecto, variables transmitidas y JSON excluidos del contexto, comprobados de forma aislada | Siguen defaults de PostgreSQL en `docker-compose.yml`/`database.py`; no se cambiaron cuentas reales. Login web, autorización general y gestión administrada aplazados; CORS/rate limiting/exposición y secretos reales sin cierre de auditoría |
+
+### Contradicciones históricas que no deben arrastrarse como estado actual
+
+- Las referencias inferiores a defaults JWT/bootstrap inseguros quedaron superadas por AFIN-7/8 y ADR 0024. No significa que todos los defaults/secretos del proyecto estén resueltos.
+- La descripción histórica de entrenamiento que solo advertía fallo SQL no refleja los contratos actuales probados de persistencia antes de completed (véanse manual y KANBAN). No implica un entrenamiento real nuevo.
+- La mención histórica a `mock_fallback` en `EngineEnsemblePredictor` no coincide con el archivo actual examinado: hoy contiene `ModelWeightsError` para pesos incompletos y fallo de carga. La comprobación temprana de disponibilidad se probó en AFIN-5; esto no certifica todos los modelos ni su calidad.
+- La telemetría aún **no es universalmente veraz**: `DashboardService` conserva defaults de audios/métricas, curvas de referencia y un evento de ingesta añadido sin observación actual. Es un defecto pendiente que afecta al propósito de trazabilidad, no evidencia de una ingesta/entrenamiento real.
+- El manual de carga describía un botón/modal ausente de la vista actual, que usa curación. Se corrigió a operación por API existente, sin implementar ni reintroducir una pantalla nueva.
+
+### Evidencia actual, sin sumar ejecuciones heterogéneas
+
+- Backend acotado: **325 PASS**, una prueba de calidad Chucao real deseleccionada, 20 archivos; tres deprecaciones. No es la suite global.
+- Frontend completo, última ejecución de AFIN-18: **238 PASS/22 archivos**, TypeScript y ESLint focal sin diagnósticos. No reejecutado en la unidad de límites de subida; Node 22.20.0 sigue fuera del requisito del jsdom instalado.
+- Contenedores/configuración: **10 PASS** con Compose config y Docker CLI/API simulada. Sin nuevo build/arranque de servicios ni validación GPU.
+- Sin datos/BD/GCS/pesos reales, migraciones, push o despliegue. La evidencia completa y sus interfaces figuran en [KANBAN](../KANBAN.md); estado para retomar en [manual operativo de pendientes](../manuales/estado_actual_y_pendientes.md).
+
+**Puerta para retomar funcionalidades:** se puede continuar desarrollo controlado en la rama de afinamiento, pero aún quedan correcciones de lo existente. Antes de declarar objetivos operativos cumplidos se deben cerrar esos defectos y ejecutar el E2E y los benchmarks autorizados. Los porcentajes citados abajo pertenecen a la tesis/revisión histórica; no son una medición nueva de avance.
 
 ---
 

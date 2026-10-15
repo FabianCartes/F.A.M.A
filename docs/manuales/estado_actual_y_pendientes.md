@@ -56,3 +56,9 @@ El usuario pidió estabilizar primero lo existente. No se incluyen estas ampliac
 Requiere autorización separada: configuración real y arranque integral con Docker/GPU/PostgreSQL/GCS; smoke en navegador del recorrido ingesta → entrenamiento → checkpoint → selección → predicción; límites de cargas/CORS/peticiones y controles de acceso antes de exposición.
 
 No se ha acreditado el ciclo completo con datos/pesos reales durante este afinamiento. Se puede retomar desarrollo controlado en la rama actual, pero no declarar la plataforma lista para producción. Commits locales; sin push, merge ni despliegue.
+
+## 5. Concordancia con propósito, objetivos y documentación
+
+El propósito híbrido y sus módulos están presentes; no está acreditado el cumplimiento operativo completo. OE1–OE3 están documentados; OE4 tiene implementación y pruebas de alcance específico, pero conserva defectos —incluida telemetría de referencia presentada como actual—. OE5 y los tiempos de 2 s/3 s, volumen de 50 GB y seguridad integral requieren validación adicional. No se asigna un porcentaje global de avance sin metodología.
+
+El [contraste de objetivos actualizado](../tesis/analisis_objetivos_fama.md) conserva la revisión histórica del 2 de octubre, identifica afirmaciones superadas por las correcciones y separa requisitos implementados de los no acreditados. No sustituye el E2E ni una auditoría de producción. Los defaults de PostgreSQL, control de acceso aplazado y estado Node incompatible siguen siendo pendientes concretos.

@@ -34,7 +34,7 @@ docs/
 
 ### 1. [`docs/tesis/`](./tesis/) — Tesis y Objetivos de Grado
 * [`VIDA_01_CINF_FINAL_PT_2026_1_CARTES.md`](./tesis/VIDA_01_CINF_FINAL_PT_2026_1_CARTES.md) / [`.pdf`](./tesis/VIDA_01_CINF_FINAL_PT_2026_1_CARTES.pdf): Memoria formal de proyecto de título.
-* [`analisis_objetivos_fama.md`](./tesis/analisis_objetivos_fama.md): Matriz de trazabilidad de los Objetivos Específicos (OE1 a OE5) y Requerimientos Funcionales (RF_01 a RF_06) vs. el código real.
+* [`analisis_objetivos_fama.md`](./tesis/analisis_objetivos_fama.md): Matriz de objetivos/RF/RNF con actualización acotada del 15 de octubre de 2026; distingue correcciones comprobadas, antecedentes históricos y objetivos operativos aún no acreditados.
 
 ### 2. [`docs/modelos/`](./modelos/) — Modelado Acústico y Experimentos
 Informes técnicos de evolución de los modelos de Machine Learning (desde la PoC al 88.68% F1):
