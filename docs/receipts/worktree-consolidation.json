@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-15",
+  "status": "partially_consolidated_with_explicit_blockers",
+  "base_head": "23ad406d4705ccea880d6e79faea21e9ab78682e",
+  "destination_branch": "feat/consistent-evaluation-publication",
+  "changes_committed": false,
+  "tested_local_sources": {
+    "file_count": 17,
+    "canonical_files_sha256": "f0b90e50823daef1f91b21c0ed9b1e83caa429229d51b5ebbaf9b7820f76cd44",
+    "manifest_in_backup": "integrated-source-manifest.json",
+    "canonicalization": "SHA256 of UTF-8 JSON files_sha256 object with sort_keys=true and separators comma/colon"
+  },
+  "secondary_worktrees_initial": 58,
+  "secondary_worktrees_removed": 46,
+  "secondary_worktrees_retained": 12,
+  "backup": {
+    "local_path": "/home/kevin/Work/fama-preservation/20261015T151502Z",
+    "manifest_sha256": "78167bd19edb909a74e5277267bb2744bf74a73c77cb36564bb332123a22fb3f",
+    "clean_removal_receipt_sha256": "d09b1167982dea3d9a3426c241a4ec5315df04dce660ebe4511e39be79e471dc",
+    "snapshot_removal_receipt_sha256": "565a1d0110a7b28a44a01f8b308c54e4f4e5d2830d442718745fa7cdf2a53d83",
+    "bundle_verified": true,
+    "archived_file_hashes_verified": true,
+    "excluded": ["virtual_environments", "node_modules", "codegraph_indexes", "generated_caches"]
+  },
+  "applied_units": [
+    "checkout_local_isolated_runner_and_current_protected_input_inventory",
+    "nullable_internal_f_max_contract_checkpoint_and_reports",
+    "strict_uint32_seed_from_ui_and_api_to_existing_training_service",
+    "cancellation_barriers_after_validation_and_before_checkpoint",
+    "frontend_initialization_failure_and_retry_coverage"
+  ],
+  "verification": {
+    "backend_core": {"passed": 312, "warnings": 2, "exit_code": 0, "evidence": "backend-regression.json"},
+    "predictor_reevaluation_preprocessing": {"passed": 56, "deselected": 5, "exit_code": 0, "evidence": "predictor-regression.json"},
+    "publication_cli": {"passed": 18, "exit_code": 0, "evidence": "publication-preflight.json"},
+    "runner_cli": {"passed": 4, "exit_code": 0, "evidence": "runner-final.json"},
+    "frontend": {"passed": 116, "exit_code": 0, "evidence": "frontend-regression.json"},
+    "typecheck": {"exit_code": 0, "evidence": "frontend-typecheck.json"},
+    "build": {"exit_code": 0, "evidence": "frontend-build.json"},
+    "lint": {"exit_code": 1, "preexisting_errors": 25, "preexisting_warnings": 1, "head_sources_compared": true, "evidence": "frontend-lint.json"}
+  },
+  "retained_groups": [
+    {"path": "/home/kevin/Work/fama-frontend-contract", "reason": "spawn_supervision_and_end_to_end_child_runtime_not_ready"},
+    {"path": "/home/kevin/Work/fama-review-new-model-flow", "reason": "historical_artifacts_environment_and_policy_differences_preserved"},
+    {"path": ".git/gentle-ai/candidate-views", "count": 10, "reason": "no_verified_selective_provider_cleanup_preserving_review_authority"}
+  ],
+  "not_claimed": ["full_consolidation", "global_suite_green", "spawn_integrated", "cuda_verification", "production_postgresql", "real_training", "native_review_approval", "deployment"],
+  "branches_deleted": false,
+  "review_authority_reset": false
+}

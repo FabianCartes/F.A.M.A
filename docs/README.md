@@ -17,7 +17,7 @@ docs/
 ├── arquitectura/                # Diseño de sistemas, pipelines, MLOps y despliegue
 ├── limites/                     # Límites matemáticos, físicos y problemas conocidos
 ├── manuales/                    # Manual de usuario, revisión, despliegue e índices canónicos
-├── adr/                         # Architectural Decision Records (ADR 0001 a 0023)
+├── adr/                         # Architectural Decision Records (ADR 0001 a 0024)
 ├── receipts/                    # Recibos técnicos reproducibles en formato JSON (RDD)
 ├── duplicados-exactos/           # Tarea acotada: admisión de feedback sin duplicados SHA-256
 └── images/                      # Diagramas, matrices de confusión y gráficos vectoriales
@@ -72,6 +72,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`22_propuesta_vista_ayuda_y_centro_de_conocimiento.md`](./arquitectura/22_propuesta_vista_ayuda_y_centro_de_conocimiento.md): Diseño y especificación del centro de conocimiento e interactividad en frontend.
 
 ### 4. [`docs/manuales/`](./manuales/) — Manuales y Guías Operativas
+* [`consolidacion-worktrees.md`](./manuales/consolidacion-worktrees.md): Retirada de los 58 secundarios, recuperación de respaldos y entornos CUDA, integración spawn y verificaciones locales.
 * [`evaluaciones-admitidas.md`](./manuales/evaluaciones-admitidas.md): Distingue el par val/test admitido por la guarda de los intentos y reportes históricos más recientes; documenta los límites de la evidencia.
 * [`preflight-publicacion.md`](./manuales/preflight-publicacion.md): CLI explícito de publicación de solo lectura, identidad requerida y smoke separado de inferencia; SQLite nativo read-only y límites de verificación.
 * [`diagnostico-publicacion-modelos.md`](./manuales/diagnostico-publicacion-modelos.md): Causas sanitizadas de rechazo y mensajes de catálogo vacío o indisponible; no modifica activación ni validación.
@@ -96,6 +97,9 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`05_restriccion_formato_audio_y_captura_microfono.md`](./limites/05_restriccion_formato_audio_y_captura_microfono.md): Restricción estricta de formato PCM .wav y pipeline de captura por micrófono web.
 
 ### Evidencia operacional
+* [`worktree-consolidation.json`](./receipts/worktree-consolidation.json): Conteos de retirada, identidad del respaldo, comprobaciones y bloqueos de consolidación local.
+* [`worktree-consolidation-final.json`](./receipts/worktree-consolidation-final.json): Cierre de los doce secundarios restantes y tres rutas de verificación; integridad de respaldos y conservación del estado de revisión.
+* [`training-checks-inventory.json`](./receipts/training-checks-inventory.json): Inventario vigente de entradas protegidas por el runner aislado; independiente del baseline histórico.
 * [`training-legacy-final-verification.json`](./receipts/training-legacy-final-verification.json): Verificación independiente del candidato final, incluido el retiro de orquestadores Python y reexportación: 297 pruebas aprobadas, stdout/stderr y selección aislada preservados; sin validación de servicios reales ni revisión nativa.
 * [`training-legacy-independent-verification.json`](./receipts/training-legacy-independent-verification.json): Evidencia histórica del retiro inicial de CLI/entrenador legacy: 322 pruebas aprobadas; la salvedad de funciones Python todavía invocables fue resuelta posteriormente y no describe el candidato final.
 * [`backend_permissions_integration.json`](./receipts/backend_permissions_integration.json): Verificación PERM-3 del servicio público de feedback en contenedor aislado; propietario y modos tras aprobaciones, reinicio y replay. Contexto mínimo, no prueba del despliegue completo ni autoridad de entrega.
@@ -103,7 +107,8 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`model-11-real-evaluation.json`](./receipts/model-11-real-evaluation.json): Informe inmutable de reevaluación real del modelo #11 (val/test); no certifica calidad ni autoriza activación.
 
 ### 6. [`docs/adr/`](./adr/) — Architectural Decision Records
-Registro de las 23 decisiones de arquitectura fundamentales del sistema:
+Registro de las 24 decisiones de arquitectura fundamentales del sistema:
+* [`ADR 0024`](./adr/0024-entrenamiento-aislado-spawn.md): Aislamiento del entrenamiento, supervisión independiente del sondeo, conciliación de salida y límites de cancelación/persistencia.
 * `ADR 0001`: Migración de AudioCNN a EfficientNet-B0.
 * `ADR 0002`: Particionamiento Estratificado a Nivel de Grabador (Zero Leakage).
 * `ADR 0003`: Adopción de Focal Loss frente a Cross-Entropy estándar.
