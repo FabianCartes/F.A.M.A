@@ -1,0 +1,32 @@
+{
+  "purpose": "Current protected inputs for isolated training checks; historical baseline remains unchanged.",
+  "paths": [
+    "backend/app/main.py",
+    "backend/app/database.py",
+    "backend/app/schemas/training.py",
+    "backend/app/schemas/model_info.py",
+    "backend/app/services/training.py",
+    "backend/app/services/training_process.py",
+    "backend/app/services/standard_evaluation_guard.py",
+    "backend/app/services/registry.py",
+    "backend/app/services/predictors/trained_predictor.py",
+    "backend/poc/preprocess.py",
+    "backend/training/paths.py",
+    "backend/training/schemas/config.py",
+    "backend/tests/conftest.py",
+    "backend/tests/test_training_flow.py",
+    "backend/tests/test_training_persistence.py",
+    "backend/tests/test_training_service.py",
+    "backend/tests/test_training_spawn.py",
+    "backend/tests/test_training_schemas.py",
+    "backend/tests/test_api_training.py",
+    "backend/tests/test_preprocess.py",
+    "backend/tests/test_trained_predictor.py",
+    "backend/tests/test_model_reevaluation.py",
+    "backend/tests/test_registry_db_sync.py",
+    "backend/tests/test_api_model_catalogue.py",
+    "backend/tests/test_loaded_checkpoint_identity.py",
+    "backend/tests/test_publication_preflight.py",
+    "backend/tests/test_isolated_training_checks_runner.py"
+  ]
+}

@@ -1,4 +1,8 @@
 # Integración del flujo de entrenamiento en la carpeta principal
+
+> Actualización del 15 de octubre de 2026: la [consolidación de worktrees](consolidacion-worktrees.md)
+> incorpora selector de semilla UI/API, ejecución spawn y runner autocontenido. Los registros de
+> integración que siguen describen sus árboles históricos, no la verificación actual.
 Destino: `/home/kevin/Work/fama`, rama `fix/prediction-view-truthfulness`, HEAD inicial `d9c374fa3467fea4307b54ed6bdb644839c45dcc`. Origen: `283bf212e94bea21826b45badd457e2fe22a0d2e`.
 Entrega local sin commits por instrucción explícita; runner aislado con intérprete del origen y módulos del destino. Seguimiento activo enlazado desde docs/KANBAN.md.
 
@@ -23,8 +27,8 @@ Entrega local sin commits por instrucción explícita; runner aislado con intér
 
 ## Uso y límites del código integrado
 
-- El servicio admite `seed=42` por defecto; exige un entero entre `0` y `2**32 - 1` (no bool). Un valor inválido se rechaza antes de admisión o cambios de estado. La API/frontend no agrega un selector de semilla en este traslado.
-- El checkpoint registra `seed` e `initialization_mode`: `constructor_default` para AudioCNN/PANNs y `pretrained_constructor` para los modelos construidos con pesos preentrenados. La siembra de RNG no promete determinismo total ni aislamiento entre procesos o hilos consumidores de RNG globales.
+- El servicio admite `seed=42` por defecto; exige un entero entre `0` y `2**32 - 1` (no bool). Un valor inválido se rechaza antes de admisión o cambios de estado. La consolidación posterior incorpora su selección y propagación desde API/frontend, con entrenamiento en un hijo spawn supervisado independientemente del sondeo HTTP.
+- El checkpoint registra `seed` e `initialization_mode`: `constructor_default` para AudioCNN/PANNs y `pretrained_constructor` para los modelos construidos con pesos preentrenados. La ejecución spawn aísla los RNG del hijo respecto de la API; no promete determinismo total entre equipos, versiones o hardware CUDA. Véase el [ADR 0024](../adr/0024-entrenamiento-aislado-spawn.md).
 - Si falla el constructor preentrenado, el job falla conservando su error: no se reintenta silenciosamente con pesos aleatorios.
 - Para `AvesChilenas`, las variables opcionales `FAMA_TRAINING_AVESCHILENAS_RAW_READ_ROOT` y `FAMA_TRAINING_AVESCHILENAS_PREPARED_READ_DIR` configuran directorios de lectura físicos, absolutos, existentes y legibles, sin symlinks. Cada variable es independiente; omitirla conserva su ruta canónica. Un valor inválido rechaza admisión sin fallback. Otros datasets no usan estos overrides.
 - La aplicación no copia ni modifica esas fuentes; esto no establece permisos de solo lectura del sistema operativo. Checkpoints y salidas permanecen locales. El registro exacto del dataset en la base de datos sigue siendo requisito.
@@ -32,16 +36,16 @@ Entrega local sin commits por instrucción explícita; runner aislado con intér
 
 ### Reproducir comprobaciones aisladas
 
-Desde `/home/kevin/Work/fama/backend`, con el intérprete validado del worktree fuente (solo dependencias; módulos de aplicación del destino):
+Desde `/home/kevin/Work/fama/backend`, con el intérprete validado del checkout principal:
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// \
 CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
-/home/kevin/Work/fama-review-new-model-flow/.venv-cuda/bin/python \
+/home/kevin/Work/fama/.venv/bin/python \
   tests/run_isolated_training_checks.py <selectores pytest>
 ```
 
-El runner fija el destino y lee la guarda original desde el worktree fuente; no ejecuta su launcher. Necesita ese worktree y `docs/receipts/training-integration-baseline.json`. Admite selectores y opciones de pytest, crea scratch/cachés privados y limita fases a30s con captura de stacks. Prohíbe red y SQLite persistente. El audit guard no es un sandbox OS y no cubre carreras, hardlinks, I/O nativo o descriptores preabiertos. La fuente y los resultados históricos no se reutilizan como prueba del destino. No instalar ni cambiar entornos por inercia ante un fallo.
+El runner resuelve el checkout desde su propia ruta y carga `tests/training_host_guard.py` local. Usa `docs/receipts/training-checks-inventory.json`; el baseline histórico queda intacto. Rechaza entradas ausentes, escapes de raíz y Python optimizado antes de iniciar las pruebas. Admite selectores y opciones de pytest, crea scratch/cachés privados y limita fases a 30 s con captura de stacks. Prohíbe red y SQLite persistente. No depende de otro worktree. El audit guard no es un sandbox OS y no cubre carreras, hardlinks, I/O nativo o descriptores preabiertos. La fuente y los resultados históricos no se reutilizan como prueba del destino. No instalar ni cambiar entornos por inercia ante un fallo.
 
 ### Comprobación separada de imports
 

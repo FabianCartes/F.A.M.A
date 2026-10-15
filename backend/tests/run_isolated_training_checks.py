@@ -5,6 +5,9 @@ CUDA hidden and pytest plugin autoload disabled. This is an application audit
 guard, not an OS sandbox; native writes, races and hard links are not covered.
 No launcher, historical receipts, datasets or checkpoints are loaded.
 """
+if not __debug__:
+    raise SystemExit('Optimized Python is unsupported for isolated training checks.')
+
 import sys,os,json,tempfile,traceback,faulthandler,stat
 from pathlib import Path
 def install_descriptor_adapter(root):
@@ -35,10 +38,9 @@ def install_descriptor_adapter(root):
 import hashlib, importlib.util
 BACKEND=Path(__file__).resolve().parents[1]
 AUTHORIZED_ROOT=BACKEND.parent
-assert BACKEND == Path('/home/kevin/Work/fama/backend')
-assert Path.cwd()==BACKEND
+assert Path.cwd().resolve()==BACKEND
 sys.path.insert(0,str(BACKEND))
-guard_path=Path('/home/kevin/Work/fama-review-new-model-flow/backend/scripts/training_host_guard.py')
+guard_path=BACKEND/'tests/training_host_guard.py'
 spec=importlib.util.spec_from_file_location('original_training_host_guard',guard_path)
 guard_module=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(guard_module)
@@ -65,9 +67,21 @@ def prepare_private_runtime(runtime):
     tempfile.tempdir = str(temporary)
     return pinned_cache
 
-baseline=json.loads((AUTHORIZED_ROOT/'docs/receipts/training-integration-baseline.json').read_text())
-paths=[AUTHORIZED_ROOT/name for name in baseline['hashes']]
-paths += [Path(__file__),guard_path]
+inventory_path=AUTHORIZED_ROOT/'docs/receipts/training-checks-inventory.json'
+inventory=json.loads(inventory_path.read_text())
+paths=[]
+missing=[]
+for name in inventory['paths']:
+    path=(AUTHORIZED_ROOT/name).resolve()
+    if not path.is_relative_to(AUTHORIZED_ROOT):
+        raise SystemExit(f'Protected path escapes checkout: {name}')
+    if not path.is_file():
+        missing.append(name)
+    else:
+        paths.append(path)
+if missing:
+    raise SystemExit(f'Missing protected paths: {missing}')
+paths += [Path(__file__),guard_path,inventory_path]
 before={str(path):_sha256(path) for path in paths}
 code=1; scratch_path=None; guard_installed=False; reports=[]; summary={}
 trace_fd=os.dup(2); original_open=os.open; sqlite_connects=[]
@@ -167,5 +181,6 @@ finally:
     assert {str(path):_sha256(path) for path in paths}==before
     cleaned=scratch_path is not None and not scratch_path.exists(); assert cleaned
     summary.update(phase='isolated_ambient_import_probe' if ambient_probe else 'isolated_training_fixture_consumer_suite',process_exit_code=code,pytest_exit_code=None if ambient_probe else code,deselected_cases=deselected,status='passed' if code==0 else 'failed',guard_before_collection_fixtures_and_body=guard_installed,phase_deadline_seconds=30,call_reports=[r for r in reports if r['phase']=='call'],nonpassing_reports=[r for r in reports if r['outcome']!='passed'],sqlite_memory_connection_count=len(sqlite_connects),excluded_completed_cases=sorted(excluded),private_scratch_cleanup=cleaned,code_guard_and_documentation_preserved=True,only_sqlite_synthetic_cpu=True,network_live_db_forbidden=True,no_further_environment_recovery=True)
+    summary.update(protected_paths_unchanged=True,protected_path_count=len(paths),inventory='docs/receipts/training-checks-inventory.json')
     print('CHECK_SUMMARY '+json.dumps(summary),flush=True)
 raise SystemExit(code)
