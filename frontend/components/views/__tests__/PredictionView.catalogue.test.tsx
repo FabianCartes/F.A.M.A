@@ -5,7 +5,7 @@ import PredictionView, { type RegisteredModel } from "../PredictionView";
 const bird: RegisteredModel = { id: "bird-cnn", name: "Aves CNN", description: "Aves", target_sr: 22050, duration_seconds: 5, classes: ["Chucao", "Rayadito"], is_default: true, has_weights: true };
 const engine: RegisteredModel = { id: "engine-v2", name: "Motor v2", description: "Motor", target_sr: 32000, duration_seconds: 2, classes: ["bad_ignition", "low_oil"], is_default: false, has_weights: true };
 const model11: RegisteredModel = { id: "fama_trained_model_11", name: "Modelo 11", description: "Aves nuevas", target_sr: 22050, duration_seconds: 5, classes: ["Chucao", "Rayadito", "Chincol"], is_default: false, has_weights: true };
-const response = (models: RegisteredModel[], defaultId = bird.id, publication_errors: { model_id?: string; code: string }[] = [], catalogueFields: Record<string, unknown> = {}) => new Response(JSON.stringify({ models, total: models.length, default_model_id: defaultId, publication_errors, ...catalogueFields }), { status: 200 });
+const response = (models: RegisteredModel[], defaultId = bird.id, publication_errors: { model_id?: string; code: string; reason?: string }[] = [], catalogueFields: Record<string, unknown> = {}) => new Response(JSON.stringify({ models, total: models.length, default_model_id: defaultId, publication_errors, ...catalogueFields }), { status: 200 });
 function deferred() {
   let resolve!: (response: Response) => void;
   let reject!: (error: Error) => void;
@@ -461,6 +461,30 @@ describe("Catálogo público de Predicción", () => {
     await focus();
     expect(screen.queryByRole("alert")).toBeNull();
     expect(selection().value).toBe(engine.id);
+  });
+
+  it("distingue catálogo vacío, errores de publicación y base de datos no disponible", async () => {
+    catalogue = async () => response([], "", [{
+      model_id: model11.id,
+      code: "standard_evaluation_invalid",
+      reason: "runtime_configuration_incompatible",
+    }]);
+    await show();
+
+    const publication = screen.getByRole("status", { name: "Publicación de modelos" });
+    expect(publication.textContent).toContain("No hay modelos publicados disponibles");
+    expect(publication.textContent).not.toContain("siguen siendo seleccionables");
+    expect(publication.textContent).toContain("runtime del predictor incompatible con los informes");
+
+    catalogue = async () => response([], "");
+    await focus();
+    const empty = screen.getByRole("status", { name: "Disponibilidad de modelos" });
+    expect(empty.textContent).toContain("La consulta fue correcta, pero no hay modelos publicados");
+
+    catalogue = async () => new Response(JSON.stringify({ detail: { errors: [{ code: "database_unavailable" }] } }), { status: 503 });
+    await focus();
+    expect(screen.getByRole("alert").textContent).toContain("la base de datos no está disponible");
+    expect(screen.queryByRole("status", { name: "Disponibilidad de modelos" })).toBeNull();
   });
 
   it("no inventa modelos ni permite ejecutar tras un error inicial o catálogo vacío", async () => {

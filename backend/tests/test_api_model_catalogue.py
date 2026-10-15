@@ -273,12 +273,44 @@ def test_catalogue_rejects_unverified_standard_models_before_publication(catalog
     response = client.get("/api/models")
     payload = response.json()
     assert response.status_code == 200
+    expected_reasons = {
+        "pending": "model_state_incomplete", "failed": "model_state_incomplete",
+        "component": "model_state_incomplete", "missing_test": "evaluation_pair_incomplete",
+        "wrong_hash": "evaluation_pair_incomplete", "wrong_classes": "evaluation_pair_incomplete",
+        "wrong_config": "runtime_configuration_incompatible",
+        "coherent_wrong_config": "runtime_configuration_incompatible",
+        "wrong_architecture": "runtime_configuration_incompatible",
+        "wrong_job": "runtime_configuration_incompatible",
+        "wrong_dataset": "evaluation_pair_incomplete", "wrong_schema": "evaluation_pair_incomplete",
+        "wrong_evaluator": "evaluation_pair_incomplete",
+        "missing_pair_identity": "pair_provenance_invalid",
+        "tampered_pair_identity": "pair_provenance_invalid",
+    }
     assert all(model["id"] != "fama_trained_model_401" for model in payload["models"])
-    assert payload["publication_errors"] == [
-        {"model_id": "fama_trained_model_401", "code": "standard_evaluation_invalid"},
-    ]
+    assert payload["publication_errors"] == [{
+        "model_id": "fama_trained_model_401",
+        "code": "standard_evaluation_invalid",
+        "reason": expected_reasons[fault],
+    }]
     assert "/private/synthetic/path" not in response.text
     assert "synthetic-secret-marker" not in response.text
+
+
+def test_catalogue_exposes_sanitized_reason_for_incompatible_runtime_configuration(catalogue, monkeypatch):
+    client, _, _, _ = seed_standard_model(catalogue, 399, fault="coherent_wrong_config")
+    install_torch_metadata_adapter(monkeypatch)
+
+    response = client.get("/api/models")
+
+    assert response.status_code == 200
+    assert response.json()["publication_errors"] == [{
+        "model_id": "fama_trained_model_399",
+        "code": "standard_evaluation_invalid",
+        "reason": "runtime_configuration_incompatible",
+    }]
+    assert "/private/synthetic/path" not in response.text
+    assert "synthetic-secret-marker" not in response.text
+    assert "Falta un par completado" not in response.text
 
 
 def test_catalogue_rejects_val_test_from_different_admitted_manifest_pairs(catalogue, monkeypatch):
@@ -291,9 +323,31 @@ def test_catalogue_rejects_val_test_from_different_admitted_manifest_pairs(catal
 
     assert response.status_code == 200
     assert all(model["id"] != "fama_trained_model_400" for model in response.json()["models"])
-    assert response.json()["publication_errors"] == [
-        {"model_id": "fama_trained_model_400", "code": "standard_evaluation_invalid"},
-    ]
+    assert response.json()["publication_errors"] == [{
+        "model_id": "fama_trained_model_400",
+        "code": "standard_evaluation_invalid",
+        "reason": "pair_provenance_invalid",
+    }]
+
+
+def test_catalogue_keeps_unrecognized_standard_failure_generic_and_sanitized(catalogue, monkeypatch):
+    client, _, _, _ = seed_standard_model(catalogue, 398)
+    from app.services import standard_evaluation_guard
+
+    secret = "/private/guard/path token=synthetic-secret"
+    def unexpected_failure(*args, **kwargs):
+        raise RuntimeError(secret)
+    monkeypatch.setattr(standard_evaluation_guard, "require_standard_reports", unexpected_failure)
+
+    response = client.get("/api/models")
+
+    assert response.status_code == 200
+    assert response.json()["publication_errors"] == [{
+        "model_id": "fama_trained_model_398",
+        "code": "standard_evaluation_invalid",
+    }]
+    assert secret not in response.text
+    assert "reason" not in response.json()["publication_errors"][0]
 
 
 def test_catalogue_accepts_shared_manifest_pair_with_independent_split_manifests_and_counts(
@@ -431,12 +485,30 @@ def test_catalogue_evicts_cached_standard_predictor_when_checkpoint_identity_cha
     response = client.get("/api/models")
     assert response.status_code == 200
     assert all(model["id"] != "fama_trained_model_404" for model in response.json()["models"])
-    assert response.json()["publication_errors"] == [
-        {"model_id": "fama_trained_model_404", "code": "standard_evaluation_invalid"},
-    ]
+    assert response.json()["publication_errors"] == [{
+        "model_id": "fama_trained_model_404",
+        "code": "standard_evaluation_invalid",
+        "reason": "checkpoint_invalid",
+    }]
     assert not registry.has_model("fama_trained_model_404")
     with pytest.raises(ModelNotFoundError):
         registry.get("404")
+
+
+def test_catalogue_classifies_a_missing_standard_checkpoint_without_exposing_its_path(catalogue, monkeypatch):
+    client, checkpoint, _, _ = seed_standard_model(catalogue, 397)
+    install_torch_metadata_adapter(monkeypatch)
+    checkpoint.unlink()
+
+    response = client.get("/api/models")
+
+    assert response.status_code == 200
+    assert response.json()["publication_errors"] == [{
+        "model_id": "fama_trained_model_397",
+        "code": "standard_evaluation_invalid",
+        "reason": "checkpoint_invalid",
+    }]
+    assert str(checkpoint) not in response.text
 
 
 def test_catalogue_exposes_full_val_test_evaluations_and_distinguishes_zero_from_absence(catalogue):

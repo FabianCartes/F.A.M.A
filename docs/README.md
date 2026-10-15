@@ -58,6 +58,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`informe_consolidado_diagnostico_acustico_motores.md`](./modelos/informe_consolidado_diagnostico_acustico_motores.md): Informe del ensamble industrial para fallas de motor (81.16% Acc).
 
 ### 3. [`docs/arquitectura/`](./arquitectura/) — Arquitectura de Software y MLOps
+* [`publicacion-evaluaciones-coherentes.md`](./arquitectura/publicacion-evaluaciones-coherentes.md): Seguimiento de diagnóstico de publicación, par de evaluaciones aplicable, preflight y reversión; implementación y verificaciones por hitos.
 * [`identidad-checkpoint-cargado.md`](./arquitectura/identidad-checkpoint-cargado.md): Contrato de identidad de carga, bloqueo de registros sin hash y evidencia de implementación; no implica atestación continua de tensores.
 * [`03_orquestador_fastapi_gcs_postgresql.md`](./arquitectura/03_orquestador_fastapi_gcs_postgresql.md): Arquitectura del orquestador backend con FastAPI.
 * [`04_saneamiento_y_transcodificacion_audio.md`](./arquitectura/04_saneamiento_y_transcodificacion_audio.md): Pipeline de saneamiento y normalización de audio crudo.
@@ -71,6 +72,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`22_propuesta_vista_ayuda_y_centro_de_conocimiento.md`](./arquitectura/22_propuesta_vista_ayuda_y_centro_de_conocimiento.md): Diseño y especificación del centro de conocimiento e interactividad en frontend.
 
 ### 4. [`docs/manuales/`](./manuales/) — Manuales y Guías Operativas
+* [`diagnostico-publicacion-modelos.md`](./manuales/diagnostico-publicacion-modelos.md): Causas sanitizadas de rechazo y mensajes de catálogo vacío o indisponible; no modifica activación ni validación.
 * [`fragmentacion-limpieza-legacy.md`](./manuales/fragmentacion-limpieza-legacy.md): Seguimiento de la división local autorizada del commit de limpieza, respaldo, verificaciones y límites de revisión nativa; sin publicación. [Evidencia de los cortes](./receipts/fragmentacion-limpieza-legacy.json).
 * [`identidad-checkpoint-prediccion.md`](./manuales/identidad-checkpoint-prediccion.md): Interpretación de hashes de catálogo, carga e informe; bloqueo de modelos persistidos sin hash y límites operativos.
 * [`integracion-flujo-entrenamiento.md`](./manuales/integracion-flujo-entrenamiento.md): Alcance, preservación y evidencia de integración local del flujo de entrenamiento; sin ejecución real ni cambios de activación.

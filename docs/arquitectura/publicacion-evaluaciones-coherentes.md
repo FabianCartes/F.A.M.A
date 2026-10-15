@@ -1,0 +1,32 @@
+# Publicación y evaluaciones coherentes
+Objetivo: prevenir incompatibilidades entre predictor servido y evidencia de evaluación sin debilitar la validación. Rama: `feat/publicacion-evaluaciones-coherentes`; base reconciliada: `4c1d3b4`; commits locales por hito.
+Entrega: cadena desde una rama de seguimiento (`feature-branch-chain`), sin push ni PR; RDD habilitado por autorización posterior del usuario. Pruebas: `.venv/bin/python -m pytest` y runner frontend existente, con estado sintético aislado.
+
+## Specs
+- S1: «Procede con la implementación, ve haciendo commits despues de cada hito».
+- S2: «Haz un plan para aplicar las recomiendaciones, haz una investigación para comprobar que esta en lo cierto».
+- S3: «Hace poco se realizo una limpieza de codigo muerto y legacy, al probar el codigo, el modelo 14 da error de publicación, a que se debe?
+Algunos modelos no pudieron publicarse. Los modelos disponibles siguen siendo seleccionables.
+
+    fama_trained_model_14: error de publicación
+    fama_trained_model_13: error de publicación
+    fama_trained_model_12: archivo de pesos inválido
+    fama_trained_model_11: archivo de pesos inválido
+El resto de modelos se deben de eliminar, solo deja el 14.
+Investiga».
+- S4: Decisión de entrega: «Cadena desde una rama de seguimiento — recomendado» (`feature-branch-chain`).
+- S5: «No voy a estar ahora, te doy la auotrizaación para que termines T2 y T3 ademas que realices los RDD correspondientes».
+
+## Tasks
+- T1 | S1–S3 | delegated: worker A, paralelo con T3, superficies disjuntas | in_progress (entorno alternativo autorizado) | Causas tipadas y sanitizadas, código existente conservado y catálogo vacío correcto. Worker: RED API 1 fail / UI 1 fail+32 pass; GREEN 106 backend pass/2 warnings, 33 UI pass y tsc exit0. Spot-check padre: 1 pass/1.03s. ASSESS unassessable; verificador mv91f8yk-7-v887 parcial: UI 33 pass, tsc sin error; backend no ejecutó por imports omitidos del scratch. Padre reconcilió `backend/dataset_references.py` y autorizó una corrección acotada mv91k17d-8-q5et; falló exit4 antes de colección: `ModuleNotFoundError: No module named 'training'` al importar backend/__init__.py. Recuperación del scratch agotada. Usuario autorizó posteriormente terminar T2/T3; verificación prerrequisito T1 en árbol actual con fixtures aisladas autorizada. Continuación mv91vuf7-b-t12u ausente tras interrupción (status/list confirmados); relanzada como mv9jqlnk-1-0v65: 106 passed, 2 warnings en 8.65s, salida exitosa; fixtures SQLite/raw/prepared/checkpoints temporales inspeccionadas. Navegador real no disponible, no afirmar verificación browser. Commit: candidato verificado, pendiente de creación.
+- T2 | S1–S3 | delegated: continuación worker A tras commit T1 | pending | Exponer el par val/test admitido por la guarda como evidencia aplicable, separado de intentos recientes/históricos; sin duplicar reglas ni mezclar pares. Commit: pendiente.
+- T3 | S1–S3 | delegated: worker B, paralelo con T1, superficies disjuntas | in_progress (independent verification) | CLI/servicio implementados; worker: 8 pruebas nuevas y 56 regresión aprobadas, smoke sintético real, ayuda exit0 e import-only seguro. Padre revisó servicio/CLI; ASSESS unassessable. Verificador mv91no5s-9-z19t: 64 pass aisladas, CLI/help y smoke sintético correctos; BLOQUEADOR reproducido: SQLite inexistente se crea al conectar antes de query_only. Corrección batch1 mv91sobr-a-fux3 ausente tras interrupción; fuente seguía sin mode=ro. Relanzada sin duplicado activo como mv9jqzer-2-6ogz: apertura nativa mode=ro y prueba RED/GREEN de ausencia de archivo. PostgreSQL real no probado. Commit: pendiente.
+- T4 | S1–S4 | delegated o inline según dependencias T3 | deferred (fuera del cierre T2/T3 solicitado) | Flujo de imágenes versionadas, validación aislada del candidato y reversión verificable; ayuda/manual y pruebas aisladas sin despliegue activo. Commit: pendiente.
+- T5 | S1–S4 | independent verify + parent seam check | pending | Verificar requisitos y regresiones en estado aislado, documentar evidencia, límites y cortes de revisión. Commit: pendiente.
+
+## Log
+- L1: Solicitud original de implementación, literal: «Procede con la implementación, ve haciendo commits despues de cada hito».
+- L2: Plan aceptado por referencia al turno anterior: diagnóstico público accionable; evidencia aplicable igual al par admitido; preflight de publicación con imagen candidata antes de reemplazo; inferencia smoke separada; imágenes identificables, aislamiento y reversión. No reemplazar hashes por versiones manuales ni incorporar otra plataforma. La reevaluación real del 14, activación, despliegue sobre servicios activos y eliminación de otros modelos requieren entradas/permisos operativos separados y no se ejecutan en estos hitos.
+- L3: Investigación: checkpoint14 íntegro y par histórico completado; hashes de predictor/cargador anteriores. Guarda busca todos los pares compatibles; catálogo muestra último completado por split. Reevaluación existente append-only con preflight default y `--execute` explícito. Compose usa `latest` y almacenamiento compartido. No atribuir el fallo a corrupción ni a la retirada de entrypoints legacy.
+- L4: Seams aceptadas por el plan y su autorización: GET `/api/models`, publicación/activación públicas, lectura pública de evaluaciones y CLI de preflight/release. RED antes de cada regla nueva sobre esas interfaces; regresión de comportamiento previo compartido. Datos, DB, checkpoints y audio de prueba temporales; sin leer `.env`, secretos ni datasets reales. No simular evidencia de inferencia o rollback real con pruebas de comandos.
+- L5: Documentación bajo `docs/` según AGENTS.md; este archivo es la autoridad y tiene espejo Engram `odd/publicacion-evaluaciones-coherentes/tasks`. Estimación inicial 900–1600 líneas autorales entre código/pruebas/manuales, cortes T1–T4 revisables y commit por hito, no una PR acumulada. Estrategia S4 ya elegida; no autoriza publicación. Proteger trabajo ajeno observado: `docs/README.md` (una entrada previa), `docs/manuales/fragmentacion-limpieza-legacy.md`, `docs/receipts/fragmentacion-limpieza-legacy.json` y temporales `backend/tests/.legacy-split*`. Coordinación enviada a sesión de limpieza antes de mutaciones Git.

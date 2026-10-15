@@ -249,8 +249,24 @@ class ModelRegistry:
                     continue
                 if str(model.estado or "").startswith("standard_"):
                     try:
-                        from app.services.standard_evaluation_guard import require_standard_reports
+                        from app.services.standard_evaluation_guard import (
+                            StandardEvaluationError, require_standard_reports,
+                        )
+                    except Exception:
+                        self._discard_invalid_standard_predictor(key)
+                        errors.append({"model_id": key, "code": "standard_evaluation_invalid"})
+                        continue
+                    try:
                         require_standard_reports(model, db, root)
+                    except StandardEvaluationError as err:
+                        self._discard_invalid_standard_predictor(key)
+                        publication_error = {
+                            "model_id": key, "code": "standard_evaluation_invalid",
+                        }
+                        if err.reason is not None:
+                            publication_error["reason"] = err.reason.value
+                        errors.append(publication_error)
+                        continue
                     except Exception:
                         self._discard_invalid_standard_predictor(key)
                         errors.append({"model_id": key, "code": "standard_evaluation_invalid"})

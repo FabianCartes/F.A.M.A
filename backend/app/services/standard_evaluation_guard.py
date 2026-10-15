@@ -1,5 +1,6 @@
 """Canonical integrity guard for persisted standard-evaluated artifacts."""
 from dataclasses import dataclass
+from enum import Enum
 import hashlib
 import inspect
 import json
@@ -15,8 +16,22 @@ from poc.preprocess import (
 )
 
 
+class StandardEvaluationReason(str, Enum):
+    """Bounded public categories for known standard-evaluation failures."""
+
+    RUNTIME_CONFIGURATION_INCOMPATIBLE = "runtime_configuration_incompatible"
+    EVALUATION_PAIR_INCOMPLETE = "evaluation_pair_incomplete"
+    CHECKPOINT_INVALID = "checkpoint_invalid"
+    PAIR_PROVENANCE_INVALID = "pair_provenance_invalid"
+    MODEL_STATE_INCOMPLETE = "model_state_incomplete"
+
+
 class StandardEvaluationError(ValueError):
     """A standard artifact cannot be safely published or activated."""
+
+    def __init__(self, message: str, *, reason: StandardEvaluationReason | None = None):
+        super().__init__(message)
+        self.reason = reason
 
 
 ADMITTED_MANIFEST_PAIR_KEY = "admitted_val_test_manifest_pair"
@@ -73,19 +88,28 @@ def inspect_checkpoint(checkpoints_root, checkpoint_path, expected_sha256, *, ex
         if (not root.is_dir() or not path.is_relative_to(root) or not path.is_file() or
                 type(expected_sha256) is not str or len(expected_sha256) != 64 or
                 any(char not in "0123456789abcdef" for char in expected_sha256)):
-            _invalid("Checkpoint fuera de la raíz confiable o hash inválido.")
+            _invalid(StandardEvaluationReason.CHECKPOINT_INVALID,
+                     "Checkpoint fuera de la raíz confiable o hash inválido.")
         before = _file_signature(path)
         if before[2] <= 0 or expected_size is not None and expected_size > 0 and before[2] != expected_size:
-            _invalid("Tamaño de checkpoint no coincide con la identidad esperada.")
+            _invalid(StandardEvaluationReason.CHECKPOINT_INVALID,
+                     "Tamaño de checkpoint no coincide con la identidad esperada.")
         digest = checkpoint_sha256(path)
         if digest != expected_sha256:
-            _invalid("Checkpoint hash no coincide con la identidad esperada.")
-        payload = torch.load(path, map_location="cpu", weights_only=True)
+            _invalid(StandardEvaluationReason.CHECKPOINT_INVALID,
+                     "Checkpoint hash no coincide con la identidad esperada.")
+        try:
+            payload = torch.load(path, map_location="cpu", weights_only=True)
+        except Exception:
+            _invalid(StandardEvaluationReason.CHECKPOINT_INVALID,
+                     "No se pudo leer el checkpoint estándar.")
         after = _file_signature(path)
         if before != after or checkpoint_sha256(path) != digest:
-            _invalid("Checkpoint cambió durante su inspección.")
+            _invalid(StandardEvaluationReason.CHECKPOINT_INVALID,
+                     "Checkpoint cambió durante su inspección.")
         if type(payload) is not dict:
-            _invalid("Checkpoint sin metadata de evaluación MAIN.")
+            _invalid(StandardEvaluationReason.CHECKPOINT_INVALID,
+                     "Checkpoint sin metadata de evaluación MAIN.")
         job_id, classes = payload.get("job_id"), payload.get("classes")
         dataset_name, dataset_id = payload.get("dataset_name"), payload.get("dataset_id")
         architecture = payload.get("architecture")
@@ -97,13 +121,15 @@ def inspect_checkpoint(checkpoints_root, checkpoint_path, expected_sha256, *, ex
                 "audio_config" not in payload or "windowing_config" not in payload or
                 (payload["audio_config"] is not None and type(payload["audio_config"]) is not dict) or
                 (payload["windowing_config"] is not None and type(payload["windowing_config"]) is not dict)):
-            _invalid("Checkpoint sin identidad estándar válida.")
+            _invalid(StandardEvaluationReason.CHECKPOINT_INVALID,
+                     "Checkpoint sin identidad estándar válida.")
         training_audio = resolve_training_audio(dataset_name, payload["audio_config"])
         try:
             preprocessing_contract = validate_gpu_audio_frontend_contract(
                 payload.get("preprocessing_contract"))
         except ValueError:
-            _invalid("Checkpoint sin contrato de preprocessing GPU válido.")
+            _invalid(StandardEvaluationReason.CHECKPOINT_INVALID,
+                     "Checkpoint sin contrato de preprocessing GPU válido.")
         expected_contract = build_gpu_audio_frontend_contract(
             sample_rate=training_audio["target_sr"],
             duration_seconds=training_audio["duration_seconds"],
@@ -120,7 +146,8 @@ def inspect_checkpoint(checkpoints_root, checkpoint_path, expected_sha256, *, ex
             preprocessing_contract["duration_seconds"] != expected_contract["duration_seconds"] or
             any(contract_parameters[key] != expected_parameters[key] for key in acoustic_fields))
         if acoustic_mismatch:
-            _invalid("Checkpoint frontend contract differs from its effective training audio settings.")
+            _invalid(StandardEvaluationReason.CHECKPOINT_INVALID,
+                     "Checkpoint frontend contract differs from its effective training audio settings.")
         configurations = build_evaluation_configuration(
             {"job_id": job_id, "architecture": architecture,
              "windowing_config": payload["windowing_config"]},
@@ -128,8 +155,13 @@ def inspect_checkpoint(checkpoints_root, checkpoint_path, expected_sha256, *, ex
         return CheckpointInspection(path, digest, before[2], before, payload, configurations)
     except StandardEvaluationError:
         raise
+    except OSError:
+        raise StandardEvaluationError(
+            "No se pudo leer el checkpoint estándar.",
+            reason=StandardEvaluationReason.CHECKPOINT_INVALID,
+        ) from None
     except Exception:
-        _invalid("No se pudo comprobar el checkpoint estándar.")
+        raise StandardEvaluationError("No se pudo comprobar el checkpoint estándar.") from None
 
 
 def assert_checkpoint_unchanged(inspection):
@@ -138,15 +170,21 @@ def assert_checkpoint_unchanged(inspection):
         if (_file_signature(inspection.path) != inspection.signature or
                 checkpoint_sha256(inspection.path) != inspection.sha256 or
                 _file_signature(inspection.path) != inspection.signature):
-            _invalid("Checkpoint cambió durante la evaluación.")
+            _invalid(StandardEvaluationReason.CHECKPOINT_INVALID,
+                     "Checkpoint cambió durante la evaluación.")
     except StandardEvaluationError:
         raise
+    except OSError:
+        raise StandardEvaluationError(
+            "No se pudo comprobar el checkpoint durante la evaluación.",
+            reason=StandardEvaluationReason.CHECKPOINT_INVALID,
+        ) from None
     except Exception:
-        _invalid("No se pudo comprobar el checkpoint durante la evaluación.")
+        raise StandardEvaluationError("No se pudo comprobar el checkpoint durante la evaluación.") from None
 
 
-def _invalid(message="Evaluación estándar incompleta o identidad incompatible."):
-    raise StandardEvaluationError(message)
+def _invalid(reason: StandardEvaluationReason, message: str) -> None:
+    raise StandardEvaluationError(message, reason=reason)
 
 
 def resolve_training_audio(dataset_name: str, audio_config) -> dict:
@@ -158,7 +196,8 @@ def resolve_training_audio(dataset_name: str, audio_config) -> dict:
         settings = dict(target_sr=22050, duration_seconds=5.0, n_mels=128,
                         n_fft=2048, hop_length=512, f_min=800.0, f_max=10000.0)
     else:
-        _invalid("Dataset estándar no admitido.")
+        _invalid(StandardEvaluationReason.RUNTIME_CONFIGURATION_INCOMPATIBLE,
+                 "Dataset estándar no admitido.")
     if audio_config is None:
         return settings
     if isinstance(audio_config, dict):
@@ -255,7 +294,7 @@ def require_standard_reports(target, db, checkpoints_root: Path) -> None:
     except StandardEvaluationError:
         raise
     except Exception:
-        _invalid("No se pudieron validar los informes estándar.")
+        raise StandardEvaluationError("No se pudieron validar los informes estándar.") from None
 
 
 def _validate_standard_reports(target, db, checkpoints_root: Path) -> None:
@@ -270,12 +309,16 @@ def _validate_standard_reports(target, db, checkpoints_root: Path) -> None:
     if not state.startswith("standard_"):
         return
     if state != "standard_eval_completed":
-        _invalid("Modelo nuevo sin evaluación estándar val/test completada; activación/publicación bloqueada.")
+        _invalid(StandardEvaluationReason.MODEL_STATE_INCOMPLETE,
+                 "Modelo nuevo sin evaluación estándar val/test completada; activación/publicación bloqueada.")
 
-    root = Path(checkpoints_root).resolve(strict=True)
-    basename = Path(target.ruta_binario_gcp).name
+    try:
+        root = Path(checkpoints_root).resolve(strict=True)
+        basename = Path(target.ruta_binario_gcp).name
+    except OSError:
+        _invalid(StandardEvaluationReason.CHECKPOINT_INVALID, "No se pudo resolver el checkpoint estándar.")
     if not basename or not target.hash_binario:
-        _invalid("Checkpoint estándar ausente.")
+        _invalid(StandardEvaluationReason.CHECKPOINT_INVALID, "Checkpoint estándar ausente.")
     inspection = inspect_checkpoint(root, root / basename, target.hash_binario,
                                     expected_size=target.tamano_bytes)
     payload = inspection.payload
@@ -285,7 +328,8 @@ def _validate_standard_reports(target, db, checkpoints_root: Path) -> None:
     architecture = payload["architecture"]
     if (target.conjunto_datos is None or target.conjunto_datos.nombre != dataset_name or
             target.id_conjunto_datos != dataset_id or target.arquitectura != architecture):
-        _invalid("Dataset o arquitectura del checkpoint no coincide con el modelo.")
+        _invalid(StandardEvaluationReason.CHECKPOINT_INVALID,
+                 "Dataset o arquitectura del checkpoint no coincide con el modelo.")
 
     try:
         expected_configs = inspection.configurations
@@ -294,8 +338,9 @@ def _validate_standard_reports(target, db, checkpoints_root: Path) -> None:
                 .order_by(ModelEvaluation.id_evaluation.desc())
                 .all())
     except Exception:
-        _invalid("No se pudieron validar las evaluaciones estándar.")
+        raise StandardEvaluationError("No se pudieron validar las evaluaciones estándar.") from None
 
+    matching_identity = {"val": [], "test": []}
     candidates = {"val": [], "test": []}
     for row in rows:
         if row.split not in candidates or row.status != "completed":
@@ -310,15 +355,20 @@ def _validate_standard_reports(target, db, checkpoints_root: Path) -> None:
         if (identity.id_modelo != target.id_modelo or identity.split != row.split or
                 identity.checkpoint_sha256 != checkpoint_hash or identity.dataset != dataset_name or
                 identity.classes != classes or identity.schema_version != 2 or
-                identity.evaluator_version != EVALUATOR_VERSION or
-                not _effective_predictor_config_matches(identity.predictor_config, expected_configs[0]) or
-                not _json_matches(identity.preprocessing_config, expected_configs[1]) or
-                not _json_matches(identity.aggregation_config, expected_configs[2])):
+                identity.evaluator_version != EVALUATOR_VERSION):
             continue
-        candidates[row.split].append(identity)
+        matching_identity[row.split].append(identity)
+        if (_effective_predictor_config_matches(identity.predictor_config, expected_configs[0]) and
+                _json_matches(identity.preprocessing_config, expected_configs[1]) and
+                _json_matches(identity.aggregation_config, expected_configs[2])):
+            candidates[row.split].append(identity)
 
+    if not matching_identity["val"] or not matching_identity["test"]:
+        _invalid(StandardEvaluationReason.EVALUATION_PAIR_INCOMPLETE,
+                 "Falta un par completado para la identidad del checkpoint.")
     if not candidates["val"] or not candidates["test"]:
-        _invalid("Falta un par completado para la configuración exacta del checkpoint.")
+        _invalid(StandardEvaluationReason.RUNTIME_CONFIGURATION_INCOMPATIBLE,
+                 "Los informes completados no corresponden a la configuración efectiva del predictor.")
     for val in candidates["val"]:
         for test in candidates["test"]:
             try:
@@ -334,5 +384,6 @@ def _validate_standard_reports(target, db, checkpoints_root: Path) -> None:
                 "predictor_config", "preprocessing_config", "aggregation_config", "code_revision",
             )):
                 return
-    _invalid("No existe un par val/test coherente ligado a una identidad conjunta de manifiestos; "
+    _invalid(StandardEvaluationReason.PAIR_PROVENANCE_INVALID,
+             "No existe un par val/test coherente ligado a una identidad conjunta de manifiestos; "
              "los informes estándar sin esa identidad requieren reevaluación explícita.")

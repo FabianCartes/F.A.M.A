@@ -3,7 +3,7 @@ Esquemas Pydantic para el módulo de información y catálogo de modelos.
 """
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_serializer
 
 from app.schemas.evaluation import EvaluationProvenance
 
@@ -65,6 +65,20 @@ class ModelPublicationError(BaseModel):
     """Sanitized failure to publish one persisted model in the catalogue."""
     model_id: str
     code: str
+    reason: Optional[Literal[
+        "runtime_configuration_incompatible",
+        "evaluation_pair_incomplete",
+        "checkpoint_invalid",
+        "pair_provenance_invalid",
+        "model_state_incomplete",
+    ]] = None
+
+    @model_serializer(mode="wrap")
+    def omit_unknown_reason(self, handler):
+        serialized = handler(self)
+        if self.reason is None:
+            serialized.pop("reason", None)
+        return serialized
 
 
 class ModelListResponse(BaseModel):

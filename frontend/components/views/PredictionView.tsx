@@ -485,9 +485,10 @@ export default function PredictionView() {
   const [selectionState, setSelectionState] = useState({ modelId: "", evaluationDialogOpen: false, evaluationDialogModelId: null as string | null });
   const selectedModelId = selectionState.modelId;
   const [catalogueError, setCatalogueError] = useState<string | null>(null);
+  const [catalogueLoaded, setCatalogueLoaded] = useState(false);
   const [evaluationCatalogueStatus, setEvaluationCatalogueStatus] = useState<"available" | "unavailable" | "legacy">("legacy");
   const [evaluationCatalogueErrorCode, setEvaluationCatalogueErrorCode] = useState<string | null>(null);
-  const [publicationErrors, setPublicationErrors] = useState<{ model_id?: string; code: string }[]>([]);
+  const [publicationErrors, setPublicationErrors] = useState<{ model_id?: string; code: string; reason?: string }[]>([]);
   const [audioStats, setAudioStats] = useState<AudioWaveformStats | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -601,11 +602,22 @@ export default function PredictionView() {
       controller = new AbortController();
       try {
         const res = await fetch(`${API_BASE_URL}/api/models`, { signal: controller.signal });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+          let databaseUnavailable = false;
+          try {
+            const failure = await res.clone().json();
+            databaseUnavailable = Array.isArray(failure?.detail?.errors) &&
+              failure.detail.errors.some((item: { code?: unknown }) => item?.code === "database_unavailable");
+          } catch {
+            // Error responses are untrusted; retain only the HTTP status and known code.
+          }
+          throw new Error(`HTTP ${res.status}${databaseUnavailable ? " database_unavailable" : ""}`);
+        }
         const data = await res.json();
         if (request !== generation) return;
         if (!Array.isArray(data.models)) throw new Error("invalid_catalogue");
         setCatalogueError(null);
+        setCatalogueLoaded(true);
         setPublicationErrors(Array.isArray(data.publication_errors) ? data.publication_errors : []);
         setEvaluationCatalogueStatus(
           data.evaluation_catalogue_status === "available" || data.evaluation_catalogue_status === "unavailable"
@@ -639,8 +651,11 @@ export default function PredictionView() {
         });
       } catch (err) {
         if (request !== generation) return;
-        const status = err instanceof Error && /^HTTP \d{3}$/.test(err.message) ? ` (${err.message})` : "";
-        setCatalogueError(`No se pudo actualizar el catálogo de modelos${status}. Se conserva el último catálogo disponible; vuelve a esta ventana para reintentar.`);
+        const errorMessage = err instanceof Error ? err.message : "";
+        const statusMatch = errorMessage.match(/^HTTP (\d{3})(?: database_unavailable)?$/);
+        const status = statusMatch ? ` (HTTP ${statusMatch[1]})` : "";
+        const databaseUnavailable = errorMessage.endsWith(" database_unavailable");
+        setCatalogueError(`No se pudo actualizar el catálogo de modelos${status}${databaseUnavailable ? ": la base de datos no está disponible" : ""}. Se conserva el último catálogo disponible; vuelve a esta ventana para reintentar.`);
       }
     }
     const onVisible = () => { if (document.visibilityState === "visible") void fetchModels(); };
@@ -1096,7 +1111,11 @@ export default function PredictionView() {
       {catalogueError && <p role="alert" className="text-xs text-red-300">{catalogueError}</p>}
       {publicationErrors.length > 0 && (
         <div role="status" aria-label="Publicación de modelos" className="text-xs text-amber-300">
-          <p>Algunos modelos no pudieron publicarse. Los modelos disponibles siguen siendo seleccionables.</p>
+          <p>{publicationErrors.some((issue) => issue.code === "database_unavailable")
+            ? "La base de datos no está disponible; no se pudo determinar qué modelos pueden publicarse."
+            : availableModels.length === 0
+              ? "No hay modelos publicados disponibles; no hay modelos seleccionables hasta resolver los errores indicados."
+              : "Algunos modelos no pudieron publicarse. Los modelos publicados siguen siendo seleccionables."}</p>
           <ul>
             {publicationErrors.map((issue, index) => {
               const labels: Record<string, string> = {
@@ -1106,12 +1125,26 @@ export default function PredictionView() {
                 checkpoint_unreadable: "archivo de pesos ilegible",
                 checkpoint_outside_root: "archivo de pesos fuera de la ubicación permitida",
                 database_unavailable: "base de datos no disponible",
+                standard_evaluation_invalid: "evaluación estándar inválida",
+              };
+              const reasons: Record<string, string> = {
+                runtime_configuration_incompatible: "runtime del predictor incompatible con los informes; revisar configuración y solicitar reevaluación explícita",
+                evaluation_pair_incomplete: "falta un par de informes val/test completados; completar la evaluación estándar antes de publicar",
+                checkpoint_invalid: "checkpoint inválido o distinto de la identidad registrada; revisar el artefacto y su hash",
+                pair_provenance_invalid: "procedencia val/test incoherente; verificar que ambos informes pertenezcan al mismo par admitido",
+                model_state_incomplete: "evaluación estándar no finalizada; completarla antes de publicar",
               };
               const id = issue.model_id && /^[a-zA-Z0-9_-]+$/.test(issue.model_id) ? issue.model_id : "Modelo sin identificador";
-              return <li key={index}>{id}: {labels[issue.code] || "error de publicación"}</li>;
+              const reason = issue.reason ? reasons[issue.reason] : undefined;
+              return <li key={index}>{id}: {reason || labels[issue.code] || "error de publicación"}</li>;
             })}
           </ul>
         </div>
+      )}
+      {catalogueLoaded && !catalogueError && availableModels.length === 0 && publicationErrors.length === 0 && (
+        <p role="status" aria-label="Disponibilidad de modelos" className="text-xs text-amber-300">
+          La consulta fue correcta, pero no hay modelos publicados ni modelos seleccionables.
+        </p>
       )}
 
       {/* Banner de Especificaciones y Contrato Acústico del Modelo */}
