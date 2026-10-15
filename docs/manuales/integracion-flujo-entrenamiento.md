@@ -53,6 +53,31 @@ El modo `--ambient-import-probe` ejecuta, en un proceso fresco ya guardado, el p
 
 Ejecutar ese modo con el comando anterior y, después, la suite de nueve archivos con `-k 'not test_cli_and_reevaluation_imports_do_not_initialize_ambient_database_runtime'`. La suite sintética final debe informar cinco deseleccionados: el wrapper de imports comprobado separadamente y cuatro casos que requieren checkpoint histórico/audio real (`test_trained_predictor_lazy_loading_defers_model_instantiation`, `test_trained_predictor_infers_real_audio`, `test_trained_predictor_fails_fast_when_audio_missing`, `test_trained_predictor_detects_silence`). Esos cuatro casos quedan fuera del alcance autorizado; no cuentan como aprobados ni se sustituyen con artefactos históricos. Nunca ocultar esa diferencia. Reevaluación usa SQLite en memoria; el caso CLI reutiliza el engine real de la fixture en la frontera externa SQLAlchemy, sin sustituir la operación de reevaluación.
 
+### Baseline focal posterior a las limpiezas
+
+Actualización del 15 de octubre de 2026 sobre HEAD `95cae81fe2d06f10c8ddbf029322716545592ed5`, con Python 3.14.7 y cambios documentales locales preservados. El usuario confirma operativo entrenamiento → inferencia → agregar al dataset; las comprobaciones siguientes no son una nueva ejecución operacional del ciclo ni resuelven DATA-6.
+
+1. Repetir los ocho selectores explícitos de la [consolidación](consolidacion-worktrees.md#verificación-nueva-tras-integrar-spawn). Resultado nuevo: **320 PASS**, cero skips/deselecciones, dos advertencias FFT de señales sintéticas cortas; 29,51 s.
+2. Con el mismo prefijo de entorno e intérprete, ejecutar el grupo de consumidores:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// \
+CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+/home/kevin/Work/fama/.venv/bin/python tests/run_isolated_training_checks.py \
+  tests/test_trained_predictor.py tests/test_model_reevaluation.py tests/test_preprocess.py \
+  -k 'not test_cli_and_reevaluation_imports_do_not_initialize_ambient_database_runtime and not test_trained_predictor_lazy_loading_defers_model_instantiation and not test_trained_predictor_infers_real_audio and not test_trained_predictor_fails_fast_when_audio_missing and not test_trained_predictor_detects_silence'
+```
+
+Resultado nuevo: **56 PASS / 5 deselecciones**, cero skips, 2,39 s. Los cuatro casos de artefactos reales no están aprobados; el quinto es el wrapper subprocess. La salida argparse de argumentos obligatorios corresponde al caso negativo aprobado `test_cli_requires_explicit_inputs_before_database_access`, no a un fallo del runner.
+
+3. Ejecutar `--ambient-import-probe` con el mismo entorno: resultado nuevo PASS, exit 0 y cero conexiones SQLite. Esto comprueba el payload exacto del wrapper excluido, no ejecuta dicho wrapper mediante pytest.
+
+Las tres ejecuciones comprobaron guardas, hashes de 30 entradas protegidas y limpieza del scratch. La primera imprime un mensaje genérico de «PostgreSQL» desde la aplicación; la prueba de conexiones registra únicamente SQLite en memoria (260 conexiones) y red prohibida, no una conexión PostgreSQL real. El grupo de consumidores registra 23 conexiones SQLite en memoria.
+
+**Cobertura y siguiente ampliación:** 376 PASS en once módulos, cinco deselecciones y probe aparte; no suite global. Antes de añadir módulos, revisar sus fixtures y dependencias. `test_ingestion_service_both_datasets_synced` consulta GCS/inventario local real y no se ejecutó; que el runner admita su selector no lo convierte en hermético. Spawn conserva su procedimiento separado. Módulos no revisados quedan no evaluados. No ampliar permisos del runner para convertir un prerrequisito ausente en éxito. Solo un defecto vigente reproducido justifica cambiar producción mediante TDD.
+
+Los reportes originales de 12 FAIL / 5 SKIP y 26 FAIL / 1493 PASS / 5 SKIP no se recuperaron de los respaldos identificados: quedan como antecedentes históricos incompletos, sin afirmar que sus fallos pasen hoy ni contabilizarlos como defectos vigentes. Resultados, comandos, exclusiones y huellas del checkout en [backend-suite-current-baseline.json](../receipts/backend-suite-current-baseline.json).
+
 ## Log
 - L19: Verificación independiente final mv65n1re-4-kuf9 S1-S10 aprobados: importsprobeexit0/payloadSHA5cda.../0SQLite; suite344PASS5deselected2FFT warnings18.97s/exit0/memory260/nonpassing[]/guard/SHAcleanup; faultproof solo en memoria AssertionError después code0=>exit1/statusfailed/exactmessage/SHAcleanup. Diffcheck0; baseline360 con9cambiospermitidos/351intactos/0missingunexpected, HEADd9c374f/indexvacío, service3hunksactivo preservados. Sin ediciones del verificador. T4cerrado; nativeASSESSunassessable poruntracked/no reviewDue ofrecido, no aprobación nativa ni authoritycreated. No certificar Docker3.12/GPU/PG/browser/MLquality/4realartifactcasos. No commits por autorización explícita.
 - L18: Suite sintética final job4exit0/wall25:344PASS5deselected2FFTwarnings20.70s, nonpassing_reports[],memory260,guardantesall/hash/cleanupPASS.5exclusiones expresas segúnmanual:1payloadimportsPASSaparte+4realartifactfueraalcance. CLIrequiredargsstderr es caso negativo esperado. T3checkspropioscerrados, T4independientefinalnext, no commit autorizado. La corrección runnerexceptcode1 observó éxito normal; falta faultprobeindependiente para confirmar propagaciónfallo tras code0.

@@ -98,6 +98,10 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`05_restriccion_formato_audio_y_captura_microfono.md`](./limites/05_restriccion_formato_audio_y_captura_microfono.md): Restricción estricta de formato PCM .wav y pipeline de captura por micrófono web.
 
 ### Evidencia operacional
+
+* [`receipts/backend-suite-current-baseline.json`](./receipts/backend-suite-current-baseline.json): Baseline focal posterior a las limpiezas: 320 + 56 pruebas aprobadas, cinco deselecciones y probe de imports separado; comandos, hashes y límites frente a los conteos globales históricos de 12/26 fallos.
+
+* [`receipts/lock4-incorporacion-audit.json`](./receipts/lock4-incorporacion-audit.json): Auditoría local de cinco incorporaciones de feedback, duplicados WAV y 78 pruebas aisladas de incorporación/deduplicación; límites históricos y seguimientos DATA-6/DATA-7.
 * [`model14-recovery.json`](./receipts/model14-recovery.json): Identidades y resultados de limpieza, reevaluación, despliegue y verificación del modelo 14; distingue recuperación operativa de calidad del clasificador.
 * [`worktree-consolidation.json`](./receipts/worktree-consolidation.json): Conteos de retirada, identidad del respaldo, comprobaciones y bloqueos de consolidación local.
 * [`worktree-consolidation-final.json`](./receipts/worktree-consolidation-final.json): Cierre de los doce secundarios restantes y tres rutas de verificación; integridad de respaldos y conservación del estado de revisión.

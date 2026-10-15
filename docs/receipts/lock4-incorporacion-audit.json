@@ -1,0 +1,70 @@
+{
+  "issue": "LOCK-4",
+  "date": "2026-10-15",
+  "kind": "local_audit_and_isolated_regression",
+  "audit_evidence": "Read-only exploration delegated to exploracion-luna; test execution by the coordinating agent.",
+  "dataset": "backend/data/raw/AvesChilenas",
+  "metadata_data_rows": 1211,
+  "feedback_audit": {
+    "csv_lines_including_header": [1208, 1209, 1210, 1211, 1212],
+    "paths": [
+      "canastero/feedback_9.wav",
+      "chucao/feedback_10.wav",
+      "zorzal_patagónico/feedback_13.wav",
+      "canastero/feedback_17.wav",
+      "canastero/feedback_20.wav"
+    ],
+    "files_present": 5,
+    "matching_byte_sizes": 5,
+    "matching_sha256": 5,
+    "readable_wav_with_positive_rms": 5,
+    "exact_duplicate_groups_within_feedback": 0,
+    "feedback_9": {
+      "bytes": 991056,
+      "sha256": "cce44abc415fbcd4894609b6294cee7bd7a6092d26903c8f1dad1a7d8fc930d2",
+      "sha256_occurrences_in_metadata": 1,
+      "physical_read": "successful_in_current_checkout"
+    }
+  },
+  "wav_content_scan": {
+    "root": "backend/data/raw",
+    "pattern": "**/*.wav",
+    "files_hashed": 1395,
+    "duplicate_groups": [
+      {
+        "sha256": "4c3ecebdd78de314cfe9dbeea27a95c4d8b5f72d5a59dc0f23e93f3ce53be8ab",
+        "paths": [
+          "AvesChilenas/Canastero/canastero_01.wav",
+          "AvesChilenas/Chucao/chucao_01.wav"
+        ],
+        "follow_up": "DATA-7"
+      }
+    ]
+  },
+  "regression": {
+    "cwd": "backend",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /home/kevin/Work/fama/.venv/bin/python tests/run_isolated_training_checks.py tests/test_feedback_local_approval.py",
+    "python": "3.14.7",
+    "passed": 78,
+    "failed": 0,
+    "skipped": 0,
+    "deselected": 0,
+    "pytest_seconds": 2.74,
+    "process_exit_code": 0,
+    "runner_summary": {
+      "only_sqlite_synthetic_cpu": true,
+      "network_live_db_forbidden": true,
+      "protected_paths_unchanged": true,
+      "private_scratch_cleanup": true
+    },
+    "diagnostics": "libmpg123 emitted illegal-header/resync notes during malformed source fixtures; all tests passed."
+  },
+  "limits": [
+    "Positive RMS excludes complete digital silence for these five current WAVs; it does not establish provenance or label correctness.",
+    "Files deleted before this audit and historical source identity were not verified.",
+    "Duplicate scan covers exact WAV file bytes, not other formats or acoustically equivalent encodings.",
+    "No production POST, data change, permission repair, cloud audit, training or deployment validation was performed.",
+    "Python 3.14.7 tests do not validate the Python 3.12 container image.",
+    "Local incorporation does not establish membership in the prepared training dataset; DATA-6 remains separate."
+  ]
+}
