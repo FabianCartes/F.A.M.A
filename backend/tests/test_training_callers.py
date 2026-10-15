@@ -290,7 +290,6 @@ def test_public_inference_reads_explicit_stage(source, monkeypatch, module, func
 
 
 @pytest.mark.parametrize("module", [
-    "train_efficientnet_hpss_additive",
     "train_panns_hpss_additive",
     "train_multitask_hpss",
     "train_multitask_hpss_wideband",
