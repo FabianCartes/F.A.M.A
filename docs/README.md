@@ -17,7 +17,7 @@ docs/
 ├── arquitectura/                # Diseño de sistemas, pipelines, MLOps y despliegue
 ├── limites/                     # Límites matemáticos, físicos y problemas conocidos
 ├── manuales/                    # Manual de usuario, revisión, despliegue e índices canónicos
-├── adr/                         # Architectural Decision Records (ADR 0001 a 0024)
+├── adr/                         # Architectural Decision Records (ADR 0001 a 0025)
 ├── receipts/                    # Recibos técnicos reproducibles en formato JSON (RDD)
 ├── duplicados-exactos/           # Tarea acotada: admisión de feedback sin duplicados SHA-256
 └── images/                      # Diagramas, matrices de confusión y gráficos vectoriales
@@ -72,6 +72,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`22_propuesta_vista_ayuda_y_centro_de_conocimiento.md`](./arquitectura/22_propuesta_vista_ayuda_y_centro_de_conocimiento.md): Diseño y especificación del centro de conocimiento e interactividad en frontend.
 
 ### 4. [`docs/manuales/`](./manuales/) — Manuales y Guías Operativas
+* [`recuperacion-modelo-14.md`](./manuales/recuperacion-modelo-14.md): Corrección del contrato de compatibilidad, reevaluación real del modelo 14, retirada de modelos 11–13 y comprobación HTTP/navegador del despliegue.
 * [`consolidacion-worktrees.md`](./manuales/consolidacion-worktrees.md): Retirada de los 58 secundarios, recuperación de respaldos y entornos CUDA, integración spawn y verificaciones locales.
 * [`evaluaciones-admitidas.md`](./manuales/evaluaciones-admitidas.md): Distingue el par val/test admitido por la guarda de los intentos y reportes históricos más recientes; documenta los límites de la evidencia.
 * [`preflight-publicacion.md`](./manuales/preflight-publicacion.md): CLI explícito de publicación de solo lectura, identidad requerida y smoke separado de inferencia; SQLite nativo read-only y límites de verificación.
@@ -97,6 +98,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`05_restriccion_formato_audio_y_captura_microfono.md`](./limites/05_restriccion_formato_audio_y_captura_microfono.md): Restricción estricta de formato PCM .wav y pipeline de captura por micrófono web.
 
 ### Evidencia operacional
+* [`model14-recovery.json`](./receipts/model14-recovery.json): Identidades y resultados de limpieza, reevaluación, despliegue y verificación del modelo 14; distingue recuperación operativa de calidad del clasificador.
 * [`worktree-consolidation.json`](./receipts/worktree-consolidation.json): Conteos de retirada, identidad del respaldo, comprobaciones y bloqueos de consolidación local.
 * [`worktree-consolidation-final.json`](./receipts/worktree-consolidation-final.json): Cierre de los doce secundarios restantes y tres rutas de verificación; integridad de respaldos y conservación del estado de revisión.
 * [`training-checks-inventory.json`](./receipts/training-checks-inventory.json): Inventario vigente de entradas protegidas por el runner aislado; independiente del baseline histórico.
@@ -107,7 +109,8 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`model-11-real-evaluation.json`](./receipts/model-11-real-evaluation.json): Informe inmutable de reevaluación real del modelo #11 (val/test); no certifica calidad ni autoriza activación.
 
 ### 6. [`docs/adr/`](./adr/) — Architectural Decision Records
-Registro de las 24 decisiones de arquitectura fundamentales del sistema:
+Registro de las 25 decisiones de arquitectura fundamentales del sistema:
+* [`ADR 0025`](./adr/0025-compatibilidad-semantica-evaluacion.md): Compatibilidad semántica explícita del predictor; hashes fuente diagnósticos y reevaluación obligatoria para pasar del contrato anterior.
 * [`ADR 0024`](./adr/0024-entrenamiento-aislado-spawn.md): Aislamiento del entrenamiento, supervisión independiente del sondeo, conciliación de salida y límites de cancelación/persistencia.
 * `ADR 0001`: Migración de AudioCNN a EfficientNet-B0.
 * `ADR 0002`: Particionamiento Estratificado a Nivel de Grabador (Zero Leakage).

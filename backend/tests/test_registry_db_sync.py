@@ -85,7 +85,8 @@ def _assert_default(registry, row, checkpoints):
     return predictor
 
 
-def seed_standard_model(db, checkpoints, model_id, *, wrong_config=False, failed_retry=False):
+def seed_standard_model(db, checkpoints, model_id, *, wrong_config=False, failed_retry=False,
+                        compatibility_version=None):
     import hashlib
     import torch
     from app.services.evaluations import EvaluationService
@@ -130,6 +131,8 @@ def seed_standard_model(db, checkpoints, model_id, *, wrong_config=False, failed
         {"job_id": job_id, "architecture": "AudioCNN", "windowing_config": None},
         training_audio, payload["preprocessing_contract"])
     configs = dict(zip(("predictor_config", "preprocessing_config", "aggregation_config"), settings))
+    if compatibility_version is not None:
+        configs["predictor_config"]["version"] = compatibility_version
     if wrong_config:
         configs["preprocessing_config"] = {
             **configs["preprocessing_config"], "silence_rms_threshold": 0.75,
@@ -215,6 +218,70 @@ def test_startup_preserves_authorized_active_predictor_after_same_artifact_faile
     newest = db.query(ModelEvaluation).filter_by(id_modelo=model.id_modelo, split="val").order_by(
         ModelEvaluation.id_evaluation.desc()).first()
     assert newest.status == "failed"
+
+
+@pytest.mark.parametrize("implementation", [
+    "PREDICT_IMPLEMENTATION", "MODEL_LOADER_IMPLEMENTATION",
+    "LENGTH_IMPLEMENTATION", "RMS_IMPLEMENTATION",
+])
+def test_publication_survives_nonsemantic_runtime_refactor(isolated_db, monkeypatch, implementation):
+    """Equivalent wrappers must not revoke an already evaluated model."""
+    from app.services.predictors import trained_predictor
+
+    db, checkpoints = isolated_db
+    model = seed_standard_model(db, checkpoints, 73)
+    original = getattr(trained_predictor, implementation)
+
+    def equivalent_implementation(*args, **kwargs):
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(trained_predictor, implementation, equivalent_implementation)
+    registry = ModelRegistry()
+    assert registry.publish_from_db(db, checkpoints_root=checkpoints) == []
+    assert registry.get(f"fama_trained_model_{model.id_modelo}").metadata.id == f"fama_trained_model_{model.id_modelo}"
+
+
+def test_publication_survives_nonsemantic_frontend_refactor(isolated_db, monkeypatch):
+    from poc.preprocess import GPUAudioFrontEnd
+
+    db, checkpoints = isolated_db
+    model = seed_standard_model(db, checkpoints, 74)
+    original = GPUAudioFrontEnd.forward
+
+    def equivalent_frontend(self, waveform):
+        return original(self, waveform)
+
+    monkeypatch.setattr(GPUAudioFrontEnd, "forward", equivalent_frontend)
+    registry = ModelRegistry()
+    assert registry.publish_from_db(db, checkpoints_root=checkpoints) == []
+    assert registry.has_model(f"fama_trained_model_{model.id_modelo}")
+
+
+@pytest.mark.parametrize("version", ["gpu-audio-frontend-v1", "unknown-contract"])
+def test_publication_requires_explicit_reevaluation_for_other_contracts(isolated_db, version):
+    db, checkpoints = isolated_db
+    seed_standard_model(db, checkpoints, 75, compatibility_version=version)
+    registry = ModelRegistry()
+    assert registry.publish_from_db(db, checkpoints_root=checkpoints) == [{
+        "model_id": "fama_trained_model_75", "code": "standard_evaluation_invalid",
+        "reason": "runtime_configuration_incompatible",
+    }]
+    assert not registry.has_model("fama_trained_model_75")
+
+
+def test_publication_requires_reevaluation_after_semantic_contract_change(isolated_db, monkeypatch):
+    from app.services import standard_evaluation_guard
+
+    db, checkpoints = isolated_db
+    seed_standard_model(db, checkpoints, 76)
+    monkeypatch.setattr(standard_evaluation_guard, "PREDICTOR_COMPATIBILITY_VERSION",
+                        "gpu-audio-frontend-v3")
+    registry = ModelRegistry()
+    assert registry.publish_from_db(db, checkpoints_root=checkpoints) == [{
+        "model_id": "fama_trained_model_76", "code": "standard_evaluation_invalid",
+        "reason": "runtime_configuration_incompatible",
+    }]
+    assert not registry.has_model("fama_trained_model_76")
 
 
 def test_registry_resolves_active_trained_model(seeded_models):

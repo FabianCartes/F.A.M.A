@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-15",
+  "scope": "Recover model 14 and remove legacy models 11, 12, 13 with their exclusive operational dependencies",
+  "root_cause": {
+    "old_evaluation_ids": [5, 6],
+    "runtime_mismatched_fields": ["predictor_config.implementation_sha256", "predictor_config.model_loader_sha256"],
+    "checkpoint_valid": true,
+    "preprocessing_and_aggregation_matched": true,
+    "new_compatibility_contract": "gpu-audio-frontend-v2",
+    "source_fingerprints": "Preserved as diagnostic implementation_provenance; excluded only from runtime compatibility comparison",
+    "historical_reports_rewritten": false
+  },
+  "deployment": {
+    "image": "fama-backend:latest",
+    "image_id": "sha256:21f8d04bbff2061693bcc61885fa17a44d5345e3998c8f2f1b565559e33a6fc8",
+    "python": "3.12.15",
+    "torch": "2.14.1+cu130",
+    "device": "cuda",
+    "gpu": "NVIDIA GeForce RTX 2050",
+    "checkout_and_deployed_guard_sha256": "d28051db206065f8fe1ffe6bbd981c4f2b38d13d1f9e2c6736e5956d6c116393",
+    "rebuilt_and_recreated": true,
+    "healthy_after_additional_restart": true
+  },
+  "cleanup": {
+    "model_ids": [11, 12, 13],
+    "deleted_counts": {
+      "modelo": 3,
+      "model_evaluation": 4,
+      "metrica_entrenamiento": 30,
+      "prediccion": 20,
+      "retroalimentacion": 11,
+      "feedback_sync": 3,
+      "local_checkpoints": 2,
+      "current_gcs_raw_audio_objects": 20
+    },
+    "checkpoint_names": [
+      "fama_15792fbba3754d32bb2cd63d1050f185_best.pt",
+      "fama_14d5d9e02adb4f628bab51feb9562ed3_best.pt",
+      "fama_9d0b4582541f4cbfb265d82d6603b745_best.pt"
+    ],
+    "model_13_checkpoint_already_absent": true,
+    "registered_gcs_model_objects_already_absent": 3,
+    "db_dependent_rows_absence_verified": true,
+    "local_checkpoint_absence_verified": true,
+    "current_gcs_object_absence_verified": true,
+    "gcs_generation_preconditions_used": true,
+    "model_14_row_unchanged_during_cleanup": true,
+    "shared_dataset_preserved": "AvesChilenas",
+    "shared_incorporated_recordings_preserved": [
+      "AvesChilenas/canastero/feedback_9.wav",
+      "AvesChilenas/chucao/feedback_10.wav",
+      "AvesChilenas/zorzal_patagónico/feedback_13.wav"
+    ],
+    "one_off_script_sha256": "dc153b305c6b8aaae2ec9ca45280b82f0977bbef29fde173b462e6644dfce217",
+    "distributed_atomicity_claimed": false
+  },
+  "reevaluation": {
+    "model_id": 14,
+    "checkpoint_sha256": "d6ede3c7f343d8a2945209bd13d3fcbc0b497a2863dcd7e8afee18c0be7cbc4d",
+    "checkpoint_size_bytes": 16385325,
+    "dataset": "AvesChilenas",
+    "class_count": 15,
+    "training_executed": false,
+    "checkpoint_modified": false,
+    "model_state": "standard_eval_completed",
+    "active": true,
+    "historical_attempt_ids_preserved": [5, 6],
+    "new_reports_equal_historical_reports": true,
+    "val": {
+      "id_evaluation": 7,
+      "status": "completed",
+      "sample_count": 177,
+      "manifest_sha256": "fdc7eb415d5ff5724efb7cc080837acc4b629de6a75fc9e613d35d3a50936e2c",
+      "accuracy": 0.4463276836158192,
+      "f1_macro": 0.4756022731160921,
+      "rejections": 31
+    },
+    "test": {
+      "id_evaluation": 8,
+      "status": "completed",
+      "sample_count": 181,
+      "manifest_sha256": "a27dbedf98798a113d170b1fac550112b60e722cef8d7ec7dc8474b965cefdba",
+      "accuracy": 0.44751381215469616,
+      "f1_macro": 0.502817119764219,
+      "rejections": 63
+    },
+    "quality_improvement_claimed": false,
+    "source_mpeg_decoder_diagnostics_observed": true
+  },
+  "verification": {
+    "tdd_red": "Equivalent predictor wrapper rejected with runtime_configuration_incompatible",
+    "python_3_14_isolated_suite": {"passed": 240, "deselected": 1, "fft_warnings": 2},
+    "python_3_12_isolated_suite": {"passed": 240, "deselected": 1, "fft_warnings": 2, "seconds": 22.68},
+    "python_3_12_initial_direct_runner": "Blocked before collection by CUDA library discovery subprocess under the original guard",
+    "python_3_12_valid_invocation": "Preimport torch only, then run the unchanged isolated runner with network disabled",
+    "deselected_test": "test_cli_and_reevaluation_imports_do_not_initialize_ambient_database_runtime",
+    "original_import_payload_probe": {"python_3_14": "passed", "python_3_12": "passed"},
+    "global_suite_executed": false,
+    "publication_preflight": {"code": "smoke_passed", "forward_proven": true},
+    "frontend_proxy_http_prediction": {
+      "endpoint": "/api/predict?model_id=fama_trained_model_14",
+      "database_id": 45,
+      "status": "classified",
+      "device": "cuda",
+      "is_mock": false,
+      "gcs_upload_confirmed": true,
+      "loaded_checkpoint_sha256_matched": true
+    },
+    "chromium_rendered_prediction_view": {
+      "sole_selectable_model": "fama_trained_model_14",
+      "published_weights_visible": true,
+      "admitted_pair_visible": true,
+      "publication_block_absent": true,
+      "browser_file_upload_executed": false
+    },
+    "catalogue_after_backend_restart": {
+      "total": 1,
+      "default_model_id": "fama_trained_model_14",
+      "publication_errors": []
+    },
+    "independent_static_review": "No concrete blockers found by exploracion-luna; manual semantic version discipline remains required"
+  }
+}

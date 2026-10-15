@@ -7,6 +7,12 @@ reemplaza el checkpoint o informes anteriores. Ejecuta el predictor publicado
 
 ## Requisitos y preflight
 
+Desde el [ADR 0025](../adr/0025-compatibilidad-semantica-evaluacion.md), la identidad
+de publicación usa un contrato semántico explícito. Los hashes del código fuente
+siguen como procedencia diagnóstica, pero un refactor equivalente no invalida los
+informes nuevos. Los informes del contrato anterior requieren reevaluación explícita;
+no se deben editar sus hashes ni versiones para hacerlos pasar por actuales.
+
 La base debe existir y contener el modelo, dataset y tabla `model_evaluation`; la
 operación no crea esquemas ni migra. Proporcione explícitamente:
 

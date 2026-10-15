@@ -2,6 +2,16 @@
 kanban-plugin: basic
 ---
 
+## Recuperación del modelo 14 y retirada legacy — verificado en despliegue
+
+- [x] Corregir compatibilidad semántica del predictor con TDD; huellas fuente diagnósticas y controles efectivos estrictos. [ADR 0025](adr/0025-compatibilidad-semantica-evaluacion.md).
+- [x] Eliminar 11–13 con dependencias exclusivas: 4 evaluaciones, 30 métricas, 20 predicciones, 11 feedback, 3 sync, 2 checkpoints locales y 20 objetos GCS. Dataset compartido preservado.
+- [x] Reevaluar 14 sin reentrenar ni alterar pesos: intentos 7/8 completados, 177/181 muestras; informes históricos 5/6 conservados.
+- [x] Reconstruir/recrear backend y verificar catálogo único/default 14, smoke CUDA, HTTP mediante frontend y selector en Chromium real. Reinicio adicional sin reaparición legacy.
+- [x] 240 pruebas aisladas aprobadas en Python 3.12 y 3.14, 1 deselección cubierta por payload separado y 2 advertencias FFT; sin suite global ni mejora de calidad implícita. Entrega en commit local autorizada tras confirmar el funcionamiento del modelo.
+
+Detalle, comandos y límites: [recuperación del modelo 14](manuales/recuperacion-modelo-14.md); [recibo](receipts/model14-recovery.json).
+
 ## Identidad del checkpoint cargado — implementación local verificada
 - [x] **LOAD-1:** snapshot/procedencia y bloqueo estricto PASS independiente S1-S4/S6; alias/default corregidos, focal 109 PASS. Global final 1564 PASS/5 SKIP/12 FAIL con nodeids presentes en base (no equivalencia total de causas). Sin datos reales ni despliegue.
 - [x] **LOAD-2:** identidades separadas y resultado estable; focal 67/67, suite frontend 264/264 y typecheck final exit 0. Navegador real no ejecutado; evidencia T2 en contrato.

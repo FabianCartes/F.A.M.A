@@ -37,6 +37,9 @@ class StandardEvaluationError(ValueError):
 ADMITTED_MANIFEST_PAIR_KEY = "admitted_val_test_manifest_pair"
 ADMITTED_MANIFEST_PAIR_VERSION = 1
 _ADMITTED_MANIFEST_PAIR_DOMAIN = "fama.standard-evaluation.admitted-val-test-manifest-pair"
+# Bump for changes to loading, preprocessing, inference or aggregation semantics.
+# Source fingerprints below are diagnostic provenance, not compatibility versions.
+PREDICTOR_COMPATIBILITY_VERSION = "gpu-audio-frontend-v2"
 
 
 def admitted_manifest_pair_provenance(val_manifest_sha256: str, test_manifest_sha256: str) -> dict:
@@ -222,8 +225,8 @@ def build_evaluation_configuration(config: dict, training_audio: dict,
                                    preprocessing_contract=None) -> tuple:
     """Describe the effective published predictor once for training and validation.
 
-    Hashes are intentionally taken from inference implementations, never this builder
-    or the guard, so moving the integrity code cannot create a self-hash cycle.
+    The explicit compatibility version and effective parameters gate publication.
+    Source hashes remain diagnostic provenance; refactors do not revoke evaluations.
     """
     from app.services.predictors import trained_predictor as published_predictor
 
@@ -257,9 +260,13 @@ def build_evaluation_configuration(config: dict, training_audio: dict,
         return hashlib.sha256(inspect.getsource(function).encode()).hexdigest()
 
     predictor_config = dict(
-        implementation="TrainedModelPredictor", version="gpu-audio-frontend-v1", lazy_load=True,
-        implementation_sha256=source_hash(published_predictor.PREDICT_IMPLEMENTATION),
-        model_loader_sha256=source_hash(published_predictor.MODEL_LOADER_IMPLEMENTATION),
+        implementation="TrainedModelPredictor", version=PREDICTOR_COMPATIBILITY_VERSION, lazy_load=True,
+        implementation_provenance=dict(
+            implementation_sha256=source_hash(published_predictor.PREDICT_IMPLEMENTATION),
+            model_loader_sha256=source_hash(published_predictor.MODEL_LOADER_IMPLEMENTATION),
+            load_function_sha256=source_hash(published_predictor.LENGTH_IMPLEMENTATION),
+            rms_function_sha256=source_hash(published_predictor.RMS_IMPLEMENTATION),
+            mel_function_sha256=source_hash(GPUAudioFrontEnd.forward)),
         architecture=config["architecture"], job_id=config["job_id"], training_mismatch=mismatch,
         runtime_versions=dict(torch=str(torch.__version__), librosa=published_predictor.librosa.__version__,
                               numpy=published_predictor.np.__version__),
@@ -271,9 +278,6 @@ def build_evaluation_configuration(config: dict, training_audio: dict,
         flatness_mask_abs_threshold=1e-4, flatness_mask_min_samples=512,
         normalization=("per-example-zscore" if frontend_params["normalize"] else "none"),
         frontend_contract=preprocessing_contract,
-        load_function_sha256=source_hash(published_predictor.LENGTH_IMPLEMENTATION),
-        rms_function_sha256=source_hash(published_predictor.RMS_IMPLEMENTATION),
-        mel_function_sha256=source_hash(GPUAudioFrontEnd.forward),
         resampling=inspect.signature(published_predictor.librosa.load).parameters["res_type"].default,
         flatness_defaults={key: parameter.default for key, parameter in
                            inspect.signature(published_predictor.librosa.feature.spectral_flatness).parameters.items()
@@ -293,6 +297,9 @@ def _effective_predictor_config_matches(actual, expected) -> bool:
         return False
     effective = dict(actual)
     effective.pop(ADMITTED_MANIFEST_PAIR_KEY, None)
+    expected = dict(expected)
+    effective.pop("implementation_provenance", None)
+    expected.pop("implementation_provenance", None)
     return _json_matches(effective, expected)
 
 
