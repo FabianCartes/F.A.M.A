@@ -3,6 +3,7 @@ import os
 import wave
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
+from queue import Queue
 
 import numpy as np
 import librosa
@@ -37,11 +38,44 @@ def training_env(tmp_path, monkeypatch):
     monkeypatch.setattr(paths, "get_prepared_data_dir", lambda name: tmp_path / "prepared" / name)
     monkeypatch.setattr(training, "_BACKEND_DIR", tmp_path)
     service = training.TrainingService(tmp_path / "checkpoints")
-    # Only intercept the service worker; HTTP/framework threads must stay real.
+    # Replace only process execution, leaving the real parent supervisor running.
     thread = MagicMock(name="Thread")
-    local_threading = SimpleNamespace(Lock=training.threading.Lock, Thread=thread)
-    with patch("app.services.training.threading", local_threading):
+    runners = []
+    class InProcessRunner:
+        def __init__(self, target, *, args, seed):
+            self.config = args[0]
+            self.events = Queue()
+            self.alive = True
+            self.exitcode = None
+            runners.append(self)
+        def start(self):
+            thread(target=service._run_training_worker, args=(self.config,)).start()
+            if service.status in {"completed", "stopped", "failed"}:
+                self.finish()
+        def finish(self):
+            self.events.put({"type": "progress", "snapshot": service.get_progress()})
+            self.events.put({"type": "finished"})
+            self.exitcode = 0
+            self.alive = False
+        def receive(self, timeout=None):
+            return self.events.get(timeout=timeout)
+        def is_alive(self):
+            return self.alive
+        def request_stop(self):
+            service._stop_requested = True
+        def join(self, timeout=None):
+            pass
+        def close(self):
+            pass
+    service._process_factory = InProcessRunner
+    try:
         yield service, sessions, tmp_path, thread
+    finally:
+        for runner in runners:
+            if runner.alive:
+                service.status = "stopped"
+                runner.finish()
+        service.wait_for_completion(2)
     engine.dispose()
 
 

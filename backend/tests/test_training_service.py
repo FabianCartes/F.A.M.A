@@ -75,6 +75,26 @@ def history(service, sessions):
         return service.get_history(db)
 
 
+def test_cancellation_during_final_validation_does_not_publish_artifacts(execution, monkeypatch):
+    service, sessions, _ = execution
+
+    class CancelDuringValidation(torch.nn.Module):
+        def __init__(self, num_classes):
+            super().__init__()
+            self.bias = torch.nn.Parameter(torch.zeros(num_classes))
+
+        def forward(self, inputs):
+            if not self.training:
+                assert service.stop_training()['status'] == 'stopping'
+            return self.bias.unsqueeze(0).expand(inputs.shape[0], -1)
+
+    monkeypatch.setattr(timm, 'create_model', lambda *args, num_classes, **kwargs: CancelDuringValidation(num_classes))
+    assert service.start_training('AvesChilenas', epochs=1, early_stopping=False)['status'] == 'started'
+    assert service.get_progress()['status'] == 'stopped'
+    assert history(service, sessions) == []
+    assert list(service.checkpoints_dir.iterdir()) == []
+
+
 def payloads(service, sessions):
     return {entry["architecture"]: torch.load(service.checkpoints_dir / entry["filename"], weights_only=True)
             for entry in history(service, sessions)}

@@ -7,6 +7,7 @@ import hashlib
 import json
 import soundfile as sf
 import threading
+from queue import Empty
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional
@@ -28,6 +29,7 @@ from app.services.recording_evaluator import (
     LabelledRecording, RecordingEvaluator, validate_recording_splits, REJECTION_LABEL,
 )
 from app.services.predictors import trained_predictor as published_predictor
+from app.services.training_process import TrainingProcess, run_training_worker
 from app.schemas.evaluation import strict_json
 import pandas as pd
 import gc
@@ -90,8 +92,14 @@ class TrainingService:
     - Saves durable local checkpoints (.pt); does not upload checkpoints to GCS.
     """
 
-    def __init__(self, checkpoints_dir: Optional[Path] = None):
+    def __init__(self, checkpoints_dir: Optional[Path] = None, process_factory=None):
         self.checkpoints_dir = Path(checkpoints_dir or (_BACKEND_DIR / "checkpoints"))
+        self._process_factory = process_factory or TrainingProcess
+        self._worker_process = None
+        self._progress_callback = None
+        self._stop_event = None
+        self._completion = threading.Event()
+        self._completion.set()
         self.checkpoints_dir.mkdir(parents=True, exist_ok=True)
 
         # Estado global del entrenamiento
@@ -109,6 +117,7 @@ class TrainingService:
         self.error_message: Optional[str] = None
         self.start_timestamp: Optional[float] = None
         self._stop_requested: bool = False
+        self.seed = 42
 
     def _add_log(self, level: str, message: str) -> None:
         entry = {
@@ -120,6 +129,76 @@ class TrainingService:
         self.logs.append(entry)
         if len(self.logs) > 500:
             self.logs = self.logs[-500:]
+        if self._progress_callback is not None:
+            self._progress_callback(self.get_progress())
+
+    def _emit_progress(self):
+        if self._progress_callback is not None:
+            self._progress_callback(self.get_progress())
+
+    def wait_for_completion(self, timeout=None) -> bool:
+        """Wait until the worker is reaped and its final exit status is checked."""
+        return self._completion.wait(timeout)
+
+    def _supervise_worker(self, runner):
+        terminal_event = False
+        final_status = None
+        crash = None
+        try:
+            while True:
+                try:
+                    event = runner.receive(timeout=0.05)
+                except Empty:
+                    if runner.is_alive():
+                        continue
+                    break
+                if event["type"] == "progress":
+                    snapshot = event["snapshot"]
+                    status = snapshot.get("status", "training")
+                    if status in {"completed", "stopped", "failed"}:
+                        final_status = status
+                    with self._lock:
+                        for key, attr in {
+                            "epoch": "current_epoch", "total_epochs": "total_epochs",
+                            "train_loss": "current_train_loss", "val_loss": "current_val_loss",
+                            "train_acc": "current_train_acc", "val_acc": "current_val_acc",
+                            "current_model_index": "current_model_index",
+                            "current_architecture": "current_architecture",
+                            "metrics_history": "metrics_history", "logs": "logs",
+                            "error_message": "error_message",
+                        }.items():
+                            if key in snapshot:
+                                setattr(self, attr, snapshot[key])
+                        if status in {"training", "evaluating"}:
+                            self.status = status
+                elif event["type"] == "crashed":
+                    crash = event.get("error", "Training child crashed.")
+                elif event["type"] == "finished":
+                    terminal_event = True
+            # Empty after confirmed death: all normally flushed child events were drained.
+            runner.join()
+            exitcode = runner.exitcode
+            with self._lock:
+                if exitcode != 0 or not terminal_event or final_status is None or crash:
+                    self.status = "failed"
+                    self.error_message = crash or f"Training process exited without a valid completion (code {exitcode})."
+                    self._add_log("ERROR", self.error_message)
+                else:
+                    self.status = final_status
+        except Exception as exc:
+            with self._lock:
+                self.status = "failed"
+                self.error_message = f"Training supervision failed: {exc}"
+            runner.request_stop()
+        finally:
+            if not runner.is_alive():
+                runner.close()
+                with self._lock:
+                    self._worker_process = None
+                    self._completion.set()
+
+    def _is_stop_requested(self):
+        return self._stop_requested or (self._stop_event is not None and self._stop_event.is_set())
 
     def get_hardware_status(self) -> Dict[str, Any]:
         """
@@ -241,6 +320,7 @@ class TrainingService:
             return {
                 "status": self.status,
                 "job_id": self.current_job_id,
+                "seed": self.seed,
                 "is_tri_model": getattr(self, "is_tri_model", False),
                 "current_model_index": getattr(self, "current_model_index", 1),
                 "total_models": getattr(self, "total_models", 1),
@@ -266,7 +346,8 @@ class TrainingService:
             if self.status != "training":
                 return {"status": self.status, "message": "No hay ningún entrenamiento activo para detener."}
             self._stop_requested = True
-            self._add_log("WARN", "Solicitud de detención manual recibida. Abortando entrenamiento...")
+            if self._worker_process is not None:
+                self._worker_process.request_stop()
             return {"status": "stopping", "message": "Detención solicitada. El proceso finalizará de forma segura."}
 
     def _prepare_source(self, dataset_name: str) -> Dict[str, Any]:
@@ -350,7 +431,7 @@ class TrainingService:
         seed: int = 42,
     ) -> Dict[str, Any]:
         """
-        Inicia un nuevo ciclo de entrenamiento bioacústico en un hilo desacoplado.
+        Inicia un nuevo ciclo de entrenamiento bioacústico en un proceso spawn.
         Soporta modo individual, pipeline secuencial de la Tríada Completa o Ensamble Dinámico (1 a 3 modelos),
         y parametrización universal multi-dominio de audio, ventaneo y regularización.
         """
@@ -358,7 +439,7 @@ class TrainingService:
             raise ValueError("seed debe ser un entero entre 0 y 2**32 - 1.")
 
         with self._lock:
-            if self.status in {"training", "evaluating"}:
+            if self.status in {"training", "evaluating"} or self._worker_process is not None:
                 raise RuntimeError("Ya existe un proceso de entrenamiento en ejecución.")
 
             try:
@@ -425,6 +506,7 @@ class TrainingService:
             mode_tag = "ensemble" if is_ensemble else resolved_models[0]["architecture"].lower().replace('-', '_')
             job_id = f"fama_{mode_tag}_{uuid.uuid4().hex}"
             self.current_job_id = job_id
+            self.seed = seed
             self.status = "training"
             self.is_tri_model = is_tri_model or (len(resolved_models) == 3)
             self.models_config = resolved_models
@@ -463,14 +545,33 @@ class TrainingService:
             "seed": seed,
         }
 
-        # Lanzar en hilo de fondo para no bloquear el servidor FastAPI
-        thread = threading.Thread(
-            target=self._run_training_worker,
-            args=(config,),
-            daemon=True,
-            name=f"TrainingWorker-{job_id}",
-        )
-        thread.start()
+        runner = None
+        try:
+            runner = self._process_factory(
+                run_training_worker, args=(config, str(self.checkpoints_dir)), seed=seed,
+            )
+            with self._lock:
+                self._completion = threading.Event()
+                self._worker_process = runner
+            runner.start()
+            with self._lock:
+                if self._stop_requested:
+                    runner.request_stop()
+            if runner.is_alive():
+                supervisor = threading.Thread(target=self._supervise_worker, args=(runner,),
+                                              daemon=True, name=f"TrainingSupervisor-{job_id}")
+                supervisor.start()
+            else:
+                self._supervise_worker(runner)
+        except Exception as exc:
+            if runner is not None:
+                runner.abort_start()
+            with self._lock:
+                self.status = "failed"
+                self.error_message = f"No se pudo iniciar el proceso de entrenamiento: {exc}"
+                self._worker_process = None
+                self._completion.set()
+            raise RuntimeError(self.error_message) from exc
 
         if is_ensemble:
             arch_summary = " -> ".join([m["architecture"] for m in resolved_models])
@@ -566,6 +667,7 @@ class TrainingService:
         """Registration is durable first; evaluation errors preserve the artifact."""
         with self._lock:
             self.status = 'evaluating'
+        self._emit_progress()
         attempt_ids = []
         previous_active_ids = None
         try:
@@ -647,6 +749,7 @@ class TrainingService:
             with self._lock:
                 if self.status == 'evaluating':
                     self.status = 'training'
+            self._emit_progress()
 
     def _run_training_worker(self, config: Dict[str, Any]) -> None:
         """
@@ -715,7 +818,7 @@ class TrainingService:
             )
 
             for idx, arch in enumerate(models_to_train):
-                if self._stop_requested:
+                if self._is_stop_requested():
                     break
 
                 preset = ARCHITECTURE_PRESETS.get(arch, {})
@@ -884,7 +987,7 @@ class TrainingService:
                     )
 
                 for epoch in range(1, arch_epochs + 1):
-                    if self._stop_requested:
+                    if self._is_stop_requested():
                         self._add_log("WARN", f"Entrenamiento interrumpido por el usuario en la época {epoch - 1}.")
                         with self._lock:
                             self.status = "stopped"
@@ -897,7 +1000,7 @@ class TrainingService:
                     tr_samples = 0
 
                     for x_batch, y_batch in train_loader:
-                        if self._stop_requested:
+                        if self._is_stop_requested():
                             break
                         x_batch = x_batch.to(device, non_blocking=True)
                         y_batch = y_batch.to(device, non_blocking=True)
@@ -927,7 +1030,7 @@ class TrainingService:
                         tr_correct += int(torch.sum(preds == y_batch).item())
                         tr_samples += bsz
 
-                    if self._stop_requested:
+                    if self._is_stop_requested():
                         self._add_log("WARN", f"Entrenamiento interrumpido por el usuario en la época {epoch}.")
                         with self._lock:
                             self.status = "stopped"
@@ -946,7 +1049,7 @@ class TrainingService:
 
                     with torch.no_grad():
                         for x_batch, y_batch in val_loader:
-                            if self._stop_requested:
+                            if self._is_stop_requested():
                                 break
                             x_batch = x_batch.to(device, non_blocking=True)
                             y_batch = y_batch.to(device, non_blocking=True)
@@ -958,6 +1061,12 @@ class TrainingService:
                             preds = torch.argmax(outputs, dim=-1)
                             val_correct += int(torch.sum(preds == y_batch).item())
                             val_samples += bsz
+
+                    if self._is_stop_requested():
+                        with self._lock:
+                            self.status = 'stopped'
+                        self._add_log('WARN', 'Entrenamiento detenido durante validación; no se publica el modelo incompleto.')
+                        return
 
                     val_loss = round(val_loss_total / max(1, val_samples), 4)
                     val_acc = round((val_correct / max(1, val_samples)) * 100.0, 2)
@@ -1010,6 +1119,11 @@ class TrainingService:
                         )
                         break
 
+                if self._is_stop_requested():
+                    with self._lock:
+                        self.status = 'stopped'
+                    return
+
                 # Guardar el artefacto de pesos real (.pt)
                 saved_state = best_weights if best_weights is not None else {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
                 checkpoint_payload = {
@@ -1020,6 +1134,18 @@ class TrainingService:
                     "model_index": idx + 1,
                     "architecture": arch,
                     "seed": seed,
+                    "runtime": {
+                        "python_version": sys.version.split()[0],
+                        "torch_version": str(torch.__version__),
+                        "cuda_runtime": torch.version.cuda,
+                        "device": str(device),
+                    },
+                    "reproducibility": {
+                        "seed": seed,
+                        "rngs_seeded": ["python", "numpy", "torch_cpu", "torch_cuda_if_available"],
+                        "execution": "spawned_process" if self._stop_event is not None else "in_process",
+                        "cuda_bitwise_reproducible": False,
+                    },
                     "initialization_mode": initialization_mode,
                     "epochs": arch_epochs,
                     "best_val_acc": best_val_acc,
@@ -1033,6 +1159,10 @@ class TrainingService:
                     "state_dict": saved_state,
                     "created_at": datetime.now(timezone.utc).isoformat(),
                 }
+                if self._is_stop_requested():
+                    with self._lock:
+                        self.status = 'stopped'
+                    return
                 file_size, file_hash = self._write_checkpoint(checkpoint_path, checkpoint_payload)
 
                 # A checkpoint is successful only after its registration commits.
@@ -1108,6 +1238,12 @@ class TrainingService:
                     if db is not None:
                         db.close()
 
+                # Registration is already durable. A late stop preserves it pending,
+                # without starting reports or changing the previously active model.
+                if self._is_stop_requested():
+                    with self._lock:
+                        self.status = 'stopped'
+                    return
                 self._evaluate_registered_checkpoint(
                     model_id, checkpoint_path, file_hash, config, classes, training_audio,
                     preprocessing_contract, is_ensemble, arch)
@@ -1120,7 +1256,11 @@ class TrainingService:
                 if is_ensemble and idx < len(models_to_train) - 1:
                     self._add_log("INFO", f"Memoria liberada exitosamente. Pasando al siguiente modelo ({models_to_train[idx+1]})...")
 
-            if not self._stop_requested:
+            if self._is_stop_requested():
+                with self._lock:
+                    self.status = "stopped"
+                self._add_log("WARN", "Training stopped before completing the pipeline.")
+            else:
                 with self._lock:
                     self.status = "completed"
                 if is_ensemble:
