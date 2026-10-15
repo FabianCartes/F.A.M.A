@@ -17,7 +17,6 @@ def test_prepare_engine_dataset_default_path():
 def test_training_scripts_no_hardcoded_root_data_dir():
     root = get_project_root()
     scripts = [
-        root / "backend" / "train_car_engine_model.py",
         root / "backend" / "train_and_ensemble_engines.py",
         root / "backend" / "train_v2_and_compare.py",
     ]
@@ -28,8 +27,8 @@ def test_training_scripts_no_hardcoded_root_data_dir():
         assert 'Path("data/engine_diagnostics")' not in content, (
             f"Script {script.name} contiene ruta hardcodeada 'data/engine_diagnostics'"
         )
-        assert "get_raw_data_dir" in content, (
-            f"Script {script.name} no utiliza get_raw_data_dir"
+        assert "get_prepared_data_dir" in content, (
+            f"Script {script.name} no utiliza get_prepared_data_dir"
         )
 
 

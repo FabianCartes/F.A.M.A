@@ -86,12 +86,12 @@ python -m poc.train --epochs 15 --checkpoint-name augmented_best.pt
 python -m poc.evaluate --checkpoint augmented_best.pt --no-tta
 ```
 
-**Motores, desde `backend`, ejemplos no ejecutados:** preparar con el
-[adaptador real](../../backend/training/prepare_engine_data.py), luego entrenar
-con la receta fija del [script](../../backend/train_car_engine_model.py), que
-incluye evaluación final de test y no expone flags de dataset/índice/raíces.
-Las raíces declaradas al preparar deben corresponder a las configuradas por
-ese consumidor.
+**Motores, desde `backend`, ejemplo de preparación no ejecutado:** preparar con el
+[adaptador](../../backend/training/prepare_engine_data.py). El CLI
+`train_car_engine_model.py` fue retirado; para entrenar desde la plataforma,
+use la vista **Entrenamiento**, que envía `POST /api/training/start`.
+Las raíces declaradas al preparar deben corresponder a las que valida el
+servicio para el dataset admitido.
 
 ```bash
 python -m training.prepare_engine_data \
@@ -99,7 +99,6 @@ python -m training.prepare_engine_data \
   --raw-root /synthetic/data/raw/engine_diagnostics \
   --processed-root /synthetic/data/processed/engine_diagnostics/processed_wav \
   --train-ratio 0.70 --val-ratio 0.15 --test-ratio 0.15 --seed 42
-python train_car_engine_model.py
 ```
 
 El adaptador también admite `--output-dir`; `--processed-root` es opcional

@@ -120,34 +120,10 @@ def test_trainer_requires_root_binding(source, tmp_path):
         trainer.train_and_export(frame, frame, frame, tmp_path / "checkpoints")
 
 
-def test_car_entrypoint_preserves_canonical_csv_identity(source, tmp_path, monkeypatch):
-    import train_car_engine_model as script
-
-    roots, frame, config = source
-    frames = make_disjoint_splits(roots, frame)
-    for split, split_frame in zip(("train", "val", "test"), frames):
-        split_frame.to_csv(roots["raw"] / f"{split}_metadata.csv", index=False)
-    recipe_dir = tmp_path / "backend/training/recipes"
-    recipe_dir.mkdir(parents=True)
-    (recipe_dir / "car_engine_diagnostics_resnet34d.yaml").write_text(
-        yaml.safe_dump(config.model_copy(update={"dataset_name": None}).model_dump(mode="json")), encoding="utf-8")
-    monkeypatch.setattr(script, "get_project_root", lambda: tmp_path)
-    monkeypatch.setattr(script, "get_prepared_data_dir", lambda name: roots["raw"])
-    monkeypatch.setattr(script, "get_dataset_roots", lambda name: dict(roots))
-    monkeypatch.setattr(script, "load_prepared_dataset", lambda *args, **kwargs: frames)
-    prepared = stop_after_preparation(monkeypatch)
-    with pytest.raises(PreparedSplits):
-        script.main()
-    for actual, waveform, _ in prepared:
-        assert any(actual.equals(expected) for expected in frames)
-        assert torch.allclose(waveform, torch.full((8000,), -0.5))
-    for split, split_frame in zip(("train", "val", "test"), frames):
-        pd.testing.assert_frame_equal(
-            pd.read_csv(roots["raw"] / f"{split}_metadata.csv", dtype=str, keep_default_na=False), split_frame)
 
 
 @pytest.mark.parametrize("module", [
-    "train_car_engine_model", "train_v2_and_compare", "train_and_ensemble_engines",
+    "train_v2_and_compare", "train_and_ensemble_engines",
 ])
 @pytest.mark.parametrize("invalid", [False, True])
 def test_engine_main_loads_validated_prepared_trio_before_training(source, tmp_path, monkeypatch, module, invalid):
