@@ -43,6 +43,49 @@ def resolve_test_audio_path() -> Path:
 AUDIO_PRUEBA_PATH = resolve_test_audio_path()
 
 
+@pytest.mark.parametrize('failure_stage', ['construction', 'device_transfer'])
+def test_frontend_failure_can_retry_without_legacy_fallback(tmp_path, monkeypatch, failure_stage):
+    import torchaudio.transforms
+
+    model = predictor_module.AudioCNN(num_classes=2)
+    state = {key: torch.zeros_like(value) for key, value in model.state_dict().items()}
+    state['classifier.3.bias'] = torch.tensor([2.0, -2.0])
+    checkpoint = tmp_path / 'predictor.pt'
+    torch.save({
+        'architecture': 'AudioCNN', 'classes': ['tone', 'other'],
+        'job_id': 'frontend-retry', 'state_dict': state,
+        'preprocessing_contract': build_gpu_audio_frontend_contract(
+            sample_rate=8000, duration_seconds=1.0, n_mels=32,
+            n_fft=256, hop_length=64, f_min=0.0, f_max=4000.0),
+    }, checkpoint)
+    audio = tmp_path / 'tone.wav'
+    samples = np.arange(8000, dtype=np.float32) / 8000
+    sf.write(audio, 0.5 * np.sin(2 * np.pi * 1000 * samples), 8000)
+    before = checkpoint.read_bytes(), audio.read_bytes()
+    predictor = TrainedModelPredictor(checkpoint, lazy_load=True)
+    with monkeypatch.context() as fault:
+        if failure_stage == 'construction':
+            def fail(*args, **kwargs):
+                raise RuntimeError('Injected frontend failure')
+            fault.setattr(torchaudio.transforms.MelSpectrogram, '__init__', fail)
+        else:
+            original_to = torch.nn.Module.to
+            def transfer(module, *args, **kwargs):
+                if isinstance(module, GPUAudioFrontEnd):
+                    raise RuntimeError('Injected frontend failure')
+                return original_to(module, *args, **kwargs)
+            fault.setattr(torch.nn.Module, 'to', transfer)
+        for _ in range(2):
+            with pytest.raises(ModelWeightsError):
+                predictor.predict(audio)
+    result = predictor.predict(audio)
+    assert result.clase == 'tone'
+    assert result.confianza == pytest.approx(0.982)
+    assert result.detalles['status'] == 'classified'
+    assert result.detalles['is_mock'] is False
+    assert (checkpoint.read_bytes(), audio.read_bytes()) == before
+
+
 def test_trained_predictor_lazy_loading_defers_model_instantiation():
     """
     Verifica que con lazy_load=True:
