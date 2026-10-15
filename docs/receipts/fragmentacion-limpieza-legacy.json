@@ -796,5 +796,17 @@
     "backupRef": "backup/limpieza-entrenamiento-6ef3687",
     "backupCommit": "6ef368794385aceee3eed832f69f4175e90dfc33",
     "method": "atomic compare-and-swap; source and index preserved"
-  }
+  },
+  "verificationCommit": "96be008cce5d989b68e214080cd0bcb573b4d217",
+  "completion": "done",
+  "sourceDeltaAgainstOriginalOutsideTracking": [],
+  "nativeReviewApprovedForWholeCleanup": false,
+  "notRun": [
+    "global suite",
+    "real training/data/database",
+    "GCS",
+    "deployment/concurrency",
+    "push",
+    "pull request"
+  ]
 }
