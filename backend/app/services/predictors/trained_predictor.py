@@ -67,6 +67,7 @@ class TrainedModelPredictor(AudioPredictor):
         self.best_val_acc: Optional[float] = None
         self.model: Optional[nn.Module] = None
         self.audio_config: Optional[dict] = None
+        self.legacy_n_mels = 64
         self.window_selection = "max_rms"
 
         if not self.checkpoint_path.exists():
@@ -113,7 +114,7 @@ class TrainedModelPredictor(AudioPredictor):
                 f"El checkpoint {self.checkpoint_path} no tiene un formato válido (se esperaba un diccionario)."
             )
 
-        self.architecture_name = checkpoint.get("architecture", "EfficientNet-B0")
+        self.architecture_name = checkpoint.get("architecture", checkpoint.get("model_type", "EfficientNet-B0"))
         self.classes = checkpoint.get("classes", list(DEFAULT_CHILEAN_BIRD_CLASSES))
         self.best_val_acc = checkpoint.get("best_val_acc")
         self._configure_audio(checkpoint)
@@ -132,6 +133,12 @@ class TrainedModelPredictor(AudioPredictor):
             self.window_selection = profile["window_selection"]
         if configuration is None:
             self.audio_config = None
+            try:
+                self.legacy_n_mels = AudioConfigSchema.model_validate(
+                    {"n_mels": checkpoint.get("n_mels", 64)}, strict=True
+                ).n_mels
+            except (ValueError, TypeError) as error:
+                raise ModelWeightsError("Checkpoint con n_mels legacy inválido") from error
             return
         try:
             if (not isinstance(configuration, dict)
@@ -170,22 +177,30 @@ class TrainedModelPredictor(AudioPredictor):
                     f"No se encontró state_dict en el checkpoint {self.checkpoint_path}"
                 )
 
-        self.architecture_name = checkpoint.get("architecture", "EfficientNet-B0")
+        self.architecture_name = checkpoint.get("architecture", checkpoint.get("model_type", "EfficientNet-B0"))
         self.classes = checkpoint.get("classes", list(DEFAULT_CHILEAN_BIRD_CLASSES))
         self.best_val_acc = checkpoint.get("best_val_acc")
         self._configure_audio(checkpoint)
 
         arch_lower = self.architecture_name.lower().replace("-", "_")
         num_classes = len(self.classes)
+        legacy_poc = "model_type" in checkpoint and "architecture" not in checkpoint
+        pool_type = checkpoint.get("pool_type", "avg" if legacy_poc else "gem")
+        if pool_type is None:
+            pool_type = "avg"  # Preserve BioacousticModel's explicit-null convention.
+        if not isinstance(pool_type, str) or pool_type.lower() not in {"avg", "gem"}:
+            raise ModelWeightsError("Contrato de pooling del checkpoint no soportado")
+        pool_type = pool_type.lower()
 
-        if "audiocnn" in arch_lower or "audio_cnn" in arch_lower:
+        if arch_lower == "cnn" or "audiocnn" in arch_lower or "audio_cnn" in arch_lower:
             model = AudioCNN(num_classes=num_classes)
         elif "panns" in arch_lower:
             try:
                 from training.models.panns_cnn14 import PannsCNN14
                 model = PannsCNN14(in_chans=1, num_classes=num_classes)
             except ImportError:
-                model = BioacousticModel(model_name="panns_cnn14", num_classes=num_classes, in_chans=1, pretrained=False)
+                model = BioacousticModel(model_name="panns_cnn14", num_classes=num_classes, in_chans=1,
+                                         pretrained=False, pool_type=pool_type)
         else:
             if "resnet" in arch_lower:
                 target_arch = "resnet34d"
@@ -201,6 +216,7 @@ class TrainedModelPredictor(AudioPredictor):
                 num_classes=num_classes,
                 in_chans=1,
                 pretrained=False,
+                pool_type=pool_type,
             )
 
         try:
@@ -303,7 +319,7 @@ class TrainedModelPredictor(AudioPredictor):
             ).to(self.device)
             mel_tensor = frontend(torch.from_numpy(waveform).to(self.device))
         else:
-            mel = extract_mel_spectrogram(waveform, sr=TARGET_SR)
+            mel = extract_mel_spectrogram(waveform, sr=TARGET_SR, n_mels=self.legacy_n_mels)
             mel_tensor = torch.from_numpy(mel).unsqueeze(0).unsqueeze(0).float().to(self.device)
 
         t_start = time.perf_counter()
@@ -325,6 +341,7 @@ class TrainedModelPredictor(AudioPredictor):
                 "checkpoint_name": self.checkpoint_path.name,
                 "device": str(self.device),
                 "latency_ms": latency_ms,
+                "mel_bands": int(mel_tensor.shape[-2]),
                 "status": "classified",
                 "is_mock": False,
                 "preprocessing_mode": "gpu_mel_zscore" if self.audio_config else "legacy_librosa",

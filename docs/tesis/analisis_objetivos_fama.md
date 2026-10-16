@@ -1,5 +1,5 @@
 # Análisis de Objetivos del Proyecto F.A.M.A.
-### Estado del código vs. Tesis — Revisión histórica del 2 y actualización acotada del 15 de octubre de 2026
+### Estado del código vs. Tesis — Revisión histórica del 2 y actualización acotada del 15–16 de octubre de 2026
 
 La revisión histórica del 2 de octubre distingue **implementado** (código presente), **evidencia histórica** (resultados registrados en recibos) y **pendiente de validación** (comportamiento aún no acreditado en el entorno objetivo). En esa revisión no se ejecutaron pruebas, contenedores ni benchmarks. Se conserva debajo como antecedente; no debe leerse como inventario vigente de cada defecto. Los pendientes actuales se mantienen en [KANBAN.md](../KANBAN.md).
 
@@ -14,7 +14,7 @@ La revisión histórica del 2 de octubre distingue **implementado** (código pre
 | OE4: construir módulos de sincronización, preprocesamiento, interfaz y telemetría | Implementación presente. RF02: checksums, publicación local, subida parcial, validación estructural/límites. RF03: casos sintéticos reales de generación de tensores y errores. RF04/RF05: contratos de checkpoint/selección y disponibilidad comprobados de alcance específico. Dashboard corregido sin observaciones ficticias y con referencias históricas diferenciadas | Catálogo y otras fuentes de estado/ensamble, opciones ofrecidas, bundles, otros lectores y seguridad/operación integral |
 | OE5: rendimiento, viabilidad y ciclo de reentrenamiento | Permanecen los recibos/experimentos históricos; estas pruebas no recalculan accuracy/F1, ahorro ni viabilidad económica | Feedback → curación → preparación → reentrenamiento → nuevo modelo → nueva inferencia; trazabilidad de artefactos/métricas/costos y evaluación reproducible |
 | RF01 y RF02: acceso y sincronización cloud | Adaptadores y rutas presentes; transferencias y errores comprobados con GCS falso/SQLite | IAM, PostgreSQL/GCS reales, volumen, concurrencia y recuperación operacional |
-| RF03 y RNF01: extracción y ≤2 s | Extracción implementada y caso sintético probado | Benchmark reproducible del umbral en hardware/configuración objetivo; duración de pytest no es ese benchmark |
+| RF03 y RNF01: extracción y ≤2 s | Extracción implementada; benchmark CPU autorizado del 16: un audio, default legacy64, primera llamada 1,5526 s y mediana caliente 27,911 ms | No acredita todos los casos/perfiles, imports/guardado/UI ni hardware objetivo; ampliar protocolo, no usar duración de pytest como benchmark |
 | RF04: entrenamiento web local | Mejores pesos, época/pérdida seleccionadas, preprocesamiento efectivo, publicación y persistencia confirmada antes de completed comprobados en suites acotadas | Entrenamiento real autorizado, parámetros pendientes y integración GPU/BD; scripts experimentales aún con snapshots pendientes |
 | RF05 y RNF04: predicción visible y ≤3 s | Selección exige disponibilidad; API rechaza temprano sin pesos. Hay recibo histórico de un caso real | Compatibilidad/calidad de todos los modelos y ensambles, coherencia de bundles y medición desde carga hasta pantalla |
 | RF06: retroalimentación y mejora continua | Captura/curación presentes; una prueba focal reciente confirma aprobación local utilizable antes de copia cloud | No hay evidencia nueva del ciclo completo hasta un modelo reentrenado y su efecto medido |
@@ -31,10 +31,16 @@ La revisión histórica del 2 de octubre distingue **implementado** (código pre
 
 ### Evidencia actual, sin sumar ejecuciones heterogéneas
 
-- Backend acotado de AFIN-22: **338 PASS**, una prueba de calidad Chucao real deseleccionada, 22 archivos; tres deprecaciones. No es la suite global.
+- Backend acotado de AFIN-24: **352 PASS**, una prueba de calidad Chucao real deseleccionada, 23 archivos; tres deprecaciones. No es la suite global.
 - Frontend completo de AFIN-22: **242 PASS/23 archivos**, TypeScript y ESLint focal sin diagnósticos. Node observado 22.20.0 sigue fuera del requisito del jsdom instalado; PASS no acredita compatibilidad oficial del runtime.
 - Contenedores/configuración: **10 PASS** con Compose config y Docker CLI/API simulada. Sin nuevo build/arranque de servicios ni validación GPU.
-- Sin datos/BD/GCS/pesos reales, migraciones, push o despliegue. La evidencia completa y sus interfaces figuran en [KANBAN](../KANBAN.md); estado para retomar en [manual operativo de pendientes](../manuales/estado_actual_y_pendientes.md).
+- Las regresiones aisladas no usan datos/BD/GCS/pesos reales, migraciones, push o despliegue. La excepción autorizada de benchmark se describe a continuación. Evidencia e interfaces en [KANBAN](../KANBAN.md); estado para retomar en [manual operativo de pendientes](../manuales/estado_actual_y_pendientes.md).
+
+### Suplemento autorizado de benchmark local — 16 de octubre de 2026
+
+La exclusión de activos reales de las pruebas anteriores tiene una excepción explícita: inventario local de nombres/tamaños y lectura de un MP3/checkpoint autorizados para CPU, con límites de tiempo/memoria, red bloqueada y deserialización restringida. No se modificaron originales ni se usaron BD/GCS reales. [Informe y cuatro recibos](../modelos/benchmark_local_cpu_20261016.md) conservan fallos iniciales y diagnóstico, no solo el intento que terminó.
+
+El caso de preprocesamiento no cierra RNF01 global. La ruta del predictor corregido terminó en noise antes de la red, pese a cargar correctamente el checkpoint: su mediana de 33,568 ms **no** acredita forward, latencia hasta pantalla de RNF04 ni exactitud. Inventario de unos 5,02 GiB no es prueba de 50 GB; no hubo benchmark GPU, concurrencia, entrenamiento ni evaluación OE5. El bloqueo de pooling/formato/bandas encontrado sí se reprodujo/corrigió con pruebas sintéticas y carga real limitada, sin reescribir el artefacto. Estado de ensambles y otras validaciones de AFIN-25 siguen pendientes.
 
 **Puerta para retomar funcionalidades:** se puede continuar desarrollo controlado en la rama de afinamiento, pero aún quedan correcciones de lo existente. Antes de declarar objetivos operativos cumplidos se deben cerrar esos defectos y ejecutar el E2E y los benchmarks autorizados. Los porcentajes citados abajo pertenecen a la tesis/revisión histórica; no son una medición nueva de avance.
 

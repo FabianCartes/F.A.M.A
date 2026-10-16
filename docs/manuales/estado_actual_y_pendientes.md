@@ -1,6 +1,6 @@
 # Estado actual y pendientes para retomar F.A.M.A.
 
-**Corte: 15 de octubre de 2026. Rama: `fix/afinamiento-integral`.**
+**Corte: 16 de octubre de 2026. Rama: `fix/afinamiento-integral`.**
 
 Este resumen distingue correcciones comprobadas, defectos pendientes y funcionalidades aplazadas. No certifica que toda la plataforma funcione en producción. Evidencia y detalle por unidad: [KANBAN](../KANBAN.md).
 
@@ -25,13 +25,15 @@ Este resumen distingue correcciones comprobadas, defectos pendientes y funcional
 | Metadatos de ingesta | Frecuencia/duración observadas de cabecera, null si desconocidas, cero conservado; reemplazos actualizados; inspector lee metadatos de BD por URI exacta | No valida muestras/calidad; datos históricos y cambios cloud posteriores no se reinterpretan; sin nueva pantalla |
 | Validación de subida | WAV/MP3/FLAC/OGG con cabecera/extensión compatibles y decodificación en bloques; rechaza ilegibles/vacíos/cero frames antes de GCS; límites configurables 64 MiB/archivo y 256 MiB/lote | No se extiende a sync; límites no cubren RAM total, recepción/spooling previo, CPU, concurrencia ni RNF de 50 GB |
 | Dashboard | Conteos BD reales, cero/null explícitos, métricas del último registro y solo curvas/eventos registrados; referencias históricas separadas; GET no busca/carga checkpoints | No prueba salud GCS/inferencia ni activación; no cierra otros endpoints de estado/ensamble, auditoría completa ni OE5 |
+| Compatibilidad PoC | Respeta pooling, model_type y bandas declaradas, sin inventar parámetros ni relajar state_dict; clasificación sintética para avg/GeM/CNN | No reconstruye perfil completo/normalización/TTA histórico ni certifica calidad; otras fuentes de inferencia pendientes |
 
 ### Evidencia disponible
 
-- Última regresión backend acotada: **338 aprobadas**, una prueba de calidad Chucao real deseleccionada, 22 archivos; tres avisos de deprecación. Incluye dashboard, modelos relacionales, entrenamiento, contratos de checkpoint, autenticación, disponibilidad, ingesta y pruebas existentes de bundles; no implica que todos los defectos de bundles estén resueltos. Aprobación local de feedback: prueba pública focal adicional anterior, **1 aprobada**, sin modificar su implementación previa.
+- Última regresión backend acotada: **352 aprobadas**, una prueba de calidad Chucao real deseleccionada, 23 archivos; tres avisos de deprecación. Incluye compatibilidad PoC/pooling, dashboard, modelos relacionales, entrenamiento, contratos de checkpoint, autenticación, disponibilidad, ingesta y pruebas existentes de bundles; no implica que todos los defectos de bundles estén resueltos. Aprobación local de feedback: prueba pública focal adicional anterior, **1 aprobada**, sin modificar su implementación previa.
 - Última suite frontend completa: **242 aprobadas / 23 archivos**. TypeScript sin incremental y ESLint focal sin diagnósticos. Node observado 22.20.0 sigue fuera del requisito del jsdom instalado.
 - Configuración/contexto Docker: **10 pruebas aprobadas**, con Compose config y cliente/API simulada; no valida el arranque integral. Incluye transmisión/defaults de los límites de carga.
-- Pruebas con temporales, SQLite y adaptadores falsos. Sin cambios a `.env`, credenciales, cuentas, datasets, pesos, PostgreSQL/GCS reales ni servicios existentes. Cinco cambios locales previos del usuario preservados y fuera de los commits de afinamiento.
+- Validación de recibos sin repetir benchmarks: **7 aprobadas**; regresión root recibos/contenedores **17 aprobadas**. No se suman como suite global.
+- Las pruebas de corrección usan temporales, SQLite y adaptadores falsos. Aparte, se autorizó lectura real de un MP3 y un checkpoint para benchmark CPU: ver apartado 6. Sin cambios a `.env`, credenciales, cuentas, contenidos de datasets/pesos, PostgreSQL/GCS reales ni servicios existentes. Cinco cambios locales previos preservados y fuera de los commits de afinamiento.
 
 ## 2. Correcciones pendientes de lo ya implementado
 
@@ -63,3 +65,9 @@ No se ha acreditado el ciclo completo con datos/pesos reales durante este afinam
 El propósito híbrido y sus módulos están presentes; no está acreditado el cumplimiento operativo completo. OE1–OE3 están documentados; OE4 tiene implementación y pruebas de alcance específico, pero conserva defectos en otras fuentes de estado/ensamble, catálogo y pipeline. La telemetría ficticia del dashboard examinada en el contraste inicial fue corregida en AFIN-22. OE5 y los tiempos de 2 s/3 s, volumen de 50 GB y seguridad integral requieren validación adicional. No se asigna un porcentaje global de avance sin metodología.
 
 El [contraste de objetivos actualizado](../tesis/analisis_objetivos_fama.md) conserva la revisión histórica del 2 de octubre, identifica afirmaciones superadas por las correcciones y separa requisitos implementados de los no acreditados. No sustituye el E2E ni una auditoría de producción. Los defaults de PostgreSQL, control de acceso aplazado y estado Node incompatible siguen siendo pendientes concretos.
+
+## 6. Excepción autorizada: benchmark CPU con dos activos reales
+
+Inventario y luego únicamente `backend/data/raw/AvesChilenas/Canastero/15290.mp3` y `backend/checkpoints/efficientnet_gpu_pipeline_35e_best.pt` autorizados para lectura, sin otros activos/servicios/entrenamiento. Presupuesto por proceso: hasta 180 s, dos hilos, vigilancia RSS 1,5 GiB y aborto si RAM libre <2 GiB; no es límite duro del SO. Repeticiones confirmadas, red bloqueada y weights_only forzado. No hay permiso automático para otra ejecución.
+
+El [informe experimental](../modelos/benchmark_local_cpu_20261016.md) conserva dos cargas fallidas, diagnóstico y resultado final. Preprocesamiento: 1,5526 s/mediana caliente 27,911 ms para un caso. Checkpoint finalmente cargado, pero predict filtró como noise sin forward; mediana 33,568 ms **no** acredita latencia neuronal, API/pantalla ≤3 s ni calidad. Dataset 50 GB y GPU no medidos; runtime CPU-only. Originales con hashes/tamaño/mtime conservados. Estado de ensambles AFIN-25 sigue pendiente y autorizado para pruebas aisladas.

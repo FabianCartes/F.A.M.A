@@ -17,7 +17,7 @@ docs/
 ├── arquitectura/                # Diseño de sistemas, pipelines, MLOps y despliegue
 ├── limites/                     # Límites matemáticos, físicos y problemas conocidos
 ├── manuales/                    # Uso, estado para retomar, revisión y despliegue
-├── adr/                         # Architectural Decision Records (ADR 0001 a 0031)
+├── adr/                         # Architectural Decision Records (ADR 0001 a 0032)
 ├── receipts/                    # Recibos técnicos reproducibles en formato JSON (RDD)
 ├── duplicados-exactos/           # Tarea acotada: admisión de feedback sin duplicados SHA-256
 └── images/                      # Diagramas, matrices de confusión y gráficos vectoriales
@@ -27,7 +27,7 @@ docs/
 
 ## Índice Detallado por Carpeta
 
-**Para retomar el proyecto:** [`manuales/estado_actual_y_pendientes.md`](./manuales/estado_actual_y_pendientes.md) separa correcciones verificadas, defectos pendientes, funcionalidades aplazadas y validación operacional necesaria (corte del 15 de octubre de 2026).
+**Para retomar el proyecto:** [`manuales/estado_actual_y_pendientes.md`](./manuales/estado_actual_y_pendientes.md) separa correcciones, pendientes, funcionalidades aplazadas, benchmark CPU autorizado y validación operacional necesaria (corte del 16 de octubre de 2026).
 
 ### Tarea acotada: duplicados exactos
 * [`docs/duplicados-exactos/tasks.md`](./duplicados-exactos/tasks.md): Alcance, decisiones locales, checklist y evidencia TDD de aprobación de feedback sin duplicados SHA-256; revisión y commit pendientes del orquestador.
@@ -56,6 +56,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`17_arquitectura_super_ensamble_y_modelos_preentrenados.md`](./modelos/17_arquitectura_super_ensamble_y_modelos_preentrenados.md): Fundamentación teórica de modelos preentrenados.
 * [`fundamentacion_tecnica_efficientnet_focal_loss.md`](./modelos/fundamentacion_tecnica_efficientnet_focal_loss.md): Justificación matemática de Focal Loss y EfficientNet.
 * [`informe_consolidado_diagnostico_acustico_motores.md`](./modelos/informe_consolidado_diagnostico_acustico_motores.md): Informe del ensamble industrial para fallas de motor (81.16% Acc).
+* [`benchmark_local_cpu_20261016.md`](./modelos/benchmark_local_cpu_20261016.md): Mediciones reales CPU autorizadas de un audio/checkpoint; fallos de compatibilidad conservados, preprocesamiento medido y predictor detenido por filtro de ruido, sin acreditar forward, latencia hasta pantalla ni 50 GB.
 
 ### 3. [`docs/arquitectura/`](./arquitectura/) — Arquitectura de Software y MLOps
 * [`CONTEXT.md`](./arquitectura/CONTEXT.md): Glosario de catálogo, disponibilidad/activación, inferencia/confianza, alta de administrador, metadatos y referencias experimentales históricas.
@@ -84,8 +85,14 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 ### Evidencia operacional de permisos
 * [`backend_permissions_integration.json`](./receipts/backend_permissions_integration.json): Verificación PERM-3 del servicio público de feedback en contenedor aislado; propietario y modos tras aprobaciones, reinicio y replay. Contexto mínimo, no prueba del despliegue completo ni autoridad de entrega.
 
+### Evidencia de benchmark local controlado
+* [`benchmark_local_cpu_20261015.json`](./receipts/benchmark_local_cpu_20261015.json): Intento inicial: preprocesamiento real medido, fallo de carga de pesos conservado.
+* [`benchmark_local_cpu_inference_20261016.json`](./receipts/benchmark_local_cpu_inference_20261016.json): Repetición autorizada, mismo fallo de carga; no latencia de inferencia válida.
+* [`checkpoint_compatibility_metadata_20261016.json`](./receipts/checkpoint_compatibility_metadata_20261016.json): Diagnóstico restringido de metadatos/tensores del único checkpoint autorizado; no benchmark.
+* [`benchmark_local_cpu_inference_validated_20261016.json`](./receipts/benchmark_local_cpu_inference_validated_20261016.json): Carga corregida y ruta del predictor medida con filtro noise; no forward neuronal ni medición navegador/API.
+
 ### 6. [`docs/adr/`](./adr/) — Architectural Decision Records
-Registro de las 31 decisiones de arquitectura fundamentales del sistema:
+Registro de las 32 decisiones de arquitectura fundamentales del sistema:
 * `ADR 0001`: Migración de AudioCNN a EfficientNet-B0.
 * `ADR 0002`: Particionamiento Estratificado a Nivel de Grabador (Zero Leakage).
 * `ADR 0003`: Adopción de Focal Loss frente a Cross-Entropy estándar.
@@ -117,3 +124,4 @@ Registro de las 31 decisiones de arquitectura fundamentales del sistema:
 * [`ADR 0029`](./adr/0029-metadatos-acusticos-observados-y-lectura-registrada.md): Ingesta registra frecuencia/duración de cabecera o null, sin defaults ficticios; inspector existente devuelve metadatos registrados por URI, no certificación del objeto actual.
 * [`ADR 0030`](./adr/0030-cargas-acusticas-validadas-y-acotadas.md): Subida valida WAV/MP3/FLAC/OGG por decodificación en bloques y limita contenidos a 64 MiB/archivo y 256 MiB/lote configurables; no acredita RNF de 50 GB ni protección integral de recepción.
 * [`ADR 0031`](./adr/0031-dashboard-con-observaciones-y-origen-explicito.md): Dashboard sin métricas/eventos ficticios, origen en último modelo registrado, desconocidos explícitos y referencias históricas separadas; GET sin cargar checkpoints ni alterar activación.
+* [`ADR 0032`](./adr/0032-compatibilidad-explicita-de-checkpoints-poc.md): Predictor respeta pooling declarado, formato PoC model_type/avg y bandas Mel explícitas, preservando carga estricta y default del formato actual; sin reescribir artefactos.
