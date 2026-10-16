@@ -17,7 +17,7 @@ docs/
 ├── arquitectura/                # Diseño de sistemas, pipelines, MLOps y despliegue
 ├── limites/                     # Límites matemáticos, físicos y problemas conocidos
 ├── manuales/                    # Manual de usuario, revisión, despliegue e índices canónicos
-├── adr/                         # Architectural Decision Records (ADR 0001 a 0029)
+├── adr/                         # Architectural Decision Records (ADR 0001 a 0030)
 ├── receipts/                    # Recibos técnicos reproducibles en formato JSON (RDD)
 ├── duplicados-exactos/           # Tarea acotada: admisión de feedback sin duplicados SHA-256
 └── images/                      # Diagramas, matrices de confusión y gráficos vectoriales
@@ -76,6 +76,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`22_propuesta_vista_ayuda_y_centro_de_conocimiento.md`](./arquitectura/22_propuesta_vista_ayuda_y_centro_de_conocimiento.md): Diseño y especificación del centro de conocimiento e interactividad en frontend.
 
 ### 4. [`docs/manuales/`](./manuales/) — Manuales y Guías Operativas
+* [`trabajos-importacion-datasets.md`](./manuales/trabajos-importacion-datasets.md): Migración y admisión durable aditiva T2a, comprobación sintética entre procesos y límites; worker/HTTP202 todavía pendientes. [ADR 0030](./adr/0030-admision-durable-importaciones.md).
 * [`migracion-metadatos-importacion.md`](./manuales/migracion-metadatos-importacion.md): Backfill explícito que conserva JSON, contrato HTTP paginado y corte coordinado de lectores; mantenimiento y recuperación sujetos a autorización, sin despliegue implícito.
 * [`importacion-datasets-zip.md`](./manuales/importacion-datasets-zip.md): Modal de importación, activación Docker local explícita, base de pruebas separada, formato WAV/ZIP, límites, recuperación y sincronización explícita; [ADR 0027](./adr/0027-importaciones-zip-privadas-locales.md) y [ADR 0028](./adr/0028-importacion-local-docker.md).
 * [`versiones-preparadas-dataset.md`](./manuales/versiones-preparadas-dataset.md): Preparación inmutable explícita, rechazo por desfase, selección histórica y referencias de origen revisadas por una persona para DATA-6; [ADR 0026](./adr/0026-versiones-preparadas-y-procedencia-curada.md).
