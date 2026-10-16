@@ -1,0 +1,48 @@
+# Explicit overlay only: docker compose -f docker-compose.yml -f docker-compose.dev.yml
+# Requires Compose >= 2.24.4 for !override. Never rename to *.override.yml.
+services:
+  db:
+    ports: !override []
+    volumes:
+      - fama_dev_pgdata:/var/lib/postgresql/data
+    networks: !override
+      fama-dev:
+        ipv4_address: 172.30.253.30
+
+  backend:
+    ports: !override []
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--no-proxy-headers"]
+    environment:
+      FAMA_ENV: development
+      FAMA_IMPORT_DEV_MODE: "1"
+      FAMA_IMPORT_DEV_FRONTEND_IP: 172.30.253.10
+    volumes: !override
+      - ./backend/checkpoints:/app/checkpoints
+      - ./backend/data-dev:/app/data
+    networks: !override
+      fama-dev:
+        ipv4_address: 172.30.253.20
+
+  frontend:
+    ports: !override
+      - "127.0.0.1:3000:3000"
+    build:
+      args:
+        NEXT_PUBLIC_API_URL: ""
+        API_URL: http://backend:8000
+    environment:
+      NEXT_PUBLIC_API_URL: ""
+      API_URL: http://backend:8000
+    networks: !override
+      fama-dev:
+        ipv4_address: 172.30.253.10
+
+volumes:
+  fama_dev_pgdata:
+
+networks:
+  fama-dev:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.253.0/24

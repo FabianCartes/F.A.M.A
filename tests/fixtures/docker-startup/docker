@@ -9,7 +9,9 @@ if [[ ${1:-} == compose ]]; then
     shift
     if [[ ${1:-} == version ]]; then [[ $SCENARIO != legacy && $SCENARIO != compose_missing ]]; exit; fi
 fi
+while [[ ${1:-} == -f ]]; do shift 2; done
 case ${1:-} in
+    config) exit 0 ;;
     up)
         [[ $SCENARIO != up_failure ]] || exit 1
         # Minimal image lifecycle for the external CLI contract; not a Compose emulator.
