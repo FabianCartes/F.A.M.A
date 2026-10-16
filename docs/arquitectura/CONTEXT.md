@@ -9,3 +9,5 @@
 | Alta inicial de administrador | Creación de la primera cuenta de administración a cargo del operador. No es registro público ni cambio de rol de una cuenta existente. |
 | Metadatos acústicos registrados | Frecuencia y duración conservadas de una observación anterior. Su presencia no certifica el contenido actual, la calidad ni la aptitud del audio para entrenar. |
 | Audio estructuralmente legible | Grabación con formato reconocido y muestras que el decodificador puede recorrer. No acredita clase correcta, calidad acústica ni utilidad para entrenar. |
+| Referencia experimental histórica | Resultado conservado de un experimento anterior. No describe por sí solo las métricas, disponibilidad ni configuración actual de un modelo. |
+| Confianza de predicción | Valor reportado por el clasificador para una salida concreta. No equivale a certeza diagnóstica ni a exactitud general demostrada. |

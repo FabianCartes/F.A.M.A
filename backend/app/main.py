@@ -468,8 +468,8 @@ def get_dashboard_stats(
     Retorna métricas operativas consolidadas de Ingesta, Entrenamiento y Predicción,
     incluyendo KPIs, curvas de convergencia del último modelo, telemetría y feed reciente.
     """
-    ensemble_status = ensemble_service.get_status(db=db)
-    return dashboard_service.get_stats(db=db, ensemble_status=ensemble_status)
+    # Metrics reads must not trigger checkpoint discovery/loading or activation.
+    return dashboard_service.get_stats(db=db)
 
 
 # ============================================================================

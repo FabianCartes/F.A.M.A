@@ -105,58 +105,58 @@ El asistente y las pantallas `/setup`/`/login` que se describen a continuación 
 - Se acordó que solo administradores autenticados podrán crear cuentas; **`/api/auth/register` aún no aplica esa política**, y su implementación, login web y permisos se pospusieron a la etapa de funcionalidades nuevas. No exponer esta transición como seguridad cerrada. Compose ya propaga las variables explícitas de autenticación desde su entorno; configurar `backend/.env` por sí solo no habilita un contenedor que no monta ese archivo. JSON externos quedan excluidos del contexto backend, sin cambiar montajes runtime; véase [ADR 0025](../adr/0025-configuracion-runtime-y-contexto-sin-credenciales.md).
 - Decisión y límites: [ADR 0024](../adr/0024-configuracion-explicita-de-autenticacion.md). No se modificó ningún `.env` real, cuenta desplegada, configuración de servicios ni credencial GCS.
 
-## 3. Módulo 1: Dashboard MLOps de Doble Campeón
+## 3. Módulo 1: Dashboard de Observaciones y Referencias Experimentales
 
-El **Dashboard MLOps** es la pantalla central de visualización del estado del arte productivo del laboratorio. Ofrece un panorama integral que combina el rendimiento analítico de los modelos, la telemetría del hardware on-premise y la salud de las conexiones externas.
+El **Dashboard MLOps** combina registros consultados en BD y telemetría de hardware disponible. No verifica GCS ni ejecuta inferencia para declarar salud, ni busca/carga checkpoints al abrirse. Los desconocidos aparecen como «No disponible» y las referencias experimentales se presentan separadas: no son métricas de producción actuales.
+
+El esquema siguiente es ilustrativo, no un recibo de operación o disponibilidad:
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
 │                              PANEL PRINCIPAL DEL DASHBOARD                             │
 ├──────────────────────────────────────────┬─────────────────────────────────────────────┤
-│  [1] TARJETAS KPI DE PRODUCCIÓN          │  [2] MODELOS CAMPEONES MULTI-DOMINIO        │
-│  • Macro F1 Bioacústica: 88.68%          │  • Bioacústica: Tri-Model Super-Ensemble    │
-│  • Exactitud Motores: 81.16%             │  • Industrial: All-RMS Car Engine Ensemble  │
-│  • Datasets GCS: 1,211 audios            │                                             │
+│  [1] MÉTRICAS REGISTRADAS EN BD          │  [2] REFERENCIAS EXPERIMENTALES HISTÓRICAS  │
+│  • Accuracy/pérdida del último registro  │  • Bioacústica: referencia documentada      │
+│  • Cero observado ≠ dato desconocido    │  • Industrial: referencia documentada      │
+│  • Audios/datasets: filas BD            │  • No acreditan disponibilidad actual      │
 │  • Inferencias Registradas: PostgreSQL   │                                             │
 ├──────────────────────────────────────────┴─────────────────────────────────────────────┤
 │  [3] CURVA DE CONVERGENCIA TEMPORAL (Loss & Accuracy SVG Interactivo)                  │
 ├──────────────────────────────────────────┬─────────────────────────────────────────────┤
 │  [4] TELEMETRÍA DE HARDWARE ON-PREMISE   │  [5] MONITOR DE SALUD DEL SISTEMA           │
-│  • GPU: NVIDIA GeForce RTX (VRAM %)      │  • PostgreSQL: Conectado (Pool OK)          │
-│  • CPU: Carga de núcleos y temperatura   │  • GCS Bucket: Conectado (Lectura/Escritura)│
-│  • RAM Host: Memoria física activa       │  • Motor Inferencia: Residente en VRAM      │
+│  • GPU/CPU/RAM según lectura disponible │  • BD: consulta observada o no confirmada   │
+│  • Sensor no disponible ≠ carga normal  │  • GCS/inferencia: no comprobados           │
+│  • Fallo de refresh: snapshot advertido │  • Sin activación implícita de modelos      │
 └──────────────────────────────────────────┴─────────────────────────────────────────────┘
 ```
 
-### 3.1. Concepto del Doble Campeón Multi-Dominio
+### 3.1. Referencias Históricas Multi-Dominio
 
-A diferencia de sistemas acústicos monolíticos, F.A.M.A. reconoce que los sonidos biológicos y los ruidos de maquinaria industrial poseen características matemáticas fundamentalmente distintas:
+F.A.M.A. conserva referencias de experimentos de bioacústica y motores, con `source="historical_reference"` y aviso de que no acreditan disponibilidad actual. Las cifras son las referencias ya existentes, no un benchmark nuevo ni una lectura del modelo activo; la consolidación de artefactos de OE5 sigue pendiente:
 * **Campeón de Bioacústica (Aves Chilenas):**
   * **Arquitectura:** Super-Ensamble Tri-Modelo Heterogéneo (**EfficientNet-B0** [55%] + **ConvNeXt-Nano** [30%] + **ResNet-34d** [15%]).
-  * **Rendimiento:** **88.68% F1-Score Macro**, **88.31% de Exactitud Global**, **90.15% Precision Macro**.
-  * **Métricas Operativas:** Clasificación sobre 15 especies chilenas con audios de 5.0 segundos remuestreados a 22.05 kHz y ventaneo denso TTA (hop de 1.0s).
+  * **Referencia presentada:** **88.68% Macro F1**, **88.31% Accuracy**, 15 clases históricas.
 * **Campeón de Diagnóstico Industrial (Motores Vehiculares):**
   * **Arquitectura:** Super-Ensamble Tri-Modelo All-RMS-Balanced (**ResNet-34d** [60%] + **EfficientNet-B0** [10%] + **PANNs-CNN14** [30%]).
-  * **Rendimiento:** **81.16% de Exactitud en Test**, **81.44% Balanced F1-Score**.
-  * **Métricas Operativas:** Diagnóstico de 13 fallas mecánicas de combustión y accesorios con audios de 2.0 segundos muestreados a 32 kHz con balanceo energético RMS y calibración Softmax.
+  * **Referencia presentada:** **81.16% Accuracy**, **80.33% Macro F1**, 13 clases históricas, según la referencia existente del backend. No confundirla con otras métricas de informes como Balanced F1 ni inferir que esos pesos/configuración están en uso.
 
 ### 3.2. Panel de Métricas e Indicadores Clave (KPIs)
-* **Precisión y F1-Score del Modelo Campeón:** Indica el umbral matemático más alto validado en la base de datos relacional.
-* **Tasa de Pérdida Mínima:** El mejor valor de entropía cruzada / pérdida focal alcanzado en validación.
-* **Volumen de Datos Gestionados:** Total de archivos de audio catalogados en Google Cloud Storage y su volumen en Megabytes/Gigabytes.
-* **Contador de Inferencias en Terreno:** Registro acumulado de peticiones atendidas por el backend y almacenadas en la tabla `prediccion`.
+* **Accuracy y pérdida registradas:** Campos del último `Modelo` por ID, identificados como último registro, no activo, ganador ni necesariamente entrenamiento exitoso. No se deducen función de pérdida/optimizador ni convergencia óptima.
+* **Volumen registrado:** Conteos reales de filas de dataset/audio en BD; no es auditoría de objetos GCS ni de archivos locales. BD vacía muestra cero; ausencia/fallo de lectura puede dejar null/«No disponible».
+* **Predicciones y confianza media:** Conteo de registros de `prediccion` y media de sus confidencias. Sin predicciones la media es desconocida; una media observada de cero no se sustituye por un ejemplo. Confianza no es certeza diagnóstica.
 
 ### 3.3. Curvas de Convergencia Dinámicas
-El gráfico central renderiza la evolución histórica de épocas de entrenamiento utilizando trazado vectorial SVG:
-* **Línea Esmeralda (Accuracy):** Muestra el porcentaje de aciertos sobre el conjunto de validación época tras época.
-* **Línea Ámbar (Loss):** Refleja la reducción del error del optimizador (AdamW).
+El gráfico central usa solo las filas de métricas del último modelo registrado; acepta una sola época y conserva sus números reales. Sin métricas no dibuja una curva de referencia ni inventa diez épocas:
+* **Accuracy y Loss:** Valores registrados, sin atribuirles otro conjunto de evaluación, optimizador o configuración que no conste en la fuente.
 * **Interactividad:** Al posar el puntero del ratón sobre cualquier punto del gráfico, se despliega una tarjeta flotante con la métrica precisa de esa época, facilitando la detección de sobreajuste (*overfitting*).
 
 ### 3.4. Telemetría de Hardware y Diagnóstico de Salud
 Ubicado en el cuadrante inferior:
-* **Uso de GPU y VRAM:** Informa la memoria de video asignada al Super-Ensamble y la disponible para nuevos entrenamientos.
-* **Temperatura y Carga de CPU:** Monitorea la estabilidad térmica de la estación de trabajo física.
-* **Semáforo de Servicios:** Luces indicadoras de disponibilidad para PostgreSQL (Base de datos), GCS (Data Lake), Motor de Inferencia (PyTorch) y Aceleración de Hardware (CUDA).
+* **GPU/CPU/RAM:** Presenta la lectura disponible; VRAM de PyTorch no se atribuye automáticamente a un ensamble concreto ni garantiza capacidad para otro entrenamiento. Si falta hardware no se muestra CPU normal/cero como observación.
+* **Temperatura:** Solo se presenta si el sensor la informa; no se inventa una temperatura ni se confunde el sensor GPU con temperatura CPU.
+* **Salud:** BD consultada/degradada/desconocida describe esta lectura. GCS y motor de inferencia quedan no comprobados; el dashboard no activa, carga ni certifica modelos. Estado de ensamble sin fuente queda desconocido, no «Tríada Operativa» o «Modo Individual» por defecto.
+* **Actualización fallida:** Puede conservarse el último snapshot, con aviso explícito de que no es una lectura actual. No se garantiza orden entre polls concurrentes ni un SLA de refresco.
+* **Actividad:** Predicciones y último registro de modelo seleccionados desde BD, sin ingestas ficticias ni promesa de auditoría cronológica completa. Un modelo registrado no equivale a entrenamiento exitoso. Véase [ADR 0031](../adr/0031-dashboard-con-observaciones-y-origen-explicito.md).
 
 ---
 

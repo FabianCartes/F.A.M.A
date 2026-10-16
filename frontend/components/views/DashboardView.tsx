@@ -9,13 +9,14 @@ interface DashboardViewProps {
 }
 
 interface DashboardKpis {
-  accuracy: number;
-  loss: number;
-  total_datasets: number;
-  total_audios: number;
-  total_predictions: number;
-  avg_confidence: number;
-  active_model_name: string;
+  accuracy: number | null;
+  loss: number | null;
+  total_datasets: number | null;
+  total_audios: number | null;
+  total_predictions: number | null;
+  avg_confidence: number | null;
+  latest_model_name: string | null;
+  metrics_source: string | null;
 }
 
 interface TrainingCurvePoint {
@@ -32,20 +33,20 @@ interface RecentActivityItem {
   timestamp: string;
   badge: string;
   confidence?: number;
-  model_id?: string;
-  domain?: string;
+  model_id?: string | null;
+  domain?: string | null;
 }
 
 interface TriadModelItem {
   name: string;
   weight: number;
-  ready: boolean;
+  ready: boolean | null;
   accuracy?: number;
   checkpoint?: string;
 }
 
 interface SuperEnsembleSummary {
-  ready: boolean;
+  ready: boolean | null;
   active_mode: string;
   models: TriadModelItem[];
 }
@@ -58,19 +59,16 @@ interface SystemHealth {
 }
 
 interface DomainChampionInfo {
-  domain_name: string;
-  champion_model: string;
-  accuracy: number;
-  f1_macro: number;
-  precision: number;
-  status: string;
+  title: string;
+  architecture: string;
+  accuracy: number | null;
+  macro_f1: number | null;
   classes_count: number;
-  sample_rate: string;
-  duration: string;
+  source: string;
 }
 
 interface DomainChampions {
-  bioacoustics: DomainChampionInfo;
+  bioacoustic: DomainChampionInfo;
   industrial: DomainChampionInfo;
 }
 
@@ -99,8 +97,14 @@ interface HardwareTelemetry {
   load_level?: string;
 }
 
+function metric(value: number | null | undefined, digits = 0, suffix = ""): string {
+  return typeof value === "number" && Number.isFinite(value)
+    ? `${value.toFixed(digits)}${suffix}` : "No disponible";
+}
+
 export default function DashboardView({ onNavigate }: DashboardViewProps) {
   const [stats, setStats] = useState<DashboardStatsResponse | null>(null);
+  const [statsUnavailable, setStatsUnavailable] = useState(true);
   const [hardware, setHardware] = useState<HardwareTelemetry | null>(null);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [hoveredEpoch, setHoveredEpoch] = useState<number | null>(null);
@@ -116,12 +120,18 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
       if (resStats && resStats.ok) {
         const data = (await resStats.json()) as DashboardStatsResponse;
         setStats(data);
+        setStatsUnavailable(false);
+      } else {
+        setStatsUnavailable(true);
       }
       if (resHw && resHw.ok) {
         const hwData = (await resHw.json()) as HardwareTelemetry;
         setHardware(hwData);
+      } else {
+        setHardware(null);
       }
     } catch (err) {
+      setStatsUnavailable(true);
       console.warn("Aviso al consultar datos del dashboard:", err);
     }
   }, []);
@@ -150,12 +160,18 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
         if (resStats && resStats.ok) {
           const data = (await resStats.json()) as DashboardStatsResponse;
           setStats(data);
+          setStatsUnavailable(false);
+        } else {
+          setStatsUnavailable(true);
         }
         if (resHw && resHw.ok) {
           const hwData = (await resHw.json()) as HardwareTelemetry;
           setHardware(hwData);
+        } else {
+          setHardware(null);
         }
       } catch (err) {
+        if (!isCancelled) setStatsUnavailable(true);
         console.warn("Aviso al consultar datos del dashboard:", err);
       }
     }
@@ -294,8 +310,11 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
         <div className="flex items-center gap-2.5">
           {/* Indicador de Estado del Backend y Conexión */}
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#16171b] border border-[#262834] text-gray-300 text-xs font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[11px]">PostgreSQL & GCS Operativos</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-gray-500" />
+            <span className="text-[11px]">
+              {!statsUnavailable && stats?.system_health.database === "operational" ? "BD consultada" : "BD no confirmada"}
+              {" · "}{stats?.system_health.storage === "connected" ? "GCS conectado" : "GCS no comprobado"}
+            </span>
           </div>
 
           {/* Botón de Actualizar Datos */}
@@ -323,8 +342,14 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
         </div>
       </div>
 
+      {statsUnavailable && (
+        <p role="status" className="text-xs text-amber-300">
+          Datos actuales del dashboard no disponibles{stats ? "; se conserva la última lectura." : "."}
+        </p>
+      )}
+
       {/* Fila 1: 4 KPIs Principales con Datos Dinámicos Reales */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+      <section aria-label="Métricas registradas" className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
         {/* KPI 1: Precisión del Modelo Activo */}
         <div className="bg-[#16171b] border border-[#23252e] hover:border-[#2d303b] transition-all rounded-xl p-3.5 flex flex-col justify-between">
           <div className="flex items-center justify-between">
@@ -332,18 +357,18 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
               <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span>Precisión Activa</span>
+              <span>Precisión registrada</span>
             </div>
             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/50">
-              Test
+              Último modelo
             </span>
           </div>
           <div className="mt-2">
             <p className="text-2xl font-bold text-white font-mono">
-              {stats ? `${stats.kpis.accuracy.toFixed(2)}%` : "88.31%"}
+              {metric(stats?.kpis.accuracy, 2, "%")}
             </p>
-            <p className="text-[10px] text-gray-400 mt-0.5 truncate" title={stats?.kpis.active_model_name}>
-              {stats?.kpis.active_model_name || "Super-Ensamble Tri-Modelo"}
+            <p className="text-[10px] text-gray-400 mt-0.5 truncate" title={stats?.kpis.latest_model_name ?? undefined}>
+              {stats?.kpis.latest_model_name ?? "No disponible"}
             </p>
           </div>
         </div>
@@ -355,18 +380,18 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
               <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
               </svg>
-              <span>Pérdida de Validación</span>
+              <span>Pérdida registrada</span>
             </div>
             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-950/60 text-blue-300 border border-blue-800/50">
-              Focal Loss
+              Último modelo
             </span>
           </div>
           <div className="mt-2">
             <p className="text-2xl font-bold text-blue-400 font-mono">
-              {stats ? stats.kpis.loss.toFixed(4) : "0.3120"}
+              {metric(stats?.kpis.loss, 4)}
             </p>
             <p className="text-[10px] text-gray-400 mt-0.5">
-              Convergencia óptima (γ = 2.0)
+              Último modelo registrado; no implica activación
             </p>
           </div>
         </div>
@@ -381,15 +406,15 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
               <span>Volumen de Datos</span>
             </div>
             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-950/60 text-amber-300 border border-amber-800/50">
-              GCS
+              Registros BD
             </span>
           </div>
           <div className="mt-2">
             <p className="text-2xl font-bold text-white font-mono">
-              {stats ? `${stats.kpis.total_audios.toLocaleString()}` : "1,211"}
+              {stats?.kpis.total_audios != null ? stats.kpis.total_audios.toLocaleString() : "No disponible"}
             </p>
             <p className="text-[10px] text-gray-400 mt-0.5">
-              {stats ? `${stats.kpis.total_datasets} lote(s) en 15 especies` : "1 lote oficial (15 especies)"}
+              {stats?.kpis.total_datasets != null ? `${stats.kpis.total_datasets} dataset(s) registrados` : "No disponible"}
             </p>
           </div>
         </div>
@@ -409,112 +434,33 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
           </div>
           <div className="mt-2">
             <p className="text-2xl font-bold text-purple-300 font-mono">
-              {stats ? stats.kpis.total_predictions : "28"}
+              {stats?.kpis.total_predictions ?? "No disponible"}
             </p>
             <p className="text-[10px] text-gray-400 mt-0.5">
-              Confianza prom.: {stats ? `${stats.kpis.avg_confidence}%` : "89.4%"}
+              Confianza prom.: {metric(stats?.kpis.avg_confidence, 1, "%")}
             </p>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Modelos Campeones de Producción Multi-Dominio */}
+      {/* Referencias experimentales, separadas de la telemetría actual */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-        {/* Campeón Bioacústica */}
-        <div className="bg-[#16171b] border border-emerald-900/40 rounded-xl p-4 flex flex-col justify-between relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none" />
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded font-semibold bg-emerald-950/80 border border-emerald-700/60 text-emerald-300 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Campeón Bioacústica (Aves Chilenas)
-              </span>
-              <span className="text-[10px] font-mono text-gray-400">15 Especies · 5.0s @ 22 kHz</span>
-            </div>
-            <h3 className="text-sm font-bold text-white leading-snug">
-              {stats?.domain_champions?.bioacoustics?.champion_model ||
-                "Tri-Model Super-Ensemble (EfficientNet-B0 + ConvNeXt-Nano + ResNet-34d)"}
-            </h3>
-            <p className="text-[11px] text-gray-400 mt-1">
-              Ponderación bayesiana óptima validada en tesis · Inferencia TTA densa (hop 1.0s)
-            </p>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-[#23252e] text-xs">
-            <div>
-              <span className="text-[10px] text-gray-400 block">F1-Macro (Récord)</span>
-              <span className="text-sm font-bold text-emerald-400 font-mono">
-                {stats?.domain_champions?.bioacoustics?.f1_macro
-                  ? `${stats.domain_champions.bioacoustics.f1_macro.toFixed(2)}%`
-                  : "88.68%"}
-              </span>
-            </div>
-            <div>
-              <span className="text-[10px] text-gray-400 block">Precisión Global</span>
-              <span className="text-sm font-bold text-white font-mono">
-                {stats?.domain_champions?.bioacoustics?.accuracy
-                  ? `${stats.domain_champions.bioacoustics.accuracy.toFixed(2)}%`
-                  : "88.31%"}
-              </span>
-            </div>
-            <div>
-              <span className="text-[10px] text-gray-400 block">Precision Macro</span>
-              <span className="text-sm font-bold text-blue-400 font-mono">
-                {stats?.domain_champions?.bioacoustics?.precision
-                  ? `${stats.domain_champions.bioacoustics.precision.toFixed(2)}%`
-                  : "90.15%"}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Campeón Diagnóstico Industrial */}
-        <div className="bg-[#16171b] border border-amber-900/40 rounded-xl p-4 flex flex-col justify-between relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded font-semibold bg-amber-950/80 border border-amber-700/60 text-amber-300 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                Campeón Acústica Industrial (Motores)
-              </span>
-              <span className="text-[10px] font-mono text-gray-400">13 Fallas · 2.0s @ 32 kHz</span>
-            </div>
-            <h3 className="text-sm font-bold text-white leading-snug">
-              {stats?.domain_champions?.industrial?.champion_model ||
-                "Car Engine Diagnostics Super-Ensemble (ResNet-34d + EfficientNet-B0 + PANNs-CNN14)"}
-            </h3>
-            <p className="text-[11px] text-gray-400 mt-1">
-              Ensamble balanceado All-RMS con calibración Softmax · Detección de fallas mecánicas
-            </p>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-[#23252e] text-xs">
-            <div>
-              <span className="text-[10px] text-gray-400 block">Exactitud (Test)</span>
-              <span className="text-sm font-bold text-amber-400 font-mono">
-                {stats?.domain_champions?.industrial?.accuracy
-                  ? `${stats.domain_champions.industrial.accuracy.toFixed(2)}%`
-                  : "81.16%"}
-              </span>
-            </div>
-            <div>
-              <span className="text-[10px] text-gray-400 block">Balanced F1</span>
-              <span className="text-sm font-bold text-white font-mono">
-                {stats?.domain_champions?.industrial?.f1_macro
-                  ? `${stats.domain_champions.industrial.f1_macro.toFixed(2)}%`
-                  : "81.44%"}
-              </span>
-            </div>
-            <div>
-              <span className="text-[10px] text-gray-400 block">Balanced Precision</span>
-              <span className="text-sm font-bold text-blue-400 font-mono">
-                {stats?.domain_champions?.industrial?.precision
-                  ? `${stats.domain_champions.industrial.precision.toFixed(2)}%`
-                  : "81.16%"}
-              </span>
-            </div>
-          </div>
-        </div>
+        {(["bioacoustic", "industrial"] as const).map(domain => {
+          const reference = stats?.domain_champions?.[domain];
+          if (!reference || reference.source !== "historical_reference") return null;
+          return (
+            <article key={domain} aria-label={`Referencia ${domain}`} className="bg-[#16171b] border border-[#23252e] rounded-xl p-4 space-y-3">
+              <p className="text-xs text-amber-300">Referencia experimental histórica · no acredita disponibilidad actual</p>
+              <h3 className="text-sm font-bold text-white">{reference.title}</h3>
+              <p className="text-[11px] text-gray-400">{reference.architecture}</p>
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <div><span className="block text-gray-400">Accuracy de referencia</span>{metric(reference.accuracy, 2, "%")}</div>
+                <div><span className="block text-gray-400">Macro F1 de referencia</span>{metric(reference.macro_f1, 2, "%")}</div>
+                <div><span className="block text-gray-400">Clases de referencia</span>{reference.classes_count}</div>
+              </div>
+            </article>
+          );
+        })}
       </div>
 
       {/* Fila 2: Gráfico de Convergencia + Actividad Reciente */}
@@ -620,7 +566,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
 
             {/* Leyenda y marcas de Épocas */}
             <div className="flex items-center justify-between text-[10px] text-gray-500 font-mono mt-1 px-3 pt-1 border-t border-[#1b1d25]">
-              <span>Época 1</span>
+              <span>{stats?.training_curves[0] ? `Época ${stats.training_curves[0].epoch}` : "Sin métricas registradas"}</span>
               <div className="flex items-center gap-4">
                 <span className="flex items-center gap-1.5 text-emerald-400">
                   <span className="w-2.5 h-0.5 bg-emerald-400 inline-block" />
@@ -631,7 +577,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
                   Pérdida (Loss)
                 </span>
               </div>
-              <span>Época {stats?.training_curves.length || 10}</span>
+              <span>{activeEpochData ? `Época ${activeEpochData.epoch}` : "No disponible"}</span>
             </div>
           </div>
         </div>
@@ -644,47 +590,14 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
                 Actividad Reciente del Pipeline
               </span>
               <span className="text-[10px] text-gray-400 mt-0.5 block">
-                Últimos eventos registrados en la base de datos y Cloud Storage
+                Eventos seleccionados registrados en la base de datos
               </span>
             </div>
-            <span className="text-[10px] font-mono text-gray-500">En tiempo real</span>
+            <span className="text-[10px] font-mono text-gray-500">Última consulta</span>
           </div>
 
           <div className="space-y-2 overflow-hidden">
-            {(stats?.recent_activity || [
-              {
-                id: "act-1",
-                type: "prediccion" as const,
-                title: "Inferencia: Chucao",
-                description: "Audio de campo clasificado con 94.2% de certeza",
-                timestamp: "Hace 10 min",
-                badge: "Predicción",
-              },
-              {
-                id: "act-2",
-                type: "entrenamiento" as const,
-                title: "Modelo EfficientNet-B0 entrenado",
-                description: "Precisión alcanzada: 88.5% (10 épocas completadas)",
-                timestamp: "Hoy, 18:30",
-                badge: "Entrenamiento",
-              },
-              {
-                id: "act-3",
-                type: "ingesta" as const,
-                title: "Sincronización con GCP Storage",
-                description: "Lote oficial AvesChilenas (1,211 audios) sincronizado",
-                timestamp: "Hoy, 15:45",
-                badge: "Ingesta",
-              },
-              {
-                id: "act-4",
-                type: "prediccion" as const,
-                title: "Inferencia: Chercán",
-                description: "Audio de prueba clasificado con 91.8% de certeza",
-                timestamp: "Ayer, 21:12",
-                badge: "Predicción",
-              },
-            ]).slice(0, 4).map((item) => (
+            {(stats?.recent_activity || []).slice(0, 4).map((item) => (
               <div
                 key={item.id}
                 className="bg-[#111215] border border-[#1f2128] hover:border-[#2d303b] transition-all rounded-lg p-2.5 flex items-start justify-between gap-3 text-xs"
@@ -785,11 +698,11 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
                     : "bg-blue-950/60 text-blue-300 border-blue-800/40"
                 }`}
               >
-                {hardware?.cuda_available ? "GPU" : "CPU Host"}
+                {hardware ? (hardware.cuda_available ? "GPU" : "CPU Host") : "Sin telemetría"}
               </span>
             </div>
             <p className="text-[10px] text-gray-400 font-mono">
-              {hardware?.device_name || "CPU Node Host"}
+              {hardware?.device_name || "No disponible"}
             </p>
           </div>
 
@@ -799,13 +712,14 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
               <div className="flex justify-between text-[11px] text-gray-400 mb-1">
                 <span>Uso de CPU</span>
                 <span className="text-gray-200 font-mono">
-                  {hardware?.cpu_percent ?? 0}% ({hardware?.cpu_cores ?? 1} núcleos)
+                  {hardware?.cpu_percent != null && hardware.cpu_cores != null
+                    ? `${hardware.cpu_percent}% (${hardware.cpu_cores} núcleos)` : "No disponible"}
                 </span>
               </div>
               <div className="w-full bg-[#111215] rounded-full h-1.5 overflow-hidden border border-[#23252e]">
                 <div
                   className="h-1.5 rounded-full bg-blue-500 transition-all duration-500"
-                  style={{ width: `${Math.min(100, Math.max(3, hardware?.cpu_percent ?? 0))}%` }}
+                  style={{ width: `${Math.min(100, Math.max(0, hardware?.cpu_percent ?? 0))}%` }}
                 />
               </div>
             </div>
@@ -815,7 +729,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
               <div className="flex justify-between text-[11px] text-gray-400 mb-1">
                 <span>Memoria RAM</span>
                 <span className="text-gray-200 font-mono">
-                  {hardware?.host_ram_used_gb ?? hardware?.vram_used_gb ?? 0} / {hardware?.host_ram_total_gb ?? hardware?.vram_total_gb ?? 0} GB ({hardware?.host_ram_percent ?? hardware?.vram_percent ?? 0}%)
+                  {hardware ? `${hardware.host_ram_used_gb ?? hardware.vram_used_gb} / ${hardware.host_ram_total_gb ?? hardware.vram_total_gb} GB (${hardware.host_ram_percent ?? hardware.vram_percent ?? "No disponible"}%)` : "No disponible"}
                 </span>
               </div>
               <div className="w-full bg-[#111215] rounded-full h-1.5 overflow-hidden border border-[#23252e]">
@@ -844,7 +758,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
                   ? "bg-amber-950/60 text-amber-300 border border-amber-800/50"
                   : "bg-emerald-950/60 text-emerald-300 border border-emerald-800/50"
               }`}>
-                {hardware?.load_status || "Carga Normal"}
+                {hardware?.load_status || "No disponible"}
               </span>
             </div>
 
@@ -856,7 +770,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
               </span>
             ) : (
               <span className="text-gray-500 font-mono text-[10px]">
-                PyTorch 2.5 Engine
+                Sensor de temperatura no disponible
               </span>
             )}
           </div>
@@ -873,21 +787,18 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
                 Super-Ensamble Tri-Modelo
               </span>
               <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/40">
-                {stats?.super_ensemble.ready ? "Tríada Operativa" : "Modo Individual"}
+                {stats?.super_ensemble.ready === true ? "Estado reportado: disponible"
+                  : stats?.super_ensemble.ready === false ? "Estado reportado: no disponible" : "Estado no comprobado"}
               </span>
             </div>
             <p className="text-[10px] text-gray-400">
-              Ponderación bayesiana óptima de inferencia densa
+              Sin comprobación de pesos ni ejecución de inferencia en esta consulta
             </p>
           </div>
 
           {/* Micro-barras bien alineadas de las 3 arquitecturas */}
           <div className="space-y-1.5 my-2.5">
-            {(stats?.super_ensemble.models || [
-              { name: "EfficientNet-B0", weight: 0.55, ready: true, accuracy: 88.3 },
-              { name: "ConvNeXt-Nano", weight: 0.30, ready: true, accuracy: 87.1 },
-              { name: "ResNet-34d", weight: 0.15, ready: true, accuracy: 85.4 },
-            ]).map((m) => (
+            {(stats?.super_ensemble.models || []).map((m) => (
               <div key={m.name} className="bg-[#111215] border border-[#222530] rounded-lg px-2.5 py-1.5">
                 <div className="flex items-center justify-between text-[11px] mb-1 font-mono">
                   <span className="text-gray-200">{m.name}</span>
@@ -909,7 +820,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
           </div>
 
           <div className="pt-2 border-t border-[#23252e]/80 flex items-center justify-between text-[10px] text-gray-400 font-mono">
-            <span>Dense TTA (hop 1.0s)</span>
+            <span>Consultar disponibilidad en predicción</span>
             <button
               onClick={() => onNavigate("prediccion")}
               className="text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1 cursor-pointer font-sans text-[11px]"
