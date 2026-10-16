@@ -2,6 +2,13 @@
 kanban-plugin: basic
 ---
 
+## ZIP grandes y reconstrucción GCS — implementación en curso
+
+- [x] ZIP-LARGE-1: Corte 1 completo en implementación local (T1a + T1b): runtime, HTTP y panel paginados verificados con datos sintéticos. Corrección B1 revalidada; revisión nativa de cuatro perspectivas aprobada y acuse consumido. Commit del corte autorizado; comprobación focal nueva: 43 backend y 11 frontend aprobadas. Sin certificación de escala, migración real ni despliegue.
+- [ ] ZIP-LARGE-2–8: trabajos durables, recepción fragmentada/cuotas, validación aislada ZIP64, publicación/limpieza, manifiestos, exportación/descarga e integración. Límites actuales conservados hasta implementar sus controles.
+
+Seguimiento: [large ZIP and GCS](arquitectura/large-zip-gcs.md). [Plan original íntegro](arquitectura/large-zip-gcs-plan.md) recuperado. Estrategia `feature-branch-chain` confirmada. Solo pruebas sintéticas; sin GCS real, entrenamiento, instalaciones ni despliegue.
+
 ## Importación ZIP local y sincronización GCS — cierre local verificado
 
 - [x] ZIP-0: checkout y plan recuperados; rama `feat/dataset-zip-import`; propiedad privada aprobada, administración diferida.

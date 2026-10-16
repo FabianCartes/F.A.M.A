@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from ipaddress import ip_address
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import FileResponse, Response
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, ConfigDict, Field
@@ -115,14 +115,21 @@ def example(user=Depends(get_import_user)):
                     headers={"Content-Disposition": 'attachment; filename="dataset-example.zip"'})
 
 
+def pagination(limit: int | None = Query(default=None, ge=1, le=200),
+               cursor: str | None = Query(default=None, max_length=4096)):
+    return {"limit": limit, "cursor": cursor}
+
+
 @router.get("/datasets")
-def datasets(db: Session = Depends(get_db), user=Depends(get_import_user), service=Depends(get_import_service)):
-    return {"datasets": service.list_datasets(db, user.id)}
+def datasets(db: Session = Depends(get_db), user=Depends(get_import_user), service=Depends(get_import_service),
+             paging=Depends(pagination)):
+    return service.list_datasets(db, user.id, **paging)
 
 
 @router.get("/datasets/{dataset_id}/files")
-def files(dataset_id: str, db: Session = Depends(get_db), user=Depends(get_import_user), service=Depends(get_import_service)):
-    return {"files": service.dataset(db, user.id, dataset_id).files}
+def files(dataset_id: str, db: Session = Depends(get_db), user=Depends(get_import_user), service=Depends(get_import_service),
+          paging=Depends(pagination)):
+    return service.dataset_page(db, user.id, dataset_id, **paging)
 
 
 @router.get("/datasets/{dataset_id}/files/{sha256}")
@@ -136,9 +143,27 @@ def create(payload: CreateImport, db: Session = Depends(get_db), user=Depends(ge
 
 
 @router.get("")
-def jobs(db: Session = Depends(get_db), user=Depends(get_import_user), service=Depends(get_import_service)):
-    from app.models.dataset_import import DatasetImport
-    return {"imports": [service.view(row) for row in db.query(DatasetImport).filter_by(owner_id=user.id).all()]}
+def jobs(db: Session = Depends(get_db), user=Depends(get_import_user), service=Depends(get_import_service),
+         paging=Depends(pagination)):
+    return service.list_jobs(db, user.id, **paging)
+
+
+@router.get("/{job_id}/files")
+def review_files(job_id: str, db: Session = Depends(get_db), user=Depends(get_import_user),
+                 service=Depends(get_import_service), paging=Depends(pagination)):
+    return service.review_page(db, user.id, job_id, "files", **paging)
+
+
+@router.get("/{job_id}/classes")
+def review_classes(job_id: str, db: Session = Depends(get_db), user=Depends(get_import_user),
+                   service=Depends(get_import_service), paging=Depends(pagination)):
+    return service.review_page(db, user.id, job_id, "classes", **paging)
+
+
+@router.get("/{job_id}/issues")
+def review_issues(job_id: str, db: Session = Depends(get_db), user=Depends(get_import_user),
+                  service=Depends(get_import_service), paging=Depends(pagination)):
+    return service.review_page(db, user.id, job_id, "issues", **paging)
 
 
 @router.get("/{job_id}")

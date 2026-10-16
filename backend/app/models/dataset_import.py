@@ -1,5 +1,6 @@
 """Private managed catalog; deliberately not part of training's dataset registry."""
 from sqlalchemy import Column, Float, Integer, JSON, String, UniqueConstraint
+from sqlalchemy.orm import deferred
 from app.database import Base
 
 
@@ -11,7 +12,7 @@ class ImportedDataset(Base):
     name = Column(String(150), nullable=False)
     description = Column(String(2000), nullable=False, default="")
     revision = Column(Integer, nullable=False, default=0)
-    files = Column(JSON, nullable=False, default=list)
+    files = deferred(Column(JSON, nullable=False, default=list), raiseload=True)
 
 
 class DatasetImport(Base):
@@ -26,7 +27,7 @@ class DatasetImport(Base):
     created_at = Column(Float, nullable=False)
     archive_sha256 = Column(String(64))
     preview_token = Column(String(64))
-    preview = Column(JSON, nullable=False, default=dict)
+    preview = deferred(Column(JSON, nullable=False, default=dict), raiseload=True)
     dataset_id = Column(String(32))
     added_count = Column(Integer, nullable=False, default=0)
     error = Column(String(100))

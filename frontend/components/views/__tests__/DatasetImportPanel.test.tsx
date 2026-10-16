@@ -13,25 +13,39 @@ async function openImport() {
   return dialog;
 }
 
+const counts = { file_count: 0, class_count: 1, error_count: 0, warning_count: 0, total_size_bytes: 0, synced_count: 0 };
+const collectionResponse = (key: string, items: unknown[], snapshot: string) =>
+  Response.json({ [key]: items, total: items.length, next_cursor: null, snapshot });
+function reviewResponse(input: string, snapshot: string, files: unknown[] = [], issues: unknown[] = []) {
+  if (input.endsWith("/files")) return collectionResponse("files", files, snapshot);
+  if (input.endsWith("/classes")) return collectionResponse("classes", ["birds"], snapshot);
+  if (input.endsWith("/issues")) return collectionResponse("issues", issues, snapshot);
+  return null;
+}
+
 describe("private dataset import", () => {
   it("binds confirmation to reviewed root and preserves local success on cloud error", async () => {
     const base = "/api/ingestion/imports";
     const writes: { path: string; body: unknown }[] = [];
-    const preview = { root: "", classes: ["birds"], files: [], errors: [] };
+    const preview = { root: "", ...counts };
     const ready = { id: "independent", status: "ready", sync_status: "pending", dataset_id: null,
       added_count: 0, preview_token: "q".repeat(64), preview, error: null };
+    let snapshot = ready.preview_token;
     vi.stubGlobal("fetch", vi.fn(async (input: string, options?: RequestInit) => {
+      const page = reviewResponse(input, snapshot);
+      if (page) return page;
       const url = new URL(input, "http://synthetic.test").pathname;
       if (url === base + "/access") return Response.json({ development_mode: true });
       expect(new Headers(options?.headers).get("Authorization")).toBeNull();
       if (url === base + "/limits") return Response.json({ received_bytes: 1024, expanded_bytes: 4096,
         entries: 10, depth: 12, path_bytes: 240, audio_bytes: 1024, audio_seconds: 600,
         validation_seconds: 60, free_bytes: 1, ttl_seconds: 86400, concurrent_imports: 4 });
-      if (url === base + "/datasets") return Response.json({ datasets: [] });
-      if (url === base) return Response.json({ imports: [ready] });
+      if (url === base + "/datasets") return collectionResponse("datasets", [], "catalog");
+      if (url === base) return collectionResponse("imports", [ready], "history");
       const body: unknown = JSON.parse(String(options?.body));
       writes.push({ path: url, body });
       if (url.endsWith("/preview")) {
+        snapshot = "r".repeat(64);
         expect(body).toEqual({ root: "wrap" });
         return Response.json({ ...ready, preview: { ...preview, root: "wrap" }, preview_token: "r".repeat(64) });
       }
@@ -82,19 +96,21 @@ describe("private dataset import", () => {
 
   it("previews without login in local mode, confirms locally and only syncs on explicit action", async () => {
     const calls: string[] = [];
-    const preview = { root: "", classes: ["birds"], files: [{ original_path: "birds/a.wav", class_name: "birds",
-      sha256: "a".repeat(64), size_bytes: 100, duplicate: false, existing: false }],
-      errors: [], warnings: [], new_count: 1, duplicate_count: 0, duplicate_collection: false };
+    const files = [{ id: "audio", relative_path: "birds/a.wav", original_path: "birds/a.wav", class_name: "birds",
+      sha256: "a".repeat(64), size_bytes: 100, duplicate: false, existing: false }];
+    const preview = { root: "", ...counts, file_count: 1, new_count: 1, duplicate_count: 0, duplicate_collection: false };
     const job = { id: "job1", status: "ready", sync_status: "pending", dataset_id: null, added_count: 0,
       preview_token: "p".repeat(64), preview, error: null };
     vi.stubGlobal("fetch", vi.fn(async (input: string, options?: RequestInit) => {
       calls.push(`${options?.method || "GET"} ${input}`);
+      const page = reviewResponse(input, job.preview_token, files);
+      if (page) return page;
       if (input.endsWith("/access")) return Response.json({ development_mode: true });
       expect(new Headers(options?.headers).get("Authorization")).toBeNull();
       if (input.endsWith("/limits")) return Response.json({ received_bytes: 1024, expanded_bytes: 4096, entries: 10,
         depth: 12, path_bytes: 240, audio_bytes: 1024, audio_seconds: 600, validation_seconds: 60, free_bytes: 1, ttl_seconds: 86400, concurrent_imports: 4 });
-      if (input.endsWith("/datasets")) return Response.json({ datasets: [] });
-      if (input.endsWith("/imports") && !options?.method) return Response.json({ imports: [] });
+      if (input.endsWith("/datasets")) return collectionResponse("datasets", [], "catalog");
+      if (input.endsWith("/imports") && !options?.method) return collectionResponse("imports", [], "history");
       if (input.endsWith("/imports")) return Response.json({ ...job, status: "receiving" });
       if (input.endsWith("/archive")) return Response.json({ ...job, status: "validating" });
       if (input.endsWith("/preview")) return Response.json(job);
@@ -124,16 +140,18 @@ describe("private dataset import", () => {
   });
 
   it("keeps confirmation unavailable on validation errors and recovers a pending journal", async () => {
-    const issue = { path: "birds/broken.wav", code: "invalid_wav", action: "Sustituye el WAV dañado." };
+    const issue = { id: "issue", severity: "error", path: "birds/broken.wav", code: "invalid_wav", action: "Sustituye el WAV dañado." };
     const job = { id: "pending", status: "committing", sync_status: "pending", dataset_id: "d1", added_count: 0,
-      preview_token: "p".repeat(64), preview: { root: "aves", files: [], errors: [], classes: ["birds"] }, error: null };
+      preview_token: "p".repeat(64), preview: { root: "aves", ...counts }, error: null };
     vi.stubGlobal("fetch", vi.fn(async (input: string, options?: RequestInit) => {
+      const page = reviewResponse(input, job.preview_token, [], input.includes("/invalid/") ? [issue] : []);
+      if (page) return page;
       if (input.endsWith("/access")) return Response.json({ development_mode: true });
       if (input.endsWith("/limits")) return Response.json({ received_bytes: 1024, expanded_bytes: 4096, entries: 10,
         depth: 12, path_bytes: 240, audio_bytes: 1024, audio_seconds: 600, validation_seconds: 60, free_bytes: 1, ttl_seconds: 86400, concurrent_imports: 4 });
-      if (input.endsWith("/datasets")) return Response.json({ datasets: [] });
-      if (input.endsWith("/imports")) return Response.json({ imports: [job,
-        { ...job, id: "invalid", status: "needs_correction", preview: { ...job.preview, errors: [issue] } }] });
+      if (input.endsWith("/datasets")) return collectionResponse("datasets", [], "catalog");
+      if (input.endsWith("/imports")) return collectionResponse("imports", [job,
+        { ...job, id: "invalid", status: "needs_correction", preview: { ...job.preview, error_count: 1 } }], "history");
       if (input.endsWith("/confirm")) {
         expect(JSON.parse(String(options?.body))).toEqual({ preview_token: job.preview_token });
         return Response.json({ ...job, status: "imported", added_count: 1 });
@@ -143,7 +161,7 @@ describe("private dataset import", () => {
     render(<DatasetImportPanel />);
     await openImport();
     fireEvent.click(await screen.findByRole("button", { name: /invalid —/ }));
-    expect(screen.getByRole("alert").textContent).toContain(issue.action);
+    expect((await screen.findByRole("alert")).textContent).toContain(issue.action);
     expect(screen.queryByRole("button", { name: "Confirmar importación local" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /pending —/ }));
     fireEvent.click(screen.getByRole("button", { name: "Confirmar importación local" }));
@@ -182,8 +200,8 @@ describe("private dataset import", () => {
       expect(new Headers(options?.headers).get("Authorization")).toBe("Bearer supplied-session");
       if (input.endsWith("/access")) return Response.json({ development_mode: false });
       if (input.endsWith("/limits")) return Response.json(configured);
-      if (input.endsWith("/datasets")) return Response.json({ datasets: [] });
-      return Response.json({ imports: [] });
+      if (input.endsWith("/datasets")) return collectionResponse("datasets", [], "catalog");
+      return collectionResponse("imports", [], "history");
     }));
     render(<DatasetImportPanel sessionToken="supplied-session" />);
     await openImport();
@@ -221,10 +239,12 @@ describe("private dataset import", () => {
 
   it("continues an in-flight confirmation while hidden without sending cancel or a duplicate write", async () => {
     const job = { id: "working", status: "ready", sync_status: "pending", dataset_id: null, added_count: 0,
-      preview_token: "p".repeat(64), preview: { root: "", classes: ["birds"], files: [], errors: [] }, error: null };
+      preview_token: "p".repeat(64), preview: { root: "", ...counts }, error: null };
     const writes: string[] = [];
     let complete!: (response: Response) => void;
     vi.stubGlobal("fetch", vi.fn(async (input: string, options?: RequestInit) => {
+      const page = reviewResponse(input, job.preview_token);
+      if (page) return page;
       if (options?.method === "POST") {
         writes.push(input);
         return new Promise<Response>(resolve => { complete = resolve; });
@@ -232,8 +252,8 @@ describe("private dataset import", () => {
       if (input.endsWith("/access")) return Response.json({ development_mode: true });
       if (input.endsWith("/limits")) return Response.json({ received_bytes: 1024, expanded_bytes: 4096, entries: 10,
         depth: 12, path_bytes: 240, audio_bytes: 1024, audio_seconds: 600, validation_seconds: 60, free_bytes: 1, ttl_seconds: 86400, concurrent_imports: 4 });
-      if (input.endsWith("/datasets")) return Response.json({ datasets: [] });
-      return Response.json({ imports: [job] });
+      if (input.endsWith("/datasets")) return collectionResponse("datasets", [], "catalog");
+      return collectionResponse("imports", [job], "history");
     }));
     render(<DatasetImportPanel />);
     await openImport();

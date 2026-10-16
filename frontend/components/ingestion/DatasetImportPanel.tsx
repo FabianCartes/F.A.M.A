@@ -3,8 +3,12 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { z } from "zod";
-import { importBase, importRequest, jsonRequest, saveDownload, jobSchema, datasetSchema, limitsSchema,
+import { importBase, importRequest, jsonRequest, saveDownload, jobSchema, limitsSchema,
+  audioSchema, issueSchema, datasetsPageSchema, jobsPageSchema,
   type ImportJob, type ImportDataset, type ImportLimits } from "@/lib/api/datasetImports";
+import ImportDetailPage from "./ImportDetailPage";
+
+const classSchema = z.string();
 
 const statusLabels: Record<string, string> = {
   receiving: "recibiendo", validating: "validando", needs_correction: "requiere corrección",
@@ -36,7 +40,9 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
-  const [files, setFiles] = useState<z.infer<typeof jobSchema>["preview"]["files"]>([]);
+  const [localDataset, setLocalDataset] = useState<string | null>(null);
+  const [catalogNext, setCatalogNext] = useState<string | null>(null);
+  const [historyNext, setHistoryNext] = useState<string | null>(null);
   const active = useRef(false);
   const requestKey = useRef("");
 
@@ -94,8 +100,22 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
       importRequest(sessionToken, `${importBase}/datasets`).then(r => r.json()),
       importRequest(sessionToken, importBase).then(r => r.json()),
     ]);
-    setDatasets(z.object({ datasets: z.array(datasetSchema) }).parse(catalog).datasets);
-    setHistory(z.object({ imports: z.array(jobSchema) }).parse(jobs).imports);
+    const datasetPage = datasetsPageSchema.parse(catalog);
+    const jobPage = jobsPageSchema.parse(jobs);
+    setDatasets(datasetPage.datasets); setCatalogNext(datasetPage.next_cursor);
+    setHistory(jobPage.imports); setHistoryNext(jobPage.next_cursor);
+  }
+
+  async function catalogPage(cursor: string | null) {
+    const response = await importRequest(token, `${importBase}/datasets${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
+    const page = datasetsPageSchema.parse(await response.json());
+    setDatasets(page.datasets); setCatalogNext(page.next_cursor);
+  }
+
+  async function historyPage(cursor: string | null) {
+    const response = await importRequest(token, `${importBase}${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
+    const page = jobsPageSchema.parse(await response.json());
+    setHistory(page.imports); setHistoryNext(page.next_cursor);
   }
 
   async function initialize() {
@@ -142,7 +162,7 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
   }
 
   function reset() {
-    setJob(null); setFile(null); setFiles([]); setRoot(""); setError(""); requestKey.current = "";
+    setJob(null); setFile(null); setLocalDataset(null); setRoot(""); setError(""); requestKey.current = "";
   }
 
   return <>
@@ -184,10 +204,16 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
           <button className={buttonClass} disabled={!!busy} onClick={() => void act("Actualizando…", () => refresh())}>Actualizar importaciones</button>
           {limits && <>
           {!job && <div className="grid gap-3 sm:grid-cols-2">
-            <label>Destino<select className={inputClass} value={target} onChange={e => setTarget(e.target.value)} disabled={!!busy}>
+            <label>Destino<select className={inputClass} value={target} onChange={e => {
+              setTarget(e.target.value);
+              const selected = datasets.find(item => item.id === e.target.value);
+              if (selected) setName(selected.name);
+            }} disabled={!!busy}>
               <option value="">Crear dataset privado</option>
               {datasets.map(d => <option key={d.id} value={d.id}>{d.name} ({d.file_count} archivos)</option>)}
             </select></label>
+            <div><button disabled={!!busy} onClick={() => void act("Consultando destinos…", () => catalogPage(null))}>Primera página de destinos</button>
+              <button disabled={!!busy || !catalogNext} onClick={() => void act("Consultando destinos…", () => catalogPage(catalogNext))}>Siguiente página de destinos</button></div>
             {!target && <><label>Nombre del dataset<input className={inputClass} value={name} onChange={e => setName(e.target.value)} maxLength={150} disabled={!!busy} /></label>
               <label>Descripción<textarea className={inputClass} value={description} onChange={e => setDescription(e.target.value)} maxLength={2000} disabled={!!busy} /></label></>}
           </div>}
@@ -207,34 +233,38 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
         {job && <div className="space-y-3">
           <p role="status">Importación {job.id}: {statusLabels[job.status] || job.status}</p>
           <p>Sincronización: {statusLabels[job.sync_status] || job.sync_status}</p>
-          {job.preview.classes && <p>Clases propuestas: {job.preview.classes.join(", ")} · Nuevos: {job.preview.new_count ?? 0} · Duplicados internos: {job.preview.duplicate_count ?? 0} · Ya presentes: {job.preview.files?.filter(f => f.existing).length ?? 0}</p>}
+          <p>Clases propuestas: {job.preview.class_count} · Archivos: {job.preview.file_count} · Nuevos: {job.preview.new_count ?? 0} · Duplicados internos: {job.preview.duplicate_count ?? 0} · Errores: {job.preview.error_count} · Advertencias: {job.preview.warning_count}</p>
           {job.preview.duplicate_collection && <p>Colección ya importada: se detectó el mismo contenido y etiquetas.</p>}
-          <ul className="max-h-48 overflow-auto break-words">{job.preview.files?.map((f, i) => <li key={i}>{f.original_path} → {f.class_name}{f.duplicate || f.existing ? " (omitido)" : ""}</li>)}</ul>
-          {job.preview.errors?.map((issue, i) => <p role="alert" key={i}>{issue.path}: {issue.code}. {issue.action}</p>)}
-          {job.preview.warnings?.map((warning, i) => <p key={i}>Advertencia: {warning.path} — {warning.code === "empty_class" ? "clase vacía, no se registrará" : "clase pequeña; no acredita aptitud para entrenar"}.</p>)}
+          {job.preview_token && <div key={`${token}:${job.id}:${job.preview_token}`}>
+            <ImportDetailPage token={token} endpoint={`${importBase}/${job.id}/files`} collection="files" label="archivos" schema={audioSchema} snapshot={job.preview_token}
+              renderItem={f => <>{f.original_path} → {f.class_name}{f.duplicate || f.existing ? " (omitido)" : ""}{f.relative_path !== f.original_path ? ` · Ruta de exportación: ${f.relative_path}` : ""}</>} />
+            <ImportDetailPage token={token} endpoint={`${importBase}/${job.id}/classes`} collection="classes" label="clases" schema={classSchema} snapshot={job.preview_token} renderItem={value => value} />
+            <ImportDetailPage token={token} endpoint={`${importBase}/${job.id}/issues`} collection="issues" label="incidencias" schema={issueSchema} snapshot={job.preview_token}
+              renderItem={issue => <span role={issue.severity === "error" ? "alert" : undefined}>{issue.severity === "warning" ? "Advertencia: " : ""}{issue.path}: {issue.code}. {issue.action}</span>} />
+          </div>}
           {job.error && <p role="alert">{job.error === "expired" ? "La importación venció." : "La sincronización no está completa. Reintenta; la copia local se conserva."}</p>}
           {["ready", "committing"].includes(job.status) && <button className={buttonClass} disabled={!!busy || (job.status === "ready" && root !== job.preview.root)} onClick={() => void act("Confirmando copia local…", () => action("confirm", { preview_token: job.preview_token }))}>Confirmar importación local</button>}
           {job.status === "imported" && <>
             <p>Importada localmente: {job.added_count} archivo(s) nuevo(s).{job.added_count === 0 ? " No hay novedades; no se creó un dataset vacío." : ""}</p>
             {job.dataset_id && <>
               <button className={buttonClass} disabled={!!busy} onClick={() => void act("Sincronizando con GCS…", () => action("sync"))}>{job.sync_status === "running" || job.sync_status === "error" ? "Reanudar sincronización con GCS" : "Sincronizar con GCS"}</button>
-              <p className="text-xs">Acción remota explícita. Si queda en curso, reanuda el siguiente lote. Verificados: {Object.values(job.preview.sync_files ?? {}).filter(s => s === "synced").length}.</p>
-              <button className={buttonClass} disabled={!!busy} onClick={() => void act("Consultando archivos…", async () => {
-                const response = await importRequest(token, `${importBase}/datasets/${job.dataset_id}/files`);
-                const data = z.object({ files: z.array(z.object({ original_path: z.string(), class_name: z.string(), sha256: z.string(), size_bytes: z.number(), duplicate: z.boolean() })) }).parse(await response.json());
-                setFiles(data.files);
-              })}>Consultar archivos locales</button>
-              <ul>{files?.map(f => <li key={f.sha256}><button className="underline text-xs" disabled={!!busy} onClick={() => void act("Descargando audio…", async () => {
+              <p className="text-xs">Acción remota explícita. Si queda en curso, reanuda el siguiente lote. Verificados: {job.preview.synced_count}.</p>
+              <button className={buttonClass} disabled={!!busy} onClick={() => setLocalDataset(job.dataset_id)}>Consultar archivos locales</button>
+              {localDataset === job.dataset_id && <ImportDetailPage key={`${token}:${job.dataset_id}`} token={token} endpoint={`${importBase}/datasets/${job.dataset_id}/files`} collection="files" label="archivos locales" schema={audioSchema}
+                renderItem={f => <button className="underline text-xs" disabled={!!busy} onClick={() => void act("Descargando audio…", async () => {
                 await saveDownload(await importRequest(token, `${importBase}/datasets/${job.dataset_id}/files/${f.sha256}`), f.original_path.split("/").pop() || "audio.wav");
-              })}>{f.original_path} ({f.class_name})</button></li>)}</ul>
+              })}>{f.original_path} ({f.class_name})</button>} />}
             </>}
           </>}
           {!["imported", "committing", "cancelled"].includes(job.status) && <button className={buttonClass} disabled={!!busy} onClick={() => void act("Cancelando…", () => action("cancel"))}>Cancelar importación</button>}
           <button className={buttonClass} disabled={!!busy} onClick={reset}>Nueva importación</button>
         </div>}
         {history.length > 0 && <details><summary>Recuperar importaciones anteriores</summary><ul>{history.map(item => <li key={item.id}>
-          <button disabled={!!busy} className="underline text-xs" onClick={() => { setJob(item); setRoot(item.preview.root ?? ""); setFiles([]); }}>{item.id} — {statusLabels[item.status] || item.status}</button>
-        </li>)}</ul></details>}
+          <button disabled={!!busy} className="underline text-xs" onClick={() => { setJob(item); setRoot(item.preview.root ?? ""); setLocalDataset(null); }}>{item.id} — {statusLabels[item.status] || item.status}</button>
+        </li>)}</ul>
+          <button disabled={!!busy} onClick={() => void act("Consultando historial…", () => historyPage(null))}>Primera página de importaciones</button>
+          <button disabled={!!busy || !historyNext} onClick={() => void act("Consultando historial…", () => historyPage(historyNext))}>Siguiente página de importaciones</button>
+        </details>}
       </div>}
       {busy && <p role="status" aria-live="polite">{busy}</p>}
       {error && <p role="alert" className="rounded-lg border border-red-800/60 bg-red-950/40 p-3 text-red-300 break-words">{error}</p>}

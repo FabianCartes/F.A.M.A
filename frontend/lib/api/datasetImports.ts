@@ -1,22 +1,31 @@
 import { API_BASE_URL } from "@/lib/api";
 import { z } from "zod";
 
-const audioSchema = z.object({
+export const audioSchema = z.object({
+  id: z.string(), relative_path: z.string(),
   original_path: z.string(), class_name: z.string(), sha256: z.string(),
   size_bytes: z.number(), duplicate: z.boolean(), existing: z.boolean().optional(),
 });
 const previewSchema = z.object({
-  root: z.string().optional(), classes: z.array(z.string()).optional(), files: z.array(audioSchema).optional(),
-  errors: z.array(z.object({ path: z.string(), code: z.string(), action: z.string() })).optional(),
-  warnings: z.array(z.object({ path: z.string(), code: z.string() })).optional(),
+  root: z.string().optional(),
+  file_count: z.number(), class_count: z.number(), error_count: z.number(), warning_count: z.number(),
+  total_size_bytes: z.number(), synced_count: z.number(),
   new_count: z.number().optional(), duplicate_count: z.number().optional(), duplicate_collection: z.boolean().optional(),
-  sync_files: z.record(z.string(), z.string()).optional(),
 });
+export const issueSchema = z.object({ id: z.string(), severity: z.enum(["error", "warning"]),
+  path: z.string(), code: z.string(), action: z.string().nullable() });
+export const pageMetadataSchema = z.object({ total: z.number().int().nonnegative(), next_cursor: z.string().nullable(),
+  snapshot: z.union([z.string(), z.number()]).nullable() });
+export const filesPageSchema = pageMetadataSchema.extend({ files: z.array(audioSchema).max(200) });
+export const classesPageSchema = pageMetadataSchema.extend({ classes: z.array(z.string()).max(200) });
+export const issuesPageSchema = pageMetadataSchema.extend({ issues: z.array(issueSchema).max(200) });
 export const jobSchema = z.object({
   id: z.string(), status: z.string(), sync_status: z.string(), dataset_id: z.string().nullable(),
   added_count: z.number(), preview_token: z.string().nullable(), preview: previewSchema, error: z.string().nullable(),
 });
 export const datasetSchema = z.object({ id: z.string(), name: z.string(), file_count: z.number() });
+export const datasetsPageSchema = pageMetadataSchema.extend({ datasets: z.array(datasetSchema).max(200) });
+export const jobsPageSchema = pageMetadataSchema.extend({ imports: z.array(jobSchema).max(200) });
 export const limitsSchema = z.object({
   received_bytes: z.number(), expanded_bytes: z.number(), entries: z.number(), depth: z.number(),
   path_bytes: z.number(), audio_bytes: z.number(), audio_seconds: z.number(),

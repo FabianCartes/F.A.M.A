@@ -117,8 +117,8 @@ def test_owner_is_required_for_every_import_and_dataset_operation(imports, tmp_p
     job = prepare(client, tmp_path)
     target = confirm(client, job).json()["dataset_id"]
     app.dependency_overrides[get_import_user] = lambda: SimpleNamespace(id=2)
-    assert client.get("/api/ingestion/imports").json() == {"imports": []}
-    assert client.get("/api/ingestion/imports/datasets").json() == {"datasets": []}
+    assert client.get("/api/ingestion/imports").json()["imports"] == []
+    assert client.get("/api/ingestion/imports/datasets").json()["datasets"] == []
     for method, path, body in [
         ("get", f"/{job['id']}", None), ("post", f"/{job['id']}/preview", {"root": ""}),
         ("post", f"/{job['id']}/confirm", {"preview_token": job["preview_token"]}),

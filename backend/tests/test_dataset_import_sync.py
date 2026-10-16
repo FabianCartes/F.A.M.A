@@ -34,7 +34,7 @@ def test_sync_progress_survives_partial_failure_and_retries_without_overwrite(im
     app.dependency_overrides[get_import_storage] = lambda: storage
     job = prepare(client, tmp_path, entries=[("birds/a.wav", wav_bytes()), ("birds/b.wav", wav_bytes(2))])
     imported = confirm(client, job).json()
-    files = imported["preview"]["files"]
+    files = client.get(f"/api/ingestion/imports/datasets/{imported['dataset_id']}/files").json()["files"]
     storage.fail_key = files[1]["sha256"]
     path = f"/api/ingestion/imports/{job['id']}/sync"
     failed = client.post(path)
@@ -44,7 +44,7 @@ def test_sync_progress_survives_partial_failure_and_retries_without_overwrite(im
     assert result["sync_status"] == "error"
     assert len(storage.objects) == 1
     assert storage.calls.count(next(k for k in storage.calls if storage.fail_key in k)) == 3
-    assert list(result["preview"]["sync_files"].values()).count("synced") == 1
+    assert result["preview"]["synced_count"] == 1
     assert (service.root / "objects" / job["id"]).is_dir()
     storage.fail_key = None
     resumed = client.post(path).json()

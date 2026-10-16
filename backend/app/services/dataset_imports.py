@@ -8,12 +8,22 @@ import fcntl
 import hashlib
 import os
 from pathlib import Path
+from pathlib import PurePosixPath
+import unicodedata
 import shutil
 import time
 import uuid
 
 from fastapi import HTTPException
+from sqlalchemy import func
+from sqlalchemy.orm import object_session
 from app.models.dataset_import import DatasetImport, ImportedDataset
+from app.models.dataset_import_metadata import (
+    DatasetMember, DatasetSummary, ImportClass, ImportFile, ImportIssue, ImportSummary,
+)
+from app.services.dataset_import_records import (
+    identifier, page, public_file, replace_preview, required_summary,
+)
 from app.services.dataset_zip import ImportLimits, validate_zip
 
 
@@ -24,6 +34,10 @@ def reject(code, message):
 def digest_file(path):
     with path.open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def _canonical_path(value):
+    return unicodedata.normalize("NFC", value).casefold()
 
 
 def _durable_directory(path):
@@ -67,6 +81,13 @@ class DatasetImports:
             except BlockingIOError:
                 reject(409, "Hay otra importación en curso. Reintenta después.")
             db.expire_all()
+            # Refuse a partially prepared store before cleanup or any new write.
+            missing_job = db.query(DatasetImport.id).outerjoin(ImportSummary,
+                ImportSummary.import_id == DatasetImport.id).filter(ImportSummary.import_id.is_(None)).first()
+            missing_dataset = db.query(ImportedDataset.id).outerjoin(DatasetSummary,
+                DatasetSummary.dataset_id == ImportedDataset.id).filter(DatasetSummary.dataset_id.is_(None)).first()
+            if missing_job or missing_dataset:
+                reject(503, "Los metadatos requieren migración verificada antes de continuar.")
             self._cleanup(db)
             yield
         except BaseException:
@@ -100,19 +121,31 @@ class DatasetImports:
         row = db.query(DatasetImport).filter_by(id=job_id, owner_id=owner).first()
         if row is None:
             reject(404, "Importación no encontrada.")
+        required_summary(db, ImportSummary, row.id)
         return row
 
     def dataset(self, db, owner, dataset_id):
         row = db.query(ImportedDataset).filter_by(id=dataset_id, owner_id=owner).first()
         if row is None:
             reject(404, "Dataset no encontrado o no autorizado.")
+        required_summary(db, DatasetSummary, row.id)
         return row
 
     def view(self, row):
+        db = object_session(row)
+        summary = required_summary(db, ImportSummary, row.id)
+        preview = dict(summary.preview, file_count=summary.file_count, class_count=summary.class_count,
+                       error_count=summary.error_count, warning_count=summary.warning_count,
+                       total_size_bytes=summary.total_size_bytes)
+        preview["synced_count"] = db.query(func.count(func.distinct(ImportFile.sha256))).filter(
+            ImportFile.import_id == row.id, ImportFile.sync_status == "synced").scalar()
         return {"id": row.id, "status": row.status, "sync_status": row.sync_status,
                 "dataset_id": row.dataset_id, "added_count": row.added_count,
-                "preview_token": row.preview_token, "preview": row.preview,
-                "error": row.error}
+                "preview_token": row.preview_token, "preview": preview,
+                "error": row.error,
+                "details": {name: f"/api/ingestion/imports/{row.id}/{name}" for name in ("files", "classes", "issues")},
+                "issue_sample": [dict(path=issue.path, code=issue.code, severity=issue.severity, action=issue.action)
+                    for issue in db.query(ImportIssue).filter_by(import_id=row.id).order_by(ImportIssue.id).limit(5)]}
 
     def create(self, db, owner, payload):
         with self.mutation(db):
@@ -131,6 +164,9 @@ class DatasetImports:
                                 request=payload, status="receiving", created_at=time.time(),
                                 preview={}, added_count=0, sync_status="pending")
             db.add(row)
+            db.flush()
+            db.add(ImportSummary(import_id=row.id, preview={}, file_count=0, class_count=0,
+                                 error_count=0, warning_count=0, total_size_bytes=0))
             db.commit()
             return self.view(row)
 
@@ -156,23 +192,38 @@ class DatasetImports:
                 shutil.rmtree(staging)
             result = validate_zip(source, staging, root=root, limits=self.limits)
             target = self.dataset(db, owner, row.request["target_id"]) if row.request.get("target_id") else None
-            equivalent = next((previous for previous in db.query(DatasetImport).filter_by(owner_id=owner, status="imported").all()
-                               if previous.dataset_id and previous.preview.get("fingerprint") == result["fingerprint"]), None)
+            equivalent = db.query(DatasetImport).join(ImportSummary, ImportSummary.import_id == DatasetImport.id).filter(
+                DatasetImport.owner_id == owner, DatasetImport.status == "imported",
+                DatasetImport.dataset_id.is_not(None), ImportSummary.fingerprint == result["fingerprint"]).first()
             result["duplicate_collection"] = equivalent is not None
             if target is None and equivalent:
                 target = self.dataset(db, owner, equivalent.dataset_id)
             result["resolved_target_id"] = target.id if target else None
-            existing = {f["sha256"]: f for f in target.files} if target else {}
+            # Validation only needs canonical path keys, not complete membership
+            # documents. Read these once, never once per candidate.
+            occupied_paths = {_canonical_path(path) for (path,) in
+                db.query(DatasetMember.relative_path).filter_by(dataset_id=target.id).yield_per(50)} if target else set()
             for file in result["files"]:
-                old = existing.get(file["sha256"])
+                old = db.query(DatasetMember).filter_by(dataset_id=target.id, sha256=file["sha256"]).first() if target else None
                 file["existing"] = old is not None
-                if old and old["class_name"] != file["class_name"]:
+                if old and old.class_name != file["class_name"]:
                     result["errors"].append({"path": file["original_path"], "code": "label_conflict",
                         "action": "Corrige la clase: este contenido ya existe con otra etiqueta."})
+                relative = file["original_path"][len(root) + 1:] if root else file["original_path"]
+                if old:
+                    relative = old.relative_path
+                elif not file["duplicate"]:
+                    original = PurePosixPath(relative)
+                    suffix = 0
+                    while _canonical_path(relative) in occupied_paths:
+                        suffix += 1
+                        relative = str(original.with_name(f"{original.stem}-{file['sha256']}-{suffix}{original.suffix}"))
+                    occupied_paths.add(_canonical_path(relative))
+                file["relative_path"] = relative
             result["new_count"] = sum(not f["duplicate"] and not f["existing"] for f in result["files"])
             result["target_revision"] = target.revision if target else None
             result["root"] = root
-            row.preview = result
+            replace_preview(db, row, result)
             row.preview_token = uuid.uuid4().hex + uuid.uuid4().hex
             row.status = "needs_correction" if result["errors"] else "ready"
             db.commit()
@@ -189,25 +240,28 @@ class DatasetImports:
                 return self.view(row)
             if row.status not in ("ready", "committing"):
                 reject(409, "La importación no está lista para confirmar.")
-            target_id = row.preview.get("resolved_target_id")
+            summary = required_summary(db, ImportSummary, row.id)
+            preview = summary.preview
+            target_id = preview.get("resolved_target_id")
             target = self.dataset(db, owner, target_id) if target_id else None
-            if target and target.revision != row.preview["target_revision"]:
+            if target and target.revision != preview["target_revision"]:
                 reject(409, "El dataset cambió. Genera y revisa una nueva vista previa.")
             if target is None:
-                equivalent = any(previous.dataset_id and previous.preview.get("fingerprint") == row.preview["fingerprint"]
-                                 for previous in db.query(DatasetImport).filter_by(owner_id=owner, status="imported").all())
+                equivalent = db.query(DatasetImport).join(ImportSummary, ImportSummary.import_id == DatasetImport.id).filter(
+                    DatasetImport.owner_id == owner, DatasetImport.status == "imported",
+                    DatasetImport.dataset_id.is_not(None), ImportSummary.fingerprint == summary.fingerprint).first()
                 if equivalent:
                     reject(409, "La colección ya fue importada. Genera y revisa una nueva vista previa.")
             pending = db.query(DatasetImport).filter_by(owner_id=owner, status="committing").all()
             for other in pending:
                 same_target = target and other.dataset_id == target.id
                 same_new_name = not target and not other.request.get("target_id") and other.request["name"] == row.request["name"]
-                same_collection = other.preview.get("fingerprint") == row.preview["fingerprint"]
+                same_collection = required_summary(db, ImportSummary, other.id).fingerprint == summary.fingerprint
                 if other.id != row.id and (same_target or same_new_name or same_collection):
                     reject(409, "Hay una confirmación pendiente de recuperación para este destino. Reinténtala primero.")
-            selected = [dict(f, import_id=row.id) for f in row.preview["files"]
-                        if not f["duplicate"] and not f["existing"]]
-            if not selected:
+            selected = db.query(ImportFile).filter_by(import_id=row.id, duplicate=False, existing=False)
+            selected_count = selected.count()
+            if not selected_count:
                 row.status, row.added_count = "imported", 0
                 row.dataset_id = target.id if target else None
                 db.commit()
@@ -223,9 +277,9 @@ class DatasetImports:
             stage = self.stage(row) / "files"
             destination = self.root / "objects" / row.id
             location = destination if destination.exists() else stage
-            for file in selected:
-                path = location / file["stored_name"]
-                if not path.is_file() or path.is_symlink() or digest_file(path) != file["sha256"]:
+            for file in selected.order_by(ImportFile.ordinal).yield_per(50):
+                path = location / file.stored_name
+                if not path.is_file() or path.is_symlink() or digest_file(path) != file.sha256:
                     reject(409, "La copia local no coincide. Conserva el estado y solicita recuperación.")
                 with path.open("rb") as stream:
                     os.fsync(stream.fileno())
@@ -241,25 +295,68 @@ class DatasetImports:
                 target = ImportedDataset(id=row.dataset_id, owner_id=owner, name=row.request["name"],
                                          description=row.request["description"], files=[], revision=0)
                 db.add(target)
-            target.files = list(target.files) + selected
+                db.flush()
+                db.add(DatasetSummary(dataset_id=target.id, revision=0, file_count=0, class_count=0, total_size_bytes=0))
+                db.flush()
             target.revision += 1
-            row.added_count = len(selected)
+            total_added = 0
+            for file in selected.order_by(ImportFile.ordinal).yield_per(50):
+                fields = {column.name: getattr(file, column.name) for column in DatasetMember.__table__.columns
+                          if column.name not in ("id", "dataset_id", "dataset_revision")}
+                db.add(DatasetMember(id=identifier(), dataset_id=target.id,
+                                     dataset_revision=target.revision, **fields))
+                total_added += file.size_bytes
+            db.flush()
+            totals = required_summary(db, DatasetSummary, target.id)
+            totals.revision, totals.file_count = target.revision, totals.file_count + selected_count
+            totals.total_size_bytes += total_added
+            totals.class_count = db.query(func.count(func.distinct(DatasetMember.class_name))).filter(DatasetMember.dataset_id == target.id).scalar()
+            row.added_count = selected_count
             row.status = "imported"
             db.commit()  # Membership, counters and terminal result publish together.
             return self.view(row)
 
-    def list_datasets(self, db, owner):
-        return [{"id": d.id, "name": d.name, "description": d.description, "revision": d.revision,
-                 "file_count": len(d.files), "classes": sorted({f["class_name"] for f in d.files}),
-                 "total_size_bytes": sum(f["size_bytes"] for f in d.files)}
-                for d in db.query(ImportedDataset).filter_by(owner_id=owner).all()]
+    def list_datasets(self, db, owner, **pagination):
+        def serialize(dataset):
+            summary = required_summary(db, DatasetSummary, dataset.id)
+            return dict(id=dataset.id, name=dataset.name, description=dataset.description,
+                        revision=dataset.revision, file_count=summary.file_count,
+                        class_count=summary.class_count, total_size_bytes=summary.total_size_bytes)
+        return page(db.query(ImportedDataset).filter_by(owner_id=owner), ImportedDataset.id,
+                    scope=f"datasets:{owner}", snapshot="catalog", key="datasets", serialize=serialize, **pagination)
+
+    def list_jobs(self, db, owner, **pagination):
+        return page(db.query(DatasetImport).filter_by(owner_id=owner), DatasetImport.id,
+                    scope=f"imports:{owner}", snapshot="history", key="imports", serialize=self.view, **pagination)
+
+    def review_page(self, db, owner, job_id, collection, **pagination):
+        row = self.job(db, owner, job_id)
+        model, column, serialize = {
+            "files": (ImportFile, ImportFile.ordinal, public_file),
+            "classes": (ImportClass, ImportClass.ordinal, lambda r: r.class_name),
+            "issues": (ImportIssue, ImportIssue.id, lambda r: dict(id=r.id, severity=r.severity,
+                path=r.path, code=r.code, action=r.action)),
+        }[collection]
+        snapshot = row.preview_token
+        result = page(db.query(model).filter_by(import_id=row.id), column, scope=f"{row.id}:{collection}",
+                      snapshot=snapshot, key=collection, serialize=serialize, **pagination)
+        db.refresh(row)
+        if row.preview_token != snapshot:
+            reject(409, "La vista previa cambió. Consulta de nuevo la primera página.")
+        return result
+
+    def dataset_page(self, db, owner, dataset_id, **pagination):
+        dataset = self.dataset(db, owner, dataset_id)
+        return page(db.query(DatasetMember).filter(DatasetMember.dataset_id == dataset.id,
+                    DatasetMember.dataset_revision <= dataset.revision), DatasetMember.id,
+                    scope=f"{dataset.id}:files", snapshot=dataset.revision, key="files", serialize=public_file, **pagination)
 
     def download(self, db, owner, dataset_id, sha256):
         dataset = self.dataset(db, owner, dataset_id)
-        file = next((f for f in dataset.files if f["sha256"] == sha256), None)
+        file = db.query(DatasetMember).filter_by(dataset_id=dataset.id, sha256=sha256).first()
         if file is None:
             reject(404, "Audio no encontrado.")
-        path = self.root / "objects" / file["import_id"] / file["stored_name"]
+        path = self.root / "objects" / file.source_import_id / file.stored_name
         if path.is_symlink() or not path.is_file() or digest_file(path) != sha256:
             reject(409, "Integridad local incorrecta. Solicita recuperación.")
         return path
@@ -282,37 +379,41 @@ class DatasetImports:
             if row.status != "imported" or not row.dataset_id:
                 reject(409, "Confirma una importación con contenido antes de sincronizar.")
             dataset = self.dataset(db, owner, row.dataset_id)
-            wanted = {f["sha256"] for f in row.preview["files"]}
-            members = [f for f in dataset.files if f["sha256"] in wanted]
-            preview = dict(row.preview)
-            cursor = preview.get("sync_cursor", 0) if row.sync_status in ("running", "error") else 0
-            progress = dict(preview.get("sync_files", {}))
+            summary = required_summary(db, ImportSummary, row.id)
+            preview = dict(summary.preview)
+            cursor = preview.get("sync_after", "") if row.sync_status in ("running", "error") else ""
+            wanted = db.query(ImportFile.sha256).filter_by(import_id=row.id)
             row.sync_status, row.error = "running", None
             db.commit()
             deadline = time.monotonic() + self.limits.validation_seconds
-            for index in range(cursor, len(members)):
-                file = members[index]
-                key = f"private-imports/{owner}/{dataset.id}/{file['sha256']}.wav"
+            while True:
+                file = db.query(DatasetMember).filter(DatasetMember.dataset_id == dataset.id,
+                    DatasetMember.sha256.in_(wanted), DatasetMember.id > cursor).order_by(DatasetMember.id).first()
+                if file is None:
+                    break
+                key = f"private-imports/{owner}/{dataset.id}/{file.sha256}.wav"
                 try:
-                    path = self.download(db, owner, dataset.id, file["sha256"])
+                    path = self.download(db, owner, dataset.id, file.sha256)
                     metadata = {"owner_id": str(owner), "dataset_id": dataset.id,
-                                "class_name": file["class_name"]}
+                                "class_name": file.class_name}
                     for attempt in range(3):
                         try:
-                            storage.ensure(key, path, file["sha256"], metadata)
+                            generation = storage.ensure(key, path, file.sha256, metadata)
                             break
                         except TransientSyncError:
                             if attempt == 2:
                                 raise
                             time.sleep(0.05 * 2**attempt)
-                    progress[file["sha256"]] = "synced"
-                    cursor = index + 1
+                    file.sync_status, file.object_key, file.object_generation = "synced", key, generation
+                    cursor = file.id
+                    state = "synced"
                 except Exception:
                     # Storage exceptions may contain credentials, paths or object names.
-                    progress[file["sha256"]] = "error"
+                    state = "error"
                     row.sync_status, row.error = "error", "sync_failed_or_integrity_conflict"
-                preview.update(sync_files=progress, sync_cursor=cursor)
-                row.preview = dict(preview)
+                db.query(ImportFile).filter_by(import_id=row.id, sha256=file.sha256).update({"sync_status": state})
+                preview["sync_after"] = cursor
+                summary.preview = dict(preview)
                 db.commit()  # Each verified object survives process interruption.
                 if row.sync_status == "error" or time.monotonic() >= deadline:
                     return self.view(row)

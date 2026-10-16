@@ -149,8 +149,8 @@ def test_local_and_authenticated_owners_remain_isolated(local_imports, tmp_path,
     # An actual Bearer session retains its owner even while local mode is enabled.
     assert len(client.get(BASE + "/datasets").json()["datasets"]) == 1
     del client.headers["Authorization"]
-    assert client.get(BASE).json() == {"imports": []}
-    assert client.get(BASE + "/datasets").json() == {"datasets": []}
+    assert client.get(BASE).json()["imports"] == []
+    assert client.get(BASE + "/datasets").json()["datasets"] == []
     for method, suffix, payload in [
         ("GET", f"/{private_job['id']}", None),
         ("PUT", f"/{private_job['id']}/archive", None),

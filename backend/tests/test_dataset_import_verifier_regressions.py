@@ -18,7 +18,7 @@ def test_recovery_retries_failed_directory_durability(imports, tmp_path, monkeyp
     monkeypatch.setattr(module, "_durable_directory", fail_objects_sync)
     assert confirm(client, job).status_code == 500
     assert confirm(client, job).status_code == 500
-    assert client.get("/api/ingestion/imports/datasets").json() == {"datasets": []}
+    assert client.get("/api/ingestion/imports/datasets").json()["datasets"] == []
     monkeypatch.setattr(module, "_durable_directory", original)
     assert confirm(client, job).json()["added_count"] == 1
 
@@ -81,7 +81,7 @@ def test_storage_ancestry_is_durable_before_publication_and_retried(imports, tmp
     assert confirm(client, job).status_code == 500
     assert confirm(client, job).status_code == 500
     assert attempts.count(service.root.parent) == 2
-    assert client.get("/api/ingestion/imports/datasets").json() == {"datasets": []}
+    assert client.get("/api/ingestion/imports/datasets").json()["datasets"] == []
     recorded = []
     def record_sync(path):
         recorded.append(path)
