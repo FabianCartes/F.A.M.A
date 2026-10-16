@@ -24,6 +24,20 @@ describe('IngestionView persisted inference dataset and curation', () => {
   });
   afterEach(() => { global.fetch = originalFetch; });
 
+  it('places import next to download without changing the existing download action', async () => {
+    await open();
+    const download = screen.getByRole('button', { name: 'Descargar Dataset al Entorno Local' });
+    const upload = screen.getByRole('button', { name: 'Importar dataset' });
+    expect(download.parentElement).toBe(upload.parentElement);
+    expect(upload.classList.contains('text-xs')).toBe(true);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(screen.getAllByRole('checkbox')[1]);
+    await act(async () => { fireEvent.click(download); });
+    const sync = vi.mocked(global.fetch).mock.calls.find(([url, options]) => String(url).endsWith('/api/ingestion/sync') && options?.method === 'POST');
+    expect(sync).toBeDefined();
+    expect(JSON.parse(String(sync?.[1]?.body))).toEqual({ datasets: ['AvesChilenas'], preprocess: true });
+  });
+
   it('keeps accepted local audio visible separately while cloud is pending after approval', async () => {
     vi.mocked(feedbackApi.getPendingFeedback).mockResolvedValueOnce([item]).mockResolvedValue([]);
     vi.mocked(feedbackApi.getFeedbackSync).mockResolvedValueOnce([]).mockResolvedValue([{

@@ -9,6 +9,7 @@ import {
 } from "@/lib/api/feedbackApi";
 import { PendingFeedbackItem } from "@/lib/schemas/feedback";
 import FeedbackSyncPanel from "@/components/feedback/FeedbackSyncPanel";
+import DatasetImportPanel from "@/components/ingestion/DatasetImportPanel";
 
 // ============================================================================
 // INTERFACES DEL MODELO DE DOMINIO DE INGESTA (RF_02 / RF_06 / ADR 0013)
@@ -784,6 +785,7 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
             </label>
           </div>
 
+          <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
           <button
             type="button"
             onClick={handleSync}
@@ -809,6 +811,8 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
               </>
             )}
           </button>
+          <DatasetImportPanel />
+          </div>
         </div>
       </div>
 
