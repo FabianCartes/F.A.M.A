@@ -5,6 +5,7 @@ from app.models.training import Modelo, MetricaEntrenamiento, ModelEvaluation
 from app.models.feedback import Retroalimentacion
 from app.models.feedback_sync import FeedbackSync
 from app.models.user import Usuario
+from app.models.dataset_import import ImportedDataset, DatasetImport
 
 __all__ = [
     "Prediccion",
@@ -16,6 +17,7 @@ __all__ = [
     "Retroalimentacion",
     "FeedbackSync",
     "Usuario",
+    "ImportedDataset",
+    "DatasetImport",
 ]
-
 
