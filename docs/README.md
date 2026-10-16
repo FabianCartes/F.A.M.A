@@ -17,7 +17,7 @@ docs/
 ├── arquitectura/                # Diseño de sistemas, pipelines, MLOps y despliegue
 ├── limites/                     # Límites matemáticos, físicos y problemas conocidos
 ├── manuales/                    # Manual de usuario, revisión, despliegue e índices canónicos
-├── adr/                         # Architectural Decision Records (ADR 0001 a 0025)
+├── adr/                         # Architectural Decision Records (ADR 0001 a 0026)
 ├── receipts/                    # Recibos técnicos reproducibles en formato JSON (RDD)
 ├── duplicados-exactos/           # Tarea acotada: admisión de feedback sin duplicados SHA-256
 └── images/                      # Diagramas, matrices de confusión y gráficos vectoriales
@@ -58,6 +58,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`informe_consolidado_diagnostico_acustico_motores.md`](./modelos/informe_consolidado_diagnostico_acustico_motores.md): Informe del ensamble industrial para fallas de motor (81.16% Acc).
 
 ### 3. [`docs/arquitectura/`](./arquitectura/) — Arquitectura de Software y MLOps
+* [`data6-identidad-preparacion.md`](./arquitectura/data6-identidad-preparacion.md): Alcance de implementación de DATA-6, identidad inmutable de preparación, decisiones de agrupación y avance de verificación; operaciones sobre datos reales excluidas.
 * [`publicacion-evaluaciones-coherentes.md`](./arquitectura/publicacion-evaluaciones-coherentes.md): Seguimiento de diagnóstico de publicación, par de evaluaciones aplicable, preflight y reversión; implementación y verificaciones por hitos.
 * [`identidad-checkpoint-cargado.md`](./arquitectura/identidad-checkpoint-cargado.md): Contrato de identidad de carga, bloqueo de registros sin hash y evidencia de implementación; no implica atestación continua de tensores.
 * [`03_orquestador_fastapi_gcs_postgresql.md`](./arquitectura/03_orquestador_fastapi_gcs_postgresql.md): Arquitectura del orquestador backend con FastAPI.
@@ -72,6 +73,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`22_propuesta_vista_ayuda_y_centro_de_conocimiento.md`](./arquitectura/22_propuesta_vista_ayuda_y_centro_de_conocimiento.md): Diseño y especificación del centro de conocimiento e interactividad en frontend.
 
 ### 4. [`docs/manuales/`](./manuales/) — Manuales y Guías Operativas
+* [`versiones-preparadas-dataset.md`](./manuales/versiones-preparadas-dataset.md): Preparación inmutable explícita, rechazo por desfase, selección histórica y referencias de origen revisadas por una persona para DATA-6; [ADR 0026](./adr/0026-versiones-preparadas-y-procedencia-curada.md).
 * [`nombres-modelos.md`](./manuales/nombres-modelos.md): Nomenclatura compartida de entrenamiento/predicción, versiones visuales, legacy y [evidencia focal](./receipts/model-names.json).
 * [`recuperacion-modelo-14.md`](./manuales/recuperacion-modelo-14.md): Corrección del contrato de compatibilidad, reevaluación real del modelo 14, retirada de modelos 11–13 y comprobación HTTP/navegador del despliegue.
 * [`consolidacion-worktrees.md`](./manuales/consolidacion-worktrees.md): Retirada de los 58 secundarios, recuperación de respaldos y entornos CUDA, integración spawn y verificaciones locales.

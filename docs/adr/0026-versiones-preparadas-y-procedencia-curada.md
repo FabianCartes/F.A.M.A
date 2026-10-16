@@ -1,0 +1,17 @@
+# ADR 0026: Identificar versiones preparadas y preservar la procedencia curada
+
+Aceptado para DATA-6 tras la aprobación del plan de implementación por parte del usuario. Las particiones preparadas se publican de forma exclusiva, nunca se sobrescriben y se identifican por los bytes del índice de origen, los hashes de las particiones, los parámetros de reparto y la política de agrupación. El entrenamiento ordinario rechaza un índice de origen que haya cambiado; el entrenamiento histórico deliberado fija una versión y solo omite el control de frescura. El manifiesto admitido viaja con el trabajo y con el checkpoint. El esquema1 heredado sigue siendo legible para los consumidores de evaluación existentes, pero no puede acreditar procedencia de entrenamiento.
+
+La curación humana es una categoría de origen, no evidencia de una grabación independiente. Se conserva `recordist="human_feedback"` para la atribución y se añade un `curation_source_id` opcional que referencia una grabación canónica original de AvesChilenas. Quien curó debe establecer la relación; el servidor valida la pertenencia al catálogo, no la derivación acústica. Los derivados curados heredan el grupo de grabación original, incluso entre clases. La procedencia desconocida permanece en el grupo común y conservador. Se rechazan las referencias ausentes, ambiguas, de curado a curado o de dominio no soportado, en lugar de inventar independencia.
+
+## Alternativas y consecuencias
+
+- Sobrescribir rutas fijas de CSV pierde la pertenencia reproducible; la preparación automática esconde una mutación operativa dentro del entrenamiento. Ambas se rechazan.
+- Agrupar por identificador de feedback o por hashes de archivo distintos no prueba independencia y se rechaza.
+- Una identidad nueva por curador seguiría colapsando grabaciones no relacionadas y no preservaría sus grupos de grabación originales.
+- Los anclajes explícitos de versión seleccionan un hijo con nombre de contenido del almacén configurado, o fijan la preparación única configurada. Las peticiones existentes pueden usar una preparación única schema2 configurada solo mientras su origen siga siendo el vigente; la respuesta declara su identidad. No existe búsqueda ni promoción implícita de la última versión.
+- El hash del origen a nivel de bytes trata intencionadamente como desfase los cambios de anotación, orden y serialización. Esta política conservadora puede exigir una preparación nueva incluso cuando la pertenencia no haya cambiado.
+- La identidad no es una firma ni una instantánea del audio inmutable. Siguen siendo necesarias las comprobaciones de ruta y códec existentes; la procedencia del checkpoint no garantiza que los bytes de audio posteriores permanezcan sin cambios.
+- Los cinco registros históricos de feedback no reciben procedencia nueva ni se redistribuyen automáticamente. Alguien debe aportar evidencia antes de cualquier preparación nueva explícita. La cobertura completa de clases puede seguir siendo inviable.
+
+Véanse el [contrato operativo](../manuales/versiones-preparadas-dataset.md) y el [registro de implementación](../arquitectura/data6-identidad-preparacion.md). Ninguna migración de base de datos, ningún despliegue ni ninguna preparación de datos reales forman parte de las comprobaciones de implementación de esta decisión.
