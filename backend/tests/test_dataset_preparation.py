@@ -205,7 +205,7 @@ def test_loader_rejects_unsupported_completion_record(tmp_path, corruption):
         (destination / "extra.csv").write_text("extra")
     else:
         if corruption == "schema":
-            record["schema"] = 2
+            record["schema"] = 3
         elif corruption == "dataset":
             record["dataset"] = "engine_diagnostics"
         else:
@@ -242,3 +242,147 @@ def test_prepared_path_declares_without_creating():
     assert path.parts[-3:] == ("data", "prepared", "AvesChilenas")
     with pytest.raises(ValueError):
         get_prepared_data_dir("../escape")
+
+
+def test_preparation_records_reproducible_source_and_version(tmp_path):
+    import hashlib
+    import json
+    from training.prepare_data import load_prepared_version
+
+    index, roots, original = fixture_index(tmp_path)
+    versions = []
+    for name in ("one", "two"):
+        destination = tmp_path / name
+        result = prepare_dataset(index, roots=roots, dataset_name="AvesChilenas", output_dir=destination)
+        parts, manifest = load_prepared_version(destination, roots=roots, dataset_name="AvesChilenas",
+                                                index_csv=index, expected_version=result["version_id"])
+        assert manifest["source_sha256"] == hashlib.sha256(index.read_bytes()).hexdigest()
+        assert manifest["parameters"] == {"train_ratio": .7, "val_ratio": .15,
+                                           "test_ratio": .15, "random_state": 42,
+                                           "grouping": "curation-source-v1"}
+        assert manifest == json.loads((destination / ".complete").read_bytes())
+        assert sum(map(len, parts)) == len(original)
+        versions.append(manifest["version_id"])
+    assert versions[0] == versions[1]
+
+
+@pytest.mark.parametrize("change", ["addition", "metadata"])
+def test_version_rejects_stale_source_without_modifying_preparation(tmp_path, change):
+    from training.prepare_data import load_prepared_version
+
+    index, roots, frame = fixture_index(tmp_path)
+    destination = tmp_path / "prepared"
+    result = prepare_dataset(index, roots=roots, dataset_name="AvesChilenas", output_dir=destination)
+    before = {p.name: p.read_bytes() for p in destination.iterdir()}
+    if change == "addition":
+        frame = pd.concat([frame, frame.iloc[[0]].assign(xc_id="new", file_path="new.wav")])
+        (roots["raw"] / "new.wav").write_bytes(b"new audio")
+    else:
+        frame.loc[0, "extra"] = "new annotation"
+    frame.to_csv(index, index=False)
+    with pytest.raises(ValueError, match="Stale prepared dataset"):
+        load_prepared_version(destination, roots=roots, dataset_name="AvesChilenas", index_csv=index)
+    assert {p.name: p.read_bytes() for p in destination.iterdir()} == before
+    parts, _ = load_prepared_version(destination, roots=roots, dataset_name="AvesChilenas",
+                                    index_csv=index, expected_version=result["version_id"],
+                                    allow_historical=True)
+    assert sum(map(len, parts)) == 12
+
+
+def test_version_mismatch_and_historical_integrity_are_rejected(tmp_path):
+    from training.prepare_data import load_prepared_version
+
+    index, roots, _ = fixture_index(tmp_path)
+    destination = tmp_path / "prepared"
+    result = prepare_dataset(index, roots=roots, dataset_name="AvesChilenas", output_dir=destination)
+    with pytest.raises(ValueError, match="version identity"):
+        load_prepared_version(destination, roots=roots, dataset_name="AvesChilenas", index_csv=index,
+                              expected_version="0" * 64)
+    (destination / "train.csv").write_text("corrupted")
+    with pytest.raises(ValueError, match="integrity"):
+        load_prepared_version(destination, roots=roots, dataset_name="AvesChilenas", index_csv=index,
+                              expected_version=result["version_id"], allow_historical=True)
+
+
+def test_legacy_preparation_remains_readable_but_not_version_admissible(tmp_path):
+    import json
+    from training.prepare_data import load_prepared_version
+
+    index, roots, _ = fixture_index(tmp_path)
+    destination = tmp_path / "prepared"
+    prepare_dataset(index, roots=roots, dataset_name="AvesChilenas", output_dir=destination)
+    marker = destination / ".complete"
+    manifest = json.loads(marker.read_bytes())
+    marker.write_text(json.dumps({"schema": 1, "dataset": manifest["dataset"], "sha256": manifest["sha256"]}))
+    assert sum(map(len, load_prepared_dataset(destination, roots=roots, dataset_name="AvesChilenas"))) == 12
+    with pytest.raises(ValueError, match="Legacy preparation"):
+        load_prepared_version(destination, roots=roots, dataset_name="AvesChilenas", index_csv=index,
+                              expected_version=manifest["version_id"], allow_historical=True)
+
+
+def test_public_historical_loader_requires_pin_without_mutating_data(tmp_path):
+    import hashlib
+    from training.prepare_data import load_prepared_version
+
+    index, roots, _ = fixture_index(tmp_path)
+    destination = tmp_path / "prepared"
+    prepare_dataset(index, roots=roots, dataset_name="AvesChilenas", output_dir=destination)
+    index.write_bytes(index.read_bytes() + b"\n")
+    before = {path: hashlib.sha256(path.read_bytes()).hexdigest()
+              for path in tmp_path.rglob("*") if path.is_file()}
+    with pytest.raises(ValueError, match="Historical preparation requires an explicit"):
+        load_prepared_version(destination, roots=roots, dataset_name="AvesChilenas",
+                              index_csv=index, allow_historical=True)
+    assert {path: hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in tmp_path.rglob("*") if path.is_file()} == before
+
+
+def test_curated_source_references_preserve_groups_and_reach_all_splits(tmp_path):
+    from training.grouping import recording_groups
+
+    index, roots, frame = fixture_index(tmp_path)
+    frame["curation_source_id"] = ""
+    curated = frame.copy()
+    curated["curation_source_id"] = frame.xc_id
+    curated["xc_id"] = "feedback_" + frame.xc_id
+    curated["file_path"] = "feedback_" + frame.file_path
+    curated["recordist"] = "human_feedback"
+    for name in curated.file_path:
+        (roots["raw"] / name).write_bytes(b"curated recording")
+    combined = pd.concat([frame, curated], ignore_index=True)
+    combined.to_csv(index, index=False)
+    destination = tmp_path / "prepared"
+    prepare_dataset(index, roots=roots, dataset_name="AvesChilenas", output_dir=destination)
+    parts = load_prepared_dataset(destination, roots=roots, dataset_name="AvesChilenas")
+    groups = recording_groups(combined, "AvesChilenas")
+    for i, part in enumerate(parts):
+        assert set(part.loc[part.recordist == "human_feedback", "clase"]) == {"A", "B"}
+        selected = {groups[(row.file_stage, row.file_path)] for row in part.itertuples()}
+        for other in parts[:i]:
+            assert selected.isdisjoint({groups[(row.file_stage, row.file_path)] for row in other.itertuples()})
+        for row in part.loc[part.recordist == "human_feedback"].itertuples():
+            assert row.curation_source_id in set(part.xc_id)
+
+
+@pytest.mark.parametrize("source", ["missing", "feedback_self"])
+def test_invalid_curated_provenance_never_creates_preparation(tmp_path, source):
+    index, roots, frame = fixture_index(tmp_path)
+    frame["curation_source_id"] = ""
+    frame.loc[0, "recordist"] = "human_feedback"
+    frame.loc[0, "xc_id"] = "feedback_self"
+    frame.loc[0, "curation_source_id"] = source
+    frame.to_csv(index, index=False)
+    destination = tmp_path / "prepared"
+    with pytest.raises(ValueError, match="curation source"):
+        prepare_dataset(index, roots=roots, dataset_name="AvesChilenas", output_dir=destination)
+    assert not destination.exists()
+
+
+def test_unknown_feedback_stays_indivisible_and_coverage_failure_is_explicit(tmp_path):
+    index, roots, frame = fixture_index(tmp_path)
+    frame["recordist"] = "human_feedback"
+    frame["xc_id"] = "feedback_" + frame.xc_id
+    frame.to_csv(index, index=False)
+    with pytest.raises(ValueError, match="three groups"):
+        prepare_dataset(index, roots=roots, dataset_name="AvesChilenas", output_dir=tmp_path / "prepared")
+    assert not (tmp_path / "prepared").exists()
