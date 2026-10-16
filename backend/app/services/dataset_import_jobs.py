@@ -2,12 +2,12 @@
 from dataclasses import dataclass
 import hashlib
 import json
+import math
 import os
-import time
 import uuid
 
 from fastapi import HTTPException
-from sqlalchemy import func, select, update
+from sqlalchemy import Float, cast, func, or_, select, update
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.models.dataset_import import DatasetImport
@@ -16,6 +16,16 @@ from app.models.dataset_import_metadata import ImportSummary
 
 
 ACTIVE = ("queued", "running")
+
+
+class LeaseLost(RuntimeError):
+    """The attempt is no longer authorized to write."""
+
+
+def lease_duration(value):
+    if type(value) not in (int, float) or not math.isfinite(value) or not 0 < value <= 3600:
+        raise ValueError("Lease duration must be finite and in (0, 3600]")
+    return value
 
 
 @dataclass(frozen=True)
@@ -43,6 +53,8 @@ def _snapshot(row):
                 stage=row.stage, progress=row.progress, result=dict(row.result),
                 error=dict(row.error) if row.error else None, attempt=row.attempt,
                 token=row.token, created_at=row.created_at, updated_at=row.updated_at,
+                lease_until=row.lease_until, heartbeat_at=row.heartbeat_at,
+                parameters=dict(row.parameters),
                 status_url=f"/api/ingestion/imports/{row.import_id}/jobs/{row.id}")
 
 
@@ -71,10 +83,88 @@ def _owned(db, owner, job_id):
 class ImportJobQueue:
     """Short transactions only; no filesystem, decoder, network or request session."""
 
-    def __init__(self, sessions, *, limits=None, clock=time.time):
+    def __init__(self, sessions, *, limits=None, clock=None):
         self.sessions = sessions
         self.limits = limits or JobLimits.from_environment()
         self.clock = clock
+
+    def _now(self, db):
+        if self.clock is not None:
+            return self.clock()
+        # One authority for all processes using the same database. PostgreSQL
+        # clock_timestamp (not transaction-start now()) follows gate acquisition.
+        expression = ((func.julianday("now") - 2440587.5) * 86400.0
+                      if db.get_bind().dialect.name == "sqlite"
+                      else func.extract("epoch", func.clock_timestamp()))
+        return float(db.scalar(select(expression)))
+
+    def claim(self, *, lease_seconds):
+        duration = lease_duration(lease_seconds)
+        with self.sessions() as db, db.begin():
+            _gate(db)
+            now = self._now(db)
+            row = db.scalar(select(ImportJob).where(or_(
+                ImportJob.status == "queued",
+                (ImportJob.status == "running") & (ImportJob.lease_until <= now)
+            )).order_by(ImportJob.created_at, ImportJob.id).limit(1))
+            if row is None:
+                return None
+            row.attempt += 1
+            row.token += 1
+            row.status, row.stage, row.progress = "running", "running", 0
+            row.result, row.error = {}, None
+            row.lease_until, row.heartbeat_at, row.updated_at = now + duration, now, now
+            db.flush()
+            return _snapshot(row)
+
+    def _current(self, db, attempt):
+        _gate(db)
+        now = self._now(db)
+        row = db.scalar(select(ImportJob).where(
+            ImportJob.id == attempt["id"], ImportJob.attempt == attempt["attempt"],
+            ImportJob.token == attempt["token"], ImportJob.status == "running",
+            ImportJob.lease_until > now))
+        if row is None:
+            raise LeaseLost("Attempt lease lost")
+        return row, now
+
+    def heartbeat(self, attempt, *, lease_seconds):
+        duration = lease_duration(lease_seconds)
+        with self.sessions() as db, db.begin():
+            row, now = self._current(db, attempt)
+            row.lease_until = max(row.lease_until, now + duration)
+            row.heartbeat_at, row.updated_at = now, now
+
+    def progress(self, attempt, *, stage, progress):
+        if stage not in ("running", "validating", "verifying", "syncing", "prepared"):
+            raise ValueError("Invalid execution stage")
+        if type(progress) is not int or not 0 <= progress <= 99:
+            raise ValueError("Invalid execution progress")
+        with self.sessions() as db, db.begin():
+            row, now = self._current(db, attempt)
+            if progress < row.progress:
+                raise ValueError("Progress must not decrease")
+            row.stage, row.progress, row.updated_at = stage, progress, now
+
+    def finish(self, attempt, *, result=None, error=None):
+        if error not in (None, "execution_failed", "execution_timeout", "staging_failed"):
+            raise ValueError("Invalid execution error")
+        result = {} if result is None else result
+        if not isinstance(result, dict) or set(result) - {"dataset_id", "added_count", "synced_count"}:
+            raise ValueError("Invalid execution result")
+        for key, value in result.items():
+            if key == "dataset_id":
+                if not isinstance(value, str) or len(value) != 32 or any(c not in "0123456789abcdef" for c in value):
+                    raise ValueError("Invalid dataset identity")
+            elif type(value) is not int or not 0 <= value <= 2**31 - 1:
+                raise ValueError("Invalid result count")
+        with self.sessions() as db, db.begin():
+            row, now = self._current(db, attempt)
+            row.status = row.stage = "failed" if error else "succeeded"
+            row.result = {} if error else dict(result)
+            row.error = {"code": error} if error else None
+            row.progress = row.progress if error else 100
+            row.lease_until, row.updated_at = None, now
 
     def admit(self, owner, import_id, kind, request_key, parameters):
         if kind not in ("preview", "confirm", "sync"):
@@ -130,7 +220,7 @@ class ImportJobQueue:
             if db.scalar(select(ImportJob.id).where(
                     ImportJob.import_id == import_id, ImportJob.status.in_(ACTIVE)).limit(1)):
                 _reject(409, "La importación ya tiene un trabajo activo.")
-            now = self.clock()
+            now = self._now(db)
             row = ImportJob(id=uuid.uuid4().hex, owner_id=owner, import_id=import_id,
                             kind=kind, request_key=request_key, parameters=json.loads(encoded),
                             parameters_sha256=digest, expected_preview_token=parameters.get("preview_token"),
@@ -167,7 +257,7 @@ class ImportJobQueue:
             if row.status != "queued":
                 _reject(409, "Solo se puede cancelar un trabajo pendiente de ejecución.")
             row.status, row.stage = "cancelled", "cancelled"
-            row.updated_at = self.clock()
+            row.updated_at = self._now(db)
             db.flush()
             # Capacity is represented by active rows, so this terminal state
             # releases it in exactly the same transaction, even after restart.
