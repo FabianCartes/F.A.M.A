@@ -86,9 +86,9 @@ Toda documentación de proyecto que se redacte debe quedar bajo `docs/`. Elegir 
 ## 7. Convenciones de Git: ramas y commits
 
 * Escribir en inglés los nombres de todas las ramas nuevas. Usar nombres descriptivos, por ejemplo: `feat/training-validation`, `fix/checkpoint-loading` o `docs/project-guidelines`.
-* Escribir en español todos los mensajes de commit nuevos, incluidos el alcance y la descripción. Mantener en inglés únicamente los tipos convencionales de Conventional Commits (`feat`, `fix`, `test`, `docs`, `refactor`, `chore`, etc.) y los identificadores técnicos que deban conservar su forma original.
-* Usar el formato `tipo(alcance): descripción en español`, con una descripción breve que explique el resultado o propósito del cambio.
-* Ejemplos: `fix(inferencia): evitar predicciones con pesos ausentes`; `feat(predicción): permitir seleccionar un fragmento de audio`; `test(registro): aislar las pruebas de modelos`.
+* Escribir en inglés el tipo y el alcance del mensaje de commit, y en español la descripción. Los tipos convencionales (`feat`, `fix`, `test`, `docs`, `refactor`, `chore`, etc.) conservan su forma original, igual que los identificadores técnicos que perderían significado al traducirlos.
+* Usar el formato `type(scope): descripción en español`, con una descripción breve en imperativo que explique el resultado o propósito del cambio.
+* Ejemplos: `fix(inference): fallar de forma segura en el predictor de bundles`; `feat(training): agregar tooltips explicativos para física de audio e hiperparámetros`; `test(registry): aislar fixtures de modelos de PostgreSQL`.
 
 ---
 
