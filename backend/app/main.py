@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Form, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 import torch
 import torch.nn as nn
@@ -61,6 +61,7 @@ from app.services.feedback_sync import FeedbackSyncQueue
 from app.database import Base, engine, get_db
 from app.models import Prediccion, ConjuntoDatos, Audio, Modelo, MetricaEntrenamiento, Retroalimentacion, Usuario
 from app.routes.auth import router as auth_router
+from app.routes.dataset_imports import router as dataset_import_router
 from app.services.registry import get_model_registry, ModelRegistry, ModelNotFoundError
 from app.services.evaluation_catalogue import read_model_evaluations
 from app.schemas.model_info import ModelListResponse
@@ -432,6 +433,7 @@ app.add_middleware(
 
 # Inclusión de enrutadores modulares
 app.include_router(auth_router)
+app.include_router(dataset_import_router)
 
 
 # ============================================================================
@@ -732,9 +734,24 @@ async def predict_audio(
 # ============================================================================
 # ENDPOINTS DE INGESTA BIDIRECCIONAL GCS ↔ LOCAL (RF_02)
 # ============================================================================
+def validate_ingestion_segment(value: str) -> str:
+    """Legacy routes accept a name, never a relative filesystem reference."""
+    import unicodedata
+    if (not value or value in (".", "..") or value.startswith((".", "__"))
+            or any(c in value for c in "/\\")
+            or any(unicodedata.category(c).startswith("C") for c in value)):
+        raise ValueError("Dataset and class names must be safe single path segments")
+    return value
+
+
 class SyncRequest(BaseModel):
     datasets: List[str]
     preprocess: bool = False
+
+    @field_validator("datasets")
+    @classmethod
+    def safe_destinations(cls, values):
+        return [validate_ingestion_segment(value) for value in values]
 
 
 @app.get("/api/ingestion/status")
@@ -761,6 +778,10 @@ def list_ingestion_dataset_files(dataset_name: str):
     """
     Lista los archivos individuales contenidos en un dataset en GCS.
     """
+    try:
+        validate_ingestion_segment(dataset_name)
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from None
     files = ingestion_service.list_dataset_files(dataset_name)
     return {"dataset": dataset_name, "files": files}
 
@@ -809,6 +830,11 @@ async def upload_ingestion_files(
     datasets/{dataset_name}/{class_label}/{filename}
     Registra metadatos en PostgreSQL.
     """
+    try:
+        validate_ingestion_segment(dataset_name)
+        validate_ingestion_segment(class_label)
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from None
     prepared_files = []
     for f in files:
         content = await f.read()
