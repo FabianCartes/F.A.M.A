@@ -969,6 +969,10 @@ def get_pending_feedback(
 @app.post("/api/feedback/{id_retroalimentacion}/approve", response_model=ApproveFeedbackResponse)
 def approve_feedback(
     id_retroalimentacion: int,
+    curation_source_id: Optional[str] = Query(
+        None, min_length=1, max_length=200,
+        description="Human-reviewed original canonical xc_id; catalog reference validation is not acoustic verification.",
+    ),
     dataset_name: Optional[str] = Query(
         None, min_length=1, max_length=100,
         description="Compatibilidad legacy: debe coincidir con el destino persistido; no permite cambiarlo.",
@@ -979,9 +983,10 @@ def approve_feedback(
     Aprueba e incorpora el audio en el destino congelado durante la inferencia,
     actualiza metadata.csv y marca el registro como procesado.
     """
-    return feedback_service.approve_feedback(
-        db=db, id_retroalimentacion=id_retroalimentacion, dataset_name=dataset_name,
-    )
+    kwargs = {"db": db, "id_retroalimentacion": id_retroalimentacion, "dataset_name": dataset_name}
+    if curation_source_id is not None:
+        kwargs["curation_source_id"] = curation_source_id
+    return feedback_service.approve_feedback(**kwargs)
 
 
 @app.post("/api/feedback/{id_retroalimentacion}/reject")
