@@ -82,6 +82,25 @@ def test_identical_content_with_different_labels_is_a_conflict(tmp_path):
     assert result["errors"][0]["code"] == "label_conflict"
 
 
+def test_corrupt_deflate_member_returns_diagnostics_without_changing_source(tmp_path):
+    import struct
+    from app.services.dataset_zip import validate_zip, ImportLimits
+
+    source = archive(tmp_path / "input.zip", [("birds/a.wav", wav_bytes())], zipfile.ZIP_DEFLATED)
+    content = bytearray(source.read_bytes())
+    name_length, extra_length = struct.unpack_from("<HH", content, 26)
+    # Reserved DEFLATE block type; retain the valid directory and member header.
+    content[30 + name_length + extra_length] = 0x07
+    source.write_bytes(content)
+    staging = tmp_path / "staged"
+    result = validate_zip(source, staging, root="", limits=ImportLimits())
+    assert result["files"] == []
+    assert result["errors"] == [{"path": "birds/a.wav", "code": "invalid_archive_or_wav",
+                                "action": "Corrige la ruta, estructura o contenido y vuelve a subir el ZIP."}]
+    assert source.read_bytes() == content
+    assert not list(staging.glob("*.wav"))
+
+
 @pytest.mark.parametrize("kind", ["duplicate", "case", "unicode", "symlink", "special", "corrupt", "empty", "outside_root"])
 def test_rejects_ambiguous_special_empty_or_corrupt_archives(tmp_path, kind):
     from app.services.dataset_zip import validate_zip, ImportLimits

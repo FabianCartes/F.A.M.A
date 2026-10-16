@@ -10,6 +10,7 @@ import struct
 import time
 import unicodedata
 import zipfile
+import zlib
 
 import soundfile as sf
 
@@ -223,7 +224,7 @@ def validate_zip(source: Path, staging: Path, *, root: str, limits: ImportLimits
         for label in sorted(populated):
             if sum(f["class_name"] == label for f in files) < 2:
                 warnings.append({"path": label, "code": "small_class"})
-    except (ValueError, zipfile.BadZipFile, RuntimeError, OSError, EOFError, NotImplementedError) as error:
+    except (ValueError, zipfile.BadZipFile, zlib.error, RuntimeError, OSError, EOFError, NotImplementedError) as error:
         code = str(error) if type(error) is ValueError else "invalid_archive_or_wav"
         errors.append({"path": current, "code": code,
                        "action": "Corrige la ruta, estructura o contenido y vuelve a subir el ZIP."})
