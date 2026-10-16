@@ -861,6 +861,10 @@ def start_training_pipeline(req: StartTrainingRequest):
         }
         if getattr(req, "_explicit_models", False) and req.models is not None:
             kwargs["models"] = [m.model_dump() for m in req.models]
+        if req.prepared_version is not None:
+            kwargs["prepared_version"] = req.prepared_version
+        if req.allow_historical_preparation:
+            kwargs["allow_historical_preparation"] = True
         if req.audio_config is not None:
             kwargs["audio_config"] = req.audio_config.model_dump()
         if req.windowing_config is not None:

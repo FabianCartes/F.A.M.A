@@ -126,9 +126,10 @@ def test_final_evaluation_preflight_blocks_invalid_admission(training_env, monke
     service, sessions, root, thread = training_env
     register(sessions, 'AvesChilenas')
     raw = partitions(root, 'AvesChilenas')
-    real_load = training.load_prepared_dataset
+    real_load = training.load_prepared_version
     def admitted(*args, **kwargs):
-        frames = list(real_load(*args, **kwargs))
+        parts, manifest = real_load(*args, **kwargs)
+        frames = list(parts)
         if fault == 'decode':
             (raw / frames[2].iloc[0]['file_path']).write_bytes(b'corrupt codec')
         elif fault == 'reserved_label':
@@ -138,8 +139,8 @@ def test_final_evaluation_preflight_blocks_invalid_admission(training_env, monke
             column = {'test_label': 'clase', 'test_id': 'xc_id',
                       'test_group': 'recordist', 'test_path': 'file_path'}[fault]
             frames[2][column] = 'unknown' if fault == 'test_label' else frames[0].iloc[0][column]
-        return tuple(frames)
-    monkeypatch.setattr(training, 'load_prepared_dataset', admitted)
+        return tuple(frames), manifest
+    monkeypatch.setattr(training, 'load_prepared_version', admitted)
     with pytest.raises(ValueError):
         service.start_training('AvesChilenas')
     thread.assert_not_called()
@@ -151,14 +152,15 @@ def test_engine_admission_preserves_canonical_group_and_class_scoped_source_iden
     service, sessions, root, thread = training_env
     register(sessions, 'engine_diagnostics')
     partitions(root, 'engine_diagnostics')
-    real_load = training.load_prepared_dataset
+    real_load = training.load_prepared_version
     def admitted(*args, **kwargs):
-        frames = list(real_load(*args, **kwargs))
+        parts, manifest = real_load(*args, **kwargs)
+        frames = list(parts)
         for split, frame in zip(('train', 'val', 'test'), frames):
             frame['source_id'] = split
         frames[2][fault] = frames[0].iloc[0][fault]
-        return tuple(frames)
-    monkeypatch.setattr(training, 'load_prepared_dataset', admitted)
+        return tuple(frames), manifest
+    monkeypatch.setattr(training, 'load_prepared_version', admitted)
     with pytest.raises(ValueError, match='overlap'):
         service.start_training('engine_diagnostics')
     thread.assert_not_called()

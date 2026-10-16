@@ -38,7 +38,8 @@ from poc.preprocess import (
     GPUAudioFrontEnd, GPUSpecAugment, build_gpu_audio_frontend_contract,
 )
 from poc.train import BioacousticModel, AudioCNN, AudioDataset, FocalLoss, apply_mixup
-from training.prepare_data import load_prepared_dataset
+from training.prepare_data import load_prepared_version
+from training.grouping import recording_groups
 from training.paths import (
     get_raw_data_dir, get_dataset_roots, get_training_raw_read_root,
     get_training_prepared_read_dir,
@@ -350,20 +351,27 @@ class TrainingService:
                 self._worker_process.request_stop()
             return {"status": "stopping", "message": "Detención solicitada. El proceso finalizará de forma segura."}
 
-    def _prepare_source(self, dataset_name: str) -> Dict[str, Any]:
+    def _prepare_source(self, dataset_name: str, prepared_version=None,
+                        allow_historical_preparation=False) -> Dict[str, Any]:
         """Validate and freeze partitions before a job is admitted."""
         roots = get_dataset_roots(dataset_name)
         roots["raw"] = get_training_raw_read_root(dataset_name)
         raw_dir = roots["raw"]
         prepared_dir = get_training_prepared_read_dir(dataset_name)
+        if prepared_version is not None and (prepared_dir / prepared_version).exists():
+            prepared_dir = prepared_dir / prepared_version
         try:
-            train_df, val_df, test_df = load_prepared_dataset(
-                prepared_dir, roots=roots, dataset_name=dataset_name)
+            parts, manifest = load_prepared_version(
+                prepared_dir, roots=roots, dataset_name=dataset_name,
+                index_csv=raw_dir / "metadata.csv", expected_version=prepared_version,
+                allow_historical=allow_historical_preparation)
+            train_df, val_df, test_df = parts
         except (ValueError, OSError) as exc:
             raise ValueError(
                 f"Dataset '{dataset_name}': preparación ausente o inválida en {prepared_dir}: {exc}"
             ) from exc
 
+        groups = recording_groups(pd.concat(parts, ignore_index=True), dataset_name)
         recordings = {}
         for split, frame in (("train", train_df), ("val", val_df), ("test", test_df)):
             if frame.empty or "clase" not in frame or frame["clase"].isna().any():
@@ -398,7 +406,7 @@ class TrainingService:
                     identity = json.dumps([row['clase'], source_id], ensure_ascii=False, separators=(',', ':'))
                 else:
                     identity = f"{row['file_stage']}:{row['file_path']}"
-                group = row.get('recordist')
+                group = groups[(row['file_stage'], row['file_path'])]
                 if not isinstance(identity, str) or not identity.strip():
                     raise ValueError('Identidad de grabación inválida')
                 if group is not None and (not isinstance(group, str) or not group.strip()):
@@ -411,7 +419,8 @@ class TrainingService:
                 raise ValueError(f"Dataset '{dataset_name}': clases de {split} ausentes en train.")
         validate_recording_splits(recordings)
         return {"raw_dir": raw_dir, "roots": roots, "train_df": train_df,
-                "val_df": val_df, "test_df": test_df, "recordings": recordings}
+                "val_df": val_df, "test_df": test_df, "recordings": recordings,
+                "preparation": {"manifest": manifest, "historical": allow_historical_preparation}}
 
     def start_training(
         self,
@@ -429,6 +438,8 @@ class TrainingService:
         weight_decay: float = 0.01,
         early_stopping: bool = True,
         seed: int = 42,
+        prepared_version: Optional[str] = None,
+        allow_historical_preparation: bool = False,
     ) -> Dict[str, Any]:
         """
         Inicia un nuevo ciclo de entrenamiento bioacústico en un proceso spawn.
@@ -437,6 +448,13 @@ class TrainingService:
         """
         if type(seed) is not int or not 0 <= seed <= 2**32 - 1:
             raise ValueError("seed debe ser un entero entre 0 y 2**32 - 1.")
+        if prepared_version is not None and (type(prepared_version) is not str
+                or len(prepared_version) != 64 or any(c not in "0123456789abcdef" for c in prepared_version)):
+            raise ValueError("prepared_version must be a lowercase SHA-256 identity")
+        if type(allow_historical_preparation) is not bool:
+            raise ValueError("allow_historical_preparation must be a boolean")
+        if allow_historical_preparation and prepared_version is None:
+            raise ValueError("Historical preparation requires an explicit prepared_version")
 
         with self._lock:
             if self.status in {"training", "evaluating"} or self._worker_process is not None:
@@ -451,7 +469,7 @@ class TrainingService:
                     if len(matches) != 1:
                         raise ValueError(f"Dataset '{dataset_name}' requiere un registro exacto y único.")
                     dataset_id = matches[0].id_conjunto_datos
-                source = self._prepare_source(dataset_name)
+                source = self._prepare_source(dataset_name, prepared_version, allow_historical_preparation)
                 audio_config = _json_config(audio_config)
                 windowing_config = _json_config(windowing_config)
                 regularization_config = _json_config(regularization_config)
@@ -583,6 +601,8 @@ class TrainingService:
             "status": "started",
             "job_id": job_id,
             "message": msg,
+            "preparation": {"version_id": source["preparation"]["manifest"]["version_id"],
+                            "historical": allow_historical_preparation},
         }
 
 
@@ -1131,6 +1151,7 @@ class TrainingService:
                     "dataset_name": dataset_name,
                     "job_id": job_id,
                     "source_directory": str(raw_dir),
+                    "preparation": config["source"]["preparation"],
                     "model_index": idx + 1,
                     "architecture": arch,
                     "seed": seed,

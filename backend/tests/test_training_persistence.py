@@ -52,6 +52,23 @@ def history(service, sessions):
         return service.get_history(db)
 
 
+def test_checkpoint_retains_admitted_preparation_after_index_changes(persistence_env, monkeypatch):
+    service, sessions, root, _ = persistence_env
+    marker = root / "prepared/engine_diagnostics/.complete"
+    manifest = json.loads(marker.read_bytes())
+    original_factory = service._process_factory
+    def mutate_after_admission(*args, **kwargs):
+        index = root / "raw/engine_diagnostics/metadata.csv"
+        index.write_bytes(index.read_bytes() + b"\n")
+        return original_factory(*args, **kwargs)
+    monkeypatch.setattr(service, "_process_factory", mutate_after_admission)
+    start(service)
+    assert service.get_progress()["status"] == "completed", service.get_progress()["error_message"]
+    entry, = history(service, sessions)
+    payload = torch.load(service.checkpoints_dir / entry["filename"], weights_only=True)
+    assert payload["preparation"] == {"manifest": manifest, "historical": False}
+
+
 def evaluations(sessions, model_id):
     with sessions() as db:
         service = EvaluationService(db)

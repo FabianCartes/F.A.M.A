@@ -21,6 +21,96 @@ from tests.test_training_persistence import persistence_env
 app = main.app
 
 
+@pytest.mark.parametrize("historical", [False, True])
+def test_api_reports_stale_preparation_and_requires_deliberate_history(client, training_env, historical):
+    import json
+    service, sessions, root, thread = training_env
+    register(sessions, "AvesChilenas")
+    raw = partitions(root, "AvesChilenas")
+    marker = root / "prepared/AvesChilenas/.complete"
+    version = json.loads(marker.read_bytes())["version_id"]
+    index = raw / "metadata.csv"
+    index.write_bytes(index.read_bytes() + b"\n")
+    before = {p.name: p.read_bytes() for p in marker.parent.iterdir()}
+    response = client.post("/api/training/start", json={"dataset_name": "AvesChilenas",
+                           "prepared_version": version, "allow_historical_preparation": historical})
+    if historical:
+        assert response.status_code == 200, response.text
+        assert response.json()["preparation"]["version_id"] == version
+        assert response.json()["preparation"]["historical"] is True
+        config = thread.call_args.kwargs["args"][0]
+        assert config["source"]["preparation"]["manifest"]["version_id"] == version
+    else:
+        assert response.status_code == 400
+        assert "Stale prepared dataset" in response.json()["detail"]
+        thread.assert_not_called()
+        with sessions() as db:
+            assert service.get_history(db) == []
+    assert {p.name: p.read_bytes() for p in marker.parent.iterdir()} == before
+
+
+@pytest.mark.parametrize("body", [
+    {"prepared_version": "../escape"}, {"prepared_version": "a" * 63},
+    {"allow_historical_preparation": True}, {"allow_historical_preparation": "true"},
+])
+def test_api_rejects_invalid_preparation_selection_before_admission(client, training_env, body):
+    service, _, _, thread = training_env
+    before = service.get_progress()
+    response = client.post("/api/training/start", json=body)
+    assert response.status_code == 422
+    assert service.get_progress() == before
+    thread.assert_not_called()
+
+
+def test_api_selects_immutable_child_without_adopting_legacy_root(client, training_env):
+    import json
+    _, sessions, root, thread = training_env
+    register(sessions, "AvesChilenas")
+    partitions(root, "AvesChilenas")
+    store = root / "prepared/AvesChilenas"
+    manifest = json.loads((store / ".complete").read_bytes())
+    child = store / manifest["version_id"]
+    child.mkdir()
+    for file in list(store.iterdir()):
+        if file.is_file():
+            file.rename(child / file.name)
+    (store / ".complete").write_text("legacy root marker")
+    response = client.post("/api/training/start", json={"prepared_version": manifest["version_id"]})
+    assert response.status_code == 200, response.text
+    assert thread.call_args.kwargs["args"][0]["source"]["preparation"]["manifest"] == manifest
+
+
+def test_api_admits_curated_derivatives_with_their_original_groups(client, training_env):
+    import pandas as pd
+    from training.prepare_data import prepare_dataset
+    from training import paths
+
+    _, sessions, root, thread = training_env
+    register(sessions, "AvesChilenas")
+    raw = partitions(root, "AvesChilenas")
+    index = raw / "metadata.csv"
+    originals = pd.read_csv(index, dtype=str, keep_default_na=False)
+    originals["curation_source_id"] = ""
+    curated = originals.copy()
+    curated["curation_source_id"] = originals.xc_id
+    curated["xc_id"] = "feedback_" + originals.xc_id
+    curated["recordist"] = "human_feedback"
+    curated["file_path"] = originals.file_path.str.replace(".wav", "_feedback.wav", regex=False)
+    for old, new in zip(originals.file_path, curated.file_path):
+        (raw / new).write_bytes((raw / old).read_bytes())
+    pd.concat([originals, curated]).to_csv(index, index=False)
+    result = prepare_dataset(index, roots=paths.get_dataset_roots("AvesChilenas"),
+                              dataset_name="AvesChilenas", output_dir=root / "prepared/AvesChilenas",
+                              versioned=True)
+    response = client.post("/api/training/start", json={"prepared_version": result["version_id"]})
+    assert response.status_code == 200, response.text
+    source = thread.call_args.kwargs["args"][0]["source"]
+    for recordings in source["recordings"].values():
+        assert len(recordings) == 2
+        assert recordings[0].group == recordings[1].group
+        assert recordings[0].group != "human_feedback"
+
+
 @pytest.mark.parametrize('seed', [0, 314, 4_294_967_295])
 def test_api_propagates_selected_seed(client, training_env, seed):
     _, sessions, root, thread = training_env
@@ -493,5 +583,3 @@ def test_start_training_api_passes_model_epochs(client):
         assert "models" in call_kwargs
         assert call_kwargs["models"][0]["epochs"] == 35
         assert call_kwargs["models"][1]["epochs"] == 10
-
-

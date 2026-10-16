@@ -90,6 +90,10 @@ class StartTrainingRequest(BaseModel):
     y desacoplamiento del dominio acústico mediante AudioConfigSchema, WindowingConfigSchema y RegularizationConfigSchema.
     """
     dataset_name: str = "AvesChilenas"
+    prepared_version: Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{64}$",
+                                          description="Pin an immutable prepared dataset identity")
+    allow_historical_preparation: bool = Field(default=False, strict=True,
+                                               description="Use a pinned historical preparation despite source-index changes")
     architecture: Optional[str] = "EfficientNet-B0"
     epochs: int = Field(default=10, ge=1, le=1000, description="Épocas de entrenamiento")
     learning_rate: float = 0.001
@@ -117,6 +121,8 @@ class StartTrainingRequest(BaseModel):
     @model_validator(mode="after")
 
     def validate_and_normalize_models(self) -> "StartTrainingRequest":
+        if self.allow_historical_preparation and self.prepared_version is None:
+            raise ValueError("Historical preparation requires an explicit prepared_version")
         if self.models is not None:
             if len(self.models) == 0:
                 raise ValueError("La lista de modelos no puede estar vacía.")

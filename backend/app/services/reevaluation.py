@@ -12,6 +12,7 @@ from app.services.standard_evaluation_guard import (
 )
 from dataset_references import resolve_reference
 from training.prepare_data import load_prepared_dataset
+from training.grouping import recording_groups
 
 
 class ReevaluationError(ValueError):
@@ -67,6 +68,8 @@ def _admit_model(session, *, model_id, checkpoint_root, checkpoint_path, expecte
         raise ReevaluationError("Prepared split classes do not match the ordered checkpoint classes.")
     recordings = {}
     try:
+        import pandas as pd
+        groups = recording_groups(pd.concat(list(frames.values()), ignore_index=True), dataset_name)
         for split, frame in frames.items():
             admitted = []
             for row in frame.to_dict("records"):
@@ -82,7 +85,8 @@ def _admit_model(session, *, model_id, checkpoint_root, checkpoint_path, expecte
                 else:
                     identity = f"{row['file_stage']}:{row['file_path']}"
                 admitted.append(LabelledRecording(identity, row["clase"], path,
-                                                  row["file_path"], row["file_stage"], row["recordist"]))
+                                                  row["file_path"], row["file_stage"],
+                                                  groups[(row["file_stage"], row["file_path"])]))
             recordings[split] = tuple(admitted)
         validate_recording_splits(recordings)
         configs = inspection.configurations
