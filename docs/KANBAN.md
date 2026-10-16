@@ -2,6 +2,20 @@
 kanban-plugin: basic
 ---
 
+## Importación ZIP local y sincronización GCS — cierre local verificado
+
+- [x] ZIP-0: checkout y plan recuperados; rama `feat/dataset-zip-import`; propiedad privada aprobada, administración diferida.
+- [x] ZIP-1: contrato/persistencia, validador seguro e importación local recuperable; verificación sintética independiente.
+- [x] ZIP-2: asistente, instrucciones y ejemplo sintético; 4 pruebas de transiciones, sin navegador real.
+- [x] ZIP-3: sincronización independiente, integridad y recuperación con GCS simulado; sin operación remota real.
+- [x] ZIP-4: 140 pruebas backend aisladas/279 frontend aprobadas; TypeScript, lint focal y build temporal correctos. Revisiones nativas por rangos aprobadas y con acuse completado; error DEFLATE corregido con RED/GREEN. Lint global conserva 26 errores/3 avisos de archivos idénticos a base.
+- [x] ZIP-5: modal junto a descarga, cierre exterior/Escape y tipografía; identidad de desarrollo aislada. Modo Docker explícito `--dev`, frontend solo en loopback y backend/BD sin puertos publicados; 36 casos del script y dos comprobaciones reales de fusión Compose aprobados. BD y archivos de pruebas separados; el catálogo de modelos empieza vacío.
+- [ ] ZIP-6: aceptación operacional con navegador/proxy Docker y vuelta real al modo normal; no ejecutada ni acreditada por las pruebas aisladas. Sin GCS real ni datos reales.
+- [ ] ZIP-7: evaluar por separado las observaciones nativas no bloqueantes sobre recuperación de archivos, actualización del trabajo seleccionado, mensajes por fase y contención del lock; no amplían esta entrega.
+- [ ] ZIP-FUTURO (diferido): soporte opcional para importación de ZIP en carpeta plana mediante manifiesto `labels.csv`, asignación de clase única por lote o regla explícita de prefijo con previsualización obligatoria.
+
+Seguimiento, commits y límites: [dataset ZIP import](arquitectura/dataset-zip-import.md). Commits locales autorizados; sin entrenamiento, datos reales, GCS real, despliegues, PR ni push.
+
 ## Nombres coherentes de modelos — issue #2
 
 **Contrato aprobado:** `Dataset · Arquitectura (vN)` compartido por historial, publicación, activación y predicción; IDs y checkpoints estables. Versión visual calculada, no versión inmutable. Dataset relacionado preferente; legacy identificado como no verificado.

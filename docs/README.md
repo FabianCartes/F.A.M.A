@@ -17,7 +17,7 @@ docs/
 ├── arquitectura/                # Diseño de sistemas, pipelines, MLOps y despliegue
 ├── limites/                     # Límites matemáticos, físicos y problemas conocidos
 ├── manuales/                    # Manual de usuario, revisión, despliegue e índices canónicos
-├── adr/                         # Architectural Decision Records (ADR 0001 a 0026)
+├── adr/                         # Architectural Decision Records (ADR 0001 a 0028)
 ├── receipts/                    # Recibos técnicos reproducibles en formato JSON (RDD)
 ├── duplicados-exactos/           # Tarea acotada: admisión de feedback sin duplicados SHA-256
 └── images/                      # Diagramas, matrices de confusión y gráficos vectoriales
@@ -58,6 +58,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`informe_consolidado_diagnostico_acustico_motores.md`](./modelos/informe_consolidado_diagnostico_acustico_motores.md): Informe del ensamble industrial para fallas de motor (81.16% Acc).
 
 ### 3. [`docs/arquitectura/`](./arquitectura/) — Arquitectura de Software y MLOps
+* [`dataset-zip-import.md`](./arquitectura/dataset-zip-import.md): Alcance, contratos y avance de importación ZIP privada local con sincronización posterior; sin entrenamiento ni operaciones reales sobre GCS.
 * [`data6-identidad-preparacion.md`](./arquitectura/data6-identidad-preparacion.md): Alcance de implementación de DATA-6, identidad inmutable de preparación, decisiones de agrupación y avance de verificación; operaciones sobre datos reales excluidas.
 * [`publicacion-evaluaciones-coherentes.md`](./arquitectura/publicacion-evaluaciones-coherentes.md): Seguimiento de diagnóstico de publicación, par de evaluaciones aplicable, preflight y reversión; implementación y verificaciones por hitos.
 * [`identidad-checkpoint-cargado.md`](./arquitectura/identidad-checkpoint-cargado.md): Contrato de identidad de carga, bloqueo de registros sin hash y evidencia de implementación; no implica atestación continua de tensores.
@@ -73,6 +74,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`22_propuesta_vista_ayuda_y_centro_de_conocimiento.md`](./arquitectura/22_propuesta_vista_ayuda_y_centro_de_conocimiento.md): Diseño y especificación del centro de conocimiento e interactividad en frontend.
 
 ### 4. [`docs/manuales/`](./manuales/) — Manuales y Guías Operativas
+* [`importacion-datasets-zip.md`](./manuales/importacion-datasets-zip.md): Modal de importación, activación Docker local explícita, base de pruebas separada, formato WAV/ZIP, límites, recuperación y sincronización explícita; [ADR 0027](./adr/0027-importaciones-zip-privadas-locales.md) y [ADR 0028](./adr/0028-importacion-local-docker.md).
 * [`versiones-preparadas-dataset.md`](./manuales/versiones-preparadas-dataset.md): Preparación inmutable explícita, rechazo por desfase, selección histórica y referencias de origen revisadas por una persona para DATA-6; [ADR 0026](./adr/0026-versiones-preparadas-y-procedencia-curada.md).
 * [`nombres-modelos.md`](./manuales/nombres-modelos.md): Nomenclatura compartida de entrenamiento/predicción, versiones visuales, legacy y [evidencia focal](./receipts/model-names.json).
 * [`recuperacion-modelo-14.md`](./manuales/recuperacion-modelo-14.md): Corrección del contrato de compatibilidad, reevaluación real del modelo 14, retirada de modelos 11–13 y comprobación HTTP/navegador del despliegue.
@@ -116,6 +118,8 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`model-11-real-evaluation.json`](./receipts/model-11-real-evaluation.json): Informe inmutable de reevaluación real del modelo #11 (val/test); no certifica calidad ni autoriza activación.
 
 ### 6. [`docs/adr/`](./adr/) — Architectural Decision Records
+* [`ADR 0028`](./adr/0028-importacion-local-docker.md): Excepción Docker local explícita, peer exacto del frontend y puertos limitados al host loopback; no sustituye autenticación en servidores compartidos.
+* [`ADR 0027`](./adr/0027-importaciones-zip-privadas-locales.md): Importaciones ZIP privadas, persistencia local recuperable y sincronización posterior con verificación de contenido.
 Registro de las 25 decisiones de arquitectura fundamentales del sistema:
 * [`ADR 0025`](./adr/0025-compatibilidad-semantica-evaluacion.md): Compatibilidad semántica explícita del predictor; hashes fuente diagnósticos y reevaluación obligatoria para pasar del contrato anterior.
 * [`ADR 0024`](./adr/0024-entrenamiento-aislado-spawn.md): Aislamiento del entrenamiento, supervisión independiente del sondeo, conciliación de salida y límites de cancelación/persistencia.
