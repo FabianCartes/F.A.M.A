@@ -386,3 +386,37 @@ def test_unknown_feedback_stays_indivisible_and_coverage_failure_is_explicit(tmp
     with pytest.raises(ValueError, match="three groups"):
         prepare_dataset(index, roots=roots, dataset_name="AvesChilenas", output_dir=tmp_path / "prepared")
     assert not (tmp_path / "prepared").exists()
+
+
+def test_versioned_cli_creates_explicit_immutable_version_and_preserves_prior(tmp_path, capsys):
+    import json
+    from training.prepare_dataset import main
+
+    with pytest.raises(SystemExit) as error:
+        main([])
+    assert error.value.code == 2
+    assert "--index-csv" in capsys.readouterr().err
+    with pytest.raises(SystemExit) as error:
+        main(["--help"])
+    assert error.value.code == 0
+    assert "--versions-dir" in capsys.readouterr().out
+    index, roots, frame = fixture_index(tmp_path)
+    versions = tmp_path / "versions"
+    versions.mkdir()
+    args = ["--dataset", "AvesChilenas", "--index-csv", str(index),
+            "--raw-root", str(roots["raw"]), "--versions-dir", str(versions)]
+    assert main(args) == 0
+    first = json.loads(capsys.readouterr().out)
+    old = versions / first["version_id"]
+    before = {p.name: p.read_bytes() for p in old.iterdir()}
+    assert first["output_dir"] == str(old)
+    frame.loc[0, "extra"] = "reviewed"
+    frame.to_csv(index, index=False)
+    assert main(args) == 0
+    second = json.loads(capsys.readouterr().out)
+    assert second["version_id"] != first["version_id"]
+    assert {p.name: p.read_bytes() for p in old.iterdir()} == before
+    with pytest.raises(SystemExit) as error:
+        main(args)
+    assert error.value.code == 2
+    assert len(list(versions.iterdir())) == 2
