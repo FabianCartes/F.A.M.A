@@ -28,6 +28,8 @@ class ImportLimits:
     free_bytes: int = 512 * 1024**2
     ttl_seconds: int = 86400
     concurrent_imports: int = 4
+    dataset_bytes: int = 15 * 1024**3
+    dataset_entries: int = 50000
 
     def public(self):
         return asdict(self)

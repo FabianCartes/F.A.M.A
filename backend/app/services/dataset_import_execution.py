@@ -11,7 +11,7 @@ from app.models.dataset_import_metadata import (
     DatasetMember, DatasetSummary, ImportFile, ImportSummary,
 )
 from app.services.dataset_import_jobs import LeaseLost
-from app.services.dataset_import_records import identifier, replace_preview, required_summary
+from app.services.dataset_import_records import dataset_quota, identifier, quota_issues, replace_preview, required_summary
 from app.services.dataset_import_worker import ImportJobWorker
 from app.services.dataset_imports import _canonical_path, _durable_directory, digest_file, reject
 from app.services.dataset_zip import validate_zip
@@ -107,6 +107,10 @@ class ImportExecution:
                           resolved_target_id=target.id if target else None,
                           target_revision=target.revision if target else None, root=root,
                           staging_attempt=staging.name, execution_id=job.id)
+            added = [f for f in result["files"] if not f["duplicate"] and not f["existing"]]
+            result["quota"] = dataset_quota(db, target, sum(f["size_bytes"] for f in added),
+                                            len(added), self.service.limits)
+            result["errors"].extend(quota_issues(result["quota"]))
             replace_preview(db, source, result)
             source.preview_token = uuid.uuid4().hex + uuid.uuid4().hex
             source.status = "needs_correction" if result["errors"] else "ready"
@@ -126,6 +130,17 @@ class ImportExecution:
         if source.status != "imported" and target and target.revision != preview["target_revision"]:
             reject(409, "El dataset cambió. Genera y revisa una nueva vista previa.")
         if source.status != "imported":
+            selected = db.query(ImportFile).filter_by(import_id=source.id, duplicate=False, existing=False)
+            new_files, new_bytes = selected.with_entities(func.count(ImportFile.id),
+                func.coalesce(func.sum(ImportFile.size_bytes), 0)).one()
+            count, total = db.query(func.count(ImportFile.id),
+                func.coalesce(func.sum(ImportFile.size_bytes), 0)).filter_by(import_id=source.id).one()
+            if (count != summary.file_count or total != summary.total_size_bytes
+                    or new_files != preview.get("new_count") or new_bytes < 0):
+                reject(503, "Los metadatos requieren migración verificada antes de continuar.")
+            issues = quota_issues(dataset_quota(db, target, new_bytes, new_files, self.service.limits))
+            if issues:
+                reject(409, issues[0]["code"])
             for other in db.query(DatasetImport).filter_by(owner_id=source.owner_id, status="committing"):
                 if other.id != source.id and (target and other.dataset_id == target.id or
                         not target and other.request["name"] == source.request["name"] or
@@ -141,11 +156,13 @@ class ImportExecution:
         return source, target, preview
 
     def confirm(self, attempt, staging):
+        from app.services.dataset_import_receipts import release_published_receipt
         # Commit the journal before any filesystem publication. A replacement
         # reuses this journal and verifies the immutable destination after crash.
         with self.queue.publication(attempt) as (db, job):
             source, target, preview = self._confirmation(db, attempt)
             if source.status == "imported":
+                release_published_receipt(db, source)
                 result = {"added_count": source.added_count}
                 if source.dataset_id:
                     result["dataset_id"] = source.dataset_id
@@ -203,6 +220,7 @@ class ImportExecution:
                 counts.class_count = db.query(func.count(func.distinct(DatasetMember.class_name))).filter_by(dataset_id=target.id).scalar()
             source.status, source.added_count = "imported", len(files)
             source.dataset_id = target.id if target else None
+            release_published_receipt(db, source)
             result = {"added_count": len(files)}
             if source.dataset_id:
                 result["dataset_id"] = source.dataset_id

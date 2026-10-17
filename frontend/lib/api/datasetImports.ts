@@ -11,6 +11,12 @@ const previewSchema = z.object({
   file_count: z.number(), class_count: z.number(), error_count: z.number(), warning_count: z.number(),
   total_size_bytes: z.number(), synced_count: z.number(),
   new_count: z.number().optional(), duplicate_count: z.number().optional(), duplicate_collection: z.boolean().optional(),
+  quota: z.object({
+    current_bytes: z.number().int().nonnegative(), current_files: z.number().int().nonnegative(),
+    new_bytes: z.number().int().nonnegative(), new_files: z.number().int().nonnegative(),
+    projected_bytes: z.number().int().nonnegative(), projected_files: z.number().int().nonnegative(),
+    limit_bytes: z.number().int().positive(), limit_files: z.number().int().positive(),
+  }).optional(),
 });
 export const issueSchema = z.object({ id: z.string(), severity: z.enum(["error", "warning"]),
   path: z.string(), code: z.string(), action: z.string().nullable() });
@@ -39,6 +45,7 @@ export const limitsSchema = z.object({
   path_bytes: z.number(), audio_bytes: z.number(), audio_seconds: z.number(),
   validation_seconds: z.number(), free_bytes: z.number(), ttl_seconds: z.number(),
   concurrent_imports: z.number(),
+  dataset_bytes: z.number().optional(), dataset_entries: z.number().optional(),
 });
 export type ImportJob = z.infer<typeof jobSchema>;
 export type ImportDataset = z.infer<typeof datasetSchema>;

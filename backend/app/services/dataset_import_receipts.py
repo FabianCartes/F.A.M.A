@@ -118,3 +118,17 @@ def release_receipt(db, import_id):
         if source.status == "cancelled":
             row.status = "cancelled"
         db.commit()
+
+
+def release_published_receipt(db, source):
+    """Release a fulfilled promise inside the caller's publication transaction.
+
+    The queue gate is already held. Never reacquire it or commit independently:
+    membership, journal completion and this release must succeed together.
+    Legacy imports may have no receipt table/row; no migration is performed.
+    This does not assert that retained archive or attempt files were removed.
+    """
+    if source.status != "imported":
+        raise ValueError("Only published imports fulfill their reservation")
+    if has_receipt(db, source.id):
+        db.get(ImportReceipt, source.id).reservation_active = False

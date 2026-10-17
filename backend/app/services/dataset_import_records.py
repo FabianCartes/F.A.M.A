@@ -27,6 +27,38 @@ def required_summary(db, model, key):
     return summary
 
 
+def dataset_quota(db, target, new_bytes, new_files, limits):
+    """Bounded accounting from normalized membership, never legacy JSON or I/O.
+
+    Call under the publication gate so the revision and counters form one view.
+    Inconsistent summaries require operator recovery, not an implicit repair.
+    """
+    current_bytes = current_files = 0
+    if target is not None:
+        summary = required_summary(db, DatasetSummary, target.id)
+        count, unique, total, classes, latest = db.query(func.count(DatasetMember.id),
+            func.count(func.distinct(DatasetMember.sha256)),
+            func.coalesce(func.sum(DatasetMember.size_bytes), 0),
+            func.count(func.distinct(DatasetMember.class_name)),
+            func.coalesce(func.max(DatasetMember.dataset_revision), 0)).filter_by(dataset_id=target.id).one()
+        if (summary.revision != target.revision or summary.file_count != count or count != unique
+                or summary.total_size_bytes != total or total < 0 or summary.class_count != classes
+                or latest > target.revision):
+            raise HTTPException(503, "Los metadatos requieren migración verificada antes de continuar.")
+        current_bytes, current_files = total, count
+    return dict(current_bytes=current_bytes, current_files=current_files,
+                new_bytes=new_bytes, new_files=new_files,
+                projected_bytes=current_bytes + new_bytes, projected_files=current_files + new_files,
+                limit_bytes=limits.dataset_bytes, limit_files=limits.dataset_entries)
+
+
+def quota_issues(quota):
+    return [dict(path="", code=code, action=action) for dimension, code, action in (
+        ("bytes", "dataset_size_limit", "Reduce el contenido nuevo: supera la cuota de bytes del dataset."),
+        ("files", "dataset_entry_limit", "Reduce los archivos nuevos: supera la cuota de miembros del dataset."))
+        if quota["projected_" + dimension] > quota["limit_" + dimension]]
+
+
 def file_fields(file, root, source):
     prefix = root + "/" if root else ""
     return dict(source_import_id=source, class_name=file["class_name"],

@@ -16,7 +16,7 @@ Las entregas T3a–T3b son aditivas: **no habilitan subidas de 10 GiB**.
 T3c conecta el panel con reservas y fragmentos; requiere las migraciones
 explícitas de ambas entregas antes del uso. El recorrido HTTP antiguo de archivo
 completo conserva su comportamiento para clientes sin reserva, pero el panel ya
-no lo usa ni vuelve a él ante errores. T3d completará las cuotas del dataset.
+no lo usa ni vuelve a él ante errores. T3d añade las cuotas del dataset descritas debajo.
 Se permite conservar varios
 datasets por usuario; el límite de una recepción en curso es temporal.
 
@@ -58,8 +58,10 @@ configuración inválida falla503. No son cuotas acumuladas del catálogo. Adem�
 la suma de promesas existentes, nueva promesa y `free_bytes` debe caber en el
 espacio libre real. Es conservador: bytes ya escritos siguen descontados del
 espacio libre; no se promete preasignación física ni protección frente a otros
-programas que llenen el disco. Las importaciones publicadas liberan su promesa en
-la siguiente admisión, sin afirmar que se borraron temporales u objetos.
+programas que llenen el disco. La publicación libera la promesa en la misma
+transacción que los miembros y el éxito del trabajo, sin afirmar que se borraron
+temporales u objetos. La siguiente admisión conserva la reconciliación de
+publicaciones anteriores como respaldo de compatibilidad.
 
 Comprobación focal, con el mismo entorno aislado documentado debajo:
 
@@ -219,6 +221,62 @@ Rollback: desactivar las rutas de transferencia y conservar tablas, reservas y
 staging para recuperación; no volver al PUT antiguo sobre una recepción reservada.
 Límites actuales de64MiB recibidos/256MiB expandidos sin cambios. No se acredita
 operación de10GiB, PostgreSQL real, Docker/Python3.12, frontend, GCS ni escala.
+
+### T3d: capacidad acumulada del dataset
+
+Cada dataset admite por defecto **15 GiB de WAV únicos y50.000 miembros únicos**.
+Un GiB equivale a1024³ bytes. No es una cuota de almacenamiento acumulado por
+usuario: se pueden conservar varios datasets. Los límites independientes de
+ZIP recibido64MiB, expansión256MiB y2.000 entradas del archivo no cambian; T4
+seguirá pendiente. No se habilitan subidas de10GiB por configurar estas cuotas.
+
+| Configuración | Valor inicial | Contabilidad |
+| --- | --- | --- |
+| `FAMA_IMPORT_DATASET_BYTES` | `16106127360` | Bytes de WAV únicos publicados más los nuevos únicos. |
+| `FAMA_IMPORT_DATASET_ENTRIES` | `50000` | Miembros publicados más los nuevos únicos. |
+
+Se aplican mediante `ImportLimits`, igual que los otros límites; usar enteros
+positivos y configuración coherente en API y workers. El límite exacto se admite;
+un byte o un miembro adicional se rechaza. No se cuentan dos veces los duplicados
+internos ni el contenido ya presente. Una etiqueta distinta para el mismo contenido
+sigue siendo un conflicto, no una manera de eludir la deduplicación.
+
+La vista previa acotada incluye `preview.quota`: `current_bytes/current_files`,
+`new_bytes/new_files`, `projected_bytes/projected_files` y `limit_bytes/limit_files`.
+El panel muestra actuales+nuevos=proyectados junto al límite efectivo revisado.
+Las incidencias `dataset_size_limit` y `dataset_entry_limit` impiden confirmar:
+reduce el contenido nuevo o revisa la configuración autorizada y vuelve a validar.
+Una vista previa antigua sin estos campos sigue siendo legible, pero no elude
+la comprobación del worker.
+
+Confirmar vuelve a comprobar revisión y cuota bajo la compuerta de publicación,
+antes del journal y antes de publicar, también durante recuperación. Si otro
+trabajo cambió el destino, genera y revisa otra vista previa. Si se redujo la cuota,
+el trabajo puede fallar aunque la vista previa anterior estuviera lista; consulta
+su estado y conserva el staging/journal. El replay de una importación ya publicada
+no agrega contenido ni falla por una reducción posterior de cuota.
+
+Los rechazos conservan miembros, revisión, objetos publicados y reserva temporal.
+Las reservas de vistas previas con errores y trabajos fallidos siguen cobradas
+hasta cancelación segura o publicación satisfactoria. Una caída después del rename
+conserva el journal y la reserva hasta recuperación; no borres manualmente esos
+objetos. Un resumen inconsistente requiere investigación y recuperación explícita,
+no reparación automática. Véase [ADR0034](../adr/0034-dataset-import-quotas.md).
+
+Comprobación focal desde `backend/`, con el entorno aislado documentado:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// \
+CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+../.venv/bin/python tests/run_isolated_training_checks.py tests/test_dataset_import_quotas.py -q --tb=short
+```
+
+La prueba usa WAV sintéticos, SQLite en memoria y barreras controladas. Incluye
+recepción fragmentada hasta descarga del WAV original y rollback de publicación;
+no certifica PostgreSQL, múltiples hosts, escala,10GiB ni contención del decoder.
+No requiere migración nueva de T3d. Rollback: retirar coordinadamente las adiciones
+de cuota del worker, límites y panel, conservando los datos normalizados y el
+protocolo T3a–T3c; no borrar tablas ni staging recuperable.
 
 ### Operaciones de ejecución de T2
 

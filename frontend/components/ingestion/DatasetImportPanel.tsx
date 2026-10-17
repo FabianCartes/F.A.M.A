@@ -53,6 +53,8 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
   const executionStatus = job?.execution?.status;
   const importId = job?.id;
   const executing = executionStatus === "queued" || executionStatus === "running";
+  const quota = job?.preview.quota;
+  const quotaExceeded = quota && (quota.projected_bytes > quota.limit_bytes || quota.projected_files > quota.limit_files);
 
   useEffect(() => {
     if (!importId || !executionId || !["queued", "running"].includes(executionStatus ?? "")) return;
@@ -294,6 +296,11 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
           <p role="status">Importación {job.id}: {statusLabels[job.status] || job.status}</p>
           <p>Sincronización: {statusLabels[job.sync_status] || job.sync_status}</p>
           <p>Clases propuestas: {job.preview.class_count} · Archivos: {job.preview.file_count} · Nuevos: {job.preview.new_count ?? 0} · Duplicados internos: {job.preview.duplicate_count ?? 0} · Errores: {job.preview.error_count} · Advertencias: {job.preview.warning_count}</p>
+          {job.preview.quota && <section aria-label="Cuota del dataset">
+            <p>Bytes únicos: actuales {job.preview.quota.current_bytes} + nuevos {job.preview.quota.new_bytes} = proyectados {job.preview.quota.projected_bytes} / límite {job.preview.quota.limit_bytes}.</p>
+            <p>Archivos únicos: actuales {job.preview.quota.current_files} + nuevos {job.preview.quota.new_files} = proyectados {job.preview.quota.projected_files} / límite {job.preview.quota.limit_files}.</p>
+            <p>La confirmación vuelve a comprobar la cuota y la revisión del destino.</p>
+          </section>}
           {job.preview.duplicate_collection && <p>Colección ya importada: se detectó el mismo contenido y etiquetas.</p>}
           {job.preview_token && <div key={`${token}:${job.id}:${job.preview_token}`}>
             <ImportDetailPage token={token} endpoint={`${importBase}/${job.id}/files`} collection="files" label="archivos" schema={audioSchema} snapshot={job.preview_token}
@@ -303,7 +310,7 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
               renderItem={issue => <span role={issue.severity === "error" ? "alert" : undefined}>{issue.severity === "warning" ? "Advertencia: " : ""}{issue.path}: {issue.code}. {issue.action}</span>} />
           </div>}
           {job.error && <p role="alert">{job.error === "expired" ? "La importación venció." : "La sincronización no está completa. Reintenta; la copia local se conserva."}</p>}
-          {["ready", "committing"].includes(job.status) && <button className={buttonClass} disabled={!!busy || executing || (job.status === "ready" && root !== job.preview.root)} onClick={() => void act("Admitiendo confirmación local…", () => action("confirm", { preview_token: job.preview_token }))}>Confirmar importación local</button>}
+          {["ready", "committing"].includes(job.status) && <button className={buttonClass} disabled={!!busy || executing || !!quotaExceeded || job.preview.error_count > 0 || (job.status === "ready" && root !== job.preview.root)} onClick={() => void act("Admitiendo confirmación local…", () => action("confirm", { preview_token: job.preview_token }))}>Confirmar importación local</button>}
           {job.status === "imported" && <>
             <p>Importada localmente: {job.added_count} archivo(s) nuevo(s).{job.added_count === 0 ? " No hay novedades; no se creó un dataset vacío." : ""}</p>
             {job.dataset_id && <>
