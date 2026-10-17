@@ -5,6 +5,61 @@ import { durableFetch } from "./datasetImportTransport";
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
+it.each([60, 600])("keeps the rendered review page bounded across %i synthetic files", async total => {
+  const base = "/api/ingestion/imports";
+  const job = { id: `integral-${total}`, status: "ready", sync_status: "pending", dataset_id: null, added_count: 0,
+    preview_token: "a".repeat(64), error: null, preview: { root: "", file_count: total, class_count: 1,
+      error_count: 0, warning_count: 0, total_size_bytes: total * 204, synced_count: 0, new_count: total } };
+  const writes: string[] = [];
+  const fetcher = durableFetch(async (input: string, options?: RequestInit) => {
+    const url = new URL(input, "http://synthetic.test");
+    const page = (key: string, items: unknown[], count = items.length, next_cursor: string | null = null) =>
+      Response.json({ [key]: items, total: count, next_cursor, snapshot: job.preview_token });
+    if (options?.method && options.method !== "GET") writes.push(input);
+    if (url.pathname.endsWith("/access")) return Response.json({ development_mode: true });
+    if (url.pathname.endsWith("/limits")) return Response.json({ received_bytes: 67108864, expanded_bytes: 268435456,
+      entries: 2000, depth: 12, path_bytes: 240, audio_bytes: 1024, audio_seconds: 600, validation_seconds: 60,
+      free_bytes: 1, ttl_seconds: 86400, concurrent_imports: 4 });
+    if (url.pathname === base + "/datasets") return page("datasets", []);
+    if (url.pathname === base) return page("imports", [job]);
+    if (url.pathname.endsWith("/classes")) return page("classes", ["birds"]);
+    if (url.pathname.endsWith("/issues")) return page("issues", []);
+    if (url.pathname.endsWith("/files")) {
+      const offset = Number(url.searchParams.get("cursor") ?? 0);
+      const end = Math.min(offset + 50, total);
+      return page("files", Array.from({ length: end - offset }, (_, index) => {
+        const id = offset + index;
+        return { id: String(id), original_path: `birds/${id}.wav`, relative_path: `birds/${id}.wav`,
+          class_name: "birds", sha256: String(id), size_bytes: 204, duplicate: false };
+      }), total, end < total ? String(end) : null);
+    }
+    throw new Error(`Unexpected ${input}`);
+  });
+  vi.stubGlobal("fetch", fetcher);
+  render(<DatasetImportPanel sessionToken="synthetic" />);
+  fireEvent.click(screen.getByRole("button", { name: "Importar dataset" }));
+  const start = within(screen.getByRole("dialog")).getByRole("button", { name: "Importar dataset" }) as HTMLButtonElement;
+  await waitFor(() => expect(start.disabled).toBe(false));
+  fireEvent.click(start);
+  fireEvent.click(await screen.findByRole("button", { name: new RegExp(`${job.id} —`) }));
+  const review = screen.getByRole("region", { name: "archivos" });
+  let maximumRows = 0;
+  for (let offset = 0; offset < total; offset += 50) {
+    await within(review).findByText(`birds/${offset}.wav → birds`);
+    const rows = within(review).getAllByRole("listitem");
+    expect(rows).toHaveLength(Math.min(50, total - offset));
+    expect(rows.length).toBeLessThanOrEqual(200);
+    maximumRows = Math.max(maximumRows, rows.length);
+    if (offset) expect(within(review).queryByText(`birds/${offset - 50}.wav → birds`)).toBeNull();
+    const next = within(review).getByRole("button", { name: "Siguiente página de archivos" }) as HTMLButtonElement;
+    expect(next.disabled).toBe(offset + 50 >= total);
+    if (!next.disabled) fireEvent.click(next);
+  }
+  expect(writes).toEqual([]); // Reviewing never confirms or synchronizes implicitly.
+  expect(fetcher.mock.calls.filter(([url]) => url.includes(`/${job.id}/files`))).toHaveLength(Math.ceil(total / 50));
+  console.info("T8_DOM", JSON.stringify({ total, maximumRows, pages: Math.ceil(total / 50) }));
+});
+
 it("replaces review pages instead of accumulating rows and preserves the reviewed token", async () => {
   const base = "/api/ingestion/imports";
   const job = { id: "paged", status: "ready", sync_status: "pending", dataset_id: null, added_count: 0,

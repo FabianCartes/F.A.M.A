@@ -1,5 +1,9 @@
 # Admisión durable de trabajos de importación
 
+La [guía integral T8](integracion-importacion-datasets.md) reúne el recorrido del
+usuario, matriz de aceptación, presupuestos observables, almacenamiento y recuperación.
+Su alcance sintético no sustituye los procedimientos OS/entre procesos de este manual.
+
 **Estado: Corte2 (T2a–T2e) implementado y verificado dentro del alcance sintético local; revisiones nativas aprobadas y acuses consumidos.**
 Los commits locales se registran en [el seguimiento, L37/L41](../arquitectura/large-zip-gcs.md).
 El CLI y la prueba integral sintética de publicación se describen debajo;

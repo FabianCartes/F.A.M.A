@@ -5,6 +5,11 @@ copia persistente local y permite sincronizarla posteriormente con GCS. No prepa
 particiones, extrae tensores ni inicia entrenamiento. Implementación local: todavía
 no acredita despliegue ni operación real de GCS.
 
+Para recepción reanudable, exportación nativa y mantenimiento, consultar la
+[guía integral de operación y comprobación sintética T8](integracion-importacion-datasets.md).
+Los pasos Docker de este manual requieren autorización separada; no forman parte
+de esa comprobación aislada.
+
 ## Uso
 
 1. En **Gestión de audios**, pulsa **Importar dataset**, junto a **Descargar Dataset
