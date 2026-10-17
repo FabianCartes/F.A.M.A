@@ -6,7 +6,7 @@ import shutil
 import time
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import func
 
 from app.models.dataset_import import DatasetImport, ImportedDataset
 from app.models.dataset_import_metadata import (
@@ -256,57 +256,5 @@ class ImportExecution:
         return result
 
     def sync(self, attempt, staging):
-        from app.services.dataset_import_storage import TransientSyncError
-        if self.storage is None:
-            raise RuntimeError("An explicit storage adapter is required for sync")
-        with self.queue.publication(attempt) as (db, _):
-            source = self._source(db, attempt)
-            if source.status != "imported" or not source.dataset_id:
-                reject(409, "Confirma una importación con contenido antes de sincronizar.")
-            source.sync_status, source.error = "running", None
-            dataset_id, owner = source.dataset_id, source.owner_id
-        cursor = ""
-        while True:
-            with self.queue.sessions() as db:
-                wanted = select(ImportFile.sha256).where(ImportFile.import_id == attempt["import_id"])
-                file = db.query(DatasetMember).filter(DatasetMember.dataset_id == dataset_id,
-                    DatasetMember.sha256.in_(wanted), DatasetMember.id > cursor).order_by(DatasetMember.id).first()
-                if file is None:
-                    break
-                identity, digest, origin, name, label = file.id, file.sha256, file.source_import_id, file.stored_name, file.class_name
-            path = self.service.root / "objects" / origin / name
-            if path.is_symlink() or not path.is_file() or digest_file(path) != digest:
-                reject(409, "Integridad local incorrecta. Solicita recuperación.")
-            key = f"private-imports/{owner}/{dataset_id}/{digest}.wav"
-            # No DB session or publication lock spans the network operation.
-            try:
-                for retry in range(3):
-                    try:
-                        generation = self.storage.ensure(key, path, digest,
-                            {"owner_id": str(owner), "dataset_id": dataset_id, "class_name": label})
-                        break
-                    except TransientSyncError:
-                        if retry == 2:
-                            raise
-                        time.sleep(0.05 * 2**retry)
-            except Exception:
-                with self.queue.publication(attempt) as (db, _):
-                    source = self._source(db, attempt)
-                    source.sync_status, source.error = "error", "sync_failed_or_integrity_conflict"
-                raise RuntimeError("Synchronization failed") from None
-            with self.queue.publication(attempt) as (db, _):
-                self._source(db, attempt)
-                file = db.get(DatasetMember, identity)
-                file.sync_status, file.object_key, file.object_generation = "synced", key, generation
-                db.query(ImportFile).filter_by(import_id=attempt["import_id"], sha256=digest).update({"sync_status": "synced"})
-            cursor = identity
-        with self.queue.publication(attempt) as (db, job):
-            source = self._source(db, attempt)
-            source.sync_status = "synced"
-            from app.services.dataset_import_cleanup import request
-            request(db, source.id)
-            count = db.query(func.count(func.distinct(ImportFile.sha256))).filter_by(
-                import_id=source.id, sync_status="synced").scalar()
-            result = {"dataset_id": dataset_id, "synced_count": count}
-            self.queue.complete_publication(db, job, result)
-        return result
+        from app.services.dataset_import_manifests import synchronize
+        return synchronize(self, attempt, staging)

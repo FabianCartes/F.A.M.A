@@ -10,6 +10,18 @@ class MemoryObjects:
         self.objects = {}
         self.calls = []
         self.fail_key = None
+        self.manifests = {}
+
+    def ensure_manifest(self, key, path, sha256, metadata):
+        # Manifest identity lives separately from the original-WAV assertions.
+        data = path.read_bytes()
+        from app.services.dataset_import_storage import IntegrityConflict
+        if hashlib.sha256(data).hexdigest() != sha256:
+            raise IntegrityConflict("manifest digest mismatch")
+        if key in self.manifests and self.manifests[key] != (data, metadata):
+            raise IntegrityConflict("immutable manifest conflict")
+        self.manifests[key] = (data, metadata)
+        return "1"
 
     def ensure(self, key, path, sha256, metadata):
         from app.services.dataset_import_storage import TransientSyncError, IntegrityConflict
@@ -121,3 +133,59 @@ def test_gcs_adapter_uses_conditional_creation_and_generation_bound_digest_verif
     else:
         assert storage.ensure("private-imports/1/dataset/audio.wav", path, digest, identity) == "7"
         assert len(calls) == (1 if mode in ("new", "race") else 0)
+
+
+def test_manifest_adapter_creates_json_conditionally_and_verifies_exact_bytes(tmp_path):
+    from google.api_core.exceptions import NotFound
+    from app.services.dataset_import_storage import GCSImportStorage
+    data = b'{"schema_version":1,"files":[]}'
+    path = tmp_path / "manifest.json"
+    path.write_bytes(data)
+    digest = hashlib.sha256(data).hexdigest()
+    metadata = {"owner_id": "1", "dataset_id": "synthetic", "dataset_revision": "1"}
+    calls = []
+    class Blob:
+        generation, size = "9", len(data)
+        exists = False
+        def reload(self, **kwargs):
+            if not self.exists:
+                raise NotFound("synthetic")
+        def upload_from_filename(self, filename, **kwargs):
+            calls.append(kwargs)
+            self.exists = True
+        def download_to_file(self, sink, **kwargs):
+            assert kwargs["if_generation_match"] == 9 and kwargs["raw_download"] is True
+            sink.write(data)
+    blob = Blob()
+    storage = GCSImportStorage("synthetic", SimpleNamespace(bucket=lambda _: SimpleNamespace(blob=lambda _: blob)))
+    assert storage.ensure_manifest("private/manifest.json", path, digest, metadata) == "9"
+    assert calls == [{"content_type": "application/json", "if_generation_match": 0, "timeout": 10, "retry": None}]
+    assert storage.ensure_manifest("private/manifest.json", path, digest, metadata) == "9"
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("mode", ["valid", "wrong_digest", "oversize", "generation_conflict"])
+def test_manifest_adapter_recovers_only_authorized_generation_and_integrity(tmp_path, mode):
+    from google.api_core.exceptions import PreconditionFailed
+    from app.services.dataset_import_storage import GCSImportStorage, IntegrityConflict
+    data = b'{"schema_version":1}'
+    calls = []
+    class Blob:
+        def download_to_file(self, sink, **kwargs):
+            assert kwargs == {"if_generation_match": 9, "raw_download": True, "timeout": 10, "retry": None}
+            if mode == "generation_conflict":
+                raise PreconditionFailed("synthetic")
+            sink.write(data + b"x" if mode == "oversize" else b"x" * len(data) if mode == "wrong_digest" else data)
+    def blob(key, **kwargs):
+        calls.append((key, kwargs))
+        return Blob()
+    storage = GCSImportStorage("synthetic", SimpleNamespace(bucket=lambda _: SimpleNamespace(blob=blob)))
+    with (tmp_path / "private.json").open("w+b") as target:
+        if mode == "valid":
+            storage.read_verified("authorized/manifest.json", "9", hashlib.sha256(data).hexdigest(), len(data), target)
+            target.seek(0)
+            assert target.read() == data
+        else:
+            with pytest.raises(IntegrityConflict):
+                storage.read_verified("authorized/manifest.json", "9", hashlib.sha256(data).hexdigest(), len(data), target)
+    assert calls == [("authorized/manifest.json", {"generation": 9})]

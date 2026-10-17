@@ -147,6 +147,45 @@ def files(dataset_id: str, db: Session = Depends(get_db), user=Depends(get_impor
     return service.dataset_page(db, user.id, dataset_id, **paging)
 
 
+@router.get("/datasets/{dataset_id}/revisions/{revision}")
+def revision_status(dataset_id: str, revision: int = PathParameter(ge=0), db: Session = Depends(get_db),
+                    user=Depends(get_import_user), service=Depends(get_import_service)):
+    from app.services.dataset_import_manifests import authorized_reference
+    return authorized_reference(service, db, user.id, dataset_id, revision)
+
+
+@router.get("/datasets/{dataset_id}/revisions/{revision}/manifest")
+def revision_manifest(dataset_id: str, revision: int = PathParameter(ge=0), db: Session = Depends(get_db),
+                      user=Depends(get_import_user), service=Depends(get_import_service),
+                      storage=Depends(get_import_storage)):
+    import tempfile
+    from fastapi.responses import StreamingResponse
+    from starlette.background import BackgroundTask
+    from app.services.dataset_import_manifests import authorized_reference
+    reference = authorized_reference(service, db, user.id, dataset_id, revision)
+    if reference["status"] != "complete":
+        reject(409, "La revisión todavía no tiene un manifiesto completo.")
+    identity = reference["manifest"]
+    db.rollback()  # Authorize first; no read transaction spans remote recovery.
+    stream = tempfile.TemporaryFile(mode="w+b")
+    try:
+        storage.read_verified(identity["object_key"], identity["object_generation"],
+                              identity["sha256"], identity["size_bytes"], stream)
+        stream.seek(0)
+    except Exception:
+        stream.close()
+        reject(409, "El manifiesto no está disponible con la integridad y generación autorizadas.")
+
+    def chunks():
+        try:
+            while data := stream.read(1024 * 1024):
+                yield data
+        finally:
+            stream.close()
+    return StreamingResponse(chunks(), media_type="application/json", background=BackgroundTask(stream.close),
+        headers={"Content-Length": str(identity["size_bytes"]), "ETag": '"' + identity["sha256"] + '"'})
+
+
 @router.get("/datasets/{dataset_id}/files/{sha256}")
 def download(dataset_id: str, sha256: str, db: Session = Depends(get_db), user=Depends(get_import_user), service=Depends(get_import_service)):
     return FileResponse(service.download(db, user.id, dataset_id, sha256), media_type="audio/wav", filename=f"{sha256}.wav")

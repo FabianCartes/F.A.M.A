@@ -178,6 +178,10 @@ def test_sync_rechecks_previously_synced_content_and_keeps_network_outside_publi
             assert client.get(f"/api/ingestion/imports/datasets/{dataset}/files").status_code == 200
             return "generation-1"
 
+        def ensure_manifest(self, *args):
+            assert queue.claim(lease_seconds=10) is None
+            return "manifest-generation-1"
+
     storage = execution.storage = Storage()
     first = queue.admit(1, source["id"], "sync", "sync-1", {})
     assert execution.run_once()

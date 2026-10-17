@@ -181,7 +181,7 @@ class ImportJobQueue:
         if error not in (None, "execution_failed", "execution_timeout", "staging_failed"):
             raise ValueError("Invalid execution error")
         result = {} if result is None else result
-        if not isinstance(result, dict) or set(result) - {"dataset_id", "added_count", "synced_count"}:
+        if not isinstance(result, dict) or set(result) - {"dataset_id", "dataset_revision", "added_count", "synced_count"}:
             raise ValueError("Invalid execution result")
         for key, value in result.items():
             if key == "dataset_id":

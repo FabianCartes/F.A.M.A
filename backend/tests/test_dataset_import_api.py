@@ -18,6 +18,7 @@ def imports(tmp_path, monkeypatch, request):
     from app.database import Base, get_db
     from app.routes.dataset_imports import router, get_import_service, get_import_user
     from app.services.dataset_imports import DatasetImports
+    from app.models import dataset_import_revision  # Register additive tables in the synthetic store.
     from app.services.dataset_zip import ImportLimits
     if not getattr(request, "param", False):
         # Memory-only runner forbids subprocesses. These existing domain/HTTP

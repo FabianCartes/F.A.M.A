@@ -621,3 +621,99 @@ su propia ejecución observada, no reutilizar evidencia del corte anterior.
 Rollback: retirar conjuntamente el sandbox y su conexión al worker; preservar datos,
 journals e intentos recuperables. No usar rollback para aceptar entradas hostiles sin
 contención. [ADR0035](../adr/0035-contained-zip-validation.md) registra la decisión.
+
+## T6: sincronización de revisiones y manifiestos inmutables
+
+El `sync` explícito sincroniza una fotografía durable del **dataset completo**,
+no solo los hashes de la importación iniciadora. El estado de implementación y
+verificación vigente está en [el seguimiento](../arquitectura/large-zip-gcs.md).
+No ejecutar estas instrucciones contra recursos reales sin autorización separada.
+
+### Preparación y ejecución
+
+1. Detener API y workers antes de la migración aditiva, conservando el respaldo y
+   los metadatos anteriores. Las migraciones previas siguen siendo prerrequisitos.
+2. Desde `backend/`, con el intérprete del entorno operativo, ejecutar explícitamente:
+
+   ```bash
+   PYTHONPATH=. python -m scripts.migrate_dataset_import_revisions \
+     --database-url '<explicit-database-url>' --writers-stopped
+   ```
+
+   Esperar `{"version": 1, "verified": true}` y exit0. Argumentos incompletos
+   producen exit2; un fallo produce exit1 sanitizado. El comando no inicia workers,
+   no transfiere archivos ni declara sincronizado contenido histórico. Un esquema
+   incompatible se rechaza; preservar el estado y revisar mantenimiento.
+3. Reanudar consumidores coordinados. Admitir `POST /{import_id}/sync` con una
+   `request_key` nueva y consultar la URL de estado devuelta por HTTP202. El CLI
+   de un trabajo mantiene sus argumentos y su semántica `claimed`, no éxito final.
+
+| Control | Valor predeterminado y alcance |
+| --- | --- |
+| `FAMA_IMPORT_SYNC_BATCH_FILES` | 32 objetos; entero entre1 y200 |
+| `FAMA_IMPORT_SYNC_BATCH_BYTES` | 268435456 bytes (256MiB); entero entre1 y15GiB |
+| Concurrencia de transferencia | Un objeto por worker, sin futuros abandonados |
+| Reintentos transitorios | Máximo3, esperas0,05 y0,1s; no reintentar conflictos de integridad |
+
+Un WAV individual mayor que el presupuesto de lote rechaza la sincronización sin
+publicar un manifiesto completo; no se excede el límite para acomodarlo. Estos
+controles no amplían los límites de recepción64MiB, expansión256MiB,2000entradas,
+15GiB/50000archivos únicos por dataset ni la recepción simultánea por propietario.
+
+### Estado, reintento y recuperación
+
+- La primera ejecución fija la revisión del trabajo. Un reemplazo por lease
+  vencido recupera esa fotografía; un trabajo nuevo puede fijar la revisión actual.
+- Cada lote guarda resultados normalizados, generaciones e integridad y sus
+  contadores agregados. Los bytes se transfieren y verifican fuera de sesiones BD.
+  Un objeto creado antes de su checkpoint se verifica de nuevo, nunca se sobrescribe.
+- El resultado exitoso incluye `dataset_id`, `dataset_revision` y `synced_count`
+  de esa revisión completa. Si el dataset avanzó durante la transferencia, su
+  importación iniciadora permanece `pending`, no completa la revisión nueva.
+- El manifiesto solo se publica después de verificar todos los miembros. La
+  identidad completa queda ligada a clave, generación, SHA-256 y tamaño; una
+  revisión parcial no expone referencia de manifiesto. Las revisiones publicadas
+  y sus objetos se conservan; la limpieza T5 sigue limitada a staging.
+- Ante fallo, conservar tablas, WAVs, journals e intentos. Reintentar explícitamente;
+  no borrar objetos ni corregir contadores manualmente para forzar éxito. Un
+  cambio de generación o integridad requiere recuperación autorizada, no overwrite.
+
+### Consulta y recuperación autorizadas
+
+Los endpoints siguientes son relativos a `/api/ingestion/imports` y requieren al
+propietario autenticado del dataset:
+
+- `GET /datasets/{dataset_id}/revisions/{revision}`: estado `pending`/`complete`,
+  totales, contadores verificados y referencia de manifiesto solo si está completo.
+- `GET /datasets/{dataset_id}/revisions/{revision}/manifest`: recupera el JSON a un
+  temporal privado usando exclusivamente esa referencia autorizada. Verifica toda
+  su integridad antes de emitir bytes y transmite la respuesta por bloques, con
+  `Content-Length` y `ETag` SHA-256. Una revisión parcial o identidad no recuperable
+  devuelve409; otro propietario o revisión inexistente devuelve404.
+
+El JSON estándar contiene versión1, dataset/revisión, nombre/descripción,
+cantidades/tamaño total y miembros con clase, rutas canónica/original, importación
+de procedencia, tamaño/SHA-256 y clave/generación de WAV. Se genera por páginas;
+su recuperación y comprobación operan por bloques. No contiene ZIP, rutas locales
+absolutas, credenciales ni URLs firmadas. Su referencia autorizada acredita quién
+lo publicó; un hash aportado por el cliente no concede acceso ni acredita origen.
+Permite reconstruir el dataset lógico sin ZIP ni listas locales de miembros;
+no promete reproducir el contenedor ZIP original. La exportación ZIP y descarga
+reanudable de T7 **no están implementadas por estos endpoints**.
+
+### Comprobaciones sintéticas
+
+Desde `backend/`, con el mismo runner y guarda originales:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// \
+CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
+../.venv/bin/python tests/run_isolated_training_checks.py \
+  tests/test_dataset_import_revision_migration.py tests/test_dataset_import_manifests.py \
+  tests/test_dataset_import_sync.py tests/test_dataset_import_execution.py -q --tb=short
+```
+
+Estas pruebas usan SQLite en memoria, WAVs sintéticos, almacenamiento simulado y
+temporales privados; no certifican reinicio físico, PostgreSQL/GCS reales, escala
+ni despliegue. Prerrequisitos, resultados observados y límites se registran por
+ejecución en el seguimiento. [ADR0037](../adr/0037-immutable-dataset-revision-manifests.md).
