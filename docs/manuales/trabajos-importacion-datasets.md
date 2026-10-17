@@ -10,7 +10,7 @@ validación, publicación ni sincronización. No se han iniciado servicios reale
 
 ## T7: exportación y descarga nativa
 
-**Implementación verificada funcionalmente en alcance sintético local; revisión/commit pendientes, no desplegada.** El estado y los resultados
+**T7 cerrado localmente en alcance sintético; commit `9fcba8c`, revisión nativa aprobada y acuse consumido; no desplegado.** El estado y los resultados
 vigentes están en [el seguimiento](../arquitectura/large-zip-gcs.md), no en los
 resultados históricos de T6. No se autoriza ejecutar los comandos siguientes
 sobre una base, datos o almacenamiento reales por aparecer en este manual.
