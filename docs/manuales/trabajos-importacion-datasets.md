@@ -1,8 +1,9 @@
 # Admisión durable de trabajos de importación
 
-**Estado: integración T2c/T2d verificada localmente y revisión nativa aprobada, con acuse consumido.**
-El commit local se registra en [el seguimiento, L37](../arquitectura/large-zip-gcs.md).
-T2e sigue pendiente; esta entrega no certifica operación ni despliegue.
+**Estado: Corte2 (T2a–T2e) implementado y verificado dentro del alcance sintético local; revisiones nativas aprobadas y acuses consumidos.**
+Los commits locales se registran en [el seguimiento, L37/L41](../arquitectura/large-zip-gcs.md).
+El CLI y la prueba integral sintética de publicación se describen debajo;
+no certifican operación PostgreSQL, GCS real ni despliegue.
 `preview`, `confirm` y `sync` HTTP admiten trabajos durables; no ejecutan la
 operación ni arrancan workers desde la petición. Una fila `queued` no acredita
 validación, publicación ni sincronización. No se han iniciado servicios reales.
@@ -141,10 +142,48 @@ omite una recepción ocupada sin marcarla como vencida. Después toma la compuer
 de cola para revalidar elegibilidad; libera la compuerta antes del borrado pero
 mantiene el candado de recepción hasta terminar. No se toma el orden inverso.
 
-No se inicia un proceso de operación desde este manual ni automáticamente desde
-la API. El supervisor/CLI operativo y su evidencia de reinicio integral siguen
-en T2e. Sin un proceso explícito que invoque el ejecutor, los trabajos permanecen
+Sin un proceso explícito que invoque el ejecutor, los trabajos permanecen
 durablemente pendientes. No se han ampliado límites ni el aislamiento del decoder.
+
+## CLI de un trabajo por invocación
+
+Desde `backend/`, con el intérprete y el entorno operativos seleccionados por
+el administrador, la interfaz es:
+
+```bash
+python -m scripts.run_dataset_import_worker --help
+python -m scripts.run_dataset_import_worker \
+  --database-url '<explicit-migrated-database-url>' \
+  --import-root '<existing-private-absolute-import-root>' \
+  --staging-root '<existing-private-absolute-attempt-root>'
+```
+
+Estos son ejemplos de interfaz, no autorización para ejecutarlos contra datos
+reales. Usar una base ya migrada y los mismos directorios físicos estables en
+cada reinicio. Ambas raíces deben existir, pertenecer al usuario del proceso,
+tener permisos privados (0700) y compartir filesystem para permitir rename.
+La raíz de importaciones debe coincidir con la usada por la API. El comando no
+crea tablas, migra, carga la API ni arranca un supervisor. No infiere la URL de
+`DATABASE_URL` ni carga archivos dotenv; los límites existentes de importación
+y cola siguen leyendo sus variables documentadas.
+
+Cada invocación reclama como máximo un trabajo admisible, incluido un intento
+con lease vencido. Devuelve exit0 y `{"claimed": true}` si reclamó trabajo, o
+`{"claimed": false}` si no había ninguno. **No es una respuesta de éxito del
+dominio:** un intento reclamado puede fallar, vencer o perder su lease; comprobar
+su estado por HTTP. Los fallos de configuración/cola devuelven exit1 con mensaje
+sanitizado; argparse devuelve exit2 por argumentos inválidos. La supervisión
+externa decide la siguiente invocación y su backoff; no lanzar un bucle sin espera
+sobre `claimed=false` o exit1.
+
+La sincronización solo ocurre al reclamar un `sync` previamente admitido. El
+adaptador GCS crea el cliente perezosamente y usa `GCS_BUCKET_NAME` y las
+credenciales operativas existentes; no se validaron aquí. No ejecutar un worker
+contra una cola con trabajos remotos sin autorizar ese acceso. El plazo del
+callback no mata hilos Python: una terminación del proceso puede dejar un lease
+y un journal recuperables, no un resultado exitoso. Conservar staging, objetos y
+la base; reiniciar con las mismas raíces y consultar la recuperación. Este CLI
+no incorpora aislamiento de decoder ni limpieza automática de intentos.
 
 Desde `backend/`, con el entorno documentado en
 [integración de entrenamiento](integracion-flujo-entrenamiento.md#reproducir-comprobaciones-aisladas):
@@ -177,9 +216,31 @@ hijo sintético bloqueado. Readiness (incluidas líneas parciales), finalizació
 limpieza de hijos tienen plazos acotados; el coordinador siempre espera sus salidas.
 Se comprueban limpieza y hashes de los insumos protegidos. No es un sandbox OS.
 
-**El procedimiento entre procesos anterior demuestra fencing de cola, no todavía
-la publicación de membresía integrada.** Las pruebas de `ImportExecution` añaden
-recuperación de rename, publicación obsoleta rechazada y separación de staging
-con datos sintéticos; la evidencia integral de caída/reinicio entre procesos
-de publicación permanece en [T2e](../arquitectura/large-zip-gcs.md). No confundir
-estas pruebas con operación PostgreSQL, GPU, GCS real o validación de escalabilidad.
+**El procedimiento entre procesos anterior demuestra fencing de cola.** La
+publicación integrada usa un procedimiento separado, también desde `backend/`:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// \
+CUDA_VISIBLE_DEVICES='' ../.venv/bin/python tests/run_dataset_import_publication_process_checks.py
+```
+
+El coordinador crea una raíz0700 nueva en `/tmp/opencode`, usa un entorno
+allowlist e instala la guarda original antes de importar la aplicación en cada
+hijo. Solo permite su SQLite sintético privado; bloquea red y acceso a archivos
+de credenciales conocidos. No relaja el runner en memoria. Un hijo recibe WAV/ZIP
+sintéticos por HTTP y admite preview; otro ejecuta el CLI real. Después admite
+confirmación y bloquea en una barrera exclusiva del test tras rename, antes del
+commit; el coordinador mata ese proceso y espera su salida. Una consulta fresca
+comprueba journal `committing`, trabajo `running`, objetos movidos pero catálogo
+aún vacío. Otro intérprete recupera el mismo trabajo con reloj controlado en el
+vencimiento del lease. HTTP verifica una sola membresía/revisión, descarga y hash;
+otro replay no duplica contenido. También comprueba la salida de cola vacía.
+
+Readiness, líneas parciales y procesos tienen plazos; no hay sleeps de carrera.
+La raíz compartida permanece estable entre hijos y se retira al finalizar;
+los hashes del runner, guarda e inventario protegido deben permanecer idénticos.
+No hay hook de caída en producción. Esta guarda de aplicación no es un sandbox
+OS ni prueba bloqueo de toda lectura de credenciales, I/O nativo, fallo físico de
+disco o PostgreSQL. No confundir la evidencia sintética con GPU, GCS real,
+despliegue o validación de escalabilidad. Estado y resultados del corte en
+[el seguimiento](../arquitectura/large-zip-gcs.md).
