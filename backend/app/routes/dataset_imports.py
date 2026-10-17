@@ -380,3 +380,8 @@ def execution_retry(job_id: str, execution_id: str, payload: OperationImport,
     if payload.request_key == snapshot["request_key"]:
         reject(409, "Usa una identidad nueva para reintentar.")
     return accepted(queue.admit(user.id, job_id, snapshot["kind"], payload.request_key, snapshot["parameters"]))
+
+
+from app.routes.dataset_exports import router as export_router
+
+router.include_router(export_router)

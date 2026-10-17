@@ -17,7 +17,7 @@ docs/
 ├── arquitectura/                # Diseño de sistemas, pipelines, MLOps y despliegue
 ├── limites/                     # Límites matemáticos, físicos y problemas conocidos
 ├── manuales/                    # Manual de usuario, revisión, despliegue e índices canónicos
-├── adr/                         # Architectural Decision Records (ADR 0001 a 0037)
+├── adr/                         # Architectural Decision Records (ADR 0001 a 0038)
 ├── receipts/                    # Recibos técnicos reproducibles en formato JSON (RDD)
 ├── duplicados-exactos/           # Tarea acotada: admisión de feedback sin duplicados SHA-256
 └── images/                      # Diagramas, matrices de confusión y gráficos vectoriales
@@ -63,6 +63,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`0035-contained-zip-validation.md`](./adr/0035-contained-zip-validation.md): Contención Linux de interpretación ZIP/ZIP64 y decoder WAV, presupuestos de proceso, rechazo seguro y separación de publicación. Procedimiento T4 en [trabajos de importación](./manuales/trabajos-importacion-datasets.md#t4-validacion-zip64-contenida); verificación/cierre vigente en el seguimiento.
 * [`0036-recoverable-import-cleanup.md`](./adr/0036-recoverable-import-cleanup.md): Publicación de miembros nuevos y limpieza recuperable fuera de HTTP, separando liberación de reservas y recuperación física de staging; T5 cerrado localmente en alcance sintético, sin despliegue.
 * [`0037-immutable-dataset-revision-manifests.md`](./adr/0037-immutable-dataset-revision-manifests.md): Fotografía durable de revisión, lotes recuperables, generaciones verificadas y publicación de manifiestos inmutables; recuperación autorizada sin ZIP ni listas locales. [Procedimiento T6](./manuales/trabajos-importacion-datasets.md#t6-sincronización-de-revisiones-y-manifiestos-inmutables); cierre sujeto al seguimiento, sin operación real implícita.
+* [`0038-complete-zip-exports-native-sessions.md`](./adr/0038-complete-zip-exports-native-sessions.md): Exportaciones ZIP64 completas, sesiones nativas renovables, rangos autorizados y limpieza protegida; [procedimiento T7](./manuales/trabajos-importacion-datasets.md#t7-exportación-y-descarga-nativa). Verificación local y cierre sujetos al seguimiento; no acredita la ruta desplegada.
 * [`dataset-zip-import.md`](./arquitectura/dataset-zip-import.md): Alcance, contratos y avance de importación ZIP privada local con sincronización posterior; sin entrenamiento ni operaciones reales sobre GCS.
 * [`data6-identidad-preparacion.md`](./arquitectura/data6-identidad-preparacion.md): Alcance de implementación de DATA-6, identidad inmutable de preparación, decisiones de agrupación y avance de verificación; operaciones sobre datos reales excluidas.
 * [`publicacion-evaluaciones-coherentes.md`](./arquitectura/publicacion-evaluaciones-coherentes.md): Seguimiento de diagnóstico de publicación, par de evaluaciones aplicable, preflight y reversión; implementación y verificaciones por hitos.

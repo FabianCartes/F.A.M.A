@@ -7,6 +7,7 @@ import { importBase, importRequest, jsonRequest, saveDownload, jobSchema, limits
   audioSchema, issueSchema, datasetsPageSchema, jobsPageSchema, executionSchema,
   type ImportJob, type ImportDataset, type ImportLimits } from "@/lib/api/datasetImports";
 import ImportDetailPage from "./ImportDetailPage";
+import DatasetExportPanel from "./DatasetExportPanel";
 import { uploadImportReceipt, type ReceiptProgress } from "@/lib/api/datasetImportReceipt";
 
 const classSchema = z.string();
@@ -252,6 +253,7 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
         </>}
         {!started ? <div className="border-t border-[#23252e] pt-4"><button className={buttonClass} disabled={!!busy || !limits} onClick={() => setStarted(true)}>Importar dataset</button></div> : <div className="space-y-4 border-t border-[#23252e] pt-4">
           <button className={buttonClass} disabled={!!busy} onClick={() => void act("Actualizando…", () => refresh())}>Actualizar importaciones</button>
+          {limits && <DatasetExportPanel key={token} token={token} datasets={datasets} />}
           {limits && <>
           {!job && <div className="grid gap-3 sm:grid-cols-2">
             <label>Destino<select className={inputClass} value={target} onChange={e => {

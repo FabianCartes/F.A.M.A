@@ -8,6 +8,122 @@ no certifican operación PostgreSQL, GCS real ni despliegue.
 operación ni arrancan workers desde la petición. Una fila `queued` no acredita
 validación, publicación ni sincronización. No se han iniciado servicios reales.
 
+## T7: exportación y descarga nativa
+
+**Implementación verificada funcionalmente en alcance sintético local; revisión/commit pendientes, no desplegada.** El estado y los resultados
+vigentes están en [el seguimiento](../arquitectura/large-zip-gcs.md), no en los
+resultados históricos de T6. No se autoriza ejecutar los comandos siguientes
+sobre una base, datos o almacenamiento reales por aparecer en este manual.
+
+### Preparación explícita
+
+Con respaldo y escritores detenidos, después de las migraciones de importaciones,
+cola y revisiones, desde `backend/`:
+
+```bash
+python -m scripts.migrate_dataset_exports --help
+python -m scripts.migrate_dataset_exports --database-url '<URL autorizada>' --writers-stopped
+```
+
+Exigir exit0 y `{"version": 1, "verified": true}`. Crea/verifica solo
+`dataset_export` y `dataset_export_session`; no modifica el catálogo, los WAV,
+manifiestos ni el constraint de tipos de trabajos anteriores. No migra desde HTTP.
+Preparar previamente una raíz física absoluta, privada, sin symlinks, compartida
+por worker y servidor de descarga, y configurar:
+
+| Variable del servidor | Contrato |
+| --- | --- |
+| `FAMA_EXPORT_ROOT` | Raíz privada existente, modo0700 y propiedad del usuario del proceso. No usar la raíz de importaciones ni cambiarla entre reinicios. |
+| `FAMA_EXPORT_DOWNLOAD_ORIGIN` | Origen HTTPS absoluto, sin ruta/query/credenciales, por ejemplo `https://downloads.example.test`. Su ingress debe enviar `/api/ingestion/imports/exports/*/download` **directamente al backend**, sin pasar por Next. |
+
+El origen es configuración del operador, no autodetección ni prueba del ingress.
+El panel rechaza una URL del mismo origen de la página. Configurar un hostname
+distinto que termine otra vez en Next **no** satisface este contrato. Mantener TLS,
+sin buffering del ZIP y con plazos adecuados para transferencias largas; redactar
+`ticket` de logs y trazas. No pasar Bearer a ese origen ni habilitar CORS como
+sustituto de navegación nativa. No se cambia `frontend/next.config.ts` ni se
+promete que sus300s permitan una descarga prolongada. La ruta desplegada necesita
+autorización y comprobación separadas.
+
+### Control HTTP y worker
+
+Todas las rutas de control usan el prefijo `/api/ingestion/imports` y la
+autenticación/propiedad existente. Una revisión parcial devuelve409; dueño ajeno,
+404. Los identificadores son generados por el servidor.
+
+| Operación | Resultado |
+| --- | --- |
+| `POST /datasets/{id}/revisions/{revision}/exports` con `{"request_key":"operacion-unica"}` | 202 con `id`, estado `queued` y `status_url`; repetición idéntica devuelve el mismo trabajo, otros parámetros con esa clave devuelven409. No genera el ZIP en HTTP. |
+| `GET /exports/{id}` | Estado/progreso, revisión, tamaño/hash al completar y error acotado; nunca credenciales, staging o claves de ejecución. No renueva vigencia. |
+| `GET /datasets/{id}/exports` | Hasta20 trabajos recientes del propietario/dataset para recuperación del panel. No es una lista completa del catálogo. |
+| `POST /exports/{id}/sessions` | URL de bootstrap y `expires_at`, con `no-store`. Emite/renueva solo sobre una exportación terminada y vigente. Configuración ausente devuelve503; exportación no disponible410; ocho sesiones vigentes429. |
+
+El worker se invoca explícitamente, una vez por intento, bajo supervisión externa:
+
+```bash
+python -m scripts.run_dataset_export_worker --help
+python -m scripts.run_dataset_export_worker \
+  --database-url '<URL autorizada>' --import-root '<raíz privada de importaciones>' \
+  --export-root '<raíz privada de exportaciones>'
+```
+
+Devuelve `{"claimed": true|false}`: **no acredita éxito**, que se consulta por HTTP.
+Lee exclusivamente el manifiesto autorizado, no listas locales ni orden del bucket.
+Verifica generación, tamaño y SHA-256 de cada WAV, y reconstruye
+`nombre-dataset/clase/subcarpetas/audio.wav` conservando bytes. Ante cualquier
+miembro inválido, falla el trabajo sin ofrecer un ZIP parcial. Cada intento usa
+su directorio, genera `export.part` y publica `export.zip` solo al completar
+validaciones y fsync. Un reemplazo conserva la revisión del trabajo y reconstruye
+en otro intento; no reanuda bytes de compresión ni adopta archivos parciales.
+
+Límites iniciales: 15GiB y50.000 WAV únicos, manifiesto128MiB, registro16KiB,
+un objeto transferido a la vez, ZIP_STORED con ZIP64. La cola de exportación
+admite por defecto4 trabajos globales y1 por propietario, usando los valores de
+`FAMA_IMPORT_CONCURRENT_IMPORTS`/`FAMA_IMPORT_JOBS_PER_OWNER` como presupuestos
+**de esta cola**, separados de importaciones. No modifica la recepción simultánea
+por propietario ni los64MiB/256MiB/2.000 de importación.
+
+### Descarga, reanudación y limpieza
+
+Abrir el enlace HTTPS mediante navegación nativa, no `fetch`/Blob. El ticket
+establece una cookie HttpOnly/Secure/SameSite=Lax limitada a esa exportación y
+redirige303 a una URL sin ticket. GET/HEAD posteriores se autorizan por sesión:
+`Content-Disposition`, `Content-Length`, SHA-256 como ETag y `Accept-Ranges: bytes`.
+Admite rangos cerrados, abiertos y sufijos, con `If-Range`; rangos no satisfacibles
+o múltiples dentro de una sola petición devuelven416. Se admiten múltiples
+peticiones de rango/reintentos con la misma sesión. No confundir ambos casos.
+
+La sesión dura15min y el artefacto1h desde su publicación. Renovar requiere de
+nuevo autorización de propietario y no revoca sesiones vigentes. La renovación
+queda limitada a24h desde la admisión; una exportación ya vencida requiere un
+trabajo nuevo. El enlace/cookie es secreto: no compartirlo. El fingerprint del
+archivo rechaza sustituciones o modificaciones normales, no acredita ausencia
+de corrupción física ni un host confiable comprometido.
+
+```bash
+python -m scripts.run_dataset_export_worker \
+  --database-url '<URL autorizada>' --import-root '<raíz privada de importaciones>' \
+  --export-root '<raíz privada de exportaciones>' --cleanup-only
+```
+
+La limpieza no contacta GCS ni ejecuta trabajos. Leer `completed`, `busy` y
+`failed`, no solo exit0. No borra trabajos recuperables, artefactos vigentes,
+callbacks activos ni rangos en curso, incluso si su sesión vence durante la
+transferencia. Usa exclusión por directorio y estado durable `deleting`; repetir
+ante fallos de borrado/fsync. No borra WAV/manifiestos publicados ni referencias
+inmutables de T6. Los registros históricos de trabajo/sesión se conservan; no se
+introduce aquí una purga de base de datos.
+
+Pruebas focales, con el entorno aislado descrito en el manual de integración:
+
+```bash
+../.venv/bin/python tests/run_isolated_training_checks.py tests/test_dataset_exports.py tests/test_dataset_export_migration.py -q
+```
+
+Los casos sintéticos no acreditan15GiB reales, reinicio entre procesos, fallo
+físico, PostgreSQL/GCS, Docker/Python3.12 ni descarga prolongada en un navegador
+contra el ingress desplegado. Véase [ADR0038](../adr/0038-complete-zip-exports-native-sessions.md).
+
 ## T5: limpieza recuperable fuera de HTTP
 
 T5 está verificado localmente en alcance sintético; no acredita despliegue. Cancelar devuelve el
