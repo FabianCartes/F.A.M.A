@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import DatasetImportPanel from "@/components/ingestion/DatasetImportPanel";
 import { durableFetch } from "./datasetImportTransport";
+import { File } from "node:buffer";
+import { webcrypto } from "node:crypto";
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
@@ -96,6 +98,7 @@ describe("private dataset import", () => {
   });
 
   it("previews without login in local mode, confirms locally and only syncs on explicit action", async () => {
+    vi.stubGlobal("crypto", webcrypto);
     const calls: string[] = [];
     const files = [{ id: "audio", relative_path: "birds/a.wav", original_path: "birds/a.wav", class_name: "birds",
       sha256: "a".repeat(64), size_bytes: 100, duplicate: false, existing: false }];
@@ -113,7 +116,12 @@ describe("private dataset import", () => {
       if (input.endsWith("/datasets")) return collectionResponse("datasets", [], "catalog");
       if (input.endsWith("/imports") && !options?.method) return collectionResponse("imports", [], "history");
       if (input.endsWith("/imports")) return Response.json({ ...job, status: "receiving" });
-      if (input.endsWith("/archive")) return Response.json({ ...job, status: "validating" });
+      if (input.endsWith("/receipt")) return Response.json({ import_id: "job1", name: "birds.zip", size_bytes: 3,
+        received_bytes: 0, reserved_bytes: 4099, chunk_bytes: 16 * 1024 ** 2, status: "receiving" });
+      if (input.endsWith("/receipt/chunks/0") || input.endsWith("/receipt/finalize")) return Response.json({
+        import_id: "job1", name: "birds.zip", size_bytes: 3, received_bytes: 3, reserved_bytes: 4099,
+        chunk_bytes: 16 * 1024 ** 2, status: input.endsWith("/finalize") ? "sealed" : "receiving" });
+      if (input.endsWith("/job1")) return Response.json({ ...job, status: "validating" });
       if (input.endsWith("/preview")) return Response.json(job);
       if (input.endsWith("/confirm")) return Response.json({ ...job, status: "imported", added_count: 1, dataset_id: "d1" });
       if (input.endsWith("/sync")) return Response.json({ ...job, status: "imported", added_count: 1, sync_status: "synced", dataset_id: "d1" });
@@ -133,7 +141,9 @@ describe("private dataset import", () => {
     fireEvent.click(screen.getByRole("button", { name: "Validar ZIP" }));
     await screen.findByText("birds/a.wav → birds");
     expect(calls.some(call => call.includes("/sync"))).toBe(false);
-    fireEvent.click(screen.getByRole("button", { name: "Confirmar importación local" }));
+    const confirm = await screen.findByRole("button", { name: "Confirmar importación local" });
+    await waitFor(() => expect((confirm as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(confirm);
     await screen.findByText(/Importada localmente: 1 archivo/);
     expect(calls.some(call => call.includes("/sync"))).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Sincronizar con GCS" }));

@@ -7,6 +7,7 @@ import { importBase, importRequest, jsonRequest, saveDownload, jobSchema, limits
   audioSchema, issueSchema, datasetsPageSchema, jobsPageSchema, executionSchema,
   type ImportJob, type ImportDataset, type ImportLimits } from "@/lib/api/datasetImports";
 import ImportDetailPage from "./ImportDetailPage";
+import { uploadImportReceipt, type ReceiptProgress } from "@/lib/api/datasetImportReceipt";
 
 const classSchema = z.string();
 
@@ -29,6 +30,7 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
   const titleId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [limits, setLimits] = useState<ImportLimits | null>(null);
   const [datasets, setDatasets] = useState<ImportDataset[]>([]);
   const [history, setHistory] = useState<ImportJob[]>([]);
@@ -39,6 +41,7 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
   const [root, setRoot] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState("");
+  const [receiptProgress, setReceiptProgress] = useState<ReceiptProgress | null>(null);
   const [error, setError] = useState("");
   const [localDataset, setLocalDataset] = useState<string | null>(null);
   const [catalogNext, setCatalogNext] = useState<string | null>(null);
@@ -180,9 +183,8 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
     }
     if (current.status === "receiving") {
       if (!file) throw new Error("Selecciona el ZIP original para reintentar la recepción.");
-      const response = await importRequest(token, `${importBase}/${current.id}/archive`, {
-        method: "PUT", headers: { "Content-Type": "application/zip" }, body: file,
-      });
+      await uploadImportReceipt(token, current.id, file, setReceiptProgress);
+      const response = await importRequest(token, `${importBase}/${current.id}`);
       current = jobSchema.parse(await response.json());
       setJob(current);
     }
@@ -208,7 +210,7 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
   }
 
   function reset() {
-    setJob(null); setFile(null); setLocalDataset(null); setRoot(""); setError(""); requestKey.current = "";
+    setJob(null); setFile(null); setReceiptProgress(null); setLocalDataset(null); setRoot(""); setError(""); requestKey.current = "";
   }
 
   return <>
@@ -263,13 +265,18 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
             {!target && <><label>Nombre del dataset<input className={inputClass} value={name} onChange={e => setName(e.target.value)} maxLength={150} disabled={!!busy} /></label>
               <label>Descripción<textarea className={inputClass} value={description} onChange={e => setDescription(e.target.value)} maxLength={2000} disabled={!!busy} /></label></>}
           </div>}
-          {(!job || job.status === "receiving") && <label className="block">Archivo ZIP<input type="file" accept=".zip,application/zip" disabled={!!busy} onChange={e => {
+          {(!job || job.status === "receiving") && <label className="block">Archivo ZIP<input ref={fileInputRef} type="file" accept=".zip,application/zip" disabled={!!busy} onChange={e => {
             const selected = e.target.files?.[0] ?? null;
             if (selected && (selected.size > limits.received_bytes || !selected.name.toLowerCase().endsWith(".zip"))) {
               setError("Selecciona un ZIP dentro del límite recibido."); setFile(null);
             } else { setFile(selected); setError(""); }
           }} className={inputClass} /></label>}
           {file && <p className="text-gray-400">Archivo seleccionado: {file.name}</p>}
+          {job?.status === "receiving" && <p>Para reanudar, selecciona el ZIP original y pulsa Validar ZIP. Se comprobarán todos los fragmentos ya reconocidos antes de continuar; el nombre y el tamaño no prueban que sea el mismo archivo.</p>}
+          {receiptProgress && <p role="status">Bytes reconocidos por el servidor: {receiptProgress.receipt.received_bytes} de {receiptProgress.receipt.size_bytes}.
+            {receiptProgress.phase === "verifying" ? ` Verificando archivo para reanudar: ${receiptProgress.verified} de ${receiptProgress.receipt.received_bytes} bytes.` :
+              receiptProgress.phase === "sealed" ? " Recepción completa; la validación de audios es un trabajo separado." :
+                receiptProgress.phase === "sealing" ? " Verificando y finalizando recepción; todavía no valida los audios." : " Subiendo fragmentos secuenciales."}</p>}
           {(!job || ["receiving", "validating", "needs_correction", "ready"].includes(job.status)) && <>
             <label className="block">Raíz de clases dentro del ZIP<input className={inputClass} placeholder="Vacío para raíz; aves para el ejemplo" value={root} onChange={e => setRoot(e.target.value)} disabled={!!busy} /></label>
             <p className="text-xs">Selecciona la carpeta cuyos hijos son clases. Las subcarpetas de cada clase conservan su ruta original y no se convierten en etiquetas.</p>
@@ -313,7 +320,11 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
           <button className={buttonClass} disabled={!!busy} onClick={reset}>Nueva importación</button>
         </div>}
         {history.length > 0 && <details><summary>Recuperar importaciones anteriores</summary><ul>{history.map(item => <li key={item.id}>
-          <button disabled={!!busy} className="underline text-xs" onClick={() => { setJob(item); setRoot(item.preview.root ?? ""); setLocalDataset(null); }}>{item.id} — {statusLabels[item.status] || item.status}</button>
+          <button disabled={!!busy} className="underline text-xs" onClick={() => {
+            setFile(null); setReceiptProgress(null); setError("");
+            if (fileInputRef.current) fileInputRef.current.value = "";
+            setJob(item); setRoot(item.preview.root ?? ""); setLocalDataset(null);
+          }}>{item.id} — {statusLabels[item.status] || item.status}</button>
         </li>)}</ul>
           <button disabled={!!busy} onClick={() => void act("Consultando historial…", () => historyPage(null))}>Primera página de importaciones</button>
           <button disabled={!!busy || !historyNext} onClick={() => void act("Consultando historial…", () => historyPage(historyNext))}>Siguiente página de importaciones</button>

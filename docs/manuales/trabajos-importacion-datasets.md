@@ -12,10 +12,11 @@ validación, publicación ni sincronización. No se han iniciado servicios reale
 
 ### T3a–T3b: reserva y transferencia fragmentada por HTTP
 
-Esta entrega es aditiva: **no habilita todavía subidas de 10 GiB ni cambia el
-panel**. El recorrido antiguo de archivo completo conserva su comportamiento;
-no se presenta como protegido por las reservas nuevas. T3b añade la transferencia
-backend; T3c–T3d completarán el panel, la reanudación y las cuotas del dataset.
+Las entregas T3a–T3b son aditivas: **no habilitan subidas de 10 GiB**.
+T3c conecta el panel con reservas y fragmentos; requiere las migraciones
+explícitas de ambas entregas antes del uso. El recorrido HTTP antiguo de archivo
+completo conserva su comportamiento para clientes sin reserva, pero el panel ya
+no lo usa ni vuelve a él ante errores. T3d completará las cuotas del dataset.
 Se permite conservar varios
 datasets por usuario; el límite de una recepción en curso es temporal.
 
@@ -130,7 +131,7 @@ GET de estado y páginas es inerte. Un cursor corresponde a un prefijo aceptado
 concreto: si se añaden fragmentos entre páginas, devuelve409; reiniciar por la
 primera página. Para reanudar, el cliente debe releer y comparar **todos** los
 fragmentos del prefijo reconocido; nombre, tamaño y muestras de extremos no
-demuestran identidad. El panel que hará esta comprobación sigue pendiente en T3c.
+demuestran identidad. El panel T3c realiza esta comprobación completa antes de continuar.
 
 #### Recuperación y exclusión
 
@@ -153,6 +154,43 @@ pueden progresar. La limpieza omite importaciones ocupadas, trabajos activos y
 journals de publicación; usa actividad útil de append/finalización, no polling,
 para conservar progreso reciente. No se ejecuta desde HTTP. Véase
 [ADR0033](../adr/0033-durable-import-chunks.md).
+
+#### T3c: subir y reanudar desde el panel
+
+1. Selecciona el ZIP y pulsa **Validar ZIP**. El panel admite la reserva y usa el
+   `chunk_bytes` fijado por el servidor, no un tamaño inferido del archivo.
+2. Los fragmentos se leen con `File.slice()` y se calculan sus SHA-256 con Web
+   Crypto, uno a la vez. Se requiere un contexto seguro (HTTPS o localhost con
+   Web Crypto disponible). No se carga el ZIP completo en un ArrayBuffer.
+3. **Bytes reconocidos por el servidor** muestra solo `received_bytes` confirmado;
+   una petición enviada o un error de conexión no incrementan el contador.
+4. Tras recargar, abre **Recuperar importaciones anteriores**, elige la recepción
+   y vuelve a seleccionar el ZIP original. Pulsa **Validar ZIP**. Se muestra
+   **Verificando archivo para reanudar** mientras se recorren todas las páginas
+   de hashes y todos los fragmentos aceptados, también los intermedios.
+5. Solo al completar esa comparación se envía el sufijo faltante. Una página
+   incompleta, un prefijo que cambió o un hash distinto detienen el recorrido
+   antes de enviar bytes nuevos, finalizar o admitir una validación. Selecciona
+   el archivo original o cancela explícitamente; no se sustituye el prefijo.
+6. Un fallo de red se presenta como error, sin suponer que la escritura fue
+   rechazada. Reintentar consulta la recepción mediante el POST idempotente y
+   verifica de nuevo todo el prefijo reconocido. Esto cubre respuestas perdidas
+   de fragmentos o finalización sin mantener un contador local autoritativo.
+
+La finalización de la recepción precede a la admisión del trabajo de validación.
+No equivale a audios válidos, publicación local ni sincronización con GCS.
+Cerrar el modal solo lo oculta: la operación en curso continúa, como antes;
+no cancela la importación ni envía otra operación. Elegir otra importación del
+historial elimina la selección local del archivo y el progreso anterior.
+
+Los límites recibidos/expandidos conservadores no cambian. El rewrite existente
+de Next admite cuerpos de hasta110MiB, suficiente para el fragmento por defecto
+de16MiB; no se incrementan buffers ni se certifica el proxy desplegado. Un
+operador que configure fragmentos mayores debe verificar todo el recorrido.
+Las pruebas renderizadas usan transporte simulado y archivos sintéticos; no
+certifican un navegador real ni operación a10GiB. Rollback de T3c: retirar juntos
+el helper de recepción y su integración/pruebas del panel; conservar las
+migraciones y recepciones T3a–T3b. No volver al PUT antiguo para una reserva.
 
 #### Comprobaciones sintéticas de T3b
 
