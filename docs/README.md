@@ -17,7 +17,7 @@ docs/
 ├── arquitectura/                # Diseño de sistemas, pipelines, MLOps y despliegue
 ├── limites/                     # Límites matemáticos, físicos y problemas conocidos
 ├── manuales/                    # Manual de usuario, revisión, despliegue e índices canónicos
-├── adr/                         # Architectural Decision Records (ADR 0001 a 0034)
+├── adr/                         # Architectural Decision Records (ADR 0001 a 0035)
 ├── receipts/                    # Recibos técnicos reproducibles en formato JSON (RDD)
 ├── duplicados-exactos/           # Tarea acotada: admisión de feedback sin duplicados SHA-256
 └── images/                      # Diagramas, matrices de confusión y gráficos vectoriales
@@ -60,6 +60,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 ### 3. [`docs/arquitectura/`](./arquitectura/) — Arquitectura de Software y MLOps
 * [`large-zip-gcs-plan.md`](./arquitectura/large-zip-gcs-plan.md): Texto íntegro del plan original de 17 secciones; su estado inicial es histórico y prevalece el seguimiento de implementación.
 * [`large-zip-gcs.md`](./arquitectura/large-zip-gcs.md): Plan y seguimiento activo por cortes para ZIP grandes, metadatos normalizados y reconstrucción desde GCS; no acredita ampliación de límites ni despliegue.
+* [`0035-contained-zip-validation.md`](./adr/0035-contained-zip-validation.md): Contención Linux de interpretación ZIP/ZIP64 y decoder WAV, presupuestos de proceso, rechazo seguro y separación de publicación. Procedimiento T4 en [trabajos de importación](./manuales/trabajos-importacion-datasets.md#t4-validacion-zip64-contenida); verificación/cierre vigente en el seguimiento.
 * [`dataset-zip-import.md`](./arquitectura/dataset-zip-import.md): Alcance, contratos y avance de importación ZIP privada local con sincronización posterior; sin entrenamiento ni operaciones reales sobre GCS.
 * [`data6-identidad-preparacion.md`](./arquitectura/data6-identidad-preparacion.md): Alcance de implementación de DATA-6, identidad inmutable de preparación, decisiones de agrupación y avance de verificación; operaciones sobre datos reales excluidas.
 * [`publicacion-evaluaciones-coherentes.md`](./arquitectura/publicacion-evaluaciones-coherentes.md): Seguimiento de diagnóstico de publicación, par de evaluaciones aplicable, preflight y reversión; implementación y verificaciones por hitos.

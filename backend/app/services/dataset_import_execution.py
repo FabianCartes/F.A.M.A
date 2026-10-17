@@ -14,7 +14,7 @@ from app.services.dataset_import_jobs import LeaseLost
 from app.services.dataset_import_records import dataset_quota, identifier, quota_issues, replace_preview, required_summary
 from app.services.dataset_import_worker import ImportJobWorker
 from app.services.dataset_imports import _canonical_path, _durable_directory, digest_file, reject
-from app.services.dataset_zip import validate_zip
+from app.services.dataset_zip_sandbox import validate_zip
 
 
 class ImportExecution:

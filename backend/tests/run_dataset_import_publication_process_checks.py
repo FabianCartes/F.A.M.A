@@ -46,6 +46,13 @@ def child(root, action):
     from app.services.dataset_import_worker import ImportJobWorker
     from app.services.dataset_imports import DatasetImports
     from app.services.dataset_zip import ImportLimits
+    from app.services.dataset_zip import validate_zip as synthetic_validator
+    from app.services import dataset_import_execution
+
+    # This original-guard procedure proves journal/restart fencing, not OS
+    # containment. Its known synthetic archive uses the direct test validator;
+    # the separate T4 process proof exercises the production sandbox default.
+    dataset_import_execution.validate_zip = synthetic_validator
 
     engine = create_engine(f"sqlite:///{database}", connect_args={"timeout": 5})
     sessions = sessionmaker(bind=engine)

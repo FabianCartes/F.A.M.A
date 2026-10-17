@@ -18,6 +18,10 @@ def local_imports(tmp_path, monkeypatch):
     from app.routes.dataset_imports import router, get_import_service
     from app.services.dataset_imports import DatasetImports
     from app.services.dataset_zip import ImportLimits
+    from app.services import dataset_import_execution
+    from app.services.dataset_zip import validate_zip
+    # This guard-compatible authorization fixture is not containment evidence.
+    monkeypatch.setattr(dataset_import_execution, "validate_zip", validate_zip)
 
     monkeypatch.delenv("FAMA_ENV", raising=False)
     monkeypatch.delenv("FAMA_IMPORT_DEV_MODE", raising=False)

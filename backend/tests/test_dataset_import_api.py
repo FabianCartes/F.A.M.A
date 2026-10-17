@@ -14,11 +14,18 @@ from tests.test_dataset_zip_validation import archive, wav_bytes
 
 
 @pytest.fixture
-def imports(tmp_path):
+def imports(tmp_path, monkeypatch, request):
     from app.database import Base, get_db
     from app.routes.dataset_imports import router, get_import_service, get_import_user
     from app.services.dataset_imports import DatasetImports
     from app.services.dataset_zip import ImportLimits
+    if not getattr(request, "param", False):
+        # Memory-only runner forbids subprocesses. These existing domain/HTTP
+        # regressions use the synthetic validator, not a production fallback.
+        # Real sandbox integration is checked by the separate process proof.
+        from app.services import dataset_import_execution
+        from app.services.dataset_zip import validate_zip
+        monkeypatch.setattr(dataset_import_execution, "validate_zip", validate_zip)
 
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)

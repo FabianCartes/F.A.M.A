@@ -514,3 +514,70 @@ OS ni prueba bloqueo de toda lectura de credenciales, I/O nativo, fallo físico 
 disco o PostgreSQL. No confundir la evidencia sintética con GPU, GCS real,
 despliegue o validación de escalabilidad. Estado y resultados del corte en
 [el seguimiento](../arquitectura/large-zip-gcs.md).
+
+## T4: validación ZIP64 contenida
+
+El worker ejecuta el prechequeo ZIP/ZIP64, extracción y decoder WAV en un proceso
+contenido. Conserva los límites **64 MiB recibidos / 256 MiB expandidos / 2.000
+entradas** y los bytes originales. No habilita ZIP de10GiB ni implementa T5.
+Los journals, fsync, cuotas, reservas y fencing permanecen fuera del decoder.
+
+### Prerrequisitos y rechazo seguro
+
+Se requieren Linux con namespaces de usuario, montaje, PID y red utilizables,
+`/usr/bin/bwrap`, `/usr/bin/prlimit`, `libseccomp.so.2`, Python bajo `/usr` y los
+módulos instalados de SoundFile/CFFI/NumPy. No se instalan automáticamente ni se
+relaja el aislamiento si faltan. Un contenedor o host debe comprobarse por separado;
+la imagen Docker actual no se ha reconstruido ni certificado con estos requisitos.
+
+| Control | Política del proceso |
+| --- | --- |
+| Memoria | Espacio de direcciones duro:768MiB, no una medición RSS |
+| CPU | Mitad de `validation_seconds`, redondeada hacia arriba, mínimo1s |
+| Plazo | Incluye espera de cupo, arranque y procesamiento; SIGKILL y reap al vencer |
+| Acceso | ZIP/runtime de solo lectura; solo staging del intento ligado al host con escritura |
+| Red/credenciales | Namespace de red propio, seccomp sin sockets; entorno allowlist, sin home/proyecto/SDK cloud |
+| Procesos | Sin fork/clone/exec ni nuevos namespaces después del arranque; capacidades retiradas |
+| Salida | Lectura acotada por entradas/rutas, máximo16MiB; metadatos y archivos verificados por el padre |
+| Concurrencia | Máximo4 hijos por proceso, además de la admisión durable existente |
+
+`sandbox_unavailable` indica que no pudo lanzarse el mecanismo. `sandbox_invalid_result`
+rechaza una salida ausente, excesiva, inconsistente o un hijo fallido, incluidos
+errores de preparación del runtime o límites de recursos. `validation_timeout`
+indica agotamiento del plazo. No interpretar estas categorías como diagnóstico
+preciso de un codec ni como confirmación de publicación. La vista previa queda en
+corrección; no se publica contenido por un rechazo.
+
+El prechequeo admite centinelas independientes en EOCD y ZIP64 de un volumen con
+registro final fijo. Rechaza offsets/tamaños/conteos incoherentes, directorios
+ocultos tras contadores falsos, multidisco y registros extendidos no soportados.
+La prueba con offset superior a4GiB usa un archivo disperso privado y un límite
+sintético explícito; no modifica los valores operativos.
+
+### Comprobación sintética separada
+
+Desde `backend/`, usando el intérprete validado:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+FAMA_SYNTHETIC_SECRET=synthetic GOOGLE_APPLICATION_CREDENTIALS=/nonexistent/synthetic \
+../.venv/bin/python tests/run_dataset_zip_sandbox_checks.py
+```
+
+El procedimiento usa exclusivamente temporales0700 bajo `/tmp/opencode`, WAV/ZIP
+sintéticos y SQLite en memoria para HTTP. Comprueba WAV/ZIP64 aceptados, restricciones
+de acceso y recursos, decoder nativo dormido sin cooperación, CPU ocupada, memoria,
+salida excesiva/FIFO y proceso esperado/reaped; luego preview, confirmación, descarga
+y replay por el worker real. Los entrypoints defectuosos se inyectan solo en scratch;
+no hay flags de evasión en producción ni se modifica la guarda original.
+
+Los tests de dominio/HTTP bajo `run_isolated_training_checks.py` y la prueba histórica
+de publicación/reinicio usan explícitamente el validador sintético directo porque
+su guarda original prohíbe subprocesos. No prueban contención ni se relaja esa guarda.
+La prueba T4 anterior es complementaria; no certifica PostgreSQL, GCS, Docker3.12,
+fallo físico de disco, resistencia a exploits del kernel o escalabilidad. Requiere
+su propia ejecución observada, no reutilizar evidencia del corte anterior.
+
+Rollback: retirar conjuntamente el sandbox y su conexión al worker; preservar datos,
+journals e intentos recuperables. No usar rollback para aceptar entradas hostiles sin
+contención. [ADR0035](../adr/0035-contained-zip-validation.md) registra la decisión.

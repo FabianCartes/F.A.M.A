@@ -17,6 +17,33 @@ def executor(imports, tmp_path):
     return queue, ImportExecution(queue, service, root)
 
 
+@pytest.mark.parametrize("imports", [True], indirect=True)
+def test_worker_reports_sandbox_refusal_without_publishing(imports, tmp_path, monkeypatch):
+    import subprocess
+    from tests.test_dataset_zip_validation import archive, wav_bytes
+
+    client, _, _, _ = imports
+    base = "/api/ingestion/imports"
+    source = client.post(base, json={"request_key": "sandbox-refusal", "name": "Refused"}).json()["id"]
+    data = archive(tmp_path / "input.zip", [("birds/a.wav", wav_bytes())]).read_bytes()
+    assert client.put(f"{base}/{source}/archive", content=data,
+                      headers={"Content-Type": "application/zip"}).status_code == 200
+
+    def unavailable(*args, **kwargs):
+        raise OSError("synthetic missing sandbox")
+
+    monkeypatch.setattr(subprocess, "Popen", unavailable)
+    admitted = client.post(f"{base}/{source}/preview", json={"request_key": "refused-preview", "root": ""})
+    assert admitted.status_code == 202
+    assert client.execution.run_once()
+    state = client.get(f"{base}/{source}").json()
+    assert state["status"] == "needs_correction"
+    issues = client.get(f"{base}/{source}/issues").json()["issues"]
+    assert [issue["code"] for issue in issues] == ["sandbox_unavailable"]
+    assert client.get(base + "/datasets").json()["datasets"] == []
+    assert client.post(f"{base}/{source}/confirm", json={"request_key": "denied", "preview_token": state["preview_token"]}).status_code == 409
+
+
 def test_real_preview_and_confirm_publish_readable_dataset(imports, tmp_path):
     client, service, _, _ = imports
     source = prepare(client, tmp_path)

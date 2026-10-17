@@ -60,18 +60,69 @@ def _parts(text, limits):
 
 
 def _check_directory(source, limits):
-    # Bound central-directory construction before ZipFile allocates ZipInfo objects.
+    """Validate physical ranges and count bounded headers before ZipInfo allocation.
+
+    Only single-volume archives with an adjacent central directory and fixed-size
+    ZIP64 EOCD are supported. No offsets are inferred by scanning arbitrary data.
+    """
     with source.open("rb") as stream:
-        stream.seek(max(0, source.stat().st_size - 65557))
+        length = os.fstat(stream.fileno()).st_size
+        start = max(0, length - 65557)
+        stream.seek(start)
         tail = stream.read(65557)
-    offset = tail.rfind(b"PK\x05\x06")
-    if offset < 0 or len(tail) - offset < 22:
-        raise ValueError("corrupt_zip")
-    disk, directory_disk, disk_count, count, size, _, comment = struct.unpack_from("<4H2IH", tail, offset + 4)
-    if (disk or directory_disk or disk_count != count or count == 65535
-            or count > limits.entries or size > limits.entries * (limits.path_bytes + 128)
-            or offset + 22 + comment != len(tail)):
-        raise ValueError("archive_limits")
+        offset = tail.rfind(b"PK\x05\x06")
+        if offset < 0 or len(tail) - offset < 22:
+            raise ValueError("corrupt_zip")
+        disk, directory_disk, disk_count, count, size, position, comment = struct.unpack_from(
+            "<4H2IH", tail, offset + 4)
+        if disk or directory_disk or offset + 22 + comment != len(tail):
+            raise ValueError("corrupt_zip")
+        end = start + offset
+        stream.seek(max(0, end - 20))
+        locator = stream.read(20)
+        extended = locator[:4] == b"PK\x06\x07"
+        if extended:
+            _, locator_disk, record_at, disks = struct.unpack("<4sIQI", locator)
+            if locator_disk or disks != 1 or record_at + 56 != end - 20:
+                raise ValueError("corrupt_zip")
+            stream.seek(record_at)
+            record = stream.read(56)
+            if len(record) != 56 or record[:4] != b"PK\x06\x06":
+                raise ValueError("corrupt_zip")
+            _, record_size, _, needed, record_disk, central_disk, n_disk, n, n_size, n_pos = struct.unpack(
+                "<4sQ2H2I4Q", record)
+            if record_size != 44 or needed > 45 or record_disk or central_disk or n_disk != n:
+                raise ValueError("corrupt_zip")
+            for classic, actual, sentinel in ((disk_count, n_disk, 0xFFFF), (count, n, 0xFFFF),
+                                               (size, n_size, 0xFFFFFFFF), (position, n_pos, 0xFFFFFFFF)):
+                if classic != sentinel and classic != actual:
+                    raise ValueError("corrupt_zip")
+            disk_count, count, size, position, end = n_disk, n, n_size, n_pos, record_at
+        elif disk_count == 0xFFFF or count == 0xFFFF or size == 0xFFFFFFFF or position == 0xFFFFFFFF:
+            raise ValueError("corrupt_zip")
+        if (disk_count != count or count > limits.entries
+                or size > limits.entries * (limits.path_bytes + 128)):
+            raise ValueError("archive_limits")
+        if position + size != end or size < count * 46:
+            raise ValueError("corrupt_zip")
+        # EOCD counters are untrusted too: verify the actual directory instead of
+        # allowing ZipFile to allocate a larger list based on a dishonest count.
+        stream.seek(position)
+        actual = 0
+        while stream.tell() < end:
+            if actual >= count:
+                raise ValueError("archive_limits")
+            header = stream.read(46)
+            if len(header) != 46 or header[:4] != b"PK\x01\x02":
+                raise ValueError("corrupt_zip")
+            name, extra, note, entry_disk = struct.unpack_from("<4H", header, 28)
+            following = stream.tell() + name + extra + note
+            if entry_disk or following > end or name > limits.path_bytes:
+                raise ValueError("corrupt_zip")
+            stream.seek(following)
+            actual += 1
+        if actual != count:
+            raise ValueError("corrupt_zip")
 
 
 def _check_wav_container(path, size, budget):
@@ -110,8 +161,9 @@ def _check_wav_container(path, size, budget):
 def validate_zip(source: Path, staging: Path, *, root: str, limits: ImportLimits):
     """Return safe relative diagnostics and staged content, without publishing anything.
 
-    The caller owns a private staging directory. Work is streaming and uses a
-    cooperative deadline, not an OS sandbox for the native audio decoder.
+    The caller owns a private staging directory. This inner engine uses a
+    cooperative deadline; production workers call dataset_zip_sandbox.validate_zip
+    to contain this entire function, including ZIP parsing and native decoding.
     """
     staging.mkdir(mode=0o700, parents=True, exist_ok=True)
     files, errors, warnings = [], [], []

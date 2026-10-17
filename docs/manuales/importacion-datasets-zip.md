@@ -189,9 +189,12 @@ ni el staging de una confirmación pendiente de recuperación. No es un cron sep
 
 La expansión se cuenta con bytes realmente leídos, no solamente con cabeceras ZIP.
 Se rechazan rutas ambiguas, archivos especiales, cifrado, archivos no WAV y ZIP
-anidados. La validación y sincronización tienen presupuestos cooperativos; una
-llamada nativa de audio o almacenamiento puede superar el presupuesto antes de
-devolver control. Esto no sustituye límites de proceso/sandbox del despliegue.
+anidados. El worker usa ahora un proceso contenido para interpretar ZIP, extraer
+y decodificar WAV; si no puede establecer la contención, rechaza la validación sin
+fallback. El presupuesto cooperativo del motor interno no es por sí solo un sandbox.
+La sincronización conserva sus límites cooperativos y no queda contenida por T4.
+Consulte [prerrequisitos, límites y comprobación T4](trabajos-importacion-datasets.md#t4-validacion-zip64-contenida)
+antes de operar; esta entrega local no acredita el entorno desplegado.
 El proxy actual admite 110 MiB; aumentar el límite recibido sobre ese valor requiere
 revisar el proxy por separado. No se modifica su configuración en esta entrega.
 
