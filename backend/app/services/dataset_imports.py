@@ -127,6 +127,8 @@ class DatasetImports:
                     db.commit()  # Release DB gate, retain receipt exclusion.
                     if staging.exists():
                         shutil.rmtree(staging)
+                    from app.services.dataset_import_receipts import release_receipt
+                    release_receipt(db, identity)
             except HTTPException as error:
                 if error.status_code != 409:
                     raise
@@ -265,4 +267,6 @@ class DatasetImports:
             db.commit()
             if self.stage(row).exists():
                 shutil.rmtree(self.stage(row))
+            from app.services.dataset_import_receipts import release_receipt
+            release_receipt(db, job_id)
             return self.view(row)

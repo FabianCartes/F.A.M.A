@@ -89,6 +89,12 @@ class CreateImport(BaseModel):
     target_id: str | None = Field(default=None, pattern="^[0-9a-f]{32}$")
 
 
+class CreateReceipt(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    name: str = Field(min_length=1, max_length=255)
+    size_bytes: int = Field(strict=True, gt=0, le=2**63 - 1)
+
+
 class OperationImport(BaseModel):
     model_config = ConfigDict(extra="forbid")
     request_key: str = Field(min_length=1, max_length=100, pattern=r"^[A-Za-z0-9_.:-]+$")
@@ -179,6 +185,20 @@ def status(job_id: str, db: Session = Depends(get_db), user=Depends(get_import_u
     return service.view(service.job(db, user.id, job_id))
 
 
+@router.post("/{job_id}/receipt")
+def create_receipt(job_id: str, payload: CreateReceipt, db: Session = Depends(get_db),
+                   user=Depends(get_import_user), service=Depends(get_import_service)):
+    from app.services.dataset_import_receipts import reserve_receipt
+    return reserve_receipt(service, db, user.id, job_id, **payload.model_dump())
+
+
+@router.get("/{job_id}/receipt")
+def receipt_status(job_id: str, db: Session = Depends(get_db),
+                   user=Depends(get_import_user), service=Depends(get_import_service)):
+    from app.services.dataset_import_receipts import get_receipt
+    return get_receipt(service, db, user.id, job_id)
+
+
 @router.put("/{job_id}/archive")
 async def upload(job_id: str, request: Request, db: Session = Depends(get_db), user=Depends(get_import_user), service=Depends(get_import_service)):
     # Raw streamed ZIP avoids multipart parser spooling before server admission.
@@ -186,6 +206,9 @@ async def upload(job_id: str, request: Request, db: Session = Depends(get_db), u
         reject(415, "Selecciona un ZIP y envíalo como application/zip.")
     with service.mutation(db, job_id):
         row = service.job(db, user.id, job_id)
+        from app.services.dataset_import_receipts import has_receipt
+        if has_receipt(db, job_id):
+            reject(409, "Esta importación usa recepción fragmentada; consulta su estado para continuar.")
         service.require_idle(db, job_id)
         db.commit()  # No queue gate or DB write transaction spans receipt.
         if row.status not in ("receiving", "validating", "needs_correction", "ready"):

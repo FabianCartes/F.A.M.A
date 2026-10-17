@@ -10,6 +10,85 @@ validación, publicación ni sincronización. No se han iniciado servicios reale
 
 ## HTTP202 y recuperación del panel
 
+### T3a: admisión de recepción, todavía sin transferencia fragmentada
+
+Esta entrega es aditiva: **no habilita todavía subidas de 10 GiB ni cambia el
+panel**. El recorrido antiguo de archivo completo conserva su comportamiento;
+no se presenta como protegido por las reservas nuevas. T3b–T3d completarán la
+transferencia, la reanudación y su integración. Se permite conservar varios
+datasets por usuario; el límite de una recepción en curso es temporal.
+
+Con escritores detenidos, respaldo previo y autorización sobre la base elegida,
+aplicar después de las migraciones de metadatos y cola:
+
+```bash
+python -m scripts.migrate_dataset_import_receipts --help
+python -m scripts.migrate_dataset_import_receipts --database-url '<URL autorizada>' --writers-stopped
+```
+
+La migración crea y verifica `dataset_import_receipt_schema` y
+`dataset_import_receipt`, registra versión1 y no modifica importaciones existentes.
+No se ejecuta automáticamente. Exigir exit0 y `{"version": 1, "verified": true}`;
+conservar el estado ante un error, sin reparación automática ni URL en diagnósticos.
+
+| Operación autenticada | Contrato aditivo actual |
+| --- | --- |
+| `POST /api/ingestion/imports/{import_id}/receipt` | Cuerpo `{"name":"birds.zip","size_bytes":1234}`. Reserva el ZIP declarado más el máximo expandido configurado. La importación debe estar vacía y en recepción. |
+| Repetición del POST | Mismos parámetros devuelven la misma recepción; otros parámetros o una importación cancelada devuelven409. No reserva dos veces. |
+| `GET .../{import_id}/receipt` | Estado acotado: nombre, tamaño, bytes prometidos/recibidos, tamaño de fragmento y estado. No renueva actividad, libera reservas ni modifica la compuerta. |
+| `POST .../{import_id}/cancel` | Conserva la protección de trabajos activos; libera la promesa después del borrado de staging. Un fallo de borrado conserva el cargo hasta reintento o mantenimiento. |
+| `PUT .../{import_id}/archive` | Rechazado409 si ya existe una recepción reservada; no permite eludirla por el recorrido antiguo. |
+
+La respuesta inicial mantiene `received_bytes=0`, `status=receiving` y
+`chunk_bytes=16777216`. **No enviar fragmentos todavía:** esta unidad solo admite
+la recepción. Propietario incorrecto devuelve404; falta de migración503; tamaño
+declarado excesivo413; otra recepción del propietario o presupuesto agotado429;
+espacio físico insuficiente507. Los rechazos no persisten cargos parciales.
+
+| Configuración | Valor inicial |
+| --- | --- |
+| `FAMA_IMPORT_RESERVED_BYTES_PER_OWNER` | `received_bytes + expanded_bytes`, una importación máxima configurada. |
+| `FAMA_IMPORT_RESERVED_BYTES_GLOBAL` | El valor anterior predeterminado multiplicado por `concurrent_imports`; independiente de un override del presupuesto por propietario. |
+
+Los overrides son enteros positivos de hasta `2**63-1`, en bytes; una
+configuración inválida falla503. No son cuotas acumuladas del catálogo. Además,
+la suma de promesas existentes, nueva promesa y `free_bytes` debe caber en el
+espacio libre real. Es conservador: bytes ya escritos siguen descontados del
+espacio libre; no se promete preasignación física ni protección frente a otros
+programas que llenen el disco. Las importaciones publicadas liberan su promesa en
+la siguiente admisión, sin afirmar que se borraron temporales u objetos.
+
+Comprobación focal, con el mismo entorno aislado documentado debajo:
+
+```bash
+../.venv/bin/python tests/run_isolated_training_checks.py tests/test_dataset_import_receipts.py -q --tb=short
+```
+
+La prueba separada entre procesos, sin relajar la guarda del runner en memoria:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// \
+CUDA_VISIBLE_DEVICES='' OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+../.venv/bin/python tests/run_dataset_import_receipt_process_checks.py
+```
+
+Crea una raíz privada nueva bajo `/tmp/opencode`, bloquea red/credenciales e
+instala la guarda original antes de importar la aplicación en cada hijo. Solo
+autoriza un SQLite sintético privado. Seis contendientes de tres propietarios
+compiten tras una barrera por80bytes: solo dos propietarios reservan40bytes cada
+uno. Procesos frescos observan los cargos y el rechazo sin cambio de dump; un
+borrado inducido fallido conserva archivo y reserva, otro proceso reintenta la
+cancelación y una nueva recepción utiliza la capacidad liberada. También verifica
+la salida exacta del CLI de migración, polling inerte, hashes de insumos protegidos
+y limpieza privada. Plazos y lecturas parciales acotados; no usa sleeps arbitrarios.
+
+Véase [ADR0032](../adr/0032-durable-receipt-reservations.md). El rollback de T3a
+desactiva los dos endpoints nuevos y conserva sus tablas; no elimina el catálogo
+ni revierte los trabajos de T2. PostgreSQL operacional, concurrencia entre hosts,
+fragmentación, revisión completa del prefijo y escala siguen sin certificarse.
+
+### Operaciones de ejecución de T2
+
 Cada POST de operación requiere una `request_key` de 1–100 caracteres ASCII
 alfanuméricos o `_.:-`. `preview` añade `root`; `confirm`, el `preview_token`
 revisado; `sync` no añade parámetros. Conservar la misma clave y parámetros ante
