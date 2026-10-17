@@ -121,12 +121,17 @@ class DatasetImports:
                             row.created_at >= time.time() - self.limits.ttl_seconds):
                         db.rollback()
                         continue
+                    from app.services.dataset_import_chunks import protects_cleanup
+                    if protects_cleanup(self, db, row, time.time() - self.limits.ttl_seconds):
+                        db.rollback()
+                        continue
                     if row.status != "imported":
                         row.status, row.error = "cancelled", "expired"
                     staging = self.stage(row)
                     db.commit()  # Release DB gate, retain receipt exclusion.
                     if staging.exists():
                         shutil.rmtree(staging)
+                    _durable_directory(staging.parent)
                     from app.services.dataset_import_receipts import release_receipt
                     release_receipt(db, identity)
             except HTTPException as error:
@@ -267,6 +272,7 @@ class DatasetImports:
             db.commit()
             if self.stage(row).exists():
                 shutil.rmtree(self.stage(row))
+            _durable_directory(self.stage(row).parent)
             from app.services.dataset_import_receipts import release_receipt
             release_receipt(db, job_id)
             return self.view(row)

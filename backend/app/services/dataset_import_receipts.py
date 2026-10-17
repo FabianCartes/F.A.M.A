@@ -88,9 +88,15 @@ def reserve_receipt(service, db, owner, import_id, *, name, size_bytes):
             reject(429, "Presupuesto temporal agotado. Finaliza o cancela recepciones antes de reintentar.")
         if total_used + promise + service.limits.free_bytes > shutil.disk_usage(service.root).free:
             reject(507, "Espacio disponible insuficiente para reservar la recepción y su expansión.")
+        try:
+            chunk_bytes = int(os.environ.get("FAMA_IMPORT_CHUNK_BYTES", CHUNK_BYTES))
+            if not 1 <= chunk_bytes <= 2**31 - 1:
+                raise ValueError
+        except ValueError:
+            reject(503, "La configuración de fragmentos no es válida.")
         row = ImportReceipt(import_id=import_id, name=name, size_bytes=size_bytes,
             reserved_bytes=promise, reservation_active=True, received_bytes=0,
-            chunk_bytes=CHUNK_BYTES, status="receiving")
+            chunk_bytes=chunk_bytes, status="receiving")
         db.add(row)
         db.commit()
         return _view(row)

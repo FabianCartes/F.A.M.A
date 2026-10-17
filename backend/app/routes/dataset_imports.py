@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from ipaddress import ip_address
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Header, Path as PathParameter, Query, Request
 from fastapi.responses import FileResponse, Response, JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, ConfigDict, Field
@@ -247,6 +247,40 @@ async def upload(job_id: str, request: Request, db: Session = Depends(get_db), u
             reject(408, "Tiempo de recepción agotado. Reintenta la solicitud.")
         finally:
             temporary.unlink(missing_ok=True)
+
+
+@router.put("/{job_id}/receipt/chunks/{index}")
+async def upload_chunk(job_id: str, request: Request, index: int = PathParameter(ge=0, le=2**31 - 1),
+                       x_chunk_offset: int = Header(ge=0, le=2**63 - 1),
+                       x_chunk_sha256: str = Header(pattern="^[0-9a-f]{64}$"),
+                       db: Session = Depends(get_db), user=Depends(get_import_user), service=Depends(get_import_service)):
+    from app.services.dataset_import_chunks import accept_chunk
+    if request.headers.get("content-type", "").split(";")[0] != "application/octet-stream":
+        reject(415, "Envía el fragmento como application/octet-stream.")
+    return await accept_chunk(service, db, user.id, job_id, index, x_chunk_offset, x_chunk_sha256, request)
+
+
+@router.get("/{job_id}/receipt/chunks")
+def receipt_chunks(job_id: str, db: Session = Depends(get_db), user=Depends(get_import_user),
+                   service=Depends(get_import_service), paging=Depends(pagination)):
+    from app.services.dataset_import_chunks import hash_page
+    return hash_page(service, db, user.id, job_id, **paging)
+
+
+@router.post("/{job_id}/receipt/finalize")
+def finalize_receipt(job_id: str, db: Session = Depends(get_db), user=Depends(get_import_user),
+                     service=Depends(get_import_service)):
+    from app.services.dataset_import_chunks import finalize
+    return finalize(service, db, user.id, job_id)
+
+
+@router.post("/{job_id}/receipt/cancel")
+def cancel_receipt(job_id: str, db: Session = Depends(get_db), user=Depends(get_import_user),
+                   service=Depends(get_import_service)):
+    from app.services.dataset_import_receipts import get_receipt
+    get_receipt(service, db, user.id, job_id)
+    service.cancel(db, user.id, job_id)
+    return get_receipt(service, db, user.id, job_id)
 
 
 @router.post("/{job_id}/preview")

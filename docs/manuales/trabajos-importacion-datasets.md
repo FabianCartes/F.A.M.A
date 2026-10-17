@@ -10,12 +10,13 @@ validación, publicación ni sincronización. No se han iniciado servicios reale
 
 ## HTTP202 y recuperación del panel
 
-### T3a: admisión de recepción, todavía sin transferencia fragmentada
+### T3a–T3b: reserva y transferencia fragmentada por HTTP
 
 Esta entrega es aditiva: **no habilita todavía subidas de 10 GiB ni cambia el
 panel**. El recorrido antiguo de archivo completo conserva su comportamiento;
-no se presenta como protegido por las reservas nuevas. T3b–T3d completarán la
-transferencia, la reanudación y su integración. Se permite conservar varios
+no se presenta como protegido por las reservas nuevas. T3b añade la transferencia
+backend; T3c–T3d completarán el panel, la reanudación y las cuotas del dataset.
+Se permite conservar varios
 datasets por usuario; el límite de una recepción en curso es temporal.
 
 Con escritores detenidos, respaldo previo y autorización sobre la base elegida,
@@ -40,8 +41,8 @@ conservar el estado ante un error, sin reparación automática ni URL en diagnó
 | `PUT .../{import_id}/archive` | Rechazado409 si ya existe una recepción reservada; no permite eludirla por el recorrido antiguo. |
 
 La respuesta inicial mantiene `received_bytes=0`, `status=receiving` y
-`chunk_bytes=16777216`. **No enviar fragmentos todavía:** esta unidad solo admite
-la recepción. Propietario incorrecto devuelve404; falta de migración503; tamaño
+`chunk_bytes=16777216` por defecto. La transferencia requiere además la migración
+explícita de T3b descrita debajo. Propietario incorrecto devuelve404; falta de migración503; tamaño
 declarado excesivo413; otra recepción del propietario o presupuesto agotado429;
 espacio físico insuficiente507. Los rechazos no persisten cargos parciales.
 
@@ -49,6 +50,7 @@ espacio físico insuficiente507. Los rechazos no persisten cargos parciales.
 | --- | --- |
 | `FAMA_IMPORT_RESERVED_BYTES_PER_OWNER` | `received_bytes + expanded_bytes`, una importación máxima configurada. |
 | `FAMA_IMPORT_RESERVED_BYTES_GLOBAL` | El valor anterior predeterminado multiplicado por `concurrent_imports`; independiente de un override del presupuesto por propietario. |
+| `FAMA_IMPORT_CHUNK_BYTES` | 16 MiB (`16777216`); entero entre1 y `2**31-1`, fijado al admitir cada recepción. No cambia recepciones existentes. |
 
 Los overrides son enteros positivos de hasta `2**63-1`, en bytes; una
 configuración inválida falla503. No son cuotas acumuladas del catálogo. Además,
@@ -85,7 +87,100 @@ y limpieza privada. Plazos y lecturas parciales acotados; no usa sleeps arbitrar
 Véase [ADR0032](../adr/0032-durable-receipt-reservations.md). El rollback de T3a
 desactiva los dos endpoints nuevos y conserva sus tablas; no elimina el catálogo
 ni revierte los trabajos de T2. PostgreSQL operacional, concurrencia entre hosts,
-fragmentación, revisión completa del prefijo y escala siguen sin certificarse.
+reanudación en el navegador y escala siguen sin certificarse.
+
+### T3b: enviar, consultar y finalizar fragmentos
+
+**Requisito:** detener API y workers, conservar respaldo y aplicar después de la
+migración de reservas, desde `backend/` y solo sobre una base autorizada:
+
+```bash
+python -m scripts.migrate_dataset_import_chunks --help
+python -m scripts.migrate_dataset_import_chunks --database-url '<URL autorizada>' --writers-stopped
+```
+
+Exigir exit0 y `{"version": 1, "verified": true}`. La migración aditiva verifica
+columnas, constraints, referencias, continuidad del prefijo y actividad persistida
+antes de reconocer `dataset_import_chunk_schema` versión1. No modifica la versión1
+de reservas, ni convierte archivos del recorrido antiguo. Repetirla es inerte;
+ante incompatibilidad, preservar base y archivos, sin borrar ni reparar registros.
+`create_all()` por sí solo no activa el protocolo.
+
+Todas las rutas siguientes tienen el prefijo
+`/api/ingestion/imports/{import_id}/receipt`, requieren autenticación y verifican
+propiedad. Usar únicamente el identificador generado por el servidor.
+
+| Operación | Petición y resultado |
+| --- | --- |
+| `PUT .../chunks/{index}` | Índice desde0, cuerpo binario `application/octet-stream`, headers `X-Chunk-Offset` y `X-Chunk-SHA256` (64 hexadecimales minúsculas). Offset = índice × `chunk_bytes`. Devuelve200 con estado acotado después de persistir bytes y reconocimiento. |
+| `GET .../chunks` | `chunks`, `total`, `next_cursor`; cada elemento contiene `index`, `offset_bytes`, `length_bytes`, `sha256`. Páginas predeterminadas de50, máximo200; usar `limit` y `cursor`. Nunca devuelve todos los hashes sin límite. |
+| `POST .../finalize` | Sin cuerpo. Verifica tamaño y todos los hashes fuera de la compuerta de BD, sincroniza el archivo y directorios y devuelve200 con `status=sealed`. La importación pasa a `validating`; no significa que el ZIP haya sido validado o publicado. |
+| `POST .../cancel` | Igual protección que la cancelación de importación: rechaza trabajo activo o publicación recuperable. Borra staging bajo exclusión de importación y solo libera la reserva después del borrado y fsync del directorio padre. Reintentar tras un fallo de borrado o fsync. |
+
+Enviar secuencialmente fragmentos de exactamente `chunk_bytes`, salvo el último,
+que debe ocupar el resto exacto del tamaño declarado. Una repetición idéntica
+verifica también los bytes almacenados y no incrementa contadores ni renueva
+actividad. Misma posición con otros bytes, huecos, solapamientos, longitud corta
+o hash incorrecto devuelven409; exceso de longitud o del tamaño declarado413.
+Content-Type incorrecto devuelve415; headers/índice inválidos422. Una recepción
+incompleta no finaliza. Un archivo sellado rechaza cualquier PUT y la repetición
+de finalize vuelve a comprobar integridad sin modificar la base.
+
+GET de estado y páginas es inerte. Un cursor corresponde a un prefijo aceptado
+concreto: si se añaden fragmentos entre páginas, devuelve409; reiniciar por la
+primera página. Para reanudar, el cliente debe releer y comparar **todos** los
+fragmentos del prefijo reconocido; nombre, tamaño y muestras de extremos no
+demuestran identidad. El panel que hará esta comprobación sigue pendiente en T3c.
+
+#### Recuperación y exclusión
+
+Hay un único `receiving.part`, no otra copia completa de ensamblaje. Primero se
+escriben y sincronizan bytes y directorios; después se confirma el registro del
+fragmento y `received_bytes`. Tras una caída, GET reconoce solo el prefijo de BD.
+Reenviar desde esa posición trunca únicamente una cola no reconocida bajo el
+candado de importación; nunca trunca el prefijo aceptado.
+
+Finalize renombra a `archive.zip` antes del commit. Si el proceso cae en esa
+ventana, conservar la base y el staging y repetir finalize: relee y verifica todos
+los hashes y restablece fsync antes de sellar. La limpieza protege ese archivo
+recuperable aunque haya vencido TTL. No renombrar manualmente ni fabricar hashes.
+Una falta/corrupción del prefijo aceptado devuelve409: requiere investigación,
+no reparación automática. Los estados públicos no revelan rutas físicas.
+
+El orden es candado por importación → compuerta de BD. La compuerta y las
+transacciones se liberan antes de streaming/hashing/fsync; importaciones distintas
+pueden progresar. La limpieza omite importaciones ocupadas, trabajos activos y
+journals de publicación; usa actividad útil de append/finalización, no polling,
+para conservar progreso reciente. No se ejecuta desde HTTP. Véase
+[ADR0033](../adr/0033-durable-import-chunks.md).
+
+#### Comprobaciones sintéticas de T3b
+
+Desde `backend/`, con el intérprete validado, sin servicios ni datos reales:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// \
+CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+../.venv/bin/python tests/run_isolated_training_checks.py tests/test_dataset_import_chunks.py -q --tb=short
+
+PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// \
+CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+../.venv/bin/python tests/run_dataset_import_chunk_process_checks.py
+```
+
+La prueba separada instala la guarda original antes de importar la aplicación,
+permite un solo SQLite privado, usa entorno allowlist, bloquea red y credenciales
+conocidas y crea temporales exclusivos. Barreras y deadlines, sin sleeps, permiten
+matar hijos antes de fsync, después del append durable antes de commit y después
+de rename antes de commit. Intérpretes frescos comprueban estado, replay y
+recuperación. Otro propietario usa la compuerta durante I/O pausado; cancelación
+y limpieza no compiten con el candado. Verifica hashes de los30 insumos protegidos
+y retira sus temporales. No es sandbox OS ni prueba fallos físicos de disco.
+
+Rollback: desactivar las rutas de transferencia y conservar tablas, reservas y
+staging para recuperación; no volver al PUT antiguo sobre una recepción reservada.
+Límites actuales de64MiB recibidos/256MiB expandidos sin cambios. No se acredita
+operación de10GiB, PostgreSQL real, Docker/Python3.12, frontend, GCS ni escala.
 
 ### Operaciones de ejecución de T2
 
