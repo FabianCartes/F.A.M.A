@@ -24,6 +24,8 @@ def local_imports(tmp_path, monkeypatch):
     monkeypatch.delenv("FAMA_IMPORT_DEV_FRONTEND_IP", raising=False)
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
+    from scripts.migrate_dataset_import_jobs import migrate_jobs
+    migrate_jobs(engine, writers_stopped=True)
     sessions = sessionmaker(bind=engine)
     service = DatasetImports(tmp_path / "managed", limits=ImportLimits(free_bytes=1))
     app = FastAPI()
@@ -36,6 +38,12 @@ def local_imports(tmp_path, monkeypatch):
 
     app.dependency_overrides[get_db] = database
     app.dependency_overrides[get_import_service] = lambda: service
+    from app.services.dataset_import_execution import ImportExecution
+    from app.services.dataset_import_jobs import ImportJobQueue
+    service._initialize()
+    root = service.root / "attempts"
+    root.mkdir(mode=0o700)
+    app.state.import_execution = ImportExecution(ImportJobQueue(sessions), service, root)
     with TestClient(app, client=("127.0.0.1", 50000), raise_server_exceptions=False) as client:
         yield client, app
     engine.dispose()
@@ -154,8 +162,8 @@ def test_local_and_authenticated_owners_remain_isolated(local_imports, tmp_path,
     for method, suffix, payload in [
         ("GET", f"/{private_job['id']}", None),
         ("PUT", f"/{private_job['id']}/archive", None),
-        ("POST", f"/{private_job['id']}/preview", {"root": ""}),
-        ("POST", f"/{private_job['id']}/confirm", {"preview_token": private_job["preview_token"]}),
+        ("POST", f"/{private_job['id']}/preview", {"root": "", "request_key": "foreign"}),
+        ("POST", f"/{private_job['id']}/confirm", {"preview_token": private_job["preview_token"], "request_key": "foreign"}),
         ("POST", f"/{private_job['id']}/cancel", {}),
         ("GET", f"/datasets/{private_dataset}/files", None),
         ("GET", f"/datasets/{private_dataset}/files/{private_files['files'][0]['sha256']}", None),

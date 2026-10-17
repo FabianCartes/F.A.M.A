@@ -4,7 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { z } from "zod";
 import { importBase, importRequest, jsonRequest, saveDownload, jobSchema, limitsSchema,
-  audioSchema, issueSchema, datasetsPageSchema, jobsPageSchema,
+  audioSchema, issueSchema, datasetsPageSchema, jobsPageSchema, executionSchema,
   type ImportJob, type ImportDataset, type ImportLimits } from "@/lib/api/datasetImports";
 import ImportDetailPage from "./ImportDetailPage";
 
@@ -45,6 +45,43 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
   const [historyNext, setHistoryNext] = useState<string | null>(null);
   const active = useRef(false);
   const requestKey = useRef("");
+  const operationKey = useRef({ signature: "", key: "" });
+  const executionId = job?.execution?.id;
+  const executionStatus = job?.execution?.status;
+  const importId = job?.id;
+  const executing = executionStatus === "queued" || executionStatus === "running";
+
+  useEffect(() => {
+    if (!importId || !executionId || !["queued", "running"].includes(executionStatus ?? "")) return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const endpoint = `${importBase}/${importId}/jobs/${executionId}`;
+    async function poll() {
+      try {
+        const response = await importRequest(token, endpoint, { signal: controller.signal });
+        const execution = executionSchema.parse(await response.json());
+        if (controller.signal.aborted) return;
+        if (execution.status === "queued" || execution.status === "running") {
+          setJob(current => current && current.id === importId && current.execution?.id === executionId
+            ? { ...current, execution } : current);
+          timer = setTimeout(poll, 1000);
+        } else {
+          const response = await importRequest(token, `${importBase}/${importId}`, { signal: controller.signal });
+          const current = jobSchema.parse(await response.json());
+          if (!controller.signal.aborted) setJob(previous => previous && previous.id === importId && previous.execution?.id === executionId
+            ? current : previous);
+        }
+      } catch (reason) {
+        if (!controller.signal.aborted) {
+          setError(reason instanceof Error ? reason.message : "No se pudo consultar el trabajo. Reintenta la consulta.");
+          // Retry reads only, never re-submit the operation after a poll error.
+          timer = setTimeout(poll, 3000);
+        }
+      }
+    }
+    void poll();
+    return () => { controller.abort(); if (timer) clearTimeout(timer); };
+  }, [importId, executionId, executionStatus, token]);
 
   useEffect(() => {
     if (!open) return;
@@ -149,13 +186,22 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
       current = jobSchema.parse(await response.json());
       setJob(current);
     }
-    const response = await importRequest(token, `${importBase}/${current.id}/preview`, jsonRequest({ root }));
-    setJob(jobSchema.parse(await response.json()));
-    await refresh();
+    await admit(current, "preview", { root });
   }
 
-  async function action(suffix: string, body?: unknown) {
+  async function admit(current: ImportJob, suffix: string, body: Record<string, unknown> = {}) {
+    const signature = JSON.stringify([current.id, suffix, body]);
+    if (operationKey.current.signature !== signature) operationKey.current = { signature, key: crypto.randomUUID() };
+    const response = await importRequest(token, `${importBase}/${current.id}/${suffix}`,
+      jsonRequest({ ...body, request_key: operationKey.current.key }));
+    const execution = executionSchema.parse(await response.json());
+    setJob({ ...current, execution });
+    operationKey.current = { signature: "", key: "" };
+  }
+
+  async function action(suffix: string, body?: Record<string, unknown>) {
     if (!job) return;
+    if (suffix !== "cancel") return admit(job, suffix, body);
     const response = await importRequest(token, `${importBase}/${job.id}/${suffix}`, jsonRequest(body ?? {}));
     setJob(jobSchema.parse(await response.json()));
     await refresh();
@@ -227,10 +273,17 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
           {(!job || ["receiving", "validating", "needs_correction", "ready"].includes(job.status)) && <>
             <label className="block">Raíz de clases dentro del ZIP<input className={inputClass} placeholder="Vacío para raíz; aves para el ejemplo" value={root} onChange={e => setRoot(e.target.value)} disabled={!!busy} /></label>
             <p className="text-xs">Selecciona la carpeta cuyos hijos son clases. Las subcarpetas de cada clase conservan su ruta original y no se convierten en etiquetas.</p>
-            <button className={buttonClass} disabled={!!busy || (!job && (!file || (!target && !name.trim())))} onClick={() => void act("Recibiendo y validando ZIP…", validate)}>Validar ZIP</button>
+            <button className={buttonClass} disabled={!!busy || executing || (!job && (!file || (!target && !name.trim())))} onClick={() => void act("Admitiendo validación…", validate)}>Validar ZIP</button>
           </>}
         </>}
         {job && <div className="space-y-3">
+          {job.execution && <p role="status">{executionStatus === "queued" ? "Trabajo admitido; pendiente de ejecución" : executionStatus === "running" ? "Trabajo en ejecución" : executionStatus === "succeeded" ? "Trabajo completado" : executionStatus === "cancelled" ? "Trabajo cancelado" : "Trabajo fallido"}: {job.execution.stage} · {job.execution.progress}%</p>}
+          {job.execution?.error && <p role="alert">No se completó el trabajo ({job.execution.error.code}). Consulta el estado antes de reintentar.</p>}
+          {job.execution?.status === "queued" && <button className={buttonClass} disabled={!!busy} onClick={() => void act("Cancelando trabajo…", async () => {
+            const response = await importRequest(token, `${importBase}/${job.id}/jobs/${job.execution!.id}/cancel`, jsonRequest({}));
+            setJob({ ...job, execution: executionSchema.parse(await response.json()) });
+          })}>Cancelar trabajo pendiente</button>}
+          {job.execution && ["failed", "cancelled"].includes(job.execution.status) && <button className={buttonClass} disabled={!!busy} onClick={() => void act("Admitiendo reintento…", () => admit(job, `jobs/${job.execution!.id}/retry`))}>Reintentar trabajo</button>}
           <p role="status">Importación {job.id}: {statusLabels[job.status] || job.status}</p>
           <p>Sincronización: {statusLabels[job.sync_status] || job.sync_status}</p>
           <p>Clases propuestas: {job.preview.class_count} · Archivos: {job.preview.file_count} · Nuevos: {job.preview.new_count ?? 0} · Duplicados internos: {job.preview.duplicate_count ?? 0} · Errores: {job.preview.error_count} · Advertencias: {job.preview.warning_count}</p>
@@ -243,11 +296,11 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
               renderItem={issue => <span role={issue.severity === "error" ? "alert" : undefined}>{issue.severity === "warning" ? "Advertencia: " : ""}{issue.path}: {issue.code}. {issue.action}</span>} />
           </div>}
           {job.error && <p role="alert">{job.error === "expired" ? "La importación venció." : "La sincronización no está completa. Reintenta; la copia local se conserva."}</p>}
-          {["ready", "committing"].includes(job.status) && <button className={buttonClass} disabled={!!busy || (job.status === "ready" && root !== job.preview.root)} onClick={() => void act("Confirmando copia local…", () => action("confirm", { preview_token: job.preview_token }))}>Confirmar importación local</button>}
+          {["ready", "committing"].includes(job.status) && <button className={buttonClass} disabled={!!busy || executing || (job.status === "ready" && root !== job.preview.root)} onClick={() => void act("Admitiendo confirmación local…", () => action("confirm", { preview_token: job.preview_token }))}>Confirmar importación local</button>}
           {job.status === "imported" && <>
             <p>Importada localmente: {job.added_count} archivo(s) nuevo(s).{job.added_count === 0 ? " No hay novedades; no se creó un dataset vacío." : ""}</p>
             {job.dataset_id && <>
-              <button className={buttonClass} disabled={!!busy} onClick={() => void act("Sincronizando con GCS…", () => action("sync"))}>{job.sync_status === "running" || job.sync_status === "error" ? "Reanudar sincronización con GCS" : "Sincronizar con GCS"}</button>
+              <button className={buttonClass} disabled={!!busy || executing} onClick={() => void act("Admitiendo sincronización…", () => action("sync"))}>{job.sync_status === "running" || job.sync_status === "error" ? "Reanudar sincronización con GCS" : "Sincronizar con GCS"}</button>
               <p className="text-xs">Acción remota explícita. Si queda en curso, reanuda el siguiente lote. Verificados: {job.preview.synced_count}.</p>
               <button className={buttonClass} disabled={!!busy} onClick={() => setLocalDataset(job.dataset_id)}>Consultar archivos locales</button>
               {localDataset === job.dataset_id && <ImportDetailPage key={`${token}:${job.dataset_id}`} token={token} endpoint={`${importBase}/datasets/${job.dataset_id}/files`} collection="files" label="archivos locales" schema={audioSchema}
@@ -256,7 +309,7 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
               })}>{f.original_path} ({f.class_name})</button>} />}
             </>}
           </>}
-          {!["imported", "committing", "cancelled"].includes(job.status) && <button className={buttonClass} disabled={!!busy} onClick={() => void act("Cancelando…", () => action("cancel"))}>Cancelar importación</button>}
+          {!["imported", "committing", "cancelled"].includes(job.status) && <button className={buttonClass} disabled={!!busy || executing} onClick={() => void act("Cancelando…", () => action("cancel"))}>Cancelar importación</button>}
           <button className={buttonClass} disabled={!!busy} onClick={reset}>Nueva importación</button>
         </div>}
         {history.length > 0 && <details><summary>Recuperar importaciones anteriores</summary><ul>{history.map(item => <li key={item.id}>

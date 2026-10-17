@@ -4,7 +4,7 @@ import re
 import hashlib
 import pytest
 
-from tests.test_dataset_import_api import imports, prepare, confirm
+from tests.test_dataset_import_api import imports, prepare, confirm, operation
 from tests.test_dataset_zip_validation import wav_bytes
 
 
@@ -33,7 +33,7 @@ def test_review_pages_are_bounded_stable_owner_scoped_and_token_bound(imports, t
         assert client.get(f"{base}/{collection}", params={"cursor": page["next_cursor"]}).status_code == 404
         app.dependency_overrides[get_import_user] = lambda: SimpleNamespace(id=1)
     old = client.get(f"{base}/files?limit=1").json()["next_cursor"]
-    assert client.post(f"{base}/preview", json={"root": ""}).status_code == 200
+    assert operation(client, job["id"], "preview", {"root": ""}).status_code == 200
     assert client.get(f"{base}/files", params={"cursor": old}).status_code == 409
 
 

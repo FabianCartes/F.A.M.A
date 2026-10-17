@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 from sqlalchemy import event, select, text
 
-from tests.test_dataset_import_api import imports, prepare, confirm
+from tests.test_dataset_import_api import imports, prepare, confirm, operation
 from tests.test_dataset_zip_validation import wav_bytes
 
 BASE = "/api/ingestion/imports"
@@ -40,7 +40,7 @@ def test_default_page_boundary_and_rejections_preserve_every_persisted_row(impor
     for size in [0, -1, 201]:
         assert client.get(url, params={"limit": size}).status_code == 422
         assert digest(sessions) == before
-    assert client.post(f"{BASE}/{job['id']}/preview", json={"root": ""}).status_code == 200
+    assert operation(client, job["id"], "preview", {"root": ""}).status_code == 200
     before = digest(sessions)
     response = client.get(url, params={"cursor": first["next_cursor"]})
     assert (response.status_code, response.json()) == (409, {"detail": "La revisión cambió. Consulta de nuevo la primera página."})
@@ -90,8 +90,8 @@ def test_publication_totals_canonical_paths_downloads_and_owner_rejections(impor
         response = client.get(f"{BASE}/datasets/{target}/files/{file['sha256']}")
         assert hashlib.sha256(response.content).hexdigest() == file["sha256"]
     before = digest(sessions)
-    response = client.post(f"{BASE}/{second['id']}/confirm", json={"preview_token": "f" * 64})
-    assert (response.status_code, response.json()) == (409, {"detail": "La vista previa cambió. Revísala antes de confirmar."})
+    response = client.post(f"{BASE}/{second['id']}/confirm", json={"preview_token": "f" * 64, "request_key": "invalid"})
+    assert (response.status_code, response.json()) == (409, {"detail": "La vista previa cambió o no está lista para confirmar."})
     assert digest(sessions) == before
     app.dependency_overrides[get_import_user] = lambda: SimpleNamespace(id=2)
     for collection in ["files", "classes", "issues"]:
@@ -146,7 +146,7 @@ def test_revision_cursor_rejection_is_atomic(imports, tmp_path):
 
 
 def test_rename_recovery_keeps_existing_members_and_rehashes_objects(imports, tmp_path, monkeypatch):
-    from app.services import dataset_imports as module
+    from app.services import dataset_import_execution as module
 
     client, service, _, sessions = imports
     target = confirm(client, prepare(client, tmp_path)).json()["dataset_id"]
@@ -159,19 +159,20 @@ def test_rename_recovery_keeps_existing_members_and_rehashes_objects(imports, tm
             raise OSError("synthetic after rename")
         return original(path)
     monkeypatch.setattr(module, "_durable_directory", fail)
-    assert confirm(client, appended).status_code == 500
+    assert confirm(client, appended).json()["status"] == "failed"
     assert client.get(url).json() == before
     assert client.get(f"{BASE}/{appended['id']}").json()["status"] == "committing"
     audio = next((service.root / "objects" / appended["id"]).iterdir())
     saved = audio.read_bytes()
     audio.write_bytes(b"corrupt")
     monkeypatch.setattr(module, "_durable_directory", original)
-    before_hash = digest(sessions)
     response = confirm(client, appended)
-    assert (response.status_code, response.json()) == (409, {"detail": "La copia local no coincide. Conserva el estado y solicita recuperación."})
-    assert digest(sessions) == before_hash
+    assert response.json()["status"] == "failed"
+    assert response.json()["error"] == {"code": "execution_failed"}
+    assert client.get(url).json() == before
+    assert client.get(f"{BASE}/{appended['id']}").json()["status"] == "committing"
     audio.write_bytes(saved)
     result = confirm(client, appended)
     assert result.status_code == 200 and result.json()["added_count"] == 1
     assert client.get(url).json()["total"] == 2
-    assert confirm(client, appended).json() == result.json()
+    assert confirm(client, appended).json() | {"execution": None} == result.json() | {"execution": None}

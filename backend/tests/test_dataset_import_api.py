@@ -1,5 +1,6 @@
 """Authenticated public import HTTP interface, SQLite memory and private files."""
 import hashlib
+import uuid
 from types import SimpleNamespace
 
 import pytest
@@ -21,6 +22,8 @@ def imports(tmp_path):
 
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
+    from scripts.migrate_dataset_import_jobs import migrate_jobs
+    migrate_jobs(engine, writers_stopped=True)
     sessions = sessionmaker(bind=engine)
     service = DatasetImports(tmp_path / "managed", limits=ImportLimits(free_bytes=1))
     app = FastAPI()
@@ -32,6 +35,13 @@ def imports(tmp_path):
     app.dependency_overrides[get_import_service] = lambda: service
     app.dependency_overrides[get_import_user] = lambda: SimpleNamespace(id=1)
     client = TestClient(app, raise_server_exceptions=False)
+    from app.services.dataset_import_execution import ImportExecution
+    from app.services.dataset_import_jobs import ImportJobQueue
+    service._initialize()
+    attempt_root = service.root / "attempts"
+    attempt_root.mkdir(mode=0o700)
+    client.execution = ImportExecution(ImportJobQueue(sessions), service, attempt_root)
+    client.import_app = app
     yield client, service, app, sessions
     client.close()
     engine.dispose()
@@ -46,13 +56,36 @@ def prepare(client, tmp_path, *, key="request-1", name="Birds", target_id=None, 
     uploaded = client.put(f"/api/ingestion/imports/{job['id']}/archive", content=data,
                           headers={"Content-Type": "application/zip"})
     assert uploaded.status_code == 200, uploaded.text
-    preview = client.post(f"/api/ingestion/imports/{job['id']}/preview", json={"root": root})
+    preview = operation(client, job["id"], "preview", {"root": root})
     assert preview.status_code == 200, preview.text
     return preview.json()
 
 
 def confirm(client, job):
-    return client.post(f"/api/ingestion/imports/{job['id']}/confirm", json={"preview_token": job["preview_token"]})
+    return operation(client, job["id"], "confirm", {"preview_token": job["preview_token"]})
+
+
+def operation(client, import_id, kind, payload=None):
+    """Drive admission and the public worker explicitly, then read real HTTP state.
+
+    This helper does not replace HTTP responses or invent terminal status codes.
+    Dedicated async tests inspect the untouched 202 before executing any work.
+    """
+    if not hasattr(client, "execution"):
+        client.execution = client.app.state.import_execution
+        client.import_app = client.app
+    response = client.post(f"/api/ingestion/imports/{import_id}/{kind}",
+                           json=dict(payload or {}, request_key=uuid.uuid4().hex))
+    if response.status_code != 202:
+        return response
+    if kind == "sync":
+        from app.routes.dataset_imports import get_import_storage
+        client.execution.storage = client.import_app.dependency_overrides[get_import_storage]()
+    assert client.execution.run_once()
+    settled = client.get(response.json()["status_url"])
+    if settled.json()["status"] != "succeeded":
+        return settled
+    return client.get(f"/api/ingestion/imports/{import_id}")
 
 
 def test_import_is_local_queryable_downloadable_and_replayable(imports, tmp_path):
@@ -65,7 +98,7 @@ def test_import_is_local_queryable_downloadable_and_replayable(imports, tmp_path
     assert result["status"] == "imported"
     assert result["sync_status"] == "pending"
     assert result["added_count"] == 1
-    assert confirm(client, job).json() == result
+    assert confirm(client, job).json() | {"execution": None} == result | {"execution": None}
     datasets = client.get("/api/ingestion/imports/datasets").json()["datasets"]
     assert len(datasets) == 1
     assert datasets[0]["file_count"] == 1
@@ -104,7 +137,7 @@ def test_stale_preview_and_changed_request_are_rejected(imports, tmp_path):
     newer = prepare(client, tmp_path, key="newer", target_id=target, sample=3)
     assert confirm(client, newer).status_code == 200
     assert confirm(client, older).status_code == 409
-    preview = client.post(f"/api/ingestion/imports/{older['id']}/preview", json={"root": ""}).json()
+    preview = operation(client, older["id"], "preview", {"root": ""}).json()
     assert confirm(client, older).status_code == 409
     assert confirm(client, preview).json()["added_count"] == 1
     changed = client.post("/api/ingestion/imports", json={"request_key": "older", "name": "Changed"})
@@ -120,8 +153,8 @@ def test_owner_is_required_for_every_import_and_dataset_operation(imports, tmp_p
     assert client.get("/api/ingestion/imports").json()["imports"] == []
     assert client.get("/api/ingestion/imports/datasets").json()["datasets"] == []
     for method, path, body in [
-        ("get", f"/{job['id']}", None), ("post", f"/{job['id']}/preview", {"root": ""}),
-        ("post", f"/{job['id']}/confirm", {"preview_token": job["preview_token"]}),
+        ("get", f"/{job['id']}", None), ("post", f"/{job['id']}/preview", {"root": "", "request_key": "foreign"}),
+        ("post", f"/{job['id']}/confirm", {"preview_token": job["preview_token"], "request_key": "foreign"}),
         ("post", f"/{job['id']}/cancel", None), ("get", f"/datasets/{target}/files", None),
         ("get", f"/datasets/{target}/files/{'a'*64}", None),
     ]:
@@ -144,6 +177,8 @@ def test_cancel_expiry_and_cleanup_never_delete_confirmed_files(imports, tmp_pat
     expired = prepare(client, tmp_path, key="expire")
     now = time.time()
     monkeypatch.setattr("app.services.dataset_imports.time.time", lambda: now + service.limits.ttl_seconds + 1)
+    with client.execution.queue.sessions() as db:
+        service.cleanup(db)
     assert confirm(client, expired).status_code == 410
     assert client.get(f"/api/ingestion/imports/{expired['id']}").json()["status"] == "cancelled"
     assert client.get(f"/api/ingestion/imports/{confirmed['id']}").json()["status"] == "imported"
@@ -154,7 +189,7 @@ def test_cancel_expiry_and_cleanup_never_delete_confirmed_files(imports, tmp_pat
 def test_interrupted_confirmation_recovers_without_hiding_previous_content(imports, tmp_path, monkeypatch, boundary):
     from sqlalchemy import event
     from app.models.dataset_import import DatasetImport
-    from app.services import dataset_imports as module
+    from app.services import dataset_import_execution as module
     client, service, _, sessions = imports
     first = confirm(client, prepare(client, tmp_path)).json()
     target = first["dataset_id"]
@@ -168,7 +203,7 @@ def test_interrupted_confirmation_recovers_without_hiding_previous_content(impor
         if path == service.root / "objects":
             raise OSError("induced directory fsync failure")
         return original_directory(path)
-    def fail_publication(session):
+    def fail_publication(session, *args):
         if any(isinstance(row, DatasetImport) and row.id == pending["id"] and row.status == "imported" for row in session.dirty):
             raise RuntimeError("induced publication failure")
     if boundary == "before_move":
@@ -176,9 +211,9 @@ def test_interrupted_confirmation_recovers_without_hiding_previous_content(impor
     elif boundary == "after_move":
         monkeypatch.setattr(module, "_durable_directory", fail_after_move)
     else:
-        event.listen(sessions.class_, "before_commit", fail_publication)
+        event.listen(sessions.class_, "before_flush", fail_publication)
     try:
-        assert confirm(client, pending).status_code == 500
+        assert confirm(client, pending).json()["status"] == "failed"
         assert client.get(f"/api/ingestion/imports/{pending['id']}").json()["status"] == "committing"
         assert client.get(f"/api/ingestion/imports/datasets/{target}/files").json() == previous
         competing = prepare(client, tmp_path, key="competing", target_id=target, sample=3)
@@ -187,19 +222,19 @@ def test_interrupted_confirmation_recovers_without_hiding_previous_content(impor
         monkeypatch.setattr(module.os, "rename", original_rename)
         monkeypatch.setattr(module, "_durable_directory", original_directory)
         if boundary == "database_publish":
-            event.remove(sessions.class_, "before_commit", fail_publication)
+            event.remove(sessions.class_, "before_flush", fail_publication)
     recovered = confirm(client, pending)
     assert recovered.status_code == 200, recovered.text
     assert recovered.json()["added_count"] == 1
-    assert confirm(client, pending).json() == recovered.json()
+    assert confirm(client, pending).json() | {"execution": None} == recovered.json() | {"execution": None}
     assert len(client.get(f"/api/ingestion/imports/datasets/{target}/files").json()["files"]) == 2
 
 
-def test_storage_lock_rejects_simultaneous_confirmation_and_preserves_counts(imports, tmp_path):
+def test_legacy_global_lock_does_not_block_durable_confirmation_and_counts_are_idempotent(imports, tmp_path):
     client, service, _, sessions = imports
     job = prepare(client, tmp_path)
     with sessions() as db, service.mutation(db):
-        assert confirm(client, job).status_code == 409
+        assert confirm(client, job).json()["added_count"] == 1
     assert confirm(client, job).json()["added_count"] == 1
     assert confirm(client, job).json()["added_count"] == 1
 
@@ -257,6 +292,8 @@ def test_active_admission_limit_and_expired_staging_cleanup(imports, tmp_path, m
     assert client.post("/api/ingestion/imports", json={"request_key": "second", "name": "Other"}).status_code == 200
     now = time.time()
     monkeypatch.setattr("app.services.dataset_imports.time.time", lambda: now + service.limits.ttl_seconds + 1)
+    with client.execution.queue.sessions() as db:
+        service.cleanup(db)
     assert client.post("/api/ingestion/imports", json={"request_key": "third", "name": "Third"}).status_code == 200
     assert not (service.root / "staging" / imported["id"]).exists()
     assert (service.root / "objects" / imported["id"]).is_dir()

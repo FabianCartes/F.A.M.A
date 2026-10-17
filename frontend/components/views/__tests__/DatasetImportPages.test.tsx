@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import DatasetImportPanel from "@/components/ingestion/DatasetImportPanel";
+import { durableFetch } from "./datasetImportTransport";
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
@@ -11,7 +12,7 @@ it("replaces review pages instead of accumulating rows and preserves the reviewe
       error_count: 0, warning_count: 0, total_size_bytes: 5100, synced_count: 0, new_count: 51 } };
   const files = Array.from({ length: 50 }, (_, i) => ({ id: String(i), original_path: `birds/${i}.wav`,
     relative_path: `birds/${i}.wav`, class_name: "birds", sha256: String(i), size_bytes: 100, duplicate: false }));
-  vi.stubGlobal("fetch", vi.fn(async (input: string, options?: RequestInit) => {
+  vi.stubGlobal("fetch", durableFetch(async (input: string, options?: RequestInit) => {
     const url = new URL(input, "http://synthetic.test");
     const path = url.pathname;
     const page = (key: string, items: unknown[], total = items.length, next_cursor: string | null = null) =>
@@ -28,7 +29,7 @@ it("replaces review pages instead of accumulating rows and preserves the reviewe
       ? page("files", [{ ...files[0], id: "50", original_path: "birds/final.wav" }], 51)
       : page("files", files, 51, "second");
     if (path.endsWith("/confirm")) {
-      expect(JSON.parse(String(options?.body))).toEqual({ preview_token: job.preview_token });
+      expect(JSON.parse(String(options?.body))).toMatchObject({ preview_token: job.preview_token });
       return Response.json({ ...job, status: "imported", added_count: 51 });
     }
     throw new Error(`Unexpected ${input}`);
@@ -62,7 +63,7 @@ it("ignores a delayed page from a previous job and keeps confirmation explicit",
     class_name: "birds", sha256: id, size_bytes: 100, duplicate: false });
   const page = (key: string, items: unknown[], snapshot: string | null = null) =>
     Response.json({ [key]: items, total: items.length, next_cursor: null, snapshot });
-  const fetcher = vi.fn(async (input: string, options?: RequestInit) => {
+  const fetcher = durableFetch(async (input: string, options?: RequestInit) => {
     const path = new URL(input, "http://synthetic.test").pathname;
     if (path.endsWith("/access")) return Response.json({ development_mode: true });
     if (path.endsWith("/limits")) return Response.json({ received_bytes: 1024, expanded_bytes: 4096, entries: 100,
@@ -75,7 +76,7 @@ it("ignores a delayed page from a previous job and keeps confirmation explicit",
     if (path.endsWith("/classes")) return page("classes", ["birds"], current.preview_token);
     if (path.endsWith("/issues")) return page("issues", [], current.preview_token);
     if (path.endsWith("/confirm")) {
-      expect(JSON.parse(String(options?.body))).toEqual({ preview_token: jobs[1].preview_token });
+      expect(JSON.parse(String(options?.body))).toMatchObject({ preview_token: jobs[1].preview_token });
       return Response.json({ ...jobs[1], status: "imported", added_count: 1 });
     }
     throw new Error(`Unexpected ${path}`);

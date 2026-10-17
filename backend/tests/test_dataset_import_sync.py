@@ -2,7 +2,7 @@
 import hashlib
 from types import SimpleNamespace
 import pytest
-from tests.test_dataset_import_api import imports, prepare, confirm
+from tests.test_dataset_import_api import imports, prepare, confirm, operation
 
 
 class MemoryObjects:
@@ -37,9 +37,10 @@ def test_sync_progress_survives_partial_failure_and_retries_without_overwrite(im
     files = client.get(f"/api/ingestion/imports/datasets/{imported['dataset_id']}/files").json()["files"]
     storage.fail_key = files[1]["sha256"]
     path = f"/api/ingestion/imports/{job['id']}/sync"
-    failed = client.post(path)
+    failed = operation(client, job["id"], "sync")
     assert failed.status_code == 200, failed.text
-    result = failed.json()
+    assert failed.json()["status"] == "failed"
+    result = client.get(f"/api/ingestion/imports/{job['id']}").json()
     assert result["status"] == "imported"
     assert result["sync_status"] == "error"
     assert len(storage.objects) == 1
@@ -47,7 +48,7 @@ def test_sync_progress_survives_partial_failure_and_retries_without_overwrite(im
     assert result["preview"]["synced_count"] == 1
     assert (service.root / "objects" / job["id"]).is_dir()
     storage.fail_key = None
-    resumed = client.post(path).json()
+    resumed = operation(client, job["id"], "sync").json()
     assert resumed["sync_status"] == "synced"
     assert len(storage.objects) == 2
     for data, _ in storage.objects.values():
@@ -56,7 +57,8 @@ def test_sync_progress_survives_partial_failure_and_retries_without_overwrite(im
     key = next(iter(storage.objects))
     _, metadata = storage.objects[key]
     storage.objects[key] = (b"wrong", metadata)
-    wrong = client.post(path).json()
+    assert operation(client, job["id"], "sync").json()["status"] == "failed"
+    wrong = client.get(f"/api/ingestion/imports/{job['id']}").json()
     assert wrong["sync_status"] == "error"
     assert storage.objects[key][0] == b"wrong"
     assert (service.root / "objects" / job["id"]).is_dir()
@@ -70,10 +72,10 @@ def test_sync_requires_confirmed_import_and_owner(imports, tmp_path):
     app.dependency_overrides[get_import_storage] = lambda: storage
     job = prepare(client, tmp_path)
     path = f"/api/ingestion/imports/{job['id']}/sync"
-    assert client.post(path).status_code == 409
+    assert client.post(path, json={"request_key": "unconfirmed"}).status_code == 409
     confirm(client, job)
     app.dependency_overrides[get_import_user] = lambda: SimpleNamespace(id=2)
-    assert client.post(path).status_code == 404
+    assert client.post(path, json={"request_key": "foreign"}).status_code == 404
     assert storage.calls == []
 
 

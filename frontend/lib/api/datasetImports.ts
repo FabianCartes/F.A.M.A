@@ -19,9 +19,17 @@ export const pageMetadataSchema = z.object({ total: z.number().int().nonnegative
 export const filesPageSchema = pageMetadataSchema.extend({ files: z.array(audioSchema).max(200) });
 export const classesPageSchema = pageMetadataSchema.extend({ classes: z.array(z.string()).max(200) });
 export const issuesPageSchema = pageMetadataSchema.extend({ issues: z.array(issueSchema).max(200) });
+export const executionSchema = z.object({
+  id: z.string(), import_id: z.string(), kind: z.enum(["preview", "confirm", "sync"]),
+  status: z.enum(["queued", "running", "succeeded", "failed", "cancelled"]),
+  stage: z.string(), progress: z.number().int().min(0).max(100),
+  result: z.object({ dataset_id: z.string().optional(), added_count: z.number().optional(), synced_count: z.number().optional() }),
+  error: z.object({ code: z.string() }).nullable(), status_url: z.string(),
+});
 export const jobSchema = z.object({
   id: z.string(), status: z.string(), sync_status: z.string(), dataset_id: z.string().nullable(),
   added_count: z.number(), preview_token: z.string().nullable(), preview: previewSchema, error: z.string().nullable(),
+  execution: executionSchema.nullable().optional(),
 });
 export const datasetSchema = z.object({ id: z.string(), name: z.string(), file_count: z.number() });
 export const datasetsPageSchema = pageMetadataSchema.extend({ datasets: z.array(datasetSchema).max(200) });

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import DatasetImportPanel from "@/components/ingestion/DatasetImportPanel";
+import { durableFetch } from "./datasetImportTransport";
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
@@ -31,7 +32,7 @@ describe("private dataset import", () => {
     const ready = { id: "independent", status: "ready", sync_status: "pending", dataset_id: null,
       added_count: 0, preview_token: "q".repeat(64), preview, error: null };
     let snapshot = ready.preview_token;
-    vi.stubGlobal("fetch", vi.fn(async (input: string, options?: RequestInit) => {
+    vi.stubGlobal("fetch", durableFetch(async (input: string, options?: RequestInit) => {
       const page = reviewResponse(input, snapshot);
       if (page) return page;
       const url = new URL(input, "http://synthetic.test").pathname;
@@ -46,11 +47,11 @@ describe("private dataset import", () => {
       writes.push({ path: url, body });
       if (url.endsWith("/preview")) {
         snapshot = "r".repeat(64);
-        expect(body).toEqual({ root: "wrap" });
+        expect(body).toMatchObject({ root: "wrap" });
         return Response.json({ ...ready, preview: { ...preview, root: "wrap" }, preview_token: "r".repeat(64) });
       }
       if (url.endsWith("/confirm")) {
-        expect(body).toEqual({ preview_token: "r".repeat(64) });
+        expect(body).toMatchObject({ preview_token: "r".repeat(64) });
         return Response.json({ ...ready, status: "imported", dataset_id: "private", added_count: 1 });
       }
       if (url.endsWith("/sync")) return Response.json({ ...ready, status: "imported", dataset_id: "private",
@@ -101,7 +102,7 @@ describe("private dataset import", () => {
     const preview = { root: "", ...counts, file_count: 1, new_count: 1, duplicate_count: 0, duplicate_collection: false };
     const job = { id: "job1", status: "ready", sync_status: "pending", dataset_id: null, added_count: 0,
       preview_token: "p".repeat(64), preview, error: null };
-    vi.stubGlobal("fetch", vi.fn(async (input: string, options?: RequestInit) => {
+    vi.stubGlobal("fetch", durableFetch(async (input: string, options?: RequestInit) => {
       calls.push(`${options?.method || "GET"} ${input}`);
       const page = reviewResponse(input, job.preview_token, files);
       if (page) return page;
@@ -143,7 +144,7 @@ describe("private dataset import", () => {
     const issue = { id: "issue", severity: "error", path: "birds/broken.wav", code: "invalid_wav", action: "Sustituye el WAV dañado." };
     const job = { id: "pending", status: "committing", sync_status: "pending", dataset_id: "d1", added_count: 0,
       preview_token: "p".repeat(64), preview: { root: "aves", ...counts }, error: null };
-    vi.stubGlobal("fetch", vi.fn(async (input: string, options?: RequestInit) => {
+    vi.stubGlobal("fetch", durableFetch(async (input: string, options?: RequestInit) => {
       const page = reviewResponse(input, job.preview_token, [], input.includes("/invalid/") ? [issue] : []);
       if (page) return page;
       if (input.endsWith("/access")) return Response.json({ development_mode: true });
@@ -153,7 +154,7 @@ describe("private dataset import", () => {
       if (input.endsWith("/imports")) return collectionResponse("imports", [job,
         { ...job, id: "invalid", status: "needs_correction", preview: { ...job.preview, error_count: 1 } }], "history");
       if (input.endsWith("/confirm")) {
-        expect(JSON.parse(String(options?.body))).toEqual({ preview_token: job.preview_token });
+        expect(JSON.parse(String(options?.body))).toMatchObject({ preview_token: job.preview_token });
         return Response.json({ ...job, status: "imported", added_count: 1 });
       }
       throw new Error(`Unexpected: ${input}`);
@@ -196,7 +197,7 @@ describe("private dataset import", () => {
   it("uses an existing session supplied by the dedicated access view without a local login", async () => {
     const configured = { received_bytes: 1024, expanded_bytes: 4096, entries: 10, depth: 12, path_bytes: 240,
       audio_bytes: 1024, audio_seconds: 600, validation_seconds: 60, free_bytes: 1, ttl_seconds: 86400, concurrent_imports: 4 };
-    vi.stubGlobal("fetch", vi.fn(async (input: string, options?: RequestInit) => {
+    vi.stubGlobal("fetch", durableFetch(async (input: string, options?: RequestInit) => {
       expect(new Headers(options?.headers).get("Authorization")).toBe("Bearer supplied-session");
       if (input.endsWith("/access")) return Response.json({ development_mode: false });
       if (input.endsWith("/limits")) return Response.json(configured);
@@ -242,7 +243,7 @@ describe("private dataset import", () => {
       preview_token: "p".repeat(64), preview: { root: "", ...counts }, error: null };
     const writes: string[] = [];
     let complete!: (response: Response) => void;
-    vi.stubGlobal("fetch", vi.fn(async (input: string, options?: RequestInit) => {
+    vi.stubGlobal("fetch", durableFetch(async (input: string, options?: RequestInit) => {
       const page = reviewResponse(input, job.preview_token);
       if (page) return page;
       if (options?.method === "POST") {
@@ -259,7 +260,7 @@ describe("private dataset import", () => {
     await openImport();
     fireEvent.click(screen.getByRole("button", { name: /working —/ }));
     fireEvent.click(screen.getByRole("button", { name: "Confirmar importación local" }));
-    expect(screen.getByText("Confirmando copia local…")).toBeDefined();
+    expect(screen.getByText("Admitiendo confirmación local…")).toBeDefined();
     fireEvent.click(screen.getByTestId("dataset-import-backdrop"));
     expect(screen.queryByRole("dialog")).toBeNull();
     await act(async () => { complete(Response.json({ ...job, status: "imported", dataset_id: "local", added_count: 1 })); });

@@ -10,10 +10,10 @@ from ipaddress import ip_address
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, Response, JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.database import get_db
 from app.services.auth import get_current_user, security_bearer
@@ -76,6 +76,11 @@ def get_import_storage():
     return GCSImportStorage()
 
 
+def get_import_queue(db: Session = Depends(get_db)):
+    from app.services.dataset_import_jobs import ImportJobQueue
+    return ImportJobQueue(sessionmaker(bind=db.get_bind()))
+
+
 class CreateImport(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     request_key: str = Field(min_length=1, max_length=100)
@@ -84,13 +89,16 @@ class CreateImport(BaseModel):
     target_id: str | None = Field(default=None, pattern="^[0-9a-f]{32}$")
 
 
-class PreviewImport(BaseModel):
+class OperationImport(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    request_key: str = Field(min_length=1, max_length=100, pattern=r"^[A-Za-z0-9_.:-]+$")
+
+
+class PreviewImport(OperationImport):
     root: str = Field(default="", max_length=240)
 
 
-class ConfirmImport(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class ConfirmImport(OperationImport):
     preview_token: str = Field(min_length=64, max_length=64)
 
 
@@ -176,8 +184,10 @@ async def upload(job_id: str, request: Request, db: Session = Depends(get_db), u
     # Raw streamed ZIP avoids multipart parser spooling before server admission.
     if request.headers.get("content-type", "").split(";")[0] != "application/zip":
         reject(415, "Selecciona un ZIP y envíalo como application/zip.")
-    with service.mutation(db):
+    with service.mutation(db, job_id):
         row = service.job(db, user.id, job_id)
+        service.require_idle(db, job_id)
+        db.commit()  # No queue gate or DB write transaction spans receipt.
         if row.status not in ("receiving", "validating", "needs_correction", "ready"):
             reject(409, "La importación no admite otro archivo.")
         staging = service.stage(row)
@@ -217,13 +227,13 @@ async def upload(job_id: str, request: Request, db: Session = Depends(get_db), u
 
 
 @router.post("/{job_id}/preview")
-def preview(job_id: str, payload: PreviewImport, db: Session = Depends(get_db), user=Depends(get_import_user), service=Depends(get_import_service)):
-    return service.preview(db, user.id, job_id, payload.root)
+def preview(job_id: str, payload: PreviewImport, user=Depends(get_import_user), queue=Depends(get_import_queue)):
+    return accepted(queue.admit(user.id, job_id, "preview", payload.request_key, {"root": payload.root}))
 
 
 @router.post("/{job_id}/confirm")
-def confirm(job_id: str, payload: ConfirmImport, db: Session = Depends(get_db), user=Depends(get_import_user), service=Depends(get_import_service)):
-    return service.confirm(db, user.id, job_id, payload.preview_token)
+def confirm(job_id: str, payload: ConfirmImport, user=Depends(get_import_user), queue=Depends(get_import_queue)):
+    return accepted(queue.admit(user.id, job_id, "confirm", payload.request_key, {"preview_token": payload.preview_token}))
 
 
 @router.post("/{job_id}/cancel")
@@ -232,6 +242,41 @@ def cancel(job_id: str, db: Session = Depends(get_db), user=Depends(get_import_u
 
 
 @router.post("/{job_id}/sync")
-def sync(job_id: str, db: Session = Depends(get_db), user=Depends(get_import_user),
-         service=Depends(get_import_service), storage=Depends(get_import_storage)):
-    return service.sync(db, user.id, job_id, storage)
+def sync(job_id: str, payload: OperationImport, user=Depends(get_import_user), queue=Depends(get_import_queue)):
+    return accepted(queue.admit(user.id, job_id, "sync", payload.request_key, {}))
+
+
+def accepted(snapshot):
+    from app.services.dataset_import_jobs import public_job
+    return JSONResponse(public_job(snapshot), status_code=202, headers={"Location": snapshot["status_url"]})
+
+
+def owned_execution(queue, owner, import_id, execution_id):
+    snapshot = queue.get(owner, execution_id)
+    if snapshot["import_id"] != import_id:
+        reject(404, "Trabajo no encontrado.")
+    return snapshot
+
+
+@router.get("/{job_id}/jobs/{execution_id}")
+def execution_status(job_id: str, execution_id: str, user=Depends(get_import_user), queue=Depends(get_import_queue)):
+    from app.services.dataset_import_jobs import public_job
+    return public_job(owned_execution(queue, user.id, job_id, execution_id))
+
+
+@router.post("/{job_id}/jobs/{execution_id}/cancel")
+def execution_cancel(job_id: str, execution_id: str, user=Depends(get_import_user), queue=Depends(get_import_queue)):
+    from app.services.dataset_import_jobs import public_job
+    owned_execution(queue, user.id, job_id, execution_id)
+    return public_job(queue.cancel(user.id, execution_id))
+
+
+@router.post("/{job_id}/jobs/{execution_id}/retry")
+def execution_retry(job_id: str, execution_id: str, payload: OperationImport,
+                    user=Depends(get_import_user), queue=Depends(get_import_queue)):
+    snapshot = owned_execution(queue, user.id, job_id, execution_id)
+    if snapshot["status"] not in ("failed", "cancelled"):
+        reject(409, "Solo se puede reintentar un trabajo fallido o cancelado.")
+    if payload.request_key == snapshot["request_key"]:
+        reject(409, "Usa una identidad nueva para reintentar.")
+    return accepted(queue.admit(user.id, job_id, snapshot["kind"], payload.request_key, snapshot["parameters"]))

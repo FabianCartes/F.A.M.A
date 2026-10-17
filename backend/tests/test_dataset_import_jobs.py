@@ -169,6 +169,10 @@ def test_admission_without_explicit_migration_is_unavailable_without_creating_sc
     # Metadata may have been registered by an earlier case. Neither its presence
     # nor create_all counts as the explicit queue initialization acknowledgement.
     row = client.post("/api/ingestion/imports", json={"request_key": "not-migrated", "name": "X"}).json()
+    # The shared HTTP fixture now migrates jobs for the async routes. Remove
+    # only its acknowledgement to exercise this intentionally unmigrated case.
+    with engine.begin() as connection:
+        connection.exec_driver_sql("DELETE FROM dataset_import_job_gate")
     before = set(inspect(engine).get_table_names())
     with pytest.raises(HTTPException) as error:
         ImportJobQueue(sessions).admit(1, row["id"], "preview", "one", {"root": ""})

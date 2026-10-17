@@ -1,11 +1,11 @@
 """Independent findings pinned at the public HTTP interface."""
 from fastapi.testclient import TestClient
 import pytest
-from tests.test_dataset_import_api import imports, prepare, confirm
+from tests.test_dataset_import_api import imports, prepare, confirm, operation
 
 
 def test_recovery_retries_failed_directory_durability(imports, tmp_path, monkeypatch):
-    from app.services import dataset_imports as module
+    from app.services import dataset_import_execution as module
     client, service, _, _ = imports
     job = prepare(client, tmp_path)
     original = module._durable_directory
@@ -16,8 +16,8 @@ def test_recovery_retries_failed_directory_durability(imports, tmp_path, monkeyp
         return original(path)
 
     monkeypatch.setattr(module, "_durable_directory", fail_objects_sync)
-    assert confirm(client, job).status_code == 500
-    assert confirm(client, job).status_code == 500
+    assert confirm(client, job).json()["status"] == "failed"
+    assert confirm(client, job).json()["status"] == "failed"
     assert client.get("/api/ingestion/imports/datasets").json()["datasets"] == []
     monkeypatch.setattr(module, "_durable_directory", original)
     assert confirm(client, job).json()["added_count"] == 1
@@ -55,7 +55,7 @@ def test_equivalent_previews_must_reconcile_at_publication(imports, tmp_path):
     before = client.get("/api/ingestion/imports/datasets").json()
     assert confirm(client, second).status_code == 409
     assert client.get("/api/ingestion/imports/datasets").json() == before
-    reviewed = client.post(f"/api/ingestion/imports/{second['id']}/preview", json={"root": ""}).json()
+    reviewed = operation(client, second["id"], "preview", {"root": ""}).json()
     assert reviewed["preview"]["new_count"] == 0
     assert confirm(client, second).status_code == 409
     repeated = confirm(client, reviewed).json()
@@ -78,8 +78,8 @@ def test_storage_ancestry_is_durable_before_publication_and_retried(imports, tmp
         return original(path)
 
     monkeypatch.setattr(module, "_durable_directory", fail_root_parent)
-    assert confirm(client, job).status_code == 500
-    assert confirm(client, job).status_code == 500
+    assert confirm(client, job).json()["status"] == "failed"
+    assert confirm(client, job).json()["status"] == "failed"
     assert attempts.count(service.root.parent) == 2
     assert client.get("/api/ingestion/imports/datasets").json()["datasets"] == []
     recorded = []
@@ -92,7 +92,7 @@ def test_storage_ancestry_is_durable_before_publication_and_retried(imports, tmp
 
 
 def test_equivalent_append_cannot_strand_a_new_dataset_journal(imports, tmp_path, monkeypatch):
-    from app.services import dataset_imports as module
+    from app.services import dataset_import_execution as module
     client, service, _, _ = imports
     existing = confirm(client, prepare(client, tmp_path, key="existing", sample=3)).json()["dataset_id"]
     pending = prepare(client, tmp_path, key="pending-new", name="New dataset")
@@ -104,7 +104,7 @@ def test_equivalent_append_cannot_strand_a_new_dataset_journal(imports, tmp_path
         return original(path)
 
     monkeypatch.setattr(module, "_durable_directory", interrupt_publication)
-    assert confirm(client, pending).status_code == 500
+    assert confirm(client, pending).json()["status"] == "failed"
     assert client.get(f"/api/ingestion/imports/{pending['id']}").json()["status"] == "committing"
     monkeypatch.setattr(module, "_durable_directory", original)
     append = prepare(client, tmp_path, key="equivalent-append", target_id=existing)
@@ -114,7 +114,7 @@ def test_equivalent_append_cannot_strand_a_new_dataset_journal(imports, tmp_path
     recovered = confirm(client, pending)
     assert recovered.status_code == 200, recovered.text
     assert recovered.json()["added_count"] == 1
-    assert confirm(client, pending).json() == recovered.json()
+    assert confirm(client, pending).json() | {"execution": None} == recovered.json() | {"execution": None}
 
 
 def test_receipt_requires_durable_staging_parent_and_can_retry(imports, tmp_path, monkeypatch):
@@ -136,7 +136,7 @@ def test_receipt_requires_durable_staging_parent_and_can_retry(imports, tmp_path
     assert client.get(f"/api/ingestion/imports/{job['id']}").json()["status"] == "receiving"
     monkeypatch.setattr(routes, "_durable_directory", original)
     assert client.put(path, content=data, headers={"Content-Type": "application/zip"}).status_code == 200
-    reviewed = client.post(f"/api/ingestion/imports/{job['id']}/preview", json={"root": ""}).json()
+    reviewed = operation(client, job["id"], "preview", {"root": ""}).json()
     assert confirm(client, reviewed).json()["added_count"] == 1
 
 
@@ -159,6 +159,6 @@ def test_identical_archive_retry_restores_retained_bytes(imports, tmp_path, dama
     assert response.json() == job
     assert archive.is_file()
     assert hashlib.sha256(archive.read_bytes()).digest() == hashlib.sha256(original).digest()
-    reviewed = client.post(f"/api/ingestion/imports/{job['id']}/preview", json={"root": ""}).json()
+    reviewed = operation(client, job["id"], "preview", {"root": ""}).json()
     assert reviewed["status"] == "ready"
     assert confirm(client, reviewed).json()["added_count"] == 1

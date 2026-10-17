@@ -1,5 +1,6 @@
 """Database-backed execution admission; notifications are never queue authority."""
 from dataclasses import dataclass
+from contextlib import contextmanager
 import hashlib
 import json
 import math
@@ -10,7 +11,7 @@ from fastapi import HTTPException
 from sqlalchemy import Float, cast, func, or_, select, update
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.models.dataset_import import DatasetImport
+from app.models.dataset_import import DatasetImport, ImportedDataset
 from app.models.dataset_import_job import ImportJob, ImportJobGate
 from app.models.dataset_import_metadata import ImportSummary
 
@@ -54,8 +55,14 @@ def _snapshot(row):
                 error=dict(row.error) if row.error else None, attempt=row.attempt,
                 token=row.token, created_at=row.created_at, updated_at=row.updated_at,
                 lease_until=row.lease_until, heartbeat_at=row.heartbeat_at,
-                parameters=dict(row.parameters),
-                status_url=f"/api/ingestion/imports/{row.import_id}/jobs/{row.id}")
+                parameters=dict(row.parameters), request_key=row.request_key,
+                 status_url=f"/api/ingestion/imports/{row.import_id}/jobs/{row.id}")
+
+
+def public_job(snapshot):
+    """Bounded owner-facing state, excluding execution credentials/parameters."""
+    return {key: snapshot[key] for key in (
+        "id", "import_id", "kind", "status", "stage", "progress", "result", "error", "status_url")}
 
 
 def _gate(db):
@@ -127,6 +134,29 @@ class ImportJobQueue:
         if row is None:
             raise LeaseLost("Attempt lease lost")
         return row, now
+
+    @contextmanager
+    def publication(self, attempt):
+        """Serialize a short publication against reclaim, cancellation and admission.
+
+        No hashing, decoding or network is permitted in this transaction. The
+        gate remains held through filesystem metadata operations and commit.
+        A lease expiring inside the critical section rejects the DB publication;
+        its previously committed journal remains available for recovery.
+        """
+        with self.sessions() as db, db.begin():
+            row, _ = self._current(db, attempt)
+            yield db, row
+            if row.status == "running" and row.lease_until <= self._now(db):
+                raise LeaseLost("Attempt expired during publication")
+
+    def complete_publication(self, db, row, result):
+        now = self._now(db)
+        if row.status != "running" or row.lease_until <= now:
+            raise LeaseLost("Attempt expired during publication")
+        row.status = row.stage = "succeeded"
+        row.result, row.error, row.progress = dict(result), None, 100
+        row.lease_until, row.updated_at = None, now
 
     def heartbeat(self, attempt, *, lease_seconds):
         duration = lease_duration(lease_seconds)
@@ -206,12 +236,33 @@ class ImportJobQueue:
             summary = db.get(ImportSummary, source.id)
             if summary is None:
                 _reject(503, "Los metadatos requieren migración verificada antes de continuar.")
+            if source.error == "expired":
+                _reject(410, "La importación venció. Crea una nueva solicitud.")
             if kind == "preview" and (source.status not in ("validating", "needs_correction", "ready")
                                       or not source.archive_sha256):
                 _reject(409, "La importación no admite una nueva vista previa.")
             if kind == "confirm" and (source.status not in ("ready", "committing", "imported")
                                       or source.preview_token != parameters["preview_token"]):
                 _reject(409, "La vista previa cambió o no está lista para confirmar.")
+            if kind == "confirm" and source.status != "imported":
+                target_id = summary.preview.get("resolved_target_id")
+                target = db.get(ImportedDataset, target_id) if target_id else None
+                if target_id and (not target or target.owner_id != owner or target.revision != summary.preview.get("target_revision")):
+                    _reject(409, "El dataset cambió. Genera y revisa una nueva vista previa.")
+                if not target_id:
+                    equivalent = db.scalar(select(DatasetImport.id).join(ImportSummary,
+                        ImportSummary.import_id == DatasetImport.id).where(DatasetImport.owner_id == owner,
+                        DatasetImport.status == "imported", ImportSummary.fingerprint == summary.fingerprint).limit(1))
+                    collision = db.scalar(select(ImportedDataset.id).where(ImportedDataset.owner_id == owner,
+                        ImportedDataset.name == source.request["name"]).limit(1))
+                    if equivalent or collision:
+                        _reject(409, "El destino cambió. Genera y revisa una nueva vista previa.")
+                for other in db.scalars(select(DatasetImport).where(DatasetImport.owner_id == owner,
+                        DatasetImport.status == "committing", DatasetImport.id != source.id)):
+                    if (target_id and other.dataset_id == target_id or
+                            not target_id and other.request["name"] == source.request["name"] or
+                            db.get(ImportSummary, other.id).fingerprint == summary.fingerprint):
+                        _reject(409, "Hay una confirmación pendiente de recuperación para este destino. Reinténtala primero.")
             if kind == "sync" and (source.status != "imported" or not source.dataset_id):
                 _reject(409, "Confirma una importación con contenido antes de sincronizar.")
             global_count, owner_count = self._counts(db, owner)
@@ -230,6 +281,7 @@ class ImportJobQueue:
                             token=0, created_at=now, updated_at=now)
             db.add(row)
             db.flush()
+            summary.preview = dict(summary.preview, execution_id=row.id)
             return _snapshot(row)
 
     @staticmethod
