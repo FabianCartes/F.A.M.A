@@ -179,7 +179,7 @@ def test_cancel_expiry_and_cleanup_never_delete_confirmed_files(imports, tmp_pat
     confirmed = confirm(client, prepare(client, tmp_path)).json()
     job = prepare(client, tmp_path, key="cancel")
     assert client.post(f"/api/ingestion/imports/{job['id']}/cancel").json()["status"] == "cancelled"
-    assert not service.stage(SimpleNamespace(id=job["id"])).exists()
+    assert service.stage(SimpleNamespace(id=job["id"])).exists()  # HTTP only schedules deletion.
     assert confirm(client, job).status_code == 409
     expired = prepare(client, tmp_path, key="expire")
     now = time.time()

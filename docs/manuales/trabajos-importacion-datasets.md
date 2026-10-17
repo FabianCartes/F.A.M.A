@@ -8,6 +8,45 @@ no certifican operación PostgreSQL, GCS real ni despliegue.
 operación ni arrancan workers desde la petición. Una fila `queued` no acredita
 validación, publicación ni sincronización. No se han iniciado servicios reales.
 
+## T5: limpieza recuperable fuera de HTTP
+
+T5 está verificado localmente en alcance sintético; no acredita despliegue. Cancelar devuelve el
+estado cancelado y libera la promesa de escritura, pero conserva los temporales
+hasta mantenimiento. Publicar programa limpieza incluso si todos los miembros
+son duplicados; un fallo de borrado no cambia el éxito publicado.
+
+Desde `backend/`, únicamente sobre almacenamiento y base autorizados, ejecutar
+el worker de una sola invocación con las mismas raíces privadas estables:
+
+```bash
+python -m scripts.run_dataset_import_worker \
+  --database-url '<URL autorizada>' \
+  --import-root '<raíz privada de importaciones>' \
+  --staging-root '<raíz privada de intentos>' --cleanup-only
+```
+
+El supervisor externo decide cuándo invocarlo; HTTP no lanza el limpiador.
+`--cleanup-only` no ejecuta trabajos ni sincroniza con GCS. Devuelve contadores
+`completed` y `failed`: un fallo de borrado conserva la reclamación durable y
+requiere otra invocación. No interpretar exit0 como cero fallos: leer `failed`.
+Sin el flag, el contrato anterior `{"claimed": true|false}` se conserva.
+
+La reclamación `deleting` bloquea nuevas admisiones y modificaciones de recepción.
+El candado por importación permanece durante el borrado, sin transacción de BD
+prolongada. Si el proceso cae, el siguiente limpiador retoma el borrado idempotente
+y los fsync pendientes. No borrar manualmente la reclamación ni cambiar la raíz
+de intentos para aparentar espacio recuperado.
+Un callback que todavía finaliza mantiene su candado de intento aun después de
+un timeout; mantenimiento lo omite hasta que termine o su proceso salga. Una
+limpieza anterior completada no excluye limpiar staging de trabajos posteriores
+fallidos: cada invocación vuelve a contrastar los archivos realmente presentes.
+
+La limpieza protege trabajos en cola, leases activos o vencidos pendientes de
+recuperación, y journals `committing`. Primero recuperar la publicación por su
+trabajo; un lease vencido no autoriza descartar datos. El polling no renueva la
+actividad útil. Los bytes aún presentes siguen reduciendo el espacio físico
+disponible aunque la reserva esté liberada. Véase [ADR0036](../adr/0036-recoverable-import-cleanup.md).
+
 ## HTTP202 y recuperación del panel
 
 ### T3a–T3b: reserva y transferencia fragmentada por HTTP
@@ -38,7 +77,7 @@ conservar el estado ante un error, sin reparación automática ni URL en diagnó
 | `POST /api/ingestion/imports/{import_id}/receipt` | Cuerpo `{"name":"birds.zip","size_bytes":1234}`. Reserva el ZIP declarado más el máximo expandido configurado. La importación debe estar vacía y en recepción. |
 | Repetición del POST | Mismos parámetros devuelven la misma recepción; otros parámetros o una importación cancelada devuelven409. No reserva dos veces. |
 | `GET .../{import_id}/receipt` | Estado acotado: nombre, tamaño, bytes prometidos/recibidos, tamaño de fragmento y estado. No renueva actividad, libera reservas ni modifica la compuerta. |
-| `POST .../{import_id}/cancel` | Conserva la protección de trabajos activos; libera la promesa después del borrado de staging. Un fallo de borrado conserva el cargo hasta reintento o mantenimiento. |
+| `POST .../{import_id}/cancel` | Conserva la protección de trabajos activos; registra limpieza pendiente y libera la promesa de escritura. No borra staging desde HTTP ni acredita espacio físico recuperado. |
 | `PUT .../{import_id}/archive` | Rechazado409 si ya existe una recepción reservada; no permite eludirla por el recorrido antiguo. |
 
 La respuesta inicial mantiene `received_bytes=0`, `status=receiving` y
@@ -82,8 +121,9 @@ instala la guarda original antes de importar la aplicación en cada hijo. Solo
 autoriza un SQLite sintético privado. Seis contendientes de tres propietarios
 compiten tras una barrera por80bytes: solo dos propietarios reservan40bytes cada
 uno. Procesos frescos observan los cargos y el rechazo sin cambio de dump; un
-borrado inducido fallido conserva archivo y reserva, otro proceso reintenta la
-cancelación y una nueva recepción utiliza la capacidad liberada. También verifica
+borrado inducido fallido conserva el archivo aunque la promesa ya esté liberada;
+otro proceso reintenta el mantenimiento. Una nueva recepción comprueba tanto
+presupuesto como espacio físico disponible. También verifica
 la salida exacta del CLI de migración, polling inerte, hashes de insumos protegidos
 y limpieza privada. Plazos y lecturas parciales acotados; no usa sleeps arbitrarios.
 
@@ -118,7 +158,7 @@ propiedad. Usar únicamente el identificador generado por el servidor.
 | `PUT .../chunks/{index}` | Índice desde0, cuerpo binario `application/octet-stream`, headers `X-Chunk-Offset` y `X-Chunk-SHA256` (64 hexadecimales minúsculas). Offset = índice × `chunk_bytes`. Devuelve200 con estado acotado después de persistir bytes y reconocimiento. |
 | `GET .../chunks` | `chunks`, `total`, `next_cursor`; cada elemento contiene `index`, `offset_bytes`, `length_bytes`, `sha256`. Páginas predeterminadas de50, máximo200; usar `limit` y `cursor`. Nunca devuelve todos los hashes sin límite. |
 | `POST .../finalize` | Sin cuerpo. Verifica tamaño y todos los hashes fuera de la compuerta de BD, sincroniza el archivo y directorios y devuelve200 con `status=sealed`. La importación pasa a `validating`; no significa que el ZIP haya sido validado o publicado. |
-| `POST .../cancel` | Igual protección que la cancelación de importación: rechaza trabajo activo o publicación recuperable. Borra staging bajo exclusión de importación y solo libera la reserva después del borrado y fsync del directorio padre. Reintentar tras un fallo de borrado o fsync. |
+| `POST .../cancel` | Rechaza trabajo activo o publicación recuperable; registra cancelación y limpieza pendiente, libera la promesa y deja el borrado/fsync al mantenimiento explícito. Un fallo posterior se reintenta sin volver a cancelar. |
 
 Enviar secuencialmente fragmentos de exactamente `chunk_bytes`, salvo el último,
 que debe ocupar el resto exacto del tamaño declarado. Una repetición idéntica

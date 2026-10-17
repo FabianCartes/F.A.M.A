@@ -131,13 +131,15 @@ def child(root, action, key):
                         return original(path, *args, **kwargs)
 
                     shutil.rmtree = failed
-                    assert client.post(url + "/cancel").status_code == 500
+                    assert client.post(url + "/cancel").status_code == 200
+                    with sessions() as db:
+                        assert service.cleanup(db) == {"completed": 0, "failed": 1}
                     assert (directory / "part").read_bytes() == b"synthetic"
-                    assert client.get(url + "/receipt").json()["reserved_bytes"] == 40
+                    assert client.get(url + "/receipt").json()["reserved_bytes"] == 0
                     result = {"held": True}
                 elif action == "cancel":
-                    response = client.post(url + "/cancel")
-                    assert response.status_code == 200, response.text
+                    with sessions() as db:
+                        service.cleanup(db)
                     receipt = client.get(url + "/receipt").json()
                     assert receipt["reserved_bytes"] == 0 and receipt["status"] == "cancelled"
                     assert not (service.root / "staging" / mapping[key]).exists()
@@ -211,7 +213,7 @@ def coordinator():
             assert finish(launch("reject", next(key for key in keys if key not in accepted)))["status"] == 429
             chosen = accepted[0]
             assert finish(launch("fail-delete", chosen)) == {"held": True}
-            assert finish(launch("inspect"))[chosen]["reserved_bytes"] == 40
+            assert finish(launch("inspect"))[chosen]["reserved_bytes"] == 0
             assert finish(launch("cancel", chosen)) == {"released": True}
             assert finish(launch("inspect"))[chosen]["reserved_bytes"] == 0
             successor = next(key for key in keys if key.split(":")[0] == chosen.split(":")[0] and key != chosen)
@@ -229,7 +231,7 @@ def coordinator():
             assert {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in protected} == before
     assert not root.exists()
     print("RECEIPT_PROCESS_PASS contenders=6 accepted=2 owner_distinct=2 durable_release=true "
-          "failed_delete_holds=true inert_reads=true rejection_dump_unchanged=true cli_exact_output=true "
+          "failed_delete_retains_bytes_not_promise=true inert_reads=true rejection_dump_unchanged=true cli_exact_output=true "
           "original_guard_protected30_unchanged=true private_cleanup=true")
 
 

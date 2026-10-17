@@ -3,6 +3,7 @@ import asyncio
 import hashlib
 import io
 import os
+import time
 import wave
 import zipfile
 from dataclasses import dataclass
@@ -241,6 +242,9 @@ async def upload(job_id: str, request: Request, db: Session = Depends(get_db), u
                 return service.view(row)
             row.archive_sha256 = digest.hexdigest()
             row.status = "validating"
+            from app.models.dataset_import_metadata import ImportSummary
+            summary = db.get(ImportSummary, row.id)
+            summary.preview = dict(summary.preview, _activity_at=time.time())
             db.commit()
             return service.view(row)
         except TimeoutError:

@@ -94,7 +94,7 @@ def test_reserved_receipt_cannot_bypass_budget_through_whole_archive_upload(impo
     assert not service.stage(SimpleNamespace(id=identity)).exists()
 
 
-def test_failed_cancel_deletion_retains_promise_until_idempotent_retry(imports, monkeypatch):
+def test_failed_cleanup_retains_bytes_after_cancel_releases_promise(imports, monkeypatch):
     client, service, _, sessions = imports
     migrate(sessions)
     identity = create(client)
@@ -109,12 +109,16 @@ def test_failed_cancel_deletion_retains_promise_until_idempotent_retry(imports, 
             raise OSError("induced deletion failure")
         return original(path, *args, **kwargs)
     monkeypatch.setattr("app.services.dataset_imports.shutil.rmtree", fail)
-    assert client.post(f"{BASE}/{identity}/cancel").status_code == 500
-    assert client.get(f"{BASE}/{identity}/receipt").json()["reserved_bytes"] > 0
-    assert (directory / "part").read_bytes() == b"synthetic"
-    monkeypatch.setattr("app.services.dataset_imports.shutil.rmtree", original)
     assert client.post(f"{BASE}/{identity}/cancel").status_code == 200
     assert client.get(f"{BASE}/{identity}/receipt").json()["reserved_bytes"] == 0
+    with sessions() as db:
+        assert service.cleanup(db, attempt_root=client.execution.root) == {"completed": 0, "failed": 1}
+    assert (directory / "part").read_bytes() == b"synthetic"
+    monkeypatch.setattr("app.services.dataset_imports.shutil.rmtree", original)
+    assert client.post(f"{BASE}/{identity}/cancel").status_code == 409
+    assert client.get(f"{BASE}/{identity}/receipt").json()["reserved_bytes"] == 0
+    with sessions() as db:
+        assert service.cleanup(db, attempt_root=client.execution.root) == {"completed": 1, "failed": 0}
     assert not directory.exists()
 
 

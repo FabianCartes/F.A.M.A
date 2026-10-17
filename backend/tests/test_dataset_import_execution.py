@@ -129,6 +129,10 @@ def test_rename_before_commit_recovers_without_duplicate_membership(imports, tmp
     assert client.get(f"/api/ingestion/imports/{source['id']}").json()["status"] == "committing"
     assert client.get("/api/ingestion/imports/datasets").json()["datasets"] == []
     monkeypatch.setattr(module, "_durable_directory", durable)
+    # Even a failed execution cannot make a durable publication journal garbage.
+    with queue.sessions() as db:
+        assert service.cleanup(db, attempt_root=execution.root) == {"completed": 0, "failed": 0}
+    assert (service.root / "objects" / source["id"]).is_dir()
     retry = queue.admit(1, source["id"], "confirm", "recover", {"preview_token": source["preview_token"]})
     assert execution.run_once()
     result = queue.get(1, retry["id"])

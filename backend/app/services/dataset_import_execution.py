@@ -1,6 +1,8 @@
 """Durable import execution: expensive preparation, then short fenced publication."""
 from pathlib import Path, PurePosixPath
 import os
+import fcntl
+import shutil
 import time
 import uuid
 
@@ -28,6 +30,7 @@ class ImportExecution:
     def __init__(self, queue, service, staging_root, *, storage=None, **worker_options):
         self.queue, self.service, self.root, self.storage = queue, service, Path(staging_root), storage
         self.worker = ImportJobWorker(queue, self.root, self.execute, **worker_options)
+        service.attempt_root = self.root
 
     def run_once(self):
         return self.worker.run_once()
@@ -36,6 +39,16 @@ class ImportExecution:
         return self.service.job(db, attempt["owner_id"], attempt["import_id"])
 
     def execute(self, attempt, staging, report):
+        # A timed-out trusted callback can still be unwinding. Keep its attempt
+        # directory locked until all file activity stops, not merely lease loss.
+        fd = os.open(staging, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return self._execute(attempt, staging, report)
+        finally:
+            os.close(fd)
+
+    def _execute(self, attempt, staging, report):
         self.service._initialize()
         # Owner is loaded from authoritative state, never from client parameters.
         from app.models.dataset_import_job import ImportJob
@@ -63,6 +76,8 @@ class ImportExecution:
             expected = source.archive_sha256
         if digest_file(archive) != expected:
             reject(409, "El archivo recibido cambió. Crea una nueva importación.")
+        with self.queue.publication(attempt):
+            pass  # Reject a callback whose lease ended while hashing.
         root = attempt["parameters"]["root"]
         result = validate_zip(archive, staging / "files", root=root, limits=self.service.limits)
         for file in result["files"]:
@@ -106,7 +121,7 @@ class ImportExecution:
             result.update(new_count=sum(not f["duplicate"] and not f["existing"] for f in result["files"]),
                           resolved_target_id=target.id if target else None,
                           target_revision=target.revision if target else None, root=root,
-                          staging_attempt=staging.name, execution_id=job.id)
+                          staging_attempt=staging.name, execution_id=job.id, _activity_at=time.time())
             added = [f for f in result["files"] if not f["duplicate"] and not f["existing"]]
             result["quota"] = dataset_quota(db, target, sum(f["size_bytes"] for f in added),
                                             len(added), self.service.limits)
@@ -157,12 +172,14 @@ class ImportExecution:
 
     def confirm(self, attempt, staging):
         from app.services.dataset_import_receipts import release_published_receipt
+        from app.services.dataset_import_cleanup import request
         # Commit the journal before any filesystem publication. A replacement
         # reuses this journal and verifies the immutable destination after crash.
         with self.queue.publication(attempt) as (db, job):
             source, target, preview = self._confirmation(db, attempt)
             if source.status == "imported":
                 release_published_receipt(db, source)
+                request(db, source.id)
                 result = {"added_count": source.added_count}
                 if source.dataset_id:
                     result["dataset_id"] = source.dataset_id
@@ -178,10 +195,19 @@ class ImportExecution:
         # refer to a server-generated attempt identity, never a client path.
         if attempt_name and (Path(attempt_name).name != attempt_name or attempt_name in (".", "..") or "/" in attempt_name):
             reject(409, "El staging requiere recuperación.")
-        prepared = self.root / attempt_name / "files" if attempt_name else self.service.root / "staging" / source_id / "files"
+        validated = self.root / attempt_name / "files" if attempt_name else self.service.root / "staging" / source_id / "files"
+        prepared = staging / "publication"
         destination = self.service.root / "objects" / source_id
-        location = destination if destination.exists() else prepared
+        recovering = destination.exists()
+        if files and not recovering:
+            prepared.mkdir(mode=0o700)
+        location = destination if recovering else prepared
         for name, digest in files:
+            if not recovering:
+                original = validated / name
+                if original.is_symlink() or not original.is_file():
+                    reject(409, "La copia local no coincide. Conserva el estado y solicita recuperación.")
+                shutil.copyfile(original, prepared / name)
             path = location / name
             if not path.is_file() or path.is_symlink() or digest_file(path) != digest:
                 reject(409, "La copia local no coincide. Conserva el estado y solicita recuperación.")
@@ -189,6 +215,7 @@ class ImportExecution:
                 os.fsync(stream.fileno())
         if files:
             _durable_directory(location)
+            _durable_directory(location.parent)
         with self.queue.publication(attempt) as (db, job):
             source, target, _ = self._confirmation(db, attempt)
             if files:
@@ -221,6 +248,7 @@ class ImportExecution:
             source.status, source.added_count = "imported", len(files)
             source.dataset_id = target.id if target else None
             release_published_receipt(db, source)
+            request(db, source.id)
             result = {"added_count": len(files)}
             if source.dataset_id:
                 result["dataset_id"] = source.dataset_id
@@ -275,6 +303,8 @@ class ImportExecution:
         with self.queue.publication(attempt) as (db, job):
             source = self._source(db, attempt)
             source.sync_status = "synced"
+            from app.services.dataset_import_cleanup import request
+            request(db, source.id)
             count = db.query(func.count(func.distinct(ImportFile.sha256))).filter_by(
                 import_id=source.id, sync_status="synced").scalar()
             result = {"dataset_id": dataset_id, "synced_count": count}

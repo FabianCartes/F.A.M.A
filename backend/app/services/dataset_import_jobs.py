@@ -5,6 +5,7 @@ import hashlib
 import json
 import math
 import os
+import time
 import uuid
 
 from fastapi import HTTPException
@@ -226,6 +227,8 @@ class ImportJobQueue:
                 DatasetImport.id == import_id, DatasetImport.owner_id == owner))
             if source is None:
                 _reject(404, "Importación no encontrada.")
+            from app.services.dataset_import_cleanup import require_available
+            require_available(db, import_id)
             prior = db.scalar(select(ImportJob).where(
                 ImportJob.owner_id == owner, ImportJob.import_id == import_id,
                 ImportJob.kind == kind, ImportJob.request_key == request_key))
@@ -281,7 +284,7 @@ class ImportJobQueue:
                             token=0, created_at=now, updated_at=now)
             db.add(row)
             db.flush()
-            summary.preview = dict(summary.preview, execution_id=row.id)
+            summary.preview = dict(summary.preview, execution_id=row.id, _activity_at=time.time())
             return _snapshot(row)
 
     @staticmethod

@@ -183,6 +183,9 @@ def test_owner_checks_cancel_and_existing_import_cancel_behavior(imports, monkey
     assert response.status_code == 200
     assert response.json() == dict(state, status="cancelled", reserved_bytes=0)
     assert client.post(url + "/cancel").json() == response.json()
+    assert (service.root / "staging" / state["import_id"]).exists()
+    with sessions() as db:
+        service.cleanup(db, attempt_root=client.execution.root)
     assert not (service.root / "staging" / state["import_id"]).exists()
     assert put(client, url, 1, b"efgh").status_code == 409
     assert client.post(url + "/finalize").status_code == 409
@@ -285,9 +288,9 @@ def test_legacy_whole_upload_and_receipt_admission_replay_still_work(imports, mo
     assert client.put(f"{BASE}/{identity}/archive", content=b"legacy", headers={"Content-Type": "application/zip"}).json() == response.json()
 
 
-def test_cancel_holds_promise_until_deletion_directory_is_durable(imports, monkeypatch):
+def test_cancel_releases_promise_but_cleanup_retries_directory_durability(imports, monkeypatch):
     from app.services import dataset_imports
-    client, service, _, _ = imports
+    client, service, _, sessions = imports
     url = prepared(imports, monkeypatch)
     assert put(client, url, 0, b"abcd").status_code == 200
     original = dataset_imports._durable_directory
@@ -297,10 +300,14 @@ def test_cancel_holds_promise_until_deletion_directory_is_durable(imports, monke
         return original(path)
     monkeypatch.setattr(dataset_imports, "_durable_directory", fail)
     response = client.post(url + "/cancel")
-    assert response.status_code == 500, response.text
-    assert client.get(url).json()["reserved_bytes"] > 0
+    assert response.status_code == 200, response.text
+    assert client.get(url).json()["reserved_bytes"] == 0
+    with sessions() as db:
+        assert service.cleanup(db, attempt_root=client.execution.root) == {"completed": 0, "failed": 1}
     monkeypatch.setattr(dataset_imports, "_durable_directory", original)
-    assert client.post(url + "/cancel").json()["reserved_bytes"] == 0
+    with sessions() as db:
+        assert service.cleanup(db, attempt_root=client.execution.root) == {"completed": 1, "failed": 0}
+    assert client.get(url).json()["reserved_bytes"] == 0
 
 
 def test_migration_rejects_orphan_chunk_records_without_partial_ack(imports):

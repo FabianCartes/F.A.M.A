@@ -97,7 +97,7 @@ def child(root, action):
                 assert admitted.status_code == 202
                 (root / "source.json").write_text(json.dumps({"id": source["id"]}))
                 result = {"prepared": True}
-            elif action in ("run", "crash", "recover"):
+            elif action in ("run", "crash", "recover", "cleanup", "delete-crash"):
                 if action == "crash":
                     from app.services import dataset_import_execution as execution
                     durable = execution._durable_directory
@@ -108,10 +108,21 @@ def child(root, action):
                                 raise RuntimeError("Crash barrier not released")
                         return durable(path)
                     execution._durable_directory = stop_after_rename
+                if action == "delete-crash":
+                    from app.services import dataset_import_cleanup as cleanup
+                    remove = cleanup.shutil.rmtree
+                    def stop_before_delete(path):
+                        print("READY", flush=True)
+                        if sys.stdin.readline().strip() != "GO":
+                            raise RuntimeError("Deletion barrier not released")
+                        return remove(path)
+                    cleanup.shutil.rmtree = stop_before_delete
                 # Invoke the real module entry path (including parsing and engine
                 # creation) in each fresh process, without a production test flag.
                 sys.argv = ["run_dataset_import_worker", "--database-url", f"sqlite:///{database}",
                             "--import-root", str(service.root), "--staging-root", str(service.root / "attempts")]
+                if action in ("cleanup", "delete-crash"):
+                    sys.argv.append("--cleanup-only")
                 import runpy
                 runpy.run_module("scripts.run_dataset_import_worker", run_name="__main__")
                 raise AssertionError("CLI entry must exit")
@@ -191,6 +202,8 @@ def coordinator():
             assert journal["state"]["execution"]["status"] == "running"
             assert journal["datasets"] == [] and journal["files"] == []
             assert len(list((root / "imports/objects").glob("*/*.wav"))) == 1
+            assert finish(launch("cleanup")) == {"completed": 0, "failed": 0}
+            assert finish(launch("inspect")) == journal
             assert finish(launch("recover")) == {"claimed": True}
             published = finish(launch("inspect"))
             assert published["state"]["status"] == "imported"
@@ -204,6 +217,26 @@ def coordinator():
             assert replayed["files"] == published["files"]
             assert replayed["datasets"] == published["datasets"]
             assert finish(launch("run")) == {"claimed": False}
+            interrupted_delete = launch("delete-crash")
+            deadline, line = time.monotonic() + 20, bytearray()
+            with selectors.DefaultSelector() as selector:
+                selector.register(interrupted_delete.stdout, selectors.EVENT_READ)
+                while not line.endswith(b"\n"):
+                    remaining = deadline - time.monotonic()
+                    assert remaining > 0 and selector.select(remaining), "Deletion barrier deadline"
+                    byte = os.read(interrupted_delete.stdout.fileno(), 1)
+                    assert byte and len(line) < 100, "Deletion barrier protocol"
+                    line.extend(byte)
+            assert line == b"READY\n"
+            interrupted_delete.kill()
+            interrupted_delete.wait(timeout=5)
+            assert interrupted_delete.returncode < 0
+            assert finish(launch("inspect")) == replayed
+            assert finish(launch("cleanup")) == {"completed": 1, "failed": 0}
+            assert list((root / "imports/attempts").iterdir()) == []
+            assert list((root / "imports/staging").iterdir()) == []
+            assert finish(launch("inspect")) == replayed
+            assert finish(launch("cleanup")) == {"completed": 0, "failed": 0}
         finally:
             for process in children:
                 if process.poll() is None:
@@ -213,6 +246,7 @@ def coordinator():
     assert {path: hashlib.sha256(path.read_bytes()).hexdigest() for path in protected} == before
     print(json.dumps({"publication_crash_restart": "passed", "http_readback_and_download": "passed",
                       "idempotent_replay": "passed", "cli_one_shot": "passed",
+                      "cleanup_crash_restart": "passed", "recoverable_publication_protected": "passed",
                       "private_cleanup": True, "protected_inputs_unchanged": True,
                       "postgresql": "not_tested", "real_gcs": "not_tested"}))
 

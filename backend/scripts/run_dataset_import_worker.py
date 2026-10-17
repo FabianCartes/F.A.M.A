@@ -8,6 +8,8 @@ def main(argv=None):
     parser.add_argument("--database-url", required=True, help="Explicit migrated database; no ambient URL or migration.")
     parser.add_argument("--import-root", required=True, help="Existing private physical absolute import root shared with the API.")
     parser.add_argument("--staging-root", required=True, help="Existing private attempt root, stable across restarts, on the same filesystem.")
+    parser.add_argument("--cleanup-only", action="store_true",
+                        help="Reclaim eligible staging only; no execution jobs, HTTP work or cloud operations.")
     args = parser.parse_args(argv)
     engine = None
     try:
@@ -25,15 +27,20 @@ def main(argv=None):
             raise ValueError("Publication requires the same filesystem")
         engine = create_engine(normalize_database_url(args.database_url))
         queue = ImportJobQueue(sessionmaker(bind=engine))
-        execution = ImportExecution(queue, DatasetImports(root), staging, storage=GCSImportStorage())
-        claimed = execution.run_once()
+        service = DatasetImports(root)
+        if args.cleanup_only:
+            with queue.sessions() as db:
+                result = service.cleanup(db, attempt_root=staging)
+        else:
+            execution = ImportExecution(queue, service, staging, storage=GCSImportStorage())
+            result = {"claimed": execution.run_once()}
     except Exception:
         # Connection/driver/paths may contain secrets. Domain errors live in job state.
         parser.exit(1, "Import worker unavailable; preserve state and inspect the operation manual.\n")
     finally:
         if engine is not None:
             engine.dispose()
-    print(json.dumps({"claimed": claimed}))
+    print(json.dumps(result))
     return 0
 
 

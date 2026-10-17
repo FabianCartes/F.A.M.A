@@ -95,50 +95,17 @@ class DatasetImports:
         finally:
             os.close(fd)
 
-    def cleanup(self, db):
+    def cleanup(self, db, *, attempt_root=None):
         """Explicit maintenance only; never invoked as an HTTP side effect.
 
         Acquire the same import lock as receipt, then the queue gate, never the
         reverse. Busy receipt is skipped without expiration. Retain every active
         job (including expired leases) and every publication journal. Commit
         terminal cancellation before deletion while keeping the import lock.
+        Persisted cleanup intent distinguishes promise release from reclamation.
         """
-        from app.models.dataset_import_job import ImportJob
-        from app.services.dataset_import_jobs import ACTIVE, _gate
-        states = ("receiving", "validating", "ready", "needs_correction", "failed", "cancelled", "imported")
-        candidates = [identity for (identity,) in db.query(DatasetImport.id).filter(
-            DatasetImport.created_at < time.time() - self.limits.ttl_seconds,
-            DatasetImport.status.in_(states))]
-        db.rollback()  # Discovery is advisory, never deletion authorization.
-        for identity in candidates:
-            try:
-                with self.mutation(db, identity):
-                    _gate(db)
-                    row = db.query(DatasetImport).filter_by(id=identity).first()
-                    active = db.query(ImportJob.id).filter(ImportJob.import_id == identity,
-                        ImportJob.status.in_(ACTIVE)).first()
-                    if (not row or active or row.status not in states or
-                            row.created_at >= time.time() - self.limits.ttl_seconds):
-                        db.rollback()
-                        continue
-                    from app.services.dataset_import_chunks import protects_cleanup
-                    if protects_cleanup(self, db, row, time.time() - self.limits.ttl_seconds):
-                        db.rollback()
-                        continue
-                    if row.status != "imported":
-                        row.status, row.error = "cancelled", "expired"
-                    staging = self.stage(row)
-                    db.commit()  # Release DB gate, retain receipt exclusion.
-                    if staging.exists():
-                        shutil.rmtree(staging)
-                    _durable_directory(staging.parent)
-                    from app.services.dataset_import_receipts import release_receipt
-                    release_receipt(db, identity)
-            except HTTPException as error:
-                if error.status_code != 409:
-                    raise
-                # A live receipt owns this import, even if its wall-clock TTL
-                # elapsed. A later maintenance invocation can reconsider it.
+        from app.services.dataset_import_cleanup import run
+        return run(self, db, attempt_root=attempt_root or getattr(self, "attempt_root", None))
 
     def job(self, db, owner, job_id):
         row = db.query(DatasetImport).filter_by(id=job_id, owner_id=owner).first()
@@ -152,6 +119,8 @@ class DatasetImports:
         from app.models.dataset_import_job import ImportJob
         from app.services.dataset_import_jobs import ACTIVE, _gate
         _gate(db)
+        from app.services.dataset_import_cleanup import require_available
+        require_available(db, import_id)
         if db.query(ImportJob.id).filter(ImportJob.import_id == import_id, ImportJob.status.in_(ACTIVE)).first():
             reject(409, "La importación tiene un trabajo activo. Consulta su estado antes de modificarla.")
 
@@ -169,6 +138,8 @@ class DatasetImports:
                        error_count=summary.error_count, warning_count=summary.warning_count,
                        total_size_bytes=summary.total_size_bytes)
         preview.pop("staging_attempt", None)
+        preview.pop("_cleanup", None)
+        preview.pop("_activity_at", None)
         execution_id = preview.pop("execution_id", None)
         execution = None
         if execution_id:
@@ -269,10 +240,9 @@ class DatasetImports:
             if row.status in ("imported", "committing"):
                 reject(409, "No se puede cancelar una importación confirmada o en recuperación.")
             row.status = "cancelled"
+            from app.services.dataset_import_cleanup import request
+            request(db, job_id)
             db.commit()
-            if self.stage(row).exists():
-                shutil.rmtree(self.stage(row))
-            _durable_directory(self.stage(row).parent)
             from app.services.dataset_import_receipts import release_receipt
             release_receipt(db, job_id)
             return self.view(row)

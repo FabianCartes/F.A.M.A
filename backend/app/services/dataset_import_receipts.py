@@ -61,6 +61,8 @@ def reserve_receipt(service, db, owner, import_id, *, name, size_bytes):
         source = service.job(db, owner, import_id)
         _ready(db)
         _gate(db)
+        from app.services.dataset_import_cleanup import require_available
+        require_available(db, import_id)
         prior = db.get(ImportReceipt, import_id)
         if prior is not None:
             if prior.name != name or prior.size_bytes != size_bytes or source.status == "cancelled":
