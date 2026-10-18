@@ -27,7 +27,7 @@ docs/
 
 ## Índice Detallado por Carpeta
 
-**Para retomar el proyecto:** [`manuales/estado_actual_y_pendientes.md`](./manuales/estado_actual_y_pendientes.md) separa correcciones, pendientes, funcionalidades aplazadas, benchmark CPU autorizado y validación operacional necesaria (corte del 17 de octubre de 2026).
+**Para retomar el proyecto:** [`manuales/estado_actual_y_pendientes.md`](./manuales/estado_actual_y_pendientes.md) separa correcciones, pendientes, funcionalidades aplazadas, benchmark CPU autorizado y validación operacional necesaria (corte del 18 de octubre de 2026).
 
 ### Tarea acotada: duplicados exactos
 * [`docs/duplicados-exactos/tasks.md`](./duplicados-exactos/tasks.md): Alcance, decisiones locales, checklist y evidencia TDD de aprobación de feedback sin duplicados SHA-256; revisión y commit pendientes del orquestador.

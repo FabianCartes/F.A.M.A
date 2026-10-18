@@ -1,6 +1,6 @@
 # Estado actual y pendientes para retomar F.A.M.A.
 
-**Corte: 17 de octubre de 2026. Rama: `fix/afinamiento-integral`.**
+**Corte: 18 de octubre de 2026. Rama: `fix/afinamiento-integral`.** Las últimas ejecuciones de AFIN-25 son del cierre del 17; el 18 se consolida código/documentación sin repetir activos reales.
 
 Este resumen distingue correcciones comprobadas, defectos pendientes y funcionalidades aplazadas. No certifica que toda la plataforma funcione en producción. Evidencia y detalle por unidad: [KANBAN](../KANBAN.md).
 
