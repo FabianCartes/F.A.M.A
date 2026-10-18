@@ -155,11 +155,11 @@ describe("Catálogo público de Predicción", () => {
     catalogue = async () => response([bird, nextEngine], bird.id);
     await focus();
     expect(selection().value).toBe(nextEngine.id);
-    expect(screen.getByText("Dominio Activo: Diagnóstico Acústico de Motores")).toBeDefined();
+    expect(screen.getByText("Grupo seleccionado: Diagnóstico Acústico de Motores")).toBeDefined();
     catalogue = async () => response([model11], "removed-default");
     await focus();
     expect(selection().value).toBe(model11.id);
-    expect(screen.getByText("Dominio Activo: Bioacústica de Aves Chilenas")).toBeDefined();
+    expect(screen.getByText("Grupo seleccionado: Bioacústica de Aves Chilenas")).toBeDefined();
   });
 
   it.each([engine.id, "not-in-catalogue", ""])("elige solo un predeterminado publicado (%s) al entrar", async defaultId => {

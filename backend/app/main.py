@@ -139,6 +139,32 @@ class SuperEnsembleService:
                 return target
         return None
 
+    def _checkpoint_available(self, route: str) -> Optional[bool]:
+        """Metadata-only presence in configured roots; remote/untrusted paths unknown."""
+        if not isinstance(route, str) or "://" in route:
+            return None
+        path = Path(route)
+        roots = [self.checkpoints_dir, _BACKEND_ROOT.parent / "checkpoints"]
+        if not path.is_absolute() and path.parts and path.parts[0] == "models":
+            path = Path(*path.parts[1:])
+        if path.suffix.lower() != ".pt" or ".." in path.parts:
+            return None
+        candidates = [path] if path.is_absolute() else [root / path for root in roots]
+        checked = False
+        unknown = False
+        for candidate in candidates:
+            try:
+                if not any(candidate.absolute().is_relative_to(root.absolute()) for root in roots):
+                    continue
+                if not any(candidate.resolve().is_relative_to(root.resolve()) for root in roots):
+                    continue
+                checked = True
+                if candidate.is_file() and candidate.stat().st_size > 0:
+                    return True
+            except (OSError, RuntimeError):
+                unknown = True
+        return None if unknown or not checked else False
+
     def load_models(self) -> None:
         """
         Carga los 3 modelos heterogéneos si los checkpoints .pt existen en disco.
@@ -221,111 +247,151 @@ class SuperEnsembleService:
 
     def get_status(self, dataset_name: Optional[str] = None, db: Optional[Session] = None) -> dict:
         """
-        Retorna metadatos, estado operacional del ensamble y preparación de la tríada
-        para el dataset/dominio seleccionado (CU_INV_05).
+        Observa el servicio bioacústico legacy sin cargar, activar ni inferir.
+        Registro, presencia de archivo y carga en memoria son hechos separados.
+        is_ready conserva compatibilidad como alias de carga, no prueba de inferencia.
         """
-        if self.ensemble is None and self.fallback_model is None:
-            self.load_models()
-
         # Determinar dataset objetivo
         available_datasets = training_service.get_available_datasets(db=db)
         available_domains = [d["id"] for d in available_datasets]
         target_ds = dataset_name or "AvesChilenas"
+        domain_supported = target_ds == "AvesChilenas"
+        normalize_arch = lambda name: name.lower().replace("-", "").replace("_", "")
+        loaded = {}
+        if target_ds == "AvesChilenas" and self.ensemble is not None and not self.is_fallback:
+            for index, info in enumerate(self.active_models_info):
+                if index < len(self.ensemble.models):
+                    loaded[normalize_arch(info["name"])] = {
+                        **info, "weight": self.ensemble.weights[index],
+                    }
 
         # Obtener clases del dataset objetivo
         target_ds_info = next((d for d in available_datasets if d["id"] == target_ds), None)
-        classes = target_ds_info["classes"] if target_ds_info and target_ds_info.get("classes") else self.classes
+        if domain_supported and (loaded or (self.is_fallback and self.fallback_model is not None)):
+            classes, classes_source = self.classes, "service_loaded_metadata_unverified"
+        elif target_ds_info and target_ds_info.get("classes"):
+            classes, classes_source = target_ds_info["classes"], "dataset_listing_unverified"
+        else:
+            classes = self.classes if domain_supported else []
+            classes_source = "configured_or_cached_reference" if domain_supported else None
 
         triad_config = [
-            {"name": "EfficientNet-B0", "weight": 0.55},
-            {"name": "ConvNeXt-Nano", "weight": 0.30},
-            {"name": "ResNet-34d", "weight": 0.15},
+            {"name": "EfficientNet-B0", "filename": "efficientnet_gpu_pipeline_35e_best.pt"},
+            {"name": "ConvNeXt-Nano", "filename": "convnext_nano_35e_best.pt"},
+            {"name": "ResNet-34d", "filename": "resnet34d_35e_best.pt"},
         ]
+        if not domain_supported:
+            triad_config = []
 
         triad_status = []
         for item in triad_config:
             arch = item["name"]
-            weight = item["weight"]
+            weight = None
             is_ready = False
             accuracy = None
             loss = None
             checkpoint_name = None
+            recorded_checkpoint = None
+            loaded_checkpoint = None
             updated_at = None
+            is_registered = None
+            weights_available = self._checkpoint_available(item["filename"])
+            weights_source = "configured_candidate"
 
             # 1. Buscar en PostgreSQL si hay registro para este dataset
             if db is not None:
                 try:
-                    query = db.query(Modelo).filter(Modelo.arquitectura == arch)
-                    if target_ds:
-                        ds_match = query.join(ConjuntoDatos, Modelo.id_conjunto_datos == ConjuntoDatos.id_conjunto_datos, isouter=True)
-                        model_rec = ds_match.filter(
-                            (ConjuntoDatos.nombre == target_ds) | (Modelo.clase_objetivo.contains(target_ds))
-                        ).order_by(Modelo.precision.desc()).first()
-                        if not model_rec and target_ds == "AvesChilenas":
-                            model_rec = query.order_by(Modelo.precision.desc()).first()
-                    else:
-                        model_rec = query.order_by(Modelo.precision.desc()).first()
+                    model_rec = db.query(Modelo).join(
+                        ConjuntoDatos, Modelo.id_conjunto_datos == ConjuntoDatos.id_conjunto_datos
+                    ).filter(
+                        Modelo.arquitectura == arch, ConjuntoDatos.nombre == target_ds
+                    ).order_by(Modelo.precision.desc(), Modelo.id_modelo.desc()).first()
 
                     if model_rec:
-                        is_ready = True
+                        checkpoint_name = Path(model_rec.ruta_binario_gcp).name
+                        recorded_checkpoint = checkpoint_name
+                        weights_available = self._checkpoint_available(model_rec.ruta_binario_gcp)
+                        weights_source = "registered_reference"
+                        updated_at = model_rec.fecha_entrenamiento.isoformat() if model_rec.fecha_entrenamiento else None
                         accuracy = model_rec.precision
                         loss = model_rec.perdida
-                        checkpoint_name = Path(model_rec.ruta_binario_gcp).name
-                        updated_at = model_rec.fecha_entrenamiento.isoformat() if model_rec.fecha_entrenamiento else None
+                        is_registered = True
+                    else:
+                        is_registered = False
                 except Exception:
-                    pass
+                    db.rollback()
 
-            # 2. Fallback para AvesChilenas basado en checkpoints cargados
-            if not is_ready and target_ds == "AvesChilenas":
-                active_match = next((m for m in self.active_models_info if arch.lower().replace("-", "") in m["name"].lower().replace("-", "")), None)
-                if active_match:
-                    is_ready = True
-                    checkpoint_name = active_match["checkpoint"]
-                    accuracy = 84.5 if "convnext" in arch.lower() or "efficient" in arch.lower() else 81.0
-                    loss = 0.35
+            # Loaded state comes from observed in-memory models, never DB presence.
+            active_match = loaded.get(normalize_arch(arch))
+            if active_match:
+                is_ready = True
+                checkpoint_name = active_match["checkpoint"]
+                loaded_checkpoint = checkpoint_name
+                weight = active_match["weight"]
+                weights_available = self._checkpoint_available(active_match["checkpoint"])
+                weights_source = "loaded_checkpoint_file"
 
             triad_status.append({
                 "name": arch,
                 "weight": weight,
                 "is_ready": is_ready,
+                "is_registered": is_registered,
+                "is_loaded": is_ready,
+                "weights_available": weights_available,
+                "weights_source": weights_source,
                 "accuracy": accuracy,
                 "loss": loss,
                 "checkpoint": checkpoint_name,
+                "recorded_checkpoint": recorded_checkpoint,
+                "loaded_checkpoint": loaded_checkpoint,
+                "metrics_source": "database_record" if is_registered is True else None,
                 "updated_at": updated_at,
             })
 
-        ensemble_ready = all(m["is_ready"] for m in triad_status)
+        ensemble_ready = bool(triad_status) and all(m["is_ready"] for m in triad_status)
         ready_count = sum(1 for m in triad_status if m["is_ready"])
 
         if ensemble_ready:
             active_mode = "ensemble"
             model_name = "Super-Ensamble Tri-Modelo"
+        elif ready_count > 1:
+            active_mode = "partial_ensemble"
+            model_name = f"Ensamble parcial ({ready_count} modelos cargados)"
         elif ready_count > 0:
             active_mode = "individual"
             ready_first = next(m for m in triad_status if m["is_ready"])
             model_name = f"{ready_first['name']} (Modo Individual)"
-        else:
+        elif domain_supported and self.is_fallback and self.fallback_model is not None:
             active_mode = "fallback"
             model_name = "AudioCNN (Fallback)"
+        else:
+            active_mode = "unavailable"
+            model_name = None
 
         missing_models = [m["name"] for m in triad_status if not m["is_ready"]]
+        active_models = [
+            {"name": m["name"], "weight": m["weight"], "checkpoint": m["checkpoint"]}
+            for m in triad_status if m["is_loaded"]
+        ]
+        if active_mode == "fallback":
+            active_models = list(self.active_models_info)
 
         return {
+            "state_scope": "legacy_bioacoustic_service",
+            "domain_supported": domain_supported,
             "selected_domain": target_ds,
             "available_domains": available_domains,
             "ensemble_ready": ensemble_ready,
             "active_mode": active_mode,
             "missing_models": missing_models,
             "triad_status": triad_status,
-            "is_fallback": self.is_fallback or (active_mode == "fallback"),
+            "is_fallback": bool(domain_supported and self.is_fallback and self.fallback_model is not None),
             "model_name": model_name,
             "device": str(self.device),
-            "active_models": [
-                {"name": m["name"], "weight": m["weight"], "checkpoint": m["checkpoint"] or "default.pt"}
-                for m in triad_status if m["is_ready"]
-            ] or self.active_models_info,
+            "active_models": active_models,
             "total_classes": len(classes),
             "classes": classes,
+            "classes_source": classes_source,
         }
 
     def predict(
@@ -444,13 +510,13 @@ def health_check():
 # ============================================================================
 @app.get(
     "/api/model-info",
-    summary="Información y estado del modelo activo",
+    summary="Estado pasivo del servicio bioacústico legacy, sin carga de pesos",
 )
 def get_model_info(
     dataset_name: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
-    """Retorna información detallada sobre los modelos cargados en memoria y sus ponderaciones."""
+    """Observación acotada del servicio legacy; no representa activación del catálogo."""
     return ensemble_service.get_status(dataset_name=dataset_name, db=db)
 
 
@@ -628,16 +694,11 @@ async def predict_audio(
             )
 
         # 6. Retorno del formato JSON enriquecido
-        status_info = ensemble_service.get_status(dataset_name=dataset_name, db=db)
-        active_labels = [
-            f"{m['name']} ({int(round(m['weight'] * 100))}%)"
-            for m in status_info.get("active_models", [])
-        ]
+        executed_model_name = predictor.metadata.name
+        executed_labels = [executed_model_name]
         detalles = dict(getattr(pred_result, "detalles", None) or {})
         detalles["dataset_name"] = registro_prediccion.dataset_name
-        is_fallback = getattr(predictor, "is_fallback", status_info.get("is_fallback", False))
-        if detalles and detalles.get("is_mock") is False:
-            is_fallback = False
+        is_fallback = getattr(predictor, "is_fallback", False)
 
         return {
             "filename": filename,
@@ -646,9 +707,10 @@ async def predict_audio(
             "clase": clase,
             "confianza": confianza,
             "modelo_id": predictor.model_id,
-            "modelo": predictor.metadata.name if hasattr(predictor, "metadata") else status_info.get("model_name"),
+            "modelo": executed_model_name,
             "is_fallback": is_fallback,
-            "modelos_activos": active_labels,
+            "modelos_activos": executed_labels,
+            "modelos_ejecutados": executed_labels,
             "detalles": detalles,
         }
 

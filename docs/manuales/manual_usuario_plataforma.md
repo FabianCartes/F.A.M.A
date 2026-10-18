@@ -365,11 +365,13 @@ PostgreSQL real, bloqueo de fila, durabilidad del filesystem desplegado, GPU, en
 
 El **Módulo de Predicción** (`RF_05`, `RF_06`, `CU_INV_06`, `CU_INV_07`) es la herramienta diaria de clasificación en tiempo real. Integra visualización acústica interactiva, inferencia con el catálogo dinámico `ModelRegistry` y el ciclo de mejora continua MLOps.
 
+El esquema es ilustrativo, no evidencia de inferencia, activación o latencia real. La vista vigente presenta selección de catálogo y datos declarados; consultar estado no carga ni activa modelos. El tiempo de la última solicitud HTTP no es forward neuronal ni tiempo hasta pantalla.
+
 ```text
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
 │                              VISTA DE PREDICCIÓN ACÚSTICA                              │
 ├────────────────────────────────────────────────────────────────────────────────────────┤
-│  [1] SELECCIÓN DE DOMINIO Y MODELO ACTIVO                                              │
+│  [1] SELECCIÓN DE CATÁLOGO (NO ACTIVA EL MODELO EN BD)                                 │
 │  • Dominio: [ Aves Chilenas (Bioacústica) ▼ ]                                         │
 │  • Modelo:  [ Tri-Model Super-Ensemble (88.68% F1) - Oficial Tesis ▼ ]                │
 ├────────────────────────────────────────────────────────────────────────────────────────┤
@@ -384,7 +386,7 @@ El **Módulo de Predicción** (`RF_05`, `RF_06`, `CU_INV_06`, `CU_INV_07`) es la
 │  [4] RESULTADO DE LA CLASIFICACIÓN                                                     │
 │  Especie Predicha:  CHUCAO (Scelorchilus rubecula)                                     │
 │  Nivel de Confianza: 94.6%   ████████████████████████░░░                               │
-│  Latencia del Modelo: 0.14 segundos (Inferencia TTA en GPU)                            │
+│  Última solicitud HTTP: No medida antes de ejecutar (no es forward ni pantalla)       │
 ├────────────────────────────────────────────────────────────────────────────────────────┤
 │  [5] CICLO DE RETROALIMENTACIÓN ACTIVA (RF_06 / CU_INV_07)                             │
 │  ¿Es correcta la clasificación realizada por la Inteligencia Artificial?               │
@@ -394,10 +396,9 @@ El **Módulo de Predicción** (`RF_05`, `RF_06`, `CU_INV_06`, `CU_INV_07`) es la
 ```
 
 ### 6.1. Selección de Dominio y Estrategia de Inferencia
-Antes de cargar el archivo, el usuario puede seleccionar el contexto analítico mediante dos selectores superiores conectados dinámicamente con el `ModelRegistry`:
-* **Dominio Bioacústico:** Dirigido a la clasificación de aves chilenas (15 especies) utilizando el Ensamble Tri-Modelo calibrado a 22.05 kHz.
-* **Dominio Industrial:** Dirigido al diagnóstico preventivo de maquinaria y motores de vehículos (13 fallas mecánicas) calibrado a 32 kHz.
-* **Modelo Específico:** Permite alternar entre el Ensamble Campeón, modelos individuales o paquetes independientes (*Model Bundles*).
+Antes de cargar el archivo, el usuario elige una entrada del selector de catálogo agrupado en bioacústica/industrial. El grupo es presentación de catálogo, no activación. Clases y contrato acústico proceden de la entrada seleccionada: no se fijan universalmente 15/13 clases ni 22.05/32 kHz por pertenecer a un grupo. Si no hay modelo/metadatos, se muestra desconocido, no un contrato de ejemplo.
+
+Las métricas son declaradas por el catálogo, no una evaluación nueva ni prueba de conjunto test. La vista no inventa accuracy/F1/precision o composición/pesos de una tríada para sustituir ausencias. Coherencia de perfiles/bundles y métricas históricas del catálogo conservan las validaciones pendientes.
 
 #### 6.1.1. Disponibilidad del Catálogo y Activación
 
@@ -464,6 +465,20 @@ El catálogo corregido en vivo y su inferencia **no están verificados**; esa ev
 No se efectuaron despliegue, reset, migración, cambios GCS ni entrenamiento real en esta corrección.
 Las verificaciones de almacenamiento y reparación histórica continúan separadas y requieren su propia autorización.
 La decisión y sus alternativas están en el [ADR 0017](../adr/0017-disponibilidad-y-activacion-modelos.md).
+
+#### 6.1.4. Estado legacy y atribución de la respuesta
+
+GET `/api/model-info` es lectura pasiva del servicio bioacústico legacy: no deserializa pesos ni prueba inferencia. No existe `/api/ensemble/status` y no se añade otra ruta. `state_scope`/`domain_supported` evitan atribuir su estado a un predictor industrial o a otro modelo del catálogo.
+
+- **Registro:** `is_registered` true/false/null describe la consulta de una fila enlazada al dataset/arquitectura; no se toma texto de clase como asociación ni se presta una fila de otro dominio. Accuracy/loss son de ese registro BD, no del objeto cargado.
+- **Archivo:** `weights_available` describe archivo local no vacío dentro de raíces admitidas, sin validar contenido. `weights_source` identifica la referencia consultada. Remoto, ruta no cubierta o error no se convierten en ausencia confirmada.
+- **Carga:** `is_loaded` observa módulos en memoria del servicio. El alias legado `is_ready` y `ensemble_ready` solo resumen esa carga, no operatividad, calidad, activación o vigencia de versiones. Dos componentes son ensamble parcial. Un flag fallback sin módulo no prueba respaldo disponible.
+- **Procedencia:** `recorded_checkpoint`/`loaded_checkpoint` separan archivos potencialmente distintos. Las clases llevan fuente y pueden ser referencias/listados/cachés no verificados; no sustituyen validación del contrato completo ni orden de etiquetas.
+- **Vista:** sin estado de ámbito/dominio coincidente, no se inventan tarjetas. Presencia, registro y carga se muestran separados; un fallback legacy observado no se atribuye al predictor seleccionado. La disponibilidad del selector sigue exigiendo `has_weights=true`, con revalidación posterior en POST.
+- **Ejecución:** la respuesta de predicción identifica al predictor invocado por `modelo_id`, `modelo` y `modelos_ejecutados`. `modelos_activos` es alias de compatibilidad, no lista de componentes con ponderaciones ni activación. Puede haber retorno de filtros antes de la red: invocación no prueba forward. El rol fallback no se elimina por `is_mock=false`.
+- **Tiempo:** «Última solicitud» empieza sin medición y luego usa el contador HTTP existente hasta recibir respuesta; no incluye necesariamente lectura JSON/render ni acredita ≤3 s hasta pantalla. No se reutilizan 0.14 s o cifras de benchmark como placeholder.
+
+Clientes anteriores deben manejar null, pesos desconocidos y modos unavailable/partial_ensemble, y no interpretar aliases legados como salud global. Concurrencia/reload atómico, identidad por versión/hash y parser exhaustivo siguen pendientes. Véase [ADR 0033](../adr/0033-estado-legacy-pasivo-y-ejecucion-atribuida.md).
 
 ### 6.2. Inspección Acústica con Oscilograma Interactivo
 Al arrastrar o seleccionar un archivo de audio:

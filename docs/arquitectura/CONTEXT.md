@@ -11,3 +11,4 @@
 | Audio estructuralmente legible | Grabación con formato reconocido y muestras que el decodificador puede recorrer. No acredita clase correcta, calidad acústica ni utilidad para entrenar. |
 | Referencia experimental histórica | Resultado conservado de un experimento anterior. No describe por sí solo las métricas, disponibilidad ni configuración actual de un modelo. |
 | Confianza de predicción | Valor reportado por el clasificador para una salida concreta. No equivale a certeza diagnóstica ni a exactitud general demostrada. |
+| Carga observada | Instancia de modelo presente en la memoria del entorno observado. No acredita activación global, vigencia del archivo de respaldo ni inferencia correcta. |

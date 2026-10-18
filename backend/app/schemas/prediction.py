@@ -19,9 +19,9 @@ class PredictionResponse(BaseModel):
     db_id: int = Field(..., description="ID del registro histórico en PostgreSQL")
     clase: str = Field(..., description="Clase predicha")
     confianza: float = Field(..., description="Nivel de confianza calibrado")
-    modelo_id: str = Field(..., description="Identificador del modelo que generó la inferencia")
-    modelo: Optional[str] = Field(None, description="Nombre descriptivo del modelo activo")
+    modelo_id: str = Field(..., description="Identificador del predictor invocado")
+    modelo: Optional[str] = Field(None, description="Nombre descriptivo del predictor que produjo la respuesta, no activación global")
     is_fallback: Optional[bool] = Field(None, description="Indica si opera en modo fallback")
-    modelos_activos: Optional[list] = Field(None, description="Lista de modelos activos con ponderaciones")
+    modelos_activos: Optional[list] = Field(None, description="Alias legado del predictor ejecutado; no prueba activación ni composición")
+    modelos_ejecutados: Optional[list] = Field(None, description="Predictor que produjo la respuesta (también puede filtrar antes de la red); no infiere componentes legacy ni prueba forward")
     detalles: Optional[Dict[str, Any]] = Field(None, description="Telemetría y diagnósticos de inferencia (is_mock, latency_ms, device, checkpoint)")
-
