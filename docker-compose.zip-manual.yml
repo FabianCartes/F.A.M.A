@@ -1,0 +1,77 @@
+# Explicit synthetic-only stack. The import worker runs outside Docker.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: zip_manual
+      POSTGRES_PASSWORD: zip_manual_local_only
+      POSTGRES_DB: fama_zip_manual
+    volumes:
+      - manual_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zip_manual -d fama_zip_manual"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+    networks:
+      zip-manual:
+        ipv4_address: 172.30.252.30
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.zip-manual
+    image: fama-zip-manual-backend:local
+    user: "${HOST_UID:?Non-root host UID required}:${HOST_GID:?Host GID required}"
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--no-proxy-headers"]
+    environment:
+      DATABASE_URL: postgresql+psycopg2://zip_manual:zip_manual_local_only@db:5432/fama_zip_manual
+      PYTHON_DOTENV_DISABLED: "1"
+      FAMA_ENV: development
+      FAMA_IMPORT_DEV_MODE: "1"
+      FAMA_IMPORT_DEV_FRONTEND_IP: 172.30.252.10
+      FAMA_IMPORT_ROOT: ${FAMA_ZIP_MANUAL_HOME:?Private absolute root required}/imports
+      HOME: /home/fama
+      CUDA_VISIBLE_DEVICES: ""
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+    volumes:
+      - type: bind
+        source: ${FAMA_ZIP_MANUAL_HOME}
+        target: ${FAMA_ZIP_MANUAL_HOME}
+        bind:
+          create_host_path: false
+    tmpfs:
+      - /home/fama:uid=${HOST_UID},gid=${HOST_GID},mode=0700
+      - /app/data:uid=${HOST_UID},gid=${HOST_GID},mode=0700
+      - /app/checkpoints:uid=${HOST_UID},gid=${HOST_GID},mode=0700
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      zip-manual:
+        ipv4_address: 172.30.252.20
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ""
+        API_URL: http://backend:8000
+    image: fama-zip-manual-frontend:local
+    environment:
+      NEXT_PUBLIC_API_URL: ""
+      API_URL: http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      zip-manual:
+        ipv4_address: 172.30.252.10
+volumes:
+  manual_pgdata:
+networks:
+  zip-manual:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.252.0/24

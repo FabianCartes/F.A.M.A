@@ -20,6 +20,7 @@ backend/gcp-key*.json
 
 # Private operational backups and database dumps
 /backups/
+/.fama-zip-manual/
 
 # Datasets and raw media
 data/
@@ -100,4 +101,3 @@ Thumbs.db
 .codegraph/
 .obsidian/
 docs/.obsidian/
-

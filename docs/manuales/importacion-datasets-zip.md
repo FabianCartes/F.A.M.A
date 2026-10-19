@@ -75,6 +75,24 @@ FAMA_ENV=development
 FAMA_IMPORT_DEV_MODE=1
 ```
 
+#### Prueba manual aislada con worker externo
+
+El lanzador `.venv/bin/python -B backend/scripts/zip_manual.py` utiliza el proyecto
+Compose independiente `fama-zip-manual`, una base y raíces privadas persistentes,
+sin datos, checkpoints ni servicios del entorno habitual. Solo admite pruebas
+con ZIP sintéticos; no usar GCS, exportación ni entrenamiento.
+
+Para preparar imágenes, usar `build`. Solo una base nueva y vacía admite
+`init --writers-stopped`, con API y worker detenidos; no repetir inicialización
+ni backfill para reparar una base usada. `check` verifica sin escribir.
+`up` mantiene un relay en primer plano para `http://127.0.0.1:3001`, sin publicar
+puertos Docker ni habilitar salida a Internet. Mantener esa terminal abierta.
+En otra terminal, ejecutar `worker`: procesa únicamente preview/confirm en el host
+con el sandbox existente y espera entre intentos; no incluirlo en Docker.
+Para detener, primero Ctrl+C en las terminales de worker y up; luego `stop`.
+La parada conserva el volumen y los archivos; para continuar usar `up` y `worker`,
+nunca `init`. No se instalan dependencias en el host ni se borran datos automáticamente.
+
 #### Docker local explícito
 
 Desde la raíz del repositorio, con Docker accesible y Compose >= 2.24.4:
