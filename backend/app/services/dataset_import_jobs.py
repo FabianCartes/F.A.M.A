@@ -91,10 +91,16 @@ def _owned(db, owner, job_id):
 class ImportJobQueue:
     """Short transactions only; no filesystem, decoder, network or request session."""
 
-    def __init__(self, sessions, *, limits=None, clock=None):
+    def __init__(self, sessions, *, limits=None, clock=None, allowed_kinds=None):
+        if allowed_kinds is not None:
+            if (isinstance(allowed_kinds, str) or not allowed_kinds
+                    or not set(allowed_kinds) <= {"preview", "confirm", "sync"}):
+                raise ValueError("Claim kinds must be a nonempty collection of known job kinds")
+            allowed_kinds = frozenset(allowed_kinds)
         self.sessions = sessions
         self.limits = limits or JobLimits.from_environment()
         self.clock = clock
+        self.allowed_kinds = allowed_kinds
 
     def _now(self, db):
         if self.clock is not None:
@@ -111,10 +117,13 @@ class ImportJobQueue:
         with self.sessions() as db, db.begin():
             _gate(db)
             now = self._now(db)
-            row = db.scalar(select(ImportJob).where(or_(
+            query = select(ImportJob).where(or_(
                 ImportJob.status == "queued",
                 (ImportJob.status == "running") & (ImportJob.lease_until <= now)
-            )).order_by(ImportJob.created_at, ImportJob.id).limit(1))
+            ))
+            if self.allowed_kinds is not None:
+                query = query.where(ImportJob.kind.in_(self.allowed_kinds))
+            row = db.scalar(query.order_by(ImportJob.created_at, ImportJob.id).limit(1))
             if row is None:
                 return None
             row.attempt += 1

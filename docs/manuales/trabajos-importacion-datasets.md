@@ -130,6 +130,28 @@ contra el ingress desplegado. Véase [ADR0038](../adr/0038-complete-zip-exports-
 
 ## T5: limpieza recuperable fuera de HTTP
 
+### Ejecución local sin nube y supervisión explícita
+
+El comando conserva por defecto una sola invocación y su salida
+`{"claimed": true|false}`. Para el worker externo de la prueba manual, añadir
+`--local-only`: solo reclama `preview` y `confirm`, incluidas recuperaciones de leases
+vencidos de esos tipos. Los trabajos `sync` quedan intactos; no se crea el adaptador
+GCS. Esto no convierte una sincronización pendiente en exitosa ni libera su cupo.
+
+`--local-only --watch` mantiene el proceso en primer plano y espera dos segundos
+entre intentos, incluso sin trabajo. `--poll-seconds` permite un intervalo finito
+entre 1 y 3600 segundos y exige `--watch`; este último exige `--local-only`.
+SIGINT/SIGTERM solicitan salida después de la invocación actual y restauran los
+handlers. No hay borrado automático de staging ni reparación de migraciones.
+Un error de infraestructura termina con salida no cero y mensaje saneado; revisar
+el estado antes de reiniciar, no crear un bucle externo sin espera.
+
+La preparación de la base y las raíces no pertenece al comando del worker. Para
+el proyecto Docker separado y su worker en el host, consultar la
+[prueba manual aislada](importacion-datasets-zip.md#prueba-manual-aislada-con-worker-externo).
+
+### Mantenimiento de limpieza
+
 T5 está verificado localmente en alcance sintético; no acredita despliegue. Cancelar devuelve el
 estado cancelado y libera la promesa de escritura, pero conserva los temporales
 hasta mantenimiento. Publicar programa limpieza incluso si todos los miembros
