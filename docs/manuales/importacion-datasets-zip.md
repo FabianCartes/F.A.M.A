@@ -56,6 +56,15 @@ no demuestra equivalencia acústica de audios recodificados.
 
 ## Configuración del operador
 
+### Preparación explícita de la base de pruebas
+
+`backend/scripts/prepare_zip_manual_database.py` admite únicamente la base local
+dedicada `fama_zip_manual`. `--initialize --writers-stopped` prepara un esquema
+vacío mediante las etapas existentes; rechaza esquemas usados y no debe repetirse
+como reparación. `--check` verifica tablas y marcadores sin backfill ni escrituras.
+Ambas acciones requieren `--database-url` explícita; consultar `--help` para los
+argumentos. No ejecutar sobre la base habitual ni usar datos reales.
+
 ### Excepción de desarrollo local
 
 El modo sin login está **desactivado por defecto**. Requiere estas dos variables
