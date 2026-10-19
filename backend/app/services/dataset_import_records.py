@@ -33,6 +33,8 @@ def dataset_quota(db, target, new_bytes, new_files, limits):
     Call under the publication gate so the revision and counters form one view.
     Inconsistent summaries require operator recovery, not an implicit repair.
     """
+    # PostgreSQL SUM(bigint) yields Decimal; quota byte counts stay JSON integers.
+    new_bytes = int(new_bytes)
     current_bytes = current_files = 0
     if target is not None:
         summary = required_summary(db, DatasetSummary, target.id)
@@ -45,7 +47,7 @@ def dataset_quota(db, target, new_bytes, new_files, limits):
                 or summary.total_size_bytes != total or total < 0 or summary.class_count != classes
                 or latest > target.revision):
             raise HTTPException(503, "Los metadatos requieren migración verificada antes de continuar.")
-        current_bytes, current_files = total, count
+        current_bytes, current_files = int(total), count
     return dict(current_bytes=current_bytes, current_files=current_files,
                 new_bytes=new_bytes, new_files=new_files,
                 projected_bytes=current_bytes + new_bytes, projected_files=current_files + new_files,
