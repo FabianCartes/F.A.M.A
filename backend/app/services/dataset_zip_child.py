@@ -40,7 +40,8 @@ def main():
 
     configuration = json.loads(sys.argv[1])
     result = validate_zip(Path("/input.zip"), Path("/staging"),
-                          root=configuration["root"], limits=ImportLimits(**configuration["limits"]))
+                          root=configuration["root"], limits=ImportLimits(**configuration["limits"]),
+                          layout=configuration.get("layout"))
     print(json.dumps(result, ensure_ascii=True, allow_nan=False), flush=True)
 
 

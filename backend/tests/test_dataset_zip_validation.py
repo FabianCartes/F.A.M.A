@@ -146,6 +146,32 @@ def test_single_valid_wav_preserves_original_bytes_and_session_provenance(tmp_pa
     assert (tmp_path / "staged" / result["files"][0]["stored_name"]).read_bytes() == wav_bytes()
 
 
+@pytest.mark.parametrize("entry", [
+    "aves/chucao/audio.wav", "chucao/session/audio.wav", "chucao/empty/", "audio.wav",
+])
+def test_class_folders_layout_rejects_wrappers_and_all_nested_directories(tmp_path, entry):
+    from app.services.dataset_zip import validate_zip, ImportLimits
+
+    source = archive(tmp_path / "input.zip", [(entry, b"" if entry.endswith("/") else wav_bytes())])
+    original = source.read_bytes()
+    result = validate_zip(source, tmp_path / "staged", root="", limits=ImportLimits(), layout="class_folders")
+    assert result["errors"] == [{"path": entry, "code": "class_folders_required",
+        "action": "Organiza el ZIP como clase/audio.wav, sin carpeta contenedora ni subcarpetas."}]
+    assert result["files"] == []
+    assert source.read_bytes() == original
+
+
+def test_class_folders_layout_accepts_one_class_and_preserves_original_audio(tmp_path):
+    from app.services.dataset_zip import validate_zip, ImportLimits
+
+    source = archive(tmp_path / "input.zip", [("chucao/", b""), ("chucao/audio.wav", wav_bytes())])
+    result = validate_zip(source, tmp_path / "staged", root="", limits=ImportLimits(), layout="class_folders")
+    assert result["errors"] == []
+    assert result["classes"] == ["chucao"]
+    assert result["unique_count"] == 1
+    assert (tmp_path / "staged" / result["files"][0]["stored_name"]).read_bytes() == wav_bytes()
+
+
 @pytest.mark.parametrize("name,contents", [
     ("../escape.wav", wav_bytes()), ("/escape.wav", wav_bytes()),
     ("C:/a.wav", wav_bytes()), ("birds\\a.wav", wav_bytes()),

@@ -74,12 +74,14 @@ class ImportExecution:
                 reject(409, "La importación no admite una nueva vista previa.")
             archive = self.service.stage(source) / "archive.zip"
             expected = source.archive_sha256
+            layout = source.request.get("layout")
         if digest_file(archive) != expected:
             reject(409, "El archivo recibido cambió. Crea una nueva importación.")
         with self.queue.publication(attempt):
             pass  # Reject a callback whose lease ended while hashing.
         root = attempt["parameters"]["root"]
-        result = validate_zip(archive, staging / "files", root=root, limits=self.service.limits)
+        result = validate_zip(archive, staging / "files", root=root, limits=self.service.limits,
+                              **({"layout": layout} if layout else {}))
         for file in result["files"]:
             path = staging / "files" / file["stored_name"]
             if path.is_file():

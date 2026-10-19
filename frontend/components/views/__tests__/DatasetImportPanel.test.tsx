@@ -27,10 +27,10 @@ function reviewResponse(input: string, snapshot: string, files: unknown[] = [], 
 }
 
 describe("private dataset import", () => {
-  it("binds confirmation to reviewed root and preserves local success on cloud error", async () => {
+  it("recovers the historical root without an editable field and preserves local success on cloud error", async () => {
     const base = "/api/ingestion/imports";
     const writes: { path: string; body: unknown }[] = [];
-    const preview = { root: "", ...counts };
+    const preview = { root: "wrap", ...counts };
     const ready = { id: "independent", status: "ready", sync_status: "pending", dataset_id: null,
       added_count: 0, preview_token: "q".repeat(64), preview, error: null };
     let snapshot = ready.preview_token;
@@ -64,10 +64,9 @@ describe("private dataset import", () => {
     expect(writes).toEqual([]);
     await openImport();
     fireEvent.click(await screen.findByRole("button", { name: /independent —/ }));
-    fireEvent.change(screen.getByLabelText("Raíz de clases dentro del ZIP"), { target: { value: "wrap" } });
+    expect(screen.queryByLabelText("Raíz de clases dentro del ZIP")).toBeNull();
     const confirmButton = screen.getByRole("button", { name: "Confirmar importación local" }) as HTMLButtonElement;
-    expect(confirmButton.disabled).toBe(true);
-    fireEvent.click(confirmButton);
+    expect(confirmButton.disabled).toBe(false);
     expect(writes).toEqual([]);
     fireEvent.click(screen.getByRole("button", { name: "Validar ZIP" }));
     await waitFor(() => expect((screen.getByRole("button", { name: "Confirmar importación local" }) as HTMLButtonElement).disabled).toBe(false));
@@ -86,6 +85,8 @@ describe("private dataset import", () => {
     render(<DatasetImportPanel />);
     fireEvent.click(screen.getByRole("button", { name: "Importar dataset" }));
     expect(screen.getByText(/Una carpeta por clase/)).toBeDefined();
+    expect(screen.getByText(/sin carpeta contenedora ni subcarpetas/)).toBeDefined();
+    expect(screen.getByText("chucao/audio_01.wav colilarga/audio_01.wav")).toBeDefined();
     expect(screen.getByText(/no inicia preparación ni entrenamiento/)).toBeDefined();
     expect(screen.getByText(/al menos un WAV válido y único/i)).toBeDefined();
     expect(screen.queryByLabelText("Archivo ZIP")).toBeNull();
@@ -119,7 +120,7 @@ describe("private dataset import", () => {
       if (input.endsWith("/imports") && !options?.method) return collectionResponse("imports", [], "history");
       if (input.endsWith("/imports")) {
         expect(JSON.parse(String(options?.body))).toMatchObject({
-          name: "Birds", description: "New collection", target_id: null,
+          name: "Birds", description: "New collection", target_id: null, layout: "class_folders",
         });
         return Response.json({ ...job, status: "receiving" });
       }
@@ -129,7 +130,10 @@ describe("private dataset import", () => {
         import_id: "job1", name: "birds.zip", size_bytes: 3, received_bytes: 3, reserved_bytes: 4099,
         chunk_bytes: 16 * 1024 ** 2, status: input.endsWith("/finalize") ? "sealed" : "receiving" });
       if (input.endsWith("/job1")) return Response.json({ ...job, status: "validating" });
-      if (input.endsWith("/preview")) return Response.json(job);
+      if (input.endsWith("/preview")) {
+        expect(JSON.parse(String(options?.body))).toMatchObject({ root: "" });
+        return Response.json(job);
+      }
       if (input.endsWith("/confirm")) return Response.json({ ...job, status: "imported", added_count: 1, dataset_id: "d1" });
       if (input.endsWith("/sync")) return Response.json({ ...job, status: "imported", added_count: 1, sync_status: "synced", dataset_id: "d1" });
       throw new Error(`Unexpected request: ${input}`);
@@ -138,6 +142,7 @@ describe("private dataset import", () => {
     await openImport();
     await screen.findByLabelText("Archivo ZIP");
     expect(screen.queryByLabelText("Destino")).toBeNull();
+    expect(screen.queryByLabelText("Raíz de clases dentro del ZIP")).toBeNull();
     expect(screen.queryByRole("option", { name: "Crear dataset privado" })).toBeNull();
     expect(screen.queryByRole("button", { name: /página de destinos/ })).toBeNull();
     expect(screen.queryByLabelText("Dataset para exportar")).toBeNull();

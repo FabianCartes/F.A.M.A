@@ -149,9 +149,8 @@ it("ignores a delayed page from a previous job and keeps confirmation explicit",
   await act(async () => { resolveOld(page("files", [file("old")], jobs[0].preview_token)); await old; });
   await waitFor(() => expect(screen.queryByText("birds/old.wav → birds")).toBeNull());
   expect(fetcher.mock.calls.some(([url]) => url.endsWith("/sync") || url.endsWith("/confirm"))).toBe(false);
-  fireEvent.change(screen.getByRole("textbox", { name: "Raíz de clases dentro del ZIP" }), { target: { value: "changed" } });
-  expect((screen.getByRole("button", { name: "Confirmar importación local" }) as HTMLButtonElement).disabled).toBe(true);
-  fireEvent.change(screen.getByRole("textbox", { name: "Raíz de clases dentro del ZIP" }), { target: { value: "" } });
+  expect(screen.queryByRole("textbox", { name: "Raíz de clases dentro del ZIP" })).toBeNull();
+  expect((screen.getByRole("button", { name: "Confirmar importación local" }) as HTMLButtonElement).disabled).toBe(false);
   fireEvent.click(screen.getByRole("button", { name: "Confirmar importación local" }));
   await screen.findByText(/Importada localmente: 1/);
   expect(fetcher.mock.calls.some(([url]) => url.endsWith("/sync"))).toBe(false);

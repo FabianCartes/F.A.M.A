@@ -16,7 +16,7 @@ import threading
 import time
 import unicodedata
 
-from app.services.dataset_zip import _parts, fingerprint
+from app.services.dataset_zip import CLASS_FOLDERS_ACTION, _parts, fingerprint
 
 
 _CHILD = Path(__file__).with_name("dataset_zip_child.py")
@@ -31,7 +31,7 @@ def _failure(code):
             "fingerprint": fingerprint([])}
 
 
-def _command(source, staging, root, limits, maximum_output):
+def _command(source, staging, root, limits, maximum_output, *, layout=None):
     dependencies = Path(sysconfig.get_path("purelib"))
     command = ["/usr/bin/prlimit", f"--as={_MEMORY_BYTES}",
                f"--cpu={max(1, math.ceil(limits.validation_seconds / 2))}", "--core=0", "--nofile=64",
@@ -52,8 +52,11 @@ def _command(source, staging, root, limits, maximum_output):
     for name, value in (("OPENBLAS_NUM_THREADS", "1"), ("OMP_NUM_THREADS", "1"),
                         ("MKL_NUM_THREADS", "1"), ("PYTHONDONTWRITEBYTECODE", "1")):
         command.extend(["--setenv", name, value])
+    configuration = {"root": root, "limits": asdict(limits)}
+    if layout is not None:
+        configuration["layout"] = layout
     command.extend([str(Path(sys.executable).resolve()), "-I", "-S", "/code/entry.py",
-                    json.dumps({"root": root, "limits": asdict(limits)}, separators=(",", ":"))])
+                     json.dumps(configuration, separators=(",", ":"))])
     return command
 
 
@@ -79,7 +82,7 @@ def _read_result(process, deadline, maximum):
     return json.loads(output)
 
 
-def _checked_result(result, staging, root, limits):
+def _checked_result(result, staging, root, limits, *, layout=None):
     """Treat child metadata as untrusted; never grant paths publication authority."""
     files, errors, warnings = result["files"], result["errors"], result["warnings"]
     if (not isinstance(files, list) or len(files) > limits.entries or not isinstance(errors, list)
@@ -96,6 +99,8 @@ def _checked_result(result, staging, root, limits):
             raise ValueError("sandbox_invalid_result")
         parts = _parts(file["original_path"], limits)
         if parts[:len(root_parts)] != root_parts or len(parts) < len(root_parts) + 2:
+            raise ValueError("sandbox_invalid_result")
+        if layout == "class_folders" and (root or len(parts) != 2):
             raise ValueError("sandbox_invalid_result")
         label = unicodedata.normalize("NFC", parts[len(root_parts)])
         if file["stored_name"] != digest + ".wav" or file["class_name"] != label:
@@ -132,7 +137,8 @@ def _checked_result(result, staging, root, limits):
                 raise ValueError("sandbox_invalid_result")
             selected.append({"path": issue["path"], "code": issue["code"]})
             if issues is errors:
-                selected[-1]["action"] = _failure("")["errors"][0]["action"]
+                selected[-1]["action"] = (CLASS_FOLDERS_ACTION if issue["code"] == "class_folders_required"
+                                          else _failure("")["errors"][0]["action"])
         diagnostics.append(selected)
     names = {digest + ".wav" for digest in hashes}
     if errors:
@@ -145,13 +151,15 @@ def _checked_result(result, staging, root, limits):
             "duplicate_count": sum(f["duplicate"] for f in checked), "fingerprint": fingerprint(checked)}
 
 
-def validate_zip(source, staging, *, root, limits):
+def validate_zip(source, staging, *, root, limits, layout=None):
     """Run all ZIP parsing/extraction and native decoding in a killable OS sandbox.
 
     Linux bubblewrap, prlimit, libseccomp and the Python/decoder runtime are
     prerequisites. Any failure refuses validation; there is no in-process fallback.
     """
     deadline = time.monotonic() + limits.validation_seconds
+    if layout not in (None, "class_folders"):
+        return _failure("invalid_layout")
     source, staging = Path(source).absolute(), Path(staging).absolute()
     staging.mkdir(mode=0o700, parents=True, exist_ok=True)
     if source.is_symlink() or staging.is_symlink() or any(staging.iterdir()):
@@ -161,11 +169,11 @@ def validate_zip(source, staging, *, root, limits):
     process = None
     try:
         maximum = min(16 * 1024**2, max(65536, limits.entries * (limits.path_bytes * 8 + 2048)))
-        process = subprocess.Popen(_command(source, staging, root, limits, maximum),
+        process = subprocess.Popen(_command(source, staging, root, limits, maximum, layout=layout),
                                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                    env={}, close_fds=True, start_new_session=True)
         result = _read_result(process, deadline, maximum)
-        return _checked_result(result, staging, root, limits)
+        return _checked_result(result, staging, root, limits, layout=layout)
     except (TimeoutError, subprocess.TimeoutExpired):
         return _failure("validation_timeout")
     except (OSError, RuntimeError):

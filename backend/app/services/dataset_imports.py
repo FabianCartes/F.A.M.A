@@ -137,6 +137,8 @@ class DatasetImports:
         preview = dict(summary.preview, file_count=summary.file_count, class_count=summary.class_count,
                        error_count=summary.error_count, warning_count=summary.warning_count,
                        total_size_bytes=summary.total_size_bytes)
+        if row.request.get("layout"):
+            preview["layout"] = row.request["layout"]
         preview.pop("staging_attempt", None)
         preview.pop("_cleanup", None)
         preview.pop("_activity_at", None)

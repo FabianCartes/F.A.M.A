@@ -26,17 +26,18 @@ de esa comprobación aislada.
 3. Descarga el ejemplo sintético si lo necesitas. Selecciona un ZIP con WAV:
 
    ```text
-   aves/
-     chucao/audio_01.wav
-     colilarga/audio_01.wav
+   chucao/audio_01.wav
+   colilarga/audio_01.wav
    ```
 
-4. Indica `aves` como raíz para ese ejemplo, o deja la raíz vacía si las clases
-   están directamente en el ZIP. En `aves/chucao/sesion_01/audio.wav`, la clase es
-   `chucao`; la sesión queda como organización original, no como nueva etiqueta.
-5. Pulsa **Validar ZIP** y revisa rutas, clases, errores y duplicados. Cambiar la raíz
-   exige validar nuevamente. El destino queda fijado por solicitud; para cambiarlo,
-   crea otra solicitud. No se aceptan confirmaciones de una vista previa obsoleta.
+4. Coloca las carpetas de clases directamente en la raíz del ZIP y los WAV
+   inmediatamente dentro de cada clase, sin carpeta contenedora ni subcarpetas,
+   aunque estén vacías. No hay campo para escribir la raíz. Una sola clase con
+   al menos un WAV válido y único sigue siendo suficiente.
+5. Pulsa **Validar ZIP** y revisa rutas, clases, errores y duplicados. El usuario
+   organiza el ZIP; el servidor sigue validando estructura, seguridad y contenido.
+   Las rutas anidadas se rechazan con «Organiza el ZIP como clase/audio.wav, sin
+   carpeta contenedora ni subcarpetas.» y bloquean la confirmación.
 6. Confirma la importación local. Consulta y descarga sus archivos desde el panel.
    Una repetición exacta informa que no hay novedades sin incrementar los contadores.
 7. Solo cuando corresponda, pulsa **Sincronizar con GCS**. Si queda en curso o falla,
@@ -54,6 +55,15 @@ generan advertencias; esto no significa que el dataset sea apto para entrenamien
 Mismo hash y clase se omite; mismo contenido con otra clase bloquea la confirmación.
 Mismo nombre y bytes diferentes se conserva con identidades independientes. El hash
 no demuestra equivalencia acústica de audios recodificados.
+
+Las nuevas solicitudes de la interfaz fijan `layout: "class_folders"` al crearse.
+Revalidar con una raíz distinta se rechaza incluso mediante la API. Las solicitudes
+anteriores sin esa política conservan su raíz revisada, rutas de sesiones y
+recuperación desde el historial; la raíz ya no es editable en la interfaz. El
+backend para añadir audios a datasets existentes se mantiene sin migrar datos.
+La exportación ZIP conserva su formato y puede incluir una carpeta contenedora y
+rutas históricas: ese ZIP puede necesitar reorganización antes de una nueva
+importación con el formato estricto.
 
 ## Descargar una versión como ZIP
 

@@ -9,6 +9,7 @@ import zipfile
 from dataclasses import dataclass
 from ipaddress import ip_address
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, Path as PathParameter, Query, Request
 from fastapi.responses import FileResponse, Response, JSONResponse
@@ -88,6 +89,7 @@ class CreateImport(BaseModel):
     name: str = Field(min_length=1, max_length=150)
     description: str = Field(default="", max_length=2000)
     target_id: str | None = Field(default=None, pattern="^[0-9a-f]{32}$")
+    layout: Literal["class_folders"] | None = None
 
 
 class CreateReceipt(BaseModel):
@@ -125,7 +127,7 @@ def example(user=Depends(get_import_user)):
                 audio.setsampwidth(2)
                 audio.setframerate(8000)
                 audio.writeframes(index.to_bytes(2, "little") * 800)
-            archive.writestr(f"aves/{label}/audio_01.wav", wav.getvalue())
+            archive.writestr(f"{label}/audio_01.wav", wav.getvalue())
     return Response(output.getvalue(), media_type="application/zip",
                     headers={"Content-Disposition": 'attachment; filename="dataset-example.zip"'})
 
@@ -193,7 +195,8 @@ def download(dataset_id: str, sha256: str, db: Session = Depends(get_db), user=D
 
 @router.post("")
 def create(payload: CreateImport, db: Session = Depends(get_db), user=Depends(get_import_user), service=Depends(get_import_service)):
-    return service.create(db, user.id, payload.model_dump())
+    # Keep the exact legacy request payload for idempotent replay of older jobs.
+    return service.create(db, user.id, payload.model_dump(exclude={"layout"} if payload.layout is None else set()))
 
 
 @router.get("")

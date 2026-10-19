@@ -158,7 +158,10 @@ def _check_wav_container(path, size, budget):
             raise ValueError("truncated_wav")
 
 
-def validate_zip(source: Path, staging: Path, *, root: str, limits: ImportLimits):
+CLASS_FOLDERS_ACTION = "Organiza el ZIP como clase/audio.wav, sin carpeta contenedora ni subcarpetas."
+
+
+def validate_zip(source: Path, staging: Path, *, root: str, limits: ImportLimits, layout=None):
     """Return safe relative diagnostics and staged content, without publishing anything.
 
     The caller owns a private staging directory. This inner engine uses a
@@ -178,6 +181,10 @@ def validate_zip(source: Path, staging: Path, *, root: str, limits: ImportLimits
             raise ValueError("disk_reserve")
 
     try:
+        if layout not in (None, "class_folders"):
+            raise ValueError("invalid_layout")
+        if layout == "class_folders" and root:
+            raise ValueError("class_folders_required")
         if source.stat().st_size > limits.received_bytes:
             raise ValueError("received_limit")
         budget()
@@ -214,6 +221,8 @@ def validate_zip(source: Path, staging: Path, *, root: str, limits: ImportLimits
                     raise ValueError("special_entry")
                 if info.flag_bits & 1:
                     raise ValueError("encrypted_zip")
+                if layout == "class_folders" and len(parts) != (1 if info.is_dir() else 2):
+                    raise ValueError("class_folders_required")
                 kinds[key] = "directory" if info.is_dir() else "file"
                 if info.is_dir() and parts == root_parts[:len(parts)]:
                     continue
@@ -281,7 +290,8 @@ def validate_zip(source: Path, staging: Path, *, root: str, limits: ImportLimits
     except (ValueError, zipfile.BadZipFile, zlib.error, RuntimeError, OSError, EOFError, NotImplementedError) as error:
         code = str(error) if type(error) is ValueError else "invalid_archive_or_wav"
         errors.append({"path": current, "code": code,
-                       "action": "Corrige la ruta, estructura o contenido y vuelve a subir el ZIP."})
+                       "action": CLASS_FOLDERS_ACTION if code == "class_folders_required" else
+                       "Corrige la ruta, estructura o contenido y vuelve a subir el ZIP."})
     return {"files": files, "errors": errors, "warnings": warnings,
             "classes": sorted({f["class_name"] for f in files}),
             "unique_count": len({f["sha256"] for f in files}),

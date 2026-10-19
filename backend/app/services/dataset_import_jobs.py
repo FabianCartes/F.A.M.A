@@ -236,6 +236,8 @@ class ImportJobQueue:
                 DatasetImport.id == import_id, DatasetImport.owner_id == owner))
             if source is None:
                 _reject(404, "Importación no encontrada.")
+            if kind == "preview" and source.request.get("layout") == "class_folders" and parameters["root"]:
+                _reject(422, "El formato clase/audio.wav no admite seleccionar una raíz.")
             from app.services.dataset_import_cleanup import require_available
             require_available(db, import_id)
             prior = db.scalar(select(ImportJob).where(

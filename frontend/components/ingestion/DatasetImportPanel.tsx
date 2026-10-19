@@ -36,7 +36,6 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
   const [job, setJob] = useState<ImportJob | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [root, setRoot] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState("");
   const [receiptProgress, setReceiptProgress] = useState<ReceiptProgress | null>(null);
@@ -164,7 +163,7 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
       if (!file) throw new Error("Selecciona un archivo ZIP.");
       if (!requestKey.current) requestKey.current = crypto.randomUUID();
       const response = await importRequest(token, importBase, jsonRequest({ request_key: requestKey.current,
-        name, description, target_id: null }));
+        name, description, target_id: null, layout: "class_folders" }));
       current = jobSchema.parse(await response.json());
       setJob(current);
     }
@@ -175,7 +174,9 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
       current = jobSchema.parse(await response.json());
       setJob(current);
     }
-    await admit(current, "preview", { root });
+    // Historical previews retain their reviewed root; new requests always use
+    // the ZIP root and the server-enforced class-folder layout.
+    await admit(current, "preview", { root: current.preview.root ?? "" });
   }
 
   async function admit(current: ImportJob, suffix: string, body: Record<string, unknown> = {}) {
@@ -197,7 +198,7 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
   }
 
   function reset() {
-    setJob(null); setFile(null); setReceiptProgress(null); setLocalDataset(null); setRoot(""); setError(""); requestKey.current = "";
+    setJob(null); setFile(null); setReceiptProgress(null); setLocalDataset(null); setError(""); requestKey.current = "";
   }
 
   return <>
@@ -220,8 +221,9 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
       </div>
       <div className="p-5 space-y-4 leading-relaxed">
       <h3 className="text-sm font-semibold text-white">Instrucciones del archivo ZIP</h3>
-      <p>Una carpeta por clase, con audios WAV válidos. Puedes usar una carpeta contenedora y subcarpetas de sesiones.</p>
-      <pre className="overflow-x-auto rounded-lg border border-[#23252e] bg-[#111215] p-3 text-xs text-emerald-300">{"aves/\n  chucao/audio_01.wav\n  colilarga/audio_01.wav"}</pre>
+      <p>Una carpeta por clase directamente en la raíz del ZIP, con audios WAV válidos dentro de cada clase, sin carpeta contenedora ni subcarpetas, aunque estén vacías.</p>
+      <pre className="overflow-x-auto rounded-lg border border-[#23252e] bg-[#111215] p-3 text-xs text-emerald-300">{"chucao/audio_01.wav\ncolilarga/audio_01.wav"}</pre>
+      <p>Organiza el ZIP antes de subirlo. El nombre de cada carpeta determina la clase; el servidor comprobará la estructura y los audios antes de permitir la confirmación.</p>
       <p>Se requiere al menos un WAV válido y único y una clase con contenido. Las clases vacías o pequeñas generan advertencias.</p>
       <p>Los duplicados de la misma clase se omiten; el mismo contenido con otra clase bloquea la confirmación. Se comparan bytes, no similitud acústica.</p>
       <p>Importar no inicia preparación ni entrenamiento. La copia local se conserva aunque falle GCS.</p>
@@ -255,8 +257,6 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
               receiptProgress.phase === "sealed" ? " Recepción completa; la validación de audios es un trabajo separado." :
                 receiptProgress.phase === "sealing" ? " Verificando y finalizando recepción; todavía no valida los audios." : " Subiendo fragmentos secuenciales."}</p>}
           {(!job || ["receiving", "validating", "needs_correction", "ready"].includes(job.status)) && <>
-            <label className="block">Raíz de clases dentro del ZIP<input className={inputClass} placeholder="Vacío para raíz; aves para el ejemplo" value={root} onChange={e => setRoot(e.target.value)} disabled={!!busy} /></label>
-            <p className="text-xs">Selecciona la carpeta cuyos hijos son clases. Las subcarpetas de cada clase conservan su ruta original y no se convierten en etiquetas.</p>
             <button className={buttonClass} disabled={!!busy || executing || (!job && (!file || !name.trim()))} onClick={() => void act("Admitiendo validación…", validate)}>Validar ZIP</button>
           </>}
         </>}
@@ -285,7 +285,7 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
               renderItem={issue => <span role={issue.severity === "error" ? "alert" : undefined}>{issue.severity === "warning" ? "Advertencia: " : ""}{issue.path}: {issue.code}. {issue.action}</span>} />
           </div>}
           {job.error && <p role="alert">{job.error === "expired" ? "La importación venció." : "La sincronización no está completa. Reintenta; la copia local se conserva."}</p>}
-          {["ready", "committing"].includes(job.status) && <button className={buttonClass} disabled={!!busy || executing || !!quotaExceeded || job.preview.error_count > 0 || (job.status === "ready" && root !== job.preview.root)} onClick={() => void act("Admitiendo confirmación local…", () => action("confirm", { preview_token: job.preview_token }))}>Confirmar importación local</button>}
+          {["ready", "committing"].includes(job.status) && <button className={buttonClass} disabled={!!busy || executing || !!quotaExceeded || job.preview.error_count > 0} onClick={() => void act("Admitiendo confirmación local…", () => action("confirm", { preview_token: job.preview_token }))}>Confirmar importación local</button>}
           {job.status === "imported" && <>
             <p>Importada localmente: {job.added_count} archivo(s) nuevo(s).{job.added_count === 0 ? " No hay novedades; no se creó un dataset vacío." : ""}</p>
             {job.dataset_id && <>
@@ -305,7 +305,7 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
           <button disabled={!!busy} className="underline text-xs" onClick={() => {
             setFile(null); setReceiptProgress(null); setError("");
             if (fileInputRef.current) fileInputRef.current.value = "";
-            setJob(item); setRoot(item.preview.root ?? ""); setLocalDataset(null);
+            setJob(item); setLocalDataset(null);
           }}>{item.id} — {statusLabels[item.status] || item.status}</button>
         </li>)}</ul>
           <button disabled={!!busy} onClick={() => void act("Consultando historial…", () => historyPage(null))}>Primera página de importaciones</button>
