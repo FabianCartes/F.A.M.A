@@ -90,6 +90,7 @@ class CreateImport(BaseModel):
     description: str = Field(default="", max_length=2000)
     target_id: str | None = Field(default=None, pattern="^[0-9a-f]{32}$")
     layout: Literal["class_folders"] | None = None
+    auto_import: bool = Field(default=False, strict=True)
 
 
 class CreateReceipt(BaseModel):
@@ -196,7 +197,8 @@ def download(dataset_id: str, sha256: str, db: Session = Depends(get_db), user=D
 @router.post("")
 def create(payload: CreateImport, db: Session = Depends(get_db), user=Depends(get_import_user), service=Depends(get_import_service)):
     # Keep the exact legacy request payload for idempotent replay of older jobs.
-    return service.create(db, user.id, payload.model_dump(exclude={"layout"} if payload.layout is None else set()))
+    excluded = ({"layout"} if payload.layout is None else set()) | ({"auto_import"} if not payload.auto_import else set())
+    return service.create(db, user.id, payload.model_dump(exclude=excluded))
 
 
 @router.get("")

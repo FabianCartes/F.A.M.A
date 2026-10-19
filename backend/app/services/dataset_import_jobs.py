@@ -250,10 +250,17 @@ class ImportJobQueue:
             summary = db.get(ImportSummary, source.id)
             if summary is None:
                 _reject(503, "Los metadatos requieren migración verificada antes de continuar.")
+            # An automatic preview keeps its kind and reviewed root on retry;
+            # only an existing publication journal may bypass fresh validation.
+            recovering_preview = (kind == "preview" and source.request.get("auto_import") is True
+                                  and source.status == "committing" and source.preview_token
+                                  and summary.preview.get("staging_attempt"))
+            if recovering_preview and parameters["root"] != summary.preview.get("root"):
+                _reject(422, "La recuperación debe conservar la raíz de la vista previa.")
             if source.error == "expired":
                 _reject(410, "La importación venció. Crea una nueva solicitud.")
-            if kind == "preview" and (source.status not in ("validating", "needs_correction", "ready")
-                                      or not source.archive_sha256):
+            if kind == "preview" and (not source.archive_sha256 or (
+                    not recovering_preview and source.status not in ("validating", "needs_correction", "ready"))):
                 _reject(409, "La importación no admite una nueva vista previa.")
             if kind == "confirm" and (source.status not in ("ready", "committing", "imported")
                                       or source.preview_token != parameters["preview_token"]):

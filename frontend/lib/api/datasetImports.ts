@@ -8,6 +8,7 @@ export const audioSchema = z.object({
 });
 const previewSchema = z.object({
   root: z.string().optional(),
+  auto_import: z.boolean().optional(),
   file_count: z.number(), class_count: z.number(), error_count: z.number(), warning_count: z.number(),
   total_size_bytes: z.number(), synced_count: z.number(),
   new_count: z.number().optional(), duplicate_count: z.number().optional(), duplicate_collection: z.boolean().optional(),

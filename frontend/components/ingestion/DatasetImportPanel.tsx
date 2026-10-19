@@ -49,6 +49,7 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
   const executionStatus = job?.execution?.status;
   const importId = job?.id;
   const executing = executionStatus === "queued" || executionStatus === "running";
+  const automatic = !job || job.preview.auto_import === true;
   const quota = job?.preview.quota;
   const quotaExceeded = quota && (quota.projected_bytes > quota.limit_bytes || quota.projected_files > quota.limit_files);
 
@@ -163,7 +164,7 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
       if (!file) throw new Error("Selecciona un archivo ZIP.");
       if (!requestKey.current) requestKey.current = crypto.randomUUID();
       const response = await importRequest(token, importBase, jsonRequest({ request_key: requestKey.current,
-        name, description, target_id: null, layout: "class_folders" }));
+        name, description, target_id: null, layout: "class_folders", auto_import: true }));
       current = jobSchema.parse(await response.json());
       setJob(current);
     }
@@ -223,9 +224,9 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
       <h3 className="text-sm font-semibold text-white">Instrucciones del archivo ZIP</h3>
       <p>Una carpeta por clase directamente en la raíz del ZIP, con audios WAV válidos dentro de cada clase, sin carpeta contenedora ni subcarpetas, aunque estén vacías.</p>
       <pre className="overflow-x-auto rounded-lg border border-[#23252e] bg-[#111215] p-3 text-xs text-emerald-300">{"chucao/audio_01.wav\ncolilarga/audio_01.wav"}</pre>
-      <p>Organiza el ZIP antes de subirlo. El nombre de cada carpeta determina la clase; el servidor comprobará la estructura y los audios antes de permitir la confirmación.</p>
+      <p>Organiza el ZIP antes de subirlo. El nombre de cada carpeta determina la clase; el ZIP se importará automáticamente solo si supera la validación del servidor, sin una segunda confirmación. No necesitas mantener esta ventana abierta.</p>
       <p>Se requiere al menos un WAV válido y único y una clase con contenido. Las clases vacías o pequeñas generan advertencias.</p>
-      <p>Los duplicados de la misma clase se omiten; el mismo contenido con otra clase bloquea la confirmación. Se comparan bytes, no similitud acústica.</p>
+      <p>Los duplicados de la misma clase se omiten; el mismo contenido con otra clase bloquea la importación. Se comparan bytes, no similitud acústica.</p>
       <p>Importar no inicia preparación ni entrenamiento. La copia local se conserva aunque falle GCS.</p>
       <p className="text-gray-400">Las colecciones importadas se conservan fuera del catálogo compartido.</p>
       {developmentMode && <p role="status" className="rounded-lg border border-amber-800/60 bg-amber-950/40 p-3 text-amber-300">Modo de desarrollo local: identidad de pruebas compartida en este equipo, sin acceso a colecciones de otros usuarios. No exponer este modo públicamente.</p>}
@@ -251,17 +252,17 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
             } else { setFile(selected); setError(""); }
           }} className={inputClass} /></label>}
           {file && <p className="text-gray-400">Archivo seleccionado: {file.name}</p>}
-          {job?.status === "receiving" && <p>Para reanudar, selecciona el ZIP original y pulsa Validar ZIP. Se comprobarán todos los fragmentos ya reconocidos antes de continuar; el nombre y el tamaño no prueban que sea el mismo archivo.</p>}
+          {job?.status === "receiving" && <p>Para reanudar, selecciona el ZIP original y pulsa {automatic ? "Importar ZIP" : "Validar ZIP"}. Se comprobarán todos los fragmentos ya reconocidos antes de continuar; el nombre y el tamaño no prueban que sea el mismo archivo.</p>}
           {receiptProgress && <p role="status">Bytes reconocidos por el servidor: {receiptProgress.receipt.received_bytes} de {receiptProgress.receipt.size_bytes}.
             {receiptProgress.phase === "verifying" ? ` Verificando archivo para reanudar: ${receiptProgress.verified} de ${receiptProgress.receipt.received_bytes} bytes.` :
               receiptProgress.phase === "sealed" ? " Recepción completa; la validación de audios es un trabajo separado." :
                 receiptProgress.phase === "sealing" ? " Verificando y finalizando recepción; todavía no valida los audios." : " Subiendo fragmentos secuenciales."}</p>}
           {(!job || ["receiving", "validating", "needs_correction", "ready"].includes(job.status)) && <>
-            <button className={buttonClass} disabled={!!busy || executing || (!job && (!file || !name.trim()))} onClick={() => void act("Admitiendo validación…", validate)}>Validar ZIP</button>
+            <button className={buttonClass} disabled={!!busy || executing || (!job && (!file || !name.trim()))} onClick={() => void act(automatic ? "Admitiendo importación…" : "Admitiendo validación…", validate)}>{automatic ? "Importar ZIP" : "Validar ZIP"}</button>
           </>}
         </>}
         {job && <div className="space-y-3">
-          {job.execution && <p role="status">{executionStatus === "queued" ? "Trabajo admitido; pendiente de ejecución" : executionStatus === "running" ? "Trabajo en ejecución" : executionStatus === "succeeded" ? "Trabajo completado" : executionStatus === "cancelled" ? "Trabajo cancelado" : "Trabajo fallido"}: {job.execution.stage} · {job.execution.progress}%</p>}
+          {job.execution && <p role="status">{executionStatus === "queued" ? "Trabajo admitido; pendiente de ejecución" : executionStatus === "running" ? "Trabajo en ejecución" : executionStatus === "succeeded" ? (job.status === "needs_correction" ? "Validación rechazada" : "Trabajo completado") : executionStatus === "cancelled" ? "Trabajo cancelado" : "Trabajo fallido"}: {job.execution.stage} · {job.execution.progress}%</p>}
           {job.execution?.error && <p role="alert">No se completó el trabajo ({job.execution.error.code}). Consulta el estado antes de reintentar.</p>}
           {job.execution?.status === "queued" && <button className={buttonClass} disabled={!!busy} onClick={() => void act("Cancelando trabajo…", async () => {
             const response = await importRequest(token, `${importBase}/${job.id}/jobs/${job.execution!.id}/cancel`, jsonRequest({}));
@@ -271,6 +272,7 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
           <p role="status">Importación {job.id}: {statusLabels[job.status] || job.status}</p>
           <p>Sincronización: {statusLabels[job.sync_status] || job.sync_status}</p>
           <p>Clases propuestas: {job.preview.class_count} · Archivos: {job.preview.file_count} · Nuevos: {job.preview.new_count ?? 0} · Duplicados internos: {job.preview.duplicate_count ?? 0} · Errores: {job.preview.error_count} · Advertencias: {job.preview.warning_count}</p>
+          {automatic && job.status === "needs_correction" && <p role="alert">ZIP rechazado: revisa las incidencias, cancela esta solicitud y crea una nueva importación con el ZIP corregido. No se publicó contenido de este ZIP.</p>}
           {job.preview.quota && <section aria-label="Cuota del dataset">
             <p>Bytes únicos: actuales {job.preview.quota.current_bytes} + nuevos {job.preview.quota.new_bytes} = proyectados {job.preview.quota.projected_bytes} / límite {job.preview.quota.limit_bytes}.</p>
             <p>Archivos únicos: actuales {job.preview.quota.current_files} + nuevos {job.preview.quota.new_files} = proyectados {job.preview.quota.projected_files} / límite {job.preview.quota.limit_files}.</p>
@@ -285,7 +287,7 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
               renderItem={issue => <span role={issue.severity === "error" ? "alert" : undefined}>{issue.severity === "warning" ? "Advertencia: " : ""}{issue.path}: {issue.code}. {issue.action}</span>} />
           </div>}
           {job.error && <p role="alert">{job.error === "expired" ? "La importación venció." : "La sincronización no está completa. Reintenta; la copia local se conserva."}</p>}
-          {["ready", "committing"].includes(job.status) && <button className={buttonClass} disabled={!!busy || executing || !!quotaExceeded || job.preview.error_count > 0} onClick={() => void act("Admitiendo confirmación local…", () => action("confirm", { preview_token: job.preview_token }))}>Confirmar importación local</button>}
+          {!automatic && ["ready", "committing"].includes(job.status) && <button className={buttonClass} disabled={!!busy || executing || !!quotaExceeded || job.preview.error_count > 0} onClick={() => void act("Admitiendo confirmación local…", () => action("confirm", { preview_token: job.preview_token }))}>Confirmar importación local</button>}
           {job.status === "imported" && <>
             <p>Importada localmente: {job.added_count} archivo(s) nuevo(s).{job.added_count === 0 ? " No hay novedades; no se creó un dataset vacío." : ""}</p>
             {job.dataset_id && <>

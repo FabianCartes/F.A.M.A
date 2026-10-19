@@ -161,7 +161,7 @@ it("clears the selected file and progress when resetting a failed receipt", asyn
   fireEvent.click(screen.getByRole("button", { name: "Nueva importación" }));
   expect(screen.queryByText(/Archivo seleccionado/)).toBeNull();
   expect(screen.queryByText(/Bytes reconocidos/)).toBeNull();
-  expect((screen.getByRole("button", { name: "Validar ZIP" }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole("button", { name: "Importar ZIP" }) as HTMLButtonElement).disabled).toBe(true);
 });
 
 it("keeps one PUT in flight, reports only acknowledged bytes, and clears history selection", async () => {

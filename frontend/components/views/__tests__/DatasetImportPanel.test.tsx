@@ -98,12 +98,12 @@ describe("private dataset import", () => {
     expect((within(screen.getByRole("dialog")).getByRole("button", { name: "Importar dataset" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("previews without login in local mode, confirms locally and only syncs on explicit action", async () => {
+  it("imports automatically without login in local mode and only syncs on explicit action", async () => {
     vi.stubGlobal("crypto", webcrypto);
     const calls: string[] = [];
     const files = [{ id: "audio", relative_path: "birds/a.wav", original_path: "birds/a.wav", class_name: "birds",
       sha256: "a".repeat(64), size_bytes: 100, duplicate: false, existing: false }];
-    const preview = { root: "", ...counts, file_count: 1, new_count: 1, duplicate_count: 0, duplicate_collection: false };
+    const preview = { auto_import: true, root: "", ...counts, file_count: 1, new_count: 1, duplicate_count: 0, duplicate_collection: false };
     const job = { id: "job1", status: "ready", sync_status: "pending", dataset_id: null, added_count: 0,
       preview_token: "p".repeat(64), preview, error: null };
     vi.stubGlobal("fetch", durableFetch(async (input: string, options?: RequestInit) => {
@@ -120,7 +120,7 @@ describe("private dataset import", () => {
       if (input.endsWith("/imports") && !options?.method) return collectionResponse("imports", [], "history");
       if (input.endsWith("/imports")) {
         expect(JSON.parse(String(options?.body))).toMatchObject({
-          name: "Birds", description: "New collection", target_id: null, layout: "class_folders",
+          name: "Birds", description: "New collection", target_id: null, layout: "class_folders", auto_import: true,
         });
         return Response.json({ ...job, status: "receiving" });
       }
@@ -132,7 +132,7 @@ describe("private dataset import", () => {
       if (input.endsWith("/job1")) return Response.json({ ...job, status: "validating" });
       if (input.endsWith("/preview")) {
         expect(JSON.parse(String(options?.body))).toMatchObject({ root: "" });
-        return Response.json(job);
+        return Response.json({ ...job, status: "imported", added_count: 1, dataset_id: "d1" });
       }
       if (input.endsWith("/confirm")) return Response.json({ ...job, status: "imported", added_count: 1, dataset_id: "d1" });
       if (input.endsWith("/sync")) return Response.json({ ...job, status: "imported", added_count: 1, sync_status: "synced", dataset_id: "d1" });
@@ -148,22 +148,20 @@ describe("private dataset import", () => {
     expect(screen.queryByLabelText("Dataset para exportar")).toBeNull();
     expect(screen.queryByRole("button", { name: "Descargar versión como ZIP" })).toBeNull();
     fireEvent.change(screen.getByLabelText("Archivo ZIP"), { target: { files: [new File(["zip"], "birds.zip", { type: "application/zip" })] } });
-    expect((screen.getByRole("button", { name: "Validar ZIP" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Importar ZIP" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(screen.getByLabelText("Nombre del dataset"), { target: { value: "Birds" } });
     fireEvent.change(screen.getByLabelText("Descripción"), { target: { value: "New collection" } });
-    expect((screen.getByRole("button", { name: "Validar ZIP" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: "Importar ZIP" }) as HTMLButtonElement).disabled).toBe(false);
     // Closing only hides the window; the selected archive and form survive.
     fireEvent.click(screen.getByTestId("dataset-import-backdrop"));
     expect(screen.queryByRole("dialog")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Importar dataset" }));
     expect((screen.getByLabelText("Nombre del dataset") as HTMLInputElement).value).toBe("Birds");
     expect(screen.getByText("Archivo seleccionado: birds.zip")).toBeDefined();
-    fireEvent.click(screen.getByRole("button", { name: "Validar ZIP" }));
+    fireEvent.click(screen.getByRole("button", { name: "Importar ZIP" }));
     await screen.findByText("birds/a.wav → birds");
     expect(calls.some(call => call.includes("/sync"))).toBe(false);
-    const confirm = await screen.findByRole("button", { name: "Confirmar importación local" });
-    await waitFor(() => expect((confirm as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(confirm);
+    expect(screen.queryByRole("button", { name: "Confirmar importación local" })).toBeNull();
     await screen.findByText(/Importada localmente: 1 archivo/);
     expect(calls.some(call => call.includes("/sync"))).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Sincronizar con GCS" }));

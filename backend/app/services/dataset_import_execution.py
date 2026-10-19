@@ -70,11 +70,21 @@ class ImportExecution:
     def preview(self, attempt, staging):
         with self.queue.sessions() as db:
             source = self._source(db, attempt)
-            if source.status not in ("validating", "needs_correction", "ready"):
+            automatic = source.request.get("auto_import") is True
+            recovering = automatic and source.status in ("committing", "imported")
+            token = source.preview_token
+            if recovering:
+                preview = required_summary(db, ImportSummary, source.id).preview
+                if attempt["parameters"]["root"] != preview.get("root"):
+                    reject(422, "La recuperación debe conservar la raíz de la vista previa.")
+            elif source.status not in ("validating", "needs_correction", "ready"):
                 reject(409, "La importación no admite una nueva vista previa.")
             archive = self.service.stage(source) / "archive.zip"
             expected = source.archive_sha256
             layout = source.request.get("layout")
+        if recovering:
+            # Never replace the reviewed token or staging identity of a journal.
+            return self.confirm(dict(attempt, parameters={"preview_token": token}), staging)
         if digest_file(archive) != expected:
             reject(409, "El archivo recibido cambió. Crea una nueva importación.")
         with self.queue.publication(attempt):
@@ -131,7 +141,13 @@ class ImportExecution:
             replace_preview(db, source, result)
             source.preview_token = uuid.uuid4().hex + uuid.uuid4().hex
             source.status = "needs_correction" if result["errors"] else "ready"
-            self.queue.complete_publication(db, job, {})
+            token = source.preview_token
+            publish = automatic and not result["errors"]
+            if not publish:
+                self.queue.complete_publication(db, job, {})
+        if publish:
+            # Preserve the running preview lease and immutable queue parameters.
+            return self.confirm(dict(attempt, parameters={"preview_token": token}), staging)
         return {}
 
     def _confirmation(self, db, attempt):

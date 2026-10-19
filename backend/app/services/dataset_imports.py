@@ -139,6 +139,8 @@ class DatasetImports:
                        total_size_bytes=summary.total_size_bytes)
         if row.request.get("layout"):
             preview["layout"] = row.request["layout"]
+        if row.request.get("auto_import") is True:
+            preview["auto_import"] = True
         preview.pop("staging_attempt", None)
         preview.pop("_cleanup", None)
         preview.pop("_activity_at", None)

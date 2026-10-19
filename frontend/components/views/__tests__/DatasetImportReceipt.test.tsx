@@ -82,7 +82,7 @@ async function open(history = true, contents = chunks.join("")) {
 it("uploads sequential bounded slices, acknowledges bytes, seals then separately admits preview", async () => {
   const { writes } = transport(0, false);
   const { slices, wholeRead } = await open(false);
-  fireEvent.click(screen.getByRole("button", { name: "Validar ZIP" }));
+  fireEvent.click(screen.getByRole("button", { name: "Importar ZIP" }));
   await screen.findByText("Importación resume: lista para confirmar");
   expect(writes).toEqual([`POST ${base}`, `POST ${base}/resume/receipt`,
     ...[0, 1, 2, 3].map(index => `PUT ${base}/resume/receipt/chunks/${index}`),

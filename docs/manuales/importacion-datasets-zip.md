@@ -34,11 +34,14 @@ de esa comprobación aislada.
    inmediatamente dentro de cada clase, sin carpeta contenedora ni subcarpetas,
    aunque estén vacías. No hay campo para escribir la raíz. Una sola clase con
    al menos un WAV válido y único sigue siendo suficiente.
-5. Pulsa **Validar ZIP** y revisa rutas, clases, errores y duplicados. El usuario
-   organiza el ZIP; el servidor sigue validando estructura, seguridad y contenido.
-   Las rutas anidadas se rechazan con «Organiza el ZIP como clase/audio.wav, sin
-   carpeta contenedora ni subcarpetas.» y bloquean la confirmación.
-6. Confirma la importación local. Consulta y descarga sus archivos desde el panel.
+5. Pulsa **Importar ZIP** para autorizar la validación y la importación local
+   automática solo si el ZIP es válido, sin una segunda confirmación. El servidor
+   sigue comprobando estructura, seguridad y contenido. Las rutas anidadas se
+   rechazan con «Organiza el ZIP como clase/audio.wav, sin carpeta contenedora ni
+   subcarpetas.» Revisa las incidencias, cancela la solicitud rechazada y crea otra
+   con el ZIP corregido; no se publica contenido parcial.
+6. Espera **Importada localmente** antes de considerar terminado el trabajo. Su
+   admisión no es éxito final. Consulta y descarga sus archivos desde el panel.
    Una repetición exacta informa que no hay novedades sin incrementar los contadores.
 7. Solo cuando corresponda, pulsa **Sincronizar con GCS**. Si queda en curso o falla,
    reanuda desde el mismo panel. La copia local no se elimina.
@@ -47,6 +50,10 @@ Puedes cerrar la ventana con **Cerrar importación**, Escape o pulsando el fondo
 oscuro exterior. Pulsar dentro no la cierra. Cerrar solo oculta la ventana: conserva
 el formulario, el ZIP seleccionado y el trabajo mientras permanezcas en la vista;
 no cancela una operación ni libera su cupo. Volver a pulsar el botón permite continuar.
+Una vez admitido, el worker valida e importa aunque cierres el navegador. La subida
+todavía en curso debe terminar antes de abandonar la vista. Los errores de publicación
+retienen su journal: usa el reintento explícito, sin borrar estado ni volver a validar
+un journal confirmado. Las advertencias no se convierten en errores.
 Si recargas o abandonas la vista, usa **Recuperar importaciones anteriores** y, si
 la recepción no terminó, selecciona de nuevo el ZIP original.
 
@@ -57,6 +64,14 @@ Mismo nombre y bytes diferentes se conserva con identidades independientes. El h
 no demuestra equivalencia acústica de audios recodificados.
 
 Las nuevas solicitudes de la interfaz fijan `layout: "class_folders"` al crearse.
+También envían `auto_import: true`, booleano estricto que autoriza solo publicación
+local tras validar; GCS sigue siendo explícito. Omitirlo o enviar `false` conserva
+**Validar ZIP → Confirmar importación local** para clientes e historial antiguos.
+Cadenas, números y `null` se rechazan. La autorización queda fijada al crear la
+solicitud: una repetición idéntica conserva identidad, cambiarla se rechaza.
+Abrir, recuperar o actualizar el historial no crea trabajos ni confirma nada.
+La recuperación conserva raíz, token y staging revisados y reutiliza la publicación
+fenced existente sin duplicar miembros ni liberar reservas antes de publicar.
 Revalidar con una raíz distinta se rechaza incluso mediante la API. Las solicitudes
 anteriores sin esa política conservan su raíz revisada, rutas de sesiones y
 recuperación desde el historial; la raíz ya no es editable en la interfaz. El
