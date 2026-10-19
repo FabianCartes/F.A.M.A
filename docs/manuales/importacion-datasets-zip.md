@@ -20,9 +20,10 @@ de esa comprobación aislada.
    explícitamente el modo local descrito más abajo. Fuera de ese modo, el backend
    conserva la autenticación; el panel puede recibir una sesión de la futura vista
    de acceso, pero todavía no está conectado a ella.
-2. Introduce el nombre y, opcionalmente, la descripción del nuevo dataset privado.
-   El selector de destino ya no se muestra. Añadir audios a datasets existentes
-   queda pospuesto en la interfaz, sin retirar el soporte del backend.
+2. Introduce el nombre del nuevo dataset privado y, opcionalmente, su descripción.
+   El formulario no ofrece añadir audios a un dataset existente: esa función queda
+   pospuesta en la interfaz, sin retirar el soporte del backend. La recuperación de
+   solicitudes anteriores se conserva.
 3. Descarga el ejemplo sintético si lo necesitas. Selecciona un ZIP con WAV:
 
    ```text
@@ -30,18 +31,20 @@ de esa comprobación aislada.
    colilarga/audio_01.wav
    ```
 
-4. Coloca las carpetas de clases directamente en la raíz del ZIP y los WAV
-   inmediatamente dentro de cada clase, sin carpeta contenedora ni subcarpetas,
-   aunque estén vacías. No hay campo para escribir la raíz. Una sola clase con
-   al menos un WAV válido y único sigue siendo suficiente.
-5. Pulsa **Importar ZIP** para autorizar la validación y la importación local
-   automática solo si el ZIP es válido, sin una segunda confirmación. El servidor
-   sigue comprobando estructura, seguridad y contenido. Las rutas anidadas se
-   rechazan con «Organiza el ZIP como clase/audio.wav, sin carpeta contenedora ni
-   subcarpetas.» Revisa las incidencias, cancela la solicitud rechazada y crea otra
-   con el ZIP corregido; no se publica contenido parcial.
-6. Espera **Importada localmente** antes de considerar terminado el trabajo. Su
-   admisión no es éxito final. Consulta y descarga sus archivos desde el panel.
+4. Coloca las carpetas de clases directamente en la raíz del ZIP, con los WAV
+   inmediatamente dentro de cada clase. No incluyas una carpeta contenedora ni
+   subcarpetas de sesiones, aunque estén vacías. Por ejemplo, `chucao/audio_01.wav`
+   pertenece a la clase `chucao`; `aves/chucao/audio_01.wav` se rechaza, no se
+   interpreta ni corrige automáticamente. No hay un campo para escribir la raíz.
+5. Pulsa **Importar ZIP** para autorizar la validación y, solo si es válida, la
+   importación local automática. No hay una segunda confirmación. El usuario debe
+   organizar el ZIP; el servidor sigue comprobando estructura, seguridad y contenido.
+   Una estructura incorrecta rechaza el ZIP e indica:
+   «Organiza el ZIP como clase/audio.wav, sin carpeta contenedora ni subcarpetas.»
+   Revisa las incidencias; cancela la solicitud rechazada y crea otra con el ZIP
+   corregido. No se publica contenido parcial ni se convierten advertencias en errores.
+6. Espera **Importada localmente** antes de considerar el trabajo terminado. La
+   admisión del trabajo no es éxito final. Consulta y descarga sus archivos desde el panel.
    Una repetición exacta informa que no hay novedades sin incrementar los contadores.
 7. Solo cuando corresponda, pulsa **Sincronizar con GCS**. Si queda en curso o falla,
    reanuda desde el mismo panel. La copia local no se elimina.
@@ -50,60 +53,62 @@ Puedes cerrar la ventana con **Cerrar importación**, Escape o pulsando el fondo
 oscuro exterior. Pulsar dentro no la cierra. Cerrar solo oculta la ventana: conserva
 el formulario, el ZIP seleccionado y el trabajo mientras permanezcas en la vista;
 no cancela una operación ni libera su cupo. Volver a pulsar el botón permite continuar.
-Una vez admitido, el worker valida e importa aunque cierres el navegador. La subida
-todavía en curso debe terminar antes de abandonar la vista. Los errores de publicación
-retienen su journal: usa el reintento explícito, sin borrar estado ni volver a validar
-un journal confirmado. Las advertencias no se convierten en errores.
+Una vez admitido el trabajo, el worker valida e importa en el servidor aunque cierres
+el navegador; la subida todavía en curso sí necesita terminar antes de abandonar la vista.
 Si recargas o abandonas la vista, usa **Recuperar importaciones anteriores** y, si
 la recepción no terminó, selecciona de nuevo el ZIP original.
 
 Se admite al menos un WAV válido único y una clase poblada. Clases vacías y pequeñas
 generan advertencias; esto no significa que el dataset sea apto para entrenamiento.
-Mismo hash y clase se omite; mismo contenido con otra clase bloquea la confirmación.
+Mismo hash y clase se omite; mismo contenido con otra clase bloquea la importación.
 Mismo nombre y bytes diferentes se conserva con identidades independientes. El hash
 no demuestra equivalencia acústica de audios recodificados.
 
+### Compatibilidad de solicitudes anteriores
+
 Las nuevas solicitudes de la interfaz fijan `layout: "class_folders"` al crearse.
-También envían `auto_import: true`, booleano estricto que autoriza solo publicación
-local tras validar; GCS sigue siendo explícito. Omitirlo o enviar `false` conserva
-**Validar ZIP → Confirmar importación local** para clientes e historial antiguos.
-Cadenas, números y `null` se rechazan. La autorización queda fijada al crear la
-solicitud: una repetición idéntica conserva identidad, cambiarla se rechaza.
-Abrir, recuperar o actualizar el historial no crea trabajos ni confirma nada.
-La recuperación conserva raíz, token y staging revisados y reutiliza la publicación
-fenced existente sin duplicar miembros ni liberar reservas antes de publicar.
-Revalidar con una raíz distinta se rechaza incluso mediante la API. Las solicitudes
-anteriores sin esa política conservan su raíz revisada, rutas de sesiones y
-recuperación desde el historial; la raíz ya no es editable en la interfaz. El
-backend para añadir audios a datasets existentes se mantiene sin migrar datos.
-La exportación ZIP conserva su formato y puede incluir una carpeta contenedora y
-rutas históricas: ese ZIP puede necesitar reorganización antes de una nueva
-importación con el formato estricto.
+La política queda asociada a la solicitud: revalidar con una raíz distinta se
+rechaza, incluso mediante la API. Una sola clase con al menos un WAV válido y
+único sigue siendo suficiente; no se requieren dos clases.
+
+También envían `auto_import: true`: un booleano estricto que autoriza únicamente
+la publicación local tras validar. Omitirlo o enviar `false` conserva el recorrido
+manual **Validar ZIP → Confirmar importación local**, incluso para solicitudes del
+historial; no se migran solicitudes anteriores ni se confirma al abrirlas.
+Las cadenas `"true"`/`"false"`, números y `null` se rechazan. Repetir una creación
+idéntica conserva su identidad; cambiar esa autorización para una solicitud existente
+se rechaza. Consultar el historial o actualizarlo no admite trabajos nuevos.
+
+Las solicitudes anteriores sin esa política conservan su raíz revisada, rutas de
+sesiones y recuperación desde el historial. El campo de raíz ya no es editable
+en la interfaz. El contrato del backend para esos clientes y para añadir audios
+a datasets existentes se mantiene; no se migran ni reinterpretan sus datos.
+La exportación ZIP independiente conserva su formato y puede incluir una carpeta
+contenedora y rutas históricas: no implica que ese ZIP cumpla el nuevo formato de
+importación sin reorganizarlo.
 
 ## Descargar una versión como ZIP
 
-El botón **Descargar versión como ZIP**, inmediatamente después de **Descargar desde
-GCS para entrenamiento local**, abre un modal independiente del importador. Selecciona
-el dataset y la revisión sincronizada; el ZIP se descarga al equipo del navegador,
-no prepara datos ni inicia entrenamiento. Requiere el worker y el origen HTTPS
-de descarga descritos en [trabajos de importación](trabajos-importacion-datasets.md).
+En **Gestión de audios**, el botón **Descargar versión como ZIP** está junto a
+**Descargar desde GCS para entrenamiento local** y abre una ventana independiente.
+La exportación ya no forma parte del formulario **Importar dataset**.
 
-**Primera página de datasets** y **Siguiente página de datasets** recorren el catálogo
-sin cargarlo completo. **Reintentar conexión** vuelve a consultar la página que falló.
-Cerrar el modal no cancela el trabajo ni pierde la selección mientras permanezcas
-en la vista. Tras recargar, consulta **Recuperar exportaciones** para el dataset.
+Selecciona un dataset y su revisión sincronizada, solicita la exportación y espera
+su finalización antes de preparar la descarga. **Primera página de datasets** y
+**Siguiente página de datasets** permiten recorrer el catálogo sin cargarlo completo.
+Si falla una página, **Reintentar conexión** vuelve a consultar esa misma página.
+**Recuperar exportaciones** permite
+consultar trabajos anteriores del dataset seleccionado. Cerrar la ventana no
+cancela el trabajo y volver a abrirla conserva la selección y el resultado mientras
+permanezcas en la vista. Si recargas la página, consulta de nuevo las exportaciones.
+
+Este ZIP se descarga a tu equipo; no prepara datos para entrenamiento ni inicia una
+importación. Requiere una revisión con manifiesto completo y la configuración del
+worker de exportación y del origen HTTPS de descarga descrita en
+[trabajos de importación y exportación](trabajos-importacion-datasets.md).
 El worker manual `--local-only` no ejecuta exportaciones.
 
 ## Configuración del operador
-
-### Preparación explícita de la base de pruebas
-
-`backend/scripts/prepare_zip_manual_database.py` admite únicamente la base local
-dedicada `fama_zip_manual`. `--initialize --writers-stopped` prepara un esquema
-vacío mediante las etapas existentes; rechaza esquemas usados y no debe repetirse
-como reparación. `--check` verifica tablas y marcadores sin backfill ni escrituras.
-Ambas acciones requieren `--database-url` explícita; consultar `--help` para los
-argumentos. No ejecutar sobre la base habitual ni usar datos reales.
 
 ### Excepción de desarrollo local
 
@@ -117,23 +122,85 @@ FAMA_IMPORT_DEV_MODE=1
 
 #### Prueba manual aislada con worker externo
 
-El lanzador `.venv/bin/python -B backend/scripts/zip_manual.py` utiliza el proyecto
-Compose independiente `fama-zip-manual`, una base y raíces privadas persistentes,
-sin datos, checkpoints ni servicios del entorno habitual. Solo admite pruebas
-con ZIP sintéticos; no usar GCS, exportación ni entrenamiento.
+Este recorrido utiliza un proyecto Compose independiente, `fama-zip-manual`, sin
+worker en Docker y sin reutilizar la base, los datos, las imágenes o los
+checkpoints del entorno habitual. No requiere GPU. Solo se deben usar ZIP sintéticos;
+GCS, exportación y entrenamiento quedan fuera de esta prueba.
 
-Para preparar imágenes, usar `build`. Solo una base nueva y vacía admite
-`init --writers-stopped`, con API y worker detenidos; no repetir inicialización
-ni backfill para reparar una base usada. `check` verifica sin escribir.
-`up` mantiene un relay en primer plano para `http://127.0.0.1:3001`, sin publicar
-puertos Docker ni habilitar salida a Internet. Mantener esa terminal abierta.
-En otra terminal, ejecutar `worker`: procesa únicamente preview/confirm en el host
-con el sandbox existente y espera entre intentos; no incluirlo en Docker.
-Para detener, primero Ctrl+C en las terminales de worker y up; luego `stop`.
-La parada conserva el volumen y los archivos; para continuar usar `up` y `worker`,
-nunca `init`. No se instalan dependencias en el host ni se borran datos automáticamente.
+Desde la raíz del repositorio, con el entorno `.venv` existente y el sandbox Linux
+previamente comprobado, preparar las imágenes y una base **vacía**:
 
-#### Docker local explícito
+```bash
+.venv/bin/python -B backend/scripts/zip_manual.py build
+.venv/bin/python -B backend/scripts/zip_manual.py init --writers-stopped
+.venv/bin/python -B backend/scripts/zip_manual.py up
+```
+
+`up` mantiene un relay TCP en primer plano, limitado a `127.0.0.1:3001` y al
+frontend interno fijo. Solo anuncia disponibilidad después de comprobar HTTP 200
+desde el host por ese puerto. Mantener esa terminal abierta; Ctrl+C cierra el relay,
+sin borrar datos ni detener contenedores. Docker no publica puertos de este stack;
+la red conserva su aislamiento y no recibe salida a Internet para habilitar la UI.
+
+`build` puede descargar paquetes únicamente dentro de las imágenes. No instala
+dependencias en el host. `init` exige API y worker detenidos, crea tablas básicas y
+aplica explícitamente importaciones → metadatos → trabajos → recepciones → fragmentos.
+Rechaza cualquier esquema no vacío: **no repetirlo para reparar una base utilizada**.
+Si falla a mitad de la preparación, conservar el estado y diagnosticar; no se
+eliminan ni reinicializan datos automáticamente.
+
+En otra terminal, desde la misma raíz:
+
+```bash
+.venv/bin/python -B backend/scripts/zip_manual.py worker
+```
+
+El worker permanece en primer plano, procesa solo validación/confirmación y espera
+dos segundos entre intentos, también cuando la cola está vacía. No reclama ni
+modifica trabajos `sync`, y no construye almacenamiento GCS. Mantener esa terminal
+abierta mientras se prueba **http://127.0.0.1:3001**. Un trabajo reclamado no equivale
+a una operación completada: revisar **Importada localmente** en el panel. Las
+solicitudes históricas manuales siguen necesitando su confirmación explícita.
+
+En Docker Engine sobre Linux, el worker del host accede a `fama_zip_manual` por
+`172.30.252.30:5432`, la dirección fija de su puente interno; PostgreSQL **no publica
+puertos**. La red conserva `internal: true`, sin habilitar NAT de salida para resolver
+la conexión. Este recorrido no acredita Docker Desktop ni otros sistemas operativos.
+Sus credenciales son públicas y exclusivas de la prueba; no desplegar esta
+configuración fuera de un equipo local de confianza. El backend no publica puertos.
+Las raíces `.fama-zip-manual/imports` y `.fama-zip-manual/attempts` son persistentes,
+privadas, propiedad del usuario y del mismo sistema de archivos. El backend ve la
+misma ruta absoluta y los mismos archivos que el worker: no mover el checkout ni
+crear aliases mientras haya importaciones recuperables. Los directorios no entran
+en el contexto de construcción; la imagen backend utiliza una lista de inclusión
+de código Python y `requirements.txt`, sin claves, audios ni checkpoints locales.
+
+Para comprobar o detener sin borrar:
+
+```bash
+.venv/bin/python -B backend/scripts/zip_manual.py status
+.venv/bin/python -B backend/scripts/zip_manual.py check
+# Primero Ctrl+C en las terminales del worker y de up; esperar su salida.
+.venv/bin/python -B backend/scripts/zip_manual.py stop
+```
+
+`check` solo verifica esquema y marcadores; no ejecuta backfill. `stop` rechaza
+detener la base si el worker iniciado por este lanzador sigue activo. Conserva el
+volumen y las raíces privadas; para continuar, usar `up` y luego `worker`, **no `init`**.
+No pulsar sincronización GCS ni exportación durante esta prueba. La subred dedicada
+es `172.30.252.0/24`; si hay una colisión, detener la preparación y revisar la
+configuración, sin ampliar la guarda del frontend ni alterar redes ajenas.
+
+La prueba nativa del sandbox ya ejecutada solo acredita su alcance sintético local.
+La comprobación completa con `TestClient` requiere `httpx`, ausente en el entorno
+inspeccionado; no se instala automáticamente ni se presenta como aprobada.
+
+#### Docker local explícito anterior
+
+El siguiente modo general conserva su contrato anterior. **No prepara las
+migraciones ni ejecuta un worker de importación**; `--build` por sí solo no habilita
+el recorrido asíncrono completo. Para la prueba sintética aislada, usar el modo
+con worker externo descrito arriba.
 
 Desde la raíz del repositorio, con Docker accesible y Compose >= 2.24.4:
 
@@ -283,8 +350,12 @@ Después de una interrupción, usa la misma sesión o identidad local de desarro
 **Recuperar importaciones anteriores**. Reenviar el ZIP original idéntico restablece
 el archivo retenido si se perdió o corrompió; no permite sustituirlo por otros bytes.
 La recepción confirma la durabilidad del archivo, su directorio y el directorio padre.
-Reintenta la misma confirmación si está `committing`: el diario permite verificar
-los archivos ya movidos y publicar una vez. No cancela ni limpia esas confirmaciones.
+Si un trabajo automático falla con la importación en `committing`, usa **Reintentar
+trabajo**. Conserva el tipo `preview`, la raíz y el token revisados; el worker recupera
+el diario existente sin volver a validar ni reemplazar su staging. Si perdió el lease,
+un worker puede reclamar el mismo trabajo pendiente y recuperarlo. El diario permite
+verificar los archivos ya movidos y publicar una vez; no se cancela ni limpia mientras
+sea recuperable. Las solicitudes manuales conservan su reintento de confirmación.
 Mientras exista ese diario, una confirmación equivalente en otro destino espera
 su recuperación; no puede dejarlo bloqueado permanentemente por equivalencia.
 Si un destino cambió después de la vista previa, valida nuevamente; se rechaza antes
@@ -300,6 +371,22 @@ ni que ampliaciones posteriores del dataset estén sincronizadas. Volver a solic
 una sincronización completada vuelve a verificar sus objetos.
 
 ## Verificación y exclusiones
+
+La regresión automática S12 usa `test_dataset_import_automatic.py`: peticiones ASGI
+reales sin HTTPX, SQLite en memoria y validador sintético directo. Comprueba autorización,
+rechazos sin publicación parcial, reintentos antes del diario y después de rename,
+reemplazo de leases vencidos, cuotas, reservas y conservación de bytes. El panel
+renderizado comprueba admisión única, recuperación de solo lectura, cierre durante
+publicación, rechazo visible y compatibilidad manual. Esta evidencia no recertifica
+el sandbox nativo ni acredita reinicios físicos o un navegador desplegado.
+
+Comprobación focalizada S12 desde `backend/`, sin instalar HTTPX:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// \
+CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
+../.venv/bin/python -B tests/run_isolated_training_checks.py tests/test_dataset_import_automatic.py -q --tb=short
+```
 
 Los tests nuevos usan WAV/ZIP sintéticos, SQLite en memoria, temporales privados,
 red bloqueada y GCS simulado. Comando desde `backend/` con el intérprete validado:
