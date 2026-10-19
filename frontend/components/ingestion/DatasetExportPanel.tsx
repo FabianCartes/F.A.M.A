@@ -82,8 +82,7 @@ export default function DatasetExportPanel({ token, datasets }: { token: string;
     if (generation === epoch.current) setSession(value);
   }
 
-  return <section aria-label="Exportaciones de datasets" className="space-y-3 border-t border-[#23252e] pt-4">
-    <h3 className="font-semibold">Exportar desde revisión sincronizada</h3>
+  return <section aria-label="Exportaciones de datasets" className="space-y-3">
     <p>Reconstruye los WAV originales desde el manifiesto completo; no necesita el ZIP ni los audios locales.</p>
     <label>Dataset para exportar<select value={dataset} disabled={busy} onChange={event => {
       epoch.current += 1;
@@ -95,7 +94,7 @@ export default function DatasetExportPanel({ token, datasets }: { token: string;
     <label>Revisión para exportar<input type="number" min="0" step="1" value={revision} disabled={busy}
       onChange={event => setRevision(event.target.value)} /></label>
     <button className={buttonClass} disabled={busy || !dataset || !/^\d+$/.test(revision) || ["queued", "running"].includes(jobStatus ?? "")}
-      onClick={() => void act(admit)}>Exportar revisión</button>
+      onClick={() => void act(admit)}>Descargar versión como ZIP</button>
     <button className={buttonClass} disabled={busy || !dataset} onClick={() => void act(async generation => {
       const response = await importRequest(token, `${importBase}/datasets/${dataset}/exports`);
       const value = z.object({ exports: z.array(exportSchema).max(20) }).parse(await response.json());

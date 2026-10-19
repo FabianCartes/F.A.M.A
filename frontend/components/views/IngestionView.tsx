@@ -10,6 +10,7 @@ import {
 import { PendingFeedbackItem } from "@/lib/schemas/feedback";
 import FeedbackSyncPanel from "@/components/feedback/FeedbackSyncPanel";
 import DatasetImportPanel from "@/components/ingestion/DatasetImportPanel";
+import DatasetExportDialog from "@/components/ingestion/DatasetExportDialog";
 
 // ============================================================================
 // INTERFACES DEL MODELO DE DOMINIO DE INGESTA (RF_02 / RF_06 / ADR 0013)
@@ -807,13 +808,17 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                 </svg>
-                <span>Descargar Dataset al Entorno Local</span>
+                <span>Descargar desde GCS para entrenamiento local</span>
               </>
             )}
           </button>
+          <DatasetExportDialog />
           <DatasetImportPanel />
           </div>
         </div>
+        <p className="text-[11px] text-gray-400">
+          Guarda los archivos en el entorno donde se ejecuta F.A.M.A.; no inicia el entrenamiento.
+        </p>
       </div>
 
       {/* ==================================================================== */}

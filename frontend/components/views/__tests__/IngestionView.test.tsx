@@ -26,9 +26,13 @@ describe('IngestionView persisted inference dataset and curation', () => {
 
   it('places import next to download without changing the existing download action', async () => {
     await open();
-    const download = screen.getByRole('button', { name: 'Descargar Dataset al Entorno Local' });
+    const download = screen.getByRole('button', { name: 'Descargar desde GCS para entrenamiento local' });
+    expect(screen.getByText('Guarda los archivos en el entorno donde se ejecuta F.A.M.A.; no inicia el entrenamiento.')).toBeDefined();
     const upload = screen.getByRole('button', { name: 'Importar dataset' });
     expect(download.parentElement).toBe(upload.parentElement);
+    const exportZip = screen.getByRole('button', { name: 'Descargar versión como ZIP' });
+    expect(exportZip.parentElement).toBe(download.parentElement);
+    expect(download.nextElementSibling).toBe(exportZip);
     expect(upload.classList.contains('text-xs')).toBe(true);
     expect(screen.queryByRole('dialog')).toBeNull();
     fireEvent.click(screen.getAllByRole('checkbox')[1]);

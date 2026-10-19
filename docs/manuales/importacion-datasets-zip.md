@@ -12,16 +12,17 @@ de esa comprobación aislada.
 
 ## Uso
 
-1. En **Gestión de audios**, pulsa **Importar dataset**, junto a **Descargar Dataset
-   al Entorno Local**. Lee las instrucciones y límites en la ventana modal y pulsa
+1. En **Gestión de audios**, pulsa **Importar dataset**, junto a **Descargar desde GCS
+   para entrenamiento local**. Lee las instrucciones y límites en la ventana modal y pulsa
    **Importar dataset** dentro de ella para mostrar el formulario. No hay formulario
    de login en el importador: la vista de acceso y la política de roles están
    pendientes de integración. Para probar sin sesión, el operador debe habilitar
    explícitamente el modo local descrito más abajo. Fuera de ese modo, el backend
    conserva la autenticación; el panel puede recibir una sesión de la futura vista
    de acceso, pero todavía no está conectado a ella.
-2. Crea un dataset privado con nombre/descripción o selecciona uno propio. Las
-   colecciones antiguas sin propietario no se ofrecen como destinos de escritura.
+2. Introduce el nombre y, opcionalmente, la descripción del nuevo dataset privado.
+   El selector de destino ya no se muestra. Añadir audios a datasets existentes
+   queda pospuesto en la interfaz, sin retirar el soporte del backend.
 3. Descarga el ejemplo sintético si lo necesitas. Selecciona un ZIP con WAV:
 
    ```text
@@ -53,6 +54,20 @@ generan advertencias; esto no significa que el dataset sea apto para entrenamien
 Mismo hash y clase se omite; mismo contenido con otra clase bloquea la confirmación.
 Mismo nombre y bytes diferentes se conserva con identidades independientes. El hash
 no demuestra equivalencia acústica de audios recodificados.
+
+## Descargar una versión como ZIP
+
+El botón **Descargar versión como ZIP**, inmediatamente después de **Descargar desde
+GCS para entrenamiento local**, abre un modal independiente del importador. Selecciona
+el dataset y la revisión sincronizada; el ZIP se descarga al equipo del navegador,
+no prepara datos ni inicia entrenamiento. Requiere el worker y el origen HTTPS
+de descarga descritos en [trabajos de importación](trabajos-importacion-datasets.md).
+
+**Primera página de datasets** y **Siguiente página de datasets** recorren el catálogo
+sin cargarlo completo. **Reintentar conexión** vuelve a consultar la página que falló.
+Cerrar el modal no cancela el trabajo ni pierde la selección mientras permanezcas
+en la vista. Tras recargar, consulta **Recuperar exportaciones** para el dataset.
+El worker manual `--local-only` no ejecuta exportaciones.
 
 ## Configuración del operador
 

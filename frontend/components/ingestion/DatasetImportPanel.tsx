@@ -4,10 +4,9 @@ import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { z } from "zod";
 import { importBase, importRequest, jsonRequest, saveDownload, jobSchema, limitsSchema,
-  audioSchema, issueSchema, datasetsPageSchema, jobsPageSchema, executionSchema,
-  type ImportJob, type ImportDataset, type ImportLimits } from "@/lib/api/datasetImports";
+  audioSchema, issueSchema, jobsPageSchema, executionSchema,
+  type ImportJob, type ImportLimits } from "@/lib/api/datasetImports";
 import ImportDetailPage from "./ImportDetailPage";
-import DatasetExportPanel from "./DatasetExportPanel";
 import { uploadImportReceipt, type ReceiptProgress } from "@/lib/api/datasetImportReceipt";
 
 const classSchema = z.string();
@@ -33,19 +32,16 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
   const dialogRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [limits, setLimits] = useState<ImportLimits | null>(null);
-  const [datasets, setDatasets] = useState<ImportDataset[]>([]);
   const [history, setHistory] = useState<ImportJob[]>([]);
   const [job, setJob] = useState<ImportJob | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [target, setTarget] = useState("");
   const [root, setRoot] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState("");
   const [receiptProgress, setReceiptProgress] = useState<ReceiptProgress | null>(null);
   const [error, setError] = useState("");
   const [localDataset, setLocalDataset] = useState<string | null>(null);
-  const [catalogNext, setCatalogNext] = useState<string | null>(null);
   const [historyNext, setHistoryNext] = useState<string | null>(null);
   const active = useRef(false);
   const requestKey = useRef("");
@@ -139,20 +135,9 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
   }
 
   async function refresh(sessionToken = token) {
-    const [catalog, jobs] = await Promise.all([
-      importRequest(sessionToken, `${importBase}/datasets`).then(r => r.json()),
-      importRequest(sessionToken, importBase).then(r => r.json()),
-    ]);
-    const datasetPage = datasetsPageSchema.parse(catalog);
+    const jobs = await importRequest(sessionToken, importBase).then(r => r.json());
     const jobPage = jobsPageSchema.parse(jobs);
-    setDatasets(datasetPage.datasets); setCatalogNext(datasetPage.next_cursor);
     setHistory(jobPage.imports); setHistoryNext(jobPage.next_cursor);
-  }
-
-  async function catalogPage(cursor: string | null) {
-    const response = await importRequest(token, `${importBase}/datasets${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
-    const page = datasetsPageSchema.parse(await response.json());
-    setDatasets(page.datasets); setCatalogNext(page.next_cursor);
   }
 
   async function historyPage(cursor: string | null) {
@@ -178,9 +163,8 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
     if (!current) {
       if (!file) throw new Error("Selecciona un archivo ZIP.");
       if (!requestKey.current) requestKey.current = crypto.randomUUID();
-      const destination = datasets.find(d => d.id === target);
       const response = await importRequest(token, importBase, jsonRequest({ request_key: requestKey.current,
-        name: destination?.name || name, description, target_id: target || null }));
+        name, description, target_id: null }));
       current = jobSchema.parse(await response.json());
       setJob(current);
     }
@@ -253,21 +237,10 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
         </>}
         {!started ? <div className="border-t border-[#23252e] pt-4"><button className={buttonClass} disabled={!!busy || !limits} onClick={() => setStarted(true)}>Importar dataset</button></div> : <div className="space-y-4 border-t border-[#23252e] pt-4">
           <button className={buttonClass} disabled={!!busy} onClick={() => void act("Actualizando…", () => refresh())}>Actualizar importaciones</button>
-          {limits && <DatasetExportPanel key={token} token={token} datasets={datasets} />}
           {limits && <>
           {!job && <div className="grid gap-3 sm:grid-cols-2">
-            <label>Destino<select className={inputClass} value={target} onChange={e => {
-              setTarget(e.target.value);
-              const selected = datasets.find(item => item.id === e.target.value);
-              if (selected) setName(selected.name);
-            }} disabled={!!busy}>
-              <option value="">Crear dataset privado</option>
-              {datasets.map(d => <option key={d.id} value={d.id}>{d.name} ({d.file_count} archivos)</option>)}
-            </select></label>
-            <div><button disabled={!!busy} onClick={() => void act("Consultando destinos…", () => catalogPage(null))}>Primera página de destinos</button>
-              <button disabled={!!busy || !catalogNext} onClick={() => void act("Consultando destinos…", () => catalogPage(catalogNext))}>Siguiente página de destinos</button></div>
-            {!target && <><label>Nombre del dataset<input className={inputClass} value={name} onChange={e => setName(e.target.value)} maxLength={150} disabled={!!busy} /></label>
-              <label>Descripción<textarea className={inputClass} value={description} onChange={e => setDescription(e.target.value)} maxLength={2000} disabled={!!busy} /></label></>}
+            <label>Nombre del dataset<input className={inputClass} value={name} onChange={e => setName(e.target.value)} maxLength={150} disabled={!!busy} /></label>
+            <label>Descripción<textarea className={inputClass} value={description} onChange={e => setDescription(e.target.value)} maxLength={2000} disabled={!!busy} /></label>
           </div>}
           {(!job || job.status === "receiving") && <label className="block">Archivo ZIP<input ref={fileInputRef} type="file" accept=".zip,application/zip" disabled={!!busy} onChange={e => {
             const selected = e.target.files?.[0] ?? null;
@@ -284,7 +257,7 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
           {(!job || ["receiving", "validating", "needs_correction", "ready"].includes(job.status)) && <>
             <label className="block">Raíz de clases dentro del ZIP<input className={inputClass} placeholder="Vacío para raíz; aves para el ejemplo" value={root} onChange={e => setRoot(e.target.value)} disabled={!!busy} /></label>
             <p className="text-xs">Selecciona la carpeta cuyos hijos son clases. Las subcarpetas de cada clase conservan su ruta original y no se convierten en etiquetas.</p>
-            <button className={buttonClass} disabled={!!busy || executing || (!job && (!file || (!target && !name.trim())))} onClick={() => void act("Admitiendo validación…", validate)}>Validar ZIP</button>
+            <button className={buttonClass} disabled={!!busy || executing || (!job && (!file || !name.trim()))} onClick={() => void act("Admitiendo validación…", validate)}>Validar ZIP</button>
           </>}
         </>}
         {job && <div className="space-y-3">

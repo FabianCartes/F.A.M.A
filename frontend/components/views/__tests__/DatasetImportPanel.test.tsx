@@ -113,9 +113,16 @@ describe("private dataset import", () => {
       expect(new Headers(options?.headers).get("Authorization")).toBeNull();
       if (input.endsWith("/limits")) return Response.json({ received_bytes: 1024, expanded_bytes: 4096, entries: 10,
         depth: 12, path_bytes: 240, audio_bytes: 1024, audio_seconds: 600, validation_seconds: 60, free_bytes: 1, ttl_seconds: 86400, concurrent_imports: 4 });
-      if (input.endsWith("/datasets")) return collectionResponse("datasets", [], "catalog");
+      if (input.endsWith("/datasets")) return collectionResponse("datasets", [{
+        id: "existing", name: "Existing birds", file_count: 2, revision: 1,
+      }], "catalog");
       if (input.endsWith("/imports") && !options?.method) return collectionResponse("imports", [], "history");
-      if (input.endsWith("/imports")) return Response.json({ ...job, status: "receiving" });
+      if (input.endsWith("/imports")) {
+        expect(JSON.parse(String(options?.body))).toMatchObject({
+          name: "Birds", description: "New collection", target_id: null,
+        });
+        return Response.json({ ...job, status: "receiving" });
+      }
       if (input.endsWith("/receipt")) return Response.json({ import_id: "job1", name: "birds.zip", size_bytes: 3,
         received_bytes: 0, reserved_bytes: 4099, chunk_bytes: 16 * 1024 ** 2, status: "receiving" });
       if (input.endsWith("/receipt/chunks/0") || input.endsWith("/receipt/finalize")) return Response.json({
@@ -130,8 +137,16 @@ describe("private dataset import", () => {
     render(<DatasetImportPanel />);
     await openImport();
     await screen.findByLabelText("Archivo ZIP");
-    fireEvent.change(screen.getByLabelText("Nombre del dataset"), { target: { value: "Birds" } });
+    expect(screen.queryByLabelText("Destino")).toBeNull();
+    expect(screen.queryByRole("option", { name: "Crear dataset privado" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /página de destinos/ })).toBeNull();
+    expect(screen.queryByLabelText("Dataset para exportar")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Descargar versión como ZIP" })).toBeNull();
     fireEvent.change(screen.getByLabelText("Archivo ZIP"), { target: { files: [new File(["zip"], "birds.zip", { type: "application/zip" })] } });
+    expect((screen.getByRole("button", { name: "Validar ZIP" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText("Nombre del dataset"), { target: { value: "Birds" } });
+    fireEvent.change(screen.getByLabelText("Descripción"), { target: { value: "New collection" } });
+    expect((screen.getByRole("button", { name: "Validar ZIP" }) as HTMLButtonElement).disabled).toBe(false);
     // Closing only hides the window; the selected archive and form survive.
     fireEvent.click(screen.getByTestId("dataset-import-backdrop"));
     expect(screen.queryByRole("dialog")).toBeNull();
