@@ -207,18 +207,23 @@ detenidos. No repetir `prepare_zip_manual_database --initialize` ni un backfill
 antiguo para reparar esta base. Un fallo de comprobación no detiene los servicios
 que ya arrancaron; no acredita que la importación esté disponible.
 
-**Estado de esta entrega:** soporte comprobado con Docker simulado, configuración
-Compose sin daemon y bases sintéticas. Todavía no se ha inspeccionado ni migrado
-la base real de desarrollo, reconstruido imágenes o arrancado este recorrido.
-Los comandos siguientes corresponden al paso operacional posterior, no a una
-operación ya ejecutada o autorizada automáticamente por este documento.
+**Estado al 20 de octubre de 2026:** soporte en commit `e1de562` y aceptación local
+mínima completada. Tras autorizaciones separadas se verificaron respaldo y
+restauración, se aplicaron las migraciones de desarrollo y se reconstruyeron los
+servicios. Con el worker supervisado por el usuario en segunda terminal, el ZIP
+sintético vigente publicó dos WAV; sus descargas locales conservaron tamaño y
+SHA-256. No acredita escala, datasets reales, entrenamiento, reinicio físico ni
+GCS. El refinamiento posterior permanece abierto en ZIP-DEV-REFINE, sin bloquear
+este cierre. Los comandos siguientes documentan el procedimiento; no autorizan
+repetir operaciones ni volver a ejecutar el backfill tras nuevas escrituras.
 
 La verificación inicial tuvo un incidente de aislamiento que llegó a activar
 Docker y restaurar contenedores existentes; su inspección y parada se autorizaron
 por separado. La verificación pendiente se completó después con un PATH cerrado,
 Docker simulado y 12 pruebas independientes de esquema, conservando la evidencia
-del incidente. No equivale a aceptación del nuevo recorrido desplegado ni descarta
-efectos sobre los datos durante aquel arranque. Véase el
+del incidente. Esa verificación aislada no acreditaba operación desplegada; la
+aceptación local posterior se registra por separado y no descarta efectos sobre
+los datos durante aquel arranque. Véase el
 [registro de verificación y recuperación](../arquitectura/dev-import-readiness.md#log).
 
 Desde la raíz del repositorio, con Docker accesible y Compose >= 2.24.4:
@@ -256,8 +261,9 @@ No se mueve ni copia contenido existente. Mantener ambas raíces privadas, con e
 mismo propietario y sistema de archivos; no mover el checkout ni cambiar rutas
 mientras haya trabajo recuperable. La ruta del host es para Docker Engine sobre
 Linux: el worker accede al puente de desarrollo en `172.30.253.30:5432`, sin publicar
-PostgreSQL. La conexión efectiva y la recuperación de contenido preexistente se
-deben comprobar en el paso operacional; no se deducen del esquema.
+PostgreSQL. La aceptación mínima comprobó la conexión efectiva al ejecutar el
+worker; la recuperación de contenido preexistente sigue sin acreditarse por esa
+prueba y no se deduce del esquema.
 
 Para comandos Compose directos con el overlay, exportar primero desde la raíz:
 

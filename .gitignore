@@ -27,6 +27,7 @@ data/
 data/**
 backend/data/
 backend/data/**
+/backend/data-dev/
 *.mp3
 *.wav
 !audios_prueba/audio_prueba.wav
@@ -97,6 +98,7 @@ ENV/
 Thumbs.db
 
 # Agent & Tooling artifacts
+/.playwright-mcp/
 .atl/
 .codegraph/
 .obsidian/
