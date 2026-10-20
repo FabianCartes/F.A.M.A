@@ -16,9 +16,11 @@ services:
       FAMA_ENV: development
       FAMA_IMPORT_DEV_MODE: "1"
       FAMA_IMPORT_DEV_FRONTEND_IP: 172.30.253.10
+      FAMA_IMPORT_ROOT: ${FAMA_DEV_IMPORT_ROOT:?Use iniciar_fama.sh --dev or export the physical development import root}
     volumes: !override
       - ./backend/checkpoints:/app/checkpoints
       - ./backend/data-dev:/app/data
+      - ${FAMA_DEV_IMPORT_ROOT:?Export the physical development import root}:${FAMA_DEV_IMPORT_ROOT:?Export the physical development import root}
     networks: !override
       fama-dev:
         ipv4_address: 172.30.253.20

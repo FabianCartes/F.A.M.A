@@ -12,6 +12,7 @@ fi
 while [[ ${1:-} == -f ]]; do shift 2; done
 case ${1:-} in
     config) exit 0 ;;
+    exec) [[ $SCENARIO != dev_schema_missing ]] ;;
     up)
         [[ $SCENARIO != up_failure ]] || exit 1
         # Minimal image lifecycle for the external CLI contract; not a Compose emulator.
@@ -51,7 +52,7 @@ case ${1:-} in
         if [[ " $* " == *' backend '* ]]; then printf 'backend-id\n'
         elif [[ " $* " == *' db '* ]]; then printf 'db-id\n'
         elif [[ -f $FAKE_STATE/db-only ]]; then printf 'db-id\nunrelated\n'
-        elif [[ $SCENARIO == all ]]; then printf 'backend-id\ndb-id\n'
+        elif [[ $SCENARIO == all || $SCENARIO == dev_schema_missing ]]; then printf 'backend-id\ndb-id\n'
         else printf 'backend-id\ndb-id\nunrelated\n'; fi
         ;;
     inspect)

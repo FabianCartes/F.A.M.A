@@ -163,6 +163,13 @@ has "$OUTPUT" 'Importación sin sesión habilitada'
 has "$OUTPUT" 'http://127.0.0.1:3000'
 lacks "$OUTPUT" 'localhost:8000/docs'
 lacks "$OUTPUT" 'localhost:5432 (fama_db)'
+has "$LOG" '<exec> <-T> <backend> <python> <-B> <-m> <scripts.check_dev_import_database>'
+has "$OUTPUT" 'backend/scripts/dev_imports.py worker'
+run dev_schema_missing --dev --build
+bad 'development schema failure is not import readiness' 'esquema de importación'
+lacks "$LOG" '<--apply>'
+lacks "$LOG" '<--initialize>'
+lacks "$LOG" '<scripts.run_dataset_import_worker>'
 run healthy backend
 ok 'normal selection after development does not retain anonymous mode'
 lacks "$LOG" '<docker-compose.dev.yml>'

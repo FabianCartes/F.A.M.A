@@ -8,7 +8,8 @@ for argument in "$@"; do
     if [[ $argument == --help || $argument == -h ]]; then
         printf '%s\n' 'Uso: ./iniciar_fama.sh [--dev] [--build|--no-build] [--wait-timeout SEGUNDOS] [servicios...]
   --dev          Importación sin sesión solo para desarrollo local de confianza.
-                 Solo publica http://127.0.0.1:3000; requiere Compose >= 2.24.4.
+                  Solo publica http://127.0.0.1:3000; requiere Compose >= 2.24.4.
+                  Comprueba el esquema; no aplica migraciones ni inicia el worker.
   --build        Reconstruir imágenes explícitamente.
   --help, -h     Mostrar esta ayuda sin acceder a Docker.
 Ejemplo local: ./iniciar_fama.sh --dev --build
@@ -93,10 +94,12 @@ done
 # Pin normal selection too: ambient COMPOSE_FILE must not enable the dev overlay.
 export COMPOSE_FILE="$SCRIPT_DIR/docker-compose.yml"
 if $DEV_MODE; then
+    export FAMA_DEV_IMPORT_ROOT="$SCRIPT_DIR/backend/data-dev/dataset-imports"
     COMPOSE_CMD+=(-f docker-compose.yml -f docker-compose.dev.yml)
     # Parse before any up: old Compose must fail rather than leave public ports.
     "${COMPOSE_CMD[@]}" config --quiet || fail 'El modo --dev requiere Compose >= 2.24.4 y una configuración válida.'
     mkdir -p backend/checkpoints backend/data-dev
+    (umask 077; mkdir -p "$FAMA_DEV_IMPORT_ROOT" backend/data-dev/dataset-import-attempts)
     echo -e "${YELLOW}Importación sin sesión habilitada: solo desarrollo local de confianza (propietario -1).${NC}"
 else
     mkdir -p backend/checkpoints backend/data
@@ -148,6 +151,15 @@ while :; do
 done
 "${COMPOSE_CMD[@]}" ps "${SERVICES[@]}" || fail 'No se pudo mostrar el estado final.'
 
+if $DEV_MODE; then
+    # Existing service startup remains unchanged; readiness is not a migration.
+    dev_backend=$("${COMPOSE_CMD[@]}" ps -q --filter status=running backend) || fail 'No se pudo consultar backend.'
+    if [[ -n $dev_backend ]]; then
+        "${COMPOSE_CMD[@]}" exec -T backend python -B -m scripts.check_dev_import_database \
+            || fail 'El esquema de importación no está preparado. Conserve los datos y autorice las migraciones pendientes por separado; no se inició el worker.'
+    fi
+fi
+
 echo -e "\n${GREEN}Servicios iniciados correctamente.${NC}"
 if $DEV_MODE; then
     echo -e "  • Aplicación Web (Frontend):      ${BLUE}http://127.0.0.1:3000${NC}"
@@ -158,10 +170,15 @@ echo -e "  • Documentación API (FastAPI):    ${BLUE}http://localhost:8000/doc
 echo -e "  • Base de Datos (PostgreSQL):     ${BLUE}localhost:5432 (fama_db)${NC}"
 fi
 echo -e "\n${YELLOW}Comandos:${NC}"
+if $DEV_MODE; then
+    echo '  • Antes de usar Compose directo desde esta raíz: export FAMA_DEV_IMPORT_ROOT="$(pwd -P)/backend/data-dev/dataset-imports"'
+fi
 echo "  • Ver logs en tiempo real:        ${COMPOSE_CMD[*]} logs -f"
 echo "  • Detener el sistema:             ${COMPOSE_CMD[*]} down"
 if $DEV_MODE; then
     echo "  • Reiniciar en desarrollo:        ./iniciar_fama.sh --dev"
+    echo "  • Worker en otra terminal:        .venv/bin/python -B backend/scripts/dev_imports.py worker"
+    echo "  • Comprobar importaciones:        .venv/bin/python -B backend/scripts/dev_imports.py check"
     echo "  • Volver al modo normal:          ./iniciar_fama.sh --force-recreate"
 else
     echo "  • Reiniciar el sistema:           ./iniciar_fama.sh"

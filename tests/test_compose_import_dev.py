@@ -13,7 +13,8 @@ def configuration(dev=False):
     if dev:
         command += ["-f", "docker-compose.dev.yml"]
     environment = {"PATH": os.environ["PATH"], "HOME": os.environ["HOME"],
-                   "HOST_UID": "10001", "HOST_GID": "10001"}
+                   "HOST_UID": "10001", "HOST_GID": "10001",
+                   "FAMA_DEV_IMPORT_ROOT": str(ROOT / "backend/data-dev/dataset-imports")}
     result = subprocess.run(command + ["config", "--format", "json"], cwd=ROOT,
                             env=environment, capture_output=True, text=True, check=True)
     return json.loads(result.stdout)
@@ -34,6 +35,10 @@ class LocalComposeTests(unittest.TestCase):
         backend = services["backend"]
         self.assertEqual(backend["environment"]["FAMA_ENV"], "development")
         self.assertEqual(backend["environment"]["FAMA_IMPORT_DEV_MODE"], "1")
+        root = str(ROOT / "backend/data-dev/dataset-imports")
+        self.assertEqual(backend["environment"]["FAMA_IMPORT_ROOT"], root)
+        self.assertIn(root, [volume["target"] for volume in backend["volumes"]
+                            if volume.get("source") == root])
         peer = services["frontend"]["networks"]["fama-dev"]["ipv4_address"]
         self.assertEqual(backend["environment"]["FAMA_IMPORT_DEV_FRONTEND_IP"], peer)
         self.assertIn("--no-proxy-headers", backend["command"])

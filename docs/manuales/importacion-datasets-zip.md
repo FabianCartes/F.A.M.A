@@ -195,18 +195,83 @@ La prueba nativa del sandbox ya ejecutada solo acredita su alcance sintético lo
 La comprobación completa con `TestClient` requiere `httpx`, ausente en el entorno
 inspeccionado; no se instala automáticamente ni se presenta como aprobada.
 
-#### Docker local explícito anterior
+#### Desarrollo habitual con worker en segunda terminal
 
-El siguiente modo general conserva su contrato anterior. **No prepara las
-migraciones ni ejecuta un worker de importación**; `--build` por sí solo no habilita
-el recorrido asíncrono completo. Para la prueba sintética aislada, usar el modo
-con worker externo descrito arriba.
+Este modo usa la base persistente de desarrollo y `backend/data-dev`, no el
+proyecto aislado `fama-zip-manual`. **No aplica migraciones ni inicia el worker**.
+Después del arranque y la espera de salud, comprueba el esquema de importación
+del backend activo antes de anunciar éxito. Si faltan tablas, marcadores de
+migración o resúmenes normalizados, termina con error: conservar el estado y
+coordinar inspección, respaldo y migraciones pendientes con los escritores
+detenidos. No repetir `prepare_zip_manual_database --initialize` ni un backfill
+antiguo para reparar esta base. Un fallo de comprobación no detiene los servicios
+que ya arrancaron; no acredita que la importación esté disponible.
+
+**Estado de esta entrega:** soporte comprobado con Docker simulado, configuración
+Compose sin daemon y bases sintéticas. Todavía no se ha inspeccionado ni migrado
+la base real de desarrollo, reconstruido imágenes o arrancado este recorrido.
+Los comandos siguientes corresponden al paso operacional posterior, no a una
+operación ya ejecutada o autorizada automáticamente por este documento.
+
+La verificación inicial tuvo un incidente de aislamiento que llegó a activar
+Docker y restaurar contenedores existentes; su inspección y parada se autorizaron
+por separado. La verificación pendiente se completó después con un PATH cerrado,
+Docker simulado y 12 pruebas independientes de esquema, conservando la evidencia
+del incidente. No equivale a aceptación del nuevo recorrido desplegado ni descarta
+efectos sobre los datos durante aquel arranque. Véase el
+[registro de verificación y recuperación](../arquitectura/dev-import-readiness.md#log).
 
 Desde la raíz del repositorio, con Docker accesible y Compose >= 2.24.4:
 
 ```bash
 ./iniciar_fama.sh --dev --build
 ```
+
+En una **segunda terminal**, desde la misma raíz y con el intérprete `.venv`
+validado y el sandbox Linux disponible:
+
+```bash
+.venv/bin/python -B backend/scripts/dev_imports.py check
+.venv/bin/python -B backend/scripts/dev_imports.py worker
+```
+
+`check` consulta el backend de desarrollo que ya está ejecutándose y verifica
+tablas, restricciones, marcadores y presencia de resúmenes; no revalida todos los
+archivos, no modifica datos ni prueba la conexión del host a PostgreSQL o el
+sandbox. `worker` usa esa configuración, comprueba que la raíz física coincide y
+supervisa en primer plano únicamente validación/publicación local, con una espera
+entre intentos. No inicia contenedores, migra, reclama trabajos GCS ni realiza
+exportaciones. Sus credenciales se transportan en memoria sin agregarlas al argv
+del proceso del worker ni mostrarlas en la salida del lanzador. No ejecutar
+directamente la opción interna `--worker-config`, cuya salida contiene la conexión.
+Una segunda instancia de este comando se rechaza mientras el worker conserve su
+lock. Ctrl+C solicita terminar después del intento actual; esperar su salida antes
+de detener servicios o migrar. No usar simultáneamente otro lanzador contra esta
+misma cola: el lock solo supervisa instancias de este comando.
+
+La API y el worker ven los mismos archivos de
+`backend/data-dev/dataset-imports`, montados también en su ruta física absoluta
+del host. Los intentos persisten en `backend/data-dev/dataset-import-attempts`.
+No se mueve ni copia contenido existente. Mantener ambas raíces privadas, con el
+mismo propietario y sistema de archivos; no mover el checkout ni cambiar rutas
+mientras haya trabajo recuperable. La ruta del host es para Docker Engine sobre
+Linux: el worker accede al puente de desarrollo en `172.30.253.30:5432`, sin publicar
+PostgreSQL. La conexión efectiva y la recuperación de contenido preexistente se
+deben comprobar en el paso operacional; no se deducen del esquema.
+
+Para comandos Compose directos con el overlay, exportar primero desde la raíz:
+
+```bash
+export FAMA_DEV_IMPORT_ROOT="$(pwd -P)/backend/data-dev/dataset-imports"
+```
+
+El lanzador y `dev_imports.py` fijan esta variable por sí mismos; no aceptan un
+directorio distinto por un override heredado. El worker verifica un daemon local
+Unix, no usa una conexión Docker remota. Las imágenes y nombres de contenedores
+siguen siendo los del arranque habitual: `--build` puede reemplazar imágenes y
+recrear esos servicios, aunque la base y los datos de desarrollo sean separados.
+Conserva además los prerrequisitos GPU del Compose habitual. No usar datos reales,
+entrenamiento o acciones GCS para la aceptación sintética de este recorrido.
 
 Abre **http://127.0.0.1:3000**. El script anuncia **Importación sin sesión habilitada**
 y selecciona explícitamente `docker-compose.yml` y `docker-compose.dev.yml`.
