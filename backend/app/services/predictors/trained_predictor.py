@@ -33,9 +33,11 @@ except ImportError:
     )
     from poc.train import BioacousticModel, AudioCNN
 
-from poc.preprocess import GPUAudioFrontEnd, validate_gpu_audio_frontend_contract
+from poc.preprocess import GPUAudioFrontEnd, validate_gpu_audio_frontend_contract, extract_active_windows
 from app.schemas.model_info import ModelMetadata
 from app.schemas.prediction import PredictionResult
+from app.schemas.training import AudioConfigSchema
+from training.pipelines.dataset import load_and_resample
 from app.services.predictors.base import (
     AudioPredictor,
     ModelWeightsError,
@@ -92,6 +94,9 @@ class TrainedModelPredictor(AudioPredictor):
         self.model: Optional[nn.Module] = None
         self.frontend: Optional[GPUAudioFrontEnd] = None
         self.preprocessing_contract: Optional[Dict[str, Any]] = None
+        self.audio_config: Optional[dict] = None
+        self.legacy_n_mels = 64
+        self.window_selection = "max_rms"
 
         if not self.checkpoint_path.exists():
             raise ModelWeightsError(
@@ -109,9 +114,9 @@ class TrainedModelPredictor(AudioPredictor):
             name=self.custom_name or f"Modelo Entrenado: {self.architecture_name} ({self.checkpoint_path.name})",
             description=f"Inferencia bioacústica con pesos reales entrenados ({self.architecture_name})",
             target_sr=(self.preprocessing_contract["sample_rate"]
-                       if self.preprocessing_contract else TARGET_SR),
+                       if self.preprocessing_contract else (self.audio_config or {}).get("target_sr", TARGET_SR)),
             duration_seconds=(self.preprocessing_contract["duration_seconds"]
-                              if self.preprocessing_contract else DURATION_SECONDS),
+                              if self.preprocessing_contract else (self.audio_config or {}).get("duration_seconds", DURATION_SECONDS)),
             classes=self.classes,
             is_default=self.is_default,
             metrics={"accuracy": round(self.best_val_acc / 100.0 if self.best_val_acc and self.best_val_acc > 1 else (self.best_val_acc or 0.0), 4)},
@@ -158,14 +163,44 @@ class TrainedModelPredictor(AudioPredictor):
         snapshot, _ = self._read_checkpoint_snapshot()
         checkpoint = self._deserialize_checkpoint(snapshot, map_location="cpu")
         contract = _standard_frontend_contract(checkpoint)
-        architecture_name = checkpoint.get("architecture", "EfficientNet-B0")
+        architecture_name = checkpoint.get("architecture", checkpoint.get("model_type", "EfficientNet-B0"))
         classes = checkpoint.get("classes", list(DEFAULT_CHILEAN_BIRD_CLASSES))
         best_val_acc = checkpoint.get("best_val_acc")
 
+        if contract is None:
+            self._configure_audio(checkpoint)
         self.preprocessing_contract = contract
         self.architecture_name = architecture_name
         self.classes = classes
         self.best_val_acc = best_val_acc
+
+    def _configure_audio(self, checkpoint: dict) -> None:
+        configuration = checkpoint.get("audio_config")
+        self.window_selection = "max_rms"
+        if "preprocessing" in checkpoint:
+            profile = checkpoint["preprocessing"]
+            if (not isinstance(profile, dict) or type(profile.get("version")) is not int
+                    or profile.get("version") != 1 or profile.get("frontend") != "gpu_mel_zscore"
+                    or profile.get("window_selection") not in ("max_rms", "active_max_rms")
+                    or configuration is None):
+                raise ModelWeightsError("Perfil de preprocesamiento del checkpoint no soportado")
+            self.window_selection = profile["window_selection"]
+        if configuration is None:
+            self.audio_config = None
+            try:
+                self.legacy_n_mels = AudioConfigSchema.model_validate(
+                    {"n_mels": checkpoint.get("n_mels", 64)}, strict=True
+                ).n_mels
+            except (ValueError, TypeError) as error:
+                raise ModelWeightsError("Checkpoint con n_mels legacy inválido") from error
+            return
+        try:
+            if (not isinstance(configuration, dict)
+                    or not set(AudioConfigSchema.model_fields).issubset(configuration)):
+                raise ValueError("Incomplete audio configuration")
+            self.audio_config = AudioConfigSchema.model_validate(configuration, strict=True).model_dump()
+        except (ValueError, TypeError) as error:
+            raise ModelWeightsError("Checkpoint con configuración acústica inválida o incompleta") from error
 
     def _load_model(self) -> None:
         """Carga y valida los pesos binarios en memoria desde una instantánea única."""
@@ -190,14 +225,21 @@ class TrainedModelPredictor(AudioPredictor):
                         f"No se encontró state_dict en el checkpoint {self.checkpoint_path}"
                     )
 
-            architecture_name = checkpoint.get("architecture", "EfficientNet-B0")
+            architecture_name = checkpoint.get("architecture", checkpoint.get("model_type", "EfficientNet-B0"))
             classes = checkpoint.get("classes", list(DEFAULT_CHILEAN_BIRD_CLASSES))
             best_val_acc = checkpoint.get("best_val_acc")
             arch_lower = architecture_name.lower().replace("-", "_")
             num_classes = len(classes)
+            legacy_poc = "model_type" in checkpoint and "architecture" not in checkpoint
+            pool_type = checkpoint.get("pool_type", "avg" if legacy_poc else "gem")
+            if pool_type is None:
+                pool_type = "avg"
+            if not isinstance(pool_type, str) or pool_type.lower() not in {"avg", "gem"}:
+                raise ModelWeightsError("Contrato de pooling del checkpoint no soportado")
+            pool_type = pool_type.lower()
 
             try:
-                if "audiocnn" in arch_lower or "audio_cnn" in arch_lower:
+                if arch_lower == "cnn" or "audiocnn" in arch_lower or "audio_cnn" in arch_lower:
                     model = AudioCNN(num_classes=num_classes)
                 elif "panns" in arch_lower:
                     try:
@@ -207,6 +249,7 @@ class TrainedModelPredictor(AudioPredictor):
                         model = BioacousticModel(
                             model_name="panns_cnn14", num_classes=num_classes,
                             in_chans=1, pretrained=False,
+                            pool_type=pool_type,
                         )
                 else:
                     if "resnet" in arch_lower:
@@ -222,6 +265,7 @@ class TrainedModelPredictor(AudioPredictor):
                         num_classes=num_classes,
                         in_chans=1,
                         pretrained=False,
+                        pool_type=pool_type,
                     )
 
                 model.load_state_dict(state_dict)
@@ -241,6 +285,8 @@ class TrainedModelPredictor(AudioPredictor):
                 ) from err
 
             # Publish identity and metadata only after every load step succeeds.
+            if contract is None:
+                self._configure_audio(checkpoint)
             self.preprocessing_contract = contract
             self.architecture_name = architecture_name
             self.classes = classes
@@ -250,8 +296,8 @@ class TrainedModelPredictor(AudioPredictor):
             if hasattr(self, "_metadata"):
                 self._metadata.name = self.custom_name or f"Modelo Entrenado: {architecture_name} ({self.checkpoint_path.name})"
                 self._metadata.description = f"Inferencia bioacústica con pesos reales entrenados ({architecture_name})"
-                self._metadata.target_sr = contract["sample_rate"] if contract else TARGET_SR
-                self._metadata.duration_seconds = contract["duration_seconds"] if contract else DURATION_SECONDS
+                self._metadata.target_sr = contract["sample_rate"] if contract else (self.audio_config or {}).get("target_sr", TARGET_SR)
+                self._metadata.duration_seconds = contract["duration_seconds"] if contract else (self.audio_config or {}).get("duration_seconds", DURATION_SECONDS)
                 self._metadata.classes = classes
                 self._metadata.metrics = {
                     "accuracy": round(best_val_acc / 100.0 if best_val_acc and best_val_acc > 1 else (best_val_acc or 0.0), 4)
@@ -301,11 +347,29 @@ class TrainedModelPredictor(AudioPredictor):
 
         contract = self.preprocessing_contract
         loaded_checkpoint_sha256 = self._loaded_checkpoint_sha256
-        waveform = load_and_fix_length(
-            audio_file_path,
-            target_sr=contract["sample_rate"] if contract else TARGET_SR,
-            duration_seconds=contract["duration_seconds"] if contract else DURATION_SECONDS,
-        )
+        if contract is not None:
+            waveform = load_and_fix_length(
+                audio_file_path, target_sr=contract["sample_rate"],
+                duration_seconds=contract["duration_seconds"],
+            )
+        elif self.audio_config:
+            if self.window_selection == "active_max_rms":
+                windows = extract_active_windows(
+                    audio_file_path, target_sr=self.audio_config["target_sr"],
+                    duration_seconds=self.audio_config["duration_seconds"],
+                    hop_seconds=2.5, top_db=25.0,
+                )
+                waveform = max(windows, key=compute_rms)
+            else:
+                waveform = load_and_resample(
+                    audio_file_path, target_sr=self.audio_config["target_sr"],
+                    duration_seconds=self.audio_config["duration_seconds"], strict=True,
+                )
+        else:
+            # Historical checkpoints retain their explicitly legacy preprocessing.
+            waveform = load_and_fix_length(
+                audio_file_path, target_sr=TARGET_SR, duration_seconds=DURATION_SECONDS
+            )
 
         # 1. Filtro de Silencio (RMS)
         energy_rms = float(compute_rms(waveform))
@@ -320,6 +384,7 @@ class TrainedModelPredictor(AudioPredictor):
                     "device": str(self.device),
                     "is_mock": False,
                     "loaded_checkpoint_sha256": loaded_checkpoint_sha256,
+                    "preprocessing_mode": "gpu_mel_zscore" if contract or self.audio_config else "legacy_librosa",
                 },
             )
 
@@ -339,6 +404,7 @@ class TrainedModelPredictor(AudioPredictor):
                     "device": str(self.device),
                     "is_mock": False,
                     "loaded_checkpoint_sha256": loaded_checkpoint_sha256,
+                    "preprocessing_mode": "gpu_mel_zscore" if contract or self.audio_config else "legacy_librosa",
                 },
             )
 
@@ -346,8 +412,16 @@ class TrainedModelPredictor(AudioPredictor):
         if self.frontend is not None:
             audio_tensor = torch.from_numpy(waveform).unsqueeze(0).float().to(self.device)
             mel_tensor = self.frontend(audio_tensor)
+        elif self.audio_config:
+            config = self.audio_config
+            frontend = GPUAudioFrontEnd(
+                sample_rate=config["target_sr"], n_mels=config["n_mels"],
+                n_fft=config["n_fft"], hop_length=config["hop_length"],
+                f_min=config["f_min"], f_max=config["f_max"],
+            ).to(self.device)
+            mel_tensor = frontend(torch.from_numpy(waveform).to(self.device))
         else:
-            mel = extract_mel_spectrogram(waveform, sr=TARGET_SR)
+            mel = extract_mel_spectrogram(waveform, sr=TARGET_SR, n_mels=self.legacy_n_mels)
             mel_tensor = torch.from_numpy(mel).unsqueeze(0).unsqueeze(0).float().to(self.device)
 
         t_start = time.perf_counter()
@@ -369,9 +443,11 @@ class TrainedModelPredictor(AudioPredictor):
                 "checkpoint_name": self.checkpoint_path.name,
                 "device": str(self.device),
                 "latency_ms": latency_ms,
+                "mel_bands": int(mel_tensor.shape[-2]),
                 "status": "classified",
                 "is_mock": False,
                 "loaded_checkpoint_sha256": loaded_checkpoint_sha256,
+                "preprocessing_mode": "gpu_mel_zscore" if contract or self.audio_config else "legacy_librosa",
             },
         )
 

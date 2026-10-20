@@ -86,10 +86,13 @@ def mock_db_session():
 
 
 @pytest.fixture
-def client(mock_db_session, controlled_registry, monkeypatch):
+def client(mock_db_session, controlled_registry, monkeypatch, tmp_path):
     """Exercise routes without startup model loading or database admin seeding."""
-    # Response/model-info telemetry must not lazily load unrelated disk weights.
-    monkeypatch.setattr(ensemble_service, "load_models", lambda: None)
+    # Real passive status implementation, with only temporary artifact roots.
+    from app import main as main_module
+    monkeypatch.setattr("torch.cuda.is_available", lambda: False)
+    monkeypatch.setattr(main_module, "_BACKEND_ROOT", tmp_path / "backend")
+    monkeypatch.setattr(main_module, "ensemble_service", main_module.SuperEnsembleService(checkpoints_dir=tmp_path / "weights"))
     previous_overrides = app.dependency_overrides.copy()
     app.dependency_overrides[get_db] = lambda: mock_db_session
     app.dependency_overrides[get_model_registry] = lambda: controlled_registry
@@ -289,5 +292,4 @@ def test_predict_real_chucao_quality(mock_gcp, client, controlled_registry):
     assert data.get("is_fallback") is False
     assert "detalles" in data
     assert data["detalles"].get("is_mock") is False
-
 

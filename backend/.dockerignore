@@ -45,6 +45,10 @@ data/
 # Variables de entorno y credenciales locales
 .env
 .env.*
+# JSON del backend corresponde a credenciales/artefactos externos, no código.
+# Excluir nombres arbitrarios, no solo los ejemplos de cuentas de servicio.
+*.json
+**/*.json
 *.json.key
 service-account*.json
 gcp-key.json

@@ -1,9 +1,54 @@
 # Análisis de Objetivos del Proyecto F.A.M.A.
-### Estado del código vs. Tesis — Revisión documental del 2 de octubre de 2026
+### Estado del código vs. Tesis — Revisión histórica del 2 y actualización acotada del 15–17 de octubre de 2026
 
-Esta revisión distingue **implementado** (código presente), **evidencia histórica** (resultados registrados en recibos) y **pendiente de validación** (comportamiento aún no acreditado en el entorno objetivo). No se ejecutaron pruebas, contenedores ni benchmarks durante esta revisión. Los pendientes se mantienen en [KANBAN.md](../KANBAN.md).
+La revisión histórica del 2 de octubre distingue **implementado** (código presente), **evidencia histórica** (resultados registrados en recibos) y **pendiente de validación** (comportamiento aún no acreditado en el entorno objetivo). En esa revisión no se ejecutaron pruebas, contenedores ni benchmarks. Se conserva debajo como antecedente; no debe leerse como inventario vigente de cada defecto. Los pendientes actuales se mantienen en [KANBAN.md](../KANBAN.md).
+
+## Actualización vigente de alcance limitado — 15 de octubre de 2026
+
+**Conclusión:** la implementación mantiene el propósito híbrido —almacenamiento centralizado y cómputo local orquestado por web— y tiene recorridos corregidos con pruebas aisladas. **No está acreditado que todo funcione según todos los objetivos y requisitos, ni que esté listo para producción.** Esta actualización contrasta la matriz existente, código seleccionado y evidencia del afinamiento; no es una revisión exhaustiva de literatura/tesis, auditoría integral ni nuevo experimento de precisión/costos.
+
+| Objetivo/requisito | Evaluación actual y evidencia | Qué falta para cerrarlo |
+| --- | --- | --- |
+| Objetivo general: pipeline MLOps híbrido | Arquitectura y módulos presentes; contratos de ingesta, entrenamiento, selección e inferencia corregidos en pruebas aisladas | Recorrido completo con configuración, datos/pesos y servicios reales autorizados |
+| OE1, OE2 y OE3: análisis, requisitos y diseño | Documentados en la revisión histórica; diseño respaldado por implementación y ADRs | No confundir documentación/diseño con cumplimiento operativo; no se reevalúa aquí su contenido completo |
+| OE4: construir módulos de sincronización, preprocesamiento, interfaz y telemetría | Implementación presente. RF02: checksums, publicación local, subida parcial, validación estructural/límites. RF03: casos sintéticos reales de generación de tensores y errores. RF04/RF05: contratos de checkpoint/selección, disponibilidad, estado legacy pasivo y atribución comprobados con alcance específico. Dashboard sin observaciones ficticias y con referencias históricas diferenciadas | Catálogo/inventario, unificación/coherencia de inferencia y perfiles, opciones ofrecidas, bundles, otros lectores y seguridad/operación integral |
+| OE5: rendimiento, viabilidad y ciclo de reentrenamiento | Permanecen los recibos/experimentos históricos; estas pruebas no recalculan accuracy/F1, ahorro ni viabilidad económica | Feedback → curación → preparación → reentrenamiento → nuevo modelo → nueva inferencia; trazabilidad de artefactos/métricas/costos y evaluación reproducible |
+| RF01 y RF02: acceso y sincronización cloud | Adaptadores y rutas presentes; transferencias y errores comprobados con GCS falso/SQLite | IAM, PostgreSQL/GCS reales, volumen, concurrencia y recuperación operacional |
+| RF03 y RNF01: extracción y ≤2 s | Extracción implementada; benchmark CPU autorizado del 16: un audio, default legacy64, primera llamada 1,5526 s y mediana caliente 27,911 ms | No acredita todos los casos/perfiles, imports/guardado/UI ni hardware objetivo; ampliar protocolo, no usar duración de pytest como benchmark |
+| RF04: entrenamiento web local | Mejores pesos, época/pérdida seleccionadas, preprocesamiento efectivo, publicación y persistencia confirmada antes de completed comprobados en suites acotadas | Entrenamiento real autorizado, parámetros pendientes y integración GPU/BD; scripts experimentales aún con snapshots pendientes |
+| RF05 y RNF04: predicción visible y ≤3 s | Selección exige disponibilidad; API rechaza temprano sin pesos. Hay recibo histórico de un caso real | Compatibilidad/calidad de todos los modelos y ensambles, coherencia de bundles y medición desde carga hasta pantalla |
+| RF06: retroalimentación y mejora continua | Captura/curación presentes; una prueba focal reciente confirma aprobación local utilizable antes de copia cloud | No hay evidencia nueva del ciclo completo hasta un modelo reentrenado y su efecto medido |
+| RNF02: dataset de 50 GB sin OOM | Cargas HTTP ahora acotadas a 64 MiB/archivo y 256 MiB/lote configurables, con lectura/decodificación por bloques | No acredita 50 GB, RAM total, parser multipart, CPU ni concurrencia: faltan ensayo de volumen y presupuestos de recursos |
+| RNF03: credenciales y operación segura | JWT/bootstrap sin secretos compartidos por defecto, variables transmitidas y JSON excluidos del contexto, comprobados de forma aislada | Siguen defaults de PostgreSQL en `docker-compose.yml`/`database.py`; no se cambiaron cuentas reales. Login web, autorización general y gestión administrada aplazados; CORS/rate limiting/exposición y secretos reales sin cierre de auditoría |
+
+### Contradicciones históricas que no deben arrastrarse como estado actual
+
+- Las referencias inferiores a defaults JWT/bootstrap inseguros quedaron superadas por AFIN-7/8 y ADR 0042. No significa que todos los defaults/secretos del proyecto estén resueltos.
+- La descripción histórica de entrenamiento que solo advertía fallo SQL no refleja los contratos actuales probados de persistencia antes de completed (véanse manual y KANBAN). No implica un entrenamiento real nuevo.
+- La mención histórica a `mock_fallback` en `EngineEnsemblePredictor` no coincide con el archivo actual examinado: hoy contiene `ModelWeightsError` para pesos incompletos y fallo de carga. La comprobación temprana de disponibilidad se probó en AFIN-5; esto no certifica todos los modelos ni su calidad.
+- El hallazgo de defaults/curvas/evento ficticios de `DashboardService` fue corregido en AFIN-22. AFIN-25 corrigió además GET model-info y su consumidor, separando registro/archivo/carga y atribuyendo la respuesta al predictor invocado. No implica telemetría universalmente validada: catálogo/inventario, otras fuentes/perfiles, versiones y auditoría integral siguen pendientes. Origen explícito no es evidencia de inferencia correcta, activación ni un experimento nuevo.
+- El manual de carga describía un botón/modal ausente de la vista actual, que usa curación. Se corrigió a operación por API existente, sin implementar ni reintroducir una pantalla nueva.
+
+### Evidencia actual, sin sumar ejecuciones heterogéneas
+
+- Backend acotado de AFIN-25: **371 PASS**, una prueba de calidad Chucao real deseleccionada, 24 archivos; tres deprecaciones. No es la suite global.
+- Frontend completo de AFIN-25: **249 PASS/23 archivos**, TypeScript y ESLint focal sin diagnósticos. Node observado 22.20.0 sigue fuera del requisito del jsdom instalado; PASS no acredita compatibilidad oficial del runtime.
+- Contenedores/configuración: **10 PASS** con Compose config y Docker CLI/API simulada. Sin nuevo build/arranque de servicios ni validación GPU.
+- Las regresiones aisladas no usan datos/BD/GCS/pesos reales, migraciones, push o despliegue. La excepción autorizada de benchmark se describe a continuación. Evidencia e interfaces en [KANBAN](../KANBAN.md); estado para retomar en [manual operativo de pendientes](../manuales/estado_actual_y_pendientes.md).
+
+### Suplemento autorizado de benchmark local — 16 de octubre de 2026
+
+La exclusión de activos reales de las pruebas anteriores tiene una excepción explícita: inventario local de nombres/tamaños y lectura de un MP3/checkpoint autorizados para CPU, con límites de tiempo/memoria, red bloqueada y deserialización restringida. No se modificaron originales ni se usaron BD/GCS reales. [Informe y cuatro recibos](../modelos/benchmark_local_cpu_20261016.md) conservan fallos iniciales y diagnóstico, no solo el intento que terminó.
+
+El caso de preprocesamiento no cierra RNF01 global. La ruta del predictor corregido terminó en noise antes de la red, pese a cargar correctamente el checkpoint: su mediana de 33,568 ms **no** acredita forward, latencia hasta pantalla de RNF04 ni exactitud. Inventario de unos 5,02 GiB no es prueba de 50 GB; no hubo benchmark GPU, concurrencia, entrenamiento ni evaluación OE5. El bloqueo de pooling/formato/bandas encontrado sí se reprodujo/corrigió con pruebas sintéticas y carga real limitada, sin reescribir el artefacto. AFIN-25 corrigió después el estado legacy y atribución solo en pruebas aisladas, sin ampliar ese benchmark; siguen otras fuentes, perfiles/bundles y validaciones operativas pendientes.
+
+**Puerta para retomar funcionalidades:** se puede continuar desarrollo controlado en la rama de afinamiento, pero aún quedan correcciones de lo existente. Antes de declarar objetivos operativos cumplidos se deben cerrar esos defectos y ejecutar el E2E y los benchmarks autorizados. Los porcentajes citados abajo pertenecen a la tesis/revisión histórica; no son una medición nueva de avance.
 
 ---
+
+## Antecedente histórico — revisión del 2 de octubre de 2026
+
+Las secciones siguientes conservan el análisis de esa fecha, incluidas afirmaciones después superadas sobre `mock_fallback`, persistencia y autenticación. No describen el árbol integrado actual ni acreditan ejecuciones nuevas. Para interpretar esas diferencias, prevalecen la actualización acotada y las contradicciones históricas identificadas arriba; su evidencia tampoco cierra la integración posterior.
 
 ## ¿Qué es F.A.M.A. y cuál es su propósito?
 

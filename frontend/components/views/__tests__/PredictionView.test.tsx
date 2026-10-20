@@ -69,7 +69,7 @@ describe('PredictionView validation and responsive controls', () => {
 
   it('does not invent model health, metrics, versions or ensemble participants for an individual result', async () => {
     const api = await preparePrediction();
-    expect(screen.getAllByText(/Estado no disponible/).length).toBeGreaterThan(0);
+    expect(screen.getByText('Dispositivo de esta selección: No comprobado')).toBeDefined();
     expect(screen.queryByText(/Sin métricas publicadas|Accuracy histórica|F1 histórico|Precision histórica|Evaluación en test set/)).toBeNull();
     expect(screen.queryByText('v3.0.0')).toBeNull();
     expect(screen.queryByText(/Dispositivo: CPU/)).toBeNull();
@@ -315,15 +315,159 @@ describe('PredictionView validation and responsive controls', () => {
     expect(select.querySelector('optgroup[label="Diagnóstico Industrial (Motores)"]')).not.toBeNull();
     expect(screen.getByText(/Audios de 5\.0s a 22\.050 Hz/)).toBeDefined();
     await act(async () => { fireEvent.change(select, { target: { value: mockModels[2].id } }); });
-    expect(screen.getByText(/Dominio Activo: Diagnóstico Acústico de Motores/)).toBeDefined();
+    expect(screen.getByText(/Grupo seleccionado: Diagnóstico Acústico de Motores/)).toBeDefined();
     expect(screen.getByText('2 Fallas Mecánicas')).toBeDefined();
     expect(screen.getByText('1.5s @ 32 kHz')).toBeDefined();
     expect(screen.getByText(/Audios de 1\.5s a 32\.000 Hz/)).toBeDefined();
     expect(screen.getByText('Falla de Encendido / Combustión Irregular')).toBeDefined();
-    expect(screen.getByText(/Especificaciones del Modelo Individual Activo/)).toBeDefined();
+    expect(screen.getByText(/Especificaciones del Modelo Individual Seleccionado/)).toBeDefined();
     expect(screen.queryByText(/55%/)).toBeNull();
     expect(screen.queryByText(/30%/)).toBeNull();
     expect(screen.queryByText(/15%/)).toBeNull();
     expect(screen.queryByText(/Tríada Completa Habilitada/)).toBeNull();
+  });
+
+  it('does not invent operational triad cards, historical scores or an unmeasured latency', async () => {
+    await act(async () => { render(<PredictionView />); });
+
+    expect(screen.queryAllByText('Entrenado y Operativo')).toHaveLength(0);
+    expect(screen.queryByText(/Tríada Completa Habilitada/)).toBeNull();
+    expect(screen.queryByText(/Super-Ensamble Activo/)).toBeNull();
+    expect(screen.queryAllByText(/88\.68%|88\.31%|81\.44%/)).toHaveLength(0);
+    expect(screen.getByText('Tiempo total de solicitud: no disponible')).toBeDefined();
+    expect(screen.getByText('Estado del servicio legacy no disponible para esta selección.')).toBeDefined();
+    expect(screen.getByRole('option', { name: mockModels[0].name })).toBeDefined();
+  });
+
+  it('renders registration, local availability and observed load as separate facts', async () => {
+    const status = { state_scope: 'legacy_bioacoustic_service', domain_supported: true, selected_domain: 'AvesChilenas',
+      device: 'cpu', active_mode: 'individual', ensemble_ready: false, is_fallback: false,
+      model_name: 'ConvNeXt-Nano (Modo Individual)', active_models: [], total_classes: 2, classes: ['Chucao', 'Rayadito'],
+      triad_status: [
+        { name: 'EfficientNet-B0', weight: null, is_ready: false, is_loaded: false, is_registered: true,
+          weights_available: false, weights_source: 'registered_reference', accuracy: 0, loss: 0,
+          recorded_checkpoint: 'registered.pt', loaded_checkpoint: null, metrics_source: 'database_record' },
+        { name: 'ConvNeXt-Nano', weight: 1, is_ready: true, is_loaded: true, is_registered: true,
+          weights_available: true, weights_source: 'loaded_checkpoint_file', accuracy: null, loss: null,
+          recorded_checkpoint: 'different.pt', loaded_checkpoint: 'loaded.pt', metrics_source: 'database_record' },
+        { name: 'ResNet-34d', weight: null, is_ready: false, is_loaded: false, is_registered: null,
+          weights_available: null, accuracy: null, loss: null, recorded_checkpoint: null, loaded_checkpoint: null },
+      ] };
+    global.fetch = vi.fn(async input => ({ ok: true, json: async () => String(input).includes('/api/models')
+      ? { models: mockModels } : status }) as Response);
+
+    await act(async () => { render(<PredictionView />); });
+
+    const state = within(screen.getByRole('region', { name: 'Estado del ensamble legacy' }));
+    const registered = within(state.getByRole('article', { name: 'EfficientNet-B0' }));
+    expect(registered.getByText('Registro BD: Registrado')).toBeDefined();
+    expect(registered.getByText('Archivo local: Ausente')).toBeDefined();
+    expect(registered.getByText('No cargado')).toBeDefined();
+    expect(registered.getByText('0.0%')).toBeDefined();
+    expect(registered.getByText('registered.pt')).toBeDefined();
+    const loaded = within(state.getByRole('article', { name: 'ConvNeXt-Nano' }));
+    expect(loaded.getByText('Cargado en memoria')).toBeDefined();
+    expect(loaded.getByText('Peso cargado: 100%')).toBeDefined();
+    expect(loaded.getByText('different.pt')).toBeDefined();
+    expect(loaded.getByText('Checkpoint cargado: loaded.pt')).toBeDefined();
+    expect(screen.queryByText(/Entrenado y Operativo|Tríada Completa Habilitada/)).toBeNull();
+  });
+
+  it('does not fabricate industrial components when the legacy service does not cover that domain', async () => {
+    const engine = { ...mockModels[2], id: 'car-engine-diagnostics-super-ensemble', name: 'Engine ensemble' };
+    global.fetch = vi.fn(async input => ({ ok: true, json: async () => String(input).includes('/api/models')
+      ? { models: [...mockModels, engine] }
+      : { state_scope: 'legacy_bioacoustic_service', domain_supported: false, selected_domain: 'engine_diagnostics',
+          triad_status: [], active_models: [], classes: [], total_classes: 0, model_name: null, device: 'cpu', is_fallback: false } }) as Response);
+    await act(async () => { render(<PredictionView />); });
+
+    await act(async () => { fireEvent.change(screen.getByLabelText('Modelo:'), { target: { value: engine.id } }); });
+
+    expect(screen.getByText('Estado del servicio legacy no disponible para esta selección.')).toBeDefined();
+    expect(screen.queryAllByText('Entrenado y Operativo')).toHaveLength(0);
+    expect(screen.queryByText('Peso cargado: 40%')).toBeNull();
+    expect(screen.getByRole('option', { name: engine.name })).toBeDefined();
+  });
+
+  it('uses the execution list rather than unrelated legacy active-component labels', async () => {
+    const api = await preparePrediction();
+    api.setPrediction(async () => ({ ok: true, json: async () => ({ filename: 'machine.wav', db_id: 202,
+      clase: 'alarm', confianza: 0.9, gcp_upload: true, modelo: 'Actual executed predictor',
+      modelos_activos: ['Wrong legacy component (100%)'], modelos_ejecutados: ['Actual executed predictor'],
+      detalles: { dataset_name: 'maquinaria-canonical' } }) }) as Response);
+
+    await api.infer();
+
+    expect(screen.queryByText(/Wrong legacy component/)).toBeNull();
+    expect(screen.getByText('✓ Actual executed predictor')).toBeDefined();
+  });
+
+  it('does not apply the legacy service device or an assumed test split to an individual selection', async () => {
+    await act(async () => { render(<PredictionView />); });
+    await act(async () => { fireEvent.change(screen.getByLabelText('Modelo:'), { target: { value: 'machine-model' } }); });
+
+    expect(screen.queryByText('Dispositivo: CPU')).toBeNull();
+    expect(screen.queryByText('Evaluación en test set')).toBeNull();
+    expect(screen.getByText('Dispositivo de esta selección: No comprobado')).toBeDefined();
+  });
+
+  it('does not invent an audio contract when the catalogue has no selectable model', async () => {
+    global.fetch = vi.fn(async input => String(input).includes('/api/models')
+      ? { ok: true, json: async () => ({ models: [] }) } as Response : { ok: false } as Response);
+
+    await act(async () => { render(<PredictionView />); });
+
+    expect(screen.queryByText('5.0s @ 22 kHz')).toBeNull();
+    expect(screen.getByText('duración no publicada @ frecuencia no publicada')).toBeDefined();
+    expect((screen.getByRole('button', { name: /Ejecutar inferencia/ }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('reports an observed legacy fallback without attributing it to the selected predictor', async () => {
+    const status = { state_scope: 'legacy_bioacoustic_service', domain_supported: true, selected_domain: 'AvesChilenas',
+      device: 'cpu', active_mode: 'fallback', ensemble_ready: false, is_fallback: true, model_name: 'AudioCNN (Fallback)',
+      active_models: [{ name: 'AudioCNN', weight: 1, checkpoint: 'augmented_best.pt' }], total_classes: 2,
+      classes: ['Chucao', 'Rayadito'], triad_status: ['EfficientNet-B0', 'ConvNeXt-Nano', 'ResNet-34d'].map(name => ({
+        name, weight: null, is_ready: false, is_loaded: false, is_registered: false, weights_available: false,
+        accuracy: null, loss: null, checkpoint: null, updated_at: null })) };
+    global.fetch = vi.fn(async input => ({ ok: true, json: async () => String(input).includes('/api/models')
+      ? { models: mockModels } : status }) as Response);
+
+    await act(async () => { render(<PredictionView />); });
+
+    expect(screen.getByText(/Fallback cargado en el servicio legacy: AudioCNN/)).toBeDefined();
+    expect(screen.getByText(/No confirma uso por el predictor seleccionado/)).toBeDefined();
+    expect(screen.queryAllByText('Entrenado y Operativo')).toHaveLength(0);
+  });
+});
+
+// Independent U7 / S4 baseline-preservation regression.
+describe("U7IndependentStable", () => {
+  it.each([false, true])("keeps feedback and checkpoint identity after refresh failure=%s", async failed => {
+    const api = await preparePrediction();
+    api.setPrediction(async () => Response.json({ filename: "stable.wav", db_id: 902, clase: "alarm",
+      confianza: 0, gcp_upload: false, modelo: "Stable predictor", modelo_id: "machine-model",
+      detalles: { dataset_name: "maquinaria-canonical", loaded_checkpoint_sha256: "d".repeat(64) } }));
+    await api.infer();
+    const checkpoint = screen.getByRole("region", { name: "Identidad del checkpoint del resultado" }).textContent;
+    const originalFetch = fetch;
+    global.fetch = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) =>
+      String(input).includes("/api/models")
+        ? failed ? new Response(null, { status: 503 }) : Response.json({ models: [mockModels[2]] })
+        : originalFetch(input, options));
+    fireEvent.change(screen.getByLabelText("Modelo:"), { target: { value: mockModels[2].id } });
+    await act(async () => { fireEvent(window, new Event("focus")); });
+    expect(screen.getByRole("region", { name: "Identidad del checkpoint del resultado" }).textContent).toBe(checkpoint);
+    expect(checkpoint).toContain("d".repeat(64));
+    expect(screen.getByText("Modelo ejecutado:").parentElement?.textContent).toBe("Modelo ejecutado:Stable predictor (machine-model)");
+    expect(screen.getByText("ID de predicción: 902")).toBeDefined();
+    if (failed) expect(screen.getByRole("alert").textContent).toBe("No se pudo actualizar el catálogo de modelos (HTTP 503). Se conserva el último catálogo disponible; vuelve a esta ventana para reintentar.");
+    fireEvent.click(choice("Incorrecta"));
+    expect(within(panel().getByLabelText("Clase correcta")).getAllByRole("option").map(option => option.getAttribute("value"))).toEqual(["", "alarm", "normal"]);
+    fireEvent.change(panel().getByLabelText("Clase correcta"), { target: { value: "normal" } });
+    api.setFeedback(async () => Response.json({ id_retroalimentacion: 72, id_prediccion: 902, fue_correcta: false, procesado: false }));
+    await act(async () => { fireEvent.click(submit()); });
+    expect(api.predictionCalls()).toHaveLength(2);
+    expect(api.feedbackCalls()).toHaveLength(1);
+    expect(JSON.parse(String(api.feedbackCalls()[0][1]?.body))).toEqual({ id_prediccion: 902, fue_correcta: false, etiqueta_corregida: "normal", id_usuario: 1 });
   });
 });

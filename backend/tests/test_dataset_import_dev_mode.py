@@ -19,9 +19,11 @@ def local_imports(tmp_path, monkeypatch):
     from app.services.dataset_imports import DatasetImports
     from app.services.dataset_zip import ImportLimits
     from app.services import dataset_import_execution
+    from app.services import auth
     from app.services.dataset_zip import validate_zip
     # This guard-compatible authorization fixture is not containment evidence.
     monkeypatch.setattr(dataset_import_execution, "validate_zip", validate_zip)
+    monkeypatch.setattr(auth, "SECRET_KEY", "synthetic-import-isolation-key-2026-only-for-tests")
 
     monkeypatch.delenv("FAMA_ENV", raising=False)
     monkeypatch.delenv("FAMA_IMPORT_DEV_MODE", raising=False)
@@ -153,6 +155,7 @@ def test_local_and_authenticated_owners_remain_isolated(local_imports, tmp_path,
         "password": "synthetic-password", "nombre_completo": "Synthetic User"})
     assert registration.status_code == 201, registration.text
     login = client.post("/api/auth/login", json={"email": "synthetic@example.test", "password": "synthetic-password"})
+    assert login.status_code == 200, login.text
     client.headers["Authorization"] = "Bearer " + login.json()["access_token"]
     private_job = prepare(client, tmp_path, key="private")
     private_dataset = confirm(client, private_job).json()["dataset_id"]

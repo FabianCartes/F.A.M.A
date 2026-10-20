@@ -4,6 +4,8 @@ import base64
 import hmac
 import hashlib
 import secrets
+import math
+import re
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 
@@ -17,11 +19,32 @@ from app.models.user import Usuario
 # ============================================================================
 # CONFIGURACIÓN CRIPTOGRÁFICA Y DE TOKENS (RNF_03, Tabla 6.2)
 # ============================================================================
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "fama_bioacoustic_secret_key_mlops_2026")
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "480"))  # 8 horas por defecto
 
 security_bearer = HTTPBearer(auto_error=False)
+
+
+class AuthenticationConfigurationError(RuntimeError):
+    """Authentication cannot proceed with absent or unsafe operator configuration."""
+
+
+def ensure_authentication_configured() -> None:
+    """Validate before credential verification or session-related DB writes."""
+    try:
+        key_bytes = SECRET_KEY.encode("utf-8") if isinstance(SECRET_KEY, str) else b""
+    except UnicodeError as error:
+        raise AuthenticationConfigurationError("Autenticación no configurada: JWT_SECRET_KEY inválida") from error
+    if (not isinstance(SECRET_KEY, str) or not SECRET_KEY.strip()
+            or len(key_bytes) < 32
+            or SECRET_KEY == "fama_bioacoustic_secret_key_mlops_2026"):
+        raise AuthenticationConfigurationError("Autenticación no configurada: JWT_SECRET_KEY ausente o insegura")
+
+
+def _signing_key() -> bytes:
+    ensure_authentication_configured()
+    return SECRET_KEY.encode("utf-8")
 
 
 # ============================================================================
@@ -83,7 +106,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     payload_b64 = _b64url_encode(payload_bytes)
 
     signing_input = f"{header_b64}.{payload_b64}".encode("utf-8")
-    signature = hmac.new(SECRET_KEY.encode("utf-8"), signing_input, hashlib.sha256).digest()
+    signature = hmac.new(_signing_key(), signing_input, hashlib.sha256).digest()
     signature_b64 = _b64url_encode(signature)
 
     return f"{header_b64}.{payload_b64}.{signature_b64}"
@@ -92,27 +115,41 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 def decode_access_token(token: str) -> dict:
     """Decodifica y valida la firma y vigencia de un token JWT."""
     parts = token.split(".")
-    if len(parts) != 3:
+    if len(parts) != 3 or any(re.fullmatch(r"[A-Za-z0-9_-]+", part) is None for part in parts):
         raise ValueError("Token inválido: formato no corresponde a JWT")
 
     header_b64, payload_b64, signature_b64 = parts
     signing_input = f"{header_b64}.{payload_b64}".encode("utf-8")
-    expected_sig = hmac.new(SECRET_KEY.encode("utf-8"), signing_input, hashlib.sha256).digest()
+    expected_sig = hmac.new(_signing_key(), signing_input, hashlib.sha256).digest()
     expected_sig_b64 = _b64url_encode(expected_sig)
 
     if not hmac.compare_digest(signature_b64, expected_sig_b64):
         raise ValueError("Firma de token inválida")
 
     try:
+        header = json.loads(_b64url_decode(header_b64).decode("utf-8"))
+    except Exception as exc:
+        raise ValueError("Cabecera JWT inválida") from exc
+    if not isinstance(header, dict) or header.get("alg") != ALGORITHM:
+        raise ValueError("Algoritmo JWT no permitido")
+
+    try:
         payload_json = _b64url_decode(payload_b64).decode("utf-8")
         payload = json.loads(payload_json)
     except Exception as exc:
-        raise ValueError(f"Carga útil del token corrupta: {exc}")
+        raise ValueError("Carga útil del token corrupta") from exc
 
-    if "exp" in payload:
-        now_ts = int(datetime.now(timezone.utc).timestamp())
-        if now_ts > payload["exp"]:
-            raise ValueError("Token expirado")
+    if not isinstance(payload, dict):
+        raise ValueError("Carga útil JWT inválida: se requiere un objeto")
+    if "exp" not in payload:
+        raise ValueError("Token inválido: expiración requerida")
+    expiration = payload["exp"]
+    if (type(expiration) not in (int, float)
+            or (isinstance(expiration, float) and not math.isfinite(expiration))):
+        raise ValueError("Token inválido: expiración numérica finita requerida")
+    now_ts = datetime.now(timezone.utc).timestamp()
+    if now_ts >= expiration:
+        raise ValueError("Token expirado")
 
     return payload
 
@@ -178,15 +215,23 @@ def create_user(
 
 def seed_initial_admin(db: Session) -> Optional[Usuario]:
     """
-    Realiza el seeding automático del primer usuario Administrador si la tabla está vacía.
-    Garantiza que el sistema F.A.M.A. nunca quede bloqueado sin un administrador inicial.
+    Crea el primer administrador solo con credenciales explícitas del operador.
+    No modifica ni repara cuentas existentes cuando la tabla ya contiene usuarios.
     """
     total = db.query(Usuario).count()
     if total > 0:
         return db.query(Usuario).filter(Usuario.rol == "administrador").first()
 
-    admin_email = os.getenv("ADMIN_INITIAL_EMAIL", "admin@fama.cl").strip().lower()
-    admin_password = os.getenv("ADMIN_INITIAL_PASSWORD", "AdminFama2026!")
+    admin_email = os.getenv("ADMIN_INITIAL_EMAIL")
+    admin_password = os.getenv("ADMIN_INITIAL_PASSWORD")
+    if not admin_email or not admin_password:
+        raise AuthenticationConfigurationError("Bootstrap no configurado: credenciales iniciales requeridas")
+    admin_email = admin_email.strip().lower()
+    if (admin_email.count("@") != 1 or not all(admin_email.split("@"))
+            or len(admin_email) > 150 or any(char.isspace() for char in admin_email)
+            or not admin_password.strip() or len(admin_password) < 12
+            or admin_password == "AdminFama2026!"):
+        raise AuthenticationConfigurationError("Bootstrap no configurado: credenciales iniciales inválidas o inseguras")
     admin_name = os.getenv("ADMIN_INITIAL_NAME", "Administrador F.A.M.A.")
 
     admin = Usuario(
@@ -221,6 +266,11 @@ def get_current_user(
     token = credentials.credentials
     try:
         payload = decode_access_token(token)
+    except AuthenticationConfigurationError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Servicio de autenticación no configurado.",
+        )
     except ValueError as err:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -229,14 +279,21 @@ def get_current_user(
         )
 
     user_id_raw = payload.get("sub")
-    if not user_id_raw:
+    user_id = None
+    if isinstance(user_id_raw, str) and user_id_raw.isascii() and user_id_raw.isdecimal():
+        try:
+            user_id = int(user_id_raw)
+        except ValueError:
+            pass
+    # Usuario.id is PostgreSQL INTEGER (signed 32-bit), not an arbitrary integer.
+    if user_id is None or not 1 <= user_id <= 2 ** 31 - 1:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token no contiene sujeto de usuario válido.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user = get_user_by_id(db, int(user_id_raw))
+    user = get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

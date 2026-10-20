@@ -16,21 +16,6 @@ from app.services.training import training_service
 class DashboardService:
     """Módulo profundo que centraliza las consultas y agregaciones para el Dashboard."""
 
-    def __init__(self):
-        # Curva de convergencia de referencia de la tesis (10 épocas con Mixup + Focal Loss)
-        self.baseline_curves = [
-            {"epoch": 1, "accuracy": 54.20, "loss": 1.2540},
-            {"epoch": 2, "accuracy": 62.80, "loss": 0.9850},
-            {"epoch": 3, "accuracy": 71.40, "loss": 0.7920},
-            {"epoch": 4, "accuracy": 76.90, "loss": 0.6510},
-            {"epoch": 5, "accuracy": 81.30, "loss": 0.5420},
-            {"epoch": 6, "accuracy": 84.70, "loss": 0.4680},
-            {"epoch": 7, "accuracy": 86.90, "loss": 0.3990},
-            {"epoch": 8, "accuracy": 88.10, "loss": 0.3540},
-            {"epoch": 9, "accuracy": 89.20, "loss": 0.3210},
-            {"epoch": 10, "accuracy": 90.15, "loss": 0.2890},
-        ]
-
     def get_stats(
         self,
         db: Optional[Session] = None,
@@ -40,18 +25,19 @@ class DashboardService:
         Retorna la estructura unificada de estadísticas para el Dashboard:
         - KPIs principales
         - Curvas de entrenamiento de la última ejecución
-        - Feed de actividad reciente cronológico
+        - Actividad registrada seleccionada (no auditoría completa)
         - Estado de la Tríada Super-Ensamble
         - Salud de los subsistemas
         """
-        total_predictions = 0
-        avg_confidence = 0.0
-        total_datasets = 1
-        total_audios = 1211
-        active_accuracy = 88.31
-        active_loss = 0.3120
-        active_model_name = "Super-Ensamble Tri-Modelo"
-        db_status = "operational"
+        total_predictions = None
+        avg_confidence = None
+        total_datasets = None
+        total_audios = None
+        active_accuracy = None
+        active_loss = None
+        active_model_name = None
+        metrics_source = None
+        db_status = "unknown"
 
         recent_activity: List[Dict[str, Any]] = []
         training_curves: List[Dict[str, Any]] = []
@@ -80,35 +66,25 @@ class DashboardService:
                             if p.fecha_prediccion
                             else "Reciente"
                         )
-                        model_id_val = getattr(p, "modelo_id", None) or "chilean-birds-ensemble"
-                        domain_tag = "Motores" if "engine" in model_id_val.lower() else "Aves"
-                        badge_label = f"Inferencia ({domain_tag})"
+                        model_id_val = p.modelo_id
+                        domain = {"AvesChilenas": "bioacoustic", "engine_diagnostics": "industrial"}.get(p.dataset_name)
+                        domain_tag = {"bioacoustic": "Aves", "industrial": "Motores"}.get(domain)
+                        badge_label = f"Inferencia ({domain_tag})" if domain_tag else "Inferencia"
                         recent_activity.append({
                             "id": f"pred-{p.id_prediccion}",
                             "type": "prediccion",
                             "title": f"Inferencia: {p.etiqueta_predicha}",
-                            "description": f"Audio {Path(p.ruta_audio_prueba).name} clasificado con {round(p.confianza * 100, 1)}% de certeza",
+                            "description": f"Audio {Path(p.ruta_audio_prueba).name} clasificado con {round(p.confianza * 100, 1)}% de confianza",
                             "timestamp": ts_str,
                             "badge": badge_label,
                             "confidence": round(p.confianza * 100, 1),
                             "model_id": model_id_val,
-                            "domain": "industrial" if "engine" in model_id_val.lower() else "bioacoustic",
+                            "domain": domain,
                         })
 
                 # 2. Datasets y Audios en la base de datos
-                ds_count = db.query(ConjuntoDatos).count()
-                if ds_count > 0:
-                    total_datasets = ds_count
-                
-                audio_count = db.query(Audio).count()
-                if audio_count > 0:
-                    total_audios = audio_count
-                else:
-                    # Chequear datasets disponibles desde el servicio de entrenamiento
-                    datasets_info = training_service.get_available_datasets(db=db)
-                    if datasets_info:
-                        total_datasets = max(len(datasets_info), total_datasets)
-                        total_audios = sum(d.get("audio_count", 0) for d in datasets_info) or total_audios
+                total_datasets = db.query(ConjuntoDatos).count()
+                total_audios = db.query(Audio).count()
 
                 # 3. Modelos y Curvas de Entrenamiento
                 ultimo_modelo = (
@@ -118,9 +94,10 @@ class DashboardService:
                 )
 
                 if ultimo_modelo:
-                    if ultimo_modelo.precision:
+                    metrics_source = "latest_registered_model"
+                    if ultimo_modelo.precision is not None:
                         active_accuracy = round(float(ultimo_modelo.precision), 2)
-                    if ultimo_modelo.perdida:
+                    if ultimo_modelo.perdida is not None:
                         active_loss = round(float(ultimo_modelo.perdida), 4)
                     if ultimo_modelo.arquitectura:
                         active_model_name = ultimo_modelo.arquitectura
@@ -134,10 +111,11 @@ class DashboardService:
                     recent_activity.append({
                         "id": f"mod-{ultimo_modelo.id_modelo}",
                         "type": "entrenamiento",
-                        "title": f"Modelo {ultimo_modelo.arquitectura} entrenado",
-                        "description": f"Precisión alcanzada: {round(ultimo_modelo.precision, 1)}% ({ultimo_modelo.epocas} épocas)",
+                        "title": f"Modelo {ultimo_modelo.arquitectura} registrado",
+                        "description": (f"Precisión registrada: {round(ultimo_modelo.precision, 1)}% ({ultimo_modelo.epocas} épocas)"
+                                        if ultimo_modelo.precision is not None else "Precisión registrada: No disponible"),
                         "timestamp": ts_m,
-                        "badge": "Entrenamiento",
+                        "badge": "Registro de modelo",
                     })
 
                     # Métricas de entrenamiento de ese modelo
@@ -147,7 +125,7 @@ class DashboardService:
                         .order_by(MetricaEntrenamiento.epoca.asc())
                         .all()
                     )
-                    if len(metricas) >= 2:
+                    if metricas:
                         training_curves = [
                             {
                                 "epoch": m.epoca,
@@ -157,45 +135,29 @@ class DashboardService:
                             for m in metricas
                         ]
 
-            except Exception as ex:
+                db_status = "operational"
+            except Exception:
                 db_status = "degraded"
-                print(f"[DashboardService] Aviso al consultar base de datos: {ex}")
-
-        # Si no hay suficientes métricas grabadas en DB, usar las curvas oficiales de tesis
-        if not training_curves:
-            training_curves = self.baseline_curves
-
-        # Siempre añadir un evento de ingesta a la actividad reciente para asegurar visibilidad integral
-        recent_activity.append({
-            "id": "ing-sync-1",
-            "type": "ingesta",
-            "title": "Sincronización con GCP Storage",
-            "description": "Lote oficial AvesChilenas (1,211 audios, 15 especies) validado",
-            "timestamp": "Completada",
-            "badge": "Ingesta",
-        })
+                db.rollback()
 
         # Información del Super-Ensamble
         super_ens = {
-            "ready": True,
-            "active_mode": "ensemble",
-            "models": [
-                {"name": "EfficientNet-B0", "weight": 0.55, "ready": True, "accuracy": 88.31},
-                {"name": "ConvNeXt-Nano", "weight": 0.30, "ready": True, "accuracy": 87.15},
-                {"name": "ResNet-34d", "weight": 0.15, "ready": True, "accuracy": 85.40},
-            ],
+            "ready": None,
+            "active_mode": "unknown",
+            "models": [],
         }
         if ensemble_status:
-            super_ens["ready"] = ensemble_status.get("ensemble_ready", True)
-            super_ens["active_mode"] = ensemble_status.get("active_mode", "ensemble")
+            super_ens["ready"] = ensemble_status.get("ensemble_ready")
+            super_ens["active_mode"] = ensemble_status.get("active_mode", "unknown")
             if "triad_status" in ensemble_status:
                 super_ens["models"] = ensemble_status["triad_status"]
-            if "model_name" in ensemble_status:
-                active_model_name = ensemble_status["model_name"]
 
         # Telemetría básica de hardware
-        hw = training_service.get_hardware_status()
-        device_label = "NVIDIA CUDA GPU" if hw.get("cuda_available") else f"CPU Node Host ({hw.get('cpu_cores', 1)} núcleos)"
+        try:
+            hw = training_service.get_hardware_status()
+            device_label = hw.get("device_name") or "unknown"
+        except Exception:
+            device_label = "unknown"
 
         return {
             "kpis": {
@@ -204,11 +166,14 @@ class DashboardService:
                 "total_datasets": total_datasets,
                 "total_audios": total_audios,
                 "total_predictions": total_predictions,
-                "avg_confidence": avg_confidence or 89.4,
+                "avg_confidence": avg_confidence,
                 "active_model_name": active_model_name,
+                "latest_model_name": active_model_name,
+                "metrics_source": metrics_source,
             },
             "domain_champions": {
                 "bioacoustic": {
+                    "source": "historical_reference",
                     "id": "chilean-birds-ensemble",
                     "title": "Campeón Bioacústica Silvestre",
                     "dataset": "Aves Chilenas",
@@ -219,6 +184,7 @@ class DashboardService:
                     "badge": "Récord F.A.M.A.",
                 },
                 "industrial": {
+                    "source": "historical_reference",
                     "id": "car-engine-diagnostics-super-ensemble",
                     "title": "Campeón Diagnóstico Automotriz",
                     "dataset": "Motores Vehiculares",
@@ -234,8 +200,8 @@ class DashboardService:
             "super_ensemble": super_ens,
             "system_health": {
                 "database": db_status,
-                "storage": "connected",
-                "inference_engine": "ready",
+                "storage": "unknown",
+                "inference_engine": "unknown",
                 "device": device_label,
             },
         }

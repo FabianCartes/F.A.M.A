@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, act, within } from '@testing-library/react';
+import { render, screen, fireEvent, act, within, getDefaultNormalizer } from '@testing-library/react';
 import IngestionView from '../IngestionView';
 import * as feedbackApi from '@/lib/api/feedbackApi';
 
@@ -89,7 +89,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
       year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit', second: '2-digit',
     });
-    expect(queue().getByText(`Cargado el ${local}`)).toBeDefined();
+    expect(queue().getByText(getDefaultNormalizer()(`Cargado el ${local}`))).toBeDefined();
     expect(queue().queryByText(/#42|#101/)).toBeNull();
     expect(screen.queryByText(/technical-uuid/)).toBeNull();
     expect(screen.queryByRole('columnheader', { name: 'Feedback / Predicción' })).toBeNull();
@@ -325,5 +325,70 @@ describe('IngestionView persisted inference dataset and curation', () => {
     expect(screen.getByText(/Data Lake en modo local/)).toBeDefined();
     expect(screen.getByText('AvesChilenas')).toBeDefined();
     expect(screen.getByText('Local')).toBeDefined();
+  });
+
+  it('does not announce complete synchronization when database persistence failed', async () => {
+    const partial = { status: 'partial', total_downloaded: 1, total_skipped: 0, total_failed: 0, total_preprocessed: 0,
+      results: [{ dataset: 'AvesChilenas', downloaded: 1, skipped: 0, failed: 0, db_persisted: false,
+        db_error: 'No se pudieron guardar los registros de ingesta.' }] };
+    global.fetch = vi.fn(async input => ({ ok: true, json: async () => String(input).includes('/sync') ? partial
+      : String(input).includes('/datasets') ? { datasets: mockDatasets } : mockStatus }) as Response);
+    await open();
+    await act(async () => { fireEvent.click(within(screen.getByRole('table')).getAllByRole('checkbox')[0]); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Descargar desde GCS para entrenamiento local' })); });
+
+    expect(screen.getByText(/Sincronización parcial:/)).toBeDefined();
+    expect(screen.getByText(/persistencia en BD no confirmada/)).toBeDefined();
+    expect(screen.queryByText(/Sincronización completada:/)).toBeNull();
+  });
+
+  it.each([
+    { status: 'failed', downloaded: 0, failed: 1, persisted: true, preprocessing: 0, summary: /Sincronización fallida:/ },
+    { status: 'completed', downloaded: 1, failed: 0, persisted: false, preprocessing: 0, summary: /Sincronización parcial:/ },
+    { status: 'completed', downloaded: 1, failed: 0, persisted: true, preprocessing: 1, summary: /Sincronización parcial:/ },
+  ])('does not hide failed stages behind global status ($status/$persisted/$preprocessing)', async sample => {
+    const result = { status: sample.status, total_downloaded: sample.downloaded, total_skipped: 0,
+      total_failed: sample.failed, total_preprocessed: 0,
+      results: [{ dataset: 'AvesChilenas', downloaded: sample.downloaded, skipped: 0, failed: sample.failed,
+        db_persisted: sample.persisted, preprocess_info: { failed: sample.preprocessing } }] };
+    global.fetch = vi.fn(async input => ({ ok: true, json: async () => String(input).includes('/sync') ? result
+      : String(input).includes('/datasets') ? { datasets: mockDatasets } : mockStatus }) as Response);
+    await open();
+    await act(async () => { fireEvent.click(within(screen.getByRole('table')).getAllByRole('checkbox')[0]); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Descargar desde GCS para entrenamiento local' })); });
+
+    expect(screen.getByText(sample.summary)).toBeDefined();
+    expect(screen.queryByText(/Sincronización completada:/)).toBeNull();
+    if (sample.preprocessing) expect(screen.getByText(/1 error\(es\) en preprocesamiento/)).toBeDefined();
+    if (sample.status === 'failed') expect(screen.queryByText('SUCCESS')).toBeNull();
+  });
+
+  it('shows outstanding temporary cleanup after a partial synchronization', async () => {
+    const result = { status: 'partial', total_downloaded: 1, total_skipped: 0, total_failed: 1, total_preprocessed: 0,
+      results: [{ dataset: 'AvesChilenas', downloaded: 1, skipped: 0, failed: 1, db_persisted: true,
+        files: [{ status: 'error', cleanup_pending: true }] }] };
+    global.fetch = vi.fn(async input => ({ ok: true, json: async () => String(input).includes('/sync') ? result
+      : String(input).includes('/datasets') ? { datasets: mockDatasets } : mockStatus }) as Response);
+    await open();
+    await act(async () => { fireEvent.click(within(screen.getByRole('table')).getAllByRole('checkbox')[0]); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Descargar desde GCS para entrenamiento local' })); });
+
+    expect(screen.getByText(/limpieza de temporales pendiente/)).toBeDefined();
+    expect(screen.getByText(/Sincronización parcial:/)).toBeDefined();
+  });
+
+  it('announces completion when every synchronization stage is confirmed', async () => {
+    const result = { status: 'completed', total_downloaded: 1, total_skipped: 0, total_failed: 0, total_preprocessed: 1,
+      results: [{ dataset: 'AvesChilenas', downloaded: 1, skipped: 0, failed: 0, preprocessed: 1,
+        db_persisted: true, preprocess_info: { failed: 0 } }] };
+    global.fetch = vi.fn(async input => ({ ok: true, json: async () => String(input).includes('/sync') ? result
+      : String(input).includes('/datasets') ? { datasets: mockDatasets } : mockStatus }) as Response);
+    await open();
+    await act(async () => { fireEvent.click(within(screen.getByRole('table')).getAllByRole('checkbox')[0]); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Descargar desde GCS para entrenamiento local' })); });
+
+    expect(screen.getByText(/Sincronización completada:/)).toBeDefined();
+    expect(screen.getByText(/Registrado y actualizado en PostgreSQL/)).toBeDefined();
+    expect(screen.queryByText(/Sincronización parcial:/)).toBeNull();
   });
 });

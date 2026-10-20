@@ -51,7 +51,7 @@ Tradicionalmente, los investigadores se ven forzados a elegir entre dos extremos
 
 ## 2. Modelo de Roles, Permisos y Autenticación
 
-El sistema implementa un esquema de Control de Acceso Basado en Roles (**RBAC**) que salvaguarda la integridad de los recursos computacionales y del almacenamiento en la nube sin entorpecer el trabajo analítico cotidiano.
+La matriz siguiente describe el modelo de permisos objetivo, no garantías de autorización ya aplicadas. El backend dispone de autenticación JWT y dependencias de roles, pero las rutas sensibles de datos, entrenamiento y feedback aún requieren su integración. No exponer la plataforma como si el RBAC estuviera cerrado.
 
 ### 2.1. Matriz de Roles y Responsabilidades
 
@@ -74,6 +74,8 @@ El sistema implementa un esquema de Control de Acceso Basado en Roles (**RBAC**)
 
 ### 2.2. Flujo de Acceso Inicial y Asistente de Configuración (Setup Wizard)
 
+El asistente y las pantallas `/setup`/`/login` que se describen a continuación son una propuesta de producto; no constituyen el flujo web implementado actualmente. Los endpoints de autenticación del backend no sustituyen esas pantallas ni la autorización de todas las rutas.
+
 1. **Detección Automática de Primer Inicio:**  
    Al desplegar la plataforma por primera vez, el sistema detecta si la base de datos PostgreSQL contiene una cuenta de Administrador configurada y si existe un enlace válido con Google Cloud Storage.
 2. **Asistente de Bienvenida (`/setup`):**  
@@ -86,58 +88,75 @@ El sistema implementa un esquema de Control de Acceso Basado en Roles (**RBAC**)
 
 ---
 
-## 3. Módulo 1: Dashboard MLOps de Doble Campeón
+### 2.3. Validación JWT del Backend y Límites de Seguridad
 
-El **Dashboard MLOps** es la pantalla central de visualización del estado del arte productivo del laboratorio. Ofrece un panorama integral que combina el rendimiento analítico de los modelos, la telemetría del hardware on-premise y la salud de las conexiones externas.
+- El consumidor acepta tokens compactos con segmentos Base64URL, firma HMAC válida y algoritmo declarado `HS256`. Cabecera y payload deben ser objetos JSON.
+- `exp` es obligatorio y debe ser una fecha numérica finita, no texto ni booleano. El token vence cuando el reloj alcanza esa fecha, incluyendo expiraciones fraccionarias; no se concede un segundo adicional por redondeo.
+- En `/api/auth/me`, `sub` debe representar un ID positivo como texto decimal ASCII dentro del rango `INTEGER` de PostgreSQL. Sujetos malformados o fuera de rango se rechazan con HTTP 401, sin convertir booleanos/decimales en usuarios ni responder 500 por esa entrada.
+- Un token válido no concede un rol por su payload: el perfil y rol retornados proceden del usuario activo en la BD. Las pruebas de esta fase usan claves/reloj sintéticos y una app de rutas aislada, no el lifespan productivo.
+- Validar un JWT **no aplica por sí solo permisos al resto de rutas**. Registro, login web, autenticación/roles, CORS y límites de cargas/peticiones siguen pendientes. No equivale a una auditoría JWT completa ni a una garantía de despliegue seguro.
+
+### 2.4. Configuración Explícita y Alta Inicial sin Defaults
+
+- Para ejecución local, el operador configura `JWT_SECRET_KEY` en el entorno del backend; debe ser una clave aleatoria, única y de al menos 32 bytes UTF-8, nunca la antigua clave pública ni valores de pruebas. La [plantilla](../../backend/.env.example) deja estos campos vacíos: copiarla sin completar configuración no habilita sesiones.
+- Login verifica configuración antes de comprobar credenciales y actualizar último acceso. Sin clave válida, login y comprobación de perfil con token devuelven HTTP 503 sanitizado; no se emite una sesión usando un fallback. La clave se lee al importar el módulo: aplicar valores reales y reiniciar requiere autorización separada.
+- Si la tabla de usuarios está vacía, `ADMIN_INITIAL_EMAIL` y `ADMIN_INITIAL_PASSWORD` deben ser explícitos. La contraseña tiene un mínimo de 12 caracteres y no puede ser la antigua contraseña pública; el email tiene validación básica, no verificación de propiedad. Sin esos datos no se crea un administrador por defecto.
+- Si ya hay usuarios, no se restablecen contraseñas, promueven roles ni añaden administradores automáticamente. Recuperar un administrador ausente y rotar credenciales históricas requieren operaciones propias autorizadas.
+- Se acordó que solo administradores autenticados podrán crear cuentas; **`/api/auth/register` aún no aplica esa política**, y su implementación, login web y permisos se pospusieron a la etapa de funcionalidades nuevas. No exponer esta transición como seguridad cerrada. Compose ya propaga las variables explícitas de autenticación desde su entorno; configurar `backend/.env` por sí solo no habilita un contenedor que no monta ese archivo. JSON externos quedan excluidos del contexto backend, sin cambiar montajes runtime; véase [ADR 0043](../adr/0043-configuracion-runtime-y-contexto-sin-credenciales.md).
+- Decisión y límites: [ADR 0042](../adr/0042-configuracion-explicita-de-autenticacion.md). No se modificó ningún `.env` real, cuenta desplegada, configuración de servicios ni credencial GCS.
+
+## 3. Módulo 1: Dashboard de Observaciones y Referencias Experimentales
+
+El **Dashboard MLOps** combina registros consultados en BD y telemetría de hardware disponible. No verifica GCS ni ejecuta inferencia para declarar salud, ni busca/carga checkpoints al abrirse. Los desconocidos aparecen como «No disponible» y las referencias experimentales se presentan separadas: no son métricas de producción actuales.
+
+El esquema siguiente es ilustrativo, no un recibo de operación o disponibilidad:
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
 │                              PANEL PRINCIPAL DEL DASHBOARD                             │
 ├──────────────────────────────────────────┬─────────────────────────────────────────────┤
-│  [1] TARJETAS KPI DE PRODUCCIÓN          │  [2] MODELOS CAMPEONES MULTI-DOMINIO        │
-│  • Macro F1 Bioacústica: 88.68%          │  • Bioacústica: Tri-Model Super-Ensemble    │
-│  • Exactitud Motores: 81.16%             │  • Industrial: All-RMS Car Engine Ensemble  │
-│  • Datasets GCS: 1,211 audios            │                                             │
+│  [1] MÉTRICAS REGISTRADAS EN BD          │  [2] REFERENCIAS EXPERIMENTALES HISTÓRICAS  │
+│  • Accuracy/pérdida del último registro  │  • Bioacústica: referencia documentada      │
+│  • Cero observado ≠ dato desconocido    │  • Industrial: referencia documentada      │
+│  • Audios/datasets: filas BD            │  • No acreditan disponibilidad actual      │
 │  • Inferencias Registradas: PostgreSQL   │                                             │
 ├──────────────────────────────────────────┴─────────────────────────────────────────────┤
 │  [3] CURVA DE CONVERGENCIA TEMPORAL (Loss & Accuracy SVG Interactivo)                  │
 ├──────────────────────────────────────────┬─────────────────────────────────────────────┤
 │  [4] TELEMETRÍA DE HARDWARE ON-PREMISE   │  [5] MONITOR DE SALUD DEL SISTEMA           │
-│  • GPU: NVIDIA GeForce RTX (VRAM %)      │  • PostgreSQL: Conectado (Pool OK)          │
-│  • CPU: Carga de núcleos y temperatura   │  • GCS Bucket: Conectado (Lectura/Escritura)│
-│  • RAM Host: Memoria física activa       │  • Motor Inferencia: Residente en VRAM      │
+│  • GPU/CPU/RAM según lectura disponible │  • BD: consulta observada o no confirmada   │
+│  • Sensor no disponible ≠ carga normal  │  • GCS/inferencia: no comprobados           │
+│  • Fallo de refresh: snapshot advertido │  • Sin activación implícita de modelos      │
 └──────────────────────────────────────────┴─────────────────────────────────────────────┘
 ```
 
-### 3.1. Concepto del Doble Campeón Multi-Dominio
+### 3.1. Referencias Históricas Multi-Dominio
 
-A diferencia de sistemas acústicos monolíticos, F.A.M.A. reconoce que los sonidos biológicos y los ruidos de maquinaria industrial poseen características matemáticas fundamentalmente distintas:
+F.A.M.A. conserva referencias de experimentos de bioacústica y motores, con `source="historical_reference"` y aviso de que no acreditan disponibilidad actual. Las cifras son las referencias ya existentes, no un benchmark nuevo ni una lectura del modelo activo; la consolidación de artefactos de OE5 sigue pendiente:
 * **Campeón de Bioacústica (Aves Chilenas):**
   * **Arquitectura:** Super-Ensamble Tri-Modelo Heterogéneo (**EfficientNet-B0** [55%] + **ConvNeXt-Nano** [30%] + **ResNet-34d** [15%]).
-  * **Rendimiento:** **88.68% F1-Score Macro**, **88.31% de Exactitud Global**, **90.15% Precision Macro**.
-  * **Métricas Operativas:** Clasificación sobre 15 especies chilenas con audios de 5.0 segundos remuestreados a 22.05 kHz y ventaneo denso TTA (hop de 1.0s).
+  * **Referencia presentada:** **88.68% Macro F1**, **88.31% Accuracy**, 15 clases históricas.
 * **Campeón de Diagnóstico Industrial (Motores Vehiculares):**
   * **Arquitectura:** Super-Ensamble Tri-Modelo All-RMS-Balanced (**ResNet-34d** [60%] + **EfficientNet-B0** [10%] + **PANNs-CNN14** [30%]).
-  * **Rendimiento:** **81.16% de Exactitud en Test**, **81.44% Balanced F1-Score**.
-  * **Métricas Operativas:** Diagnóstico de 13 fallas mecánicas de combustión y accesorios con audios de 2.0 segundos muestreados a 32 kHz con balanceo energético RMS y calibración Softmax.
+  * **Referencia presentada:** **81.16% Accuracy**, **80.33% Macro F1**, 13 clases históricas, según la referencia existente del backend. No confundirla con otras métricas de informes como Balanced F1 ni inferir que esos pesos/configuración están en uso.
 
 ### 3.2. Panel de Métricas e Indicadores Clave (KPIs)
-* **Precisión y F1-Score del Modelo Campeón:** Indica el umbral matemático más alto validado en la base de datos relacional.
-* **Tasa de Pérdida Mínima:** El mejor valor de entropía cruzada / pérdida focal alcanzado en validación.
-* **Volumen de Datos Gestionados:** Total de archivos de audio catalogados en Google Cloud Storage y su volumen en Megabytes/Gigabytes.
-* **Contador de Inferencias en Terreno:** Registro acumulado de peticiones atendidas por el backend y almacenadas en la tabla `prediccion`.
+* **Accuracy y pérdida registradas:** Campos del último `Modelo` por ID, identificados como último registro, no activo, ganador ni necesariamente entrenamiento exitoso. No se deducen función de pérdida/optimizador ni convergencia óptima.
+* **Volumen registrado:** Conteos reales de filas de dataset/audio en BD; no es auditoría de objetos GCS ni de archivos locales. BD vacía muestra cero; ausencia/fallo de lectura puede dejar null/«No disponible».
+* **Predicciones y confianza media:** Conteo de registros de `prediccion` y media de sus confidencias. Sin predicciones la media es desconocida; una media observada de cero no se sustituye por un ejemplo. Confianza no es certeza diagnóstica.
 
 ### 3.3. Curvas de Convergencia Dinámicas
-El gráfico central renderiza la evolución histórica de épocas de entrenamiento utilizando trazado vectorial SVG:
-* **Línea Esmeralda (Accuracy):** Muestra el porcentaje de aciertos sobre el conjunto de validación época tras época.
-* **Línea Ámbar (Loss):** Refleja la reducción del error del optimizador (AdamW).
+El gráfico central usa solo las filas de métricas del último modelo registrado; acepta una sola época y conserva sus números reales. Sin métricas no dibuja una curva de referencia ni inventa diez épocas:
+* **Accuracy y Loss:** Valores registrados, sin atribuirles otro conjunto de evaluación, optimizador o configuración que no conste en la fuente.
 * **Interactividad:** Al posar el puntero del ratón sobre cualquier punto del gráfico, se despliega una tarjeta flotante con la métrica precisa de esa época, facilitando la detección de sobreajuste (*overfitting*).
 
 ### 3.4. Telemetría de Hardware y Diagnóstico de Salud
 Ubicado en el cuadrante inferior:
-* **Uso de GPU y VRAM:** Informa la memoria de video asignada al Super-Ensamble y la disponible para nuevos entrenamientos.
-* **Temperatura y Carga de CPU:** Monitorea la estabilidad térmica de la estación de trabajo física.
-* **Semáforo de Servicios:** Luces indicadoras de disponibilidad para PostgreSQL (Base de datos), GCS (Data Lake), Motor de Inferencia (PyTorch) y Aceleración de Hardware (CUDA).
+* **GPU/CPU/RAM:** Presenta la lectura disponible; VRAM de PyTorch no se atribuye automáticamente a un ensamble concreto ni garantiza capacidad para otro entrenamiento. Si falta hardware no se muestra CPU normal/cero como observación.
+* **Temperatura:** Solo se presenta si el sensor la informa; no se inventa una temperatura ni se confunde el sensor GPU con temperatura CPU.
+* **Salud:** BD consultada/degradada/desconocida describe esta lectura. GCS y motor de inferencia quedan no comprobados; el dashboard no activa, carga ni certifica modelos. Estado de ensamble sin fuente queda desconocido, no «Tríada Operativa» o «Modo Individual» por defecto.
+* **Actualización fallida:** Puede conservarse el último snapshot, con aviso explícito de que no es una lectura actual. No se garantiza orden entre polls concurrentes ni un SLA de refresco.
+* **Actividad:** Predicciones y último registro de modelo seleccionados desde BD, sin ingestas ficticias ni promesa de auditoría cronológica completa. Un modelo registrado no equivale a entrenamiento exitoso. Véase [ADR 0049](../adr/0049-dashboard-con-observaciones-y-origen-explicito.md).
 
 ---
 
@@ -202,18 +221,32 @@ Para descargar audios desde Google Cloud hacia el hardware local:
    Active el interruptor *"Generar tensores espectrales optimizados (.pt) post-descarga"*. Cuando esta opción está habilitada, el pipeline no solo descarga el archivo `.wav`, sino que ejecuta inmediatamente la conversión a espectrogramas Mel normalizados en GPU, guardándolos en la caché local para acelerar el entrenamiento subsecuente en más de un 400%.
 3. **Pulsar [Sincronizar Seleccionados]:**  
    El sistema inicia la descarga diferencial:
-   * **Idempotencia:** Si un archivo ya existe localmente con el mismo tamaño y suma de verificación, se omite (`skipped`).
-   * Solo los audios faltantes o actualizados se transfieren por la red (`downloaded`).
+   * **Contenido confirmado:** Un archivo existente se omite (`skipped`) cuando coincide con MD5/CRC32C declarado por el proveedor; igual tamaño por sí solo no prueba identidad. Si el checksum no está disponible, se descarga conservadoramente.
+   * La descarga usa un temporal y comprueba tamaño/checksum disponibles antes de reemplazar el destino. Un fallo normal conserva el archivo anterior; no implica recuperación garantizada ante caída ni una transacción con la BD.
+   * Solo las transferencias aceptadas se registran como audios. Ante errores el dataset queda `sincronizacion_parcial`, conservando registros previos y sus contadores. Un mismo basename en clases distintas conserva identidades por objeto completo, no se fusiona. Esto no prueba existencia cloud actual ni calidad acústica; véase [ADR 0044](../adr/0044-sincronizacion-por-contenido-y-publicacion-local.md).
+   * La descarga por servicio rechaza nombres/rutas no portables y destinos que resuelven fuera de raw/dataset; mantiene subdirectorios remotos completos y omite marcadores de directorio. No renombra objetos históricos ni garantiza protección frente a sustitución concurrente de enlaces. La API devuelve 422 sanitizado para nombres/destinos inválidos; valida todos los nombres del lote antes de contactar cloud, sin prometer atomicidad frente a fallos posteriores: [ADR 0045](../adr/0045-rutas-portables-y-confinadas-en-descarga.md).
+   * El I/O de descarga usa rutas extendidas Windows y un nombre temporal corto, sin alterar la identidad ni el `local_dir` informado. Conflictos de directorios y errores operativos por archivo se informan como fallo («No se pudo sincronizar el archivo.») y permiten continuar el lote. Si no se puede eliminar un temporal, esa entrada incluye `cleanup_pending=true`: no significa que se haya limpiado ni que exista recuperación automática. Fallos de raíz del dataset y otros lectores/preprocesamiento siguen fuera de esta garantía.
+   * La API distingue `completed`, `partial` y `failed` según errores declarados de descarga, SQL y preprocesamiento; `total_failed` solo cuenta descargas fallidas. HTTP 200 no implica éxito completo. El panel presenta esos resultados y advierte persistencia/preprocesamiento/limpieza pendientes sin anunciar éxito integral. Si preprocesar falla, el dataset queda `sincronizacion_parcial`, no `procesado`. Un recorrido vacío sin errores puede seguir dando completed: no acredita datos listos para entrenar.
 4. **Consola de Telemetría en Vivo:** Una consola interactiva en la parte inferior de la pantalla muestra el progreso en tiempo real, contabilizando archivos procesados y reportando cualquier inconsistencia de red.
 
-### 4.4. Procedimiento de Ingesta Ascendente (Subir Audios Locales a la Nube)
-Cuando el equipo de campo regresa con nuevas grabaciones:
-1. Haga clic en el botón superior **[+ Subir Audios a GCS]**.
-2. En el modal emergente:
-   * **Seleccionar Dataset Destino:** Elija un dataset existente o introduzca el nombre de uno nuevo.
-   * **Definir la Etiqueta de Clase:** Seleccione una especie de la lista precargada (15 aves chilenas oficiales), una falla mecánica (13 fallas vehiculares) o escriba una clase personalizada.
-   * **Arrastrar o Seleccionar Archivos:** Arrastre uno o múltiples archivos de audio en formato `.wav`.
-3. Presione **[Iniciar Carga Segura]**: Los audios se subirán directamente al bucket institucional y se registrarán de inmediato en la base de datos PostgreSQL.
+### 4.4. Ingesta Ascendente por API (sin formulario de carga directa en la vista actual)
+
+La vista actual no ofrece el botón/modal de subida directa descrito en versiones anteriores del manual: el flujo visual vigente pasa por inferencia y revisión de audios. No se reintroduce ese formulario en este afinamiento. Para operación controlada existe POST `/api/ingestion/upload`; antes de exposición deben cerrarse los permisos y límites de recepción pendientes.
+
+1. Preparar grabaciones WAV, MP3, FLAC u OGG con extensión correspondiente al contenedor, legibles y con al menos un frame. La validación estructural no certifica especie/falla correcta ni calidad acústica.
+2. Enviar multipart con `dataset_name`, `class_label` (opcional, default `General`) y uno o más campos `files`. No se debe usar la API con datos/servicios reales sin autorización y configuración operativa previa.
+3. Comprobar el resultado: 422 sanitizado por nombres/audio inválidos, 413 por exceso de tamaño y 503 por configuración inválida de límites. Antes de transferir se valida todo el lote. Si ya se llegó a transferir, comprobar también los resultados parciales descritos abajo: un fallo SQL puede dejar objetos subidos sin registro actualizado; no existe transacción distribuida ni rollback cloud automático.
+   * La lectura propia del backend se hace en bloques de hasta 1 MiB; defaults configurables de 64 MiB por archivo y 256 MiB por suma de contenidos del lote mediante `FAMA_UPLOAD_MAX_FILE_BYTES`/`FAMA_UPLOAD_MAX_BATCH_BYTES`. No incluyen framing/campos multipart, ni RAM total, CPU, concurrencia o recepción previa del parser/proxy; no equivalen al requisito de datasets de 50 GB.
+   * La subida comprueba cabecera/extensión y recorre la decodificación en bloques. Un archivo vacío, sin frames, ilegible o incompatible rechaza el lote entero antes de la primera transferencia. La sincronización descendente no adopta automáticamente este filtro; véase [ADR 0048](../adr/0048-cargas-acusticas-validadas-y-acotadas.md).
+   * La identidad registrada es la URI completa del objeto: un mismo nombre en clases diferentes conserva audios distintos. Reemplazar el mismo objeto actualiza sus bytes sin aumentar el número de audios; los contadores se calculan desde las filas persistidas.
+   * `uploaded` cuenta transferencias, no objetos únicos: repetir un destino dos veces en un lote produce dos transferencias pero un solo registro final. No hay garantía nueva para escritores concurrentes.
+   * Dataset, clase y filenames deben ser componentes portables, no rutas; no se recortan ni renombran silenciosamente. La clase omitida usa `General`; vacía explícita se rechaza. Un nombre inválido produce 422 sanitizado y se valida todo el lote antes de transferir el primer archivo.
+   * Se aplican los límites del esquema en caracteres: dataset/clase 100, filename 255 y URI completa 500. En descarga, objetos que excedan esos límites se informan como fallidos antes de transferir. No equivalen a límites de tamaño de audio ni garantizan que todas las rutas locales Windows sean escribibles.
+   * Si falla la persistencia, `db_persisted=false` y `db_error` informa «No se pudieron guardar los registros de ingesta.» sin SQL ni detalles internos; también aplica a sincronización. No borra automáticamente el objeto subido/archivo descargado. Se mantiene HTTP 200 para resultados de lote: revisar `status` y estos campos, no interpretar el código como éxito integral.
+   * En subida, un fallo por archivo permite continuar el lote: `uploaded`/`files` describen transferencias confirmadas, `failed`/`errors` describen las fallidas con texto fijo. `status` distingue `completed`, `partial` y `failed`, incluyendo fallo de persistencia; se mantiene HTTP 200 para esos resultados. BD registra solo aceptados y conserva registros anteriores, con estado del último intento `subida_parcial`/`subido`. `db_persisted=true` no significa que todas las transferencias funcionaran. Sin BD solicitada por servicio, completed solo confirma transferencias. No se promete rollback cloud ni ausencia remota tras una excepción del proveedor: [ADR 0046](../adr/0046-resultados-parciales-en-subida-de-audios.md).
+   * La extracción de frecuencia/duración usa cabecera, sin remuestrear. La subida además valida por decodificación antes de aceptar. En sync pueden quedar desconocidos como null y duración cero observada; un reemplazo aceptado actualiza esos datos. Un reemplazo ilegible por upload ahora se rechaza sin alterar el anterior. No se certifica silencio, calidad ni aptitud para entrenamiento.
+   * El inspector HTTP existente `/api/ingestion/datasets/{dataset}/files` añade `recorded_metadata` con `sample_rate_hz`, `duration_seconds` y `source="database"`. Describe el registro de BD, no una comprobación actual de GCS; históricos pueden conservar valores de implementaciones anteriores. Si no se dispone del registro o falla la consulta, devuelve null sin detalles SQL. La asociación usa URI completa y conserva rutas planas/anidadas, sin inventar directorio General. No se añade pantalla nueva: [ADR 0047](../adr/0047-metadatos-acusticos-observados-y-lectura-registrada.md).
+   * Seguridad/portabilidad integral de otros lectores, validación de formatos de sync, límites de recepción/recursos completos, fallos de cliente/bucket, sanitización de otros errores y reconciliación de resultados ambiguos siguen pendientes. Ni una carga estructuralmente válida ni HTTP 200 son una certificación de seguridad/calidad.
 
 ---
 
@@ -274,6 +307,12 @@ Si el usuario detecta divergencia en la pérdida o necesita liberar la GPU para 
 ### 5.4. Activación de Modelos en Caliente (`CU_INV_05`)
 En la parte inferior del módulo se ubica la tabla de **Historial de Modelos**:
 * El historial consultado con BD incluye `dataset_id`, `dataset_name`, `filename`, `sha256` y métricas persistidas por época. Los nombres amigables, versiones y fichas descriptivas no sustituyen esa evidencia de origen ni la inspección del checkpoint.
+* Para entrenamientos web nuevos, `accuracy` y `loss` corresponden a la misma época del checkpoint seleccionado por mayor accuracy de validación. Un empate conserva la primera época seleccionada, aunque después baje la pérdida. El payload identifica `checkpoint_epoch` y `checkpoint_val_loss`; las curvas siguen conservando todas las épocas ejecutadas. No se corrigen automáticamente métricas de modelos históricos.
+* La ficha técnica muestra física, clases y función de pérdida explícitas del checkpoint local, no presets deducidos del dominio. Si falta el archivo o no se puede leer/validar esa metadata, muestra «No disponible» conservando el registro del modelo. El tamaño procede de la BD o, si no está registrado, del archivo local observado; no acredita integridad actual. La consulta deserializa metadata en CPU con almacenamiento tensorial mapeado: formatos/runtime incompatibles quedan desconocidos, sin fallback de carga completa. Véase [ADR 0040](../adr/0040-ficha-tecnica-sin-valores-inventados.md).
+
+**Compatibilidad PoC:** el predictor respeta pool_type declarado y el formato histórico model_type sin architecture conserva el default avg de su lector de evaluación; el formato actual mantiene GeM por defecto. No se rellenan parámetros ni se omiten claves incompatibles. n_mels legacy explícito se respeta y valida; no se deduce normalización GPU/HPSS/TTA por filename. Sigue identificado como legacy_librosa. [ADR 0050](../adr/0050-compatibilidad-explicita-de-checkpoints-poc.md).
+
+**Evidencia real limitada:** el benchmark CPU autorizado consiguió cargar ese checkpoint tras la corrección, pero el único audio permitido terminó en filtro de ruido antes de la red. Su tiempo no es latencia de clasificación ni prueba de exactitud o cumplimiento de 3 s. [Informe/recibos](../modelos/benchmark_local_cpu_20261016.md). Otros casos, GPU o servicios requieren autorización nueva.
 * **[Activar Modelo]** invoca `POST /api/training/models/{id}/activate`: cambia la selección activa en BD e intenta actualizar el predeterminado del registro. Es una operación explícita, separada del descubrimiento del catálogo.
 * No garantiza carga inmediata, latencia inferior a un segundo ni inferencia correcta. La implementación confirma el commit de BD **antes** de intentar registrar los predictores; no ofrece atomicidad entre activación y carga.
 * `register_from_db()` en `training.py:1246` pertenece a `set_active_model()`, no al worker de entrenamiento. No es un mecanismo de publicación al finalizar el trabajo.
@@ -326,11 +365,13 @@ PostgreSQL real, bloqueo de fila, durabilidad del filesystem desplegado, GPU, en
 
 El **Módulo de Predicción** (`RF_05`, `RF_06`, `CU_INV_06`, `CU_INV_07`) es la herramienta diaria de clasificación en tiempo real. Integra visualización acústica interactiva, inferencia con el catálogo dinámico `ModelRegistry` y el ciclo de mejora continua MLOps.
 
+El esquema es ilustrativo, no evidencia de inferencia, activación o latencia real. La vista vigente presenta selección de catálogo y datos declarados; consultar estado no carga ni activa modelos. El tiempo de la última solicitud HTTP no es forward neuronal ni tiempo hasta pantalla.
+
 ```text
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
 │                              VISTA DE PREDICCIÓN ACÚSTICA                              │
 ├────────────────────────────────────────────────────────────────────────────────────────┤
-│  [1] SELECCIÓN DE DOMINIO Y MODELO ACTIVO                                              │
+│  [1] SELECCIÓN DE CATÁLOGO (NO ACTIVA EL MODELO EN BD)                                 │
 │  • Dominio: [ Aves Chilenas (Bioacústica) ▼ ]                                         │
 │  • Modelo:  [ Tri-Model Super-Ensemble (88.68% F1) - Oficial Tesis ▼ ]                │
 ├────────────────────────────────────────────────────────────────────────────────────────┤
@@ -345,7 +386,7 @@ El **Módulo de Predicción** (`RF_05`, `RF_06`, `CU_INV_06`, `CU_INV_07`) es la
 │  [4] RESULTADO DE LA CLASIFICACIÓN                                                     │
 │  Especie Predicha:  CHUCAO (Scelorchilus rubecula)                                     │
 │  Nivel de Confianza: 94.6%   ████████████████████████░░░                               │
-│  Latencia del Modelo: 0.14 segundos (Inferencia TTA en GPU)                            │
+│  Última solicitud HTTP: No medida antes de ejecutar (no es forward ni pantalla)       │
 ├────────────────────────────────────────────────────────────────────────────────────────┤
 │  [5] CICLO DE RETROALIMENTACIÓN ACTIVA (RF_06 / CU_INV_07)                             │
 │  ¿Es correcta la clasificación realizada por la Inteligencia Artificial?               │
@@ -355,10 +396,9 @@ El **Módulo de Predicción** (`RF_05`, `RF_06`, `CU_INV_06`, `CU_INV_07`) es la
 ```
 
 ### 6.1. Selección de Dominio y Estrategia de Inferencia
-Antes de cargar el archivo, el usuario puede seleccionar el contexto analítico mediante dos selectores superiores conectados dinámicamente con el `ModelRegistry`:
-* **Dominio Bioacústico:** Dirigido a la clasificación de aves chilenas (15 especies) utilizando el Ensamble Tri-Modelo calibrado a 22.05 kHz.
-* **Dominio Industrial:** Dirigido al diagnóstico preventivo de maquinaria y motores de vehículos (13 fallas mecánicas) calibrado a 32 kHz.
-* **Modelo Específico:** Permite alternar entre el Ensamble Campeón, modelos individuales o paquetes independientes (*Model Bundles*).
+Antes de cargar el archivo, el usuario elige una entrada del selector de catálogo agrupado en bioacústica/industrial. El grupo es presentación de catálogo, no activación. Clases y contrato acústico proceden de la entrada seleccionada: no se fijan universalmente 15/13 clases ni 22.05/32 kHz por pertenecer a un grupo. Si no hay modelo/metadatos, se muestra desconocido, no un contrato de ejemplo.
+
+Las métricas son declaradas por el catálogo, no una evaluación nueva ni prueba de conjunto test. La vista no inventa accuracy/F1/precision o composición/pesos de una tríada para sustituir ausencias. Coherencia de perfiles/bundles y métricas históricas del catálogo conservan las validaciones pendientes.
 
 #### 6.1.1. Disponibilidad del Catálogo y Activación
 
@@ -397,12 +437,13 @@ La vista muestra avisos parciales en español; una advertencia no revierte la pe
 
 - Predicción solicita el catálogo al montar la vista, recuperar el foco y volver al estado visible.
   No realiza polling; regresar a la ventana permite reintentar una consulta fallida.
-- Conserva una selección que siga presente. Si desaparece, prioriza opciones del mismo dominio
-  y después opciones existentes del catálogo; no inventa un modelo de respaldo.
+- Solo permite elegir entradas con `has_weights=true`; las demás aparecen deshabilitadas como «no disponible». Conserva una selección que siga presente y con pesos confirmados. Si desaparece o pierde disponibilidad, prioriza opciones disponibles del mismo dominio y después del catálogo; no inventa un modelo de respaldo.
 - Descarta respuestas y errores tardíos con generación de solicitudes y cancelación.
   Retira los listeners y cancela la solicitud pendiente al desmontar la vista.
 - Ante un fallo de actualización, incluido HTTP 503, mantiene el catálogo previo y muestra el error.
   Un catálogo vacío no inventa opciones ni habilita inferencia.
+- Si ninguna entrada confirma pesos, muestra «Sin modelos con pesos disponibles» y bloquea ejecución. Tras verificar/restaurar archivos, volver a la ventana permite consultar su disponibilidad actualizada. Esto no implica activación en BD ni inferencia garantizada.
+- El backend revalida disponibilidad al recibir `POST /api/predict`: ausencia/estado desconocido o error de comprobación devuelven HTTP 503 antes de subir el audio a GCS. No garantiza ausencia de subidas ante corrupción, incompatibilidad o fallos descubiertos después del preflight; véase [ADR 0041](../adr/0041-seleccion-con-pesos-confirmados.md).
 - El refresco no cambia la identificación del modelo ya ejecutado ni los metadatos de clases
   usados por el feedback de ese resultado. Elegir otro modelo afecta la siguiente inferencia.
 
@@ -425,6 +466,20 @@ No se efectuaron despliegue, reset, migración, cambios GCS ni entrenamiento rea
 Las verificaciones de almacenamiento y reparación histórica continúan separadas y requieren su propia autorización.
 La decisión y sus alternativas están en el [ADR 0017](../adr/0017-disponibilidad-y-activacion-modelos.md).
 
+#### 6.1.4. Estado legacy y atribución de la respuesta
+
+GET `/api/model-info` es lectura pasiva del servicio bioacústico legacy: no deserializa pesos ni prueba inferencia. No existe `/api/ensemble/status` y no se añade otra ruta. `state_scope`/`domain_supported` evitan atribuir su estado a un predictor industrial o a otro modelo del catálogo.
+
+- **Registro:** `is_registered` true/false/null describe la consulta de una fila enlazada al dataset/arquitectura; no se toma texto de clase como asociación ni se presta una fila de otro dominio. Accuracy/loss son de ese registro BD, no del objeto cargado.
+- **Archivo:** `weights_available` describe archivo local no vacío dentro de raíces admitidas, sin validar contenido. `weights_source` identifica la referencia consultada. Remoto, ruta no cubierta o error no se convierten en ausencia confirmada.
+- **Carga:** `is_loaded` observa módulos en memoria del servicio. El alias legado `is_ready` y `ensemble_ready` solo resumen esa carga, no operatividad, calidad, activación o vigencia de versiones. Dos componentes son ensamble parcial. Un flag fallback sin módulo no prueba respaldo disponible.
+- **Procedencia:** `recorded_checkpoint`/`loaded_checkpoint` separan archivos potencialmente distintos. Las clases llevan fuente y pueden ser referencias/listados/cachés no verificados; no sustituyen validación del contrato completo ni orden de etiquetas.
+- **Vista:** sin estado de ámbito/dominio coincidente, no se inventan tarjetas. Presencia, registro y carga se muestran separados; un fallback legacy observado no se atribuye al predictor seleccionado. La disponibilidad del selector sigue exigiendo `has_weights=true`, con revalidación posterior en POST.
+- **Ejecución:** la respuesta de predicción identifica al predictor invocado por `modelo_id`, `modelo` y `modelos_ejecutados`. `modelos_activos` es alias de compatibilidad, no lista de componentes con ponderaciones ni activación. Puede haber retorno de filtros antes de la red: invocación no prueba forward. El rol fallback no se elimina por `is_mock=false`.
+- **Tiempo:** «Última solicitud» empieza sin medición y luego usa el contador HTTP existente hasta recibir respuesta; no incluye necesariamente lectura JSON/render ni acredita ≤3 s hasta pantalla. No se reutilizan 0.14 s o cifras de benchmark como placeholder.
+
+Clientes anteriores deben manejar null, pesos desconocidos y modos unavailable/partial_ensemble, y no interpretar aliases legados como salud global. Concurrencia/reload atómico, identidad por versión/hash y parser exhaustivo siguen pendientes. Véase [ADR 0051](../adr/0051-estado-legacy-pasivo-y-ejecucion-atribuida.md).
+
 ### 6.2. Inspección Acústica con Oscilograma Interactivo
 Al arrastrar o seleccionar un archivo de audio:
 1. **Decodificación Local en el Navegador:** El cliente web utiliza la **Web Audio API** estándar de HTML5 para decodificar la señal cruda en milisegundos sin sobrecargar la red.
@@ -436,6 +491,8 @@ Al arrastrar o seleccionar un archivo de audio:
 4. **Reproductor Sincronizado:** Permite reproducir el sonido mediante un cabezal de lectura (*playhead*) que recorre la forma de onda en tiempo real, con capacidad de hacer clic en cualquier sección para saltar a ese punto temporal.
 
 ### 6.3. Ejecución de la Predicción
+**Descripción histórica, no garantía operativa vigente.** Se conserva el flujo original siguiente como antecedente. TTA, ejecución en VRAM, latencia inferior a 0.8 segundos y persistencia inmediata no quedan acreditadas por los recibos CPU ni por las pruebas aisladas. Para disponibilidad, atribución y límites de tiempo, consulte la sección 6.1; el recibo CPU terminó en `noise` sin observar forward del clasificador. La confianza no equivale a certeza diagnóstica.
+
 Haga clic en **[Analizar Señal Acústica]**:
 1. El archivo se envía al endpoint `POST /api/predict`.
 2. El backend procesa el audio aplicando **Test-Time Augmentation (TTA)** con ventaneo denso sobre la red activa en VRAM.
@@ -446,6 +503,8 @@ Haga clic en **[Analizar Señal Acústica]**:
    * **Persistencia Relacional:** La predicción queda registrada de forma inmediata en la tabla `prediccion` de PostgreSQL con su respectivo identificador numérico único (`db_id`).
 
 ### 6.4. El Ciclo de Retroalimentación Activa y Telemetría de Errores (`RF_06`, `CU_INV_07`)
+
+**Flujo histórico y objetivo de producto.** El diagrama y los pasos siguientes no son un contrato HTTP vigente ni prueba de un ciclo completo ejecutado. La copia cloud depende de localizar el audio y completar la transferencia; la captura/curación no implica reentrenamiento automático ni mejora de calidad demostrada. Consulte el [estado acotado y pendientes](estado_actual_y_pendientes.md) para los límites de la evidencia retenida.
 
 Este componente es la piedra angular del **MLOps continuo** en F.A.M.A. Garantiza que el conocimiento experto del ornitólogo o del mecánico retroalimente a la IA cuando esta comete un error taxonómico o de diagnóstico.
 
@@ -500,6 +559,8 @@ sequenceDiagram
 ---
 
 ## 8. Conclusiones y Valor Metodológico para la Tesis
+
+**Conclusión histórica de diseño, no cierre operativo.** Las afirmaciones siguientes expresan el objetivo metodológico del manual original. No acreditan producción, cumplimiento integral de requisitos ni el ciclo E2E hasta un nuevo modelo; la integración y sus comprobaciones finales siguen pendientes.
 
 El desarrollo y puesta en marcha de esta plataforma cumple cabalmente con los compromisos metodológicos de la **Actividad 12** de la memoria de grado:
 * **Trazabilidad de Requerimientos:** Cada botón, gráfico y flujo web corresponde exactamente a los Requerimientos Funcionales `RF_01` al `RF_06` y a la Especificación de Casos de Uso del Capítulo 5 de la Tesis.

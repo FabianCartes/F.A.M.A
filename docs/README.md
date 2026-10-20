@@ -17,7 +17,7 @@ docs/
 ├── arquitectura/                # Diseño de sistemas, pipelines, MLOps y despliegue
 ├── limites/                     # Límites matemáticos, físicos y problemas conocidos
 ├── manuales/                    # Manual de usuario, revisión, despliegue e índices canónicos
-├── adr/                         # Architectural Decision Records (ADR 0001 a 0038)
+├── adr/                         # Architectural Decision Records (ADR 0001 a 0051)
 ├── receipts/                    # Recibos técnicos reproducibles en formato JSON (RDD)
 ├── duplicados-exactos/           # Tarea acotada: admisión de feedback sin duplicados SHA-256
 └── images/                      # Diagramas, matrices de confusión y gráficos vectoriales
@@ -28,13 +28,15 @@ docs/
 ## Índice Detallado por Carpeta
 
 * [`seguimiento-frontend-definitivo.md`](./seguimiento-frontend-definitivo.md): Contrato de preprocesamiento de nuevos checkpoints estándar, evidencia focal y límites antes de entrenar.
+**Para retomar el proyecto:** [`manuales/estado_actual_y_pendientes.md`](./manuales/estado_actual_y_pendientes.md) separa correcciones, pendientes, funcionalidades aplazadas, benchmark CPU autorizado y validación operacional necesaria (corte del 17 de octubre de 2026).
+* [`integracion-afinamiento-integral.md`](./manuales/integracion-afinamiento-integral.md): Alcance, decisiones de conciliación y verificación nueva de la integración; no sustituye las evidencias históricas.
 
 ### Tarea acotada: duplicados exactos
 * [`docs/duplicados-exactos/tasks.md`](./duplicados-exactos/tasks.md): Alcance, decisiones locales, checklist y evidencia TDD de aprobación de feedback sin duplicados SHA-256; revisión y commit pendientes del orquestador.
 
 ### 1. [`docs/tesis/`](./tesis/) — Tesis y Objetivos de Grado
 * [`VIDA_01_CINF_FINAL_PT_2026_1_CARTES.md`](./tesis/VIDA_01_CINF_FINAL_PT_2026_1_CARTES.md) / [`.pdf`](./tesis/VIDA_01_CINF_FINAL_PT_2026_1_CARTES.pdf): Memoria formal de proyecto de título.
-* [`analisis_objetivos_fama.md`](./tesis/analisis_objetivos_fama.md): Matriz de trazabilidad de los Objetivos Específicos (OE1 a OE5) y Requerimientos Funcionales (RF_01 a RF_06) vs. el código real.
+* [`analisis_objetivos_fama.md`](./tesis/analisis_objetivos_fama.md): Matriz de objetivos/RF/RNF con actualización acotada del 15 de octubre de 2026; distingue correcciones comprobadas, antecedentes históricos y objetivos operativos aún no acreditados.
 
 ### 2. [`docs/modelos/`](./modelos/) — Modelado Acústico y Experimentos
 Informes técnicos de evolución de los modelos de Machine Learning (desde la PoC al 88.68% F1):
@@ -56,6 +58,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`17_arquitectura_super_ensamble_y_modelos_preentrenados.md`](./modelos/17_arquitectura_super_ensamble_y_modelos_preentrenados.md): Fundamentación teórica de modelos preentrenados.
 * [`fundamentacion_tecnica_efficientnet_focal_loss.md`](./modelos/fundamentacion_tecnica_efficientnet_focal_loss.md): Justificación matemática de Focal Loss y EfficientNet.
 * [`informe_consolidado_diagnostico_acustico_motores.md`](./modelos/informe_consolidado_diagnostico_acustico_motores.md): Informe del ensamble industrial para fallas de motor (81.16% Acc).
+* [`benchmark_local_cpu_20261016.md`](./modelos/benchmark_local_cpu_20261016.md): Mediciones reales CPU autorizadas de un audio/checkpoint; fallos de compatibilidad conservados, preprocesamiento medido y predictor detenido por filtro de ruido, sin acreditar forward, latencia hasta pantalla ni 50 GB.
 
 ### 3. [`docs/arquitectura/`](./arquitectura/) — Arquitectura de Software y MLOps
 * [`large-zip-gcs-plan.md`](./arquitectura/large-zip-gcs-plan.md): Texto íntegro del plan original de 17 secciones; su estado inicial es histórico y prevalece el seguimiento de implementación.
@@ -68,6 +71,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`data6-identidad-preparacion.md`](./arquitectura/data6-identidad-preparacion.md): Alcance de implementación de DATA-6, identidad inmutable de preparación, decisiones de agrupación y avance de verificación; operaciones sobre datos reales excluidas.
 * [`publicacion-evaluaciones-coherentes.md`](./arquitectura/publicacion-evaluaciones-coherentes.md): Seguimiento de diagnóstico de publicación, par de evaluaciones aplicable, preflight y reversión; implementación y verificaciones por hitos.
 * [`identidad-checkpoint-cargado.md`](./arquitectura/identidad-checkpoint-cargado.md): Contrato de identidad de carga, bloqueo de registros sin hash y evidencia de implementación; no implica atestación continua de tensores.
+* [`CONTEXT.md`](./arquitectura/CONTEXT.md): Glosario de catálogo, disponibilidad/activación, inferencia/confianza, alta de administrador, metadatos y referencias experimentales históricas.
 * [`03_orquestador_fastapi_gcs_postgresql.md`](./arquitectura/03_orquestador_fastapi_gcs_postgresql.md): Arquitectura del orquestador backend con FastAPI.
 * [`04_saneamiento_y_transcodificacion_audio.md`](./arquitectura/04_saneamiento_y_transcodificacion_audio.md): Pipeline de saneamiento y normalización de audio crudo.
 * [`18_soporte_multimodelo_backend_rdd.md`](./arquitectura/18_soporte_multimodelo_backend_rdd.md): Desacoplamiento de inferencia con Patrón Strategy y ModelRegistry.
@@ -127,11 +131,17 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`model-11-evaluation-migration.json`](./receipts/model-11-evaluation-migration.json): Historial inmutable de migración EVAL-6B: primera creación exitosa, segundo intento fallido y contexto de la corrección verificada.
 * [`model-11-real-evaluation.json`](./receipts/model-11-real-evaluation.json): Informe inmutable de reevaluación real del modelo #11 (val/test); no certifica calidad ni autoriza activación.
 
+### Evidencia de benchmark local controlado
+* [`benchmark_local_cpu_20261015.json`](./receipts/benchmark_local_cpu_20261015.json): Intento inicial: preprocesamiento real medido, fallo de carga de pesos conservado.
+* [`benchmark_local_cpu_inference_20261016.json`](./receipts/benchmark_local_cpu_inference_20261016.json): Repetición autorizada, mismo fallo de carga; no latencia de inferencia válida.
+* [`checkpoint_compatibility_metadata_20261016.json`](./receipts/checkpoint_compatibility_metadata_20261016.json): Diagnóstico restringido de metadatos/tensores del único checkpoint autorizado; no benchmark.
+* [`benchmark_local_cpu_inference_validated_20261016.json`](./receipts/benchmark_local_cpu_inference_validated_20261016.json): Carga corregida y ruta del predictor medida con filtro noise; no forward neuronal ni medición navegador/API.
+
 ### 6. [`docs/adr/`](./adr/) — Architectural Decision Records
 * [`ADR 0029`](./adr/0029-migracion-metadatos-importacion.md): Migración aditiva verificable separada del cambio de lectores; datos originales conservados y sincronización histórica sin generaciones no elevada a prueba cloud.
 * [`ADR 0028`](./adr/0028-importacion-local-docker.md): Excepción Docker local explícita, peer exacto del frontend y puertos limitados al host loopback; no sustituye autenticación en servidores compartidos.
 * [`ADR 0027`](./adr/0027-importaciones-zip-privadas-locales.md): Importaciones ZIP privadas, persistencia local recuperable y sincronización posterior con verificación de contenido.
-Registro de las 25 decisiones de arquitectura fundamentales del sistema:
+Registro de decisiones de arquitectura; los ADR de afinamiento se renumeran como 0039–0051 para conservar las identidades existentes:
 * [`ADR 0025`](./adr/0025-compatibilidad-semantica-evaluacion.md): Compatibilidad semántica explícita del predictor; hashes fuente diagnósticos y reevaluación obligatoria para pasar del contrato anterior.
 * [`ADR 0024`](./adr/0024-entrenamiento-aislado-spawn.md): Aislamiento del entrenamiento, supervisión independiente del sondeo, conciliación de salida y límites de cancelación/persistencia.
 * `ADR 0001`: Migración de AudioCNN a EfficientNet-B0.
@@ -157,3 +167,16 @@ Registro de las 25 decisiones de arquitectura fundamentales del sistema:
 * [`ADR 0022`](./adr/0022-evaluaciones-finales-estandarizadas.md): EVAL-1 a EVAL-6B cerrados en sus alcances; #11 reevaluado en desarrollo con calidad no aprobada. No implica upgrade de tabla v1, API/browser desplegados ni aprobación/activación; backend global 12 FAIL/5 SKIP pendiente.
 * [`ADR 0021`](./adr/0021-ejecucion-acotada-inferencia.md): Cupo y temporal conservados por el trabajo real del predictor tras cancelación HTTP; límites de GCS y cierre explícitos.
 * [`ADR 0020`](./adr/0020-raices-fisicas-en-localizadores-publicos.md): Getters raw/processed y PathResolver conservan la escritura declarada; raíces con alias no soportadas para asociación canónica, sin validación física implícita ni migración de URIs.
+* [`ADR 0039`](./adr/0039-preprocesamiento-efectivo-en-checkpoints.md): Configuración acústica efectiva y perfil versionado de la rama de afinamiento; en integración prevalece `preprocessing_contract` para checkpoints estándar de trabajos y la vía explícita se limita a checkpoints no procedentes de trabajos, sin reinterpretación de pesos históricos.
+* [`ADR 0040`](./adr/0040-ficha-tecnica-sin-valores-inventados.md): Ficha técnica con metadatos explícitos del checkpoint, lectura mapeada y valores desconocidos sin presets fabricados; contrato backend/cliente/UI sin migraciones ni certificación de inferencia.
+* [`ADR 0041`](./adr/0041-seleccion-con-pesos-confirmados.md): Entradas indisponibles visibles/deshabilitadas, selección con pesos confirmados y preflight HTTP antes de GCS; no cambia la política de inclusión ni certifica inferencia.
+* [`ADR 0042`](./adr/0042-configuracion-explicita-de-autenticacion.md): Clave JWT y alta inicial sin defaults, indisponibilidad explícita y preservación de cuentas; política de creación por administradores acordada pero aún pendiente de aplicación.
+* [`ADR 0043`](./adr/0043-configuracion-runtime-y-contexto-sin-credenciales.md): Configuración existente transmitida por Compose y JSON externos excluidos del contexto backend; prueba con cliente Docker/API simulada, sin imágenes ni servicios reales.
+* [`ADR 0044`](./adr/0044-sincronizacion-por-contenido-y-publicacion-local.md): Sincronización por MD5/CRC32C, staging local y registros de transferencias aceptadas por URI completa; preservación previa y límites de atomicidad.
+* [`ADR 0045`](./adr/0045-rutas-portables-y-confinadas-en-descarga.md): Componentes portables, jerarquía y confinamiento en descarga; extensión a nombres de subida y HTTP 422 sanitizado; límites de concurrencia y atomicidad de lotes.
+* [`ADR 0046`](./adr/0046-resultados-parciales-en-subida-de-audios.md): Subida continúa por archivo y registra solo transferencias confirmadas; subida/sync distinguen completed/partial/failed y la UI informa fallos de etapa; sin rollback cloud ni atomicidad.
+* [`ADR 0047`](./adr/0047-metadatos-acusticos-observados-y-lectura-registrada.md): Ingesta registra frecuencia/duración de cabecera o null, sin defaults ficticios; inspector existente devuelve metadatos registrados por URI, no certificación del objeto actual.
+* [`ADR 0048`](./adr/0048-cargas-acusticas-validadas-y-acotadas.md): Subida valida WAV/MP3/FLAC/OGG por decodificación en bloques y limita contenidos a 64 MiB/archivo y 256 MiB/lote configurables; no acredita RNF de 50 GB ni protección integral de recepción.
+* [`ADR 0049`](./adr/0049-dashboard-con-observaciones-y-origen-explicito.md): Dashboard sin métricas/eventos ficticios, origen en último modelo registrado, desconocidos explícitos y referencias históricas separadas; GET sin cargar checkpoints ni alterar activación.
+* [`ADR 0050`](./adr/0050-compatibilidad-explicita-de-checkpoints-poc.md): Predictor respeta pooling declarado, formato PoC model_type/avg y bandas Mel explícitas, preservando carga estricta y default del formato actual; sin reescribir artefactos.
+* [`ADR 0051`](./adr/0051-estado-legacy-pasivo-y-ejecucion-atribuida.md): GET model-info observa registro/archivo/carga sin deserializar; ámbitos legacy diferenciados, métricas con origen y predicción atribuida al predictor invocado, sin activar ni fabricar componentes.

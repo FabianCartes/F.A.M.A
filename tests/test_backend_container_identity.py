@@ -3,6 +3,8 @@ from pathlib import Path
 import os
 import subprocess
 import unittest
+import tempfile
+from test_container_configuration import isolated_environment
 
 try:
     import yaml
@@ -32,19 +34,23 @@ class ContainerIdentity(unittest.TestCase):
             key: backend[key] for key in ("user", "tmpfs") if key in backend
         }}}}
         source = yaml.safe_dump(minimal)
-        base_env = {"PATH": os.defpath, "HOME": "/nonexistent"}
-        command = ["docker", "compose", "--env-file", "/dev/null", "-f", "-", "config"]
-        for identity in ({}, {"HOST_UID": "", "HOST_GID": ""},
-                         {"HOST_UID": "12345"}, {"HOST_GID": "23456"}):
+        with tempfile.TemporaryDirectory(prefix="fama-identity-", dir=os.environ.get("FAMA_TEST_TEMP_ROOT")) as temporary:
+            directory = Path(temporary)
+            base_env = isolated_environment(directory)
+            empty = directory / "empty.env"
+            empty.write_text("")
+            command = ["docker", "compose", "--env-file", str(empty), "-f", "-", "config"]
+            for identity in ({}, {"HOST_UID": "", "HOST_GID": ""},
+                             {"HOST_UID": "12345"}, {"HOST_GID": "23456"}):
+                result = subprocess.run(command, input=source, text=True, capture_output=True,
+                                        cwd=directory, env={**base_env, **identity})
+                self.assertNotEqual(result.returncode, 0, result.stdout)
             result = subprocess.run(command, input=source, text=True, capture_output=True,
-                                    env={**base_env, **identity})
-            self.assertNotEqual(result.returncode, 0, result.stdout)
-        result = subprocess.run(command, input=source, text=True, capture_output=True,
-                                env={**base_env, "HOST_UID": "12345", "HOST_GID": "23456"})
-        self.assertEqual(result.returncode, 0, result.stderr)
-        resolved = yaml.safe_load(result.stdout)["services"]["backend"]
-        self.assertEqual(resolved["user"], "12345:23456")
-        self.assertIn("/home/fama:uid=12345,gid=23456,mode=0700", resolved["tmpfs"])
+                                    cwd=directory, env={**base_env, "HOST_UID": "12345", "HOST_GID": "23456"})
+            self.assertEqual(result.returncode, 0, result.stderr)
+            resolved = yaml.safe_load(result.stdout)["services"]["backend"]
+            self.assertEqual(resolved["user"], "12345:23456")
+            self.assertIn("/home/fama:uid=12345,gid=23456,mode=0700", resolved["tmpfs"])
 
     def test_image_default_is_nonroot_with_owned_work_directories(self):
         text = (ROOT / "backend/Dockerfile").read_text()

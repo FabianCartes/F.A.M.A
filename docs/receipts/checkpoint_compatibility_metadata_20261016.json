@@ -1,0 +1,93 @@
+{
+  "kind": "authorized_restricted_checkpoint_diagnostic",
+  "started_at": "2026-10-16T13:01:45.281146+00:00",
+  "authorization": {
+    "inputs": [
+      "backend/checkpoints/efficientnet_gpu_pipeline_35e_best.pt"
+    ],
+    "local_cpu_only": true,
+    "network_allowed": false,
+    "training_allowed": false,
+    "real_database_or_gcs_allowed": false
+  },
+  "budgets": {
+    "seconds": 180,
+    "cpu_threads": 2,
+    "rss_bytes": 1610612736,
+    "minimum_available_ram_bytes": 2147483648,
+    "watchdog_poll_seconds": 0.1,
+    "hard_os_limit": false
+  },
+  "host": {
+    "os": "Windows-11-10.0.26200-SP0",
+    "cpu": "Intel64 Family 6 Model 186 Stepping 3, GenuineIntel",
+    "logical_cpus": 12,
+    "physical_cpus": 10,
+    "ram_total_bytes": 16847933440,
+    "ram_available_before_bytes": 4476399616
+  },
+  "scope_limits": [
+    "checkpoint metadata only; no prediction or latency benchmark",
+    "not browser/API end-to-end",
+    "not a 50 GB or concurrency test",
+    "no accuracy/F1 evaluation",
+    "only whitelisted metadata and tensor names/shapes are reported",
+    "watchdog is sampled, not a hard memory limit"
+  ],
+  "reproduction": {
+    "python_executable": "C:\\Users\\fabia\\.pyenv\\pyenv-win\\versions\\3.12.10\\python.exe",
+    "worker_source": "\"\"\"Restricted diagnostic of the one checkpoint already authorized for this task.\"\"\"\nimport hashlib\nimport json\nfrom pathlib import Path\nimport sys\n\nROOT = Path(sys.argv[1]).resolve()\nOUTPUT = Path(sys.argv[2])\ncheckpoint = ROOT / \"backend/checkpoints/efficientnet_gpu_pipeline_35e_best.pt\"\n\n\ndef digest():\n    value = hashlib.sha256()\n    with checkpoint.open(\"rb\") as source:\n        for chunk in iter(lambda: source.read(1024 * 1024), b\"\"):\n            value.update(chunk)\n    return value.hexdigest()\n\n\ndef reject_network(event, args):\n    if event == \"socket.connect\":\n        raise PermissionError(\"Network disabled for checkpoint diagnostic\")\n\n\nsys.addaudithook(reject_network)\nbefore = digest()\nreport = {\"scope\": \"restricted_checkpoint_metadata_only\", \"benchmark_timings\": None}\ntry:\n    import torch\n    torch.set_num_threads(2)\n    torch.set_num_interop_threads(1)\n    payload = torch.load(checkpoint, weights_only=True, map_location=\"cpu\", mmap=True)\n    report[\"payload_keys\"] = list(payload)\n    report[\"selected_metadata\"] = {\n        key: payload[key] for key in (\"architecture\", \"model_type\", \"pool_type\", \"n_mels\", \"audio_config\", \"preprocessing\", \"use_gpu_frontend\")\n        if key in payload\n    }\n    report[\"classes_count\"] = len(payload.get(\"classes\", []))\n    state = payload.get(\"model_state_dict\") or payload.get(\"state_dict\") or {}\n    report[\"state_key_count\"] = len(state)\n    report[\"pool_parameter_keys\"] = [key for key in state if \"global_pool\" in key]\n    report[\"selected_tensor_shapes\"] = {key: list(value.shape) for key, value in state.items()\n        if key in (\"backbone.conv_stem.weight\", \"backbone.classifier.weight\", \"backbone.classifier.bias\")}\n    report[\"status\"] = \"completed\"\nexcept Exception as exc:\n    report[\"status\"] = \"failed\"\n    report[\"error\"] = {\"type\": type(exc).__name__, \"message\": str(exc)}\nfinally:\n    report[\"checkpoint_sha256_before\"] = before\n    report[\"checkpoint_sha256_after\"] = digest()\n    report[\"checkpoint_unchanged\"] = report[\"checkpoint_sha256_after\"] == before\n    OUTPUT.write_text(json.dumps(report, indent=2), encoding=\"utf-8\")\n",
+    "monitor_source": "\"\"\"Watch only our child; never stop or modify another process/service.\"\"\"\nimport datetime\nimport json\nimport os\nfrom pathlib import Path\nimport platform\nimport subprocess\nimport sys\nimport time\n\nimport psutil\n\nROOT = Path(sys.argv[1]).resolve()\nWORK = Path(__file__).resolve().parent\nRSS_LIMIT = int(1.5 * 1024**3)\nMIN_AVAILABLE = 2 * 1024**3\nTIMEOUT = 180\nresult_path = WORK / \"worker_result.json\"\nreceipt_path = ROOT / \"docs/receipts/checkpoint_compatibility_metadata_20261016.json\"\nif receipt_path.exists():\n    raise FileExistsError(\"Refusing to overwrite an existing benchmark receipt\")\nenvironment = os.environ.copy()\nfor key in (\"GOOGLE_APPLICATION_CREDENTIALS\", \"GCP_KEY_PATH\", \"GCS_BUCKET_NAME\", \"XC_API_KEY\",\n            \"JWT_SECRET_KEY\", \"ADMIN_INITIAL_EMAIL\", \"ADMIN_INITIAL_PASSWORD\"):\n    environment.pop(key, None)\nenvironment.update({\"CUDA_VISIBLE_DEVICES\": \"\", \"DATABASE_URL\": \"sqlite://\", \"PYTHON_DOTENV_DISABLED\": \"1\",\n                    \"PYTHONDONTWRITEBYTECODE\": \"1\", \"HF_HUB_OFFLINE\": \"1\", \"TRANSFORMERS_OFFLINE\": \"1\",\n                    \"MPLBACKEND\": \"Agg\", \"TORCH_FORCE_WEIGHTS_ONLY_LOAD\": \"1\"})\nfor key in (\"OMP_NUM_THREADS\", \"MKL_NUM_THREADS\", \"OPENBLAS_NUM_THREADS\", \"NUMEXPR_NUM_THREADS\", \"NUMBA_NUM_THREADS\"):\n    environment[key] = \"2\"\nfor key in (\"NUMBA_CACHE_DIR\", \"TORCH_HOME\", \"HF_HOME\", \"MPLCONFIGDIR\", \"XDG_CACHE_HOME\"):\n    directory = WORK / key.lower()\n    directory.mkdir(exist_ok=True)\n    environment[key] = str(directory)\nmemory = psutil.virtual_memory()\nreceipt = {\"kind\": \"authorized_restricted_checkpoint_diagnostic\", \"started_at\": datetime.datetime.now(datetime.timezone.utc).isoformat(),\n           \"authorization\": {\"inputs\": [\"backend/checkpoints/efficientnet_gpu_pipeline_35e_best.pt\"],\n                             \"local_cpu_only\": True, \"network_allowed\": False, \"training_allowed\": False,\n                             \"real_database_or_gcs_allowed\": False},\n           \"budgets\": {\"seconds\": TIMEOUT, \"cpu_threads\": 2, \"rss_bytes\": RSS_LIMIT,\n                       \"minimum_available_ram_bytes\": MIN_AVAILABLE, \"watchdog_poll_seconds\": 0.1,\n                       \"hard_os_limit\": False},\n           \"host\": {\"os\": platform.platform(), \"cpu\": platform.processor(), \"logical_cpus\": psutil.cpu_count(),\n                    \"physical_cpus\": psutil.cpu_count(logical=False), \"ram_total_bytes\": memory.total,\n                    \"ram_available_before_bytes\": memory.available},\n           \"scope_limits\": [\"checkpoint metadata only; no prediction or latency benchmark\", \"not browser/API end-to-end\",\n                            \"not a 50 GB or concurrency test\", \"no accuracy/F1 evaluation\",\n                            \"only whitelisted metadata and tensor names/shapes are reported\",\n                            \"watchdog is sampled, not a hard memory limit\"],\n           \"reproduction\": {\"python_executable\": sys.executable,\n                            \"worker_source\": (WORK / \"worker.py\").read_text(encoding=\"utf-8\"),\n                            \"monitor_source\": Path(__file__).read_text(encoding=\"utf-8\")}}\npeak_rss = 0\nminimum_available = memory.available\nabort = None\nstarted = time.monotonic()\nif memory.available < MIN_AVAILABLE:\n    abort = \"insufficient_available_memory_before_start\"\n    receipt[\"diagnostic_executed\"] = False\nelse:\n    with (WORK / \"stdout.log\").open(\"w\", encoding=\"utf-8\") as out, (WORK / \"stderr.log\").open(\"w\", encoding=\"utf-8\") as err:\n        process = subprocess.Popen([sys.executable, str(WORK / \"worker.py\"), str(ROOT), str(result_path)],\n                                   cwd=WORK, env=environment, stdout=out, stderr=err)\n        receipt[\"diagnostic_executed\"] = True\n        observed = psutil.Process(process.pid)\n        while process.poll() is None:\n            available = psutil.virtual_memory().available\n            minimum_available = min(minimum_available, available)\n            try:\n                info = observed.memory_info()\n                peak_rss = max(peak_rss, info.rss, getattr(info, \"peak_wset\", 0))\n            except psutil.NoSuchProcess:\n                break\n            if time.monotonic() - started > TIMEOUT:\n                abort = \"time_budget_exceeded\"\n            elif peak_rss > RSS_LIMIT:\n                abort = \"rss_budget_exceeded\"\n            elif available < MIN_AVAILABLE:\n                abort = \"available_memory_budget_exceeded\"\n            if abort:\n                process.kill()\n                break\n            time.sleep(0.1)\n        process.wait(timeout=10)\n        receipt[\"child_exit_code\"] = process.returncode\nreceipt[\"abort_reason\"] = abort\nreceipt[\"observed_peak_rss_bytes\"] = peak_rss\nreceipt[\"minimum_available_ram_bytes\"] = minimum_available\nreceipt[\"monitor_elapsed_seconds\"] = time.monotonic() - started\nreceipt[\"worker_result\"] = json.loads(result_path.read_text(encoding=\"utf-8\")) if result_path.exists() else None\nreceipt[\"status\"] = \"aborted\" if abort else (receipt[\"worker_result\"] or {}).get(\"status\", \"failed\")\nreceipt_path.parent.mkdir(exist_ok=True)\nwith receipt_path.open(\"x\", encoding=\"utf-8\") as output:\n    json.dump(receipt, output, indent=2, ensure_ascii=True)\nsummary = {key: value for key, value in receipt.items() if key != \"reproduction\"}\nsummary[\"receipt_path\"] = str(receipt_path.relative_to(ROOT))\nprint(json.dumps(summary, indent=2, ensure_ascii=True))\n"
+  },
+  "diagnostic_executed": true,
+  "child_exit_code": 0,
+  "abort_reason": null,
+  "observed_peak_rss_bytes": 207278080,
+  "minimum_available_ram_bytes": 4294574080,
+  "monitor_elapsed_seconds": 2.3280000000086147,
+  "worker_result": {
+    "scope": "restricted_checkpoint_metadata_only",
+    "benchmark_timings": null,
+    "payload_keys": [
+      "epoch",
+      "model_type",
+      "n_mels",
+      "mixup_alpha",
+      "mixup_prob",
+      "model_state_dict",
+      "optimizer_state_dict",
+      "val_acc",
+      "val_loss",
+      "classes",
+      "label_to_idx",
+      "idx_to_label"
+    ],
+    "selected_metadata": {
+      "model_type": "efficientnet_b0",
+      "n_mels": 128
+    },
+    "classes_count": 15,
+    "state_key_count": 360,
+    "pool_parameter_keys": [],
+    "selected_tensor_shapes": {
+      "backbone.conv_stem.weight": [
+        32,
+        1,
+        3,
+        3
+      ],
+      "backbone.classifier.weight": [
+        15,
+        1280
+      ],
+      "backbone.classifier.bias": [
+        15
+      ]
+    },
+    "status": "completed",
+    "checkpoint_sha256_before": "79ce8e3e574296e360814b89151cf5666ab0b1050e297baed06b3762dfef94b6",
+    "checkpoint_sha256_after": "79ce8e3e574296e360814b89151cf5666ab0b1050e297baed06b3762dfef94b6",
+    "checkpoint_unchanged": true
+  },
+  "status": "completed"
+}

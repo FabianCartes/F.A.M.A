@@ -52,7 +52,7 @@ class ModelMetadata(BaseModel):
     dataset_name: Optional[str] = Field(None, description="Destino canónico de almacenamiento verificado; null si desconocido")
     classes: List[str] = Field(default_factory=list, description="Lista de clases/especies reconocidas")
     is_default: bool = Field(False, description="Indica si es el modelo por defecto del sistema")
-    has_weights: bool = Field(True, description="Indica si los pesos binarios (.pt) existen físicamente en disco y están listos")
+    has_weights: bool = Field(True, description="Disponibilidad de pesos reportada por el adaptador; no garantiza compatibilidad, integridad ni inferencia exitosa")
     checkpoint_sha256: Optional[str] = Field(
         None,
         description="SHA-256 de los bytes actuales del archivo checkpoint registrado; no acredita los parámetros cargados en memoria",

@@ -1,19 +1,26 @@
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 _BACKEND_ROOT = Path(__file__).resolve().parent.parent
 if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
 
-from app.main import app
+from app.main import get_dashboard_stats
+from app.database import get_db
+from app.models.prediction import Prediccion
 from app.services.dashboard import DashboardService
+from tests.test_dashboard_truthful_stats import dashboard_environment
 
 
 @pytest.fixture
-def client():
+def client(dashboard_environment):
+    _, db = dashboard_environment
+    app = FastAPI()
+    app.add_api_route("/api/dashboard/stats", get_dashboard_stats, methods=["GET"])
+    app.dependency_overrides[get_db] = lambda: db
     with TestClient(app) as test_client:
         yield test_client
 
@@ -66,19 +73,23 @@ def test_get_dashboard_stats_endpoint(client):
     assert "inference_engine" in health
 
 
-def test_dashboard_service_aggregation():
+def test_dashboard_service_aggregation(dashboard_environment):
     """Valida la agregación de KPIs y cálculo de confianza promedio en DashboardService."""
     service = DashboardService()
-    mock_db = MagicMock()
+    _, db = dashboard_environment
 
     # Simular Predicciones
-    p1 = MagicMock(id_prediccion=1, etiqueta_predicha="Chucao", confianza=0.95, ruta_audio_prueba="chucao.wav", fecha_prediccion=None)
-    p2 = MagicMock(id_prediccion=2, etiqueta_predicha="Chercán", confianza=0.85, ruta_audio_prueba="chercan.wav", fecha_prediccion=None)
-    mock_db.query.return_value.count.return_value = 2
+    db.add_all([
+        Prediccion(etiqueta_predicha="Chucao", confianza=0.95, ruta_audio_prueba="chucao.wav"),
+        Prediccion(etiqueta_predicha="Chercán", confianza=0.85, ruta_audio_prueba="chercan.wav"),
+    ])
+    db.commit()
 
     # Invocar get_stats
-    stats = service.get_stats(db=mock_db)
+    stats = service.get_stats(db=db)
 
     assert "kpis" in stats
     assert stats["kpis"]["total_predictions"] >= 0
     assert stats["system_health"]["database"] in ["connected", "operational", "degraded"]
+    assert stats["kpis"]["total_predictions"] == 2
+    assert stats["kpis"]["avg_confidence"] == 90.0

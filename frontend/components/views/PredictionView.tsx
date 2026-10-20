@@ -16,13 +16,20 @@ interface AudioWaveformStats {
 interface ActiveModelInfo {
   name: string;
   weight: number;
-  checkpoint: string;
+  checkpoint: string | null;
 }
 
 interface TriadModelStatus {
   name: string;
-  weight: number;
+  weight: number | null;
   is_ready: boolean;
+  is_loaded?: boolean;
+  is_registered?: boolean | null;
+  weights_available?: boolean | null;
+  weights_source?: string;
+  recorded_checkpoint?: string | null;
+  loaded_checkpoint?: string | null;
+  metrics_source?: string | null;
   accuracy: number | null;
   loss: number | null;
   checkpoint: string | null;
@@ -31,7 +38,7 @@ interface TriadModelStatus {
 
 interface BackendModelStatus {
   is_fallback: boolean;
-  model_name: string;
+  model_name: string | null;
   device: string;
   active_models: ActiveModelInfo[];
   total_classes: number;
@@ -39,13 +46,15 @@ interface BackendModelStatus {
   selected_domain?: string;
   available_domains?: string[];
   ensemble_ready?: boolean;
-  active_mode?: "ensemble" | "individual" | "fallback";
+  active_mode?: "ensemble" | "partial_ensemble" | "individual" | "fallback" | "unavailable";
+  state_scope?: string;
+  domain_supported?: boolean;
   missing_models?: string[];
   triad_status?: TriadModelStatus[];
 }
 
 interface PredictionResponse {
-  detalles?: { dataset_name?: string | null; loaded_checkpoint_sha256?: unknown } | null;
+  detalles?: { dataset_name?: string | null; loaded_checkpoint_sha256?: unknown; device?: string | null } | null;
   filename: string;
   gcp_upload: boolean;
   db_id?: number | null;
@@ -55,6 +64,7 @@ interface PredictionResponse {
   modelo_id?: string;
   is_fallback?: boolean;
   modelos_activos?: string[];
+  modelos_ejecutados?: string[];
 }
 
 interface HistoryItem {
@@ -522,6 +532,9 @@ export default function PredictionView() {
   const selectedModel = useMemo(() => {
     return availableModels.find((m) => m.id === selectedModelId);
   }, [availableModels, selectedModelId]);
+  const selectedModelHasWeights = selectedModel?.has_weights === true;
+  const hasSelectableModels = availableModels.some((model) => model.has_weights === true);
+  const hasUnavailableModels = availableModels.some((model) => model.has_weights !== true);
 
   const selectedDomain = useMemo(() => {
     return resolveModelDomain(selectedModel, selectedModelId);
@@ -573,6 +586,10 @@ export default function PredictionView() {
     return (selectedModelId || "").toLowerCase().includes("ensemble");
   }, [selectedModelId]);
 
+  const legacyStatusMatches = modelStatus?.state_scope === "legacy_bioacoustic_service"
+    && modelStatus.domain_supported === true && modelStatus.selected_domain === selectedDomain;
+  const legacyTriad = legacyStatusMatches ? modelStatus?.triad_status || [] : [];
+
   const currentClasses = useMemo(() => {
     if (selectedModel?.classes && selectedModel.classes.length > 0) {
       return selectedModel.classes;
@@ -597,11 +614,11 @@ export default function PredictionView() {
     return availableModels.filter((m) => resolveModelDomain(m, m.id) === "engine_diagnostics");
   }, [availableModels]);
 
-  // ODD: Telemetría estructurada al conmutar modelo activo
+  // Telemetría de selección; no modifica la activación del catálogo.
   useEffect(() => {
     if (selectedModel) {
       console.log(
-        `[PredictionView] Modelo activo: ${selectedModel.id} | Dominio: ${selectedDomain} | SR: ${selectedModel.target_sr}Hz | Ventana: ${selectedModel.duration_seconds}s`
+        `[PredictionView] Modelo seleccionado: ${selectedModel.id} | Grupo: ${selectedDomain} | SR: ${selectedModel.target_sr}Hz | Ventana: ${selectedModel.duration_seconds}s`
       );
     }
   }, [selectedModel, selectedDomain]);
@@ -651,13 +668,14 @@ export default function PredictionView() {
         setAvailableModels(models);
         setSelectionState((state) => {
           const current = state.modelId;
-          if (models.some((m) => m.id === current)) return state;
-          const defaultModel = models.find((m) => m.id === data.default_model_id);
+          const selectable = models.filter((m) => m.has_weights === true);
+          if (selectable.some((m) => m.id === current)) return state;
+          const defaultModel = selectable.find((m) => m.id === data.default_model_id);
           const domain = resolveModelDomain(priorCatalogue.find((m) => m.id === current), current);
-          const sameDomain = models.filter((m) => resolveModelDomain(m) === domain);
+          const sameDomain = selectable.filter((m) => resolveModelDomain(m) === domain);
           const replacement = current
-            ? sameDomain.find((m) => m.id === defaultModel?.id) || sameDomain[0] || defaultModel || models[0]
-            : defaultModel || models[0];
+            ? sameDomain.find((m) => m.id === defaultModel?.id) || sameDomain[0] || defaultModel || selectable[0]
+            : defaultModel || selectable[0];
           return {
             ...state,
             modelId: replacement?.id || "",
@@ -954,6 +972,10 @@ export default function PredictionView() {
       setError("No hay un modelo disponible para ejecutar la inferencia.");
       return;
     }
+    if (!selectedModelHasWeights) {
+      setError("No hay confirmación de pesos disponibles para el modelo seleccionado. Actualiza el catálogo antes de ejecutar.");
+      return;
+    }
 
     setLoading(true);
     setLatency(null);
@@ -1089,11 +1111,12 @@ export default function PredictionView() {
             >
               {availableModels.length > 0 ? (
                 <>
+                  {!hasSelectableModels && <option value="" disabled>Sin modelos con pesos disponibles</option>}
                   {bioModels.length > 0 && (
                     <optgroup label="Bioacústica (Aves Chilenas)">
                       {bioModels.map((m) => (
-                        <option key={m.id} value={m.id} className="bg-[#16171b] text-white">
-                          {m.name || m.id}
+                        <option key={m.id} value={m.id} disabled={m.has_weights !== true} className="bg-[#16171b] text-white">
+                          {m.name || m.id}{m.has_weights === true ? "" : " (no disponible)"}
                         </option>
                       ))}
                     </optgroup>
@@ -1101,8 +1124,8 @@ export default function PredictionView() {
                   {engineModels.length > 0 && (
                     <optgroup label="Diagnóstico Industrial (Motores)">
                       {engineModels.map((m) => (
-                        <option key={m.id} value={m.id} className="bg-[#16171b] text-white">
-                          {m.name || m.id}
+                        <option key={m.id} value={m.id} disabled={m.has_weights !== true} className="bg-[#16171b] text-white">
+                          {m.name || m.id}{m.has_weights === true ? "" : " (no disponible)"}
                         </option>
                       ))}
                     </optgroup>
@@ -1125,6 +1148,11 @@ export default function PredictionView() {
       </div>
 
       {catalogueError && <p role="alert" className="text-xs text-red-300">{catalogueError}</p>}
+      {hasUnavailableModels && (
+        <p role="status" aria-label="Disponibilidad de modelos" className="text-xs text-amber-300">
+          Los modelos sin confirmación de pesos disponibles aparecen deshabilitados. Verifica sus archivos y vuelve a esta ventana para actualizar el catálogo. La disponibilidad de archivos no garantiza una inferencia correcta.
+        </p>
+      )}
       {publicationErrors.length > 0 && (
         <div role="status" aria-label="Publicación de modelos" className="text-xs text-amber-300">
           <p>{publicationErrors.some((issue) => issue.code === "database_unavailable")
@@ -1193,8 +1221,8 @@ export default function PredictionView() {
             <div className="flex items-center gap-2">
               <span className="font-bold text-white">
                 {isEngineModel
-                  ? "Dominio Activo: Diagnóstico Acústico de Motores"
-                  : "Dominio Activo: Bioacústica de Aves Chilenas"}
+                  ? "Grupo seleccionado: Diagnóstico Acústico de Motores"
+                  : "Grupo seleccionado: Bioacústica de Aves Chilenas"}
               </span>
               <span
                 className={`text-[10px] font-mono px-2 py-0.5 rounded font-semibold border ${
@@ -1203,7 +1231,7 @@ export default function PredictionView() {
                     : "bg-emerald-950/80 border-emerald-700/60 text-emerald-300"
                 }`}
               >
-                {isEngineModel ? `${classesCount} Fallas Mecánicas` : `${classesCount} Especies Oficiales`}
+                {isEngineModel ? `${classesCount} Fallas Mecánicas` : `${classesCount} Clases declaradas`}
               </span>
             </div>
             <p className="text-[11px] text-gray-300 mt-0.5">
@@ -1221,7 +1249,7 @@ export default function PredictionView() {
 
       {/* Panel de Estado y Preparación de la Tríada o Especificaciones Individuales */}
       {isEnsemble ? (
-        <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4">
+        <section aria-label="Estado del ensamble legacy" className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#23252e]">
             <div className="flex items-center gap-2.5">
               <div className="p-2 rounded-lg bg-blue-950/50 border border-blue-800/40 text-blue-400">
@@ -1232,24 +1260,22 @@ export default function PredictionView() {
               <div>
                 <div className="flex items-center gap-2">
                   <h2 className="text-sm font-bold text-white">
-                    {isEngineModel
-                      ? "Estado del Super-Ensamble Acústico de Motores"
-                      : "Estado del Super-Ensamble Tri-Modelo Bioacústico"}
+                    Estado observado del servicio bioacústico legacy
                   </h2>
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-950/80 border border-emerald-800/80 text-emerald-400 flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Participantes disponibles en el resultado de inferencia
+                    {legacyStatusMatches ? `${legacyTriad.filter(model => model.is_loaded === true).length} componente(s) de tríada cargados` : "Carga no comprobada"}
                   </span>
                 </div>
                 <p className="text-[11px] text-gray-400 mt-0.5">
-                  Sin inferencia no se acredita participación ni ponderación.
+                  Observación puntual, no salud en tiempo real. Esta consulta no activa modelos ni certifica la composición o la inferencia del predictor seleccionado.
                 </p>
               </div>
             </div>
 
             <div className="text-[11px] text-gray-400 flex items-center gap-2 font-mono">
               <span className="bg-[#101114] px-2 py-1 rounded border border-[#23252e]">
-                Dispositivo: {modelStatus?.device || "Estado no disponible"}
+                Dispositivo configurado: {legacyStatusMatches ? modelStatus?.device || "No disponible" : "No disponible"}
               </span>
               <span className="bg-[#101114] px-2 py-1 rounded border border-[#23252e]">
                 {classesCount} {isEngineModel ? "fallas mecánicas" : "especies"}
@@ -1257,8 +1283,59 @@ export default function PredictionView() {
             </div>
           </div>
 
-          <p className="text-xs text-gray-400">Los participantes y pesos informados por la API se muestran únicamente junto al resultado correspondiente.</p>
-        </div>
+          {legacyStatusMatches && modelStatus?.is_fallback === true && (
+            <p className="text-xs text-amber-300">
+              Fallback cargado en el servicio legacy: {modelStatus.model_name || "nombre no disponible"}. No confirma uso por el predictor seleccionado.
+            </p>
+          )}
+
+          {/* Las 3 tarjetas de arquitectura de la Tríada */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {legacyTriad.length === 0 && <p className="text-xs text-gray-400">Estado del servicio legacy no disponible para esta selección.</p>}
+            {legacyTriad.map((model) => (
+              <article aria-label={model.name}
+                key={model.name}
+                className="rounded-lg p-3.5 border transition-all bg-[#111215] border-[#252834]"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-white font-mono">{model.name}</span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-950/60 border border-blue-800/50 text-blue-300 font-semibold">
+                    Peso cargado: {model.is_loaded === true && model.weight != null ? `${Math.round(model.weight * 100)}%` : "No disponible"}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] mb-2">
+                  <span className="text-gray-400">Carga observada:</span>
+                  <span className="text-gray-300 font-medium">
+                    {model.is_loaded === true ? "Cargado en memoria" : model.is_loaded === false ? "No cargado" : "No comprobada"}
+                  </span>
+                </div>
+                <p className="text-[10px] text-gray-400">Registro BD: {model.is_registered === true ? "Registrado" : model.is_registered === false ? "Sin registro" : "No comprobado"}</p>
+                <p className="text-[10px] text-gray-400">Archivo local: {model.weights_available === true ? "Presente, contenido no validado" : model.weights_available === false ? "Ausente" : "No comprobado"}</p>
+                <p className="text-[10px] text-gray-400">Referencia consultada: {model.weights_source === "loaded_checkpoint_file" ? "Archivo del modelo cargado" : model.weights_source === "registered_reference" ? "Registro BD" : model.weights_source === "configured_candidate" ? "Candidato configurado" : "No disponible"}</p>
+
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#1e2028] text-[10px]">
+                  <div>
+                    <span className="text-gray-500 block">Accuracy registrada (BD)</span>
+                    <span className="font-mono font-semibold text-white">
+                      {model.metrics_source === "database_record" && model.accuracy != null ? `${Number(model.accuracy).toFixed(1)}%` : "No disponible"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block">Checkpoint registrado</span>
+                    <span
+                      className="font-mono text-gray-300 truncate block"
+                      title={model.recorded_checkpoint || "No disponible"}
+                    >
+                      {model.recorded_checkpoint || "No disponible"}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-[10px] text-gray-400 truncate" title={model.loaded_checkpoint || "No disponible"}>Checkpoint cargado: {model.loaded_checkpoint || "No disponible"}</p>
+              </article>
+            ))}
+          </div>
+        </section>
       ) : (
         <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#23252e]">
@@ -1271,7 +1348,7 @@ export default function PredictionView() {
               <div>
                 <div className="flex items-center gap-2">
                   <h2 className="text-sm font-bold text-white">
-                    Especificaciones del Modelo Individual Activo
+                    Especificaciones del Modelo Individual Seleccionado
                   </h2>
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-950/80 border border-blue-800/80 text-blue-400 flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
@@ -1279,14 +1356,14 @@ export default function PredictionView() {
                   </span>
                 </div>
                 <p className="text-[11px] text-gray-400 mt-0.5">
-                  {selectedModel?.description || "Inferencia individual con parámetros acústicos dedicados"}
+                  {selectedModel?.description || "Descripción no declarada"}
                 </p>
               </div>
             </div>
 
             <div className="text-[11px] text-gray-400 flex items-center gap-2 font-mono">
               <span className="bg-[#101114] px-2 py-1 rounded border border-[#23252e]">
-                Dispositivo: {modelStatus?.device || "Estado no disponible"}
+                Dispositivo de esta selección: No comprobado
               </span>
               <span className="bg-[#101114] px-2 py-1 rounded border border-[#23252e]">
                 {classesCount} {isEngineModel ? "fallas mecánicas" : "especies"}
@@ -1297,7 +1374,7 @@ export default function PredictionView() {
           {/* Tarjetas de Especificaciones Individuales */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <div className="rounded-lg p-3.5 border bg-[#111215] border-[#252834]">
-              <span className="text-[10px] text-gray-500 block uppercase font-mono">Arquitectura / Backbone</span>
+              <span className="text-[10px] text-gray-500 block uppercase font-mono">Nombre / Identidad de catálogo</span>
               <span className="text-xs font-bold text-white font-mono mt-1 block truncate" title={selectedModel?.name || selectedModelId}>
                 {selectedModel?.name || selectedModelId}
               </span>
@@ -1311,7 +1388,7 @@ export default function PredictionView() {
               <div className="flex items-center gap-1.5 mt-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                 <span className="text-xs font-semibold text-emerald-400">
-                  {!selectedModel ? "Sin modelo disponible" : selectedModel.has_weights === true ? "Pesos publicados" : selectedModel.has_weights === false ? "Sin pesos publicados" : "Estado no disponible"}
+                  {!selectedModel ? "Sin modelo disponible" : selectedModelHasWeights ? "Archivos de pesos disponibles" : "Disponibilidad no confirmada"}
                 </span>
               </div>
               <span className="text-[10px] text-gray-400 mt-1 block">
@@ -1333,9 +1410,9 @@ export default function PredictionView() {
         </div>
       )}
 
-      {/* Fila 1: Modelo Activo (Super-Ensamble) + Cargar Audio */}
+      {/* Fila 1: Modelo seleccionado + Cargar Audio */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Tarjeta: Modelo Activo Actualizado con Datos Reales */}
+        {/* Tarjeta: datos declarados del modelo seleccionado */}
         <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -1356,7 +1433,7 @@ export default function PredictionView() {
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <span className="text-[10px] text-gray-400 font-mono bg-[#1d1f27] border border-[#2b2d38] px-1.5 py-0.5 rounded uppercase">
-                  {modelStatus?.device || "Estado no disponible"}
+                  Última respuesta: {result?.detalles?.device || "Dispositivo no informado"}
                 </span>
                 <span className="text-xs text-blue-400 font-mono bg-blue-950/50 border border-blue-800/50 px-2 py-0.5 rounded">
                   {Number.isInteger(selectedModel?.version) ? `Versión v${selectedModel?.version}` : "Versión no publicada"}
@@ -1441,7 +1518,7 @@ export default function PredictionView() {
                 {`Contrato publicado: ${formattedDuration} @ ${formattedSr}`}
               </span>
               <span className="text-gray-500 font-mono">
-                {isEngineModel ? `${classesCount} fallas mecánicas` : `${classesCount} especies`}
+                {classesCount} clases declaradas
               </span>
             </div>
             <button
@@ -1746,7 +1823,7 @@ export default function PredictionView() {
           <button
             type="button"
             onClick={handleExecuteInference}
-            disabled={loading || !file || !selectedModel}
+            disabled={loading || !file || !selectedModelHasWeights}
             className="mt-4 w-full py-2.5 px-4 rounded-lg text-xs font-semibold text-white bg-[#2b2d35] hover:bg-[#343740] active:bg-[#23242b] disabled:opacity-40 disabled:cursor-not-allowed border border-[#373a46] transition-all flex items-center justify-center gap-2 shadow-sm"
           >
             {loading ? (
@@ -1823,7 +1900,16 @@ export default function PredictionView() {
                 </section>
                 {result.inferenceEnsemble && result.modelos_activos && result.modelos_activos.length > 0 && (
                   <div className="flex flex-wrap gap-1 pt-1 border-t border-[#23252e]/70">
-                    {result.modelos_activos.map((m, idx) => (
+                    {result.modelos_activos.map((model, index) => (
+                      <span key={index} className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-emerald-950/60 text-emerald-300 border border-emerald-800/50">
+                        ✓ {model}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {result.modelos_ejecutados && result.modelos_ejecutados.length > 0 && (
+                  <div className="flex flex-wrap gap-1 pt-1 border-t border-[#23252e]/70">
+                    {result.modelos_ejecutados.map((m, idx) => (
                       <span
                         key={idx}
                         className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-emerald-950/60 text-emerald-300 border border-emerald-800/50"

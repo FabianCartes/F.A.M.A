@@ -17,7 +17,10 @@ AUDIO = synthetic_wav()
 def external_adapters(test_db, monkeypatch):
     monkeypatch.setattr(main, "upload_audio_to_gcp", AsyncMock(return_value=True))
     monkeypatch.setattr(main.ensemble_service, "get_status", lambda **kwargs: {})
-    predictor = SimpleNamespace(model_id="fake", dataset_name="AvesChilenas")
+    predictor = SimpleNamespace(
+        model_id="fake", dataset_name="AvesChilenas", has_weights=True,
+        metadata=SimpleNamespace(name="Synthetic inference fixture"),
+    )
     main.app.dependency_overrides[main.get_model_registry] = lambda: SimpleNamespace(get=lambda _: predictor)
     yield predictor
     main.app.dependency_overrides.pop(main.get_model_registry, None)

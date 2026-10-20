@@ -485,6 +485,70 @@ describe("Catálogo público de Predicción", () => {
     expect(screen.queryByText("eugralla_paradoxa_mocha_03.wav")).toBeNull();
     expect(screen.getByText("Sin predicciones en esta sesión.")).toBeDefined();
   });
+  it("no selecciona un predeterminado sin pesos y lo muestra deshabilitado", async () => {
+    const unavailable = { ...bird, id: "missing-bird", name: "Modelo sin pesos", has_weights: false };
+    catalogue = async () => response([unavailable, model11, engine], unavailable.id);
+
+    await show();
+
+    expect(selection().value).toBe(model11.id);
+    const option = within(selection()).getByRole("option", { name: /Modelo sin pesos.*no disponible/i });
+    expect((option as HTMLOptionElement).disabled).toBe(true);
+  });
+
+  it.each([false, undefined])("bloquea inferencia cuando ningún modelo confirma pesos (%s)", async hasWeights => {
+    catalogue = async () => response([
+      { ...bird, has_weights: hasWeights }, { ...engine, has_weights: hasWeights },
+    ], bird.id);
+    const view = await show();
+
+    expect(selection().value).toBe("");
+    expect(within(selection()).getByRole("option", { name: "Sin modelos con pesos disponibles" })).toBeDefined();
+    expect(screen.getByRole("status", { name: "Disponibilidad de modelos" }).textContent).toContain("pesos");
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:test");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    await act(async () => {
+      fireEvent.change(view.container.querySelector('input[type="file"]')!, {
+        target: { files: [new File(["audio"], "audio.wav")] },
+      });
+    });
+    // Even a synthetic change event cannot enable an unavailable option.
+    fireEvent.change(selection(), { target: { value: bird.id } });
+    expect((screen.getByRole("button", { name: /Ejecutar inferencia/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("/api/predict"))).toBe(false);
+  });
+
+  it("reemplaza un modelo que pierde pesos por otro disponible del mismo dominio y permite recuperación", async () => {
+    await show();
+    fireEvent.change(selection(), { target: { value: engine.id } });
+    const nextEngine = { ...engine, id: "engine-v3", name: "Motor v3" };
+    catalogue = async () => response([bird, { ...engine, has_weights: false }, nextEngine], bird.id);
+
+    await focus();
+
+    expect(selection().value).toBe(nextEngine.id);
+    const unavailable = within(selection()).getByRole("option", { name: /Motor v2.*no disponible/i });
+    expect((unavailable as HTMLOptionElement).disabled).toBe(true);
+    catalogue = async () => response([bird, engine, nextEngine], engine.id);
+    await focus();
+    expect(selection().value).toBe(nextEngine.id);
+    expect((within(selection()).getByRole("option", { name: "Motor v2" }) as HTMLOptionElement).disabled).toBe(false);
+    fireEvent.change(selection(), { target: { value: engine.id } });
+    expect(selection().value).toBe(engine.id);
+  });
+
+  it("un catálogo sin pesos recupera una selección solo cuando aparecen pesos confirmados", async () => {
+    catalogue = async () => response([{ ...bird, has_weights: false }], bird.id);
+    await show();
+    expect(selection().value).toBe("");
+
+    catalogue = async () => response([bird, model11], model11.id);
+    await focus();
+
+    expect(selection().value).toBe(model11.id);
+    expect(screen.queryByRole("status", { name: "Disponibilidad de modelos" })).toBeNull();
+  });
+
   it("muestra publicación parcial sin descartar modelos sanos y limpia el aviso al reintentar", async () => {
     catalogue = async () => response([bird], bird.id, [
       { model_id: model11.id, code: "checkpoint_missing" },
@@ -568,11 +632,11 @@ describe("Catálogo público de Predicción", () => {
     catalogue = async () => response([bird, nextEngine], bird.id);
     await focus();
     expect(selection().value).toBe(nextEngine.id);
-    expect(screen.getByText("Dominio Activo: Diagnóstico Acústico de Motores")).toBeDefined();
+    expect(screen.getByText("Grupo seleccionado: Diagnóstico Acústico de Motores")).toBeDefined();
     catalogue = async () => response([model11], "removed-default");
     await focus();
     expect(selection().value).toBe(model11.id);
-    expect(screen.getByText("Dominio Activo: Bioacústica de Aves Chilenas")).toBeDefined();
+    expect(screen.getByText("Grupo seleccionado: Bioacústica de Aves Chilenas")).toBeDefined();
   });
 
   it.each([engine.id, "not-in-catalogue", ""])("elige solo un predeterminado publicado (%s) al entrar", async defaultId => {
@@ -677,5 +741,126 @@ describe("Catálogo público de Predicción", () => {
     expect(selection().value).toBe(engine.id);
     fireEvent.change(selection(), { target: { value: model11.id } });
     expect(screen.getByRole("option", { name: "Chincol" })).toBeDefined();
+  });
+});
+
+// Independent U7 / S4 public UI and simulated HTTP regressions.
+describe("U7Independent", () => {
+  const calls = (path: string) => vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes(path));
+  const upload = async (view: ReturnType<typeof render>) => {
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:synthetic");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    await act(async () => { fireEvent.change(view.container.querySelector('input[type="file"]')!, {
+      target: { files: [new File(["synthetic"], "synthetic.wav")] },
+    }); });
+  };
+
+  it.each([false, null, undefined, "true", 1, 0])("requires literal true, rejects %s without HTTP, then recovers", async value => {
+    catalogue = async () => response([{ ...bird, has_weights: value } as RegisteredModel], bird.id);
+    const view = await show();
+    await upload(view);
+    const option = within(selection()).getByRole("option", { name: /Aves CNN/ }) as HTMLOptionElement;
+    expect(option.disabled).toBe(true);
+    expect(selection().value).toBe("");
+    const before = vi.mocked(fetch).mock.calls.length;
+    fireEvent.click(screen.getByRole("button", { name: /Ejecutar inferencia/ }));
+    expect(vi.mocked(fetch).mock.calls).toHaveLength(before);
+    expect(calls("/api/predict")).toHaveLength(0);
+    catalogue = async () => response([bird], bird.id);
+    await focus();
+    expect(selection().value).toBe(bird.id);
+    expect((within(selection()).getByRole("option", { name: "Aves CNN" }) as HTMLOptionElement).disabled).toBe(false);
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Ejecutar inferencia/ })); });
+    expect(calls("/api/predict")).toHaveLength(1);
+    expect(String(calls("/api/predict")[0][0])).toContain("model_id=bird-cnn");
+    expect((calls("/api/predict")[0][1]?.body as FormData).get("dataset_name")).toBe("AvesChilenas");
+  });
+
+  it.each([bird, engine])("replaces $id within its domain despite an opposite-domain default", async original => {
+    const opposite = original.id === bird.id ? engine : bird;
+    const successor = { ...original, id: "opaque-successor", name: "Successor" };
+    catalogue = async () => response([original, opposite], original.id);
+    await show();
+    catalogue = async () => response([opposite, { ...original, has_weights: false }, successor], opposite.id);
+    await focus();
+    expect(selection().value).toBe(successor.id);
+    catalogue = async () => response([opposite, original, successor], original.id);
+    await focus();
+    expect(selection().value).toBe(successor.id);
+    expect(calls("/api/predict")).toHaveLength(0);
+    expect(vi.mocked(fetch).mock.calls.every(([, options]) => !options?.method || options.method === "GET")).toBe(true);
+  });
+
+  it.each([false, true])("preserves pending result, checkpoint and feedback after catalogue failure=%s", async failed => {
+    const requested = { ...bird, id: "bird-ensemble", checkpoint_sha256: "a".repeat(64) };
+    catalogue = async () => response([requested, engine], requested.id);
+    const pending = deferred();
+    predict = () => pending.promise;
+    const originalFetch = fetch;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, options?: RequestInit) =>
+      String(input).endsWith("/api/feedback")
+        ? Response.json({ id_retroalimentacion: 71, id_prediccion: 901, fue_correcta: false, procesado: false })
+        : originalFetch(input, options)));
+    const view = await show();
+    await upload(view);
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Ejecutar inferencia/ })); });
+    expect(String(calls("/api/predict")[0][0])).toContain("model_id=bird-ensemble");
+    expect((calls("/api/predict")[0][1]?.body as FormData).get("dataset_name")).toBe("AvesChilenas");
+    fireEvent.change(selection(), { target: { value: engine.id } });
+    catalogue = failed ? async () => new Response(null, { status: 503 })
+      : async () => response([{ ...engine, checkpoint_sha256: "c".repeat(64) }], engine.id);
+    await focus();
+    await act(async () => { pending.resolve(Response.json({ filename: "synthetic.wav", db_id: 901,
+      modelo_id: requested.id, modelo: "Executed snapshot", clase: "Chucao", confianza: 0, gcp_upload: false,
+      modelos_activos: ["Result participant 17%"], modelos_ejecutados: ["Executed predictor"],
+      detalles: { dataset_name: "AvesChilenas", loaded_checkpoint_sha256: "b".repeat(64), device: "cpu" } })); });
+    const checkpoint = screen.getByRole("region", { name: "Identidad del checkpoint del resultado" });
+    expect(checkpoint.textContent).toContain("a".repeat(64));
+    expect(checkpoint.textContent).toContain("b".repeat(64));
+    expect(checkpoint.textContent).not.toContain("c".repeat(64));
+    expect(screen.getByText("Modelo ejecutado:").parentElement?.textContent).toContain("Executed snapshot");
+    expect(screen.getByText("✓ Result participant 17%")).toBeDefined();
+    expect(screen.getByText("✓ Executed predictor")).toBeDefined();
+    const feedback = within(screen.getByRole("region", { name: "Validar resultado" }));
+    fireEvent.click(feedback.getByRole("button", { name: "Incorrecta" }));
+    expect(feedback.queryByRole("option", { name: "low_oil" })).toBeNull();
+    fireEvent.change(feedback.getByLabelText("Clase correcta"), { target: { value: "Rayadito" } });
+    await focus();
+    await act(async () => { fireEvent.click(feedback.getByRole("button", { name: "Enviar a revisión" })); });
+    expect(calls("/api/predict")).toHaveLength(1);
+    expect(calls("/api/feedback")).toHaveLength(1);
+    expect(JSON.parse(String(calls("/api/feedback")[0][1]?.body))).toEqual({
+      id_prediccion: 901, fue_correcta: false, etiqueta_corregida: "Rayadito", id_usuario: 1,
+    });
+  });
+
+  it.each([
+    ["legacy_bioacoustic_service", true, "AvesChilenas", true],
+    ["other_service", true, "AvesChilenas", false],
+    ["legacy_bioacoustic_service", false, "AvesChilenas", false],
+    ["legacy_bioacoustic_service", true, "engine_diagnostics", false],
+  ])("isolates legacy scope=%s supported=%s domain=%s", async (scope, supported, domain, visible) => {
+    const ensemble = { ...bird, id: "bird-ensemble" };
+    catalogue = async () => response([ensemble, { ...engine, id: "engine-ensemble" }], ensemble.id);
+    const originalFetch = fetch;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, options?: RequestInit) =>
+      String(input).includes("/api/model-info") ? Response.json({ state_scope: scope, domain_supported: supported,
+        selected_domain: domain, device: "legacy-device", triad_status: [{ name: "Legacy component",
+          is_ready: true, is_loaded: false, is_registered: true, weights_available: false, weight: 0.7,
+          accuracy: 0, metrics_source: "database_record", recorded_checkpoint: "registered.pt", loaded_checkpoint: null }],
+      }) : originalFetch(input, options)));
+    await show();
+    expect(Boolean(screen.queryByRole("article", { name: "Legacy component" }))).toBe(visible);
+    if (visible) {
+      const card = within(screen.getByRole("article", { name: "Legacy component" }));
+      for (const text of ["Registro BD: Registrado", "Archivo local: Ausente", "No cargado", "Peso cargado: No disponible", "0.0%", "registered.pt"]) {
+        expect(card.getByText(text)).toBeDefined();
+      }
+    }
+    fireEvent.change(selection(), { target: { value: "engine-ensemble" } });
+    if (domain !== "engine_diagnostics") expect(screen.queryByRole("article", { name: "Legacy component" })).toBeNull();
+    expect(calls("/api/predict")).toHaveLength(0);
+    expect(calls("/api/model-info").some(([url]) => String(url).includes("dataset_name=engine_diagnostics"))).toBe(true);
+    expect(vi.mocked(fetch).mock.calls.every(([, options]) => !options?.method || options.method === "GET")).toBe(true);
   });
 });

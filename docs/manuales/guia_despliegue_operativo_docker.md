@@ -9,7 +9,9 @@
 
 La presente guía detalla los procedimientos técnicos estandarizados para instalar, configurar y mantener en producción el sistema **F.A.M.A.** en infraestructuras institucionales (laboratorios de investigación, servidores departamentales o estaciones de trabajo universitarias).
 
-Para eliminar por completo la "fricción de instalación" —uno de los mayores motivos de fracaso en despliegues de Machine Learning— F.A.M.A. adopta el estándar de empaquetado mediante **Contenedores Docker multi-etapa orquestados con Docker Compose**. Esto aísla las dependencias críticas del sistema operativo (Python 3.12, Node.js 20, CUDA Toolkit 12.4, PostgreSQL 16 y librerías de procesamiento de audio como `libsndfile` y `ffmpeg`), garantizando que la plataforma funcione de forma determinista y reproducible en cualquier servidor institucional equipado con aceleración gráfica NVIDIA.
+F.A.M.A. utiliza contenedores Docker orquestados con Docker Compose para acotar dependencias. El empaquetado no garantiza por sí solo reproducibilidad ni operación en cualquier servidor NVIDIA. Las versiones, etapas, servicios y montajes efectivos deben contrastarse con los archivos del repositorio indicados en la sección de configuración runtime.
+
+**Alcance de esta guía:** conserva ejemplos de instalación y diseño operativo, no evidencia de un despliegue ejecutado. Los bloques ilustrativos de Dockerfile, Compose, esquema SQL y comandos no sustituyen los archivos vigentes del checkout. Las comprobaciones sintéticas retenidas no acreditan GPU, PostgreSQL/GCS reales, credenciales ni operación institucional. Preparar esta documentación no autoriza ejecutar instalaciones, servicios o procedimientos destructivos.
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
@@ -566,6 +568,8 @@ networks:
 
 ### 6.4. Archivo de Variables de Entorno (`.env.production`)
 
+Los ejemplos heredados de esta guía no garantizan que todas sus variables estén consumidas. La fuente vigente es [`docker-compose.yml`](../../docker-compose.yml); no ejecutar operaciones publicadas sobre servicios/datos existentes sin autorización propia.
+
 Cree un archivo `.env` en la raíz del proyecto junto al `docker-compose.yml`:
 
 ```env
@@ -592,6 +596,16 @@ BACKEND_PORT=8000
 NEXT_PUBLIC_API_URL=http://localhost:8000
 CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://192.168.1.100:3000
 ```
+
+#### Corrección vigente: autenticación existente y exclusión de credenciales
+
+Compose transmite al backend `JWT_SECRET_KEY`, `ADMIN_INITIAL_EMAIL`, `ADMIN_INITIAL_PASSWORD`, `ADMIN_INITIAL_NAME` y `ACCESS_TOKEN_EXPIRE_MINUTES`. Los valores de clave/email/password ausentes quedan vacíos: no habilitan una sesión ni un administrador por defecto. Definirlos en el entorno de Compose o su archivo de variables es responsabilidad del operador; `backend/.env` es la configuración local de Python y no se monta automáticamente en el contenedor. No usar las contraseñas ilustrativas ni valores de pruebas como secretos reales.
+
+También transmite `FAMA_UPLOAD_MAX_FILE_BYTES` (default `67108864`, 64 MiB) y `FAMA_UPLOAD_MAX_BATCH_BYTES` (default `268435456`, 256 MiB). Deben ser enteros positivos, con límite individual menor o igual al agregado; valores inválidos producen 503 sanitizado en subida. Pueden definirse en el entorno/archivo de variables de Compose o en el entorno local del backend. Son límites de bytes de contenidos de archivo: no incluyen framing/campos multipart ni garantizan RAM total. La recepción/spooling previa del parser, límites de proxy/ASGI, CPU de decodificación y concurrencia necesitan validación separada; no acreditan el RNF de datasets de 50 GB. El ajuste operativo real/reinicio exige autorización y no se ejecutó en estas pruebas. Véase [ADR 0048](../adr/0048-cargas-acusticas-validadas-y-acotadas.md).
+
+El contexto backend excluye JSON en raíz/subdirectorios, además de `.env`; código Python y recetas YAML se conservan. Credenciales GCS, manifiestos y datos externos se proporcionan mediante los montajes runtime existentes, no dentro de la imagen. Un futuro recurso JSON público de código requiere una excepción revisada.
+
+Verificación de alcance específico: Compose sobre copia temporal y cliente Docker con API simulada en loopback, sin daemon real, imágenes, contenedores ni archivos privados. No acredita GPU, BuildKit/build real, arranque completo o acceso GCS. La autorización por roles y el login web todavía son funcionalidades pendientes, no garantías del despliegue descrito. [ADR 0043](../adr/0043-configuracion-runtime-y-contexto-sin-credenciales.md).
 
 ---
 
@@ -779,7 +793,7 @@ Para permitir que biólogos en terreno clasifiquen audio desde teléfonos móvil
      ```bash
      docker compose logs db
      ```
-  3. Si es una instalación nueva y desea resetear la base de datos desde cero:
+   3. **Ejemplo destructivo, no paso rutinario de diagnóstico.** Solo para una instalación desechable, con autorización explícita y respaldo verificado de cualquier dato que deba conservarse. No lo ejecute sobre una instalación existente para resolver una conexión fallida: elimina los volúmenes administrados por Compose, no solo las tablas.
      ```bash
      docker compose down -v
      docker compose up -d

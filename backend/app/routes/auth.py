@@ -11,6 +11,8 @@ from app.services.auth import (
     create_access_token,
     create_user,
     get_current_user,
+    ensure_authentication_configured,
+    AuthenticationConfigurationError,
 )
 
 router = APIRouter(prefix="/api/auth", tags=["Autenticación y Sesión"])
@@ -63,6 +65,13 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     Si son correctas y el usuario está activo, actualiza el timestamp de último acceso
     y genera un token Bearer JWT con vigencia de 8 horas.
     """
+    try:
+        ensure_authentication_configured()
+    except AuthenticationConfigurationError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Servicio de autenticación no configurado.",
+        )
     user = authenticate_user(db=db, email=req.email, password=req.password)
     if not user:
         raise HTTPException(

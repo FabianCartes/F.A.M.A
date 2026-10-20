@@ -55,7 +55,7 @@ class Audio(Base):
     nombre_archivo = Column(String(255), nullable=False)
     ruta_gcp = Column(String(500), nullable=False)
     clase = Column(String(100), nullable=False, index=True)
-    frecuencia_muestreo = Column(Integer, nullable=True, default=22050)
+    frecuencia_muestreo = Column(Integer, nullable=True)
     duracion_segundos = Column(Float, nullable=True)
     tamano_bytes = Column(BigInteger, default=0, nullable=False)
     hash_archivo = Column(String(64), nullable=True)

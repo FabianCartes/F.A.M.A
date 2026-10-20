@@ -38,6 +38,8 @@ describe('accepted feedback synchronization through the rendered panel', () => {
     expect(within(rows[2]).getByText('Copia cloud confirmada')).toBeDefined();
     expect(rows[0].textContent).toContain('Feedback #7');
     expect(rows[0].textContent).toContain('Predicción #12');
+    expect(within(rows[0]).getByText('AvesChilenas')).toBeDefined();
+    expect(within(rows[0]).getByText('Rayadito')).toBeDefined();
     expect(rows[0].textContent).toContain('Directorio: rayadito');
     expect(within(rows[0]).getByRole('cell', { name: '2' })).toBeDefined();
     expect(screen.getByText(/no una auditoría física actual.*no una comprobación de existencia actual/)).toBeDefined();
