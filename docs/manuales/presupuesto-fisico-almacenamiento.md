@@ -1,6 +1,6 @@
 # Inspect and prepare physical-budget metadata without activating it
 
-Status: P2 maintenance foundation and **inactive import-side integration**, including bounded manifest sync/download, closed locally within synthetic verification and acknowledged native review ([T2 receipt](../receipts/large-zip-limits-p2-t2.json)). Export integration now has local synthetic checks and independent verification; its native review and T4 remain pending. Do not activate it: operational topology/floor qualification and coordinated reconciliation remain open. This command does not enable larger imports, reconcile existing work or establish disk capacity. Follow [P2 implementation tracking](../arquitectura/large-zip-storage-budget-implementation.md) and [ADR 0052](../adr/0052-shared-physical-storage-budget.md).
+Status: P2 import/export implementation has local synthetic checks, independent verification and acknowledged native reviews. T4 drain-first reconciliation and process checks are being verified. **Do not activate the real deployment:** operational topology/floor qualification and authorized coordinated maintenance remain open. The preparation command does not enable larger imports, reconcile existing work or establish disk capacity. Follow [P2 implementation tracking](../arquitectura/large-zip-storage-budget-implementation.md) and [ADR 0052](../adr/0052-shared-physical-storage-budget.md).
 
 ## Read-only inspection
 
@@ -90,7 +90,83 @@ The supported synchronous GCS adapter was inspected: `ensure`/`ensure_manifest` 
 
 Download creation is outside the gate only after its grant commits. Its exclusive anonymous temporary file is not an import-cleanup target. After the adapter returns or unwinds, the route persists retirement of a unique, never-reused token before returning the read stream; actual file bytes continue reducing free space until it closes. A crash can conservatively leak a grant for later quiescent reconciliation. No timeout/lease alone retires sync authority, and no directory-size subtraction or guessed-byte refund is used.
 
-Do not activate a profile until independent import-side verification, Btrfs or the selected deployment topology/floor qualification, export writers (T3), and coordinated migration/reconciliation (T4) are complete. Existing active limits remain unchanged.
+Do not activate a real profile until the selected deployment topology/floor is qualified and coordinated migration/reconciliation is separately authorized and verified. Synthetic import/export and cutover evidence does not qualify Btrfs, overlay or quota-bearing mounts. Existing active limits remain unchanged.
+
+## Drain-first reconciliation and coordinated cutover (T4)
+
+The separate `scripts.reconcile_dataset_storage` command does not change the
+existing inspect/prepare command or its output. Its default is read-only inventory
+of an explicitly selected, already prepared database:
+
+```text
+python -m scripts.reconcile_dataset_storage --database-url <explicit-existing-database-url>
+```
+
+It verifies the ledger and relevant import/export table shapes. Output contains
+only aggregate counts: recoverable imports, queued/running jobs (including expired
+leases), active receipt-v1 reservations, recoverable exports and pending/deleting
+cleanup intents. Missing summaries, unclassified cleanup state or incompatible
+metadata refuse inspection. `drained: true` means those counts and all live grants
+are zero; it is **not** readiness, writer discovery, capacity or deployment proof.
+The inventory never infers authority from `reserved_bytes`, assigns grants,
+cancels jobs, completes cleanup or deletes retained files.
+
+The implemented first-cutover path is **drain first**, as proposed in the plan.
+Active, ambiguous or recoverable work blocks activation and remains intact.
+Finish it through the existing compatible runtime under separately authorized
+maintenance; do not cancel it to make the counts fit. Leaked grants require
+explicit investigation, not a guessed refund. Adoption of unfinished legacy work
+is not implemented; if draining is impossible, stop for a separately designed
+reconciliation procedure rather than editing the database to bypass refusal.
+
+Only after separately authorized backup/restore verification, coordinated shutdown
+of API/import/export/sync/cleanup writers and qualification of all configured
+roots/floors, the modifying form is:
+
+```text
+python -m scripts.reconcile_dataset_storage --database-url <explicit-existing-database-url> --apply --writers-stopped --profile <private-profile.json>
+```
+
+All three flags are required together and validated before connecting. The private
+UTF-8 JSON profile (at most 64 KiB) contains exactly the `PhysicalStorage`
+constructor inputs: `roots`, `pools`, `free_floors`, and optional `manifest_bytes`.
+Use the six roles and topology constraints documented above, existing physical
+directories and positive, independently qualified floors. Do not include secrets.
+No template here certifies an operational mapping or floor.
+
+The modifying command takes existing staging/attempt/export directory locks before
+the short database admission lock, rechecks the drained inventory, registers only
+an empty prepared pool set and atomically marks it active. Existing pool metadata
+must match exactly; it is never overwritten. A shared download or live callback
+lock refuses the cutover. Repetition with the same drained state/profile is
+idempotent. Any refusal rolls back marker/pool writes and preserves grants,
+receipt-v1 fields, published objects, journals and artifacts. The command neither
+migrates missing tables nor starts services. SQLite inspection cannot create a
+misspelled file target. Failure output omits paths, credentials and identifiers.
+
+`--writers-stopped` is an operator assertion, not proof that an old binary is
+stopped. Additive metadata cannot constrain code that never checks it. Deploy all
+compatible API, worker and cleaner constructors with the same policy/database/root
+mapping before restarting them together; unconfigured new payload writers refuse
+an active marker. Do not mix old/unbudgeted writers with the active ledger. On
+rollback, preserve additive metadata and keep incompatible writers stopped; never
+drop tables, erase grants or relabel work to restore availability.
+
+The separate small process check is `tests/run_dataset_storage_process_checks.py`
+from `backend/` with the documented isolated Python environment. It uses private
+file-backed SQLite, real process locks and controlled process death, but synthetic
+mount/free-space observations. The actual `/tmp` advertises `usrquota` and was
+correctly refused before fixture substitution. The check does not certify actual
+quota scopes, PostgreSQL, Btrfs, overlay, physical floors or maximum throughput.
+
+The promoted independent CLI regressions run separately as
+`tests/run_dataset_storage_cli_checks.py <empty-private-scratch-directory>` with
+the same isolated interpreter environment. Allocate that directory outside the
+worktree, for example with `mktemp -d /tmp/opencode/storage-cli-XXXXXX`. They
+exercise file-backed SQLite subprocesses and compare rejection hashes, exact
+exit/output and matching-policy replay; their mount observation is synthetic.
+Neither runner cleans its outer private scratch automatically; the invoking
+operator owns its removal after inspecting results.
 
 ## Verification boundary
 
