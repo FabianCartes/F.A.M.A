@@ -282,7 +282,7 @@ def test_downloadable_example_is_an_importable_synthetic_zip(imports, tmp_path):
     from app.services.dataset_zip import validate_zip, ImportLimits
     source = tmp_path / "example.zip"
     source.write_bytes(example.content)
-    result = validate_zip(source, tmp_path / "example", root="aves", limits=ImportLimits())
+    result = validate_zip(source, tmp_path / "example", root="", limits=ImportLimits())
     assert result["errors"] == []
     assert result["unique_count"] == 2
     assert result["classes"] == ["chucao", "colilarga"]

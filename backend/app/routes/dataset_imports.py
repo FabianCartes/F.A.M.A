@@ -4,6 +4,7 @@ import hashlib
 import io
 import os
 import time
+import uuid
 import wave
 import zipfile
 from dataclasses import dataclass
@@ -169,15 +170,46 @@ def revision_manifest(dataset_id: str, revision: int = PathParameter(ge=0), db: 
     if reference["status"] != "complete":
         reject(409, "La revisión todavía no tiene un manifiesto completo.")
     identity = reference["manifest"]
+    from app.services.dataset_storage import physical_storage
+    physical = physical_storage(service, db)
+    authority = None
+    if physical is not None:
+        if type(identity["size_bytes"]) is not int or not 0 < identity["size_bytes"] <= physical.manifest_bytes:
+            reject(413, "El manifiesto supera el límite físico permitido.")
+        from app.services.dataset_import_jobs import _gate
+        _gate(db)
+        authority = "manifest-download:" + uuid.uuid4().hex
+        physical.acquire(db, resource=authority, phase="download", attempt=0, token=0,
+            amounts={physical.pools["scratch"]: identity["size_bytes"]}, policy=physical.policy_hash(service.limits))
+        db.commit()  # Authority before TemporaryFile creation; no gate over remote I/O.
     db.rollback()  # Authorize first; no read transaction spans remote recovery.
-    stream = tempfile.TemporaryFile(mode="w+b")
+    stream = None
     try:
+        stream = tempfile.TemporaryFile(mode="w+b", **({"dir": physical.roots["scratch"]} if physical else {}))
+        target = physical.writer(stream, identity["size_bytes"], role="scratch") if physical else stream
         storage.read_verified(identity["object_key"], identity["object_generation"],
-                              identity["sha256"], identity["size_bytes"], stream)
+                              identity["sha256"], identity["size_bytes"], target)
+        if physical:
+            target.verify(identity["size_bytes"], identity["sha256"])
         stream.seek(0)
     except Exception:
-        stream.close()
+        if stream is not None:
+            stream.close()
         reject(409, "El manifiesto no está disponible con la integridad y generación autorizadas.")
+    finally:
+        if authority is not None:
+            # The synchronous adapter has returned/unwound: its exclusive file
+            # owner can no longer grow it. A unique retired token is the durable
+            # no-resumption fence; retained download bytes still reduce free space.
+            try:
+                db.rollback()
+                _gate(db)
+                physical.retire(db, authority)
+                db.commit()
+            except BaseException:
+                if stream is not None:
+                    stream.close()
+                raise
 
     def chunks():
         try:
@@ -255,9 +287,23 @@ async def upload(job_id: str, request: Request, db: Session = Depends(get_db), u
         if has_receipt(db, job_id):
             reject(409, "Esta importación usa recepción fragmentada; consulta su estado para continuar.")
         service.require_idle(db, job_id)
-        db.commit()  # No queue gate or DB write transaction spans receipt.
         if row.status not in ("receiving", "validating", "needs_correction", "ready"):
             reject(409, "La importación no admite otro archivo.")
+        from app.services.dataset_storage import physical_storage
+        physical = physical_storage(service, db)
+        ingress = None
+        if physical is not None:
+            if row.archive_sha256:
+                physical.require(db, service, job_id, "archive", service.limits.received_bytes)
+                # The old archive survives while receiving.part grows. A unique
+                # ingress token cannot be reused after this synchronous writer ends.
+                ingress = f"{job_id}:raw:{uuid.uuid4().hex}"
+                physical.acquire(db, resource=ingress, phase="ingress", attempt=0, token=0,
+                    amounts={physical.pools["imports"]: service.limits.received_bytes},
+                    policy=physical.policy_hash(service.limits))
+            else:
+                physical.initial(db, service, job_id, service.limits.received_bytes)
+        db.commit()  # Write authority is durable BEFORE output creation, no gate over I/O.
         staging = service.stage(row)
         staging.mkdir(mode=0o700, exist_ok=True)
         temporary = staging / "receiving.part"
@@ -295,6 +341,15 @@ async def upload(job_id: str, request: Request, db: Session = Depends(get_db), u
             reject(408, "Tiempo de recepción agotado. Reintenta la solicitud.")
         finally:
             temporary.unlink(missing_ok=True)
+            if ingress is not None:
+                # Import flock is still held; streaming has ended and this token
+                # is durably retired before releasing ownership. Retained archive
+                # bytes remain charged by filesystem free, not a guessed refund.
+                db.rollback()
+                from app.services.dataset_import_jobs import _gate
+                _gate(db)
+                physical.retire(db, ingress)
+                db.commit()
 
 
 @router.put("/{job_id}/receipt/chunks/{index}")

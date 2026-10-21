@@ -1,7 +1,9 @@
 """Durable import execution: expensive preparation, then short fenced publication."""
 from pathlib import Path, PurePosixPath
+from contextlib import contextmanager, ExitStack
 import os
 import fcntl
+import re
 import shutil
 import time
 import uuid
@@ -29,24 +31,56 @@ class ImportExecution:
 
     def __init__(self, queue, service, staging_root, *, storage=None, **worker_options):
         self.queue, self.service, self.root, self.storage = queue, service, Path(staging_root), storage
-        self.worker = ImportJobWorker(queue, self.root, self.execute, **worker_options)
+        self.worker = ImportJobWorker(queue, self.root, self.execute, preparation=self.preparation, **worker_options)
         service.attempt_root = self.root
 
     def run_once(self):
         return self.worker.run_once()
 
+    @contextmanager
+    def preparation(self, attempt):
+        from app.services.dataset_storage import physical_storage
+        from app.models.dataset_import_job import ImportJob
+        with self.queue.sessions() as db, self.service.mutation(db, attempt["import_id"]), ExitStack() as locks:
+            # Import ownership prevents cleanup while an old preview lock is
+            # checked. No queue gate is held while acquiring filesystem locks.
+            source = db.get(DatasetImport, attempt["import_id"])
+            summary = db.get(ImportSummary, source.id)
+            reviewed = None
+            name = summary.preview.get("staging_attempt", "")
+            match = re.fullmatch(r"([0-9a-f]{32})-([1-9][0-9]*)-([1-9][0-9]*)", name)
+            if self.service.storage_policy is not None and attempt["kind"] == "confirm" and source.status == "ready" and match:
+                old = db.get(ImportJob, match[1])
+                if (old and old.import_id == source.id and old.kind == "preview" and old.status == "succeeded"
+                        and old.attempt == int(match[2]) and old.token == int(match[3])
+                        and not source.request.get("auto_import")):
+                    fd = os.open(self.root / name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                    locks.callback(os.close, fd)
+                    try:
+                        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        reviewed = (f"{source.id}:{old.id}", old.attempt, old.token)
+                    except BlockingIOError:
+                        pass  # Still unwinding: keep old authority and charge fresh output.
+            db.rollback()
+            self.queue._current(db, attempt)
+            physical = physical_storage(self.service, db)
+            if physical is not None:
+                if attempt["kind"] == "sync" and not all(callable(getattr(self.storage, name, None))
+                                                         for name in ("ensure", "ensure_manifest")):
+                    reject(503, "La sincronización requiere almacenamiento explícito.")
+                physical.attempt(db, self.service, attempt, reviewed=reviewed)
+            db.commit()
+            # Keep import ownership through attempt-directory creation. Cleanup
+            # cannot interleave the committed authority and output creation.
+            yield
+
     def _source(self, db, attempt):
         return self.service.job(db, attempt["owner_id"], attempt["import_id"])
 
     def execute(self, attempt, staging, report):
-        # A timed-out trusted callback can still be unwinding. Keep its attempt
-        # directory locked until all file activity stops, not merely lease loss.
-        fd = os.open(staging, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            return self._execute(attempt, staging, report)
-        finally:
-            os.close(fd)
+        # ImportJobWorker owns this directory before scheduling the callback and
+        # releases it only after this function has actually stopped, even timeout.
+        return self._execute(attempt, staging, report)
 
     def _execute(self, attempt, staging, report):
         self.service._initialize()

@@ -85,6 +85,7 @@ def run(service, db, *, attempt_root):
                 if current.get("state") == "done" and not any(path.exists() or path.is_symlink() for path in paths):
                     db.rollback()
                     continue
+                db.rollback()  # Never acquire attempt locks while holding the DB gate.
                 for path in paths:
                     if not path.exists() or path.is_symlink():
                         continue
@@ -95,9 +96,30 @@ def run(service, db, *, attempt_root):
                     except BlockingIOError:
                         from app.services.dataset_imports import reject
                         reject(409, "Un intento todavía está finalizando; reintenta la limpieza después.")
+                _gate(db)
+                source = db.get(DatasetImport, identity)
+                summary = db.get(ImportSummary, identity)
+                # Queue admission can race the filesystem-lock acquisition. Its
+                # worker cannot create output while we hold import ownership.
+                if db.query(ImportJob.id).filter(ImportJob.import_id == identity,
+                        ImportJob.status.in_(ACTIVE)).first() or source.status == "committing":
+                    db.rollback()
+                    continue
+                terminal = source.status in ("imported", "cancelled")
+                useful = max(source.created_at, summary.preview.get("_activity_at", 0))
+                if not terminal and (useful >= cutoff or protects_cleanup(service, db, source, cutoff)):
+                    db.rollback()
+                    continue
+                from app.services.dataset_storage import physical_storage
+                physical = physical_storage(service, db)
+                if physical is not None and root != physical.roots["attempts"]:
+                    from app.services.dataset_imports import reject
+                    reject(503, "La limpieza requiere la raíz física de intentos verificada.")
                 if not terminal:
                     source.status, source.error = "cancelled", "expired"
                 summary.preview = dict(summary.preview, **{KEY: {"state": "deleting"}})
+                if physical is not None:
+                    physical.retire_import(db, identity)
                 db.commit()  # Durable fence; no DB lock spans recursive deletion.
                 try:
                     for path in paths:

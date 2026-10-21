@@ -48,9 +48,10 @@ def _durable_directory(path):
 
 
 class DatasetImports:
-    def __init__(self, root, *, limits=None):
+    def __init__(self, root, *, limits=None, storage_policy=None):
         self.root = Path(root)
         self.limits = limits or ImportLimits.from_environment()
+        self.storage_policy = storage_policy
 
     def _initialize(self):
         if not self.root.is_absolute() or self.root != self.root.resolve():

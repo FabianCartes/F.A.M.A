@@ -14,6 +14,7 @@ from app.models.dataset_import_revision import DatasetRevision, RevisionObject
 from app.services.dataset_import_records import dataset_quota, identifier
 from app.services.dataset_import_storage import IntegrityConflict, TransientSyncError
 from app.services.dataset_imports import digest_file
+from app.services.dataset_manifest_stream import RECORD_BYTES, MEMBERS
 
 
 @dataclass(frozen=True)
@@ -131,22 +132,31 @@ def _safe_path(value):
     return value
 
 
-def _write_manifest(sessions, revision_id, path):
+def _write_manifest(sessions, revision_id, path, *, physical=None):
     with sessions() as db:
         row = db.get(DatasetRevision, revision_id)
         header = dict(schema_version=1, dataset_id=row.dataset_id, dataset_revision=row.revision,
                       name=row.name, description=row.description, file_count=row.file_count,
                       total_size_bytes=row.total_size_bytes)
+    if physical and (type(header["file_count"]) is not int or not 0 <= header["file_count"] <= MEMBERS):
+        raise IntegrityConflict("Manifest member count exceeds bound")
     # Line-delimited entries inside a standard JSON array allow bounded readers.
     count = total = 0
     cursor = ""
-    with path.open("wb") as stream:
-        stream.write(json.dumps(header, ensure_ascii=True, sort_keys=True).encode()[:-1] + b', "files": [\n')
+    with path.open("wb") as output:
+        # Inactive profiles retain the original serialized bytes and wire limits.
+        stream = physical.writer(output, physical.manifest_bytes, role="manifests") if physical else output
+        record = json.dumps(header, ensure_ascii=True, sort_keys=True).encode()[:-1] + b', "files": [\n'
+        if physical and len(record) > RECORD_BYTES:
+            raise IntegrityConflict("Manifest record exceeds bound")
+        stream.write(record)
         while True:
             batch = _batch(sessions, revision_id, cursor, SyncLimits(bytes=15 * 1024**3))
             if not batch:
                 break
             for item in batch:
+                if physical and (count >= header["file_count"] or count >= MEMBERS):
+                    raise IntegrityConflict("Manifest member count exceeds bound")
                 if (not item["object_generation"] or item["verified_sha256"] != item["sha256"]
                         or item["verified_size_bytes"] != item["size_bytes"]):
                     raise IntegrityConflict("Incomplete revision")
@@ -154,9 +164,14 @@ def _write_manifest(sessions, revision_id, path):
                     "size_bytes", "sha256", "object_key", "object_generation")}
                 _safe_path(entry["original_path"])
                 _safe_path(entry["relative_path"])
+                record = json.dumps(entry, ensure_ascii=True, sort_keys=True).encode()
+                # The existing reader consumes the comma and newline with this
+                # entry's record. Escaped Unicode bytes, not character counts.
+                if physical and len(record) + 2 > RECORD_BYTES:
+                    raise IntegrityConflict("Manifest record exceeds bound")
                 if count:
                     stream.write(b",\n")
-                stream.write(json.dumps(entry, ensure_ascii=True, sort_keys=True).encode())
+                stream.write(record)
                 count += 1
                 total += item["size_bytes"]
             cursor = batch[-1]["member_id"]
@@ -198,7 +213,13 @@ def synchronize(execution, attempt, staging):
                 _checkpoint(execution, attempt, revision_id, verified)
         cursor = batch[-1]["member_id"]
     path = staging / "manifest.json"
-    header, digest, size = _write_manifest(execution.queue.sessions, revision_id, path)
+    from app.services.dataset_storage import physical_storage
+    with execution.queue.publication(attempt) as (db, _):
+        physical = physical_storage(execution.service, db)
+        if physical:
+            physical.require(db, execution.service, f"{attempt['import_id']}:{attempt['id']}", "sync",
+                physical.manifest_bytes, attempt=attempt["attempt"], token=attempt["token"], role="manifests")
+    header, digest, size = _write_manifest(execution.queue.sessions, revision_id, path, physical=physical)
     key = f"private-imports/{attempt['owner_id']}/{header['dataset_id']}/revisions/{header['dataset_revision']}/{digest}.json"
     with execution.queue.publication(attempt):
         pass

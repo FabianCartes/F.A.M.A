@@ -88,7 +88,11 @@ def reserve_receipt(service, db, owner, import_id, *, name, size_bytes):
         promise = size_bytes + service.limits.expanded_bytes
         if owner_used + promise > owner_budget or total_used + promise > global_budget:
             reject(429, "Presupuesto temporal agotado. Finaliza o cancela recepciones antes de reintentar.")
-        if total_used + promise + service.limits.free_bytes > shutil.disk_usage(service.root).free:
+        from app.services.dataset_storage import physical_storage
+        physical = physical_storage(service, db)
+        if physical is not None:
+            physical.initial(db, service, import_id, size_bytes)
+        elif total_used + promise + service.limits.free_bytes > shutil.disk_usage(service.root).free:
             reject(507, "Espacio disponible insuficiente para reservar la recepción y su expansión.")
         try:
             chunk_bytes = int(os.environ.get("FAMA_IMPORT_CHUNK_BYTES", CHUNK_BYTES))

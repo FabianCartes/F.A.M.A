@@ -75,6 +75,10 @@ async def accept_chunk(service, db, owner, identity, index, offset, sha256, requ
     with service.mutation(db, identity):
         source, row = receipt(service, db, owner, identity)
         service.require_idle(db, identity)
+        from app.services.dataset_storage import physical_storage
+        physical = physical_storage(service, db)
+        if physical is not None:
+            physical.require(db, service, identity, "archive", row.size_bytes)
         if row.status != "receiving" or source.status != "receiving" or not row.reservation_active:
             reject(409, "La recepción no admite modificaciones.")
         if index < 0 or offset < 0 or index * row.chunk_bytes != offset or offset > row.received_bytes:
@@ -161,6 +165,10 @@ def finalize(service, db, owner, identity):
     with service.mutation(db, identity):
         source, row = receipt(service, db, owner, identity)
         service.require_idle(db, identity)
+        from app.services.dataset_storage import physical_storage
+        physical = physical_storage(service, db)
+        if physical is not None:
+            physical.require(db, service, identity, "archive", row.size_bytes)
         if row.status == "cancelled" or source.status == "cancelled" or not row.reservation_active:
             reject(409, "La recepción no admite finalización.")
         if row.received_bytes != row.size_bytes:

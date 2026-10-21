@@ -1,6 +1,8 @@
 """Trusted, bounded callback orchestration; not an untrusted decoder sandbox."""
 from pathlib import Path
+from contextlib import nullcontext
 import os
+import fcntl
 import stat
 import threading
 
@@ -28,12 +30,13 @@ class ImportJobWorker:
     """
 
     def __init__(self, queue, staging_root, execute, *, lease_seconds=60,
-                 execution_seconds=300, heartbeat_wait=None):
+                 execution_seconds=300, heartbeat_wait=None, preparation=None):
         self.queue, self.root, self.execute = queue, _private_root(staging_root), execute
         self.lease_seconds = lease_duration(lease_seconds)
         self.execution_seconds = lease_duration(execution_seconds)
         self.heartbeat_wait = heartbeat_wait or (lambda stop, interval: stop.wait(interval))
         self._work = None
+        self.preparation = preparation
 
     def run_once(self):
         # A timed-out cooperative callback may still be unwinding. Do not spawn
@@ -45,6 +48,7 @@ class ImportJobWorker:
             return False
         stop, lost, done = threading.Event(), threading.Event(), threading.Event()
         outcome = {}
+        ownership = None
 
         def report(**values):
             if lost.is_set() or stop.is_set():
@@ -61,31 +65,47 @@ class ImportJobWorker:
                     lost.set()
                     return
 
-        def execute():
+        def execute(attempt_ownership):
             try:
                 outcome["result"] = self.execute(attempt, staging, report)
             except Exception:
                 outcome["error"] = "execution_failed"
             finally:
+                # Main-thread timeout is NOT writer termination. The callback
+                # retains ownership from before scheduling until its actual exit.
+                os.close(attempt_ownership)
                 done.set()
 
         try:
             _private_root(self.root)
             staging = self.root / f"{attempt['id']}-{attempt['attempt']}-{attempt['token']}"
             # Never adopt an existing attempt directory or follow a link.
-            staging.mkdir(mode=0o700)
+            with self.preparation(attempt) if self.preparation is not None else nullcontext():
+                staging.mkdir(mode=0o700)
+                ownership = os.open(staging, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                fcntl.flock(ownership, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except Exception:
+            if ownership is not None:
+                os.close(ownership)
             try:
                 self.queue.finish(attempt, error="staging_failed")
             except LeaseLost:
                 pass
             return True
-        pulse = threading.Thread(target=heartbeat, daemon=True)
-        work = threading.Thread(target=execute, daemon=True)
-        self._work = work
-        pulse.start()
-        work.start()
+        pulse = work = None
         try:
+            try:
+                pulse = threading.Thread(target=heartbeat, daemon=True)
+                work = threading.Thread(target=execute, args=(ownership,), daemon=True)
+                self._work = work
+                pulse.start()
+                work.start()
+            except BaseException:
+                # A successfully started callback alone owns the descriptor,
+                # even if it already exited. Otherwise scheduling must unwind it.
+                if work is None or work.ident is None:
+                    os.close(ownership)
+                raise
             if not done.wait(self.execution_seconds):
                 outcome = {"error": "execution_timeout"}
             if not lost.is_set():
@@ -101,5 +121,6 @@ class ImportJobWorker:
                         lost.set()
         finally:
             stop.set()
-            pulse.join(timeout=min(self.lease_seconds, 1))
+            if pulse is not None and pulse.ident is not None:
+                pulse.join(timeout=min(self.lease_seconds, 1))
         return True
