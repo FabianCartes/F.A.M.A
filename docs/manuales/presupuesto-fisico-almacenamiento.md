@@ -1,6 +1,6 @@
 # Inspect and prepare physical-budget metadata without activating it
 
-Status: P2 maintenance foundation and **inactive import-side integration**, including bounded manifest sync/download, closed locally within synthetic verification and acknowledged native review ([T2 receipt](../receipts/large-zip-limits-p2-t2.json)). Do not activate it: operational topology/floor qualification, export integration and coordinated reconciliation remain open. This command does not enable larger imports, reconcile existing work or establish disk capacity. Follow [P2 implementation tracking](../arquitectura/large-zip-storage-budget-implementation.md) and [ADR 0052](../adr/0052-shared-physical-storage-budget.md).
+Status: P2 maintenance foundation and **inactive import-side integration**, including bounded manifest sync/download, closed locally within synthetic verification and acknowledged native review ([T2 receipt](../receipts/large-zip-limits-p2-t2.json)). Export integration now has local synthetic checks and independent verification; its native review and T4 remain pending. Do not activate it: operational topology/floor qualification and coordinated reconciliation remain open. This command does not enable larger imports, reconcile existing work or establish disk capacity. Follow [P2 implementation tracking](../arquitectura/large-zip-storage-budget-implementation.md) and [ADR 0052](../adr/0052-shared-physical-storage-budget.md).
 
 ## Read-only inspection
 
@@ -93,5 +93,44 @@ Download creation is outside the gate only after its grant commits. Its exclusiv
 Do not activate a profile until independent import-side verification, Btrfs or the selected deployment topology/floor qualification, export writers (T3), and coordinated migration/reconciliation (T4) are complete. Existing active limits remain unchanged.
 
 ## Verification boundary
+
+### Export accounting (T3)
+
+`ExportQueue` uses the import service's explicit `storage_policy`. No separate
+environment activation switch is introduced. `ExportExecution` and explicit
+cleanup require their root to equal the configured `exports` root. First
+admission reserves the entire export ceiling before output creation; job-count
+limits remain independent. Replaying admission does not duplicate the grant.
+
+For export limits `M` manifest bytes, `B` WAV payload bytes and `N` members:
+
+```text
+export envelope = M + B + 4,226 × N + 98 bytes
+```
+
+Each archive name has at most 2,049 UTF-8 bytes (1,024-byte dataset name,
+separator, 1,024-byte relative path). Per-member overhead includes both names,
+30-byte local and 46-byte central headers, 20-byte forced local ZIP64 extra and
+up to 32 central ZIP64 bytes. The 98-byte tail covers classic/ZIP64 end records
+and locator. ZIP_STORED has no compression expansion or comments. This bound is
+independent of the import's 2,000-entry cap; exports can contain 50,000 members.
+Filesystem allocation rounding, directory metadata, database/WAL and logs are
+still operational-floor/separate-capacity obligations, not ZIP bytes.
+
+The manifest writer checks its declared size before forwarding writes. The ZIP
+writer checks its high-water offset (not cumulative bytes, because headers are
+rewritten) and free-space floor before each write, including the central
+directory. Renaming `export.part` to `export.zip` creates no second ZIP copy.
+
+Every replacement attempt must validate the original admission policy and obtain
+fresh authority. Expired leases, callback timeouts and failed scheduling do not
+refund earlier grants. Legacy queued/running exports without admission authority
+are refused before attempt-directory creation, even on a later lease claim.
+Successful publication retires only that attempt's authority after final writes;
+retained manifests/ZIPs continue consuming real filesystem space. Failed/stale
+attempt grants remain live until explicit cleanup owns the directory exclusively
+and fences the stopped terminal attempt. Failed deletion does not imply reclaimed
+space. Existing native-download shared locks continue protecting artifacts after
+grant retirement. No GCS operation or maximum-size export is certified here.
 
 The automated CLI tests use an in-process SQLite-memory adapter, private synthetic state and the unchanged isolated backend runner. They test default non-mutation, explicit/repeatable preparation, refusals and public receipt compatibility. Import tests additionally exercise HTTP/worker/cleanup/sync/download behavior with synthetic free-space and private-root mount observations, small WAVs, incompatible DDL, full-revision metadata, failed writes and delayed callbacks. They do not demonstrate real disk capacity, cross-process file locking, PostgreSQL, operational floor sufficiency, deployment or maximum-size imports. Independent verification and later P2 cuts must establish those applicable contracts before operational cutover.

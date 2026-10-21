@@ -4,7 +4,7 @@ No network or hashing runs under the shared admission gate. Attempts own private
 directories; callbacks and HTTP streams hold directory locks until I/O stops.
 """
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 import fcntl
 import hashlib
 import json
@@ -26,6 +26,7 @@ from app.services.dataset_import_manifests import authorized_reference
 from app.services.dataset_import_storage import IntegrityConflict, _HashSink
 from app.services.dataset_import_worker import ImportJobWorker, _private_root
 from app.services.dataset_imports import _durable_directory, digest_file, reject
+from app.services.dataset_storage import physical_storage
 
 
 @dataclass(frozen=True)
@@ -70,6 +71,18 @@ class ExportQueue:
         self.jobs = ImportJobQueue(sessions, clock=clock)
         self.limits = limits or ExportLimits()
 
+    def physical(self, db, *, root=None):
+        policy = physical_storage(self.service, db)
+        if policy is not None and root is not None and Path(root) != policy.roots["exports"]:
+            reject(503, "La raíz de exportación no coincide con el presupuesto físico.")
+        return policy
+
+    def _reserve(self, db, policy, identity, attempt, token):
+        policy.acquire(db, resource=export_resource(identity, attempt, token), phase="export",
+            attempt=attempt, token=token, amounts={policy.pools["exports"]: export_envelope(self.limits)},
+            policy=hashlib.sha256(json.dumps([policy.configuration_sha256, asdict(self.limits)],
+                                           sort_keys=True).encode()).hexdigest())
+
     def _owned(self, db, owner, identity):
         row = db.query(DatasetExport).filter_by(id=identity, owner_id=owner).first()
         if row is None:
@@ -91,6 +104,7 @@ class ExportQueue:
                 if (prior.dataset_id, prior.revision) != (dataset_id, revision):
                     reject(409, "La operación ya existe con otros parámetros.")
                 return _snapshot(prior)
+            physical = self.physical(db)
             active = db.query(DatasetExport).filter(DatasetExport.status.in_(("queued", "running")))
             if (active.count() >= self.jobs.limits.global_active
                     or active.filter_by(owner_id=owner).count() >= self.jobs.limits.owner_active):
@@ -101,6 +115,8 @@ class ExportQueue:
                 expires_at=now + self.limits.artifact_seconds, attempt=0, token=0, progress=0)
             db.add(row)
             db.flush()
+            if physical is not None:
+                self._reserve(db, physical, row.id, 1, 1)
             return _snapshot(row)
 
     def get(self, owner, identity):
@@ -227,6 +243,13 @@ class ExportQueue:
                         if row.status == "succeeded" and row.expires_at > self.jobs._now(db):
                             continue
                         row.status = "deleting"
+                    physical = self.physical(db, root=root)
+                    if physical is not None:
+                        # Exclusive directory ownership proves the callback and
+                        # downloads stopped. Claim only advances tokens; it never
+                        # resumes this terminal attempt or resurrects its grant.
+                        _, number, token = path.name.rsplit("-", 2)
+                        physical.retire(db, export_resource(row.id, int(number), int(token)))
                 try:
                     shutil.rmtree(path)
                     _durable_directory(root)
@@ -259,6 +282,44 @@ def _path(value, *, segment=False):
     return value
 
 
+def export_resource(identity, attempt, token):
+    return f"export:{identity}:{attempt}:{token}"
+
+
+def export_envelope(limits):
+    # ZIP_STORED: local header 30 + forced ZIP64 extra 20; central
+    # header 46 + worst-case ZIP64 extra 32; two UTF-8 names <=2049 each.
+    # End records: EOCD 22 + ZIP64 EOCD 56 + locator 20. No comments.
+    return limits.manifest_bytes + limits.bytes + limits.files * 4226 + 98
+
+
+class _ArtifactWriter:
+    """Bound seekable ZIP growth, including header rewrites and central records."""
+
+    def __init__(self, destination, maximum, physical):
+        self.destination, self.maximum, self.physical = destination, maximum, physical
+
+    def write(self, data):
+        if self.tell() + len(data) > self.maximum:
+            raise IntegrityConflict("Export exceeds physical envelope")
+        pool = self.physical.pools["exports"]
+        if shutil.disk_usage(self.physical.roots["exports"]).free < self.physical.free_floors[pool]:
+            reject(507, "Espacio físico insuficiente para autorizar la escritura.")
+        written = self.destination.write(data)
+        if written != len(data):
+            raise OSError("Short export write")
+        return written
+
+    def tell(self):
+        return self.destination.tell()
+
+    def seek(self, *args):
+        return self.destination.seek(*args)
+
+    def flush(self):
+        return self.destination.flush()
+
+
 def _json(line):
     def unique(pairs):
         result = {}
@@ -277,7 +338,7 @@ def _line(stream):
     return line
 
 
-def build_zip(storage, reference, staging, limits, report):
+def build_zip(storage, reference, staging, limits, report, *, physical=None):
     """Read T6's bounded line-delimited JSON wire format, not local member rows."""
     manifest = reference["manifest"]
     owner, dataset = reference["owner_id"], reference["dataset_id"]
@@ -288,13 +349,18 @@ def build_zip(storage, reference, staging, limits, report):
         raise IntegrityConflict("Unauthorized manifest reference")
     manifest_path = staging / "manifest.json"
     with manifest_path.open("xb") as target:
+        if physical is not None:
+            target = physical.writer(target, manifest["size_bytes"], role="exports")
         storage.read_verified(manifest["object_key"], manifest["object_generation"],
                               manifest["sha256"], manifest["size_bytes"],
                               _HashSink(manifest["size_bytes"], target))
     if manifest_path.stat().st_size != manifest["size_bytes"] or digest_file(manifest_path) != manifest["sha256"]:
         raise IntegrityConflict("Manifest integrity mismatch")
     output = staging / "export.part"
-    with manifest_path.open("rb") as stream, zipfile.ZipFile(output, "x", compression=zipfile.ZIP_STORED, allowZip64=True) as archive:
+    with manifest_path.open("rb") as stream, output.open("x+b") as destination, zipfile.ZipFile(
+            _ArtifactWriter(destination, export_envelope(limits) - limits.manifest_bytes, physical)
+            if physical is not None else destination,
+            "w", compression=zipfile.ZIP_STORED, allowZip64=True) as archive:
         suffix = b', "files": [\n'
         first = _line(stream)
         if not first.endswith(suffix):
@@ -364,30 +430,47 @@ def build_zip(storage, reference, staging, limits, report):
 class ExportExecution:
     def __init__(self, queue, root, *, storage, **options):
         self.queue, self.root, self.storage = queue, _private_root(root), storage
-        self.worker = ImportJobWorker(queue, self.root, self.execute, **options)
+        self.worker = ImportJobWorker(queue, self.root, self.execute, preparation=self.preparation, **options)
+
+    @contextmanager
+    def preparation(self, attempt):
+        with self.queue.publication(attempt) as (db, row):
+            physical = self.queue.physical(db, root=self.root)
+            if physical is not None:
+                # First authority must have been admitted durably, including
+                # after a legacy lease expired. Retry is not implicit adoption.
+                from app.models.dataset_storage import StorageGrant
+                resource = export_resource(row.id, 1, 1)
+                if not db.query(StorageGrant.id).filter_by(resource_id=resource, state="live").first():
+                    reject(503, "La exportación requiere conciliación explícita.")
+                self.queue._reserve(db, physical, row.id, 1, 1)
+                self.queue._reserve(db, physical, row.id, row.attempt, row.token)
+        # Commit before creating output. Cleanup skips running jobs, even when
+        # their lease expired; the worker owns its new lock before scheduling.
+        yield
 
     def run_once(self):
         return self.worker.run_once()
 
     def execute(self, attempt, staging, report):
-        fd = os.open(staging, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX)
-            with self.queue.publication(attempt) as (db, row):
-                reference = authorized_reference(self.queue.service, db, row.owner_id, row.dataset_id, row.revision)
-                reference["owner_id"] = row.owner_id
-                if reference["status"] != "complete":
-                    raise IntegrityConflict("Incomplete revision")
-            path, digest = build_zip(self.storage, reference, staging, self.queue.limits, report)
-            with self.queue.publication(attempt) as (db, row):
-                now = self.queue.jobs._now(db)
-                if row.lease_until <= now:
-                    raise LeaseLost("Export expired before completion")
-                row.artifact = staging.name + "/export.zip"
-                row.artifact_identity = artifact_identity(path.stat())
-                row.sha256, row.size_bytes = digest, path.stat().st_size
-                row.status, row.progress, row.lease_until = "succeeded", 100, None
-                row.expires_at = now + self.queue.limits.artifact_seconds
-            return {}
-        finally:
-            os.close(fd)
+        # ImportJobWorker already owns the directory lock until callback exit.
+        # Reopening and flocking the same directory would deadlock against it.
+        with self.queue.publication(attempt) as (db, row):
+            physical = self.queue.physical(db, root=self.root)
+            reference = authorized_reference(self.queue.service, db, row.owner_id, row.dataset_id, row.revision)
+            reference["owner_id"] = row.owner_id
+            if reference["status"] != "complete":
+                raise IntegrityConflict("Incomplete revision")
+        path, digest = build_zip(self.storage, reference, staging, self.queue.limits, report, physical=physical)
+        with self.queue.publication(attempt) as (db, row):
+            now = self.queue.jobs._now(db)
+            if row.lease_until <= now:
+                raise LeaseLost("Export expired before completion")
+            row.artifact = staging.name + "/export.zip"
+            row.artifact_identity = artifact_identity(path.stat())
+            row.sha256, row.size_bytes = digest, path.stat().st_size
+            row.status, row.progress, row.lease_until = "succeeded", 100, None
+            row.expires_at = now + self.queue.limits.artifact_seconds
+            if physical is not None:
+                physical.retire(db, export_resource(row.id, row.attempt, row.token))
+        return {}
