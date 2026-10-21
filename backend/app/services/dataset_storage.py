@@ -212,10 +212,12 @@ class PhysicalStorage:
         self.acquire(db, resource=identity, phase="initial", attempt=0, token=0,
                      amounts={pool: 2 * service.limits.expanded_bytes}, policy=policy)
 
-    def require(self, db, service, identity, phase, amount, *, attempt=0, token=0, role="imports"):
+    def require(self, db, service, identity, phase, amount, *, attempt=0, token=0, role="imports",
+                allow_retired=False):
         pool = self.pools[role]
         row = db.get(StorageGrant, _hash([identity, phase, attempt, token, pool]))
-        if (row is None or row.state != "live" or row.pool_id != pool or row.resource_id != identity
+        states = ("live", "retired") if allow_retired else ("live",)
+        if (row is None or row.state not in states or row.pool_id != pool or row.resource_id != identity
                 or row.phase != phase or row.attempt != attempt or row.token != token
                 or row.envelope_bytes != amount or row.policy_sha256 != self.policy_hash(service.limits)):
             _reject()
@@ -257,7 +259,11 @@ class PhysicalStorage:
         if reviewed is not None:
             old_resource, number, token = reviewed
             transfer = self.require(db, service, old_resource, "preview", 2 * service.limits.expanded_bytes,
-                                    attempt=number, token=token, role="attempts")
+                                    attempt=number, token=token, role="attempts", allow_retired=True)
+            if transfer.state == "retired":
+                # A prior confirmation already consumed this promise. Its charge
+                # survives scheduling failure; recovery needs a fresh envelope.
+                transfer = None
         elif attempt["kind"] == "preview" and initial is not None and initial.state == "live":
             self.require(db, service, attempt["import_id"], "initial", amount)
             transfer = initial

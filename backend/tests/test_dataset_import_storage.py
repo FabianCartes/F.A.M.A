@@ -300,6 +300,89 @@ def test_initial_preview_transfers_authority_and_retry_is_charged_before_output(
     assert inspect_storage(sessions.kw["bind"])["live_grants"] == 3
 
 
+@pytest.mark.parametrize("failure", ["construction", "first_start", "second_start"])
+def test_confirm_transfer_retry_preserves_failed_charge_and_requires_fresh_capacity(
+        imports, monkeypatch, tmp_path, failure):
+    import hashlib
+    import threading
+    from scripts.migrate_dataset_storage import inspect_storage
+    from tests.test_dataset_import_api import prepare, wav_bytes
+
+    configure(imports, monkeypatch, free=2005)
+    client, service, _, sessions = imports
+    service.limits = replace(service.limits, received_bytes=1000, expanded_bytes=500)
+    preview = prepare(client, tmp_path)
+    identity = preview["id"]
+    endpoint = f"{BASE}/{identity}"
+    receipt = client.get(endpoint + "/receipt").json()
+    files = {str(p): p.read_bytes() for p in service.root.rglob("*") if p.is_file()}
+    admitted = client.post(endpoint + "/confirm", json={
+        "preview_token": preview["preview_token"], "request_key": "confirm"})
+    assert admitted.status_code == 202, admitted.text
+    with sessions() as db:
+        now = client.execution.queue._now(db)
+    original_start = threading.Thread.start
+    calls = 0
+    started = []
+
+    def construct(thread, *args, **kwargs):
+        raise RuntimeError("cannot start new thread")
+
+    def start_thread(thread):
+        nonlocal calls
+        calls += 1
+        if calls == (1 if failure == "first_start" else 2):
+            raise RuntimeError("cannot start new thread")
+        original_start(thread)
+        started.append(thread)
+
+    # Initial confirmation transfers the preview even with no spare envelope.
+    monkeypatch.setattr("app.services.dataset_storage.shutil.disk_usage", lambda _: SimpleNamespace(free=5))
+    with monkeypatch.context() as patch:
+        patch.setattr(threading.Thread, "__init__" if failure == "construction" else "start",
+                      construct if failure == "construction" else start_thread)
+        with pytest.raises(RuntimeError, match="^cannot start new thread$"):
+            client.execution.run_once()
+    for thread in started:
+        thread.join(2)
+        assert not thread.is_alive()
+    assert inspect_storage(sessions.kw["bind"])["live_grants"] == 2
+    assert client.get(endpoint).json()["status"] == "ready"
+    assert client.get(endpoint + "/receipt").json() == receipt
+    assert client.get(f"{BASE}/datasets").json()["datasets"] == []
+    assert {str(p): p.read_bytes() for p in service.root.rglob("*") if p.is_file()} == files
+    directories = set(client.execution.root.iterdir())
+
+    # Recovery must retain archive 1000 + failed confirm 500, then acquire E.
+    client.execution.queue.clock = lambda: now + 120
+    monkeypatch.setattr("app.services.dataset_storage.shutil.disk_usage", lambda _: SimpleNamespace(free=2004))
+    assert client.execution.run_once()
+    failed = client.get(admitted.json()["status_url"]).json()
+    assert failed["status"] == "failed" and failed["error"] == {"code": "staging_failed"}
+    assert failed["result"] == {}
+    assert inspect_storage(sessions.kw["bind"])["live_grants"] == 2
+    assert set(client.execution.root.iterdir()) == directories
+    assert client.get(endpoint + "/receipt").json() == receipt
+    assert client.get(f"{BASE}/datasets").json()["datasets"] == []
+    assert {str(p): p.read_bytes() for p in service.root.rglob("*") if p.is_file()} == files
+    retry = client.post(admitted.json()["status_url"] + "/retry", json={"request_key": "retry"})
+    assert retry.status_code == 202, retry.text
+    monkeypatch.setattr("app.services.dataset_storage.shutil.disk_usage", lambda _: SimpleNamespace(free=2005))
+    assert client.execution.run_once()
+    result = client.get(retry.json()["status_url"]).json()
+    assert result["status"] == "succeeded", result
+    published = client.get(endpoint).json()
+    assert published["status"] == "imported" and published["added_count"] == 1
+    assert inspect_storage(sessions.kw["bind"])["live_grants"] == 3
+    datasets = client.get(f"{BASE}/datasets").json()["datasets"]
+    assert len(datasets) == 1 and datasets[0]["revision"] == 1 and datasets[0]["file_count"] == 1
+    members = client.get(f"{BASE}/datasets/{published['dataset_id']}/files").json()["files"]
+    assert len(members) == 1 and members[0]["sha256"] == hashlib.sha256(wav_bytes()).hexdigest()
+    assert client.get(f"{BASE}/datasets/{published['dataset_id']}/files/{members[0]['sha256']}").content == wav_bytes()
+    assert not client.execution.run_once()
+    assert client.get(f"{BASE}/datasets").json()["datasets"] == datasets
+
+
 def test_confirmation_uses_reserved_publication_and_preserves_original_wav(imports, monkeypatch, tmp_path):
     from tests.test_dataset_import_api import prepare, confirm, wav_bytes
     configure(imports, monkeypatch, free=2005)
