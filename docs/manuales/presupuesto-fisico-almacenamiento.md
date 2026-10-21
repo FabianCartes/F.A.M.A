@@ -1,6 +1,6 @@
 # Inspect and prepare physical-budget metadata without activating it
 
-Status: P2 import/export implementation has local synthetic checks, independent verification and acknowledged native reviews. T4 drain-first reconciliation and process checks are being verified. **Do not activate the real deployment:** operational topology/floor qualification and authorized coordinated maintenance remain open. The preparation command does not enable larger imports, reconcile existing work or establish disk capacity. Follow [P2 implementation tracking](../arquitectura/large-zip-storage-budget-implementation.md) and [ADR 0052](../adr/0052-shared-physical-storage-budget.md).
+Status: P2 T1–T4 local implementation/checking is complete, including import/export grants and drain-first reconciliation, with independent verification and acknowledged native reviews. **P2 operational acceptance is incomplete; do not activate the real deployment:** PostgreSQL, selected-storage topology/floor qualification and authorized coordinated maintenance remain open. The preparation command does not enable larger imports, reconcile existing work or establish disk capacity. Follow [P2 implementation tracking](../arquitectura/large-zip-storage-budget-implementation.md) and [ADR 0052](../adr/0052-shared-physical-storage-budget.md).
 
 ## Read-only inspection
 

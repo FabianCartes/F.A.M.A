@@ -1,8 +1,8 @@
 # ADR 0052: Shared physical-storage promises without reinterpreting receipt v1
 
-Status: Design selected for P2; implementation, migration and operational cutover pending.
+Status: Design selected for P2; local implementation/checking complete, operational acceptance and cutover pending.
 
-Implementation update: [T1 maintenance foundation](../arquitectura/large-zip-storage-budget-implementation.md) now has isolated functional and independent correction evidence; closure, writer integration and operational migration/cutover remain pending. This does not change the design's authorization boundary or certify storage accounting.
+Implementation update: [T1–T4 tracking](../arquitectura/large-zip-storage-budget-implementation.md) records local maintenance, import/export grants and explicit drain-first reconciliation, with functional, independent and acknowledged native review evidence. PostgreSQL and actual mount/quota/floor/metadata/inode qualification remain pending; P2 is not accepted operationally. The design and operational authorization boundary below remain unchanged.
 
 The existing receipt promise covers the declared ZIP plus one expansion, while publication can create another WAV copy, retries retain independent attempts, and exports build local artifacts. We select an additive, versioned physical-budget ledger shared by these writers, with conservative per-filesystem admission and durable grants before growth. The detailed lifecycle, acceptance cases and conditional migration/recovery plan are in [P2 design, section 10](../arquitectura/large-zip-limits-enablement-plan.md#10-p2-shared-physical-budget-design).
 
