@@ -1,0 +1,51 @@
+{
+  "schema": "fama.large-zip-limits-p2-t2/v1",
+  "status": "closed locally within import-side synthetic scope",
+  "branch": "plan/large-zip-limits",
+  "base_commit": "8db83ba",
+  "implementation_commit": "818d47f",
+  "native_correction_commit": "5087910",
+  "plan": "docs/arquitectura/large-zip-storage-budget-implementation.md",
+  "checks": {
+    "unblocked_regression": {"passed": 102, "exit_code": 0, "deselected": 0},
+    "auxiliary_unit_before_unicode_correction": {"storage_passed": 51, "sync_passed": 12, "regression_passed": 128, "exit_code": 0, "deselected": 0},
+    "after_unicode_correction": {"storage_passed": 53, "sync_passed": 12, "total_passed": 65, "exit_code": 0, "deselected": 0},
+    "after_native_correction": {"storage_passed": 56, "exit_code": 0, "deselected": 0},
+    "parent_native_correction_spot": {"passed": 3, "deselected": 53, "exit_code": 0},
+    "runner": "backend/tests/run_isolated_training_checks.py",
+    "protected_paths_unchanged": 30,
+    "private_scratch_cleanup": true,
+    "network_and_live_database_denied": true,
+    "warnings": "Two existing interpreter-prefix warnings per guarded invocation.",
+    "scope_note": "Counts describe distinct candidate executions, not one combined final suite. Earlier broad suites were not repeated after scoped corrections."
+  },
+  "independent_checks": {
+    "example_failure": "Same obsolete selected-root test failed once on candidate and baseline; authorized test-only correction passed and unblocked regression.",
+    "worker_scheduling": "Candidate-only lock leak reproduced against baseline; unchanged targeted probe passed after correction.",
+    "auxiliary_initial": {"passed": 7, "failed": 1},
+    "auxiliary_failure": "Valid inactive Unicode description failed only on candidate; corrected without changing inactive wire encoding or weakening active bounds.",
+    "auxiliary_targeted_recheck": {"inactive_passed": 1, "active_bound_passed": 1},
+    "qualification": "Private synthetic roots, memory SQLite and synthetic mount/free-space observations; no host topology or real cloud certification."
+  },
+  "native_review": {
+    "consent": "User selected Revisar este cambio.",
+    "lenses": ["review-risk", "review-resilience", "review-readability", "review-reliability"],
+    "finding": "R3-confirm-transfer-retry",
+    "refuter": "corroborated",
+    "correction_batches": 1,
+    "correction_authored_lines": 95,
+    "accepted_forecast_lines": 160,
+    "frozen_budget_lines": 200,
+    "targeted_validation": "admitted; approved",
+    "acknowledgement_schema": "gentle-ai.review-acknowledged/v1",
+    "lineage": "review-5dee437500a68a10",
+    "initial_target": "sha256:ab235a1678d5e6a1ff6c002cef76b16972a04687652c2e77ef535c1c4d7b32f9",
+    "corrected_target": "sha256:70cb855b1fe3b16d5ed55d4922cad044c5be81f034cfe38b05bbc3341459fa72",
+    "consumed_revision": "sha256:0c0a1a9bfbc93a063561e06207b06fe29daf5153b7f0f6688f2083f83edc48f4",
+    "action": "acknowledged",
+    "authority": "burned"
+  },
+  "pending": ["T3 export accounting", "T4 reconciliation and coordinated cutover", "cross-process acceptance", "PostgreSQL", "operational mount/lock/floor/inode qualification", "maximum-size acceptance", "P3-P6"],
+  "not_performed": ["active limit changes", "operational migration", "service or worker launch/restart", "real imports", "large fixtures", "dependency installation", "real cloud operations", "push", "pull request"],
+  "closure_note": "This receipt and later closure notes are passive post-review evidence, not additional reviewed executable bytes. T2 closure does not close P2 or authorize activation."
+}

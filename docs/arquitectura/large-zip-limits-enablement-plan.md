@@ -1,6 +1,6 @@
 # Enable the agreed large-ZIP import limits
 
-Status: P0 inventory recorded; P1 closed locally; P2 design documented, T1 maintenance foundation functionally checked with independent correction recheck; T1 closure and writer integration pending. P3–P6, operational migration and activation pending.
+Status: P0 inventory recorded; P1 closed locally; P2 T1 maintenance and T2 import-side integration closed locally with acknowledged native reviews. P2 T3/T4, P3–P6, operational migration and activation pending. Current work-unit evidence: [P2 implementation tracking](large-zip-storage-budget-implementation.md).
 Baseline: `adecb01` on `dev`; planning branch: `plan/large-zip-limits`.
 Scope: 10 GiB received ZIP, 15 GiB expanded import, and preservation of existing dataset quotas.
 

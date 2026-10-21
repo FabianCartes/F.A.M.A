@@ -1,6 +1,6 @@
 # Inspect and prepare physical-budget metadata without activating it
 
-Status: P2 maintenance foundation and **inactive import-side integration**, including bounded manifest sync/download. Do not activate it: independent verification, operational topology/floor qualification, export integration and coordinated reconciliation remain open. This command does not enable larger imports, reconcile existing work or establish disk capacity. Follow [P2 implementation tracking](../arquitectura/large-zip-storage-budget-implementation.md) and [ADR 0052](../adr/0052-shared-physical-storage-budget.md).
+Status: P2 maintenance foundation and **inactive import-side integration**, including bounded manifest sync/download, closed locally within synthetic verification and acknowledged native review ([T2 receipt](../receipts/large-zip-limits-p2-t2.json)). Do not activate it: operational topology/floor qualification, export integration and coordinated reconciliation remain open. This command does not enable larger imports, reconcile existing work or establish disk capacity. Follow [P2 implementation tracking](../arquitectura/large-zip-storage-budget-implementation.md) and [ADR 0052](../adr/0052-shared-physical-storage-budget.md).
 
 ## Read-only inspection
 

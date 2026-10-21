@@ -123,6 +123,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 
 * [`large-zip-limits-p0.json`](./receipts/large-zip-limits-p0.json): Inventario local P0: límites API observados, almacenamiento compartido, prerrequisitos y ausencia de worker coincidente; conserva límites de recolección. No certifica sandbox, importación ni escala máxima.
 * [`large-zip-limits-p1.json`](./receipts/large-zip-limits-p1.json): Cierre local P1: RED/GREEN, suites propias, nueve probes independientes, prueba HTTP candidato/base y revisión nativa de tres perspectivas aprobada con acuse consumido. Conserva fallos de preparación históricos; sin activación de límites.
+* [`large-zip-limits-p2-t2.json`](./receipts/large-zip-limits-p2-t2.json): Cierre local de integración de importaciones T2: pruebas por candidato, correcciones y revisión nativa con validación dirigida/acuse consumido. No acredita exportaciones, conciliación, capacidad máxima ni activación.
 * [`receipts/backend-suite-current-baseline.json`](./receipts/backend-suite-current-baseline.json): Baseline focal posterior a las limpiezas: 320 + 56 pruebas aprobadas, cinco deselecciones y probe de imports separado; comandos, hashes y límites frente a los conteos globales históricos de 12/26 fallos.
 
 * [`receipts/lock4-incorporacion-audit.json`](./receipts/lock4-incorporacion-audit.json): Auditoría local de cinco incorporaciones de feedback, duplicados WAV y 78 pruebas aisladas de incorporación/deduplicación; límites históricos y seguimientos DATA-6/DATA-7.
