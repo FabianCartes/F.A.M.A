@@ -12,3 +12,7 @@
 | Referencia experimental histórica | Resultado conservado de un experimento anterior. No describe por sí solo las métricas, disponibilidad ni configuración actual de un modelo. |
 | Confianza de predicción | Valor reportado por el clasificador para una salida concreta. No equivale a certeza diagnóstica ni a exactitud general demostrada. |
 | Carga observada | Instancia de modelo presente en la memoria del entorno observado. No acredita activación global, vigencia del archivo de respaldo ni inferencia correcta. |
+| Cuota lógica de dataset | Límite acumulado de bytes y miembros únicos incorporados a un dataset; no representa todo el espacio físico ocupado durante su importación. |
+| Promesa de escritura | Capacidad comprometida para crecimiento futuro autorizado. Su liberación no demuestra que se hayan borrado archivos ni recuperado espacio. |
+| Pool físico de almacenamiento | Capacidad compartida por ubicaciones de almacenamiento; varias rutas pueden competir por el mismo espacio disponible. |
+| Espacio recuperado | Capacidad física que vuelve a estar disponible tras una reclamación efectiva; no equivale a cancelar un trabajo o liberar una promesa. |

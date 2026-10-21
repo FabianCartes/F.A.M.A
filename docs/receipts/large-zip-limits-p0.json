@@ -1,0 +1,127 @@
+{
+  "schema": "fama.large-zip-limits-p0/v1",
+  "scope": "local read-only inventory; not functional or maximum-size acceptance",
+  "baseline_commit": "adecb01",
+  "branch": "plan/large-zip-limits",
+  "plan": "docs/arquitectura/large-zip-limits-enablement-plan.md",
+  "observation_time": {
+    "parent_storage_spot_check_utc": "2026-10-21T01:22:03.308018+00:00",
+    "collector_timestamp": null,
+    "note": "Collector observations preceded the parent spot check in the same P0 inspection. Availability is a changing snapshot."
+  },
+  "collection": {
+    "command": "python -B /tmp/opencode/fama_p0_readonly.py",
+    "collector_location": "temporary diagnostic outside the repository; not an installed application command",
+    "executions": 1,
+    "overall_exit_code": null,
+    "exit_code_limitation": "Runner received all observation sections but did not expose the global process exit code. No full-collector retry was performed.",
+    "parent_spot_check": "Read-only statvfs of backend/data-dev and proposed workspace existence; completed with an explicit exit_status=0 observation.",
+    "local_docker_endpoint": "unix:///var/run/docker.sock",
+    "http_endpoint": "http://127.0.0.1:3000/api/ingestion/imports/limits",
+    "http_method": "GET",
+    "http_status": 200,
+    "http_credentials_used": false,
+    "http_proxies_and_redirects": "disabled",
+    "output_policy": "Only allowlisted import settings and bounded resource observations; no raw container environment, process arguments, credentials or database contents."
+  },
+  "local_runtime": {
+    "compose_running_services": 3,
+    "frontend": {"running": true, "health": "healthy", "published_address": "127.0.0.1:3000"},
+    "backend": {"running": true, "health": "healthy", "host_port_published": false},
+    "database": {"running": true, "health": "healthy", "host_port_published": false},
+    "mode": "development import exception enabled",
+    "backend_import_root_host_path": "backend/data-dev/dataset-imports",
+    "backend_explicit_byte_limit_overrides": false,
+    "container_memory_and_nano_cpu_limits": "zero reported for all three services; no explicit limits in inspected fields, not proof of unconstrained host resources",
+    "matching_host_workers_detected": 0,
+    "worker_detection_scope": "Same-user processes with recognized worker launcher/module tokens and cwd inside this repository; no process environment or database inspected.",
+    "api_worker_limit_agreement": "unverified: no matching running host worker detected",
+    "database_schema_and_active_jobs": "not queried"
+  },
+  "effective_api_limits": {
+    "received_bytes": 67108864,
+    "expanded_bytes": 268435456,
+    "entries": 2000,
+    "depth": 12,
+    "path_bytes": 240,
+    "audio_bytes": 33554432,
+    "audio_seconds": 600,
+    "validation_seconds": 60,
+    "free_bytes": 536870912,
+    "ttl_seconds": 86400,
+    "concurrent_imports": 4,
+    "dataset_bytes": 16106127360,
+    "dataset_entries": 50000
+  },
+  "storage": {
+    "data_filesystem": {
+      "type": "btrfs",
+      "mountpoint": "/home",
+      "same_filesystem_paths": [".", "backend/data-dev/dataset-imports", "backend/data-dev/dataset-import-attempts"],
+      "available_bytes_collector": 45391785984,
+      "available_bytes_parent_spot_check": 45391306752,
+      "available_GiB_parent_spot_check": 42.274,
+      "margin_after_40_GiB_payload_GiB": 2.274,
+      "available_inode_count": null,
+      "inode_note": "statvfs reported no fixed inode pool; do not interpret as zero free inodes.",
+      "import_and_attempt_roots": "existing physical directories, invoking-user owned, mode0700, writable; same filesystem",
+      "non_dev_default_roots": "backend/data/dataset-imports and backend/data/dataset-import-attempts absent; nearest existing ancestor backend/data"
+    },
+    "small_scratch_parent": {
+      "path": "/tmp/opencode",
+      "type": "tmpfs",
+      "mountpoint": "/tmp",
+      "available_bytes": 8159956992,
+      "available_inodes": 1048527,
+      "use": "Private child directories for bounded small checks only; parent itself is mode0755. No child created by P0."
+    },
+    "large_scratch_candidate": {
+      "path": "backend/data-dev/large-zip-checks/<private-run>",
+      "parent_exists": false,
+      "disposition": "Candidate on the data filesystem only; create mode0700 separately from live roots after authorization and resource budgeting. Not provisioned or cleared for maximum-size testing."
+    },
+    "export_root_and_backlog": "not established; worker root is supplied separately and no export worker or database inventory was inspected",
+    "maximum_size_clearance": false,
+    "reason": "Only about2.274GiB remains after a hypothetical40GiB no-retry payload; overhead, retained attempts, other allocations and competing exports are not budgeted. tmpfs is smaller than the target archive itself."
+  },
+  "existing_archives_metadata_only": [
+    {"path": "~/Work/ESC-50-master.SDEQyqRI.zip.part", "size_bytes": 645695005},
+    {"path": "~/Work/ESC-50-fama.zip", "size_bytes": 644080590}
+  ],
+  "host_resources": {
+    "logical_cpus": 12,
+    "memory_total_bytes": 16458252288,
+    "memory_available_bytes": 7758598144,
+    "swap_total_bytes": 16457396224,
+    "swap_free_bytes": 16457396224,
+    "collector_address_space_rlimit": [-1, -1],
+    "collector_open_file_rlimit": [524288, 524288],
+    "note": "Host snapshots and collector limits are not decoder-child limits or a safe-concurrency measurement."
+  },
+  "host_prerequisites": {
+    "bubblewrap": {"path": "/usr/bin/bwrap", "version": "0.13.1", "version_command_exit": 0},
+    "prlimit": {"path": "/usr/bin/prlimit", "util_linux_version": "2.42.4", "version_command_exit": 0},
+    "seccomp_library_lookup": "libseccomp.so.2",
+    "unprivileged_userns_clone": 1,
+    "max_user_namespaces": 61774,
+    "project_venv": {
+      "python": "3.14.8",
+      "module_specs_found": ["soundfile", "_soundfile", "numpy", "cffi", "sqlalchemy", "psycopg2", "typing_extensions"],
+      "probe_exit": 0
+    },
+    "system_python": {
+      "python": "3.14.8",
+      "module_specs_found": ["typing_extensions"],
+      "module_specs_missing": ["soundfile", "_soundfile", "numpy", "cffi", "sqlalchemy", "psycopg2"],
+      "probe_exit": 0
+    },
+    "validation_scope": "Executable versions, library lookup, namespace settings and isolated module-spec discovery only. Not module initialization, sandbox launch, Python3.12/container qualification, database connectivity or full runner validation."
+  },
+  "p0_outcome": {
+    "inventory": "recorded with limitations",
+    "next_safe_work": ["P1 configuration preparation without live activation", "P2 physical-capacity accounting", "P3 bounded measurement preparation"],
+    "not_ready": ["API-worker live configuration comparison", "maximum-size tests on current unbudgeted storage", "full sandbox operation proof", "normal authenticated-mode acceptance"]
+  },
+  "preserved": ["application limits", "services and images", "database and schema", "user datasets and archives", "existing jobs and reservations", "Git baseline and old branch"],
+  "not_performed": ["worker launch", "functional tests or sandbox smoke", "large-data generation", "Docker lifecycle actions", "installation", "migration", "import", "cleanup or deletion", "remote operation", "commit or push"]
+}

@@ -1,0 +1,100 @@
+{
+  "schema": "fama.large-zip-limits-p1/v1",
+  "baseline_commit": "adecb01",
+  "branch": "plan/large-zip-limits",
+  "scope": "P1 configuration preparation only; no operational activation",
+  "status": "P1 closed locally within synthetic configuration scope; functionally verified and native review acknowledged",
+  "production_change": {
+    "path": "docker-compose.yml",
+    "summary": "Five existing import variables passed with conservative fallbacks; no loader, worker or API implementation change.",
+    "defaults": {
+      "FAMA_IMPORT_RECEIVED_BYTES": "67108864",
+      "FAMA_IMPORT_EXPANDED_BYTES": "268435456",
+      "FAMA_IMPORT_DATASET_BYTES": "16106127360",
+      "FAMA_IMPORT_DATASET_ENTRIES": "50000",
+      "FAMA_IMPORT_ENTRIES": "2000"
+    },
+    "explicit_target_tested_in_synthetic_configuration": {
+      "FAMA_IMPORT_RECEIVED_BYTES": "10737418240",
+      "FAMA_IMPORT_EXPANDED_BYTES": "16106127360"
+    }
+  },
+  "own_checks": {
+    "red": {"compose_cases_failed": 6, "unrelated_cases_deselected": 7, "reason": "Import environment keys absent from resolved Compose model."},
+    "focused_green": {"compose_cases_passed": 6, "unrelated_cases_deselected": 7},
+    "root_suite": {
+      "files": ["tests/test_container_configuration.py", "tests/test_compose_import_dev.py", "tests/test_dev_imports.py"],
+      "passed": 20,
+      "subtests_passed": 6,
+      "deselected": 0
+    },
+    "backend_suite": {
+      "runner": "backend/tests/run_isolated_training_checks.py",
+      "selector": "tests/test_dataset_import_quotas.py",
+      "passed": 16,
+      "process_exit_code": 0,
+      "pytest_exit_code": 0,
+      "deselected": 0,
+      "protected_paths_unchanged": 30,
+      "guard_and_private_cleanup": "reported intact",
+      "warnings": "Two interpreter-prefix warnings; no failed cases."
+    }
+  },
+  "independent_verification": {
+    "scratch": "/tmp/opencode/p1-independent-3tuelj4k",
+    "public_probe": "test_p1_public.py",
+    "passed": 9,
+    "exit_code": 0,
+    "covered": ["P1.A1", "P1.A2", "P1.A3", "P1.A4", "P1.A5 within inspected scope"],
+    "baseline_comparison": "Resolved Compose JSON and stderr identical after removing exactly five new environment keys and normalizing checkout-root paths; public launcher rejection output and sentinel content preserved.",
+    "public_probe_workspace_source_hashes_unchanged": 445,
+    "recheck_workspace_source_hashes_unchanged": 492,
+    "workspace_status_unchanged": true,
+    "http_probe": "candidate/backend/tests/test_p1_independent_http.py",
+    "http_status": "passed once in candidate and once at baseline adecb01 after authorized scratch-only prerequisite completion",
+    "historical_preparation_failures": {
+      "blocked_attempts": 2,
+      "last_error": "ModuleNotFoundError: No module named 'ml_core'",
+      "last_exit_code": 4,
+      "last_attempt_sqlite_connections": 0,
+      "last_attempt_test_call_reports": 0
+    },
+    "authorized_recovery": {
+      "user_answer": "Autorizo",
+      "tracked_sources_completed_per_snapshot": 44,
+      "reachable_local_modules_inventoried": 76,
+      "unresolved_local_imports_before_launch": 0,
+      "prepared_probe_and_guards_unchanged": true,
+      "candidate": {"test_calls_passed": 1, "process_exit_code": 0, "pytest_exit_code": 0, "deselected": 0, "sqlite_memory_connections": 1, "protected_paths_unchanged": 30, "private_scratch_cleanup": true},
+      "baseline": {"test_calls_passed": 1, "process_exit_code": 0, "pytest_exit_code": 0, "deselected": 0, "sqlite_memory_connections": 1, "protected_paths_unchanged": 30, "private_scratch_cleanup": true},
+      "network_and_live_database_denied": true,
+      "already_passed_suites_repeated": false,
+      "parent_readback": "Read recheck-result.json and repeated read-only Git status/diff checks; no extra functional execution beyond the user-authorized once-per-snapshot limit."
+    },
+    "remaining_criterion": null,
+    "product_defect_reproduced": false
+  },
+  "next_decision": "P2 physical-capacity accounting requires the next stage authorization; no operational activation.",
+  "native_review": "approved without findings or correction; exact acknowledgement returned authority burned",
+  "native_review_details": {
+    "consent": "User selected Revisar este cambio in the native single-select prompt.",
+    "risk": "high; shared deployment configuration escalation item5",
+    "lenses": ["review-risk", "review-readability", "review-reliability"],
+    "lineage": "review-dfe0247bbcb56871",
+    "target_identity": "sha256:b0aa4b1e3ace6f50f175703f8b24c3caef42951cb1844aebf21fc9a5476ccb6d",
+    "base_tree": "80f78693665bbc151b62b560187360fbeddee841",
+    "candidate_tree": "f6c3fbf7566d98194a98c866096e8cb06d917323",
+    "consumed_revision": "sha256:753df48a644492ad35d9d4d9d3141d3b5470ae14d4b7b62ffbb02a199087c2f9",
+    "reviewed_paths": 10,
+    "reviewed_changed_lines": 622,
+    "findings": 0,
+    "correction_performed": false,
+    "acknowledgement_schema": "gentle-ai.review-acknowledged/v1",
+    "acknowledgement_action": "acknowledged",
+    "authority": "burned",
+    "closure_note": "Review covers the immutable candidate above. Subsequent status/evidence edits are passive closure notes, not a claim that these changed documentation bytes were in that snapshot. Commit, publication and operational activation remain separate."
+  },
+  "not_claimed": ["running worker agreement", "normal authenticated deployment", "sandbox runtime proof", "maximum-size receipt or decoding", "resource capacity", "operational rollout"],
+  "not_performed": ["service or worker start/restart", "real database changes", "dataset import", "dependency installation", "large file generation", "commit", "push", "remote operation"],
+  "risk_items": [3, 5]
+}

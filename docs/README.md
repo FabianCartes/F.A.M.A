@@ -17,7 +17,7 @@ docs/
 ├── arquitectura/                # Diseño de sistemas, pipelines, MLOps y despliegue
 ├── limites/                     # Límites matemáticos, físicos y problemas conocidos
 ├── manuales/                    # Manual de usuario, revisión, despliegue e índices canónicos
-├── adr/                         # Architectural Decision Records (ADR 0001 a 0051)
+├── adr/                         # Architectural Decision Records (ADR 0001 a 0052)
 ├── receipts/                    # Recibos técnicos reproducibles en formato JSON (RDD)
 ├── duplicados-exactos/           # Tarea acotada: admisión de feedback sin duplicados SHA-256
 └── images/                      # Diagramas, matrices de confusión y gráficos vectoriales
@@ -63,6 +63,8 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 ### 3. [`docs/arquitectura/`](./arquitectura/) — Arquitectura de Software y MLOps
 * [`large-zip-gcs-plan.md`](./arquitectura/large-zip-gcs-plan.md): Texto íntegro del plan original de 17 secciones; su estado inicial es histórico y prevalece el seguimiento de implementación.
 * [`large-zip-gcs.md`](./arquitectura/large-zip-gcs.md): Plan y seguimiento activo por cortes para ZIP grandes, metadatos normalizados y reconstrucción desde GCS; no acredita ampliación de límites ni despliegue.
+* [`large-zip-limits-enablement-plan.md`](./arquitectura/large-zip-limits-enablement-plan.md): Plan para habilitar 10 GiB por ZIP y 15 GiB descomprimidos; P0 inventariado y P1 cerrado localmente. P2 diseñado, con base de mantenimiento T1 comprobada en estado aislado; cierre e integración de escritores pendientes. Sin migración operacional ni activación; valores activos conservadores.
+* [`large-zip-storage-budget-implementation.md`](./arquitectura/large-zip-storage-budget-implementation.md): Especificación y seguimiento de implementación P2 por cortes; migración explícita, integración de escritores y verificación aislada, sin autorización de activación ni migración real.
 * [`0035-contained-zip-validation.md`](./adr/0035-contained-zip-validation.md): Contención Linux de interpretación ZIP/ZIP64 y decoder WAV, presupuestos de proceso, rechazo seguro y separación de publicación. Procedimiento T4 en [trabajos de importación](./manuales/trabajos-importacion-datasets.md#t4-validacion-zip64-contenida); verificación/cierre vigente en el seguimiento.
 * [`0036-recoverable-import-cleanup.md`](./adr/0036-recoverable-import-cleanup.md): Publicación de miembros nuevos y limpieza recuperable fuera de HTTP, separando liberación de reservas y recuperación física de staging; T5 cerrado localmente en alcance sintético, sin despliegue.
 * [`0037-immutable-dataset-revision-manifests.md`](./adr/0037-immutable-dataset-revision-manifests.md): Fotografía durable de revisión, lotes recuperables, generaciones verificadas y publicación de manifiestos inmutables; recuperación autorizada sin ZIP ni listas locales. [Procedimiento T6](./manuales/trabajos-importacion-datasets.md#t6-sincronización-de-revisiones-y-manifiestos-inmutables); cierre sujeto al seguimiento, sin operación real implícita.
@@ -71,7 +73,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`data6-identidad-preparacion.md`](./arquitectura/data6-identidad-preparacion.md): Alcance de implementación de DATA-6, identidad inmutable de preparación, decisiones de agrupación y avance de verificación; operaciones sobre datos reales excluidas.
 * [`publicacion-evaluaciones-coherentes.md`](./arquitectura/publicacion-evaluaciones-coherentes.md): Seguimiento de diagnóstico de publicación, par de evaluaciones aplicable, preflight y reversión; implementación y verificaciones por hitos.
 * [`identidad-checkpoint-cargado.md`](./arquitectura/identidad-checkpoint-cargado.md): Contrato de identidad de carga, bloqueo de registros sin hash y evidencia de implementación; no implica atestación continua de tensores.
-* [`CONTEXT.md`](./arquitectura/CONTEXT.md): Glosario de catálogo, disponibilidad/activación, inferencia/confianza, alta de administrador, metadatos y referencias experimentales históricas.
+* [`CONTEXT.md`](./arquitectura/CONTEXT.md): Glosario de catálogo, disponibilidad/activación, inferencia/confianza, alta de administrador, metadatos, referencias históricas y distinción entre cuotas lógicas, promesas de escritura y espacio físico recuperado.
 * [`03_orquestador_fastapi_gcs_postgresql.md`](./arquitectura/03_orquestador_fastapi_gcs_postgresql.md): Arquitectura del orquestador backend con FastAPI.
 * [`04_saneamiento_y_transcodificacion_audio.md`](./arquitectura/04_saneamiento_y_transcodificacion_audio.md): Pipeline de saneamiento y normalización de audio crudo.
 * [`18_soporte_multimodelo_backend_rdd.md`](./arquitectura/18_soporte_multimodelo_backend_rdd.md): Desacoplamiento de inferencia con Patrón Strategy y ModelRegistry.
@@ -86,6 +88,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 ### 4. [`docs/manuales/`](./manuales/) — Manuales y Guías Operativas
 * [`integracion-importacion-datasets.md`](./manuales/integracion-importacion-datasets.md): Recorrido T8 de recepción a descarga, matriz de aceptación, presupuestos de páginas/DOM, mediciones sintéticas y guía consolidada de almacenamiento, manifiestos y recuperación; no certifica despliegue ni escala máxima.
 * [`trabajos-importacion-datasets.md`](./manuales/trabajos-importacion-datasets.md): Migración, admisión durable, ejecución, HTTP202/panel, publicación fenced, limpieza protegida y CLI de un trabajo; pruebas sintéticas entre procesos y límites operacionales. T3a añade reservas; T3b añade fragmentos durables; T3c conecta el panel y verifica todo el prefijo; T3d añade cuotas por dataset y liberación atómica de reservas. T3a–T3d cerrados localmente dentro del alcance sintético, sin habilitar10GiB ni certificar operación real. [ADR 0030](./adr/0030-admision-durable-importaciones.md), [ADR 0031](./adr/0031-fenced-import-publication.md), [ADR 0032](./adr/0032-durable-receipt-reservations.md), [ADR 0033](./adr/0033-durable-import-chunks.md) y [ADR 0034](./adr/0034-dataset-import-quotas.md).
+* [`presupuesto-fisico-almacenamiento.md`](./manuales/presupuesto-fisico-almacenamiento.md): CLI P2 de inspección sin cambios y preparación aditiva explícita; no activa el presupuesto, no concilia trabajos ni acredita capacidad física. Aplicación real sujeta a autorización separada.
 * [`migracion-metadatos-importacion.md`](./manuales/migracion-metadatos-importacion.md): Backfill explícito que conserva JSON, contrato HTTP paginado y corte coordinado de lectores; mantenimiento y recuperación sujetos a autorización, sin despliegue implícito.
 * [`importacion-datasets-zip.md`](./manuales/importacion-datasets-zip.md): Modal de importación con formato `clase/audio.wav` sin subcarpetas y recuperación histórica; prueba manual Docker aislada con base vacía y worker externo local-only supervisado, arranque/parada sin borrados, límites y sincronización explícita; [ADR 0027](./adr/0027-importaciones-zip-privadas-locales.md) y [ADR 0028](./adr/0028-importacion-local-docker.md).
 * [`dev-import-readiness.md`](./arquitectura/dev-import-readiness.md): Alcance y comprobaciones del soporte de importación en el arranque de desarrollo habitual, con worker externo en segunda terminal; no autoriza ni acredita migraciones o ejecución operacional.
@@ -118,6 +121,8 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 
 ### Evidencia operacional
 
+* [`large-zip-limits-p0.json`](./receipts/large-zip-limits-p0.json): Inventario local P0: límites API observados, almacenamiento compartido, prerrequisitos y ausencia de worker coincidente; conserva límites de recolección. No certifica sandbox, importación ni escala máxima.
+* [`large-zip-limits-p1.json`](./receipts/large-zip-limits-p1.json): Cierre local P1: RED/GREEN, suites propias, nueve probes independientes, prueba HTTP candidato/base y revisión nativa de tres perspectivas aprobada con acuse consumido. Conserva fallos de preparación históricos; sin activación de límites.
 * [`receipts/backend-suite-current-baseline.json`](./receipts/backend-suite-current-baseline.json): Baseline focal posterior a las limpiezas: 320 + 56 pruebas aprobadas, cinco deselecciones y probe de imports separado; comandos, hashes y límites frente a los conteos globales históricos de 12/26 fallos.
 
 * [`receipts/lock4-incorporacion-audit.json`](./receipts/lock4-incorporacion-audit.json): Auditoría local de cinco incorporaciones de feedback, duplicados WAV y 78 pruebas aisladas de incorporación/deduplicación; límites históricos y seguimientos DATA-6/DATA-7.
@@ -138,6 +143,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`benchmark_local_cpu_inference_validated_20261016.json`](./receipts/benchmark_local_cpu_inference_validated_20261016.json): Carga corregida y ruta del predictor medida con filtro noise; no forward neuronal ni medición navegador/API.
 
 ### 6. [`docs/adr/`](./adr/) — Architectural Decision Records
+* [`ADR 0052`](./adr/0052-shared-physical-storage-budget.md): Diseño P2 de promesas físicas compartidas por importaciones y exportaciones, separado del contrato de reservas v1; migración aditiva y conciliación planificadas, no implementadas ni ejecutadas.
 * [`ADR 0029`](./adr/0029-migracion-metadatos-importacion.md): Migración aditiva verificable separada del cambio de lectores; datos originales conservados y sincronización histórica sin generaciones no elevada a prueba cloud.
 * [`ADR 0028`](./adr/0028-importacion-local-docker.md): Excepción Docker local explícita, peer exacto del frontend y puertos limitados al host loopback; no sustituye autenticación en servidores compartidos.
 * [`ADR 0027`](./adr/0027-importaciones-zip-privadas-locales.md): Importaciones ZIP privadas, persistencia local recuperable y sincronización posterior con verificación de contenido.
