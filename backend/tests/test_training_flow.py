@@ -19,6 +19,15 @@ from app.services import training
 from training import paths
 
 
+def directory_alias(alias, target):
+    try:
+        alias.symlink_to(target, target_is_directory=True)
+    except OSError as error:
+        if getattr(error, "winerror", None) == 1314:
+            pytest.skip("Windows no concede el privilegio para crear enlaces simbólicos en esta prueba")
+        raise
+
+
 @pytest.fixture
 def training_env(tmp_path, monkeypatch):
     engine = create_engine("sqlite:///:memory:", poolclass=StaticPool,
@@ -63,11 +72,11 @@ def partitions(root, name, stage="raw", extension=".wav"):
     return raw
 
 
-@pytest.mark.parametrize("name", ["medical_cough", "MotoresVehiculares", "aveschilenas", " AvesChilenas", "../AvesChilenas"])
-def test_unsupported_identity_is_rejected_before_scheduling(training_env, name):
+@pytest.mark.parametrize("name", ["../AvesChilenas", "bad/name", "CON", "name.", "x" * 101])
+def test_unsafe_identity_is_rejected_before_scheduling(training_env, name):
     service, sessions, _, thread = training_env
     register(sessions, name)
-    with pytest.raises(ValueError, match="no soportado"):
+    with pytest.raises(ValueError, match="Invalid dataset name"):
         service.start_training(name)
     progress = service.get_progress()
     assert progress["status"] == "failed"
@@ -95,7 +104,7 @@ def test_requires_exact_unambiguous_registration(training_env, registrations):
     thread.assert_not_called()
 
 
-@pytest.mark.parametrize("name", ["AvesChilenas", "engine_diagnostics"])
+@pytest.mark.parametrize("name", ["AvesChilenas", "engine_diagnostics", "FAMA_Prueba_Aves"])
 @pytest.mark.parametrize("defect", ["missing_source", "missing_partition", "empty", "schema", "unknown_label",
                                   "missing_audio", "outside_source", "overlap", "missing_stage", "unknown_stage",
                                   "blank_stage", "wrong_stage", "missing_path", "blank_path", "traversal", "alias",
@@ -133,13 +142,13 @@ def test_invalid_source_is_rejected_before_scheduling(training_env, name, defect
         elif defect in {"blank_path", "traversal"}:
             frame.assign(file_path="" if defect == "blank_path" else "fixture/../fixture/val.wav").to_csv(val_csv, index=False)
         elif defect == "alias":
-            (raw / "alias").symlink_to(raw / "fixture", target_is_directory=True)
+            directory_alias(raw / "alias", raw / "fixture")
             frame.assign(file_path="alias/val.wav").to_csv(val_csv, index=False)
         elif defect == "legacy_alias":
             processed = root / "processed" / name / "processed_wav"
             processed.mkdir(parents=True)
             (processed / "val.wav").write_bytes(b"derived audio")
-            (raw / "processed_wav").symlink_to(processed, target_is_directory=True)
+            directory_alias(raw / "processed_wav", processed)
             frame.assign(file_path="processed_wav/val.wav").to_csv(val_csv, index=False)
         elif defect == "unsupported_extension":
             (raw / "fixture" / "val.txt").write_bytes(b"not supported")
@@ -154,7 +163,7 @@ def test_invalid_source_is_rejected_before_scheduling(training_env, name, defect
     assert list(service.checkpoints_dir.iterdir()) == []
 
 
-@pytest.mark.parametrize("name", ["AvesChilenas", "engine_diagnostics"])
+@pytest.mark.parametrize("name", ["AvesChilenas", "engine_diagnostics", "FAMA_Prueba_Aves"])
 @pytest.mark.parametrize("audio_config", [None, {"target_sr": 16000}])
 @pytest.mark.parametrize("stage,extension", [("raw", ".wav"), ("raw", ".mp3"), ("processed", ".wav")])
 def test_accepted_source_reaches_ml_boundary_without_training(training_env, monkeypatch, name, audio_config,
@@ -230,15 +239,15 @@ def test_accepted_source_reaches_ml_boundary_without_training(training_env, monk
     assert list(service.checkpoints_dir.iterdir()) == []
 
 
-def test_training_catalog_only_offers_supported_registered_datasets(training_env):
+def test_training_catalog_offers_registered_identities_and_no_implicit_local_datasets(training_env):
     service, sessions, root, _ = training_env
     register(sessions, "medical_cough")
     supported_id = register(sessions, "engine_diagnostics")
     partitions(root, "engine_diagnostics")
     with sessions() as db:
         catalog = service.get_available_datasets(db)
-    assert [entry["id"] for entry in catalog] == ["engine_diagnostics"]
-    assert catalog[0]["db_id"] == supported_id
+    assert [entry["id"] for entry in catalog] == ["medical_cough", "engine_diagnostics"]
+    assert catalog[1]["db_id"] == supported_id
     assert service.get_available_datasets() == []
 
 
@@ -296,7 +305,7 @@ def test_selected_dataset_root_alias_fails_before_scheduling(training_env, stage
     selected = raw if stage == "raw" else root / "processed" / name / "processed_wav"
     physical = selected.with_name("physical")
     selected.rename(physical)
-    selected.symlink_to(physical, target_is_directory=True)
+    directory_alias(selected, physical)
     with pytest.raises(ValueError):
         service.start_training(name)
     assert service.get_progress()["status"] == "failed"

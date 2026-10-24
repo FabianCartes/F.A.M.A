@@ -9,7 +9,7 @@ const mockModels = [
 ];
 const panel = () => within(screen.getByRole('region', { name: 'Validar resultado' }));
 const choice = (name: string) => panel().getByRole('button', { name });
-const submit = () => panel().getByRole('button', { name: 'Enviar a revisión' });
+const submit = () => panel().getByRole('button', { name: 'Guardar corrección' });
 
 async function preparePrediction({ classes = ['alarm', 'normal'], dbId = 201, dataset = 'maquinaria-canonical' }: { classes?: string[]; dbId?: number | null; dataset?: string | null } = {}) {
   let nextId = dbId;
@@ -37,6 +37,28 @@ async function preparePrediction({ classes = ['alarm', 'normal'], dbId = 201, da
 
 describe('PredictionView validation and responsive controls', () => {
   beforeEach(() => { vi.resetAllMocks(); global.fetch = vi.fn(async (input) => String(input).includes('/api/models') ? { ok: true, json: async () => ({ models: mockModels }) } as Response : { ok: false } as Response); });
+
+  it('no presenta predicciones de ejemplo al abrir una vista sin modelos autorizados', async () => {
+    global.fetch = vi.fn(async (input) => String(input).includes('/api/models')
+      ? { ok: true, json: async () => ({ models: [] }) } as Response
+      : { ok: false } as Response);
+    await act(async () => { render(<PredictionView />); });
+    expect(screen.queryByText('eugralla_paradoxa_mocha_03.wav')).toBeNull();
+    expect(screen.getByText('Todavía no hay predicciones en esta vista.')).toBeDefined();
+  });
+
+  it('muestra resultados recibidos y conserva la lista si falla otra solicitud', async () => {
+    const api = await preparePrediction();
+    const predictions = within(screen.getByRole('region', { name: 'Predicciones de esta vista' }));
+    expect(predictions.getAllByText('machine.wav')).toHaveLength(1);
+    expect(predictions.getByText('90.0%')).toBeDefined();
+    expect(predictions.queryByText('Todavía no hay predicciones en esta vista.')).toBeNull();
+    api.setPrediction(async () => ({ ok: false, status: 503,
+      json: async () => ({ detail: 'Servicio no disponible' }) }) as Response);
+    await api.infer();
+    expect(screen.getByText('Servicio no disponible')).toBeDefined();
+    expect(predictions.getAllByText('machine.wav')).toHaveLength(1);
+  });
 
   it('offers compact wrapping Check/X buttons with explicit pressed state, separate submit and no default', async () => {
     const api = await preparePrediction();
@@ -73,8 +95,8 @@ describe('PredictionView validation and responsive controls', () => {
     expect(api.feedbackCalls()).toHaveLength(0);
     await act(async () => { fireEvent.click(submit()); });
     expect(JSON.parse(String(api.feedbackCalls()[0][1]?.body))).toEqual({ id_prediccion: 201, fue_correcta: true, etiqueta_corregida: null, id_usuario: 1 });
-    expect(screen.getByText(/Enviado a revisión/)).toBeDefined();
-    expect(panel().queryByRole('button', { name: 'Enviar a revisión' })).toBeNull();
+    expect(screen.getByText(/Corrección guardada/)).toBeDefined();
+    expect(panel().queryByRole('button', { name: 'Guardar corrección' })).toBeNull();
   });
 
   it('shows the executed dataset snapshot and freezes nonbird correction catalog after model changes', async () => {
@@ -109,7 +131,7 @@ describe('PredictionView validation and responsive controls', () => {
     let reject!: (reason: Error) => void;
     api.setFeedback(() => new Promise((_, fail) => { reject = fail; }));
     fireEvent.click(submit());
-    fireEvent.click(panel().getByRole('button', { name: 'Enviando a revisión…' }));
+    fireEvent.click(panel().getByRole('button', { name: 'Guardando corrección…' }));
     expect(api.feedbackCalls()).toHaveLength(1);
     expect(choice('Incorrecta').matches(':disabled')).toBe(true);
     expect(choice('Correcta').matches(':disabled')).toBe(true);

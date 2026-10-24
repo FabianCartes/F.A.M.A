@@ -43,6 +43,23 @@ from app.services.predictors.base import (
 )
 
 
+def _checkpoint_architecture(checkpoint: dict):
+    if "architecture" in checkpoint or "model_type" in checkpoint:
+        return checkpoint.get("architecture", checkpoint.get("model_type"))
+    state = checkpoint.get("model_state_dict")
+    classes = checkpoint.get("classes", DEFAULT_CHILEAN_BIRD_CLASSES)
+    if isinstance(state, dict) and isinstance(classes, (list, tuple)) and classes:
+        # The two original CNN files predate architecture metadata. Recognize
+        # their complete tensor layout without allocating a second set of weights.
+        with torch.device("meta"):
+            expected = AudioCNN(num_classes=len(classes)).state_dict()
+        if (set(state) == set(expected) and all(
+                isinstance(state[key], torch.Tensor) and state[key].shape == value.shape
+                for key, value in expected.items())):
+            return "AudioCNN"
+    return "EfficientNet-B0"
+
+
 class TrainedModelPredictor(AudioPredictor):
     """
     Predictor de inferencia real basado en checkpoints binarios generados por el pipeline de entrenamiento.
@@ -114,9 +131,9 @@ class TrainedModelPredictor(AudioPredictor):
                 f"El checkpoint {self.checkpoint_path} no tiene un formato válido (se esperaba un diccionario)."
             )
 
-        self.architecture_name = checkpoint.get("architecture", checkpoint.get("model_type", "EfficientNet-B0"))
+        self.architecture_name = _checkpoint_architecture(checkpoint)
         self.classes = checkpoint.get("classes", list(DEFAULT_CHILEAN_BIRD_CLASSES))
-        self.best_val_acc = checkpoint.get("best_val_acc")
+        self.best_val_acc = checkpoint.get("best_val_acc", checkpoint.get("val_acc"))
         self._configure_audio(checkpoint)
         self.model = None
 
@@ -177,9 +194,9 @@ class TrainedModelPredictor(AudioPredictor):
                     f"No se encontró state_dict en el checkpoint {self.checkpoint_path}"
                 )
 
-        self.architecture_name = checkpoint.get("architecture", checkpoint.get("model_type", "EfficientNet-B0"))
+        self.architecture_name = _checkpoint_architecture(checkpoint)
         self.classes = checkpoint.get("classes", list(DEFAULT_CHILEAN_BIRD_CLASSES))
-        self.best_val_acc = checkpoint.get("best_val_acc")
+        self.best_val_acc = checkpoint.get("best_val_acc", checkpoint.get("val_acc"))
         self._configure_audio(checkpoint)
 
         arch_lower = self.architecture_name.lower().replace("-", "_")

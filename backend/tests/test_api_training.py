@@ -17,6 +17,7 @@ from app.database import get_db
 from app.services import training
 from tests.test_training_flow import training_env, partitions, register
 from tests.test_training_persistence import persistence_env
+from tests.http_security import administrator_http
 
 app = main.app
 
@@ -33,7 +34,8 @@ def client(training_env, monkeypatch):
     # Without the context manager TestClient does not run model loading/admin seeding.
     test_client = TestClient(app, raise_server_exceptions=False)
     try:
-        yield test_client
+        with administrator_http(app):
+            yield test_client
     finally:
         test_client.close()
         app.dependency_overrides.pop(get_db, None)
@@ -53,8 +55,8 @@ def test_start_rejection_is_visible_in_api_progress(client, training_env, name, 
     thread.assert_not_called()
 
 
-@pytest.mark.parametrize("name", ["AvesChilenas", "engine_diagnostics"])
-def test_api_accepts_supported_registered_source(client, training_env, name):
+@pytest.mark.parametrize("name", ["AvesChilenas", "engine_diagnostics", "FAMA_Prueba_Aves"])
+def test_api_accepts_registered_canonical_source(client, training_env, name):
     _, sessions, root, _ = training_env
     register(sessions, name)
     partitions(root, name)
@@ -68,6 +70,53 @@ def test_api_accepts_supported_registered_source(client, training_env, name):
     assert conflict.status_code == 400
     assert client.get("/api/training/progress").json()["status"] == "training"
     assert client.get("/api/training/history").status_code == 200
+
+
+@pytest.mark.parametrize("change_during_training", [False, True])
+def test_versioned_partition_identity_is_preserved_in_checkpoint_and_history(client, persistence_env, monkeypatch, change_during_training):
+    import hashlib
+    import torch
+    from app.models.dataset import Audio
+    from app.routes.partitions import router
+    service, sessions, root, dataset_id = persistence_env
+    client.app.include_router(router)
+    raw = root / "raw" / "engine_diagnostics"
+    (raw / "fixture/val.wav").write_bytes(b"different synthetic audio boundary")
+    with sessions() as db:
+        for split in ("train", "val"):
+            path = raw / f"fixture/{split}.wav"
+            db.add(Audio(id_conjunto_datos=dataset_id, nombre_archivo=path.name, clase="Fixture",
+                         ruta_gcp=f"datasets/engine_diagnostics/fixture/{split}.wav",
+                         hash_archivo=hashlib.sha256(path.read_bytes()).hexdigest()))
+        db.commit()
+    base = "/api/training/datasets/engine_diagnostics/partitions"
+    preview = client.post(base + "/preview", json={}).json()
+    assert client.post(base, json={"preview_version": preview["version"], "acknowledge_warnings": True}).status_code == 200
+    if change_during_training:
+        import timm
+        build = timm.create_model
+        def changed_recording(*args, **kwargs):
+            (raw / "fixture/train.wav").write_bytes(b"changed after admission")
+            return build(*args, **kwargs)
+        monkeypatch.setattr(timm, "create_model", changed_recording)
+    response = client.post("/api/training/start", json={
+        "dataset_name": "engine_diagnostics", "partition_version": preview["version"], "epochs": 1,
+        "audio_config": {"target_sr": 8000, "duration_seconds": 0.5, "n_mels": 32,
+                         "n_fft": 256, "hop_length": 64, "f_min": 0.0, "f_max": 4000.0},
+        "regularization_config": {"loss_type": "cross_entropy"}, "early_stopping": False})
+
+    assert response.status_code == 200
+    if change_during_training:
+        assert client.get("/api/training/progress").json()["status"] == "failed"
+        assert client.get("/api/training/history").json()["history"] == []
+        assert list(service.checkpoints_dir.iterdir()) == []
+        return
+    assert client.get("/api/training/progress").json()["status"] == "completed"
+    entry, = client.get("/api/training/history").json()["history"]
+    assert entry.get("partition_version") == preview["version"]
+    artifact = torch.load(service.checkpoints_dir / entry["filename"], weights_only=True, map_location="cpu")
+    assert artifact["partition_manifest"]["version"] == preview["version"]
+    assert artifact["partition_manifest"]["counts"] == {"train": 1, "val": 1}
 
 
 @pytest.mark.parametrize("commit_fails", [False, True])
@@ -96,8 +145,28 @@ def test_api_reports_checkpoint_registration_outcome(client, persistence_env, co
         assert progress["status"] == "completed"
         entry, = entries
         assert entry["dataset_id"] == dataset_id
+        assert entry["active"] is False  # Activation requires a separate administrator action.
+        assert entry["user_id"] == 1
         assert len(entry["metrics"]) == 1
         assert (service.checkpoints_dir / entry["filename"]).is_file()
+
+
+def test_failed_new_job_does_not_expose_previous_execution_snapshot(client, persistence_env):
+    response = client.post("/api/training/start", json={
+        "dataset_name": "engine_diagnostics", "architecture": "EfficientNet-B0", "epochs": 1,
+        "audio_config": {"target_sr": 8000, "duration_seconds": 0.5, "n_mels": 32,
+                         "n_fft": 256, "hop_length": 64, "f_min": 0.0, "f_max": 4000.0},
+        "regularization_config": {"loss_type": "cross_entropy"}, "early_stopping": False,
+    })
+    assert response.status_code == 200
+    assert client.get("/api/training/progress").json()["status"] == "completed"
+    assert client.post("/api/training/start", json={"dataset_name": "not-supported"}).status_code == 400
+    progress = client.get("/api/training/progress").json()
+    assert progress["status"] == "failed"
+    assert progress["current_architecture"] == ""
+    assert progress["models_config"] == []
+    assert progress["train_acc"] == 0
+    assert progress["val_acc"] == 0
 
 
 def test_get_training_hardware(client):
@@ -121,14 +190,56 @@ def test_get_training_datasets(client):
     assert data["datasets"] == []
 
 
-def test_catalog_excludes_unsupported_registered_dataset(client, training_env):
+def test_catalog_includes_new_registered_dataset_for_training(client, training_env):
     _, sessions, root, _ = training_env
-    register(sessions, "medical_cough")
+    register(sessions, "FAMA_Prueba_Aves")
+    partitions(root, "FAMA_Prueba_Aves")
     register(sessions, "engine_diagnostics")
     partitions(root, "engine_diagnostics")
     response = client.get("/api/training/datasets")
     assert response.status_code == 200
-    assert [entry["id"] for entry in response.json()["datasets"]] == ["engine_diagnostics"]
+    assert [entry["id"] for entry in response.json()["datasets"]] == ["FAMA_Prueba_Aves", "engine_diagnostics"]
+
+
+def test_new_empty_dataset_does_not_invent_training_classes(client, training_env):
+    _, sessions, _, _ = training_env
+    register(sessions, "FAMA_Nuevo")
+    response = client.get("/api/training/datasets")
+    assert response.status_code == 200
+    dataset, = response.json()["datasets"]
+    assert dataset["classes"] == []
+    assert dataset["class_count"] == 0
+
+
+@pytest.mark.parametrize("persistence_env", ["FAMA_Prueba_Aves"], indirect=True)
+def test_new_dataset_completes_and_registers_a_model_through_HTTP(client, persistence_env):
+    service, _, _, dataset_id = persistence_env
+    response = client.post("/api/training/start", json={
+        "dataset_name": "FAMA_Prueba_Aves", "architecture": "EfficientNet-B0", "epochs": 1,
+        "audio_config": {"target_sr": 8000, "duration_seconds": 0.5, "n_mels": 32,
+                         "n_fft": 256, "hop_length": 64, "f_min": 0.0, "f_max": 4000.0},
+        "regularization_config": {"loss_type": "cross_entropy"}, "early_stopping": False,
+    })
+    assert response.status_code == 200
+    progress = client.get("/api/training/progress").json()
+    assert progress["status"] == "completed", progress["error_message"]
+    entry, = client.get("/api/training/history").json()["history"]
+    assert entry["dataset_id"] == dataset_id
+    assert entry["dataset"] == "FAMA_Prueba_Aves"
+    assert entry["name"] == "FAMA_Prueba_Aves · EfficientNet-B0 (v1)"
+    assert entry["user_id"] == 1
+    assert entry["active"] is False
+    assert len(entry["metrics"]) == 1
+    assert (service.checkpoints_dir / entry["filename"]).is_file()
+
+
+@pytest.mark.parametrize("name", ["../outside", "CON", "bad/name", "name."])
+def test_catalog_does_not_expose_unsafe_registered_dataset_names(client, training_env, name):
+    _, sessions, _, _ = training_env
+    register(sessions, name)
+    response = client.get("/api/training/datasets")
+    assert response.status_code == 200
+    assert response.json()["datasets"] == []
 
 
 def test_training_lifecycle(client):
@@ -212,6 +323,7 @@ def test_training_lifecycle_triad(client):
         data = res.json()
         assert data["status"] == "started"
         mock_start.assert_called_once_with(
+            user_id=1,
             dataset_name="AvesChilenas",
             architecture="EfficientNet-B0",
             epochs=10,
@@ -248,6 +360,7 @@ def test_training_lifecycle_dynamic_ensemble(client):
         data = res.json()
         assert data["status"] == "started"
         mock_start.assert_called_once_with(
+            user_id=1,
             dataset_name="AvesChilenas",
             architecture="EfficientNet-B0",
             epochs=12,
@@ -361,7 +474,3 @@ def test_start_training_api_passes_model_epochs(client):
         assert "models" in call_kwargs
         assert call_kwargs["models"][0]["epochs"] == 35
         assert call_kwargs["models"][1]["epochs"] == 10
-
-
-
-

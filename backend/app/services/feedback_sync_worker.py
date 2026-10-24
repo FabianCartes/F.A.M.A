@@ -1,7 +1,12 @@
 """Verified local-to-cloud synchronization with owned transactions and lifecycle."""
 import asyncio
 from contextlib import asynccontextmanager
-import fcntl
+import sys
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
+    import msvcrt
 import hashlib
 import json
 import logging
@@ -99,11 +104,17 @@ class FeedbackSyncWorker:
                     continue
                 lock = self.local._intent_path(candidate.id_retroalimentacion).with_suffix('.json.lock')
                 self.local._safe_path(lock)
-                descriptor = os.open(lock, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+                flags = os.O_CREAT | os.O_RDWR
+                if hasattr(os, 'O_NOFOLLOW'): flags |= os.O_NOFOLLOW
+                if hasattr(os, 'O_CLOEXEC'): flags |= os.O_CLOEXEC
+                descriptor = os.open(lock, flags, 0o600)
                 try:
                     try:
-                        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    except BlockingIOError:
+                        if fcntl:
+                            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        else:
+                            msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
+                    except (BlockingIOError, OSError):
                         continue
                     db.refresh(feedback)
                     row = db.query(FeedbackSync).filter_by(
@@ -137,6 +148,11 @@ class FeedbackSyncWorker:
                     result['attempted'] += 1
                     result['synced' if error is None else 'failed'] += 1
                 finally:
+                    if not fcntl:
+                        try:
+                            msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
+                        except OSError:
+                            pass
                     os.close(descriptor)
         return result
 

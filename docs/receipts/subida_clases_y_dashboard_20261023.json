@@ -1,0 +1,130 @@
+{
+  "version": 1,
+  "checked_at": "2026-10-23T15:46:30.026567+00:00",
+  "branch": "fix/afinamiento-integral",
+  "status": "implemented_tests_and_live_browser_verified",
+  "test_seam": "rendered_UI_and_HTTP_boundary_with_simulated_responses_previously_authorized",
+  "upload": {
+    "classes_from_selected_dataset": true,
+    "selection_reset_on_dataset_change": true,
+    "explicit_new_class_supported": true,
+    "empty_dataset_first_class_supported": true,
+    "known_case_variant_reused_in_form": true,
+    "exact_existing_class_identity_preserved": true,
+    "server_policy_changed": false
+  },
+  "dashboard": {
+    "initial_loading_state": true,
+    "stats_published_without_waiting_for_hardware": true,
+    "network_SQL_latency_eliminated_claimed": false,
+    "artificial_reveal_delay_removed_ms": 2200,
+    "zero_epochs_explained": true,
+    "single_epoch_centered_visible": true,
+    "multiple_epochs_drawn_from_recorded_points": true,
+    "synthetic_epochs_added_to_real_data": false,
+    "latest_snapshot_retained_and_marked_on_failure": true
+  },
+  "verification": {
+    "frontend_passed": 56,
+    "frontend_failed": 0,
+    "frontend_skipped": 0,
+    "files_run": [
+      "components/views/__tests__/DashboardView.test.tsx",
+      "components/views/__tests__/IngestionWorkflow.test.tsx",
+      "components/views/__tests__/IngestionView.test.tsx"
+    ],
+    "typescript_exit_code": 0,
+    "eslint_focused_exit_code": 0,
+    "complete_suite_run": false
+  },
+  "runtime": {
+    "frontend_origin": "http://localhost:3010",
+    "frontend_directory": ".pytest_cache/stage8-live/frontend",
+    "listener_pid_observed": 14520,
+    "copied_files_verified_by_hash": 4,
+    "frontend_restarted": false,
+    "backend_restarted": false
+  },
+  "browser": {
+    "role_observed": "administrador",
+    "dataset": "FAMA_Prueba_Aves",
+    "classes_observed": [
+      "Canastero",
+      "Chucao",
+      "chucao"
+    ],
+    "local_audios_observed": 11,
+    "cloud_audios_observed": 12,
+    "latest_model_epochs_observed": 1,
+    "latest_model_accuracy_observed": 50.0,
+    "latest_model_loss_observed": 11.64,
+    "live_uploads_executed": false,
+    "live_training_or_prediction_executed": false,
+    "credentials_or_cookie_contents_read": false,
+    "initial_loading_observed_live": true,
+    "no_missing_metrics_claim_while_first_query_pending": true
+  },
+  "known_limits": [
+    "existing_Chucao_chucao_variants_preserved",
+    "direct_API_clients_not_subject_to_form_class_suggestions",
+    "remote_stats_still_require_network_SQL_response",
+    "E8_04_and_E8_11_training_chart_and_institutional_operation_remain_pending"
+  ],
+  "backend_schema_or_permissions_changed": false,
+  "business_data_mutations_executed": false,
+  "artifacts": [
+    {
+      "path": "frontend/components/ingestion/DatasetUpload.tsx",
+      "sha256": "3d923efcb8bbd5a5e818634f555f5e73c1954e014c10e234c4615dee18dc4103"
+    },
+    {
+      "path": "frontend/components/views/DashboardView.tsx",
+      "sha256": "fe250b99fb92d3e093167ab31f554d5824090d3fe9b11c027041aaf67dfc7ccd"
+    },
+    {
+      "path": "frontend/components/views/__tests__/IngestionWorkflow.test.tsx",
+      "sha256": "604c072dbd67271aff0c3e2a20d7777c9e8396d142e7798eb3287b18cacbd202"
+    },
+    {
+      "path": "frontend/components/views/__tests__/DashboardView.test.tsx",
+      "sha256": "701d78fdfe012ff76807fc6a7a39f5c2c41c667c2fe90d2f37b6f89941cc6906"
+    },
+    {
+      "path": "docs/manuales/clases_de_audio_y_dashboard.md",
+      "sha256": "2922253bd45638dea8fb8b1fa0711dbbcd99364b1b218c446fc692b93e42e398"
+    },
+    {
+      "path": "docs/manuales/autonomia_y_solicitudes_datasets.md",
+      "sha256": "856a4c5cb1385db494819ce81d224e12ec2d1fececcbd2e3caf4d31327e3d34c"
+    },
+    {
+      "path": "docs/manuales/bitacora_acceso_e_instalacion.md",
+      "sha256": "50298c97ea834f3640f60be8793ee6e3964ffef15f0dd0188e3c01f7ebee93fb"
+    },
+    {
+      "path": "docs/manuales/estado_actual_y_pendientes.md",
+      "sha256": "02b8b43d747052635945f51839e9c834fa8a533bf1376bb7c93e43932c8ae2e7"
+    },
+    {
+      "path": "docs/manuales/plan_autonomia_investigador_y_catalogo.md",
+      "sha256": "1cc5ec36036e4456536c6e177f7f1403d6fef5c84246bf31a96d2050f0365b8c"
+    },
+    {
+      "path": "docs/README.md",
+      "sha256": "b87925eec00a2f0d83c6370b93420253a027c8210a05bdba23be647f3218cef1"
+    },
+    {
+      "path": "docs/KANBAN.md",
+      "sha256": "bdc25e1da297776057afaae9739b5c90b2879ad0bdef4f780b034e2925f10fc9"
+    },
+    {
+      "path": "docs/images/subida_selector_clases_20261023.png",
+      "sha256": "a2a6fd0418a8bf8345246fe735af553b53f670d4ee0e3d6cbc7c3885fda915e5"
+    },
+    {
+      "path": "docs/images/dashboard_una_epoca_20261023.png",
+      "sha256": "fe8607b0c72f60e56b9ae8c0a36b52294a0caf3dfae78cee0a7382d1f165153f"
+    }
+  ],
+  "updated_at": "2026-10-23T15:49:02.897367+00:00"
+}

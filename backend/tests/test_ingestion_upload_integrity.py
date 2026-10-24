@@ -1,6 +1,9 @@
 """Upload identity and counters through public interfaces, without cloud access."""
 import io
 import wave
+import base64
+import hashlib
+from google.api_core.exceptions import NotFound, PreconditionFailed
 from types import SimpleNamespace
 
 import pytest
@@ -26,14 +29,31 @@ def synthetic_wav(frames=8000, sample_rate=8000):
 @pytest.fixture
 def upload_environment(tmp_path, monkeypatch):
     objects = {}
+    generations = {}
 
     class Blob:
         def __init__(self, name):
             self.name = name
 
+        @property
+        def generation(self):
+            return generations.get(self.name, 1 if self.name in objects else None)
+
+        @property
+        def md5_hash(self):
+            return base64.b64encode(hashlib.md5(objects[self.name], usedforsecurity=False).digest()).decode()
+
+        def reload(self):
+            if self.name not in objects:
+                raise NotFound("Synthetic missing object")
+
         def upload_from_string(self, content, **kwargs):
             if self.name in Client.failures:
                 raise OSError("Synthetic provider failure /private/credentials.json")
+            expected = kwargs.get("if_generation_match")
+            if expected is not None and expected != (self.generation or 0):
+                raise PreconditionFailed("Synthetic generation conflict")
+            generations[self.name] = (self.generation or 0) + 1
             objects[self.name] = content
 
     class Bucket:
@@ -77,19 +97,19 @@ def test_same_filename_in_two_classes_remains_two_registered_audios(upload_envir
     assert set(objects) == {"datasets/AvesChilenas/Chucao/audio.wav", "datasets/AvesChilenas/Rayadito/audio.wav"}
 
 
-def test_replacing_an_object_updates_bytes_without_incrementing_audio_count(upload_environment):
+def test_conflicting_object_preserves_bytes_and_audio_count(upload_environment):
     service, db, objects = upload_environment
     original = synthetic_wav(frames=524288)  # 1 MiB of PCM plus WAV header.
     replacement = synthetic_wav(frames=1048576)  # 2 MiB of PCM plus header.
     for content in (original, replacement):
         result = service.upload_files_to_gcs([("audio.wav", content)], "AvesChilenas", "Chucao", db=db)
-        assert result["db_persisted"] is True
+        assert result["db_persisted"] is (content == original)
 
     dataset, = training.training_service.get_available_datasets(db=db)
 
     assert dataset["audio_count"] == 1
-    assert dataset["size_mb"] == 2.0
-    assert objects["datasets/AvesChilenas/Chucao/audio.wav"] == replacement
+    assert dataset["size_mb"] == 1.0
+    assert objects["datasets/AvesChilenas/Chucao/audio.wav"] == original
 
 
 def test_duplicate_object_in_one_batch_counts_final_object_once(upload_environment):
@@ -102,10 +122,11 @@ def test_duplicate_object_in_one_batch_counts_final_object_once(upload_environme
     )
     dataset, = training.training_service.get_available_datasets(db=db)
 
-    assert result["uploaded"] == 2  # Two transfers, but only one final object.
+    assert result["uploaded"] == 1
+    assert result["failed"] == 1
     assert result["db_persisted"] is True
     assert dataset["audio_count"] == 1
-    assert dataset["size_mb"] == 2.0
+    assert dataset["size_mb"] == 1.0
     assert len(objects) == 1
 
 
@@ -229,13 +250,11 @@ def test_total_upload_failure_registers_no_new_audio(upload_environment, monkeyp
     assert result["failed"] == 1
     assert result["files"] == []
     assert objects == {}
-    dataset, = training.training_service.get_available_datasets(db=db)
-    assert dataset["audio_count"] == 0
-    assert dataset["size_mb"] == 0
-    assert dataset["estado"] == "subida_parcial"
+    assert result["db_persisted"] is False
+    assert training.training_service.get_available_datasets(db=db) == []
 
 
-def test_failed_refresh_preserves_previous_audio_and_retry_updates_it(upload_environment, monkeypatch):
+def test_failed_conflicting_refresh_and_retry_preserve_previous_audio(upload_environment, monkeypatch):
     service, db, objects = upload_environment
     original = synthetic_wav(frames=524288)
     replacement = synthetic_wav(frames=1048576)
@@ -246,22 +265,22 @@ def test_failed_refresh_preserves_previous_audio_and_retry_updates_it(upload_env
     failed = service.upload_files_to_gcs([("audio.wav", replacement)], "AvesChilenas", "Chucao", db=db)
 
     assert failed["status"] == "failed"
-    assert failed["db_persisted"] is True
+    assert failed["db_persisted"] is False
     dataset, = training.training_service.get_available_datasets(db=db)
     assert dataset["audio_count"] == 1
     assert dataset["size_mb"] == 1.0
-    assert dataset["estado"] == "subida_parcial"
+    assert dataset["estado"] == "subido"
     assert objects["datasets/AvesChilenas/Chucao/audio.wav"] == original
 
     monkeypatch.setattr("google.cloud.storage.Client.failures", set())
     retried = service.upload_files_to_gcs([("audio.wav", replacement)], "AvesChilenas", "Chucao", db=db)
 
-    assert retried["status"] == "completed"
-    assert retried["failed"] == 0
-    assert retried["errors"] == []
+    assert retried["status"] == "failed"
+    assert retried["failed"] == 1
+    assert retried["errors"][0]["code"] == "already_exists"
     dataset, = training.training_service.get_available_datasets(db=db)
     assert dataset["audio_count"] == 1
-    assert dataset["size_mb"] == 2.0
+    assert dataset["size_mb"] == 1.0
     assert dataset["estado"] == "subido"
 
 

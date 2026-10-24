@@ -42,9 +42,9 @@ class AudioCNNPredictor(AudioPredictor):
         self.temperature = temperature
 
         if checkpoint_path is None:
-            backend_root = Path(__file__).resolve().parent.parent.parent.parent
-            augmented = backend_root / "checkpoints" / "augmented_best.pt"
-            baseline = backend_root / "checkpoints" / "baseline_best.pt"
+            from training.paths import get_checkpoints_dir
+            augmented = get_checkpoints_dir() / "augmented_best.pt"
+            baseline = get_checkpoints_dir() / "baseline_best.pt"
             self.checkpoint_path = augmented if augmented.exists() else baseline
         else:
             self.checkpoint_path = Path(checkpoint_path)

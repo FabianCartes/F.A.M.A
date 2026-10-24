@@ -8,6 +8,7 @@ from urllib.parse import unquote, urlparse
 from typing import Dict, List, Optional, Any
 from app.schemas.model_info import ModelMetadata
 from app.services.predictors.base import AudioPredictor, ModelWeightsError
+from training.paths import get_checkpoints_dir
 
 
 def _verified_dataset_name(dataset, raw_data_root: Optional[Path] = None) -> Optional[str]:
@@ -168,7 +169,7 @@ class ModelRegistry:
         from app.models.training import Modelo
         from app.services.predictors.trained_predictor import TrainedModelPredictor
 
-        root = Path(checkpoints_root) if checkpoints_root is not None else Path(__file__).resolve().parents[2] / "checkpoints"
+        root = Path(checkpoints_root) if checkpoints_root is not None else get_checkpoints_dir()
         errors = []
         with self._publication_lock:
             try:
@@ -228,8 +229,7 @@ class ModelRegistry:
         marca como default el modelo activo.
         """
         if checkpoints_root is None:
-            backend_root = Path(__file__).resolve().parent.parent.parent
-            checkpoints_root = backend_root / "checkpoints"
+            checkpoints_root = get_checkpoints_dir()
         else:
             checkpoints_root = Path(checkpoints_root)
 
@@ -289,8 +289,7 @@ def discover_and_register_checkpoints(
        buscando fama_*_best.pt mayores a 1MB y los registra.
     """
     if checkpoints_root is None:
-        backend_root = Path(__file__).resolve().parent.parent.parent
-        checkpoints_root = backend_root / "checkpoints"
+        checkpoints_root = get_checkpoints_dir()
     checkpoints_root = Path(checkpoints_root)
 
     count = 0
@@ -354,8 +353,7 @@ def discover_and_register_bundles(registry: ModelRegistry, checkpoints_root: Opt
     y los registra automáticamente como BundleAudioPredictor.
     """
     if checkpoints_root is None:
-        backend_root = Path(__file__).resolve().parent.parent.parent
-        checkpoints_root = backend_root / "checkpoints"
+        checkpoints_root = get_checkpoints_dir()
 
     checkpoints_root = Path(checkpoints_root)
     if not checkpoints_root.exists() or not checkpoints_root.is_dir():
@@ -376,15 +374,26 @@ def discover_and_register_bundles(registry: ModelRegistry, checkpoints_root: Opt
 
 
 def build_default_registry() -> ModelRegistry:
-    """Construye el catálogo productivo exclusivamente desde modelos persistidos.
+    """Construye el catálogo desde declaraciones de instalación y modelos SQL.
 
-    Un catálogo vacío o una BD inaccesible no habilitan semillas ni descubrimiento
-    de archivos. El registro explícito y los descubridores siguen disponibles para
-    callers que los soliciten; /api/models reintenta la publicación desde BD.
+    Sin declaración no se añaden ensambles ni se descubren archivos. El default
+    declarado es el inicial; una activación SQL posterior conserva su prioridad.
+    /api/models reintenta la publicación desde BD si falla la conexión de arranque.
     """
+    from app.configuration import declared_ensembles, get_configuration
     from app.database import SessionLocal
 
     reg = ModelRegistry()
+    enabled, default = declared_ensembles(get_configuration().values)
+    for model_id in enabled:
+        if model_id == "chilean-birds-ensemble":
+            from app.services.predictors.ensemble_predictor import ChileanBirdsEnsemblePredictor
+            predictor = ChileanBirdsEnsemblePredictor(lazy_load=True)
+        else:
+            from app.services.predictors.engine_ensemble_predictor import EngineEnsemblePredictor
+            predictor = EngineEnsemblePredictor(lazy_load=True)
+        reg.register(predictor, is_default=(model_id == default))
+
     try:
         with SessionLocal() as db:
             reg.register_from_db(db)

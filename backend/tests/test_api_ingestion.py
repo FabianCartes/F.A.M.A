@@ -4,6 +4,10 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 import pytest
 from fastapi.testclient import TestClient
+from fastapi import FastAPI
+from tests.test_ingestion_upload_integrity import upload_environment
+from tests.http_security import administrator_http
+from app.database import get_db
 
 _BACKEND_ROOT = Path(__file__).resolve().parent.parent
 if str(_BACKEND_ROOT) not in sys.path:
@@ -13,8 +17,14 @@ from app.main import app
 
 
 @pytest.fixture
-def client():
-    with TestClient(app) as test_client:
+def client(upload_environment):
+    _, db, _ = upload_environment
+    isolated = FastAPI()
+    for route in app.routes:
+        if getattr(route, 'path', '').startswith('/api/ingestion/'):
+            isolated.add_api_route(route.path, route.endpoint, methods=list(route.methods))
+    isolated.dependency_overrides[get_db] = lambda: db
+    with administrator_http(isolated), TestClient(isolated) as test_client:
         yield test_client
 
 

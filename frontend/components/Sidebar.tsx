@@ -2,16 +2,17 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, apiFetch } from "@/lib/api";
 import { getFeedbackStats } from "@/lib/api/feedbackApi";
 
-export type TabType = "dashboard" | "ingesta" | "entrenamiento" | "prediccion";
+export type TabType = "dashboard" | "ingesta" | "entrenamiento" | "prediccion" | "cuenta" | "administracion";
 
 interface SidebarProps {
   activeTab: TabType;
   onSelectTab: (tab: TabType) => void;
   isCollapsed: boolean;
   onToggleCollapsed: () => void;
+  role?: "administrador" | "investigador";
 }
 
 interface HardwareMini {
@@ -24,13 +25,14 @@ export default function Sidebar({
   onSelectTab,
   isCollapsed,
   onToggleCollapsed,
+  role = "investigador",
 }: SidebarProps) {
   const [hw, setHw] = useState<HardwareMini | null>(null);
   const [isGcpConnected, setIsGcpConnected] = useState<boolean>(true);
   const [pendingFeedbackCount, setPendingFeedbackCount] = useState<number>(0);
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/api/training/hardware`)
+    apiFetch(`${API_BASE_URL}/api/training/hardware`)
       .then((res) => {
         if (res.ok) {
           setIsGcpConnected(true);
@@ -114,6 +116,9 @@ export default function Sidebar({
       ),
     },
   ];
+
+  navItems.push({ id: "cuenta", label: "Mi cuenta", icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4" /><path d="M4 21v-2a8 8 0 0116 0v2" /></svg> });
+  if (role === "administrador") navItems.push({ id: "administracion", label: "Administración", icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4v5c0 5-8 9-8 9s-8-4-8-9V7z" /><path d="M8 12l3 3 5-6" /></svg> });
 
   const feedbackBadgeClass =
     pendingFeedbackCount === 0

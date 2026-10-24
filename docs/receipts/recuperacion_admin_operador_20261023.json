@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "code": "administrator_password_reset_verified",
+  "checked_at": "2026-10-23T05:03:55.613200+00:00",
+  "database": "fama_pruebas",
+  "schema_revision_unchanged": "0002_access",
+  "user_id": 1,
+  "password_verified": true,
+  "profile_and_role_preserved": true,
+  "previous_sessions_revoked": 1,
+  "previous_recoveries_revoked": 0,
+  "remaining_sessions": 0,
+  "remaining_recoveries": 0,
+  "audit_event_confirmed": true,
+  "plaintext_saved_to_files": false,
+  "scope": "explicit_operator_authorized_single_account_reset_using_existing_service",
+  "authorization": "explicit_operator_request_for_own_administrator_account",
+  "actors": {
+    "operator": "requested_reset_and_selected_new_password",
+    "codex": "executed_existing_service_and_verified_persistence"
+  },
+  "audit_action": "account.password_reset",
+  "audit_actor_user_id": null,
+  "browser_login_after_reset_verified": false,
+  "general_emergency_recovery_feature_implemented": false,
+  "schema_migration_applied": false,
+  "audio_transfers_executed": false,
+  "documentation": "docs/manuales/bitacora_acceso_e_instalacion.md",
+  "next_operator_step": "login_with_requested_password_then_resume_controlled_schema_update"
+}

@@ -1,0 +1,305 @@
+{
+  "version": 1,
+  "checked_at": "2026-10-23T23:46:36.241717+00:00",
+  "branch": "fix/afinamiento-integral",
+  "status": "explicit_checkpoint_backup_and_separate_restore_verified",
+  "authorization": {
+    "operator": "vamos con lo siguiente",
+    "scope": "checkpoint_backup_and_recovery_in_previously_authorized_test_environment",
+    "test_seams": "previously_agreed_authenticated_HTTP_rendered_UI_temporary_SQL_files_fake_GCS"
+  },
+  "design": {
+    "ADR": "docs/adr/0045-respaldo-explicito-de-checkpoints-por-contenido.md",
+    "backup_trigger": "explicit_user_action_not_automatic_after_training",
+    "authorization": "administrator_or_current_dataset_assignment",
+    "maximum_bytes": 1073741824,
+    "key": "models/checkpoints/sha256/{registered_sha256}.pt",
+    "overwrite_cloud": false,
+    "overwrite_local": false,
+    "activation_changed": false,
+    "status_is_metadata_not_full_download_verification": true,
+    "transfer_integrity": [
+      "SDK_checksum",
+      "registered_size",
+      "registered_SHA256",
+      "pinned_GCS_generation"
+    ],
+    "SQL_schema_change": false,
+    "SQL_writes_by_copy_operations": false
+  },
+  "TDD": {
+    "functional_RED": [
+      "HTTP_operation_missing_404",
+      "Windows_readonly_fsync_restore_503",
+      "missing_rendered_checkpoint_copies_panel"
+    ],
+    "setup_issues_not_counted_as_RED": [
+      "cached_fixture_configuration",
+      "unavailable_Chai_matcher",
+      "diagnostic_Session_exec_driver_sql_call",
+      "sandbox_temporary_file_probe_permissions"
+    ]
+  },
+  "checks": {
+    "backend": {
+      "passed": 163,
+      "skipped": 8,
+      "failed": 0,
+      "seconds": 64.31,
+      "files": [
+        "test_checkpoint_backup.py",
+        "test_dataset_partitions.py",
+        "test_api_training.py",
+        "test_training_persistence.py",
+        "test_training_flow.py"
+      ],
+      "new_checkpoint_HTTP_cases_included": 16,
+      "skip_reason": "Windows_symlink_privilege"
+    },
+    "frontend": {
+      "passed": 42,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 7.75,
+      "files": [
+        "TrainingView.test.tsx",
+        "CheckpointBackup.test.tsx"
+      ],
+      "new_panel_cases_included": 4
+    },
+    "typescript_no_emit_exit_code": 0,
+    "ESLint_new_component_and_test_exit_code": 0,
+    "global_lint_not_claimed": true,
+    "global_suites_not_run": true
+  },
+  "runtime": {
+    "backend_directory": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\.pytest_cache\\stage8-live\\backend",
+    "frontend_port_preserved": 3010,
+    "backend_parent_pid": 21508,
+    "checked_at": "2026-10-23T23:37:39.3430975Z",
+    "proxy_port_preserved": 5433,
+    "source_copies": [
+      {
+        "path": "backend/app/services/checkpoints.py",
+        "sha256": "faa6934b8c3f7b6b07f927545a30225ec9c9ec4085bce8971a40b39b1edf6d52"
+      },
+      {
+        "path": "backend/app/routes/checkpoints.py",
+        "sha256": "d012fefefed69ddd2c1ede226ab0aaae8646928eee6b6d598817b6528d595307"
+      },
+      {
+        "path": "backend/app/main.py",
+        "sha256": "79b6d38b177b78c47541726cf81e9745d9b8af76dea88ea047e1644d09df7f6a"
+      },
+      {
+        "path": "frontend/components/training/CheckpointBackup.tsx",
+        "sha256": "3e4590baee775ae0e26a2fa5e9927ea3600177f18df2f4f6ca1263ce47a54dcb"
+      },
+      {
+        "path": "frontend/components/views/TrainingView.tsx",
+        "sha256": "73a7971d63c2395980b59fb4ab89075a4331a4ca6236f2ee58e08f9bb510db24"
+      }
+    ],
+    "code": "checkpoint_sources_activated",
+    "backend_child_pid": 7840,
+    "frontend_child_pid": 14520,
+    "proxy_pid": 22380,
+    "ready": {
+      "status": 200,
+      "body": {
+        "code": "schema_current"
+      },
+      "checked_at": "2026-10-23T23:43:39.7767702Z"
+    },
+    "anonymous_route_HTTP": 401,
+    "slow_startup_and_HMR_session_retry_observed": true,
+    "same_administrator_session_restored_without_credentials": true,
+    "temporary_runtime_directories_remain": true
+  },
+  "real_browser": {
+    "origin": "http://localhost:3010",
+    "tab_id": "10",
+    "role": "Administrador",
+    "model_id": 1,
+    "dataset": "FAMA_Prueba_Aves",
+    "backup_clicked_and_confirmed": true,
+    "success_message": "Respaldo verificado: tamaño y SHA-256 coinciden.",
+    "screenshot": "docs/images/respaldo_checkpoint_real_20261023.png",
+    "restore_on_operational_node_not_clicked": true
+  },
+  "real_GCS": {
+    "bucket": "fama-pruebas",
+    "key": "models/checkpoints/sha256/a905275bdbc974643608580e6d29d5905ced30a8ce53b372fb88280c446f035d.pt",
+    "generation": "1792799002816536",
+    "bytes": 16318381,
+    "new_backup_object_retained": true,
+    "audio_objects_not_written_by_this_work": true
+  },
+  "real_before": {
+    "checked_at": "2026-10-23T23:36:45.753084+00:00",
+    "mode": "before",
+    "SQL": {
+      "model_id": 1,
+      "model_sha256": "a905275bdbc974643608580e6d29d5905ced30a8ce53b372fb88280c446f035d",
+      "active": false,
+      "size_bytes": 16318381,
+      "audios": 12,
+      "models": 1,
+      "schema": "0003_autonomy"
+    },
+    "status": {
+      "model_id": 1,
+      "filename": "fama_5af201b348e8459a9c7e5a094f77a115_best.pt",
+      "sha256": "a905275bdbc974643608580e6d29d5905ced30a8ce53b372fb88280c446f035d",
+      "size_bytes": 16318381,
+      "local": "valid",
+      "cloud": "missing",
+      "generation": null,
+      "transfer_verified": false
+    },
+    "files": {
+      ".pytest_cache/stage8-live/backend/data/raw/FAMA_Prueba_Aves/.metadata.lock": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      ".pytest_cache/stage8-live/backend/data/raw/FAMA_Prueba_Aves/metadata.csv": "cab6d3f03b149642eaa78dd9fb5ebc6624e4f574e163ceff4c77888011f107c3",
+      ".pytest_cache/stage8-live/backend/data/raw/FAMA_Prueba_Aves/train.csv": "5bdaecdd9aed65daff101765ec787fd2a4c255f301f6783f3deaedbfbd0ac101",
+      ".pytest_cache/stage8-live/backend/data/raw/FAMA_Prueba_Aves/val.csv": "2283891f94dc9c53bcfccbfc245b725a44c27349bf825619dd2aac4e9309906c",
+      ".pytest_cache/stage8-live/backend/data/raw/FAMA_Prueba_Aves/.partitions/2262aaf0364a39b09d0f717573359a366946cbf7a95cdffef2519ebabbf0f33f.json": "465a3f9b0fbdf2a6c1ccd3943286655c50f4ff36932f4b93dfcff66121c930e1",
+      ".pytest_cache/stage8-live/backend/data/raw/FAMA_Prueba_Aves/Canastero/225288.mp3": "f52f6cc84bc113dae8b00a2d2aa1173570149a6a46691a4265bb727331f1fc63",
+      ".pytest_cache/stage8-live/backend/data/raw/FAMA_Prueba_Aves/Canastero/225290.mp3": "05ee7231d46c9239f2eca1625d240ab6c30dc016f09d07f2fba1493ed36a9bd1",
+      ".pytest_cache/stage8-live/backend/data/raw/FAMA_Prueba_Aves/Canastero/381517.mp3": "87d4cee1449470e6f975e1ea19da0d8858b3754ff6c16679d9993bed81e4574f",
+      ".pytest_cache/stage8-live/backend/data/raw/FAMA_Prueba_Aves/Canastero/381518.mp3": "dfbfffb0a843b5d6c645cde78cdd8297d092e0a89f8028e8ec11e32d3f90aeb9",
+      ".pytest_cache/stage8-live/backend/data/raw/FAMA_Prueba_Aves/Canastero/502838.mp3": "eafc54719aae0c93a86093b986d613d252b932f43a7874138fa2c9d9cd3279d4",
+      ".pytest_cache/stage8-live/backend/data/raw/FAMA_Prueba_Aves/Chucao/1036796.mp3": "844a7fb10f8c89a564d2aae48de4dbb0b5de0c70d87b1660cbd71c970eab9945",
+      ".pytest_cache/stage8-live/backend/data/raw/FAMA_Prueba_Aves/Chucao/1075457.mp3": "55d352db226b74088013e799641794972ee2959b1df69a1ada1c568e4439d8cb",
+      ".pytest_cache/stage8-live/backend/data/raw/FAMA_Prueba_Aves/Chucao/218159.mp3": "cd4bb13d1cb0eab0b033078188d75d8d74285b2dedc25cd31916cd633f4d4d11",
+      ".pytest_cache/stage8-live/backend/data/raw/FAMA_Prueba_Aves/Chucao/296132.mp3": "120065c55027db4519cc3ba69c0a0ddab5f985e3d603c456f1e565c0883f53fa",
+      ".pytest_cache/stage8-live/backend/data/raw/FAMA_Prueba_Aves/Chucao/508289.mp3": "07cd7f0269812574e0d4d7cfee3e557e3df03256d2e444a634739900bf0cdd15",
+      ".pytest_cache/stage8-live/backend/data/raw/FAMA_Prueba_Aves/Chucao/feedback_1.wav": "11f1970044054337ef76d1e19fdabf6dbe08beb25b0cc7988ad555de10a2ea1a",
+      ".pytest_cache/stage8-live/backend/checkpoints/fama_5af201b348e8459a9c7e5a094f77a115_best.pt": "a905275bdbc974643608580e6d29d5905ced30a8ce53b372fb88280c446f035d"
+    },
+    "GCS_writes_by_script": false
+  },
+  "real_separate_restore": {
+    "checked_at": "2026-10-23T23:44:19.618409+00:00",
+    "mode": "restore",
+    "SQL": {
+      "model_id": 1,
+      "model_sha256": "a905275bdbc974643608580e6d29d5905ced30a8ce53b372fb88280c446f035d",
+      "active": false,
+      "size_bytes": 16318381,
+      "audios": 12,
+      "models": 1,
+      "schema": "0003_autonomy"
+    },
+    "status": {
+      "model_id": 1,
+      "filename": "fama_5af201b348e8459a9c7e5a094f77a115_best.pt",
+      "sha256": "a905275bdbc974643608580e6d29d5905ced30a8ce53b372fb88280c446f035d",
+      "size_bytes": 16318381,
+      "local": "valid",
+      "cloud": "available",
+      "generation": "1792799002816536",
+      "transfer_verified": true
+    },
+    "recovery_path": ".pytest_cache/checkpoint-recovery-20261023/checkpoints/fama_5af201b348e8459a9c7e5a094f77a115_best.pt",
+    "recovered_sha256": "a905275bdbc974643608580e6d29d5905ced30a8ce53b372fb88280c446f035d",
+    "unchanged_files": 17,
+    "GCS_writes_by_script": false,
+    "SQL_writes_by_script": false
+  },
+  "not_performed": [
+    "official_bucket_switch",
+    "new_real_training",
+    "new_audio_upload",
+    "SQL_migration",
+    "credential_or_role_changes",
+    "SQL_disaster_restore",
+    "GPU_validation"
+  ],
+  "next_block": "persistent_exclusive_runtime_directories_and_institutional_operation",
+  "remaining_limits": [
+    "SQL_audio_configuration_and_external_manifest_backups",
+    "emergency_administrator_recovery",
+    "institutional_HTTPS_proxy",
+    "official_cut",
+    "no_automatic_backup_queue_or_progress_in_bytes",
+    "no_legacy_hash_backfill"
+  ],
+  "artifacts": [
+    {
+      "path": "backend/app/services/checkpoints.py",
+      "sha256": "faa6934b8c3f7b6b07f927545a30225ec9c9ec4085bce8971a40b39b1edf6d52"
+    },
+    {
+      "path": "backend/app/routes/checkpoints.py",
+      "sha256": "d012fefefed69ddd2c1ede226ab0aaae8646928eee6b6d598817b6528d595307"
+    },
+    {
+      "path": "backend/app/main.py",
+      "sha256": "79b6d38b177b78c47541726cf81e9745d9b8af76dea88ea047e1644d09df7f6a"
+    },
+    {
+      "path": "frontend/components/training/CheckpointBackup.tsx",
+      "sha256": "3e4590baee775ae0e26a2fa5e9927ea3600177f18df2f4f6ca1263ce47a54dcb"
+    },
+    {
+      "path": "frontend/components/views/TrainingView.tsx",
+      "sha256": "73a7971d63c2395980b59fb4ab89075a4331a4ca6236f2ee58e08f9bb510db24"
+    },
+    {
+      "path": "backend/tests/test_checkpoint_backup.py",
+      "sha256": "3f1d51fb2381a335abea380bd0c526059c4e1ceb70266304a3d407ca441c32dc"
+    },
+    {
+      "path": "frontend/components/training/__tests__/CheckpointBackup.test.tsx",
+      "sha256": "a8fcb6fb53b67bdf12cfcf7eaf46d63ea2dc3e7719561dfbda41c7bb1471d416"
+    },
+    {
+      "path": "frontend/components/views/__tests__/TrainingView.test.tsx",
+      "sha256": "a8833ae6d882d68d11b7db901dfe1007934a7fdbc4ada31d7bd1d02a9e3a8504"
+    },
+    {
+      "path": "docs/README.md",
+      "sha256": "31c0bed6654bc478de01671f95db02b884110a6495e2a780ffe7aefd330eef12"
+    },
+    {
+      "path": "docs/KANBAN.md",
+      "sha256": "d9a823cb558de9b9e9b83db36f157c909d34b1323fc5322305cfa529d8fba878"
+    },
+    {
+      "path": "docs/arquitectura/CONTEXT.md",
+      "sha256": "3149c8198c366dcc8cd610b1f07e3c710a389ad15d72bc25862089664eaaae66"
+    },
+    {
+      "path": "docs/adr/0045-respaldo-explicito-de-checkpoints-por-contenido.md",
+      "sha256": "f15d471658ebd983e0e1dada964b372f53649bd097e15ddab5ee8de5f7d04c5d"
+    },
+    {
+      "path": "docs/manuales/respaldo_y_recuperacion_checkpoints.md",
+      "sha256": "37fc605f110a4710dc1e199f2258ea3b7aa97a47034bddc5550669e3793d4efa"
+    },
+    {
+      "path": "docs/manuales/estado_actual_y_pendientes.md",
+      "sha256": "3925213cd325d8dc3e79ed30ca71435f8301283eafb8fbe185ebebe538cb173e"
+    },
+    {
+      "path": "docs/manuales/bitacora_acceso_e_instalacion.md",
+      "sha256": "c3b210380b7a701b63a538c603543520da6f6f2fafae86e36d0af4930b4c6508"
+    },
+    {
+      "path": "docs/manuales/plan_autonomia_investigador_y_catalogo.md",
+      "sha256": "d95485ceed62f0f6413ad0a132452342c4f1fd61bce7c9b024558142dc1ac3cc"
+    },
+    {
+      "path": "docs/manuales/plan_instalacion_gcp_y_asistente.md",
+      "sha256": "f30e723ac1349f6476737d1654b006ce6054e66800a33c58683b1aebc3dcd04b"
+    },
+    {
+      "path": "docs/manuales/particiones_versionadas.md",
+      "sha256": "633468a9839f8316a77dda0d5dc5fbbc53c00317b1570ec2b21c7be669ca11f2"
+    },
+    {
+      "path": "docs/images/respaldo_checkpoint_real_20261023.png",
+      "sha256": "eba0e4b5af033980f4ace3ee869f33e68867e5a552acc12b9ae426f1f523f131"
+    }
+  ]
+}

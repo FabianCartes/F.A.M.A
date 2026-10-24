@@ -13,10 +13,11 @@ from tests.test_training_flow import training_env, partitions, register
 
 
 @pytest.fixture
-def persistence_env(training_env, monkeypatch):
+def persistence_env(training_env, monkeypatch, request):
     service, sessions, root, thread = training_env
-    dataset_id = register(sessions, "engine_diagnostics")
-    partitions(root, "engine_diagnostics")
+    dataset_name = getattr(request, "param", "engine_diagnostics")
+    dataset_id = register(sessions, dataset_name)
+    partitions(root, dataset_name)
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
     # External ML library boundaries: no pretrained downloads or real audio input.
     def tiny_model(*args, num_classes, **kwargs):

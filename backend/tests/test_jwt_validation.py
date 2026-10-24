@@ -94,8 +94,11 @@ def test_fractional_numeric_date_is_not_extended_to_the_next_second(monkeypatch)
 
 
 @pytest.fixture
-def auth_client():
+def auth_client(monkeypatch):
     """Router-only HTTP app: no production lifespan, model loading or cloud."""
+    from tests.http_security import configure_access_limits
+    configure_access_limits(monkeypatch)
+    monkeypatch.setenv("FAMA_WEB_ORIGIN", "https://auth.example.test")
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     sessions = sessionmaker(bind=engine)
@@ -111,7 +114,8 @@ def auth_client():
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[get_db] = isolated_db
-    with TestClient(app, raise_server_exceptions=False) as client:
+    with TestClient(app, base_url="https://auth.example.test", headers={"Origin": "https://auth.example.test"},
+                    raise_server_exceptions=False) as client:
         yield client
     engine.dispose()
 
@@ -123,7 +127,6 @@ def test_invalid_user_subject_returns_401_instead_of_500_or_another_user(auth_cl
     response = auth_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 401
-    assert response.headers["www-authenticate"] == "Bearer"
     assert "fixture@example.test" not in response.text
 
 
@@ -156,14 +159,12 @@ def test_user_subject_outside_database_integer_range_returns_401(auth_client, su
     assert response.status_code == 401
 
 
-def test_valid_issued_token_uses_database_identity_and_role(auth_client):
+def test_valid_legacy_token_does_not_grant_web_access(auth_client):
     token = auth.create_access_token({"sub": "1", "rol": "administrador"})
     decoded = auth.decode_access_token(token)
     assert decoded["sub"] == "1"
 
     response = auth_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
 
-    assert response.status_code == 200
-    assert response.json()["email"] == "fixture@example.test"
-    assert response.json()["rol"] == "investigador"
+    assert response.status_code == 401
     assert "password_hash" not in response.json()

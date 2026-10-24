@@ -1,0 +1,385 @@
+{
+  "version": 1,
+  "date": "2026-10-24",
+  "checked_at": "2026-10-24T07:34:39.304704+00:00",
+  "branch": "fix/afinamiento-integral",
+  "status": "actual_history_copy_verified_runtime_weights_ready_catalogue_choices_confirmed_application_pending",
+  "actors": {
+    "operator": "applied_history_copy_with_hidden_password_and_confirmed_two_catalogue_choices",
+    "codex": "read_only_content_comparison_runtime_copy_reader_fix_local_backup_and_isolated_restore_candidate_preparation"
+  },
+  "operator_confirmation": {
+    "code": "history_transferred",
+    "source_database": "fama_db",
+    "target_database": "fama_oficial",
+    "digest": "922c811f8d90b01f58212613b2ebd913e43ea28555304af366c7e8b97a0afa64",
+    "rows": {
+      "usuario": 1,
+      "conjunto_datos": 1,
+      "audio": 1,
+      "modelo": 5,
+      "prediccion": 31,
+      "retroalimentacion": 1,
+      "feedback_sync": 1,
+      "metrica_entrenamiento": 0
+    },
+    "new_permissions_or_authorship_created": false,
+    "migrator_password_saved": false
+  },
+  "independent_comparison": {
+    "checked_at": "2026-10-24T06:49:48.188987+00:00",
+    "code": "history_copy_independently_verified",
+    "all_known_rows_and_fields_equal": true,
+    "seven_next_sequence_values_equal": true,
+    "digest": "922c811f8d90b01f58212613b2ebd913e43ea28555304af366c7e8b97a0afa64",
+    "next_sequence_values": {
+      "usuario": 2,
+      "conjunto_datos": 2,
+      "audio": 2,
+      "modelo": 7,
+      "prediccion": 32,
+      "retroalimentacion": 2,
+      "metrica_entrenamiento": 4
+    },
+    "original_administrator_and_password_hash_unchanged": true
+  },
+  "new_access_rows": {
+    "asignacion_dataset": 0,
+    "acceso_prediccion": 0,
+    "sesion_web": 0,
+    "recuperacion_cuenta": 0,
+    "solicitud_dataset": 0,
+    "evento_seguridad": 0
+  },
+  "initial_signup_occupied_is_expected": true,
+  "other_installation_checks_ready": true,
+  "runtime": {
+    "root": "runtime/oficial",
+    "identity": "9a160fe2802c3427c72afc5c54ef46cd88ef838d80881776d89017d33ccfc1e0",
+    "profile_completed": false,
+    "files": [
+      {
+        "source": "backend\\checkpoints\\efficientnet_gpu_pipeline_35e_best.pt",
+        "target": "runtime\\oficial\\checkpoints\\efficientnet_gpu_pipeline_35e_best.pt",
+        "bytes": 48822960,
+        "sha256": "79ce8e3e574296e360814b89151cf5666ab0b1050e297baed06b3762dfef94b6",
+        "model_id": 2,
+        "new_copy": true
+      },
+      {
+        "source": "backend\\checkpoints\\convnext_nano_35e_best.pt",
+        "target": "runtime\\oficial\\checkpoints\\convnext_nano_35e_best.pt",
+        "bytes": 179709621,
+        "sha256": "f3ea78451c9ec5677c0e28c47063217ea9d5068eac4bac6b34115094a042a064",
+        "model_id": 3,
+        "new_copy": true
+      },
+      {
+        "source": "backend\\checkpoints\\resnet34d_35e_best.pt",
+        "target": "runtime\\oficial\\checkpoints\\resnet34d_35e_best.pt",
+        "bytes": 255989559,
+        "sha256": "da5a79625906be7bc4f732c7f55e065a56b2368460756e7f306e815c18b0da5f",
+        "model_id": 4,
+        "new_copy": true
+      },
+      {
+        "source": "backend\\checkpoints\\augmented_best.pt",
+        "target": "runtime\\oficial\\checkpoints\\augmented_best.pt",
+        "bytes": 4312689,
+        "sha256": "dc2264a7abcba11adba101e5f02c394349ddcff2d2e71a0c43f099c7cf20f430",
+        "model_id": 5,
+        "new_copy": true
+      },
+      {
+        "source": "backend\\checkpoints\\baseline_best.pt",
+        "target": "runtime\\oficial\\checkpoints\\baseline_best.pt",
+        "bytes": 4312610,
+        "sha256": "ff22fc9baaf0324583bfa7993e45142bfa74e4552ff11985ef66a10f241dbb8c",
+        "model_id": 6,
+        "new_copy": true
+      },
+      {
+        "source": "backend\\data\\raw\\MaquinariaMinas\\Perforadora rotativa\\control_ruido_blanco.wav",
+        "target": "runtime\\oficial\\data\\raw\\MaquinariaMinas\\Perforadora rotativa\\control_ruido_blanco.wav",
+        "bytes": 220544,
+        "sha256": "7ced2842f5ba65f422a38ae9daaba0c343f16665bdb905b0d0a5cff1aedc1515",
+        "model_id": null,
+        "new_copy": true
+      }
+    ],
+    "total_bytes": 493367983,
+    "source_bytes_preserved": true,
+    "test_assets_copied": false,
+    "first_attempt_owned_empty_residue_removed_files": 0
+  },
+  "checkpoint_load_results": [
+    {
+      "file": "efficientnet_gpu_pipeline_35e_best.pt",
+      "code": "model_loaded_on_CPU",
+      "architecture": "efficientnet_b0",
+      "classes": 15,
+      "historical_accuracy": 0.8462
+    },
+    {
+      "file": "convnext_nano_35e_best.pt",
+      "code": "model_loaded_on_CPU",
+      "architecture": "convnext_nano.d1h_in1k",
+      "classes": 15,
+      "historical_accuracy": 0.9316
+    },
+    {
+      "file": "resnet34d_35e_best.pt",
+      "code": "model_loaded_on_CPU",
+      "architecture": "resnet34d",
+      "classes": 15,
+      "historical_accuracy": 0.8889
+    },
+    {
+      "file": "augmented_best.pt",
+      "code": "model_loaded_on_CPU",
+      "architecture": "AudioCNN",
+      "classes": 15,
+      "historical_accuracy": 0.6239
+    },
+    {
+      "file": "baseline_best.pt",
+      "code": "model_loaded_on_CPU",
+      "architecture": "AudioCNN",
+      "classes": 15,
+      "historical_accuracy": 0.5556
+    }
+  ],
+  "compatibility": {
+    "exact_legacy_AudioCNN_tensor_layout_recognized": true,
+    "declared_architectures_not_overridden": true,
+    "meta_template_without_second_weight_allocation": true,
+    "legacy_val_acc_retained": true,
+    "official_binary_or_SQL_metadata_rewritten": false
+  },
+  "TDD": {
+    "observed_red": [
+      "untyped_CNN_reported_as_EfficientNet",
+      "historical_val_acc_displayed_as_zero"
+    ],
+    "new_cases": 6,
+    "new_cases_use_real_prediction_and_no_mocks": true
+  },
+  "validation": {
+    "focused": {
+      "tests": 37,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "c652d8e180752b75d86b275c0022bf45972a3d204f681ef11764713f146322d1"
+    },
+    "focused_files": 3,
+    "deselected": 6,
+    "broad_diagnostic": {
+      "tests": 43,
+      "failures": 6,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "1ef24519471cc1b6b628d7b456a1917a63e3e99f45fcd51a226e828bca786dab"
+    },
+    "baseline_reader_reproduces_existing_empty_catalogue_failure": {
+      "tests": 1,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "f2508c4ec7fd017c6a4098f3312c1eee9d56296bcdb3bcfd23e4b53dad9de52e"
+    },
+    "unresolved": [
+      "five_Windows_symlink_privilege_cases",
+      "existing_empty_catalogue_vs_static_ensemble_registration_contract"
+    ],
+    "global_suite": false,
+    "frontend_or_official_audio_inference_or_training": false
+  },
+  "catalogue_candidate": {
+    "source_index_sha256": "6288da1f40fcb03150d896ce749d3336eeda9d4bf7e38fb49a2c7f2a3adc1b67",
+    "candidate_index_sha256": "64f258de5c3b35853c09eb6b3b18c029ed22567f735d1edcd36db6275c8fc768",
+    "rows": 1205,
+    "original_fields_and_order_preserved": true,
+    "cloud_md5_and_size_matches": 1200,
+    "multiple_remote_copies_of_same_indexed_bytes": 6,
+    "new_versioned_audio_objects": [
+      {
+        "key": "datasets/AvesChilenas/zorzal_patagónico/954562_historico_374b760f388fb655.mp3",
+        "bytes": 6420180,
+        "sha256": "374b760f388fb65564c8e9b63d686ca0d9dcf1fb2416655a67ddfff6cbc96eb2",
+        "md5": "xp7nwWVADKhol27Iqc4S3w==",
+        "source_file": "zorzal_patagónico/954562.mp3",
+        "old_cloud_key": "datasets/AvesChilenas/zorzal_patagónico/954562.mp3",
+        "old_cloud_generation": 1790454397325036,
+        "old_cloud_bytes": 1031240
+      },
+      {
+        "key": "datasets/AvesChilenas/zorzal_patagónico/954568_historico_3d765b5405919393.mp3",
+        "bytes": 8726304,
+        "sha256": "3d765b54059193934304244796e248b2b95e56d637587d30e5cbf11e2bbb55cc",
+        "md5": "j3b8pmMhBETEi39uQwUFEg==",
+        "source_file": "zorzal_patagónico/954568.mp3",
+        "old_cloud_key": "datasets/AvesChilenas/zorzal_patagónico/954568.mp3",
+        "old_cloud_generation": 1790454443410140,
+        "old_cloud_bytes": 1948680
+      },
+      {
+        "key": "datasets/AvesChilenas/zorzal_patagónico/954577_historico_35caacc4b6fcf376.mp3",
+        "bytes": 23139396,
+        "sha256": "35caacc4b6fcf3768395c623489684f14067ad5a206b94b64791d350f139b1cd",
+        "md5": "fHE/uT2IQulcCThkMx1+2A==",
+        "source_file": "zorzal_patagónico/954577.mp3",
+        "old_cloud_key": "datasets/AvesChilenas/zorzal_patagónico/954577.mp3",
+        "old_cloud_generation": 1790531649770775,
+        "old_cloud_bytes": 21363104
+      },
+      {
+        "key": "datasets/AvesChilenas/zorzal_patagónico/954572_historico_88fc35d9a16ef31e.mp3",
+        "bytes": 25877396,
+        "sha256": "88fc35d9a16ef31e00b69aac3d2503b2cfb5ccedc28ac356def2d66c50b18dbf",
+        "md5": "QgGDrYo528XY6Kvgs66zCA==",
+        "source_file": "zorzal_patagónico/954572.mp3",
+        "old_cloud_key": "datasets/AvesChilenas/zorzal_patagónico/954572.mp3",
+        "old_cloud_generation": 1790461264137366,
+        "old_cloud_bytes": 12647312
+      },
+      {
+        "key": "datasets/AvesChilenas/zorzal_patagónico/1083145_historico_72fd9def7a2204e1.mp3",
+        "bytes": 85405744,
+        "sha256": "72fd9def7a2204e1cf113504fe31f4ba6e0d170b6d019501a634b14391aaaf60",
+        "md5": "4gBu+q1fKn6tNQr2vR6JVg==",
+        "source_file": "zorzal_patagónico/1083145.mp3",
+        "old_cloud_key": "datasets/AvesChilenas/zorzal_patagónico/1083145.mp3",
+        "old_cloud_generation": 1790463526792534,
+        "old_cloud_bytes": 25148936
+      }
+    ],
+    "additional_audio_bytes": 149569020,
+    "active_or_cloud_publication_performed": false
+  },
+  "operator_choices": {
+    "default_model": "chilean-birds-ensemble",
+    "retain_five_individual_models": true,
+    "five_audio_versions": "preserve_existing_GCS_and_add_historical_versions_without_overwrite",
+    "historical_1205_row_index": "retain",
+    "status": "explicitly_confirmed_application_pending"
+  },
+  "post_transfer_backup": {
+    "relative_directory": "backend/installation/cloud-oficial/backups/post-traslado-20261024T071421Z",
+    "sha256": "32b64a3a5b55f673adbd2ffb4d22c38c2b20ed41534ead8587954ebad727b5df",
+    "bytes": 57627,
+    "pg_major": 16,
+    "tables": 17,
+    "sequences": 9,
+    "restore_verification": {
+      "checked_at": "2026-10-24T07:16:50.910954+00:00",
+      "container_id": "bc68e614a1513f7ea2ced8dd4c15e0c831e5045fc4c104fd690ef27525964fcf",
+      "image": "sha256:9e2cf6287f25c3151f4c9421ccce2b17f3e60061c111a29165e0d2cdd9ff0a97",
+      "backup_sha256": "32b64a3a5b55f673adbd2ffb4d22c38c2b20ed41534ead8587954ebad727b5df",
+      "restore": {
+        "code": "database_restore_verified",
+        "database": "official_restore_validation",
+        "tables": 17,
+        "revision": "0003_autonomy",
+        "archive_sha256": "32b64a3a5b55f673adbd2ffb4d22c38c2b20ed41534ead8587954ebad727b5df"
+      },
+      "laboratory_removed": true,
+      "id_image_labels_tmpfs_checked": true,
+      "previous_containers_preserved": 4
+    },
+    "offsite_copy": false
+  },
+  "private_acl": {
+    "files_checked": 38,
+    "unexpected_allow_rules": 0
+  },
+  "actual_operations": {
+    "history_copy_applied_by_operator": true,
+    "source_SQL_row_writes_by_codex": false,
+    "official_SQL_DML_by_codex": false,
+    "GCS_object_writes_by_codex": false,
+    "official_profile_activated": false,
+    "application_or_proxy_restarts": false,
+    "official_administrator_adopted": false
+  },
+  "pending": [
+    "apply_confirmed_catalogue_choices",
+    "prepare_selected_audio_and_active_index",
+    "explicit_initial_ensemble_catalogue",
+    "MaquinariaMinas_cloud_reconciliation",
+    "industrial_checkpoint_availability",
+    "official_adoption_and_operational_switch",
+    "source_writer_identification_and_final_digest_check",
+    "offsite_backup_retention_and_university_operation"
+  ],
+  "artifacts": [
+    {
+      "path": "backend/app/services/predictors/trained_predictor.py",
+      "sha256": "4aa3f5c33f2f74d02f5016c381b63b399be57faf49fc0dfb1c65d75c2a4836d9"
+    },
+    {
+      "path": "backend/tests/test_historical_audio_cnn_checkpoint.py",
+      "sha256": "4c9aad410afa346a91fc6f42e01edff1f409ab256c9d868d53f50a3e16e4bf62"
+    },
+    {
+      "path": "backend/app/runtime.py",
+      "sha256": "485bd8432c6d9e059c535628bf402e06ba23500a2017ffa14b656936865ab44e"
+    },
+    {
+      "path": "backend/app/node.py",
+      "sha256": "d42afd68d2aa3c9c42412c073ea3139c6a60767ebf40ae8edb9203964f9b8644"
+    },
+    {
+      "path": "backend/app/database_backup.py",
+      "sha256": "f6bd8a9ab88da01d14ca4f9dff6066b254343e54437b4929d33c65ce47b619c3"
+    },
+    {
+      "path": "backend/app/history_transfer.py",
+      "sha256": "1c20ef17ef157e1cefbc659858b13d456a184a84e3499190d7d775e06899e946"
+    },
+    {
+      "path": "docs/manuales/conciliacion_catalogo_y_pesos_oficiales.md",
+      "sha256": "37fa549de0b6be0ff4229bc09a61cb0543209106a57836a20330b0e811bc18bc"
+    },
+    {
+      "path": "docs/manuales/traslado_historia_y_adopcion.md",
+      "sha256": "86664b222f0b7f54c1c0c2c45f0727964ac14f0832d6ef4b28ad93938aeac021"
+    },
+    {
+      "path": "docs/manuales/bitacora_acceso_e_instalacion.md",
+      "sha256": "b4e9fb9109e98ddde1f22b147e5d84f97f048adc46045929d412446afd9b5b9b"
+    },
+    {
+      "path": "docs/manuales/preparacion_entorno_oficial.md",
+      "sha256": "1c8682366e5e6454d4f35d80364a74c69fbc0131467a9f5bc945dc40456df84a"
+    },
+    {
+      "path": "docs/manuales/estado_actual_y_pendientes.md",
+      "sha256": "930954f4bf6752a037e2358d06d06af3979afffd257d9a0761d6c973e4b0f35f"
+    },
+    {
+      "path": "docs/manuales/plan_instalacion_gcp_y_asistente.md",
+      "sha256": "7e84ff0c938335475c95cf711d0cd2b490b6304c079433f2fd88f3fa2624943c"
+    },
+    {
+      "path": "docs/manuales/plan_autonomia_investigador_y_catalogo.md",
+      "sha256": "431f72731a84b39bfb61c03c0fa49a3932d3e2e1d89291c3cc2bc4c32c6b4abf"
+    },
+    {
+      "path": "docs/manuales/identidad_tecnica_oficial.md",
+      "sha256": "5c19073eceb7cb068232167470147405d8ed1919db4cb2589cbad67a40931ed3"
+    },
+    {
+      "path": "docs/manuales/respaldo_historico_postgresql18.md",
+      "sha256": "830da7fd04b0d18529d5a7854b8995c1239d3e3b398763a3748089b3dce952d9"
+    },
+    {
+      "path": "docs/KANBAN.md",
+      "sha256": "322a4ff42a637ccdb6b02808901eeabcbd0f21fbc345e0bd9be7111af60ac48b"
+    },
+    {
+      "path": "docs/README.md",
+      "sha256": "d99d6d00041f7ee58c70f903eef93f84db2e405ec7c4707eafaa0c108a46fe14"
+    }
+  ]
+}

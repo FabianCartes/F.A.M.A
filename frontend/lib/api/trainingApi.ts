@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, apiFetch } from "@/lib/api";
 import {
   HardwareStatus,
   HardwareStatusSchema,
@@ -61,7 +61,7 @@ async function request<T>(
 ): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(url, options);
+    res = await apiFetch(url, options);
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     throw new ApiConnectionError(`Error de red al conectar con el servidor: ${errorMsg}`);

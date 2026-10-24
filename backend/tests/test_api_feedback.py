@@ -19,6 +19,7 @@ from app.models.prediction import Prediccion
 from app.models.feedback import Retroalimentacion
 from app.services.feedback import feedback_service
 from app.services import storage
+from tests.http_security import administrator_http
 
 
 @pytest.fixture(autouse=True)
@@ -76,7 +77,8 @@ def client(test_db):
     # No lifespan: no model discovery, cloud access, seeding or real DB.
     test_client = TestClient(app)
     try:
-        yield test_client
+        with administrator_http(app):
+            yield test_client
     finally:
         test_client.close()
 

@@ -58,8 +58,8 @@ class EngineEnsemblePredictor(AudioPredictor):
         else:
             self.weights = dict(weights)
 
-        backend_root = Path(__file__).resolve().parent.parent.parent.parent
-        ckpt_dir = backend_root / "checkpoints"
+        from training.paths import get_checkpoints_dir
+        ckpt_dir = get_checkpoints_dir()
 
         if checkpoint_paths is None:
             self.checkpoint_paths = {

@@ -1,0 +1,193 @@
+{
+  "version": 1,
+  "date": "2026-10-24",
+  "timezone": "America/Santiago",
+  "checked_at": "2026-10-24T05:03:33.644906+00:00",
+  "branch": "fix/afinamiento-integral",
+  "status": "official_profile_connections_and_legacy_PG18_backup_restore_verified_transfer_pending",
+  "operator": {
+    "profile_preparation_completion_reported": true,
+    "SQL_password_not_shared_in_chat": true
+  },
+  "profile_observed": {
+    "checked_at": "2026-10-24T05:00:24.580368+00:00",
+    "code": "official_profile_connections_verified",
+    "SQL_database": "fama_oficial",
+    "SQL_user": "fama_oficial_app",
+    "SQL_port": 5434,
+    "SQL_read_only_check": true,
+    "public_tables": 0,
+    "bucket": "fama-audio-records-2026",
+    "database_connected": true,
+    "storage_read_connected": true,
+    "storage_evidence": "preceding_public_app.node_check",
+    "installation_completed": false,
+    "official_profile_activated": false
+  },
+  "Windows_ACL_correction": {
+    "observed_issue": "mkdir_mode_0700_on_Windows_creates_child_DACL_with_Administrators_and_Owner_Rights_instead_of_explicit_user_SYSTEM_policy",
+    "public_seam": "operator_prepare_CLI_and_real_filesystem_previously_agreed",
+    "test_hardware_substitution_only": "getpass_terminal_input_with_synthetic_password",
+    "red": "extended_existing_public_CLI_test_failed_on_unexpected_Allow_rule_in_generated_child_directory_before_production_edit",
+    "harness_failures_before_functional_red": [
+      "sandbox_temporary_directory_creation",
+      "PowerShell_module_autoload_for_Get_Acl_corrected_to_native_NET"
+    ],
+    "fix": "protect_secrets_native_and_docker_directories_explicitly_before_writing_generated_files",
+    "regression": {
+      "tests": 13,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "files": 2,
+      "duration_seconds": 4.24,
+      "command": "python -m pytest --noconftest tests/test_cloud_node.py tests/test_installation_configuration.py -q",
+      "XML": ".pytest_cache/official_profile_acl_regression.xml"
+    },
+    "existing_profile_repair": {
+      "profile": "cloud-oficial",
+      "directories_protected": 4,
+      "files_checked": 7,
+      "all_file_contents_unchanged": true
+    },
+    "final_profile_and_backup_ACL": {
+      "checked_entries": 25,
+      "unexpected_Allow_rules": 0,
+      "unprotected_directories": 0
+    },
+    "architecture_change": false
+  },
+  "historical_backup_and_restore": {
+    "checked_at": "2026-10-24T04:57:28.703424+00:00",
+    "source_database": "fama_db",
+    "source_server_major": 18,
+    "dump_tool_version": "18.0",
+    "restore_tool_version": "18.0",
+    "SQL_source_writes": false,
+    "cloud_SQL_writes": false,
+    "GCS_writes": false,
+    "application_services_stopped_or_restarted": false,
+    "backup_path": "backend/installation/cloud-oficial/backups/legacy-pg18-20261024T045728Z-e5f57977466e",
+    "restore_verified": true,
+    "cleanup_verified": true,
+    "dump_bytes": 29983,
+    "dump_sha256": "78855829efeee7bc16a8e893168f9a0d8649e3907c415f4a1b0929f1f2105a6b",
+    "synchronized_snapshot_used": true,
+    "source_manifest_stable_during_export": true,
+    "source_rows": {
+      "audio": 1,
+      "conjunto_datos": 1,
+      "feedback_sync": 1,
+      "metrica_entrenamiento": 0,
+      "modelo": 5,
+      "prediccion": 31,
+      "retroalimentacion": 1,
+      "usuario": 1
+    },
+    "table_count": 8,
+    "sequence_count": 7,
+    "code": "legacy_PG18_backup_and_restore_verified",
+    "other_containers_preserved": true,
+    "all_rows_columns_indexes_noncheck_constraints_and_sequences_match": true,
+    "constraint_definitions_byte_identical": false,
+    "constraint_rendering_differences": [
+      {
+        "table": "feedback_sync",
+        "constraint": "feedback_sync_status",
+        "allowed_values": [
+          "pending",
+          "synced"
+        ],
+        "valid_invalid_and_NULL_truth_tables_match": true,
+        "probe_count": 8
+      },
+      {
+        "table": "usuario",
+        "constraint": "chk_usuario_rol",
+        "allowed_values": [
+          "administrador",
+          "investigador"
+        ],
+        "valid_invalid_and_NULL_truth_tables_match": true,
+        "probe_count": 8
+      }
+    ],
+    "check_difference_is_array_cast_vs_element_cast_for_same_varchar_literals": true,
+    "behaviour_checked_on_source_18_0_and_restored_18_2": true,
+    "row_hashes_rechecked_in_second_exclusive_restore": true,
+    "restored_server_version": "18.2",
+    "followup_cleanup_verified": true,
+    "followup_checked_at": "2026-10-24T04:59:29.411662+00:00"
+  },
+  "recovery_limits": {
+    "restored_only_to_exclusive_local_PG18_laboratories": true,
+    "direct_PG18_to_PG16_restore_attempted": false,
+    "original_source_writers_quiesced_for_final_cutover": false,
+    "final_cutover_backup": false,
+    "external_or_offsite_copy_created": false,
+    "audio_and_checkpoint_files_included": false,
+    "global_roles_backed_up": false,
+    "restored_application_started": false
+  },
+  "not_performed": [
+    "official_schema_migration",
+    "history_transfer_to_fama_oficial",
+    "existing_account_adoption",
+    "catalogue_or_audio_reconciliation",
+    "official_profile_activation",
+    "application_services_stop_or_restart",
+    "writes_to_original_SQL_data_Cloud_SQL_or_GCS"
+  ],
+  "next": "implement_and_test_explicit_history_transfer_and_account_adoption_then_prepare_target_schema_DML_and_cutover",
+  "sources": [
+    "https://www.postgresql.org/docs/18/app-pgdump.html",
+    "https://www.postgresql.org/docs/18/app-pgrestore.html",
+    "https://docs.python.org/3.12/library/os.html#os.mkdir"
+  ],
+  "artifacts": [
+    {
+      "path": "backend/app/node.py",
+      "sha256": "d42afd68d2aa3c9c42412c073ea3139c6a60767ebf40ae8edb9203964f9b8644"
+    },
+    {
+      "path": "backend/tests/test_cloud_node.py",
+      "sha256": "fd75730e0ce48e699fc4f018231d5a3ad8e283837556c47ca4ae1e5f4442ec48"
+    },
+    {
+      "path": "docs/manuales/identidad_tecnica_oficial.md",
+      "sha256": "cf976c2d4fbf3e90d34176a37f1218b4c3403cebf4caffadc16c2335eca46b3a"
+    },
+    {
+      "path": "docs/manuales/respaldo_historico_postgresql18.md",
+      "sha256": "2b33a1cf2aef06c5adcf5cb695b2a0cc60aca51b1274c8ef23431abb6df40d69"
+    },
+    {
+      "path": "docs/manuales/bitacora_acceso_e_instalacion.md",
+      "sha256": "c73b01b160e9333343dc54abf3b944a9336cbc5ca39a357cab16011a57814508"
+    },
+    {
+      "path": "docs/manuales/preparacion_entorno_oficial.md",
+      "sha256": "a03a916ab58c31434391cca370a9c6135d0c4e85fd5efeae1229f5760400407f"
+    },
+    {
+      "path": "docs/manuales/estado_actual_y_pendientes.md",
+      "sha256": "3cc52bb10f5d3aab2c2918d71fc8c35433fe398e24853a2d1425423eeb4f9543"
+    },
+    {
+      "path": "docs/KANBAN.md",
+      "sha256": "8bd5b6927e72aab23c56bb834fe96b26585c1cb12db6d17aca1cdd3fd83fb148"
+    },
+    {
+      "path": "docs/README.md",
+      "sha256": "181f34411cea30a2ae828f2294ab977b536b05de56740bb3cc0054bbf0244be3"
+    },
+    {
+      "path": "docs/manuales/plan_instalacion_gcp_y_asistente.md",
+      "sha256": "ffb2a82984e6415842eb4f557358cc1923a4b9c494f8dbbec717d33d6c1deda4"
+    },
+    {
+      "path": "docs/manuales/plan_autonomia_investigador_y_catalogo.md",
+      "sha256": "022a52efa38464c1fcef0ff9f0897c670455f03ffc83fe3621343be734cfc1e9"
+    }
+  ]
+}

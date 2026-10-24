@@ -28,6 +28,10 @@ def get_raw_data_dir(dataset_name: Optional[str] = None) -> Path:
     existencia ni seguridad física: resolve_reference valida la etapa elegida.
     Las raíces con alias no están soportadas para la asociación canónica de datasets.
     """
+    from app.runtime import runtime_root
+    selected = runtime_root()
+    if selected is not None:
+        return selected / 'data/raw' / dataset_name if dataset_name else selected / 'data/raw'
     backend_raw = Path(__file__).absolute().parent.parent / "data" / "raw"
     if backend_raw.exists():
         raw_dir = backend_raw
@@ -47,6 +51,10 @@ def get_processed_data_dir(dataset_name: Optional[str] = None) -> Path:
     y debe validarse con resolve_reference. Los alias no están soportados para
     la asociación canónica de datasets.
     """
+    from app.runtime import runtime_root
+    selected = runtime_root()
+    if selected is not None:
+        return selected / 'data/processed' / dataset_name if dataset_name else selected / 'data/processed'
     backend_proc = Path(__file__).absolute().parent.parent / "data" / "processed"
     if backend_proc.exists():
         proc_dir = backend_proc
@@ -75,6 +83,10 @@ def get_checkpoints_dir(subpath: Optional[str] = None) -> Path:
     Retorna la ruta absoluta a backend/checkpoints/[subpath].
     Resuelve de forma robusta tanto en host local como dentro de contenedor Docker (/app).
     """
+    from app.runtime import runtime_root
+    selected = runtime_root()
+    if selected is not None:
+        return selected / 'checkpoints' / subpath if subpath else selected / 'checkpoints'
     backend_ckpts = (Path(__file__).resolve().parent.parent / "checkpoints").resolve()
     if backend_ckpts.exists():
         ckpts_dir = backend_ckpts

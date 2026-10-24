@@ -11,7 +11,7 @@ class FeedbackCreateRequest(BaseModel):
     id_prediccion: int = Field(..., description="ID of the prediction in the database")
     fue_correcta: bool = Field(..., description="Whether the prediction was correct")
     etiqueta_corregida: Optional[str] = Field(None, description="Corrected taxonomic label if prediction was incorrect")
-    id_usuario: Optional[int] = Field(1, description="ID of the user providing feedback")
+    id_usuario: Optional[int] = Field(None, deprecated=True, description="Ignorado: el autor se obtiene de la sesión web")
 
     @model_validator(mode="after")
     def validate_correction_label(self):
@@ -71,6 +71,10 @@ class FeedbackSyncState(BaseModel):
     sync_status: Literal["pending", "synced"]
     attempts: int = Field(..., ge=0)
     error_code: Optional[Literal["upload_failed", "integrity_mismatch"]]
+    proposed_by: Optional[int] = None
+    incorporated_by: Optional[int] = None
+    incorporated_at: Optional[datetime] = None
+    db_persisted: Optional[bool] = None
 
 
 class ApproveFeedbackResponse(BaseModel):
@@ -82,4 +86,4 @@ class ApproveFeedbackResponse(BaseModel):
     filename: Optional[str] = None
     local_status: str
     sync_status: str
-
+    db_persisted: Optional[bool] = None

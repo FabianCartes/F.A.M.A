@@ -40,16 +40,17 @@ def _stage_root(file_stage: str, roots: Mapping[str, str | Path]) -> Path:
 
 def _absolute_path(value: str | Path, field: str) -> Path:
     if not isinstance(value, (str, Path)):
-        raise ValueError(f"{field} must be an absolute POSIX path")
-    text = str(value)
-    if not text.startswith("/"):
-        raise ValueError(f"{field} must be an absolute POSIX path")
-    try:
-        if text != "/":
-            _relative_path(text[1:])
-    except ValueError:
-        raise ValueError(f"{field} must be a canonical absolute POSIX path") from None
-    return Path(text)
+        raise ValueError(f"{field} must be an absolute path")
+    
+    p = Path(value)
+    if not p.is_absolute():
+        raise ValueError(f"{field} must be an absolute path")
+        
+    for part in p.parts:
+        if part in (".", "..") or any(unicodedata.category(c) == "Cc" for c in part):
+            raise ValueError(f"{field} must be a canonical absolute path")
+            
+    return p
 
 
 def _reject_symlinks(path: Path) -> None:

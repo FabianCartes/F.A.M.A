@@ -72,3 +72,12 @@ Toda documentación de proyecto que se redacte debe quedar bajo `docs/`. Elegir 
 * Escribir en español todos los mensajes de commit nuevos, incluidos el alcance y la descripción. Mantener en inglés únicamente los tipos convencionales de Conventional Commits (`feat`, `fix`, `test`, `docs`, `refactor`, `chore`, etc.) y los identificadores técnicos que deban conservar su forma original.
 * Usar el formato `tipo(alcance): descripción en español`, con una descripción breve que explique el resultado o propósito del cambio.
 * Ejemplos: `fix(inferencia): evitar predicciones con pesos ausentes`; `feat(predicción): permitir seleccionar un fragmento de audio`; `test(registro): aislar las pruebas de modelos`.
+
+---
+
+## 8. Seguimiento del trabajo guiado de acceso e instalación
+
+* Mantener la bitácora viva en `docs/manuales/bitacora_acceso_e_instalacion.md` al avanzar en acceso, GCP e instalación. Registrar tanto el trabajo del operador humano como el de Codex, con responsable, resultado, evidencia y siguiente paso.
+* Distinguir confirmaciones del operador, comprobaciones observadas, implementación y tareas pendientes. Conservar los recibos previos como cortes históricos; registrar las nuevas verificaciones en el recibo de su etapa bajo `docs/receipts/`.
+* Actualizar `docs/KANBAN.md`, el plan y el estado para retomar cuando cambie el avance. No registrar contraseñas, códigos temporales, tokens, cookies ni contenido de credenciales.
+* Durante la recuperación administrada, evitar volcados completos de la página o del árbol de accesibilidad que puedan incluir el enlace secreto. Observar solo controles/estados filtrados; el operador copia y consume el enlace localmente. No leer el portapapeles ni guardar capturas con el token.

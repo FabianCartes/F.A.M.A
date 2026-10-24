@@ -109,6 +109,7 @@ export const ApproveFeedbackResponseSchema = z.object({
   filename: z.string().nullable().optional(),
   local_status: z.literal("incorporated"),
   sync_status: z.enum(["pending", "synced"]),
+  db_persisted: z.boolean().nullable().optional(),
   message: z.string().optional(),
 });
 
@@ -125,6 +126,10 @@ export const FeedbackSyncStateSchema = z.object({
   sync_status: z.enum(["pending", "synced"]),
   attempts: z.number().int().nonnegative(),
   error_code: z.enum(["upload_failed", "integrity_mismatch"]).nullable(),
+  proposed_by: z.number().int().positive().nullable().optional(),
+  incorporated_by: z.number().int().positive().nullable().optional(),
+  incorporated_at: z.string().nullable().optional(),
+  db_persisted: z.boolean().nullable().optional(),
 });
 export type FeedbackSyncState = z.infer<typeof FeedbackSyncStateSchema>;
 export const FeedbackSyncListSchema = z.array(FeedbackSyncStateSchema);

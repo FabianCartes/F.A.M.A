@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback, ChangeEvent, FormEvent } from "react";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, apiFetch as fetch } from "@/lib/api";
 import { ApiConnectionError, sendFeedback } from "@/lib/api/feedbackApi";
 
 interface AudioWaveformStats {
@@ -158,7 +158,7 @@ function PredictionFeedback({ prediction }: { prediction: CurrentPrediction }) {
       setStatus(finalized ? "finalized" : "error");
       setMessage(finalized
         ? "Conflicto (409): esta predicción ya fue finalizada y no admite nuevos envíos."
-        : `No se pudo enviar a revisión: ${err instanceof Error ? err.message : String(err)}. Puedes reintentar sin perder tu selección.`);
+        : `No se pudo guardar la corrección: ${err instanceof Error ? err.message : String(err)}. Puedes reintentar sin perder tu selección.`);
     } finally {
       sending.current = false;
     }
@@ -167,9 +167,9 @@ function PredictionFeedback({ prediction }: { prediction: CurrentPrediction }) {
   return (
     <section aria-label="Validar resultado" className="pt-3 border-t border-[#23252e] space-y-3 text-xs text-gray-300">
       <h3 className="font-semibold text-white">Validar clase predicha</h3>
-      {!validId && <p role="status">Este resultado no tiene un ID de predicción válido. No se puede enviar a revisión.</p>}
+      {!validId && <p role="status">Este resultado no tiene un ID de predicción válido. No se puede guardar la corrección.</p>}
       {status === "sent" ? (
-        <p role="status" className="text-emerald-400">Enviado a revisión. El audio queda pendiente en Gestión de audios; todavía no se ha incorporado al dataset.</p>
+        <p role="status" className="text-emerald-400">Corrección guardada. Puedes revisar e incorporar el audio en Gestión de audios; todavía no se ha incorporado al dataset.</p>
       ) : (
         <>
           <fieldset disabled={locked || !validId} className="space-y-2">
@@ -212,7 +212,7 @@ function PredictionFeedback({ prediction }: { prediction: CurrentPrediction }) {
           </fieldset>
           {message && <p role="alert" className="text-red-300">{message}</p>}
           <button type="button" onClick={submit} disabled={!canSubmit || locked} className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold disabled:opacity-40 disabled:cursor-not-allowed">
-            {status === "sending" ? "Enviando a revisión…" : "Enviar a revisión"}
+            {status === "sending" ? "Guardando corrección…" : "Guardar corrección"}
           </button>
         </>
       )}
@@ -598,41 +598,7 @@ export default function PredictionView() {
     return () => cancelAnimationFrame(animId);
   }, [audioStats, triggerRevealAnimation]);
 
-  // Historial inicial con grabaciones reales de campo verificadas con el Super-Ensamble
-  const [history, setHistory] = useState<HistoryItem[]>([
-    {
-      id: "hist-01",
-      filename: "eugralla_paradoxa_mocha_03.wav",
-      timestamp: "07/09/2026, 10:45:30",
-      clase: "Churrín de la Mocha",
-      badgeCode: "AVE-005",
-      confianza: 0.998,
-    },
-    {
-      id: "hist-02",
-      filename: "scelorchilus_rubecula_campo_01.wav",
-      timestamp: "07/09/2026, 11:20:15",
-      clase: "Chucao",
-      badgeCode: "AVE-004",
-      confianza: 0.924,
-    },
-    {
-      id: "hist-03",
-      filename: "aphrastura_spinicauda_bosque_02.wav",
-      timestamp: "07/09/2026, 09:15:10",
-      clase: "Rayadito",
-      badgeCode: "AVE-010",
-      confianza: 0.941,
-    },
-    {
-      id: "hist-04",
-      filename: "turdus_falcklandii_patagonia_05.wav",
-      timestamp: "07/09/2026, 08:30:22",
-      clase: "Zorzal patagónico",
-      badgeCode: "AVE-015",
-      confianza: 0.887,
-    },
-  ]);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
 
   const handleFileSelection = useCallback(
     (selectedFile: File | null) => {
@@ -1548,7 +1514,7 @@ export default function PredictionView() {
                 {result.detalles?.dataset_name ? (
                   <p className="font-mono text-emerald-300">{result.detalles.dataset_name}</p>
                 ) : (
-                  <p role="status" className="text-amber-300">Sin dataset de inferencia asociado. El audio puede enviarse a revisión, pero no incorporarse hasta contar con una asociación verificable.</p>
+                  <p role="status" className="text-amber-300">Sin dataset de inferencia asociado. Puedes guardar la corrección; la incorporación requiere una asociación verificable.</p>
                 )}
               </div>
 
@@ -1605,8 +1571,9 @@ export default function PredictionView() {
       </div>
 
       {/* Fila 3: Historial de Predicciones */}
-      <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4">
-        <span className="text-xs text-gray-300 font-semibold block">Historial de predicciones en campo</span>
+      <section aria-label="Predicciones de esta vista" className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4">
+        <h2 className="text-xs text-gray-300 font-semibold">Predicciones de esta vista</h2>
+        <p className="text-xs text-gray-500">Resultados de esta vista; al cambiar de sección se vacía esta lista.</p>
 
         {/* Filtros de Búsqueda y Clases */}
         <div className="flex flex-col sm:flex-row gap-2.5">
@@ -1649,6 +1616,7 @@ export default function PredictionView() {
 
         {/* Lista de Registros */}
         <div className="space-y-2">
+          {history.length === 0 && <p className="text-xs text-gray-500">Todavía no hay predicciones en esta vista.</p>}
           {filteredHistory.map((item) => (
             <div
               key={item.id}
@@ -1680,7 +1648,7 @@ export default function PredictionView() {
             </div>
           ))}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

@@ -10,7 +10,7 @@ import csv
 import io
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import re
 import stat
 import sys
@@ -26,6 +26,16 @@ def _path(value, field):
     if not isinstance(value, (str, Path)):
         raise ValueError(f"{field}: expected absolute canonical path")
     text = str(value)
+    if os.name == 'nt':
+        path = Path(value)
+        if (not path.is_absolute() or path.drive.startswith('\\\\')
+                or text not in (str(path), path.as_posix())
+                or any(part in ('.', '..') or part.endswith((' ', '.'))
+                       or PureWindowsPath(part).is_reserved()
+                       or any(c in '<>:"|?*' or unicodedata.category(c) == 'Cc' for c in part)
+                       for part in path.parts[1:])):
+            raise ValueError(f"{field}: expected absolute canonical path")
+        return path
     if (not text.startswith("/") or "\\" in text or ":" in text
             or any(unicodedata.category(c) == "Cc" for c in text)
             or (text != "/" and any(p in ("", ".", "..") for p in text[1:].split("/")))):
@@ -41,8 +51,8 @@ def _physical(path, *, kind):
             if ancestor == path and kind == "target":
                 return
             raise ValueError("missing physical parent or input/root") from None
-        if stat.S_ISLNK(mode):
-            raise ValueError("symlink path or ancestor is forbidden")
+        if stat.S_ISLNK(mode) or ancestor.is_junction():
+            raise ValueError("symlink or junction path or ancestor is forbidden")
         if ancestor != path and not stat.S_ISDIR(mode):
             raise ValueError("ancestor must be a physical directory")
     if kind == "target":
@@ -66,7 +76,8 @@ def _find(name, stage, roots):
         raise error
     for directory, dirs, files in os.walk(root, followlinks=False, onerror=failed):
         # Compatibility links are not discovery routes, including dangling links.
-        dirs[:] = [d for d in dirs if not (Path(directory) / d).is_symlink()]
+        dirs[:] = [d for d in dirs if not (Path(directory) / d).is_symlink()
+                   and not (Path(directory) / d).is_junction()]
         if name in files:
             candidate = Path(directory) / name
             if candidate.is_symlink():
@@ -102,6 +113,7 @@ def _rows(data, role, stage, roots, suffix):
                         name = name[:-len(suffix[0])] + suffix[1]
                     relative = _find(name, selected, roots)
                 resolve_reference(relative, selected, roots)
+                _physical(roots[selected] / relative, kind="file")
                 row["file_path"] = relative
                 row["file_stage"] = selected
                 rows.append(row)

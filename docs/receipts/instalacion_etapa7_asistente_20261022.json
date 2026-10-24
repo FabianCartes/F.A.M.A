@@ -1,0 +1,240 @@
+{
+  "version": 1,
+  "date": "2026-10-22",
+  "branch": "fix/afinamiento-integral",
+  "stage": 7,
+  "status": "implemented_and_isolated_verification_passed",
+  "tdd": {
+    "interfaces": [
+      "operator CLI",
+      "installation HTTP",
+      "visible React forms"
+    ],
+    "observed_red_then_green": [
+      "authorization and expiry",
+      "private configuration",
+      "service and schema checks",
+      "administrator creation and closure",
+      "disk failure and restart/resume",
+      "concurrent configuration and authorization rotation",
+      "invalid access settings",
+      "session redirect only for pending installation",
+      "insufficient daily SQL permissions"
+    ],
+    "external_fakes": [
+      "Google ADC and Cloud Storage SDK",
+      "os.replace failure after SQL commit"
+    ],
+    "real_dependencies": [
+      "PostgreSQL 16.15 with migrated schema and limited runtime role"
+    ],
+    "sql_fault_injection": "temporary trigger rejects first audit insert; transaction rolled back; operator removes trigger before resume"
+  },
+  "backend_regression": {
+    "command": "backend/.venv/Scripts/python.exe -m pytest --noconftest backend/tests/test_installation_wizard.py backend/tests/test_installation_configuration.py backend/tests/test_installation_startup.py backend/tests/test_cloud_node.py backend/tests/test_installation_compose.py backend/tests/test_connection_diagnostics.py backend/tests/test_schema_migrations.py backend/tests/test_preparacion_roles_pruebas.py backend/tests/test_permisos_tablas_pruebas.py backend/tests/test_database_url.py backend/tests/test_auth_configuration.py backend/tests/test_web_sessions.py backend/tests/test_access_limits.py backend/tests/test_account_management.py -q -p no:cacheprovider",
+    "environment": {
+      "PYTHONPATH": "<repository>/backend",
+      "PYTHON_DOTENV_DISABLED": "1",
+      "DATABASE_URL": "sqlite://",
+      "TEMP_and_TMP": "<repository>/.pytest_cache",
+      "FAMA_TEST_ROLES_POSTGRES_URL": "exclusive_ephemeral_loopback_postgresql",
+      "FAMA_TEST_POSTGRES_URL": "same_exclusive_ephemeral_loopback_postgresql"
+    },
+    "passed": 181,
+    "failed": 0,
+    "skipped": 0,
+    "files": 14,
+    "duration_seconds": 438.8,
+    "exit_code": 0,
+    "scope": "selected installation, migration, authentication, session, limits and account regressions; not the entire backend suite"
+  },
+  "frontend_regression": {
+    "command": "<bundled_node_24>/node.exe node_modules/vitest/vitest.mjs run --maxWorkers=1",
+    "working_directory": "frontend",
+    "environment": {
+      "TEMP_and_TMP": "<repository>/.pytest_cache/frontend-temp"
+    },
+    "runtime": "24.19.0",
+    "passed": 306,
+    "failed": 0,
+    "skipped": 0,
+    "files": 31,
+    "duration_seconds": 116.94,
+    "exit_code": 0,
+    "global_node_runtime_changed": false
+  },
+  "static_checks": {
+    "typescript": {
+      "command": "<bundled_node_24>/node.exe node_modules/typescript/bin/tsc --noEmit --incremental false",
+      "exit_code": 0
+    },
+    "eslint": {
+      "command": "<bundled_node_24>/node.exe node_modules/eslint/bin/eslint.js app/installation/page.tsx app/__tests__/installation.test.tsx app/__tests__/installation-session.test.tsx lib/installation.ts components/auth/SessionBoundary.tsx",
+      "exit_code": 0
+    },
+    "python_ast": "all listed Python sources parsed successfully"
+  },
+  "browser_observation": {
+    "frontend": "temporary copy of current source, no real .env, existing node_modules junction",
+    "framework": "Next.js 16.3.4 development server with webpack",
+    "browser": "in-app Chromium browser",
+    "frontend_origin": "http://127.0.0.1:3107",
+    "backend_origin": "http://127.0.0.1:8107",
+    "database": "separate disposable PostgreSQL database and runtime role, distinct from regression fixtures",
+    "storage": "Google SDK listing simulated outside application modules; no real GCS request",
+    "observed": [
+      "operator code accepted",
+      "prepared SQL values and private password retained",
+      "bucket saved",
+      "all six checks successful",
+      "synthetic administrator submitted",
+      "installation completed with restart instruction",
+      "reload remains closed"
+    ],
+    "passwords_or_tokens_in_images": false,
+    "narrow_viewport_checked": false,
+    "backend_ML_restart_checked": false,
+    "screenshots": [
+      "docs/images/instalacion_etapa7_comprobaciones_20261022.png",
+      "docs/images/instalacion_etapa7_finalizada_20261022.png"
+    ]
+  },
+  "temporary_infrastructure": {
+    "container_name": "fama-etapa7-asistente-local",
+    "container_label": {
+      "fama.test": "etapa7-asistente"
+    },
+    "image": "postgres:16-alpine",
+    "image_id": "sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea",
+    "postgresql_version": "16.15",
+    "storage": "tmpfs",
+    "loopback_port": 55783,
+    "cleanup": {
+      "identity_and_label_verified_before_stop": true,
+      "container_absent_verified": true,
+      "preview_process_identity_verified_before_stop": true,
+      "preview_process_ids_stopped": [
+        31788,
+        22044,
+        24580,
+        34788
+      ],
+      "temporary_ports_clear_verified": [
+        3107,
+        8107,
+        55783
+      ],
+      "native_cloud_sql_proxy_preserved": {
+        "loopback_port": 5433,
+        "process_id": 22380
+      },
+      "ignored_preview_files_retained": "synthetic configuration and source copy under .pytest_cache; no recursive junction deletion"
+    }
+  },
+  "real_installation": {
+    "profiles": {
+      "native": {
+        "completed": false,
+        "first_administrator_created_by_this_stage": false
+      },
+      "docker": {
+        "completed": false,
+        "first_administrator_created_by_this_stage": false
+      }
+    },
+    "cloud_sql_or_GCS_requests_by_this_stage": false,
+    "credentials_modified": false,
+    "actual_datasets_or_checkpoints_accessed": false,
+    "first_admin_creation_pending_stage": 8
+  },
+  "limitations": [
+    "not a full backend suite",
+    "GCS wizard check only lists objects",
+    "no full ML/GPU restart or inference flow",
+    "no institutional HTTPS or emergency operator recovery",
+    "no mobile browser inspection",
+    "no live cloud installation finalized"
+  ],
+  "artifacts": [
+    {
+      "path": "backend/app/configuration.py",
+      "sha256": "e9f9655f0b6ee9ad353013570aa697033d3d1fcfb639f52dbd5ae9e453efb671"
+    },
+    {
+      "path": "backend/app/entrypoint.py",
+      "sha256": "7e7d74308cc2f7431b71e7e3772b7271937fc34218a174422236bbe609cddd1e"
+    },
+    {
+      "path": "backend/app/installation.py",
+      "sha256": "04015d721a8d9d977a4d768ef8ff95f2678aa9a9b2b6a689a5128909479982c9"
+    },
+    {
+      "path": "backend/app/node.py",
+      "sha256": "b8e9b30af5db7b248ef3e2a5159f71c4f7b7efcfe510bdff5f821d9069704616"
+    },
+    {
+      "path": "backend/app/passwords.py",
+      "sha256": "709ac45be980554e3211197fa75208f5e62103985b594682eb951483f1c69db0"
+    },
+    {
+      "path": "backend/app/web_settings.py",
+      "sha256": "d3684717c13edbf5fc14d01abbe6e7d5189d4d70e2242e6f87c4bafdffb783e8"
+    },
+    {
+      "path": "backend/app/services/auth.py",
+      "sha256": "4ee4eb01325802102a8529c0ffd652cdb6572fdaf3e3ebefd5916664eedfb80b"
+    },
+    {
+      "path": "backend/app/services/web_sessions.py",
+      "sha256": "f244be6817cc3996d7cfee7bd61cb8156522a59c4b5891f3a3f39d09a6545cb0"
+    },
+    {
+      "path": "backend/app/services/access_limits.py",
+      "sha256": "9288bb2e55ac3a4ae77780bed6a1e617384da80c9bf3f6d010fe1826142961e0"
+    },
+    {
+      "path": "backend/tests/test_installation_wizard.py",
+      "sha256": "be0132f188fc81bc35feae848bc87c69b9f773702b61f53c421cf998cfc6c9fd"
+    },
+    {
+      "path": "frontend/app/installation/page.tsx",
+      "sha256": "b21257bd858aec17cdba4627a8ceb7d78619d64be97c640546e6d7052d40b7c2"
+    },
+    {
+      "path": "frontend/app/installation/installation.css",
+      "sha256": "5918cb0802365637913ab81ee023016e265797063fed6a39ec87000b9cb657ad"
+    },
+    {
+      "path": "frontend/lib/installation.ts",
+      "sha256": "fbdf238e49063bd2f5bd8403aab187ffad17adce7117bb814a12ebd20023e9b5"
+    },
+    {
+      "path": "frontend/components/auth/SessionBoundary.tsx",
+      "sha256": "15d426374c2d6299ef786cb1c83d21061ef8209350446d063036356914259d37"
+    },
+    {
+      "path": "frontend/app/__tests__/installation.test.tsx",
+      "sha256": "72b95adbe780817b4e86095f4bfe23ee69333d79936a6cce68d60a9e5a99b36c"
+    },
+    {
+      "path": "frontend/app/__tests__/installation-session.test.tsx",
+      "sha256": "62dc25e7090a61c2af4a47c0576341bc1ce58028b25f69fc150e99a664532c95"
+    },
+    {
+      "path": "docs/adr/0042-autorizacion-y-finalizacion-reanudable-de-instalacion.md",
+      "sha256": "e99df1105a5a9f6b9fcbf77c9836288037f7638d3e091291b50a451a249838b1"
+    },
+    {
+      "path": "docs/manuales/asistente_primera_instalacion.md",
+      "sha256": "0cc788696a6800a1c91cb86ef5ced6ce7e80a2335a4709cfba70ddb9e82d5742"
+    },
+    {
+      "path": "docs/images/instalacion_etapa7_comprobaciones_20261022.png",
+      "sha256": "1f59238de427dd4615a1349dcc0463fdf4bbb8a71730afd38fdb9bf308b18a3a"
+    },
+    {
+      "path": "docs/images/instalacion_etapa7_finalizada_20261022.png",
+      "sha256": "65cca5beddecfd88343c6cde0b9a338170d55a49c6b9a32360c9210c46277995"
+    }
+  ]
+}

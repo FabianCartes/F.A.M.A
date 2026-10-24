@@ -1,0 +1,307 @@
+{
+  "version": 1,
+  "checked_at": "2026-10-24T08:13:41.224970+00:00",
+  "branch": "fix/afinamiento-integral",
+  "status": "official_local_node_started_and_bounded_verified_institutional_work_pending",
+  "operator_choices": {
+    "default": "chilean-birds-ensemble",
+    "five_audio_versions": "preserve_both_and_historical_index",
+    "historical_administrator_recovery_explicitly_requested": true
+  },
+  "target": {
+    "database": "fama_oficial",
+    "bucket": "fama-audio-records-2026",
+    "native_profile": "backend/installation/cloud-oficial/native",
+    "runtime": "runtime/oficial",
+    "web": "http://localhost:3010",
+    "backend_loopback_port": 8010,
+    "official_proxy_loopback_port": 5434
+  },
+  "audio_publication": {
+    "historical_index_rows": 1205,
+    "original_fields_preserved": 14,
+    "row_order_preserved": true,
+    "source_index_sha256": "6288da1f40fcb03150d896ce749d3336eeda9d4bf7e38fb49a2c7f2a3adc1b67",
+    "active_index_sha256": "64f258de5c3b35853c09eb6b3b18c029ed22567f735d1edcd36db6275c8fc768",
+    "local_files_SHA256_verified": 1205,
+    "new_versioned_audio_objects": 5,
+    "new_versioned_audio_bytes": 149569020,
+    "generation_zero_preconditions": true,
+    "readback_SHA256_verified": true,
+    "index_object": "dataset_indices/AvesChilenas/sha256/64f258de5c3b35853c09eb6b3b18c029ed22567f735d1edcd36db6275c8fc768.csv",
+    "MaquinariaMinas_missing_object_added_and_verified": true
+  },
+  "cloud_preservation": {
+    "checked_at": "2026-10-24T08:12:23.805149+00:00",
+    "code": "original_cloud_objects_preserved_verified",
+    "original_objects": 2634,
+    "current_objects": 2646,
+    "original_generations_and_sizes_unchanged": true,
+    "new_objects": 12,
+    "existing_objects_deleted_or_overwritten": 0,
+    "total_bytes": 6247048977
+  },
+  "SQL_catalogue": {
+    "datasets": {
+      "AvesChilenas": {
+        "dataset_id": 2,
+        "count": 1220,
+        "bytes": 5478671962
+      },
+      "engine_diagnostics": {
+        "dataset_id": 3,
+        "count": 1386,
+        "bytes": 185674284
+      }
+    },
+    "historical_dataset_preserved": true,
+    "registered_audio_rows": 2607,
+    "new_uploader_or_training_provenance_invented": false,
+    "new_assignments": 0
+  },
+  "models": {
+    "explicit_persisted_declaration": {
+      "version": 1,
+      "enabled": [
+        "chilean-birds-ensemble"
+      ],
+      "default": "chilean-birds-ensemble"
+    },
+    "individual_models_available": 5,
+    "historical_individual_active_flags_cleared": [
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "historical_dataset_relations_unknown_preserved": true,
+    "catalogue_without_declaration_or_SQL_remains_empty": true,
+    "real_bounded_inference": {
+      "code": "official_ensemble_inference_verified",
+      "source_audio_sha256": "75bdb8e59feb310ed43fb41c14a568c24535ef2340d4ac00163369a90f38928a",
+      "audio_seconds": 4.593,
+      "result": {
+        "clase": "Zorzal patagónico",
+        "confianza": 0.884,
+        "detalles": {
+          "energy_rms": 0.06087705450879432,
+          "spectral_flatness": 0.0951911136507988,
+          "status": "classified_ensemble"
+        }
+      },
+      "elapsed_seconds": 3.563,
+      "SQL_prediction_written": false,
+      "scientific_quality_evaluated": false
+    },
+    "operator_offsite_checkpoints": {
+      "count": 5,
+      "bytes": 493147439,
+      "path_pattern": "operator_backups/checkpoints/sha256/<sha256>.pt",
+      "generation_zero_and_readback_SHA256": true,
+      "training_dataset_links_created": false
+    },
+    "industrial_ensemble_weights_found": false
+  },
+  "history_at_cut": {
+    "checked_at": "2026-10-24T07:54:53.219632+00:00",
+    "code": "official_cut_history_rechecked",
+    "source_digest": "922c811f8d90b01f58212613b2ebd913e43ea28555304af366c7e8b97a0afa64",
+    "source_other_clients_at_observation": 0,
+    "all_original_rows_fields_equal_except_authorized_model_activation": true,
+    "original_rows_by_table": {
+      "usuario": 1,
+      "conjunto_datos": 1,
+      "audio": 1,
+      "modelo": 5,
+      "prediccion": 31,
+      "retroalimentacion": 1,
+      "feedback_sync": 1,
+      "metrica_entrenamiento": 0
+    },
+    "test_preview_8000_uses_isolated_SQLite": true,
+    "source_configuration_preserved": true,
+    "legacy_source_permanently_locked": false
+  },
+  "administrator": {
+    "existing_account_id": 1,
+    "installation_adopted": true,
+    "password_recovered_on_explicit_request": true,
+    "recovery_audited": true,
+    "prior_credentials_revoked": true,
+    "browser_login_verified": true,
+    "new_account_created": false,
+    "source_account_unchanged": true
+  },
+  "operation": {
+    "profile_completed": true,
+    "test_native_processes_verified_and_stopped": 4,
+    "official_processes_started": true,
+    "old_SQLite_preview_preserved": true,
+    "HTTP": {
+      "readiness": {
+        "body": "{\"code\":\"schema_current\"}",
+        "status": 200
+      },
+      "anonymous_models": {
+        "status": 401
+      },
+      "installation": {
+        "body": "{\"status\":\"completed\"}",
+        "status": 200
+      }
+    },
+    "browser": {
+      "default_and_five_individuals_observed": true,
+      "official_bucket_and_three_datasets_observed": true,
+      "full_bucket_count_observed": 2646,
+      "screenshots": [
+        "docs/images/catalogo_oficial_20261024.png",
+        "docs/images/datasets_oficiales_20261024.png"
+      ]
+    },
+    "test_databases_buckets_and_profiles_preserved": true,
+    "native_frontend_development_server": true,
+    "network_exposure": "loopback_only"
+  },
+  "backup_after_catalogue_and_recovery": {
+    "path": "backend/installation/cloud-oficial/backups/oficial-inicio-20261024",
+    "archive_sha256": "1bcc6c9c2593d09dffc27c77dce4980fb27ad8eb8d05e510710edf58f6f50818",
+    "bytes": 161105,
+    "tables": 17,
+    "sequences": 9,
+    "revision": "0003_autonomy",
+    "restore_verified": true,
+    "tables_and_sequences_full_digest_equal": true,
+    "temporary_containers_removed": true,
+    "four_preexisting_containers_preserved": true,
+    "first_rehearsal_argument_error_before_restore": true,
+    "corrected_rehearsal_verified": true,
+    "offsite_SQL_backup": false
+  },
+  "implementation_validation": {
+    "TDD_red_observed": [
+      "installation_key_rejected",
+      "invalid_declarations_accepted",
+      "undeclared_ensemble_in_catalogue",
+      "bucket_total_truncated_at_2000"
+    ],
+    "backend_passed": 66,
+    "deselected_windows_symlink_cases": 5,
+    "test_files": 7,
+    "scope": "configuration_restart_real_SQLite_and_weights_HTTP_catalogue_ingestion_CNN_pooling",
+    "external_GCS_adapter_simulated_for_storage_total_test": true,
+    "frontend_or_global_suites_rerun": false,
+    "full_bucket_inventory_streamed_without_limit_or_reference_list": true,
+    "private_ACL_files_checked": 46,
+    "private_ACL_unexpected_Allow_entries": 0
+  },
+  "remaining": [
+    "industrial_ensemble_missing_checkpoints",
+    "SQL_offsite_backup_destination_retention_and_managed_restore",
+    "university_server_resources_network_HTTPS_and_service_startup",
+    "historical_unmanaged_prediction_audio_provenance_limits_preserved"
+  ],
+  "artifacts": [
+    {
+      "path": "backend/app/configuration.py",
+      "sha256": "6d507f7b3596e7885f351ebf61afdb829c8d868809ff92900c0954206cbbe10f"
+    },
+    {
+      "path": "backend/app/services/registry.py",
+      "sha256": "4e13d61142b87d9fda643c1307dbb27703d1b9d2adc068459e428120b7d5cb5e"
+    },
+    {
+      "path": "backend/app/services/ingestion.py",
+      "sha256": "c8e860163b73a2cb70c6930f83bbdf7cc6596fdd033e3e1f484697c75c386707"
+    },
+    {
+      "path": "backend/app/services/predictors/trained_predictor.py",
+      "sha256": "4aa3f5c33f2f74d02f5016c381b63b399be57faf49fc0dfb1c65d75c2a4836d9"
+    },
+    {
+      "path": "backend/tests/test_installation_configuration.py",
+      "sha256": "e4a591f842468cbe12790396e1503e3ac8af73f4399b3dfd6f0db09276870865"
+    },
+    {
+      "path": "backend/tests/test_installation_ensemble_catalogue.py",
+      "sha256": "1d9701b1afe151b2bc2525cb8b2a127cca0b3162ea39fee97059d6696ed71e14"
+    },
+    {
+      "path": "backend/tests/test_storage_inventory_totals.py",
+      "sha256": "aae5ebb4460a7c41857edbc26faccf6d6b1678bbe08f7b5f0762bb8b0ea48a69"
+    },
+    {
+      "path": "backend/tests/test_api_model_catalogue.py",
+      "sha256": "c0865cb6d3211d437a0665722e0f4c7902bfa9d5fa7b5ce373da569013eed725"
+    },
+    {
+      "path": "backend/tests/test_api_ingestion.py",
+      "sha256": "8b7392102c03d02f2f8cdb59aa20a470246db00d3898e8cae11eee851a5ca89b"
+    },
+    {
+      "path": "backend/tests/test_historical_audio_cnn_checkpoint.py",
+      "sha256": "4c9aad410afa346a91fc6f42e01edff1f409ab256c9d868d53f50a3e16e4bf62"
+    },
+    {
+      "path": "backend/tests/test_checkpoint_pooling_contract.py",
+      "sha256": "92d7300a77afb290e9d455dd2aa3e2a12abb651ff01291c6fd4c47e85c5bd5ff"
+    },
+    {
+      "path": "docs/adr/0050-declaracion-explicita-de-ensambles-por-instalacion.md",
+      "sha256": "2e220cab372230c5b7fd76cbbd595a8fc957b9798f813c5757e99adc23617ecf"
+    },
+    {
+      "path": "docs/images/catalogo_oficial_20261024.png",
+      "sha256": "6ae28e566c39a2e12c32fc9f4e6927c9280768ed51cee01a2ff24d3d26ce5c7d"
+    },
+    {
+      "path": "docs/images/datasets_oficiales_20261024.png",
+      "sha256": "e13d69f93661f2ae7678df89ea1ca5965cdb705fffd3acd9e24d267a7c52d30b"
+    },
+    {
+      "path": "docs/KANBAN.md",
+      "sha256": "3e2912eac4f2eb614afa636f0b8134861e763f0e93a1d930681e9594478e8f61"
+    },
+    {
+      "path": "docs/README.md",
+      "sha256": "e5fdb5b18d18b75d0d94f9468230ab041ade724486213e10810b348bce1ec834"
+    },
+    {
+      "path": "docs/manuales/conciliacion_catalogo_y_pesos_oficiales.md",
+      "sha256": "dae3f44f39eb8a64438e3749ba70bbef563891a6d3116b08cbb3bcb16be7d23d"
+    },
+    {
+      "path": "docs/manuales/preparacion_entorno_oficial.md",
+      "sha256": "1bb43b906fdd4fc853fc21333dd0bdccb4ec36c7f17c113326f649aacec9291c"
+    },
+    {
+      "path": "docs/manuales/estado_actual_y_pendientes.md",
+      "sha256": "eb5745cc11d30d62603e6f16de2f46b705c09a34bc6b6216d72408212c74a7c3"
+    },
+    {
+      "path": "docs/manuales/plan_instalacion_gcp_y_asistente.md",
+      "sha256": "9098eec0b13af31a2d540edc46d94ff6aafa55cc4736c1387a17f03148908a82"
+    },
+    {
+      "path": "docs/manuales/plan_autonomia_investigador_y_catalogo.md",
+      "sha256": "9bae6e77ba2e7be77db3ff060df6df635c7b9835fa731e8f17bd5bdd26926db6"
+    },
+    {
+      "path": "docs/manuales/identidad_tecnica_oficial.md",
+      "sha256": "653ad060a828f1b62d96b81a545a3908a60796d47340c09a3b862618850c5a14"
+    },
+    {
+      "path": "docs/manuales/traslado_historia_y_adopcion.md",
+      "sha256": "19a68fa3e6cd92a8dda8eefe80fb229d02a37760914209909f06c278236a6d76"
+    },
+    {
+      "path": "docs/manuales/respaldo_historico_postgresql18.md",
+      "sha256": "013b1c3bb7a4e2f37669ee1ee71da53dc159f3e4fe6ea14d1be8267b2847c30f"
+    },
+    {
+      "path": "docs/manuales/bitacora_acceso_e_instalacion.md",
+      "sha256": "f33485df7c2dce40d9199513ea297c8e0755a7a6c6702de9cffb50702fb21b28"
+    }
+  ]
+}

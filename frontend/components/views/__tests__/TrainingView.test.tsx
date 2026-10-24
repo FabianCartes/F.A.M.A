@@ -6,6 +6,31 @@ import { API_BASE_URL } from "@/lib/api";
 describe("TrainingView (Dynamic Ensemble Selector)", () => {
   const originalFetch = global.fetch;
 
+  it("comprueba copias y confirma un respaldo verificado desde la ficha del modelo", async () => {
+    const existing = global.fetch;
+    const state = { model_id: 1, filename: "sample.pt", sha256: "a".repeat(64), size_bytes: 20000,
+      local: "valid", cloud: "missing", generation: null, transfer_verified: false };
+    const requested: string[] = [];
+    global.fetch = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/models/1/checkpoint")) {
+        requested.push(`${options?.method || "GET"} ${url}`);
+        return new Response(JSON.stringify(url.endsWith("/backup")
+          ? { ...state, cloud: "available", generation: "17", transfer_verified: true } : state));
+      }
+      return existing(input, options);
+    });
+    await act(async () => { render(<TrainingView />); });
+    fireEvent.click((await screen.findAllByRole("button", { name: "Ficha Técnica" }))[0]);
+    expect(screen.getByText("Copias del checkpoint")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Comprobar copias" }));
+    expect(await screen.findByText("Sin respaldo en GCS")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Respaldar en GCS" }));
+    expect(await screen.findByText("Respaldo verificado: tamaño y SHA-256 coinciden.")).toBeTruthy();
+    expect(requested.some(value => value.includes("POST") && value.endsWith("/backup"))).toBe(true);
+    expect((screen.getByRole("button", { name: "Recuperar en este equipo" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   beforeEach(() => {
     vi.resetAllMocks();
     global.fetch = vi.fn().mockImplementation(async (url: string) => {
@@ -130,6 +155,220 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
 
   afterEach(() => {
     global.fetch = originalFetch;
+  });
+
+  it("starts training with the assigned dataset displayed in the selector", async () => {
+    const defaultFetch = global.fetch;
+    global.fetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.includes("/api/training/datasets")) {
+        return {
+          ok: true,
+          json: async () => ({ datasets: [{
+            id: "FAMA_Prueba_Aves",
+            name: "FAMA_Prueba_Aves (10 audios)",
+            audio_count: 10,
+            class_count: 2,
+            size_mb: 3.67,
+          }] }),
+        };
+      }
+      return defaultFetch(url, init);
+    });
+
+    await act(async () => { render(<TrainingView />); });
+    const card = screen.getByTestId("dataset-selection-card");
+    expect((within(card).getByRole("combobox") as HTMLSelectElement).value).toBe("FAMA_Prueba_Aves");
+    expect(within(card).getByText("2 clases detectadas")).toBeDefined();
+    await act(async () => {
+      fireEvent.click(screen.getByText("Iniciar Entrenamiento Local (1 Modelo)"));
+    });
+    const postCall = vi.mocked(global.fetch).mock.calls.find(
+      ([url]) => url === `${API_BASE_URL}/api/training/start`
+    );
+    expect(postCall).toBeDefined();
+    expect(JSON.parse(String(postCall?.[1]?.body)).dataset_name).toBe("FAMA_Prueba_Aves");
+  });
+
+  it("uses the visible individual hyperparameters instead of hidden ensemble defaults", async () => {
+    await act(async () => { render(<TrainingView />); });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("Épocas de Entrenamiento"), { target: { value: "1" } });
+      fireEvent.change(screen.getByLabelText("Batch Size (Tamaño de Lote)"), { target: { value: "2" } });
+      fireEvent.change(screen.getByLabelText("Learning Rate (Tasa de Aprendizaje)"), { target: { value: "0.002" } });
+      fireEvent.click(screen.getByText("Iniciar Entrenamiento Local (1 Modelo)"));
+    });
+    const postCall = vi.mocked(global.fetch).mock.calls.find(
+      ([url]) => url === `${API_BASE_URL}/api/training/start`
+    );
+    expect(postCall).toBeDefined();
+    const payload = JSON.parse(String(postCall?.[1]?.body));
+    expect(payload).toMatchObject({ epochs: 1, batch_size: 2, learning_rate: 0.002 });
+    expect(payload.models).toEqual([{
+      architecture: "EfficientNet-B0", weight: 1, epochs: 1, batch_size: 2, learning_rate: 0.002,
+    }]);
+  });
+
+  it("shows one chart point out of one for a completed individual job despite ensemble defaults", async () => {
+    const defaultFetch = global.fetch;
+    global.fetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.includes("/api/training/progress")) {
+        return { ok: true, json: async () => ({
+          status: "completed", epoch: 1, total_epochs: 1, total_models: 1,
+          metrics_history: [{ epoca: 1, train_loss: 1, val_loss: 2,
+            train_acc: 50, val_acc: 50, tiempo_epoca: 1, model_index: 1 }],
+        }) };
+      }
+      return defaultFetch(url, init);
+    });
+    vi.useFakeTimers();
+    try {
+      await act(async () => { render(<TrainingView />); });
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText("Épocas de Entrenamiento"), { target: { value: "1" } });
+        fireEvent.click(screen.getByRole("button", { name: "Iniciar Entrenamiento Local (1 Modelo)" }));
+      });
+      await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+      expect(screen.getByText("Época 1 de 1")).toBeDefined();
+      expect(screen.getByText("Punto 1/1")).toBeDefined();
+      expect(screen.queryByText("Punto 1/10")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("previews and saves a partition version after reviewing warnings, then sends it to training", async () => {
+    const defaultFetch = global.fetch;
+    const version = "a".repeat(64);
+    const summary = { version, counts: { train: 8, val: 2 }, warnings: ["Falta procedencia de grabador."],
+      created_at: "2026-10-23T12:00:00Z", created_by: 2 };
+    global.fetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/partitions/preview")) {
+        return { ok: true, json: async () => ({ ...summary, entries: [
+          { clase: "Chucao", split: "train" }, { clase: "Chucao", split: "val" },
+        ], excluded: [] }) };
+      }
+      if (url.endsWith("/partitions")) {
+        return { ok: true, json: async () => init?.method === "POST" ? summary : { versions: [] } };
+      }
+      return defaultFetch(url, init);
+    });
+    await act(async () => { render(<TrainingView />); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Gestionar particiones" })); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Previsualizar reparto" })); });
+    expect(screen.getByText("8 para entrenamiento · 2 para validación")).toBeDefined();
+    const save = screen.getByRole("button", { name: "Guardar versión y seleccionarla" });
+    expect((save as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => { fireEvent.click(screen.getByRole("checkbox", { name: "He revisado las advertencias de esta partición" })); });
+    await act(async () => { fireEvent.click(save); });
+    expect((screen.getByLabelText("Versión para entrenar") as HTMLSelectElement).value).toBe(version);
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Iniciar Entrenamiento Local (1 Modelo)" })); });
+    const postCall = vi.mocked(global.fetch).mock.calls.find(([url]) => url === `${API_BASE_URL}/api/training/start`);
+    expect(JSON.parse(String(postCall?.[1]?.body)).partition_version).toBe(version);
+  });
+
+  it("does not reuse another dataset's selected partition version", async () => {
+    const defaultFetch = global.fetch;
+    const version = "c".repeat(64);
+    global.fetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.includes("/api/training/datasets") && !url.includes("/partitions")) {
+        return { ok: true, json: async () => ({ datasets: [
+          { id: "AvesChilenas", name: "AvesChilenas", audio_count: 10 },
+          { id: "Other", name: "Other", audio_count: 8 },
+        ] }) };
+      }
+      if (url.endsWith("/partitions")) return { ok: true, json: async () => ({ versions: [
+        { version, counts: { train: 8, val: 2 }, warnings: [] },
+      ] }) };
+      return defaultFetch(url, init);
+    });
+    await act(async () => { render(<TrainingView />); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Gestionar particiones" })); });
+    await act(async () => { fireEvent.change(screen.getByLabelText("Versión para entrenar"), { target: { value: version } }); });
+    await act(async () => { fireEvent.change(screen.getByLabelText("Dataset para Entrenamiento"), { target: { value: "Other" } }); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Iniciar Entrenamiento Local (1 Modelo)" })); });
+    const postCall = vi.mocked(global.fetch).mock.calls.find(([url]) => url === `${API_BASE_URL}/api/training/start`);
+    const body = JSON.parse(String(postCall?.[1]?.body));
+    expect(body.dataset_name).toBe("Other");
+    expect(body.partition_version).toBeUndefined();
+  });
+
+  it("reports failed publication without selecting or claiming a saved version", async () => {
+    const defaultFetch = global.fetch;
+    global.fetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/partitions/preview")) return { ok: true, json: async () => ({
+        version: "d".repeat(64), counts: { train: 8, val: 2 }, warnings: [], excluded: [],
+        entries: [{ clase: "Chucao", split: "train" }, { clase: "Chucao", split: "val" }],
+      }) };
+      if (url.endsWith("/partitions")) return init?.method === "POST"
+        ? { ok: false, status: 503, json: async () => ({ detail: "No se pudo guardar la versión en este equipo." }) }
+        : { ok: true, json: async () => ({ versions: [] }) };
+      return defaultFetch(url, init);
+    });
+    await act(async () => { render(<TrainingView />); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Gestionar particiones" })); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Previsualizar reparto" })); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Guardar versión y seleccionarla" })); });
+    expect(screen.getByRole("alert").textContent).toContain("No se pudo guardar la versión");
+    expect((screen.getByLabelText("Versión para entrenar") as HTMLSelectElement).value).toBe("");
+    expect(screen.queryByText("Versión guardada. Se usará al iniciar el próximo entrenamiento.")).toBeNull();
+  });
+
+  it("explains which recordings are excluded from a partition proposal", async () => {
+    const defaultFetch = global.fetch;
+    global.fetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/partitions/preview")) return { ok: true, json: async () => ({
+        version: "e".repeat(64), counts: { train: 8, val: 2 }, warnings: [],
+        entries: [{ clase: "Chucao", split: "train" }], excluded: [
+          { file_path: "Chucao/feedback_1.wav", reason: "feedback_without_source_group" },
+          { file_path: "chucao/later.wav", reason: "not_local" },
+        ],
+      }) };
+      if (url.endsWith("/partitions")) return { ok: true, json: async () => ({ versions: [] }) };
+      return defaultFetch(url, init);
+    });
+    await act(async () => { render(<TrainingView />); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Gestionar particiones" })); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Previsualizar reparto" })); });
+    expect(screen.getByText(/Chucao\/feedback_1.wav/)).toBeDefined();
+    expect(screen.getByText(/corrección sin grupo de origen registrado/)).toBeDefined();
+    expect(screen.getByText(/chucao\/later.wav/)).toBeDefined();
+    expect(screen.getByText(/no está descargado en este equipo/)).toBeDefined();
+  });
+
+  it("does not offer an invented dataset or allow training without assigned datasets", async () => {
+    const defaultFetch = global.fetch;
+    global.fetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.includes("/api/training/datasets")) {
+        return { ok: true, json: async () => ({ datasets: [] }) };
+      }
+      return defaultFetch(url, init);
+    });
+    await act(async () => { render(<TrainingView />); });
+    const card = screen.getByTestId("dataset-selection-card");
+    expect(within(card).queryByText(/AvesChilenas/)).toBeNull();
+    expect(within(card).getByText("0 clases detectadas")).toBeDefined();
+    const start = screen.getByRole("button", { name: "Iniciar Entrenamiento Local (1 Modelo)" });
+    expect((start as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => { fireEvent.click(start); });
+    expect(vi.mocked(global.fetch).mock.calls.some(([url]) => url === `${API_BASE_URL}/api/training/start`)).toBe(false);
+  });
+
+  it("shows the registered dataset name in model history instead of an inferred domain", async () => {
+    const defaultFetch = global.fetch;
+    global.fetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.includes("/api/training/history")) {
+        return { ok: true, json: async () => ({ history: [{
+          id: 7, name: "FAMA_Prueba_Aves · EfficientNet-B0 (v1)",
+          dataset: "Aves Chilenas", dataset_name: "FAMA_Prueba_Aves",
+          architecture: "EfficientNet-B0", epochs: 1, filename: "sample.pt", partition_version: "a".repeat(64),
+        }] }) };
+      }
+      return defaultFetch(url, init);
+    });
+    await act(async () => { render(<TrainingView />); });
+    const row = screen.getByRole("row", { name: /FAMA_Prueba_Aves · EfficientNet-B0/ });
+    expect(within(row).getByRole("cell", { name: "FAMA_Prueba_Aves" })).toBeDefined();
+    expect(within(row).getByText("Partición aaaaaaaaaaaa")).toBeDefined();
   });
 
   it("renders the 1, 2, and 3 model topology options", async () => {

@@ -90,6 +90,7 @@ class StartTrainingRequest(BaseModel):
     y desacoplamiento del dominio acústico mediante AudioConfigSchema, WindowingConfigSchema y RegularizationConfigSchema.
     """
     dataset_name: str = "AvesChilenas"
+    partition_version: Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     architecture: Optional[str] = "EfficientNet-B0"
     epochs: int = Field(default=10, ge=1, le=1000, description="Épocas de entrenamiento")
     learning_rate: float = 0.001

@@ -67,7 +67,9 @@ def catalogue(tmp_path, monkeypatch):
         return checkpoint
 
     try:
-        yield client, registry, persist, engine
+        from tests.http_security import administrator_http
+        with administrator_http(main.app):
+            yield client, registry, persist, engine
     finally:
         client.close()
         main.app.dependency_overrides.pop(get_db, None)

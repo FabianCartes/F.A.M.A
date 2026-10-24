@@ -1,0 +1,314 @@
+{
+  "version": 1,
+  "checked_at": "2026-10-23T22:53:40.466854+00:00",
+  "branch": "fix/afinamiento-integral",
+  "status": "implemented_test_runtime_preview_save_selection_verified",
+  "scope": "initial_train_validation_versions_before_official_cut",
+  "policy": {
+    "algorithm": "grouped-hash-v1",
+    "seed": 42,
+    "validation_percent": 20
+  },
+  "actors": {
+    "operator": "authorized_next_block_and_restored_browser_login",
+    "codex": "implementation_TDD_and_test_dataset_local_publication"
+  },
+  "interfaces": {
+    "HTTP": "/api/training/datasets/{dataset_name}/partitions",
+    "UI": "Entrenamiento > Gestionar particiones",
+    "training_request": "partition_version",
+    "checkpoint": "partition_manifest",
+    "history": "partition_version"
+  },
+  "authorization": "administrator_or_researcher_with_current_dataset_assignment",
+  "TDD": {
+    "observed_failures": [
+      "missing_HTTP_routes",
+      "duplicate_group_leakage",
+      "untraced_feedback_included",
+      "conflicting_labels_accepted",
+      "explicit_version_requires_legacy_CSV",
+      "checkpoint_and_history_missing_version",
+      "source_changed_during_training_published_weights",
+      "changed_bucket_reused_manifest",
+      "malformed_manifest_JSON_list_500",
+      "missing_UI_management_controls",
+      "stale_dataset_selection",
+      "missing_exclusion_names"
+    ],
+    "setup_errors_not_counted_as_RED": [
+      "FastAPI_fixture_mounting",
+      "configuration_diagnostic_wrong_call"
+    ],
+    "excluded_files_UI_RED": "removed_only_new_markup_reran_to_failure_restored_and_passed"
+  },
+  "checks": {
+    "backend": {
+      "passed": 147,
+      "skipped": 8,
+      "failed": 0,
+      "files": [
+        "test_dataset_partitions.py",
+        "test_api_training.py",
+        "test_training_persistence.py",
+        "test_training_flow.py"
+      ],
+      "skip_reason": "Windows_symlink_privilege",
+      "seconds": 22.66
+    },
+    "frontend": {
+      "passed": 73,
+      "failed": 0,
+      "skipped": 0,
+      "files": [
+        "TrainingView.test.tsx",
+        "trainingChart.test.ts",
+        "trainingApi.test.ts"
+      ],
+      "separate_exclusions_focus_already_in_total": true
+    },
+    "typescript_no_emit": {
+      "exit_code": 0
+    },
+    "ESLint_new_panel": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "preexisting_lint": {
+      "TrainingView_warnings": 1,
+      "TrainingView_test_any_errors": 23
+    },
+    "training_provenance_execution": "tiny_synthetic_ML_with_real_temp_checkpoint_and_public_history"
+  },
+  "runtime": {
+    "backend_parent_pid": 3152,
+    "backend_child_pid": 33928,
+    "frontend_child_pid": 14520,
+    "proxy_pid": 22380,
+    "ports": {
+      "backend": 8010,
+      "frontend": 3010,
+      "SQL_proxy": 5433
+    },
+    "ready": {
+      "HTTP": 200,
+      "code": "schema_current"
+    },
+    "source_copies_verified": [
+      "backend/app/services/partitions.py",
+      "backend/app/routes/partitions.py",
+      "backend/app/main.py",
+      "backend/app/schemas/training.py",
+      "backend/app/services/training.py",
+      "frontend/components/training/DatasetPartitions.tsx",
+      "frontend/components/views/TrainingView.tsx",
+      "frontend/lib/schemas/training.ts"
+    ],
+    "runtime_directories_still_temporary": true
+  },
+  "real_browser": {
+    "origin": "http://localhost:3010",
+    "tab_id": "10",
+    "observed_role": "Administrador",
+    "manifest_created_by": 1,
+    "preview_review_save_select": true,
+    "selected_version": "2262aaf0364a39b09d0f717573359a366946cbf7a95cdffef2519ebabbf0f33f",
+    "success_message": "Versión guardada. Se usará al iniciar el próximo entrenamiento.",
+    "counts": {
+      "train": 8,
+      "val": 2
+    },
+    "per_class": {
+      "Canastero": {
+        "train": 4,
+        "val": 1
+      },
+      "Chucao": {
+        "train": 4,
+        "val": 1
+      }
+    },
+    "excluded": [
+      {
+        "file_path": "Chucao/feedback_1.wav",
+        "reason": "feedback_without_source_group"
+      },
+      {
+        "file_path": "chucao/test_chucao_01.wav",
+        "reason": "not_local"
+      }
+    ],
+    "warnings": [
+      "Falta procedencia de grabador; no se garantiza independencia entre grabadores o derivados sin relación registrada.",
+      "Se excluyen 1 audios sin copia local.",
+      "Se excluyen 1 aportes de corrección sin grupo de origen trazable."
+    ],
+    "screenshot": "docs/images/particiones_versionadas_20261023.png",
+    "new_real_training_started": false
+  },
+  "preservation": {
+    "checked_at": "2026-10-23T22:53:40.466854+00:00",
+    "original_files_unchanged": 15,
+    "new_manifest_files": 1,
+    "manifest_sha256": "465a3f9b0fbdf2a6c1ccd3943286655c50f4ff36932f4b93dfcff66121c930e1",
+    "preserved_local_copy": "backend/data/raw/FAMA_Prueba_Aves/.partitions/2262aaf0364a39b09d0f717573359a366946cbf7a95cdffef2519ebabbf0f33f.json",
+    "preserved_copy_identical": true,
+    "referenced_files_verified": 10,
+    "group_overlap": false,
+    "SQL_before": {
+      "checked_at": "2026-10-23T22:38:04.056512+00:00",
+      "target": "fama_pruebas/fama-pruebas",
+      "dataset": {
+        "id_conjunto_datos": 1,
+        "nombre": "FAMA_Prueba_Aves",
+        "ruta_gcp": "gs://fama-pruebas/datasets/FAMA_Prueba_Aves/"
+      },
+      "counts": {
+        "audios": 12,
+        "models": 1
+      },
+      "existing_model": {
+        "id_modelo": 1,
+        "hash_binario": "a905275bdbc974643608580e6d29d5905ced30a8ce53b372fb88280c446f035d",
+        "epocas": 1,
+        "activo": false
+      },
+      "schema_revision": "0003_autonomy",
+      "SQL_writes_by_script": false
+    },
+    "SQL_after": {
+      "checked_at": "2026-10-23T22:51:01.691074+00:00",
+      "target": "fama_pruebas/fama-pruebas",
+      "dataset": {
+        "id_conjunto_datos": 1,
+        "nombre": "FAMA_Prueba_Aves",
+        "ruta_gcp": "gs://fama-pruebas/datasets/FAMA_Prueba_Aves/"
+      },
+      "counts": {
+        "audios": 12,
+        "models": 1
+      },
+      "existing_model": {
+        "id_modelo": 1,
+        "hash_binario": "a905275bdbc974643608580e6d29d5905ced30a8ce53b372fb88280c446f035d",
+        "epocas": 1,
+        "activo": false
+      },
+      "schema_revision": "0003_autonomy",
+      "SQL_writes_by_script": false
+    },
+    "unauthenticated_routes": {
+      "backend_8010": 401,
+      "frontend_3010": 401
+    }
+  },
+  "new_manifest": {
+    "path": ".pytest_cache/stage8-live/backend/data/raw/FAMA_Prueba_Aves/.partitions/2262aaf0364a39b09d0f717573359a366946cbf7a95cdffef2519ebabbf0f33f.json",
+    "version": "2262aaf0364a39b09d0f717573359a366946cbf7a95cdffef2519ebabbf0f33f",
+    "created_at": "2026-10-23T22:50:30.066529+00:00",
+    "sha256": "465a3f9b0fbdf2a6c1ccd3943286655c50f4ff36932f4b93dfcff66121c930e1"
+  },
+  "not_performed": [
+    "SQL_schema_migration",
+    "GCS_writes",
+    "official_bucket_switch",
+    "new_real_training",
+    "GPU_validation",
+    "global_test_suites",
+    "credential_or_role_changes"
+  ],
+  "remaining": [
+    "checkpoint_GCS_backup_and_restore",
+    "persistent_exclusive_runtime_directories",
+    "manual_unknown_provenance_entry",
+    "independent_final_test_set",
+    "historical_class_review",
+    "institutional_deployment_and_official_cut"
+  ],
+  "artifacts": [
+    {
+      "path": "backend/app/services/partitions.py",
+      "sha256": "9813308a0272d1f383b57d9b08d6fb022f1fd05d914aa02415edea3e81b6af38"
+    },
+    {
+      "path": "backend/app/routes/partitions.py",
+      "sha256": "3e20d4116514817476ffb7223ed88ad598504766686c4c0c1dcd1ab378483acb"
+    },
+    {
+      "path": "backend/app/main.py",
+      "sha256": "ebab7b119d6adb24804a565992dbe7c020ec50500cc5e58b704b323b05ca7f95"
+    },
+    {
+      "path": "backend/app/schemas/training.py",
+      "sha256": "a75d7d78681994cb9af7518654db8d622822316e970fcc09902338f6d80362be"
+    },
+    {
+      "path": "backend/app/services/training.py",
+      "sha256": "b1952c2fda141ae9923bd2d5e745fccedf6cfd6c499a2ab3d84cdf7d49bda0bb"
+    },
+    {
+      "path": "frontend/components/training/DatasetPartitions.tsx",
+      "sha256": "d4e7c087f142816e0bbe18d4151c144bc1c29f604ebcdc26651026161a22c605"
+    },
+    {
+      "path": "frontend/components/views/TrainingView.tsx",
+      "sha256": "b89add1411af26b527bdd38d977653740032d1474a92ae7f82152b06b5bcf5d8"
+    },
+    {
+      "path": "frontend/lib/schemas/training.ts",
+      "sha256": "b7efd645303c4ddae5886d316192ddd2effa3d96d149e55977127050e6ce12a0"
+    },
+    {
+      "path": "backend/tests/test_dataset_partitions.py",
+      "sha256": "c1b892ca5ae5c246bc7a3c1cac7375cfe0510cdec81974b4935e0c68e7631251"
+    },
+    {
+      "path": "backend/tests/test_api_training.py",
+      "sha256": "380520b79afdc04b95915ac338d6ff76f0c0e3b5097c0c3c3e8d8c9813926af2"
+    },
+    {
+      "path": "frontend/components/views/__tests__/TrainingView.test.tsx",
+      "sha256": "b81ae776e5cea2cd81f032aee97f46ad4d82ffdf810f4dfce6d2087ccebca10a"
+    },
+    {
+      "path": "docs/README.md",
+      "sha256": "9bd383449a38bedb58771cc9eb9b1dc942b164a59948934f3b714795f0468827"
+    },
+    {
+      "path": "docs/KANBAN.md",
+      "sha256": "23942e2b1e1aa0eaa8cffb10601de30f67a6af3109904143ae4b7ee9d50070d0"
+    },
+    {
+      "path": "docs/arquitectura/CONTEXT.md",
+      "sha256": "4c5643840d005b3b66ca2d6725b6956271cb934cf9492d8b8daf6ae8463103a2"
+    },
+    {
+      "path": "docs/adr/0044-particiones-explicitas-y-manifiestos-inmutables.md",
+      "sha256": "acbd2c0e0b4689ed77e2d6f2c9461cf451254df9111197406221df6348f37521"
+    },
+    {
+      "path": "docs/manuales/particiones_versionadas.md",
+      "sha256": "3160ccfb701be44e0ab07994ee4c93facfc5b56600629a7ced1335c2f89cbdb4"
+    },
+    {
+      "path": "docs/manuales/estado_actual_y_pendientes.md",
+      "sha256": "0fe3582db2c9a9987db2594d5641064c0c8634aca6a4a24b6e139ae52b4dcf20"
+    },
+    {
+      "path": "docs/manuales/bitacora_acceso_e_instalacion.md",
+      "sha256": "cfe883cb1a10064464789024e7a89a968d895a22503487a94235171ea27bb3f5"
+    },
+    {
+      "path": "docs/manuales/plan_autonomia_investigador_y_catalogo.md",
+      "sha256": "a9203abd9c32e8247f21b9e028fdd4a7379404c19228cda5c93b40bba27725f1"
+    },
+    {
+      "path": "docs/manuales/plan_instalacion_gcp_y_asistente.md",
+      "sha256": "855194706ec4f3fcb97b760df5edf3121d8ec534a8f110aa5d038a5e33bffa5d"
+    },
+    {
+      "path": "docs/images/particiones_versionadas_20261023.png",
+      "sha256": "ec221f0332c2677adbd69e2d39085659e14f2759df9347fe2519fa3bd980d0a0"
+    }
+  ]
+}

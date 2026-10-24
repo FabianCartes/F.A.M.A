@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, apiFetch as fetch } from "@/lib/api";
 import type { ModelHistoryItem } from "@/lib/schemas/training";
 import { rebalanceWeights, sumWeights, normalizeWeightsTo100 } from "@/lib/utils/ensembleWeights";
 import {
@@ -11,6 +11,8 @@ import {
 } from "@/lib/utils/audioDomainPresets";
 import { getChartPaths, ChartOptions } from "@/lib/utils/trainingChart";
 import InfoTooltip from "@/components/common/InfoTooltip";
+import DatasetPartitions from "@/components/training/DatasetPartitions";
+import CheckpointBackup from "@/components/training/CheckpointBackup";
 import { PARAMETER_EXPLANATIONS } from "@/lib/constants/parameterExplanations";
 
 // ============================================================================
@@ -101,7 +103,7 @@ const ARCHITECTURE_PRESETS: Record<
 
 export default function TrainingView() {
   // 1. Estado de Configuración (IE_03)
-  const [selectedDataset, setSelectedDataset] = useState<string>("AvesChilenas");
+  const [selectedDataset, setSelectedDataset] = useState<string>("");
   const [learningRate, setLearningRate] = useState<string>("0.001");
   const [weightDecay, setWeightDecay] = useState<string>("0.01");
   const [epochs, setEpochs] = useState<string>("10");
@@ -537,17 +539,10 @@ export default function TrainingView() {
   // 2. Telemetría de Hardware y Datasets
   const [hardware, setHardware] = useState<HardwareStatus | null>(null);
   const [datasets, setDatasets] = useState<TrainingDataset[]>([]);
+  const [partitionSelection, setPartitionSelection] = useState<{ dataset: string; version: string } | null>(null);
+  const partitionVersion = partitionSelection?.dataset === selectedDataset ? partitionSelection.version : "";
   const currentDataset = useMemo(() => {
-    return (
-      datasets.find((d) => d.id === selectedDataset) ||
-      datasets[0] || {
-        id: "AvesChilenas",
-        name: "AvesChilenas (1211 audios)",
-        audio_count: 1211,
-        class_count: 15,
-        size_mb: 340.5,
-      }
-    );
+    return datasets.find((d) => d.id === selectedDataset);
   }, [datasets, selectedDataset]);
 
   // 3. Ciclo de Vida del Entrenamiento (RF_04 / CU_INV_03)
@@ -601,7 +596,9 @@ export default function TrainingView() {
       totalEpochs: totalEpochs,
       activeModelFilter: chartModelFilter,
       currentModelIndex: triadProgress.modelIdx,
-      modelsConfig: ensembleModels
+      modelsConfig: Math.max(ensembleSize, triadProgress.totalModels) === 1
+        ? [{ architecture, epochs: totalEpochs }]
+        : ensembleModels
         .slice(0, Math.max(ensembleSize, triadProgress.totalModels))
         .map((m) => ({
           architecture: m.architecture,
@@ -622,6 +619,7 @@ export default function TrainingView() {
     ensembleSize,
     triadProgress.totalModels,
     epochs,
+    architecture,
   ]);
 
   const chartData = useMemo(() => {
@@ -683,7 +681,8 @@ export default function TrainingView() {
 
   // Estimador dinámico de tiempo previo al inicio (CPU vs GPU CUDA)
   const estimatedDuration = useMemo(() => {
-    const audios = currentDataset?.audio_count || 1211;
+    if (!currentDataset) return "Sin dataset disponible";
+    const audios = currentDataset.audio_count;
     const numBatch = parseInt(batchSize, 10) || 16;
     const stepsPerEpoch = Math.max(1, Math.ceil(audios / Math.max(1, numBatch)));
     const isCuda = hardware?.cuda_available ?? false;
@@ -760,7 +759,13 @@ export default function TrainingView() {
         }
         if (resDs && resDs.ok) {
           const dsData = await resDs.json();
-          setDatasets(dsData.datasets || []);
+          const availableDatasets: TrainingDataset[] = dsData.datasets || [];
+          setDatasets(availableDatasets);
+          setSelectedDataset((previous) =>
+            availableDatasets.some((dataset) => dataset.id === previous)
+              ? previous
+              : availableDatasets[0]?.id || ""
+          );
         }
         if (resHist && resHist.ok) {
           const histData = await resHist.json();
@@ -834,6 +839,7 @@ export default function TrainingView() {
 
   // Iniciar Entrenamiento (CU_INV_03)
   const handleStartTraining = async () => {
+    if (!currentDataset) return;
     const errors: Record<string, string> = {};
 
     // 1. Validar épocas (en modo individual)
@@ -1012,7 +1018,9 @@ export default function TrainingView() {
     setMetricsHistory([]);
     setCurrentEpoch(0);
 
-    const currentEnsemble = ensembleModels.slice(0, ensembleSize);
+    const currentEnsemble = ensembleSize === 1
+      ? [{ architecture, weight: 100, epochs, learning_rate: learningRate, batch_size: batchSize }]
+      : ensembleModels.slice(0, ensembleSize);
     const sumW = currentEnsemble.reduce((acc, m) => acc + (parseFloat(String(m.weight)) || 0), 0) || 100;
     const normalizedEnsemble = currentEnsemble.map((m) => ({
       architecture: m.architecture,
@@ -1055,6 +1063,7 @@ export default function TrainingView() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           dataset_name: selectedDataset,
+          ...(partitionVersion ? { partition_version: partitionVersion } : {}),
           architecture: normalizedEnsemble[0]?.architecture || architecture,
           epochs: parseInt(String(epochs), 10) || 10,
           learning_rate: parseFloat(String(learningRate)) || 0.001,
@@ -1175,17 +1184,18 @@ export default function TrainingView() {
           </div>
 
           <div>
-            <label className="text-[11px] text-gray-400 block mb-1.5 font-medium">
+            <label htmlFor="training-dataset" className="text-[11px] text-gray-400 block mb-1.5 font-medium">
               Dataset para Entrenamiento
             </label>
             <select
+              id="training-dataset"
               value={selectedDataset}
               onChange={(e) => setSelectedDataset(e.target.value)}
-              disabled={isTraining}
+              disabled={isTraining || datasets.length === 0}
               className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-emerald-600 font-mono"
             >
               {datasets.length === 0 ? (
-                <option value="AvesChilenas">AvesChilenas (1211 audios)</option>
+                <option value="">Sin datasets disponibles</option>
               ) : (
                 datasets.map((d) => (
                   <option key={d.id} value={d.id}>
@@ -1197,7 +1207,7 @@ export default function TrainingView() {
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-gray-400 pt-1 border-t border-[#23252e]/60">
-            <span>Clases objetivo: <strong className="text-gray-200">{currentDataset?.class_count || 15} clases detectadas</strong></span>
+            <span>Clases objetivo: <strong className="text-gray-200">{currentDataset?.class_count ?? 0} clases detectadas</strong></span>
             <span className="text-cyan-400 font-mono text-[10px] bg-cyan-950/40 border border-cyan-800/40 px-2 py-0.5 rounded inline-flex items-center gap-1 self-start sm:self-auto">
               <span className="text-gray-400">Arquitectura:</span> {ensembleSize === 1 ? architecture : `${ensembleSize} Modelos Ensamble`}
             </span>
@@ -1255,6 +1265,8 @@ export default function TrainingView() {
       {/* ==================================================================== */}
       {/* 2.5. PANEL DE FÍSICA DE AUDIO Y ADAPTACIÓN AL DOMINIO */}
       {/* ==================================================================== */}
+      <DatasetPartitions key={selectedDataset} dataset={selectedDataset} busy={isTraining}
+        selected={partitionVersion} onSelect={version => setPartitionSelection({ dataset: selectedDataset, version })} />
       <div className="bg-[#16171b] border border-[#23252e] rounded-xl shadow-sm transition-all">
         {/* Encabezado colapsable */}
         <button
@@ -2234,7 +2246,7 @@ export default function TrainingView() {
           <button
             type="button"
             onClick={handleStartTraining}
-            disabled={isTraining}
+            disabled={isTraining || !currentDataset}
             className={`flex-1 py-2.5 rounded-lg text-white font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-40 disabled:cursor-not-allowed ${
               ensembleSize === 3
                 ? "bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 shadow-emerald-950/40"
@@ -2547,7 +2559,7 @@ export default function TrainingView() {
               Historial de Modelos Guardados
             </span>
             <p className="text-[11px] text-gray-500">
-              Modelos acústicos indexados y respaldados en disco / Cloud Storage
+              Modelos registrados. Consulta sus copias locales y en GCS desde la ficha técnica.
             </p>
           </div>
 
@@ -2598,12 +2610,12 @@ export default function TrainingView() {
                       {isBirds ? (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-950/60 text-emerald-400 border border-emerald-800/50 inline-flex items-center gap-1.5">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                          Aves Chilenas
+                          {item.dataset_name || item.dataset || "Sin dataset declarado"}
                         </span>
                       ) : (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-950/60 text-amber-400 border border-amber-800/50 inline-flex items-center gap-1.5">
                           <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                          Motores
+                          {item.dataset_name || item.dataset || "Sin dataset declarado"}
                         </span>
                       )}
                     </td>
@@ -2618,6 +2630,7 @@ export default function TrainingView() {
                     </td>
                     <td className="py-3 text-gray-400 font-mono text-[11px] max-w-[220px] truncate" title={item.filename}>
                       {item.filename}
+                      {item.partition_version && <span className="block text-emerald-400 mt-1" title={item.partition_version}>Partición {item.partition_version.slice(0, 12)}</span>}
                     </td>
                     <td className="py-3 text-right pr-2">
                       <button
@@ -2672,6 +2685,7 @@ export default function TrainingView() {
                 </button>
               </div>
 
+              <CheckpointBackup key={selectedModelModal.id} modelId={selectedModelModal.id} onRestored={() => void fetchHistory()} />
               {/* 3 Tarjetas de Especificaciones */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
                 {/* 1) Hiperparámetros de Entrenamiento */}

@@ -59,6 +59,8 @@ class ByteBucket:
 
 @pytest.fixture
 def review_api(tmp_path, monkeypatch):
+    from app import configuration
+    monkeypatch.setattr(configuration, '_active_configuration', configuration.load_configuration({'GCS_BUCKET_NAME': 'fixture-bucket'}))
     engine = create_engine(
         "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool,
     )
@@ -92,7 +94,9 @@ def review_api(tmp_path, monkeypatch):
     # Deliberately omit lifespan: no admin seeding or disk model discovery.
     client = TestClient(app)
     try:
-        yield client, bucket, raw
+        from tests.http_security import administrator_http
+        with administrator_http(app):
+            yield client, bucket, raw
     finally:
         client.close()
         app.dependency_overrides.clear()
@@ -116,7 +120,7 @@ def test_http_local_approval_is_ingestable_while_cloud_catalogue_and_upload_are_
         "status": "approved", "id_retroalimentacion": 1,
         "destination_path": str(raw / "AvesChilenas/rayadito/feedback_1.wav"),
         "clase": "Rayadito", "filename": "feedback_1.wav",
-        "local_status": "incorporated", "sync_status": "pending",
+        "local_status": "incorporated", "sync_status": "pending", "db_persisted": True,
     }
     assert bucket.objects == {source: audio}
     assert bucket.fail_dataset_upload_once is True
@@ -147,7 +151,7 @@ def test_automatic_snapshot_resolves_rayadito_and_rejects_override(review_api):
     assert response.json()["sync_status"] == "pending"
     assert (raw / "AvesChilenas/rayadito/feedback_1.wav").read_bytes() == audio
     assert response.json()["destination_path"] == str(raw / "AvesChilenas/rayadito/feedback_1.wav")
-    assert not (raw / "AvesChilenas/Rayadito").exists()
+    assert "Rayadito" not in {path.name for path in (raw / "AvesChilenas").iterdir()}
     assert not any(key.startswith("datasets/AvesChilenas/Rayadito/") for key in bucket.objects)
     with (raw / "AvesChilenas/metadata.csv").open(newline="", encoding="utf-8") as stream:
         rows = list(csv.DictReader(stream))

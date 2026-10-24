@@ -4,14 +4,20 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from tests.test_feedback_sync_worker import workflow
+from app.services.web_sessions import current_web_user
+from app.models.user import Usuario
 
 
-def test_recent_accepted_states_are_bounded_read_only_and_separate_from_curation(workflow):
+def test_recent_accepted_states_are_bounded_read_only_and_separate_from_curation(workflow, monkeypatch):
     from app.main import app
     from app.database import get_db
     from app.models import Prediccion
     from app.services.feedback_sync import FeedbackSyncQueue
+    from app.services import storage
     w = workflow
+    # A second accepted audio must differ from the first: exact duplicates are
+    # deliberately rejected before curation, independent of web authorization.
+    monkeypatch.setattr(storage, "download_prediction_audio", lambda source: w.audio[:-2] + b"\x02\x00")
     with w.sessions() as db:
         pred = Prediccion(ruta_audio_prueba='raw_audios/' + 'b' * 32 + '.wav',
                           etiqueta_predicha='Rayadito', dataset_name='AvesChilenas', confianza=.9)
@@ -34,15 +40,20 @@ def test_recent_accepted_states_are_bounded_read_only_and_separate_from_curation
             yield db
 
     app.dependency_overrides[get_db] = database
+    app.dependency_overrides[current_web_user] = lambda: Usuario(id=1, rol="administrador", activo=True)
     client = TestClient(app)
     try:
         response = client.get('/api/feedback/sync?limit=1')
         assert response.status_code == 200
-        assert response.json() == [{
+        result = response.json()
+        assert result[0]['incorporated_at']
+        assert result == [{
             'id_retroalimentacion': 2, 'id_prediccion': 2,
             'dataset_name': 'AvesChilenas', 'storage_class': 'rayadito',
             'class_label': 'Rayadito', 'local_status': 'incorporated',
             'sync_status': 'synced', 'attempts': 1, 'error_code': None,
+            'proposed_by': 1, 'incorporated_by': None, 'incorporated_at': result[0]['incorporated_at'],
+            'db_persisted': True,
         }]
         recent = client.get('/api/feedback/sync').json()
         assert [item['id_retroalimentacion'] for item in recent] == [2, 1]
@@ -63,6 +74,7 @@ def test_recent_accepted_states_are_bounded_read_only_and_separate_from_curation
     finally:
         client.close()
         app.dependency_overrides.pop(get_db, None)
+        app.dependency_overrides.pop(current_web_user, None)
 
 
 def test_sync_schema_rejects_false_milestones_and_provider_messages():

@@ -1,0 +1,209 @@
+{
+  "version": 1,
+  "date": "2026-10-22",
+  "branch": "fix/afinamiento-integral",
+  "stage": 6,
+  "status": "foundation_verified",
+  "remote_observation": {
+    "connection_name": "proyectotesis-fama:us-central1:fama-postgres-pruebas",
+    "database": "fama_pruebas",
+    "user": "fama_app",
+    "operator_reported_migration_command_completed": true,
+    "query_mode": "read_only_catalog_queries",
+    "public_table_count": 16,
+    "all_observed_tables_owner": "fama_migrador",
+    "runtime_select_insert_update_delete_before_grants": false,
+    "runtime_role": {
+      "superuser": false,
+      "createdb": false,
+      "createrole": false,
+      "schema_create": false
+    },
+    "revision_value_and_structure_from_runtime": "pending_SELECT_on_alembic_version",
+    "business_data_read": false,
+    "writes_by_agent": false,
+    "phase": "before_operator_grants"
+  },
+  "script": {
+    "path": "backend/scripts/permisos_tablas_pruebas.sql",
+    "sha256": "407105969dc115b19b12a4a421882dc4a3bfe1a5d9b21a1b9791f7a4cc8afa82",
+    "required_database": "fama_pruebas",
+    "required_current_user": "fama_migrador",
+    "required_revision": "0002_access",
+    "required_tables_owned_by_operator": true,
+    "application_table_count": 15,
+    "direct_application_privileges": [
+      "SELECT",
+      "INSERT",
+      "UPDATE",
+      "DELETE"
+    ],
+    "alembic_version_privileges": [
+      "SELECT"
+    ],
+    "owned_application_sequence_privileges": [
+      "USAGE",
+      "SELECT"
+    ],
+    "normalizes_prior_direct_privileges": true,
+    "grants_all_future_tables": false,
+    "single_atomic_DO_block": true,
+    "passwords_in_script": false,
+    "remote_execution": "operator_confirmed_and_effective_permissions_verified"
+  },
+  "local_regression": {
+    "command": "backend/.venv/Scripts/python.exe -m pytest --noconftest backend/tests/test_permisos_tablas_pruebas.py backend/tests/test_preparacion_roles_pruebas.py backend/tests/test_schema_migrations.py -q -p no:cacheprovider",
+    "environment": {
+      "PYTHONPATH": "<repository>/backend",
+      "PYTHON_DOTENV_DISABLED": "1",
+      "DATABASE_URL": "sqlite://",
+      "TEMP_and_TMP": "<repository>/.pytest_cache",
+      "FAMA_TEST_ROLES_POSTGRES_URL": "exclusive_ephemeral_loopback_postgresql",
+      "FAMA_TEST_POSTGRES_URL": "same_exclusive_ephemeral_loopback_postgresql"
+    },
+    "postgresql_version": "16.15",
+    "image": "postgres:16-alpine",
+    "image_id": "sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea",
+    "storage": "tmpfs",
+    "passed": 25,
+    "failed": 0,
+    "skipped": 0,
+    "new_permission_cases_included": 8,
+    "duration_seconds": 73.58,
+    "global_project_suite": false,
+    "sql_mocked": false,
+    "source_sha256": {
+      "backend/tests/test_permisos_tablas_pruebas.py": "21da4ab9ecb43841b5dfb103e162141e3191509528b3091003e0f9d3fe0b8230",
+      "backend/tests/test_preparacion_roles_pruebas.py": "1aa882fbdbbe7af7d3a64625e2ade4d9da2b8f7bdcc3139501c6bc951e4bfc11",
+      "backend/tests/test_schema_migrations.py": "27fc4e6a29b9aabe7c86c1210ef468637249bfd7ad74324a2f49d1cd3a0dbc64",
+      "backend/app/schema.py": "5cca452b027a4d5fe9bcdda91564f11d6fd14317b3de82dc933bf1e843f99bbe",
+      "backend/migrations/schema_0002.py": "d0629342e54ff59a031df9520de22d196a72f4272b49770a8723fa85c5c08cb0"
+    },
+    "red_green_observed": [
+      "missing_permissions_script",
+      "wrong_database_or_operator_guard",
+      "old_or_unknown_revision_guard",
+      "prior_direct_privileges_reduced_to_expected_set",
+      "missing_or_foreign_owned_table_guard"
+    ],
+    "checks": [
+      "runtime_CRUD_with_generated_identifier",
+      "runtime_check_schema_current",
+      "repeat_script_preserves_data",
+      "runtime_DDL_TRUNCATE_and_version_writes_denied",
+      "sequence_setval_denied_after_normalization",
+      "grant_option_and_trigger_privileges_removed",
+      "wrong_database_and_operator_rejected",
+      "old_and_unknown_revision_rejected",
+      "missing_and_foreign_owned_table_rejected_without_partial_grants",
+      "existing_synthetic_data_preserved_after_rejection"
+    ],
+    "setup_issue_resolved": "test_package_import_before_first_functional_RED"
+  },
+  "cleanup": {
+    "container_id": "50ff4b50f2e9086cb6c61b58ed09dbff8a6ae1fee46d429f71614150b2cab560",
+    "label": "fama.test=etapa6-permisos",
+    "identity_and_label_checked_before_stop": true,
+    "container_removed": true,
+    "removal_verified_by_label_listing": true,
+    "native_cloud_sql_proxy_preserved": true,
+    "remaining_SQL_test_rows": 0,
+    "remaining_live_GCS_test_objects": 0
+  },
+  "pending": [
+    "protected_installation_wizard_and_first_administrator",
+    "full_functional_authentication_and_concurrency_against_Cloud_SQL",
+    "full_backend_ML_GPU_and_browser_validation",
+    "institutional_HTTPS_recovery_and_cutover"
+  ],
+  "remote_DDL_or_grants_executed_by_agent": false,
+  "real_env_file_changed": false,
+  "committed_or_pushed": false,
+  "remote_verification": {
+    "schema": {
+      "code": "schema_current",
+      "revision": "0002_access"
+    },
+    "permissions": {
+      "code": "runtime_permissions_verified",
+      "database": "fama_pruebas",
+      "user": "fama_app",
+      "application_tables": 15,
+      "sequence_count": 9,
+      "version_read_only": true,
+      "runtime_privileged": false
+    },
+    "rollback_probe": {
+      "code": "runtime_crud_verified",
+      "table": "cuota_acceso",
+      "insert": true,
+      "select": true,
+      "update": true,
+      "delete": true,
+      "rollback_confirmed": true,
+      "remaining_test_rows": 0,
+      "sequences_advanced": false
+    },
+    "persistence_probe": {
+      "code": "runtime_persistence_verified",
+      "commit": true,
+      "read_from_separate_transaction": true,
+      "cleanup_committed": true,
+      "remaining_test_rows": 0,
+      "sequences_advanced": false
+    },
+    "gcs_probe": {
+      "bucket": "fama-pruebas",
+      "object": "__fama_verificacion/etapa6/1792684349208-15b1c626967f38.txt",
+      "generation": 1792684355421985,
+      "uploaded_bytes": 39,
+      "sha256": "e3ac5cbcbeb80ff79ba2877eb167d6cbc83a693e000f4875f0775d2fe69560e7",
+      "download_matches": true,
+      "list_verified": true,
+      "delete_requested": true,
+      "remaining_live_objects": 0,
+      "code": "gcs_object_roundtrip_verified",
+      "deletion_scope": "only_created_generation_no_live_object_remaining",
+      "soft_deleted_retention_not_changed": true
+    },
+    "startup_probes": [
+      {
+        "code": "installation_gate_preserved",
+        "health": 200,
+        "installation_status": "required",
+        "ready": 503,
+        "functional_access": 503,
+        "ml_imported": false
+      },
+      {
+        "code": "installation_gate_preserved",
+        "health": 200,
+        "installation_status": "required",
+        "ready": 503,
+        "functional_access": 503,
+        "ml_imported": false
+      }
+    ],
+    "executed_from": "native_Windows_with_selected_private_configuration",
+    "secrets_printed": false,
+    "full_ML_or_browser_stack_started": false,
+    "sql_probe_scope": "only_random_synthetic_cuota_acceso_keys_no_business_rows_or_sequences_modified",
+    "installation_completed": false,
+    "row_lock_probe": {
+      "code": "runtime_row_lock_verified",
+      "simultaneous_connections": 2,
+      "lock_timeout_milliseconds": 250,
+      "second_writer_lock_timeout": true,
+      "retry_after_release_value": 3,
+      "remaining_test_rows": 0,
+      "sequences_advanced": false
+    }
+  },
+  "permission_review": {
+    "initial_combined_check": "timed_out_before_CreateProcess",
+    "shorter_read_only_retry": "approved_and_succeeded",
+    "subsequent_bounded_probes": "approved_and_succeeded",
+    "remaining_permission_block": false
+  },
+  "remote_data_probes_executed_by_agent": true
+}

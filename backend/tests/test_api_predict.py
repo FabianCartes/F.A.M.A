@@ -22,6 +22,7 @@ from app.schemas.prediction import PredictionResult
 from app.services import registry as registry_module
 from app.services.registry import ModelRegistry, get_model_registry
 from app.services.predictors.base import AudioPredictor, ModelWeightsError
+from tests.http_security import administrator_http
 
 
 class ContractPredictor(AudioPredictor):
@@ -98,7 +99,8 @@ def client(mock_db_session, controlled_registry, monkeypatch, tmp_path):
     app.dependency_overrides[get_model_registry] = lambda: controlled_registry
     test_client = TestClient(app)  # No context manager: do not run production lifespan.
     try:
-        yield test_client
+        with administrator_http(app):
+            yield test_client
     finally:
         test_client.close()
         app.dependency_overrides.clear()
@@ -292,4 +294,3 @@ def test_predict_real_chucao_quality(mock_gcp, client, controlled_registry):
     assert data.get("is_fallback") is False
     assert "detalles" in data
     assert data["detalles"].get("is_mock") is False
-

@@ -9,6 +9,7 @@ from app import main
 from app.services import training
 from tests.test_ingestion_upload_integrity import upload_environment, synthetic_wav
 from tests.test_ingestion_sync_integrity import BlobFixture
+from tests.http_security import administrator_http
 
 
 @pytest.fixture
@@ -17,12 +18,135 @@ def client(upload_environment, monkeypatch):
     monkeypatch.setattr(main, "ingestion_service", service)
     app = FastAPI()
     for route in main.app.routes:
-        if getattr(route, "path", "") in {"/api/ingestion/upload", "/api/ingestion/sync",
+        if getattr(route, "path", "") in {"/api/ingestion/upload", "/api/ingestion/sync", "/api/ingestion/preprocess", "/api/ingestion/datasets", "/api/training/datasets",
                                           "/api/ingestion/datasets/{dataset_name}/files"}:
             app.add_api_route(route.path, route.endpoint, methods=list(route.methods))
     app.dependency_overrides[main.get_db] = lambda: db
-    with TestClient(app, raise_server_exceptions=False) as client:
+    with administrator_http(app), TestClient(app, raise_server_exceptions=False) as client:
         yield client
+
+
+def test_local_inventory_never_claims_cloud_files_or_synchronization(client, upload_environment):
+    service, _, _ = upload_environment
+    audio = service.local_base_dir / "AvesChilenas" / "Chucao" / "local.wav"
+    audio.parent.mkdir(parents=True)
+    audio.write_bytes(synthetic_wav())
+
+    response = client.get("/api/ingestion/datasets")
+
+    assert response.status_code == 200
+    dataset, = response.json()["datasets"]
+    assert dataset.get("gcs_file_count") == 0
+    assert dataset["local_file_count"] == 1
+    assert dataset["gcs_size_bytes"] == 0
+    assert dataset["local_size_bytes"] == len(synthetic_wav())
+    assert dataset["sync_state"] == "local_only"
+    assert dataset["is_synced"] is False
+
+
+def test_cloud_metadata_is_not_counted_as_audio(client, upload_environment):
+    service, _, objects = upload_environment
+    audio = service.local_base_dir / "AvesChilenas" / "Chucao" / "local.wav"
+    audio.parent.mkdir(parents=True)
+    audio.write_bytes(synthetic_wav())
+    objects['datasets/AvesChilenas/metadata.csv'] = b'not an audio'
+    dataset, = client.get('/api/ingestion/datasets').json()['datasets']
+    assert dataset['gcs_file_count'] == 0
+    assert dataset['gcs_size_bytes'] == 0
+    assert dataset['sync_state'] == 'local_only'
+
+
+def test_equal_inventory_counts_do_not_claim_verified_synchronization(client, upload_environment):
+    service, _, objects = upload_environment
+    content = synthetic_wav()
+    objects["datasets/AvesChilenas/Chucao/audio.wav"] = content
+    audio = service.local_base_dir / "AvesChilenas" / "Chucao" / "audio.wav"
+    audio.parent.mkdir(parents=True)
+    audio.write_bytes(content[:-2] + b"\x01\x00")
+
+    dataset, = client.get("/api/ingestion/datasets").json()["datasets"]
+
+    assert dataset["is_synced"] is None
+    assert dataset["sync_state"] == "comparison_pending"
+    assert dataset["gcs_file_count"] == dataset["local_file_count"] == 1
+    assert dataset["gcs_size_bytes"] == dataset["local_size_bytes"] == len(content)
+
+
+def test_explicit_local_preprocessing_works_without_cloud_access(client, upload_environment, monkeypatch):
+    service, _, _ = upload_environment
+    audio = service.local_base_dir / "AvesChilenas" / "Chucao" / "local.wav"
+    audio.parent.mkdir(parents=True)
+    audio.write_bytes(synthetic_wav())
+
+    def offline(*args, **kwargs):
+        raise AssertionError("Local preprocessing must not contact GCS")
+
+    monkeypatch.setattr("google.cloud.storage.Client", offline)
+    response = client.post("/api/ingestion/preprocess", json={"datasets": ["AvesChilenas"]})
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "completed"
+    assert response.json()["results"][0]["processed"] == 1
+    assert response.json()["results"][0]["failed"] == 0
+
+
+@pytest.mark.parametrize("names, expected_status", [([], 422), (["missing"], 409)])
+def test_local_preprocessing_rejects_selection_without_local_audio(client, names, expected_status):
+    response = client.post("/api/ingestion/preprocess", json={"datasets": names})
+
+    assert response.status_code == expected_status
+
+
+def test_inventory_exposes_upload_budgets_without_secrets(client, monkeypatch):
+    monkeypatch.setenv("FAMA_UPLOAD_MAX_FILE_BYTES", "1024")
+    monkeypatch.setenv("FAMA_UPLOAD_MAX_BATCH_BYTES", "4096")
+
+    response = client.get("/api/ingestion/datasets")
+
+    assert response.status_code == 200
+    assert response.json().get("upload_limits") == {"max_file_bytes": 1024, "max_batch_bytes": 4096}
+
+
+def test_upload_does_not_silently_replace_an_existing_audio(client):
+    form = {"dataset_name": "AvesChilenas", "class_label": "Chucao"}
+    first = client.post("/api/ingestion/upload", data=form,
+                        files={"files": ("audio.wav", synthetic_wav(), "audio/wav")})
+    assert first.json()["uploaded"] == 1
+
+    replacement = client.post("/api/ingestion/upload", data=form,
+                              files={"files": ("audio.wav", synthetic_wav(frames=16000), "audio/wav")})
+
+    assert replacement.json()["uploaded"] == 0
+    assert replacement.json()["failed"] == 1
+    assert replacement.json()["errors"][0]["code"] == "already_exists"
+    row, = client.get("/api/ingestion/datasets/AvesChilenas/files").json()["files"]
+    assert row["recorded_metadata"]["duration_seconds"] == 1.0
+
+
+def test_identical_upload_retry_confirms_registration_without_duplicate_transfer(client):
+    form = {"dataset_name": "AvesChilenas", "class_label": "Chucao"}
+    files = {"files": ("audio.wav", synthetic_wav(), "audio/wav")}
+    assert client.post("/api/ingestion/upload", data=form, files=files).json()["uploaded"] == 1
+
+    retry = client.post("/api/ingestion/upload", data=form, files=files)
+
+    assert retry.json().get("skipped") == 1
+    assert retry.json()["uploaded"] == retry.json()["failed"] == 0
+    assert retry.json()["db_persisted"] is True
+    dataset, = client.get("/api/training/datasets").json()["datasets"]
+    assert dataset["audio_count"] == 1
+
+
+def test_failed_upload_does_not_register_an_empty_dataset(client):
+    from google.cloud import storage
+    storage.Client.failures.add("datasets/AvesChilenas/Chucao/audio.wav")
+
+    response = client.post("/api/ingestion/upload", data={"dataset_name": "AvesChilenas", "class_label": "Chucao"},
+                           files={"files": ("audio.wav", synthetic_wav(), "audio/wav")})
+
+    assert response.json()["status"] == "failed"
+    assert response.json()["db_persisted"] is False
+    assert client.get("/api/training/datasets").json() == {"datasets": []}
 
 
 def test_upload_invalid_dataset_returns_sanitized_422(client, upload_environment):
@@ -105,7 +229,11 @@ def test_provider_value_error_is_not_misreported_as_input_validation(client, mon
     assert "/private" not in response.text
 
 
-def test_valid_sync_still_reaches_fake_cloud_and_persists(client, monkeypatch):
+def test_empty_cloud_sync_rejects_without_registering_local_audio(client, upload_environment, monkeypatch):
+    service, _, _ = upload_environment
+    audio = service.local_base_dir / "AvesChilenas" / "Chucao" / "local.wav"
+    audio.parent.mkdir(parents=True)
+    audio.write_bytes(synthetic_wav())
     calls = []
 
     def list_blobs(self, bucket, prefix):
@@ -113,11 +241,12 @@ def test_valid_sync_still_reaches_fake_cloud_and_persists(client, monkeypatch):
         return []
 
     monkeypatch.setattr("google.cloud.storage.Client.list_blobs", list_blobs, raising=False)
-    response = client.post("/api/ingestion/sync", json={"datasets": ["AvesChilenas"]})
+    response = client.post("/api/ingestion/sync", json={"datasets": ["AvesChilenas"], "preprocess": True})
 
-    assert response.status_code == 200
+    assert response.status_code == 409
+    assert response.json()["detail"] == "El dataset no contiene audios descargables en el bucket actual."
     assert calls == ["datasets/AvesChilenas/"]
-    assert response.json()["results"][0]["db_persisted"] is True, response.json()["results"][0]["db_error"]
+    assert client.get("/api/training/datasets").json() == {"datasets": []}
 
 
 @pytest.mark.parametrize("failing_statement", ["SELECT", "INSERT"])
@@ -310,16 +439,16 @@ def test_unreadable_sync_does_not_invent_audio_metadata(client, monkeypatch):
     }
 
 
-def test_replacing_upload_updates_recorded_metadata(client):
+def test_conflicting_upload_preserves_recorded_metadata(client):
     for content in (synthetic_wav(), synthetic_wav(frames=22050, sample_rate=11025)):
         uploaded = client.post("/api/ingestion/upload", data={"dataset_name": "AvesChilenas"},
                                files={"files": ("audio.wav", content, "audio/wav")})
-        assert uploaded.json()["db_persisted"] is True
+        assert uploaded.status_code == 200
 
     audio, = client.get("/api/ingestion/datasets/AvesChilenas/files").json()["files"]
 
     assert audio["recorded_metadata"] == {
-        "sample_rate_hz": 11025, "duration_seconds": 2.0, "source": "database"
+        "sample_rate_hz": 8000, "duration_seconds": 1.0, "source": "database"
     }
 
 

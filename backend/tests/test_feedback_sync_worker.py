@@ -16,6 +16,8 @@ from app.services import storage
 
 @pytest.fixture
 def workflow(tmp_path, monkeypatch):
+    from app import configuration
+    monkeypatch.setattr(configuration, '_active_configuration', configuration.load_configuration({'GCS_BUCKET_NAME': 'fixture-bucket'}))
     engine = create_engine(f"sqlite:///{tmp_path / 'worker.sqlite'}")
     Base.metadata.create_all(engine)
     sessions = sessionmaker(bind=engine)
@@ -116,7 +118,12 @@ def test_invalid_evidence_never_uploads_and_preserves_files_and_identity(workflo
     elif damage == 'symlink':
         saved = w.path.with_suffix('.saved')
         w.path.rename(saved)
-        w.path.symlink_to(saved)
+        try:
+            w.path.symlink_to(saved)
+        except OSError as error:
+            if getattr(error, 'winerror', None) == 1314:
+                pytest.skip('Windows no permite crear enlaces simbólicos a esta cuenta')
+            raise
     elif damage.startswith('intent_'):
         intent_path = w.service.raw_data_dir / '.feedback_1.json'
         value = json.loads(intent_path.read_text())
@@ -178,9 +185,10 @@ def test_database_failure_does_not_report_false_synced(workflow, ack_lost):
 
 
 @pytest.mark.parametrize('broken_lock', [False, True])
-def test_failed_first_entry_does_not_starve_next_bounded_batch(workflow, broken_lock):
+def test_failed_first_entry_does_not_starve_next_bounded_batch(workflow, broken_lock, monkeypatch):
     from app.services.feedback_sync_worker import FeedbackSyncWorker
     w = workflow
+    monkeypatch.setattr(storage, 'download_prediction_audio', lambda source: w.audio[:-2] + b'\x02\x00')
     with w.sessions() as db:
         pred = Prediccion(ruta_audio_prueba='raw_audios/' + 'b' * 32 + '.wav',
                           etiqueta_predicha='Rayadito', dataset_name='AvesChilenas', confianza=.9)
@@ -193,7 +201,12 @@ def test_failed_first_entry_does_not_starve_next_bounded_batch(workflow, broken_
         lock = w.service.raw_data_dir / '.feedback_1.json.lock'
         saved = lock.with_suffix('.saved')
         lock.rename(saved)
-        lock.symlink_to(saved)
+        try:
+            lock.symlink_to(saved)
+        except OSError as error:
+            if getattr(error, 'winerror', None) == 1314:
+                pytest.skip('Windows no permite crear enlaces simbólicos a esta cuenta')
+            raise
     worker = FeedbackSyncWorker(w.sessions, w.service.raw_data_dir,
                                 uploader=lambda *a, **k: True, batch_size=1)
     if broken_lock:
@@ -286,9 +299,10 @@ def test_spawn_processes_share_stable_feedback_lock(workflow):
     results.join_thread()
 
 
-def test_stop_during_upload_commits_ack_but_does_not_start_next_item(workflow):
+def test_stop_during_upload_commits_ack_but_does_not_start_next_item(workflow, monkeypatch):
     from app.services.feedback_sync_worker import FeedbackSyncWorker
     w = workflow
+    monkeypatch.setattr(storage, 'download_prediction_audio', lambda source: w.audio[:-2] + b'\x02\x00')
     with w.sessions() as db:
         pred = Prediccion(ruta_audio_prueba='raw_audios/' + 'b' * 32 + '.wav',
                           etiqueta_predicha='Rayadito', dataset_name='AvesChilenas', confianza=.9)
@@ -331,7 +345,7 @@ def test_existing_storage_adapter_bounds_worker_upload_and_disables_sdk_retries(
 
 
 def test_rotation_revisits_released_entry_despite_other_repeated_failures(workflow):
-    import fcntl
+    fcntl = pytest.importorskip('fcntl', reason='Esta prueba requiere el bloqueo POSIX fcntl')
     from app.services.feedback_sync_worker import FeedbackSyncWorker
     w = workflow
     with w.sessions() as db:

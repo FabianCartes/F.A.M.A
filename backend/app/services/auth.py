@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.user import Usuario
+from app.passwords import hash_password, verify_password
 
 # ============================================================================
 # CONFIGURACIÓN CRIPTOGRÁFICA Y DE TOKENS (RNF_03, Tabla 6.2)
@@ -50,29 +51,6 @@ def _signing_key() -> bytes:
 # ============================================================================
 # HASH Y VERIFICACIÓN DE CONTRASEÑAS (PBKDF2-HMAC-SHA256 con Salt aleatorio)
 # ============================================================================
-def hash_password(password: str) -> str:
-    """Genera un hash criptográfico seguro con sal usando PBKDF2-HMAC-SHA256."""
-    salt = secrets.token_bytes(16)
-    iterations = 600000
-    derived = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
-    return f"pbkdf2_sha256${iterations}${salt.hex()}${derived.hex()}"
-
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verifica si la contraseña plana coincide con el hash almacenado en tiempo constante."""
-    try:
-        parts = hashed_password.split("$")
-        if len(parts) != 4 or parts[0] != "pbkdf2_sha256":
-            return False
-        iterations = int(parts[1])
-        salt = bytes.fromhex(parts[2])
-        expected_hash = bytes.fromhex(parts[3])
-        computed_hash = hashlib.pbkdf2_hmac("sha256", plain_password.encode("utf-8"), salt, iterations)
-        return hmac.compare_digest(expected_hash, computed_hash)
-    except Exception:
-        return False
-
-
 # ============================================================================
 # GENERACIÓN Y VALIDACIÓN DE TOKENS JWT (RFC 7519)
 # ============================================================================
@@ -182,6 +160,7 @@ def authenticate_user(db: Session, email: str, password: str) -> Optional[Usuari
         db.commit()
     except Exception:
         db.rollback()
+        raise
     return user
 
 
@@ -191,8 +170,9 @@ def create_user(
     password: str,
     nombre_completo: str,
     rol: str = "investigador",
+    *, commit: bool = True,
 ) -> Usuario:
-    """Crea y persiste un nuevo usuario asegurando el hash de contraseña y unicidad de email."""
+    """Create a user; trusted transactional callers can flush without committing."""
     email_clean = email.strip().lower()
     if get_user_by_email(db, email_clean):
         raise ValueError(f"El correo electrónico '{email_clean}' ya se encuentra registrado.")
@@ -208,8 +188,11 @@ def create_user(
         activo=True,
     )
     db.add(user)
-    db.commit()
-    db.refresh(user)
+    if commit:
+        db.commit()
+        db.refresh(user)
+    else:
+        db.flush()
     return user
 
 

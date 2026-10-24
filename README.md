@@ -181,9 +181,11 @@ Editar el archivo `backend/.env`:
 DATABASE_URL=postgresql://postgres:tu_password@localhost:5432/fama_db
 GOOGLE_APPLICATION_CREDENTIALS=tu_llave_servicio.json
 GCP_KEY_PATH=tu_llave_servicio.json
-GCS_BUCKET_NAME=fama-audio-records-2026
+GCS_BUCKET_NAME=nombre-de-tu-bucket
 XC_API_KEY=tu_api_key_opcional
 ```
+
+La configuración completa de acceso, secretos y migraciones explícitas está en [preparación de instalación y migraciones](docs/manuales/preparacion_instalacion_y_migraciones.md). El arranque ya no crea tablas ni el primer administrador automáticamente. La instalación nueva requiere las migraciones del operador y, posteriormente, el asistente protegido previsto en el plan.
 
 Crear la base de datos en PostgreSQL:
 ```bash

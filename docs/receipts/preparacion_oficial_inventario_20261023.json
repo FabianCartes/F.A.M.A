@@ -1,0 +1,478 @@
+{
+  "version": 1,
+  "date": "2026-10-23",
+  "timezone": "America/Santiago",
+  "checked_at": "2026-10-24T02:46:13.004977+00:00",
+  "branch": "fix/afinamiento-integral",
+  "status": "official_database_created_operator_SQL_role_preparation_pending_no_profile_cutover",
+  "actors": {
+    "operator": "confirmed_initial_PC_then_university_server_and_existing_Cloud_SQL_instance_with_separate_official_database",
+    "codex": "read_only_inventory_conversion_fix_preview_hash_validation_database_creation_and_synthetic_SQL_role_tests"
+  },
+  "deployment": {
+    "initial_device": "current_PC",
+    "initial_web_access": "loopback_only",
+    "future_device": "university_server",
+    "future_OS_network_domain_HTTPS": "not_yet_defined",
+    "proposed_database": "fama_oficial",
+    "proposed_profile": "backend/installation/cloud-oficial/native",
+    "proposed_runtime": "runtime/oficial",
+    "official_profile_created_or_activated": false,
+    "SQL_instance_choice": {
+      "state": "confirmed_by_operator",
+      "connection_name": "proyectotesis-fama:us-central1:fama-postgres-pruebas",
+      "separate_database": "fama_oficial"
+    },
+    "SQL_instance_choice_at_initial_inventory": {
+      "state": "pending_operator_preference",
+      "proposed_existing": "proyectotesis-fama:us-central1:fama-postgres-pruebas",
+      "alternative": "dedicated_instance",
+      "remote_provisioning_applied": false
+    },
+    "database_created": true
+  },
+  "cloud_inventory": {
+    "bucket": "fama-audio-records-2026",
+    "principal": "fama-orquestador@proyectotesis-fama.iam.gserviceaccount.com",
+    "status": "listed",
+    "objects": 2634,
+    "bytes": 5603780232,
+    "prefixes": {
+      "datasets/AvesChilenas": {
+        "objects": 1215,
+        "bytes": 5329102942,
+        "audio_objects": 1215,
+        "classes": {
+          "Canastero": 1,
+          "Chucao": 1,
+          "Churrín de la Mocha": 1,
+          "canastero": 65,
+          "chercán": 92,
+          "chincol": 76,
+          "chucao": 93,
+          "churrín_de_la_mocha": 75,
+          "churrín_del_sur": 68,
+          "colilarga": 51,
+          "fío-fío": 76,
+          "picaflor_chico": 62,
+          "rayadito": 101,
+          "tapaculo": 57,
+          "tijeral": 60,
+          "tordo": 85,
+          "turca": 76,
+          "zorzal_patagónico": 175
+        }
+      },
+      "datasets/engine_diagnostics": {
+        "objects": 1386,
+        "bytes": 185674284,
+        "audio_objects": 1386,
+        "classes": {
+          "bad_ignition": 62,
+          "dead_battery": 57,
+          "low_oil": 107,
+          "no oil_serpentine belt": 107,
+          "normal_brakes": 77,
+          "normal_engine_idle": 264,
+          "normal_engine_startup": 61,
+          "power steering combined_no oil": 107,
+          "power steering combined_no oil_serpentine belt": 107,
+          "power steering combined_serpentine belt": 116,
+          "power_steering": 129,
+          "serpentine_belt": 116,
+          "worn_out_brakes": 76
+        }
+      },
+      "raw_audios": {
+        "objects": 33,
+        "bytes": 89003006,
+        "audio_objects": 33,
+        "classes": {
+          "(sin subcarpeta)": 33
+        }
+      }
+    },
+    "object_metadata_sha256": "c7ad0752a46c8a66f86fd27ac4dbe4af1b86ad503e132db7ed752a1e2471f290"
+  },
+  "legacy_SQL": {
+    "configured_database": "fama_db",
+    "host": "localhost",
+    "port": 5432,
+    "version": "PostgreSQL 18.0",
+    "transaction_read_only": true,
+    "schema_versioned": false,
+    "tables": [
+      "audio",
+      "conjunto_datos",
+      "feedback_sync",
+      "metrica_entrenamiento",
+      "modelo",
+      "prediccion",
+      "retroalimentacion",
+      "usuario"
+    ],
+    "counts": {
+      "audio": 1,
+      "conjunto_datos": 1,
+      "feedback_sync": 1,
+      "metrica_entrenamiento": 0,
+      "modelo": 5,
+      "prediccion": 31,
+      "retroalimentacion": 1,
+      "usuario": 1
+    },
+    "account_roles": [
+      {
+        "rol": "administrador",
+        "accounts": 1
+      }
+    ],
+    "feedback_sync_states": [
+      {
+        "status": "synced",
+        "records": 1
+      }
+    ],
+    "datasets": [
+      {
+        "id_conjunto_datos": 1,
+        "nombre": "MaquinariaMinas",
+        "ruta_gcp": "gs://fama-audio-records-2026/datasets/MaquinariaMinas/",
+        "tamano_total_bytes": 220544,
+        "cantidad_audios": 1
+      }
+    ],
+    "historical_models": [
+      {
+        "model_id": 2,
+        "architecture": "EfficientNet-B0 (35 epoch)",
+        "legacy_active": true,
+        "dataset_id": null,
+        "local_file": {
+          "filename": "efficientnet_gpu_pipeline_35e_best.pt",
+          "bytes": 48822960,
+          "sha256": "79ce8e3e574296e360814b89151cf5666ab0b1050e297baed06b3762dfef94b6"
+        },
+        "size_matches_SQL": true,
+        "cloud_object_listed": false
+      },
+      {
+        "model_id": 3,
+        "architecture": "ConvNeXt-Nano (35 epoch)",
+        "legacy_active": true,
+        "dataset_id": null,
+        "local_file": {
+          "filename": "convnext_nano_35e_best.pt",
+          "bytes": 179709621,
+          "sha256": "f3ea78451c9ec5677c0e28c47063217ea9d5068eac4bac6b34115094a042a064"
+        },
+        "size_matches_SQL": true,
+        "cloud_object_listed": false
+      },
+      {
+        "model_id": 4,
+        "architecture": "ResNet34d (35 epoch)",
+        "legacy_active": true,
+        "dataset_id": null,
+        "local_file": {
+          "filename": "resnet34d_35e_best.pt",
+          "bytes": 255989559,
+          "sha256": "da5a79625906be7bc4f732c7f55e065a56b2368460756e7f306e815c18b0da5f"
+        },
+        "size_matches_SQL": true,
+        "cloud_object_listed": false
+      },
+      {
+        "model_id": 5,
+        "architecture": "Augmented Data Best",
+        "legacy_active": true,
+        "dataset_id": null,
+        "local_file": {
+          "filename": "augmented_best.pt",
+          "bytes": 4312689,
+          "sha256": "dc2264a7abcba11adba101e5f02c394349ddcff2d2e71a0c43f099c7cf20f430"
+        },
+        "size_matches_SQL": true,
+        "cloud_object_listed": false
+      },
+      {
+        "model_id": 6,
+        "architecture": "Baseline Best",
+        "legacy_active": true,
+        "dataset_id": null,
+        "local_file": {
+          "filename": "baseline_best.pt",
+          "bytes": 4312610,
+          "sha256": "ff22fc9baaf0324583bfa7993e45142bfa74e4552ff11985ef66a10f241dbb8c"
+        },
+        "size_matches_SQL": true,
+        "cloud_object_listed": false
+      }
+    ],
+    "direct_upgrade_supported": false
+  },
+  "local_cloud_comparison": [
+    {
+      "dataset": "AvesChilenas",
+      "local_audios": 1211,
+      "local_bytes": 5393438516,
+      "same_name_and_size": 1050,
+      "different_size": 5,
+      "local_only": 156,
+      "cloud_only": 160
+    },
+    {
+      "dataset": "MaquinariaMinas",
+      "local_audios": 1,
+      "local_bytes": 220544,
+      "same_name_and_size": 0,
+      "different_size": 0,
+      "local_only": 1,
+      "cloud_only": 0
+    }
+  ],
+  "historical_index_preview": {
+    "apply": false,
+    "rows": 1205,
+    "all_original_fields_and_order_preserved": true,
+    "input_sha256": "6288da1f40fcb03150d896ce749d3336eeda9d4bf7e38fb49a2c7f2a3adc1b67",
+    "input_unchanged": true,
+    "candidate_created": false,
+    "snapshot_created": false,
+    "classes": {
+      "Zorzal patagónico": 174,
+      "Rayadito": 101,
+      "Chucao": 92,
+      "Chercán": 92,
+      "Tordo": 84,
+      "Turca": 76,
+      "Fío-fío": 76,
+      "Chincol": 76,
+      "Churrín de la Mocha": 75,
+      "Churrín del sur": 68,
+      "Picaflor chico": 62,
+      "Canastero": 62,
+      "Tijeral": 59,
+      "Tapaculo": 57,
+      "Colilarga": 51
+    },
+    "unique_references": 1205,
+    "recordist_nonblank": 1205,
+    "hash_nonblank": 1205,
+    "source_id_nonblank": 1205
+  },
+  "local_audio_hash_validation": {
+    "hash_comparison": {
+      "examined": 1205,
+      "bytes_read": 5387802024,
+      "matched": 1205
+    },
+    "difference_records": 0
+  },
+  "conversion_fix": {
+    "public_surface": "offline_operator_CLI",
+    "new_cases": 12,
+    "Windows_native_absolute_arguments_supported": true,
+    "persisted_references": "relative_POSIX_plus_explicit_stage",
+    "Windows_UNC_devices_ADS_reserved_noncanonical_and_junctions_rejected": true,
+    "RED_observed": [
+      "native_path_preview_rejected",
+      "destination_junction_accepted",
+      "indexed_internal_junction_accepted"
+    ],
+    "no_internal_application_mocks_in_new_tests": true,
+    "publication_remains_explicit_and_exclusive_per_file": true,
+    "filesystem_races_or_group_atomicity_resolved": false
+  },
+  "validation": {
+    "passed": 61,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "deselected": 7,
+    "files": 2,
+    "duration_seconds": 3.738,
+    "scope": "test_dataset_conversion_and_test_dataset_conversion_cli",
+    "excluded_legacy_cases": "symlink_privileges_or_case_distinct_directories_unavailable_in_this_Windows_execution",
+    "new_junction_cases_executed": true,
+    "global_suite_claim": false,
+    "frontend_or_browser_tests_run": false,
+    "model_loading_training_inference_run": false
+  },
+  "not_performed": [
+    "GCS_writes_or_remote_audio_download",
+    "real_account_password_or_session_changes",
+    "official_profile_runtime_creation_or_activation",
+    "service_restart_or_shutdown",
+    "candidate_or_snapshot_publication_for_real_data",
+    "source_dataset_checkpoint_or_active_index_writes",
+    "legacy_PG18_backup_or_restoration",
+    "historical_rows_transfer",
+    "class_merging_or_file_overwrite",
+    "automatic_legacy_feedback_retry",
+    "model_activation_or_dataset_binding_inference",
+    "SQL_application_data_or_schema_migrations_or_remote_role_changes",
+    "new_Cloud_SQL_instance_or_bucket"
+  ],
+  "limits": [
+    "GCS_listing_and_files_are_not_one_transactional_snapshot",
+    "same_name_and_size_does_not_verify_remote_bytes",
+    "historical_hash_match_does_not_certify_acoustic_quality_licence_or_source_independence",
+    "five_cloud_local_size_conflicts_and_case_variants_need_reconciliation",
+    "six_local_audios_not_in_historical_1205_row_index",
+    "private_cache_is_not_durable_backup",
+    "legacy_nonversioned_PG18_requires_controlled_transfer_not_stamp_or_PG16_restore_assumption",
+    "five_legacy_active_models_have_unknown_dataset_linkage",
+    "future_server_HTTPS_and_offsite_backup_policy_remain_pending"
+  ],
+  "next": [
+    "operator_execute_SQL_role_preparation_on_fama_oficial_with_postgres",
+    "assign_separate_SQL_passwords_then_prepare_official_identity_and_profile",
+    "back_up_and_verify_PG18_history_then_test_controlled_transfer_to_versioned_target",
+    "review_canonical_catalogue_conflicts_and_weights_then_prepare_runtime",
+    "perform_reviewed_cutover_and_bounded_functional_check"
+  ],
+  "artifacts": [
+    {
+      "path": "backend/scripts/convert_dataset_index.py",
+      "sha256": "ca139ebe2689acedaba5d68b65d9f8f1d233b58e27232aea29600e4c46c88354"
+    },
+    {
+      "path": "backend/tests/test_dataset_conversion_cli.py",
+      "sha256": "becc5ad87dd841951d295854063b2a71f5fb81c81bfdd0aaa9a5212b8345d562"
+    },
+    {
+      "path": "docs/manuales/preparacion_entorno_oficial.md",
+      "sha256": "51306dc5cd5c57d0176e1c26aa7a9230e572c8357a5500d350842dc583a64811"
+    },
+    {
+      "path": "docs/manuales/contrato_referencias_dataset_canonicas.md",
+      "sha256": "998b52dbd23b554194f587496e9e4e9c04e312d9cb13739e1fae4a1135629a24"
+    },
+    {
+      "path": "docs/manuales/estado_actual_y_pendientes.md",
+      "sha256": "435e8ef52de9b3a39ffc9d2a213290f44106d4de57929c806c8222de09690b19"
+    },
+    {
+      "path": "docs/manuales/plan_instalacion_gcp_y_asistente.md",
+      "sha256": "8777507fa6943392cd1382d3684162a9e648e07d9d1a29271b7bdb1815699b17"
+    },
+    {
+      "path": "docs/manuales/plan_autonomia_investigador_y_catalogo.md",
+      "sha256": "ff36ac1a7c2568100574f200381fe1b658b36cc2fe9700b91d5db76ca0f79e6d"
+    },
+    {
+      "path": "docs/manuales/bitacora_acceso_e_instalacion.md",
+      "sha256": "99129038d1892b57c0685943550e006570883cbe42993f73c3cd6bc52b0e146a"
+    },
+    {
+      "path": "docs/KANBAN.md",
+      "sha256": "5ae0d730cede0a95bf5d4920d733e0296db6b7fe453e28ff19b243b17ee5b9aa"
+    },
+    {
+      "path": "docs/README.md",
+      "sha256": "d0dce3846a0a0de71dc005dc31aef2b47adb6453054d05414f40aa678071292c"
+    },
+    {
+      "path": "backend/scripts/preparar_roles_oficial.sql",
+      "sha256": "a4ca608eafa98e3573407e46e3f87e46bdef7362b7aa8cf7ec83e91d3abd9caa"
+    },
+    {
+      "path": "backend/tests/test_official_database_roles.py",
+      "sha256": "8786fe3d8eaa8909317f3f8f491647c71e4f82b71e32437f1d6d31714d4b1aee"
+    }
+  ],
+  "updated_at": "2026-10-24T02:57:10.271700+00:00",
+  "database_creation": {
+    "project": "proyectotesis-fama",
+    "instance": "fama-postgres-pruebas",
+    "database": "fama_oficial",
+    "method": "gcloud_sql_databases_create_after_operator_confirmation",
+    "post_creation_database_list": [
+      {
+        "charset": "UTF8",
+        "collation": "en_US.UTF8",
+        "name": "postgres"
+      },
+      {
+        "charset": "UTF8",
+        "collation": "en_US.UTF8",
+        "name": "fama_pruebas"
+      },
+      {
+        "charset": "UTF8",
+        "collation": "en_US.UTF8",
+        "name": "fama_oficial"
+      }
+    ],
+    "new_instance_or_bucket_created": false,
+    "application_rows_schema_migrations_or_remote_roles_written": false,
+    "test_database_still_listed": true
+  },
+  "official_SQL_roles": {
+    "script": "backend/scripts/preparar_roles_oficial.sql",
+    "target_database_guard": "fama_oficial",
+    "identities": [
+      "fama_oficial_app",
+      "fama_oficial_migrador"
+    ],
+    "passwords_assigned": false,
+    "roles_applied_remotely": false,
+    "daily_role_CREATE": false,
+    "migrator_CREATE": true,
+    "PUBLIC_CONNECT_TEMP_and_schema_privileges_revoked_on_target_only": true,
+    "existing_roles_or_user_objects_rejected": true,
+    "transaction": "single_DO_block",
+    "no_default_table_DML_grants_before_migration": true,
+    "validation": {
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0,
+      "files": 1,
+      "duration_seconds": 5.801,
+      "real_postgresql_major": 16,
+      "without_internal_mocks": true,
+      "RED_observed": [
+        "operator_SQL_script_absent",
+        "functions_types_and_extra_schemas_not_rejected"
+      ],
+      "cases": [
+        "least_privilege_and_test_data_preserved",
+        "nonempty_table",
+        "nonempty_function",
+        "nonempty_type",
+        "nonempty_schema",
+        "wrong_database",
+        "existing_role_preserved",
+        "nonsuperuser_owner_with_CREATEROLE"
+      ]
+    },
+    "temporary_lab_cleanup": {
+      "container": "9994cfb27727b0aac5b2ddcb72d0a61ed5dfe710e7511a83daa12e8d3b2120b7",
+      "label_run": "3c4268f32a8f46e789e3a622c0ebc2df",
+      "retired": true,
+      "exclusive_anonymous_volumes_removed": [
+        "09d9cabbc7fe6219d66d61a43c936a5a59d75206aa3da0e66b866903bfbbf1be"
+      ],
+      "other_containers_preserved": 4,
+      "other_states_preserved": true,
+      "image_retained": true
+    },
+    "next_operator_action": "Cloud_SQL_Studio_postgres_on_fama_oficial_execute_official_role_script_then_confirm_two_rows"
+  },
+  "not_performed_at_initial_inventory": [
+    "GCS_writes_or_remote_audio_download",
+    "SQL_writes_migrations_or_role_changes",
+    "new_billed_resources",
+    "real_account_password_or_session_changes",
+    "official_profile_runtime_creation_or_activation",
+    "service_restart_or_shutdown",
+    "candidate_or_snapshot_publication_for_real_data",
+    "source_dataset_checkpoint_or_active_index_writes",
+    "legacy_PG18_backup_or_restoration",
+    "historical_rows_transfer",
+    "class_merging_or_file_overwrite",
+    "automatic_legacy_feedback_retry",
+    "model_activation_or_dataset_binding_inference"
+  ]
+}

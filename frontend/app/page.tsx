@@ -7,8 +7,16 @@ import PredictionView from "@/components/views/PredictionView";
 import DashboardView from "@/components/views/DashboardView";
 import IngestionView from "@/components/views/IngestionView";
 import TrainingView from "@/components/views/TrainingView";
+import SessionBoundary, { useWebSession } from "@/components/auth/SessionBoundary";
+import AccountView from "@/components/account/AccountView";
+import AdministrationView from "@/components/account/AdministrationView";
 
 export default function Home() {
+  return <SessionBoundary><Workspace /></SessionBoundary>;
+}
+
+function Workspace() {
+  const { user } = useWebSession();
   const [activeTab, setActiveTab] = useState<TabType>("prediccion");
 
   return (
@@ -16,6 +24,7 @@ export default function Home() {
       sidebar={(actions) => (
         <Sidebar
           activeTab={activeTab}
+          role={user.rol}
           onSelectTab={(tab) => {
             setActiveTab(tab);
             actions.closeSidebar();
@@ -29,6 +38,7 @@ export default function Home() {
       {activeTab === "dashboard" && <DashboardView onNavigate={setActiveTab} />}
       {activeTab === "ingesta" && (
         <IngestionView
+          administrator={user.rol === "administrador"}
           onNavigate={(view) => {
             if (view === "predict") {
               setActiveTab("prediccion");
@@ -44,6 +54,8 @@ export default function Home() {
         />
       )}
       {activeTab === "entrenamiento" && <TrainingView />}
+      {activeTab === "cuenta" && <AccountView />}
+      {activeTab === "administracion" && (user.rol === "administrador" ? <AdministrationView /> : <AccountView />)}
     </AppShell>
   );
 }

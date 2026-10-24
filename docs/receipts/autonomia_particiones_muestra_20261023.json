@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "checked_at": "2026-10-23T06:38:02.216762+00:00",
+  "dataset": "FAMA_Prueba_Aves",
+  "purpose": "bounded_functional_training_test_not_model_quality_or_publication",
+  "operator_authorized_audio_count": 10,
+  "downloaded_audio_hashes_verified": 10,
+  "finite_nonempty_preprocessed_tensors_verified": 10,
+  "original_audio_modified": false,
+  "split_policy": "deterministic_filename_order_four_train_and_one_validation_per_class",
+  "split_counts": {
+    "train": 8,
+    "val": 2
+  },
+  "class_counts_per_split": {
+    "train": {
+      "Canastero": 4,
+      "Chucao": 4
+    },
+    "val": {
+      "Canastero": 1,
+      "Chucao": 1
+    }
+  },
+  "audio_hashes_disjoint_between_splits": true,
+  "recordist_identity_known": false,
+  "recordist_or_acoustic_independence_claimed": false,
+  "held_out_test_set_created": false,
+  "training_run_started": false,
+  "tensors": [
+    {
+      "path": "backend/data/processed/FAMA_Prueba_Aves/Canastero/225288.npy",
+      "shape": [
+        64,
+        216
+      ],
+      "sha256": "a3149caed7e81807510a58bb696a83fdae1c1f8ebbd4d42c6d6d3509ef923ec9"
+    },
+    {
+      "path": "backend/data/processed/FAMA_Prueba_Aves/Canastero/225290.npy",
+      "shape": [
+        64,
+        216
+      ],
+      "sha256": "0f7509def2ea5bd40b05b52f5498f5b5ffa1ec4398ed91545469aca7fc9e3abb"
+    },
+    {
+      "path": "backend/data/processed/FAMA_Prueba_Aves/Canastero/381517.npy",
+      "shape": [
+        64,
+        216
+      ],
+      "sha256": "bd80cc1fdf239d0bc93b63c375f36691acf85e31ee5f799cfe711ac2dbb81262"
+    },
+    {
+      "path": "backend/data/processed/FAMA_Prueba_Aves/Canastero/381518.npy",
+      "shape": [
+        64,
+        216
+      ],
+      "sha256": "c6434ce0ad1d18a0e12bef03a299d140f9dd3a6fa3569d0d3194f99087bb4bf5"
+    },
+    {
+      "path": "backend/data/processed/FAMA_Prueba_Aves/Canastero/502838.npy",
+      "shape": [
+        64,
+        216
+      ],
+      "sha256": "698a09899f84f22ae7ff4d6c825db5a0a10aee0fcad77d3891de5ec283bf831d"
+    },
+    {
+      "path": "backend/data/processed/FAMA_Prueba_Aves/Chucao/1036796.npy",
+      "shape": [
+        64,
+        216
+      ],
+      "sha256": "66805bb3b7b4537fbd070b1940bdd47d4dd4fcf768987d90c942418c0551fe33"
+    },
+    {
+      "path": "backend/data/processed/FAMA_Prueba_Aves/Chucao/1075457.npy",
+      "shape": [
+        64,
+        216
+      ],
+      "sha256": "70ca780d5795fff25d83bb0a9365ba06a64043d178007722eb325bd38ceb8105"
+    },
+    {
+      "path": "backend/data/processed/FAMA_Prueba_Aves/Chucao/218159.npy",
+      "shape": [
+        64,
+        216
+      ],
+      "sha256": "064ddb30585d2343692b9568e3d13fbf9b8b1fbf0071f5f3c307eca25ea4b6ca"
+    },
+    {
+      "path": "backend/data/processed/FAMA_Prueba_Aves/Chucao/296132.npy",
+      "shape": [
+        64,
+        216
+      ],
+      "sha256": "bde06d205176b5e2202d42413182ff1fb8622bc744afbf0ffa70dab1bce6918b"
+    },
+    {
+      "path": "backend/data/processed/FAMA_Prueba_Aves/Chucao/508289.npy",
+      "shape": [
+        64,
+        216
+      ],
+      "sha256": "1d3d4f5abfe0672b7bb8b009bec1e596695fb95e8fae6a3901003f989414ce11"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "backend/data/raw/FAMA_Prueba_Aves/train.csv",
+      "sha256": "5bdaecdd9aed65daff101765ec787fd2a4c255f301f6783f3deaedbfbd0ac101"
+    },
+    {
+      "path": "backend/data/raw/FAMA_Prueba_Aves/val.csv",
+      "sha256": "2283891f94dc9c53bcfccbfc245b725a44c27349bf825619dd2aac4e9309906c"
+    }
+  ]
+}

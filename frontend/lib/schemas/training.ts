@@ -91,6 +91,7 @@ export type RegularizationConfig = z.infer<typeof RegularizationConfigSchema>;
 
 export const StartTrainingRequestSchema = z.object({
   dataset_name: z.string().min(1, "Dataset name is required"),
+  partition_version: z.string().regex(/^[0-9a-f]{64}$/).optional(),
   architecture: z.string().optional().default("EfficientNet-B0"),
   epochs: z.number().int().min(1, "Epochs must be at least 1").max(1000, "Epochs must be at most 1000").default(10),
   learning_rate: z.number().positive().default(0.001),
@@ -177,6 +178,8 @@ export const ModelHistoryItemSchema = z.object({
   name: z.string().optional(),
   version: z.number().int().positive().optional(),
   dataset: z.string().optional(),
+  dataset_name: z.string().nullable().optional(),
+  partition_version: z.string().nullable().optional(),
   architecture: z.string(),
   epochs: z.number(),
   accuracy: z.number().nullable().optional(),

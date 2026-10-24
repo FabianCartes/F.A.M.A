@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "date": "2026-10-24",
+  "timezone": "America/Santiago",
+  "checked_at": "2026-10-24T03:41:34.112332+00:00",
+  "branch": "fix/afinamiento-integral",
+  "status": "official_role_creation_reported_and_API_presence_verified_SQL_password_assignment_pending",
+  "target": {
+    "project": "proyectotesis-fama",
+    "instance": "fama-postgres-pruebas",
+    "database": "fama_oficial"
+  },
+  "operator_confirmation": {
+    "connected_to_database": "fama_oficial",
+    "SQL_script_executed": true,
+    "script": "backend/scripts/preparar_roles_oficial.sql",
+    "reported_crea_tablas": {
+      "fama_oficial_app": false,
+      "fama_oficial_migrador": true
+    },
+    "full_result_screenshot_received": false
+  },
+  "codex_observation": {
+    "method": "gcloud_sql_users_list_read_only_explicit_project_and_instance",
+    "usernames": [
+      "fama_oficial_app",
+      "fama_oficial_migrador"
+    ],
+    "independent_SQL_privilege_or_login_check": false,
+    "password_read_or_update": false
+  },
+  "next_operator_step": {
+    "menu": "Cloud_SQL_instance_Users",
+    "action": "Change_password_for_each_existing_official_SQL_user",
+    "different_passwords_kept_locally": true,
+    "password_values_requested_in_chat": false,
+    "source": "https://docs.cloud.google.com/sql/docs/postgres/create-manage-users"
+  },
+  "pending": [
+    "operator_password_assignment_confirmation",
+    "local_SQL_authentication_and_complete_privilege_check",
+    "official_identity_secret_references_and_profile",
+    "legacy_history_and_catalogue_transfer",
+    "controlled_official_cutover"
+  ],
+  "tests_run_this_unit": false,
+  "application_code_or_services_changed": false,
+  "artifacts": [
+    {
+      "path": "docs/manuales/bitacora_acceso_e_instalacion.md",
+      "sha256": "fb086b354ea34bd5245f7a5c3c9610efa13b1f59706bc9c6f4d1d073e4262356"
+    },
+    {
+      "path": "docs/manuales/preparacion_entorno_oficial.md",
+      "sha256": "4dc33ccf88dea136f3551b3d6bbc32a8ea7c55e84c9bd3331c88cc4b8a03fe29"
+    },
+    {
+      "path": "docs/manuales/estado_actual_y_pendientes.md",
+      "sha256": "04cc0770be178655857620d123ac47ccc0a78e953432a31bc36554449ad57e16"
+    },
+    {
+      "path": "docs/KANBAN.md",
+      "sha256": "f5970da232c00287a4db417be9253253adf0d7767a24d8c6c08e32ba367509d3"
+    },
+    {
+      "path": "docs/README.md",
+      "sha256": "0cce8da3e5a3793817b5ed290ac3b085c94ac14cf1cd009ecb7f6b50da423ae6"
+    },
+    {
+      "path": "docs/manuales/plan_instalacion_gcp_y_asistente.md",
+      "sha256": "3bdbb8d1f0df1207aa4ca04cd198e39d2963366289a24db6f4b13bb26a347469"
+    },
+    {
+      "path": "docs/manuales/plan_autonomia_investigador_y_catalogo.md",
+      "sha256": "91a22ee981a79183eab3a495c7972c510a8ea59936b8539ed8d3cd1c76e88301"
+    }
+  ]
+}

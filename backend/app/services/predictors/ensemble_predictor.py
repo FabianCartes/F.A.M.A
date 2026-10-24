@@ -37,9 +37,9 @@ class ChileanBirdsEnsemblePredictor(AudioPredictor):
         self.weights = weights or DEFAULT_ENSEMBLE_WEIGHTS
         self.lazy_load = lazy_load
 
-        backend_root = Path(__file__).resolve().parent.parent.parent.parent
         if checkpoint_paths is None:
-            ckpt_dir = backend_root / "checkpoints"
+            from training.paths import get_checkpoints_dir
+            ckpt_dir = get_checkpoints_dir()
             self.checkpoint_paths = [
                 ckpt_dir / "convnext_nano_35e_best.pt",
                 ckpt_dir / "efficientnet_gpu_pipeline_35e_best.pt",

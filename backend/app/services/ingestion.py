@@ -9,8 +9,9 @@ import soundfile as sf
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any, Tuple
-from dotenv import load_dotenv
 from google.cloud import storage
+from google.api_core.exceptions import PreconditionFailed
+from app.configuration import get_configuration, storage_bucket
 
 
 class IngestionValidationError(ValueError):
@@ -28,35 +29,15 @@ class IngestionPayloadTooLarge(IngestionValidationError):
 class IngestionAudioError(IngestionValidationError):
     """An upload is not a supported, structurally readable audio recording."""
 
+
+class IngestionDatasetUnavailable(IngestionValidationError):
+    """The requested cloud dataset has no downloadable audio."""
+
 # ============================================================================
 # CONFIGURACIÓN DE ENTORNO Y RUTAS BASE
 # ============================================================================
 _BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
-_ENV_FILE = _BACKEND_DIR / ".env"
-if _ENV_FILE.exists():
-    load_dotenv(dotenv_path=_ENV_FILE)
-else:
-    load_dotenv()
-
-# Asegurar ruta absoluta a credenciales IAM
-_cred_env = os.getenv("GOOGLE_APPLICATION_CREDENTIALS") or os.getenv("GCP_KEY_PATH")
-if _cred_env:
-    _cred_path = Path(_cred_env)
-    if not _cred_path.is_absolute():
-        for _candidate in [
-            _cred_path,
-            _BACKEND_DIR / _cred_path,
-            Path("/app") / _cred_path,
-            Path.cwd() / _cred_path,
-            Path.cwd() / "backend" / _cred_path,
-        ]:
-            if _candidate.exists():
-                _resolved_cred = _candidate.resolve()
-                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(_resolved_cred)
-                os.environ["GCP_KEY_PATH"] = str(_resolved_cred)
-                break
-
-DEFAULT_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME", "fama-audio-records-2026")
+DEFAULT_BUCKET_NAME = get_configuration().bucket_name
 
 try:
     from training.paths import get_raw_data_dir, get_processed_data_dir
@@ -84,11 +65,12 @@ class IngestionService:
         local_base_dir: Optional[Path] = None,
         local_processed_dir: Optional[Path] = None,
     ):
-        self.bucket_name = bucket_name or os.getenv("GCS_BUCKET_NAME", DEFAULT_BUCKET_NAME)
+        self.bucket_name = bucket_name or get_configuration().bucket_name
         self.local_base_dir = Path(local_base_dir or DEFAULT_LOCAL_RAW_DIR)
         self.local_processed_dir = Path(local_processed_dir or DEFAULT_LOCAL_PROCESSED_DIR)
 
     def _get_client(self) -> storage.Client:
+        storage_bucket(self.bucket_name)
         return storage.Client()
 
     def get_storage_status(self) -> Dict[str, Any]:
@@ -97,12 +79,14 @@ class IngestionService:
         """
         try:
             client = self._get_client()
-            blobs = list(client.list_blobs(self.bucket_name, max_results=2000))
-            total_bytes = sum(b.size or 0 for b in blobs)
+            total_objects = total_bytes = 0
+            for blob in client.list_blobs(self.bucket_name):
+                total_objects += 1
+                total_bytes += blob.size or 0
             return {
                 "connected": True,
                 "bucket": self.bucket_name,
-                "total_objects": len(blobs),
+                "total_objects": total_objects,
                 "total_bytes": total_bytes,
                 "error": None,
             }
@@ -115,7 +99,8 @@ class IngestionService:
                 "error": str(exc),
             }
 
-    def list_local_datasets(self, gcs_available: bool = False) -> List[Dict[str, Any]]:
+    def list_local_datasets(self, gcs_available: bool = False,
+                            dataset_names: Optional[set[str]] = None) -> List[Dict[str, Any]]:
         """
         Escanea self.local_base_dir (DEFAULT_LOCAL_RAW_DIR), agrupa clases por subdirectorio,
         cuenta archivos de audio (.wav, .mp3, .flac, .ogg), calcula el tamaño total en bytes
@@ -127,11 +112,17 @@ class IngestionService:
         SUPPORTED_EXTS = {".wav", ".mp3", ".flac", ".ogg"}
         local_datasets = []
 
-        for entry in sorted(self.local_base_dir.iterdir()):
+        entries = (sorted(self.local_base_dir.iterdir()) if dataset_names is None
+                   else [self.local_base_dir / name for name in sorted(dataset_names)])
+        for entry in entries:
+            ds_name = entry.name
+            if dataset_names is not None and not entry.is_dir():
+                entry = self.local_base_dir / ds_name.lower().replace(" ", "_")
             if not entry.is_dir() or entry.name.startswith(".") or entry.name.startswith("__"):
                 continue
+            if not entry.resolve().is_relative_to(self.local_base_dir.resolve()):
+                continue
 
-            ds_name = entry.name
             classes_set = set()
             file_count = 0
             total_size_bytes = 0
@@ -173,7 +164,11 @@ class IngestionService:
                     "local_file_count": file_count,
                     "total_size_bytes": total_size_bytes,
                     "last_modified": last_mod_iso,
-                    "is_synced": True,
+                    "gcs_file_count": 0 if gcs_available else None,
+                    "gcs_size_bytes": 0 if gcs_available else None,
+                    "local_size_bytes": total_size_bytes,
+                    "sync_state": "local_only" if gcs_available else "cloud_unavailable",
+                    "is_synced": False,
                     "source": "local",
                     "gcs_available": gcs_available,
                     "domain": "industrial" if is_ind else "bioacoustic",
@@ -182,23 +177,31 @@ class IngestionService:
 
         return local_datasets
 
-    def list_datasets(self) -> List[Dict[str, Any]]:
+    def list_datasets(self, dataset_names: Optional[set[str]] = None) -> List[Dict[str, Any]]:
         """
         Lista los datasets almacenados en GCS organizados bajo la jerarquía:
         datasets/{dataset_name}/{class_label}/{audio_file.wav}
         Reporta clases/categorías contenidas, conteo de archivos, tamaño y estado de sincronización local.
         Si GCS no está disponible o falla la conexión, degrada grácilmente a los datasets locales (offline-first).
         """
+        if dataset_names is not None:
+            self.validate_dataset_names(list(dataset_names))
+            if not dataset_names:
+                return []
         try:
             client = self._get_client()
-            blobs = list(client.list_blobs(self.bucket_name, prefix="datasets/"))
+            prefixes = ([f"datasets/{name}/" for name in sorted(dataset_names)]
+                        if dataset_names is not None else ["datasets/"])
+            blobs = [blob for prefix in prefixes for blob in client.list_blobs(self.bucket_name, prefix=prefix)]
         except Exception:
-            return self.list_local_datasets(gcs_available=False)
+            return self.list_local_datasets(gcs_available=False, dataset_names=dataset_names)
 
         # Agrupar por dataset_name
         datasets_map: Dict[str, Dict[str, Any]] = {}
 
         for blob in blobs:
+            if Path(blob.name).suffix.lower() not in {".wav", ".mp3", ".flac", ".ogg"}:
+                continue
             parts = blob.name.split("/")
             # Jerarquía recomendada: datasets/{dataset}/{class}/{filename} (len >= 4)
             # Compatibilidad legado: datasets/{dataset}/{filename} (len == 3)
@@ -209,6 +212,8 @@ class IngestionService:
                 ds_name = parts[1]
                 class_name = "General"
             else:
+                continue
+            if dataset_names is not None and ds_name not in dataset_names:
                 continue
 
             if ds_name not in datasets_map:
@@ -245,19 +250,19 @@ class IngestionService:
                 if slug_dir.is_dir():
                     local_ds_dir = slug_dir
 
-            local_file_count = 0
+            local_files = []
             if local_ds_dir.is_dir():
                 # Conteo recursivo de audios en todas las subclases locales
-                local_file_count = len([
+                local_files = [
                     f for f in local_ds_dir.rglob("*")
                     if f.is_file() and f.suffix.lower() in (".wav", ".mp3", ".flac", ".ogg")
-                ])
+                ]
             else:
                 # Si el dataset es AvesChilenas y las especies están directamente en data/raw/
                 for c in classes:
                     c_dir = self.local_base_dir / c.lower().replace(" ", "_")
                     if c_dir.is_dir():
-                        local_file_count += len([
+                        local_files.extend([
                             f for f in c_dir.iterdir()
                             if f.is_file() and f.suffix.lower() in (".wav", ".mp3", ".flac", ".ogg")
                         ])
@@ -265,15 +270,22 @@ class IngestionService:
             is_ind = any(k in ds_name.lower() for k in ["engine", "motor", "maquinaria", "industrial"])
             data["domain"] = "industrial" if is_ind else "bioacoustic"
             data["domain_label"] = "Acústica Industrial" if is_ind else "Bioacústica Silvestre"
-            is_synced = (local_file_count >= data["file_count"] and data["file_count"] > 0)
+            local_file_count = len(local_files)
+            try:
+                data["local_size_bytes"] = sum(path.stat().st_size for path in local_files)
+            except OSError:
+                data["local_size_bytes"] = None
+            data["gcs_file_count"] = data["file_count"]
+            data["gcs_size_bytes"] = data["total_size_bytes"]
+            data["sync_state"] = "comparison_pending" if local_file_count else "cloud_only"
             data["local_file_count"] = local_file_count
-            data["is_synced"] = is_synced
+            data["is_synced"] = None if local_file_count else False
             data["source"] = "gcs"
             data["gcs_available"] = True
             result.append(data)
 
         # Si GCS está conectado, fusionar los datasets de GCS con los locales
-        local_datasets = self.list_local_datasets(gcs_available=True)
+        local_datasets = self.list_local_datasets(gcs_available=True, dataset_names=dataset_names)
         gcs_names = {d["name"] for d in result}
         for loc_ds in local_datasets:
             if loc_ds["name"] not in gcs_names:
@@ -371,7 +383,7 @@ class IngestionService:
             rows = db.query(Audio).join(ConjuntoDatos).filter(ConjuntoDatos.nombre == dataset_name).all()
             by_route = {row.ruta_gcp: row for row in rows}
             for item in files:
-                row = by_route.get(f"gs://{self.bucket_name}/{item['path']}")
+                row = by_route.get(f"gs://{self.bucket_name}/{item['path']}") or by_route.get(item['path'])
                 if row is not None:
                     item["recorded_metadata"] = {
                         "sample_rate_hz": row.frecuencia_muestreo,
@@ -387,6 +399,13 @@ class IngestionService:
         """Observe container metadata without decoding/resampling the recording."""
         try:
             info = sf.info(io.BytesIO(source) if isinstance(source, bytes) else str(source))
+            if info.format in {"MP3", "MPEG"}:
+                import miniaudio
+
+                # Scan MPEG frames instead of trusting a bitrate-based estimate.
+                info = (miniaudio.mp3_get_info(source) if isinstance(source, bytes)
+                        else miniaudio.mp3_get_file_info(str(source)))
+                return int(info.sample_rate), info.num_frames / info.sample_rate
             if info.samplerate > 0 and info.frames >= 0:
                 return int(info.samplerate), info.frames / info.samplerate
         except Exception:
@@ -394,7 +413,51 @@ class IngestionService:
         return None, None
 
     @staticmethod
-    def _validate_audio_upload(filename: str, content: bytes) -> None:
+    def _validate_mp3_frames(content: bytes) -> None:
+        """Check Layer III frame boundaries independently of estimated PCM length."""
+        offset = 0
+        end = len(content)
+        if end >= 128 and content[end - 128:end - 125] == b"TAG":
+            end -= 128
+        if end >= 32 and content[end - 32:end - 24] == b"APETAGEX":
+            footer = content[end - 32:end]
+            size = int.from_bytes(footer[12:16], "little")
+            if footer[8:12] != (2000).to_bytes(4, "little") or not 32 <= size <= end:
+                raise ValueError("Invalid APE tag size")
+            end -= size
+            if int.from_bytes(footer[20:24], "little") & (1 << 31):
+                if (end < 32 or content[end - 32:end - 24] != b"APETAGEX"
+                        or content[end - 24:end - 12] != footer[8:20]):
+                    raise ValueError("Incomplete APE header")
+                end -= 32
+        if content.startswith(b"ID3"):
+            if len(content) < 10 or content[3] not in (2, 3, 4) or any(b & 128 for b in content[6:10]):
+                raise ValueError("Invalid ID3 header")
+            size = sum(value << (7 * (3 - index)) for index, value in enumerate(content[6:10]))
+            offset = 10 + size + (10 if content[3] == 4 and content[5] & 16 else 0)
+        count = 0
+        while offset < end:
+            if offset + 4 > end:
+                raise ValueError("Incomplete MPEG header")
+            header = int.from_bytes(content[offset:offset + 4], "big")
+            version, layer = (header >> 19) & 3, (header >> 17) & 3
+            bitrate_index, rate_index = (header >> 12) & 15, (header >> 10) & 3
+            if (header >> 21 != 2047 or version == 1 or layer != 1
+                    or bitrate_index in (0, 15) or rate_index == 3):
+                raise ValueError("Invalid MPEG Layer III header")
+            rate = (44100, 48000, 32000)[rate_index] // {3: 1, 2: 2, 0: 4}[version]
+            bitrates = ((0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320)
+                        if version == 3 else (0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160))
+            size = (144000 if version == 3 else 72000) * bitrates[bitrate_index] // rate
+            offset += size + ((header >> 9) & 1)
+            if offset > end:
+                raise ValueError("Incomplete MPEG frame")
+            count += 1
+        if not count:
+            raise ValueError("Missing MPEG frames")
+
+    @staticmethod
+    def _validate_audio_upload(filename: str, content: bytes) -> Tuple[int, float]:
         formats = {".wav": {"WAV", "WAVEX", "RF64"}, ".mp3": {"MP3", "MPEG"},
                    ".flac": {"FLAC"}, ".ogg": {"OGG"}}
         supported = formats.get(Path(filename).suffix.lower(), set())
@@ -403,12 +466,32 @@ class IngestionService:
                 if (audio.format not in supported or audio.frames <= 0
                         or audio.samplerate <= 0 or audio.channels <= 0):
                     raise ValueError("Invalid audio header")
+                if audio.format in {"MP3", "MPEG"}:
+                    import miniaudio
+
+                    IngestionService._validate_mp3_frames(content)
+                    # libsndfile can also stop early when its MPEG estimate is
+                    # too small. Decode native-rate blocks independently of it.
+                    info = miniaudio.mp3_get_info(content)
+                    stream = miniaudio.stream_memory(
+                        content, output_format=miniaudio.SampleFormat.FLOAT32,
+                        nchannels=info.nchannels, sample_rate=info.sample_rate,
+                        frames_to_read=max(1, (1024 * 1024) // (4 * info.nchannels)),
+                    )
+                    try:
+                        decoded_frames = sum(len(block) // info.nchannels for block in stream)
+                    finally:
+                        stream.close()
+                    if decoded_frames <= 0 or decoded_frames != info.num_frames:
+                        raise ValueError("Incomplete decoded MPEG audio")
+                    return info.sample_rate, decoded_frames / info.sample_rate
                 block_frames = max(1, (1024 * 1024) // (4 * audio.channels))
                 decoded_frames = 0
                 while len(block := audio.read(block_frames, dtype="float32", always_2d=True)):
                     decoded_frames += len(block)
-                if decoded_frames != audio.frames:
+                if decoded_frames <= 0 or decoded_frames != audio.frames:
                     raise ValueError("Incomplete decoded audio")
+                return int(audio.samplerate), decoded_frames / audio.samplerate
         except Exception:
             raise IngestionAudioError("Invalid audio content") from None
 
@@ -550,6 +633,14 @@ class IngestionService:
         prefix = f"datasets/{dataset_name}/"
         blobs = list(client.list_blobs(self.bucket_name, prefix=prefix))
 
+        candidates = [blob for blob in blobs if not blob.name.endswith("/")]
+        if not candidates or (
+            not any(Path(blob.name).suffix.lower() in {".wav", ".mp3", ".flac", ".ogg"} for blob in candidates)
+            and all(blob.name.startswith(prefix) and all(self._valid_path_component(part) for part in blob.name.split("/"))
+                    for blob in candidates)
+        ):
+            raise IngestionDatasetUnavailable("No downloadable cloud audio")
+
         target_base_dir = self.local_base_dir / dataset_name
         if not self._filesystem_path(target_base_dir).is_dir():
             slug_dir = self.local_base_dir / dataset_name.lower().replace(" ", "_")
@@ -659,7 +750,7 @@ class IngestionService:
         # Preprocesamiento tensorial opcional (RF_03)
         preprocessed_count = 0
         prep_info = None
-        if preprocess:
+        if preprocess and downloaded + skipped > 0:
             prep_info = self.preprocess_dataset_to_tensors(dataset_name)
             preprocessed_count = prep_info.get("processed", 0)
 
@@ -760,6 +851,7 @@ class IngestionService:
         dataset_name: str,
         class_label: str = "General",
         db: Optional[Any] = None,
+        actor_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Sube una lista de archivos binarios al bucket de GCS bajo la jerarquía:
@@ -779,12 +871,12 @@ class IngestionService:
             total_bytes += len(content)
             if len(content) > file_limit or total_bytes > batch_limit:
                 raise IngestionPayloadTooLarge("Upload exceeds limits")
-        for filename, content in files:
-            self._validate_audio_upload(filename, content)
+        metadata = [self._validate_audio_upload(filename, content) for filename, content in files]
         client = self._get_client()
         bucket = client.bucket(self.bucket_name)
 
         uploaded = 0
+        skipped = 0
         uploaded_names = []
         accepted_files = []
         errors = []
@@ -793,29 +885,51 @@ class IngestionService:
         safe_ds = dataset_name
         safe_class = class_label
 
-        for filename, content in files:
+        for (filename, content), observed_metadata in zip(files, metadata):
             safe_file = filename
             blob_name = f"datasets/{safe_ds}/{safe_class}/{safe_file}"
             try:
                 blob = bucket.blob(blob_name)
                 content_type = "audio/wav" if safe_file.lower().endswith(".wav") else "application/octet-stream"
-                blob.upload_from_string(content, content_type=content_type)
+                blob.upload_from_string(content, content_type=content_type, if_generation_match=0)
+            except PreconditionFailed:
+                identical = False
+                try:
+                    blob.reload()
+                    expected = getattr(blob, "md5_hash", None)
+                    if isinstance(expected, str) and expected:
+                        observed = hashlib.md5(content, usedforsecurity=False).digest()
+                        identical = base64.b64encode(observed).decode() == expected
+                    else:
+                        expected = getattr(blob, "crc32c", None)
+                        if isinstance(expected, str) and expected:
+                            identical = base64.b64encode(google_crc32c.Checksum(content).digest()).decode() == expected
+                except Exception:
+                    pass
+                if identical:
+                    skipped += 1
+                    uploaded_names.append(safe_file)
+                    accepted_files.append((filename, content, observed_metadata))
+                    continue
+                errors.append({"filename": filename, "code": "already_exists",
+                               "error": "Ya existe un audio con ese nombre y clase; no se ha reemplazado."})
+                continue
             except Exception:
                 errors.append({"filename": filename, "error": "No se pudo subir el archivo."})
                 continue
             uploaded += 1
             uploaded_names.append(safe_file)
-            accepted_files.append((filename, content))
+            accepted_files.append((filename, content, observed_metadata))
 
         # Persistencia en PostgreSQL
         db_persisted = False
         db_error = None
-        if db is not None:
+        if db is not None and accepted_files:
             try:
                 from app.models.dataset import ConjuntoDatos, Audio
 
                 gcp_path = f"gs://{self.bucket_name}/datasets/{safe_ds}/"
-                ds = db.query(ConjuntoDatos).filter_by(nombre=safe_ds).first()
+                ds = db.query(ConjuntoDatos).filter_by(nombre=safe_ds).with_for_update().first()
                 upload_status = "subida_parcial" if errors else "subido"
 
                 if ds is None:
@@ -823,6 +937,7 @@ class IngestionService:
                         nombre=safe_ds,
                         ruta_gcp=gcp_path,
                         estado=upload_status,
+                        id_usuario_carga=actor_id,
                         tamano_total_bytes=0,
                         cantidad_audios=0,
                     )
@@ -832,9 +947,8 @@ class IngestionService:
                     ds.estado = upload_status
                     db.flush()
 
-                for filename, content in accepted_files:
+                for filename, content, (sample_rate, duration) in accepted_files:
                     safe_file = filename
-                    sample_rate, duration = self._read_audio_metadata(content)
                     object_route = f"{gcp_path}{safe_class}/{safe_file}"
                     audio_obj = (
                         db.query(Audio)
@@ -856,6 +970,7 @@ class IngestionService:
                         audio_obj.tamano_bytes = len(content)
                         audio_obj.frecuencia_muestreo = sample_rate
                         audio_obj.duracion_segundos = duration
+                    audio_obj.hash_archivo = hashlib.sha256(content).hexdigest()
 
                 from sqlalchemy import func
                 db.flush()
@@ -864,6 +979,10 @@ class IngestionService:
                 ).filter(Audio.id_conjunto_datos == ds.id_conjunto_datos).one()
                 ds.cantidad_audios = count
                 ds.tamano_total_bytes = size
+                if actor_id is not None:
+                    from app.services.security_audit import record_event
+                    record_event(db, "dataset.audio_uploaded", "success", actor_id=actor_id,
+                                 dataset_id=ds.id_conjunto_datos)
                 db.commit()
                 db_persisted = True
             except Exception:
@@ -872,9 +991,10 @@ class IngestionService:
 
         return {
             "dataset": safe_ds,
-            "status": ("partial" if uploaded else "failed") if (errors or db_error) else "completed",
+            "status": ("partial" if uploaded + skipped else "failed") if (errors or db_error) else "completed",
             "class_label": safe_class,
             "uploaded": uploaded,
+            "skipped": skipped,
             "failed": len(errors),
             "files": uploaded_names,
             "errors": errors,

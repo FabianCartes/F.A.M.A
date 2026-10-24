@@ -12,7 +12,9 @@ describe("accepted local and cloud acknowledgement contract", () => {
     respond([record]);
     const controller = new AbortController();
     expect(await getFeedbackSync(undefined, controller.signal)).toEqual([record]);
-    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/api/feedback/sync?limit=50'), { method: 'GET', signal: controller.signal });
+    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/api/feedback/sync?limit=50'), {
+      method: 'GET', signal: controller.signal, credentials: 'same-origin', cache: 'no-store', redirect: 'error',
+    });
   });
   it("retains the real approval milestones, including replay acknowledgement", async () => {
     respond(approval);

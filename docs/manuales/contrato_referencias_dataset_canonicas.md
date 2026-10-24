@@ -88,6 +88,8 @@ Estas garantías no son los locks/publicaciones atómicas propios del
 
 ## Conversión offline: dry-run por defecto
 
+**Compatibilidad comprobada el 23 de octubre de 2026:** el conversor admite rutas absolutas físicas nativas de Windows y POSIX en sus argumentos. Las referencias `file_path` de las filas siguen siendo POSIX relativas. En Windows rechaza UNC, dispositivos, streams alternativos, nombres reservados, grafías no canónicas y junctions; no se deben pre-resolver aliases antes de invocarlo. La [preparación oficial](preparacion_entorno_oficial.md) describe la previsualización real de 1205 filas sin publicación, con sus límites. Esta corrección no inicia la migración ni modifica bindings de consumidores.
+
 La interfaz pública del [conversor](../../backend/scripts/convert_dataset_index.py) es:
 
 ```python

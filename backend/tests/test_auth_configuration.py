@@ -39,8 +39,9 @@ else:
     assert result.stdout.strip() == "authentication_not_configured"
 
 
-def test_login_without_key_returns_503_and_never_a_session(auth_client, monkeypatch):
+def test_login_without_web_configuration_returns_503_and_never_a_session(auth_client, monkeypatch):
     monkeypatch.setattr(auth, "SECRET_KEY", None)
+    monkeypatch.delenv("FAMA_WEB_ORIGIN")
 
     response = auth_client.post("/api/auth/login", json={
         "email": "fixture@example.test", "password": "FixturePassword2026!",
@@ -49,15 +50,12 @@ def test_login_without_key_returns_503_and_never_a_session(auth_client, monkeypa
     assert response.status_code == 503
     assert set(response.json()) == {"detail"}
     assert "FixturePassword2026!" not in response.text
-    monkeypatch.setattr(auth, "SECRET_KEY", TEST_KEY)
-    token = auth.create_access_token({"sub": "1"})
-    profile = auth_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
-    assert profile.status_code == 200
-    assert profile.json()["ultimo_acceso"] is None
+    assert "set-cookie" not in response.headers
 
 
-def test_profile_without_key_reports_configuration_failure_not_invalid_credentials(auth_client, monkeypatch):
+def test_profile_without_web_configuration_reports_configuration_failure(auth_client, monkeypatch):
     monkeypatch.setattr(auth, "SECRET_KEY", None)
+    monkeypatch.delenv("FAMA_WEB_ORIGIN")
     token = signed_token({"sub": "1", "exp": NOW.timestamp() + 60})
 
     response = auth_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
@@ -82,10 +80,10 @@ def test_configured_login_issues_a_usable_session_without_echoing_secrets(auth_c
     })
 
     assert response.status_code == 200
-    token = response.json()["access_token"]
+    assert "access_token" not in response.json()
     assert "FixturePassword2026!" not in response.text
     assert TEST_KEY not in response.text
-    profile = auth_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+    profile = auth_client.get("/api/auth/me")
     assert profile.status_code == 200
     assert profile.json()["email"] == "fixture@example.test"
 

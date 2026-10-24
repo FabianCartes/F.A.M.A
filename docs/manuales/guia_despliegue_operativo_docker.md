@@ -247,9 +247,9 @@ flowchart TD
 
 F.A.M.A. utiliza PostgreSQL como motor de base de datos relacional para registrar usuarios, datasets indexados, audios individuales, checkpoints entrenados, historial de inferencias y retroalimentación activa (`RF_06`).
 
-### 5.1. Esquema Relacional de 8 Tablas Normalizadas
+### 5.1. Esquema relacional y migraciones explícitas
 
-Al iniciar el contenedor del backend, SQLAlchemy ejecuta automáticamente el mapeo objeto-relacional (`Base.metadata.create_all`) generando de forma idempotente las 8 tablas oficiales:
+Desde el 21 de octubre, el arranque no crea tablas. El operador aplica revisiones explícitas mediante `python -m app.schema upgrade --apply` sobre un destino previamente identificado; ver [preparación de instalación y migraciones](preparacion_instalacion_y_migraciones.md). La revisión actual contiene quince tablas de aplicación, incluidas las de acceso. El diagrama siguiente es conceptual e histórico, no el inventario del esquema migrado:
 
 ```text
 ┌─────────────────────────┐       ┌─────────────────────────┐
@@ -597,7 +597,7 @@ CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://192.168.
 
 #### Corrección vigente: autenticación existente y exclusión de credenciales
 
-Compose transmite al backend `JWT_SECRET_KEY`, `ADMIN_INITIAL_EMAIL`, `ADMIN_INITIAL_PASSWORD`, `ADMIN_INITIAL_NAME` y `ACCESS_TOKEN_EXPIRE_MINUTES`. Los valores de clave/email/password ausentes quedan vacíos: no habilitan una sesión ni un administrador por defecto. Definirlos en el entorno de Compose o su archivo de variables es responsabilidad del operador; `backend/.env` es la configuración local de Python y no se monta automáticamente en el contenedor. No usar las contraseñas ilustrativas ni valores de pruebas como secretos reales.
+Compose transmite al backend claves JWT/cuotas, origen y duraciones de sesión. Los valores ausentes quedan vacíos. `ADMIN_INITIAL_*` se conserva para la operación explícita de compatibilidad; el arranque ya no crea administradores. El operador define el entorno de Compose; `backend/.env` es la configuración local de Python y no se monta automáticamente. No usar las contraseñas ilustrativas ni valores de pruebas como secretos reales. El montaje de credenciales vigente usa `FAMA_CREDENTIALS_DIR` hacia `/run/fama/credentials`, sin nombre personal fijo; las secciones anteriores con `/app/credentials` son ejemplos de una configuración propuesta, no el Compose actual. La configuración de proxy, ADC y Cloud SQL se completa en la etapa 5 del [plan vigente](plan_instalacion_gcp_y_asistente.md).
 
 También transmite `FAMA_UPLOAD_MAX_FILE_BYTES` (default `67108864`, 64 MiB) y `FAMA_UPLOAD_MAX_BATCH_BYTES` (default `268435456`, 256 MiB). Deben ser enteros positivos, con límite individual menor o igual al agregado; valores inválidos producen 503 sanitizado en subida. Pueden definirse en el entorno/archivo de variables de Compose o en el entorno local del backend. Son límites de bytes de contenidos de archivo: no incluyen framing/campos multipart ni garantizan RAM total. La recepción/spooling previa del parser, límites de proxy/ASGI, CPU de decodificación y concurrencia necesitan validación separada; no acreditan el RNF de datasets de 50 GB. El ajuste operativo real/reinicio exige autorización y no se ejecutó en estas pruebas. Véase [ADR 0030](../adr/0030-cargas-acusticas-validadas-y-acotadas.md).
 
@@ -856,3 +856,17 @@ git pull origin main
 La reconstrucción aprovecha la caché de Docker. Reserve `docker compose build --no-cache` para diagnósticos que realmente requieran reconstruir todas las capas; no es parte del arranque diario.
 
 El volumen de PostgreSQL y los checkpoints locales se mantendrán intactos tras la actualización.
+
+### 10.4. Variante cloud con raíz de archivos por entorno — 23 de octubre de 2026
+
+`docker-compose.cloud.yml` usa una carpeta host obligatoria `FAMA_RUNTIME_DIR`, montada en `/var/lib/fama`; no usa las carpetas de datos/pesos del repositorio como respaldo implícito. El perfil y la raíz deben prepararse dentro del entorno del contenedor mediante `app.node runtime` antes de su arranque funcional. Un perfil Windows con rutas nativas no se convierte automáticamente en perfil Linux. El `compose.env` anterior no fue reescrito para inventar una carpeta host.
+
+La comprobación de este bloque consistió en dos pruebas de `docker compose config`, sin iniciar contenedores. La operación real verificada utiliza el [lanzador nativo y almacenamiento persistente](directorios_persistentes_por_entorno.md); no acredita despliegue institucional Docker, HTTPS ni restauración SQL. Los ejemplos de las secciones anteriores corresponden al stack local histórico y no sustituyen el procedimiento cloud. El siguiente paso es una copia/restauración PostgreSQL en un destino separado y la preparación de recuperación administrativa.
+
+### 10.5. Recuperación SQL comprobada en destino separado — 23 de octubre de 2026
+
+El bloque posterior ya exportó `fama_pruebas` y recuperó sus 17 tablas/nueve secuencias en un PostgreSQL 16 local exclusivo. La [CLI y guía de respaldo/restauración](respaldo_y_restauracion_postgresql.md) documentan carpeta privada, instantánea, destino vacío, comparación y permisos. Para la variante cloud actual, seguir ese procedimiento; los comandos SQL de 10.1 son ejemplos históricos del stack local y no son el procedimiento de recuperación ensayado. La copia original, su perfil y sus archivos quedaron conservados. Siguen recuperación del operador y políticas de copias/retención/destino independiente, junto con el corte oficial; este ensayo no desplegó el stack cloud Docker ni probó PITR administrado.
+
+### 10.6. Recuperación local del operador — 23 de octubre de 2026
+
+El bloque siguiente incorpora la [CLI de emergencia para administradores existentes](recuperacion_emergencia_administrador.md), comprobada en PostgreSQL local por CLI y HTTP. El perfil vigente solo se inspeccionó; sus contraseñas no cambiaron. La operación utiliza el perfil privado explícito del responsable del backend; no es un endpoint web ni una reapertura del asistente. El ensayo no acredita la distribución institucional Docker ni autoriza a compartir credenciales SQL con investigadores. Siguen preparación del entorno/catálogo oficiales, definición de equipo/acceso y políticas de copia del destino.

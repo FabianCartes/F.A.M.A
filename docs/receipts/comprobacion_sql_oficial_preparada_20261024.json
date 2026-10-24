@@ -1,0 +1,161 @@
+{
+  "version": 1,
+  "date": "2026-10-24",
+  "timezone": "America/Santiago",
+  "checked_at": "2026-10-24T03:59:41.494537+00:00",
+  "branch": "fix/afinamiento-integral",
+  "status": "operator_password_assignment_confirmed_local_read_only_check_prepared_real_authentication_pending",
+  "operator_confirmation": {
+    "both_official_SQL_passwords_assigned": true,
+    "reply": "listo",
+    "secret_values_received": false
+  },
+  "target": {
+    "project": "proyectotesis-fama",
+    "instance": "fama-postgres-pruebas",
+    "database": "fama_oficial",
+    "users": [
+      "fama_oficial_migrador",
+      "fama_oficial_app"
+    ]
+  },
+  "proxy_observation": {
+    "PID": 22380,
+    "executable_matches_record": true,
+    "expected_connection_name_in_arguments": true,
+    "owns_loopback_port_5433": true,
+    "restarted": false,
+    "official_profile_exists": false,
+    "transport_reused_for_diagnostic_only": true
+  },
+  "implementation": {
+    "public_CLI": "python -m scripts.comprobar_acceso_sql_oficial [--port PORT]",
+    "fixed_host_and_hostaddr": "127.0.0.1",
+    "default_port": 5433,
+    "fixed_database": "fama_oficial",
+    "hidden_password_input_order": [
+      "fama_oficial_migrador",
+      "fama_oficial_app"
+    ],
+    "requires_interactive_terminal": true,
+    "visible_input_fallback_blocked": true,
+    "passwords_in_arguments_env_or_files": false,
+    "secret_values_in_result_or_errors": false,
+    "connect_timeout_seconds": 8,
+    "statement_timeout_ms": 5000,
+    "default_transaction_read_only": true,
+    "dotenv_and_inherited_URL_not_loaded": true,
+    "inherited_PG_variables_removed_in_child_process_only": true,
+    "schema_or_data_mutation": false,
+    "schema_compatibility_or_DML_readiness_claim": false,
+    "SQL_attributes_checked": [
+      "identity",
+      "read_only",
+      "connect",
+      "database_CREATE_and_TEMP_absent",
+      "schema_USAGE",
+      "schema_CREATE_for_migrator_only",
+      "superuser_createrole_createdb_replication_bypassRLS_absent",
+      "role_inheritance_and_memberships_absent"
+    ],
+    "public_table_count_observed_without_reading_rows": true
+  },
+  "TDD": {
+    "seam": "operator_CLI_and_real_disposable_PostgreSQL",
+    "only_hardware_input_substituted": true,
+    "RED_observed": [
+      "module_absent_after_fixing_fixture_import",
+      "excessive_permissions_falsely_accepted",
+      "inherited_libpq_service_interfered_with_fixed_loopback_connection"
+    ]
+  },
+  "validation": {
+    "passed": 22,
+    "failed": 0,
+    "skipped": 0,
+    "files": 2,
+    "new_CLI_cases": 14,
+    "existing_role_cases": 8,
+    "duration_seconds": 17.701,
+    "PostgreSQL_major": 16,
+    "global_suite_claim": false,
+    "real_official_passwords_or_logins_used_by_Codex": false,
+    "frontend_or_browser_tests_run": false,
+    "previous_21_case_cut_superseded_not_additive": true
+  },
+  "laboratories": {
+    "initial_cleanup": {
+      "container": "2437e312ad84e8a1c91a0b09543b3b7cbfba6b113d188f22b0346268ae5a7984",
+      "label_run": "b158bd4e1cb24c1cb8175b52f9e77cb0",
+      "retired": true,
+      "exclusive_anonymous_volumes_removed": [
+        "44ca7aeb7d3471cf7bbd79e7050158c91d96af89626bc3c78f4af1a36f07a644"
+      ],
+      "other_containers_preserved": 4,
+      "other_states_preserved": true,
+      "image_retained": true
+    },
+    "environment_isolation_cleanup": {
+      "container": "3afc512ba9339adf7069d4863ababacf262f2c57aabc5080246f3a0ffcf124cf",
+      "label_run": "66081a95244f4e76a26b94a5c0cfb146",
+      "retired": true,
+      "exclusive_anonymous_volumes_removed": [
+        "b733be1f3a58e798c3901376ab6cddc09d4ab4e8f05d96d0a243a17457dc5162"
+      ],
+      "other_containers_preserved": 4,
+      "other_states_preserved": true,
+      "image_retained": true
+    }
+  },
+  "not_performed": [
+    "real_SQL_login_with_official_passwords",
+    "remote_permissions_or_schema_changes",
+    "GCS_access_or_writes",
+    "official_identity_profile_or_runtime_creation",
+    "application_or_proxy_restart",
+    "historical_data_transfer_or_official_cutover"
+  ],
+  "next_operator_action": {
+    "cwd": "C:/Users/fabia/Desktop/F.A.M.A/backend",
+    "command": ".venv/Scripts/python.exe -m scripts.comprobar_acceso_sql_oficial",
+    "share": "sanitized_final_JSON_only"
+  },
+  "artifacts": [
+    {
+      "path": "backend/scripts/comprobar_acceso_sql_oficial.py",
+      "sha256": "9e37358611b74a6357e02394c70522ff5da446877d887345c21cf222b200ce3f"
+    },
+    {
+      "path": "backend/tests/test_official_sql_access.py",
+      "sha256": "ff240034dcb1eb0d434ff4608388807b10db5bbecd87035a283c48ce3b6fe6cb"
+    },
+    {
+      "path": "docs/manuales/preparacion_entorno_oficial.md",
+      "sha256": "c81973d4b36d9c6599d2ad293842d1c313bc064f5338528c77ee407a6b8afd10"
+    },
+    {
+      "path": "docs/manuales/bitacora_acceso_e_instalacion.md",
+      "sha256": "95505c2843fbfada716a2a5ccdbe992775712835aed988f663dcecf2b61c0d6f"
+    },
+    {
+      "path": "docs/manuales/estado_actual_y_pendientes.md",
+      "sha256": "c829bfc75232ef04c4ba19d200b05d8ca3d013faf08b56137760db525c642307"
+    },
+    {
+      "path": "docs/KANBAN.md",
+      "sha256": "81dd476934d1342a7977e4ee855a1f070266120fa345a06de57106e34794bd50"
+    },
+    {
+      "path": "docs/README.md",
+      "sha256": "515a54742f1b94d9aa47923d2a2e33948cdf389abcd2ca3b2d86468f7a870507"
+    },
+    {
+      "path": "docs/manuales/plan_instalacion_gcp_y_asistente.md",
+      "sha256": "dd2b248cfb0efa71b471b3c989531938e702db0a6f9ea42b497b9df00791b303"
+    },
+    {
+      "path": "docs/manuales/plan_autonomia_investigador_y_catalogo.md",
+      "sha256": "0958a861cf8278525f052e89b41b437e14de68b1eb7324f483f328faaabcd806"
+    }
+  ]
+}

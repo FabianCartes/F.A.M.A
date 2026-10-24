@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, apiFetch as fetch } from "@/lib/api";
 import {
   getPendingFeedback,
   approveFeedback,
@@ -9,12 +9,16 @@ import {
 } from "@/lib/api/feedbackApi";
 import { PendingFeedbackItem } from "@/lib/schemas/feedback";
 import FeedbackSyncPanel from "@/components/feedback/FeedbackSyncPanel";
+import DatasetInventory, { type DatasetItem } from "@/components/ingestion/DatasetInventory";
+import DatasetUpload, { type UploadLimits } from "@/components/ingestion/DatasetUpload";
+import DatasetCatalogue from "@/components/ingestion/DatasetCatalogue";
 
 // ============================================================================
 // INTERFACES DEL MODELO DE DOMINIO DE INGESTA (RF_02 / RF_06 / ADR 0013)
 // ============================================================================
 export interface IngestionViewProps {
   onNavigate?: (view: string) => void;
+  administrator?: boolean;
 }
 
 interface StorageStatus {
@@ -23,22 +27,6 @@ interface StorageStatus {
   total_objects: number;
   total_bytes: number;
   error?: string | null;
-}
-
-interface DatasetItem {
-  id: string;
-  name: string;
-  classes?: string[];
-  class_count?: number;
-  file_count: number;
-  total_size_bytes: number;
-  last_modified: string | null;
-  local_file_count: number;
-  is_synced: boolean;
-  domain?: "bioacoustic" | "industrial";
-  domain_label?: string;
-  source?: "gcs" | "local";
-  gcs_available?: boolean;
 }
 
 interface DatasetFile {
@@ -84,7 +72,7 @@ function uploadDateLabel(value?: string | null): string {
   })}`;
 }
 
-export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
+export default function IngestionView({ onNavigate, administrator = true }: IngestionViewProps = {}) {
   // Estado de almacenamiento GCS
   const [storageStatus, setStorageStatus] = useState<StorageStatus | null>(null);
   const [isLoadingStatus, setIsLoadingStatus] = useState<boolean>(true);
@@ -92,11 +80,13 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
   // Lista de datasets en GCS
   const [datasets, setDatasets] = useState<DatasetItem[]>([]);
   const [isLoadingDatasets, setIsLoadingDatasets] = useState<boolean>(true);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [canCreateDataset, setCanCreateDataset] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [showCatalogue, setShowCatalogue] = useState(false);
+  const [uploadLimits, setUploadLimits] = useState<UploadLimits | null | undefined>(undefined);
 
   // Sincronización masiva (RF_02 GCS -> Local) y Preprocesamiento Tensorial (RF_03)
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
-  const [autoPreprocess, setAutoPreprocess] = useState<boolean>(true);
   const [syncProgress, setSyncProgress] = useState<{
     downloaded: number;
     skipped: number;
@@ -159,6 +149,7 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
 
   // Cargar estado de almacenamiento y datasets
   const fetchStatus = useCallback(async () => {
+    if (!administrator) return;
     setIsLoadingStatus(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/ingestion/status`);
@@ -189,7 +180,7 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
     } finally {
       setIsLoadingStatus(false);
     }
-  }, [addLog]);
+  }, [addLog, administrator]);
 
   const fetchDatasets = useCallback(async () => {
     setIsLoadingDatasets(true);
@@ -198,6 +189,8 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
       if (res.ok) {
         const data = await res.json();
         setDatasets(data.datasets || []);
+        setCanCreateDataset(data.can_create_dataset === true);
+        setUploadLimits(data.upload_limits);
         addLog("INFO", `Se listaron ${data.datasets?.length || 0} dataset(s) disponibles.`);
       } else {
         throw new Error(`HTTP ${res.status}`);
@@ -253,13 +246,13 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
     async function initializeIngestion() {
       try {
         const [statusResult, datasetsResult] = await Promise.allSettled([
-          fetch(`${API_BASE_URL}/api/ingestion/status`),
+          administrator ? fetch(`${API_BASE_URL}/api/ingestion/status`) : Promise.resolve(null),
           fetch(`${API_BASE_URL}/api/ingestion/datasets`),
         ]);
 
         if (isCancelled) return;
 
-        if (statusResult.status === "fulfilled" && statusResult.value.ok) {
+        if (statusResult.status === "fulfilled" && statusResult.value?.ok) {
           const data: StorageStatus = await statusResult.value.json();
           setStorageStatus(data);
           if (data.connected) {
@@ -270,13 +263,13 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
           } else {
             addLog("WARN", `Data Lake operando en modo local (GCS desconectado): ${data.error || "Sin conexión"}`);
           }
-        } else if (
+        } else if (administrator && (
           statusResult.status === "rejected" ||
-          (statusResult.status === "fulfilled" && !statusResult.value.ok)
-        ) {
+          (statusResult.status === "fulfilled" && !statusResult.value?.ok)
+        )) {
           setStorageStatus({
             connected: false,
-            bucket: "fama-audio-records-2026",
+            bucket: "Sin confirmar",
             total_objects: 0,
             total_bytes: 0,
             error: "No fue posible conectar con el servicio de almacenamiento GCS",
@@ -287,6 +280,8 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
         if (datasetsResult.status === "fulfilled" && datasetsResult.value.ok) {
           const dsData = await datasetsResult.value.json();
           setDatasets(dsData.datasets || []);
+          setCanCreateDataset(dsData.can_create_dataset === true);
+          setUploadLimits(dsData.upload_limits);
           addLog("INFO", `Se listaron ${dsData.datasets?.length || 0} dataset(s) disponibles.`);
         } else if (datasetsResult.status === "rejected") {
           addLog("WARN", "Error de red al consultar datasets.");
@@ -310,32 +305,15 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
     return () => {
       isCancelled = true;
     };
-  }, [addLog]);
-
-  // Manejo de Selección de Datasets
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedIds.length === datasets.length) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds(datasets.map((d) => d.id));
-    }
-  };
+  }, [addLog, administrator]);
 
   // Sincronización Masiva Bidireccional (RF_02) y Preprocesamiento Tensorial (RF_03)
-  const handleSync = async () => {
+  const handleSync = async (selectedIds: string[]) => {
     if (selectedIds.length === 0 || isSyncing) return;
     setIsSyncing(true);
     addLog(
       "INFO",
-      `Iniciando sincronización masiva de ${selectedIds.length} dataset(s) [GCS → Local]${
-        autoPreprocess ? " con preprocesamiento tensorial (Librosa)" : ""
-      }...`
+      `Iniciando descarga de ${selectedIds.length} dataset(s) desde GCS...`
     );
 
     let totalDownload = 0;
@@ -349,7 +327,7 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           datasets: selectedIds,
-          preprocess: autoPreprocess,
+          preprocess: false,
         }),
       });
 
@@ -380,7 +358,7 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
           "INFO",
           `Dataset '${item.dataset}': ${item.downloaded} descargados nuevos, ${item.skipped} omitidos (ya actualizados localmente).`
         );
-        if (autoPreprocess && item.preprocessed > 0) {
+        if (item.preprocessed > 0) {
           addLog(
             "SUCCESS",
             `Dataset '${item.dataset}': ${item.preprocessed} espectrograma(s) Mel generados en backend/data/processed/.`
@@ -417,8 +395,30 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
       addLog("ERROR", `Fallo en el proceso de sincronización: ${errMsg}`);
     } finally {
       setIsSyncing(false);
-      setSelectedIds([]);
     }
+  };
+
+  const handlePreprocess = async (names: string[]) => {
+    if (isSyncing || names.length === 0) return;
+    setIsSyncing(true);
+    addLog("INFO", "Preparando los audios locales seleccionados…");
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/ingestion/preprocess`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ datasets: names }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(typeof result.detail === "string" ? result.detail : "No se pudo confirmar el preprocesamiento.");
+      if (Number.isInteger(result.total_processed) && result.total_processed >= 0) {
+        setSyncProgress(previous => ({ ...previous, preprocessed: result.total_processed }));
+      }
+      const complete = result.status === "completed" && result.total_failed === 0;
+      addLog(complete ? "SUCCESS" : "WARN", complete
+        ? `Preprocesamiento completado: ${result.total_processed} audios preparados.`
+        : `Preprocesamiento ${result.status === "failed" ? "fallido" : "parcial"}: ${result.total_processed ?? 0} preparados, ${result.total_failed ?? 0} errores.`);
+    } catch (reason) {
+      addLog("ERROR", reason instanceof Error ? reason.message : "No se pudo confirmar el preprocesamiento.");
+    } finally { setIsSyncing(false); }
   };
 
   // Acciones de Curación Human-in-the-Loop (RF_06 / ADR 0013)
@@ -434,7 +434,7 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
       const res = await approveFeedback(item.id_retroalimentacion);
       addLog(
         "SUCCESS",
-        `Audio incorporado al dataset local '${datasetName}' (Clase: ${res.clase}). ${res.sync_status === "synced" ? "Copia cloud confirmada." : "Copia cloud pendiente; la sincronización automática no bloquea la preparación de entrenamiento."}`
+        `Audio incorporado al dataset local '${datasetName}' (Clase: ${res.clase}). ${res.db_persisted === true ? "Registro SQL confirmado." : "Registro SQL sin confirmar."} ${res.sync_status === "synced" ? "Copia cloud confirmada." : "Copia cloud pendiente; la sincronización automática no bloquea la preparación de entrenamiento."}`
       );
       setPendingFeedbacks(previous => previous.filter(pending => pending.id_retroalimentacion !== item.id_retroalimentacion));
       setSyncRefreshKey(previous => previous + 1);
@@ -531,7 +531,7 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
             </svg>
           </button>
 
-          {isLoadingStatus ? (
+          {!administrator ? <span className="px-3 py-1 rounded-full border border-[#373a46] text-gray-300 text-xs">Acceso a datasets asignados</span> : isLoadingStatus ? (
             <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#16171b] border border-[#23252e] text-gray-400 text-xs">
               <span className="w-2 h-2 rounded-full bg-gray-500 animate-pulse" />
               Verificando GCS...
@@ -584,257 +584,13 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
       )}
 
       {/* ==================================================================== */}
-      {/* 2. TABLA DE DATASETS REALES EN GCS (RF_02) */}
-      {/* ==================================================================== */}
-      <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-200 font-semibold block">
-              Datasets Disponibles en GCS (Data Lake)
-            </span>
-            <span className="text-[10px] px-2 py-0.5 rounded bg-[#1c1e24] text-gray-400 font-mono">
-              {datasets.length} colecciones
-            </span>
-          </div>
-
-          <button
-            type="button"
-            onClick={fetchDatasets}
-            disabled={isLoadingDatasets}
-            className="text-[11px] text-gray-400 hover:text-gray-200 transition-colors flex items-center gap-1"
-          >
-            <svg className={`w-3 h-3 ${isLoadingDatasets ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            <span>Actualizar</span>
-          </button>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="border-b border-[#23252e] text-gray-400">
-                <th className="pb-3 w-8">
-                  <input
-                    type="checkbox"
-                    checked={datasets.length > 0 && selectedIds.length === datasets.length}
-                    onChange={toggleSelectAll}
-                    disabled={datasets.length === 0}
-                    className="rounded bg-[#121316] border-[#2d303b] text-emerald-600 focus:ring-0 cursor-pointer"
-                  />
-                </th>
-                <th className="pb-3 font-medium">Dataset (Colección)</th>
-                <th className="pb-3 font-medium">Clases / Categorías</th>
-                <th className="pb-3 font-medium">Archivos en Nube</th>
-                <th className="pb-3 font-medium">Archivos Locales</th>
-                <th className="pb-3 font-medium">Tamaño GCS</th>
-                <th className="pb-3 font-medium">Última Modificación</th>
-                <th className="pb-3 font-medium text-center">Estado</th>
-                <th className="pb-3 font-medium text-right pr-2">Acción</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#23252e]/60">
-              {isLoadingDatasets ? (
-                <tr>
-                  <td colSpan={9} className="py-8 text-center text-gray-400">
-                    <div className="flex items-center justify-center gap-2">
-                      <svg className="w-4 h-4 animate-spin text-emerald-400" viewBox="0 0 24 24" fill="none">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                      </svg>
-                      <span>Consultando datasets en Google Cloud Storage...</span>
-                    </div>
-                  </td>
-                </tr>
-              ) : datasets.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="py-8 text-center">
-                    <div className="max-w-md mx-auto space-y-2">
-                      <div className="w-10 h-10 mx-auto rounded-full bg-[#1c1e24] flex items-center justify-center text-gray-500">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                        </svg>
-                      </div>
-                      <p className="text-gray-300 font-medium">
-                        No hay datasets cargados bajo el prefijo &apos;datasets/&apos;
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        Realiza inferencias y valida grabaciones en el clasificador acústico para incorporar audios curados al dataset.
-                      </p>
-                      {onNavigate && (
-                        <button
-                          type="button"
-                          onClick={() => onNavigate("predict")}
-                          className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-400 bg-emerald-950/40 border border-emerald-800/60 hover:bg-emerald-900/50 transition-colors cursor-pointer"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                          </svg>
-                          <span>Ir a Inferencia Acústica</span>
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                datasets.map((d) => (
-                  <tr key={d.id} className="hover:bg-[#1c1e24]/40 transition-colors">
-                    <td className="py-2.5">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.includes(d.id)}
-                        onChange={() => toggleSelect(d.id)}
-                        className="rounded bg-[#121316] border-[#2d303b] text-emerald-600 focus:ring-0 cursor-pointer"
-                      />
-                    </td>
-                    <td className="py-2.5 font-medium text-gray-200">
-                      <div className="flex items-center gap-2">
-                        <svg className="w-3.5 h-3.5 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                        </svg>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold">{d.name}</span>
-                          <span
-                            className={`text-[9px] font-mono px-1.5 py-0.2 rounded border ${
-                              d.domain === "industrial" || d.name === "engine_diagnostics"
-                                ? "bg-amber-950/70 border-amber-800/60 text-amber-300"
-                                : "bg-emerald-950/70 border-emerald-800/60 text-emerald-400"
-                            }`}
-                          >
-                            {d.domain === "industrial" || d.name === "engine_diagnostics"
-                              ? "Industrial"
-                              : "Bioacústica"}
-                          </span>
-                          <span
-                            className={`text-[9px] font-mono px-1.5 py-0.2 rounded border ${
-                              d.source === "local" || d.gcs_available === false
-                                ? "bg-slate-800/80 border-slate-600/60 text-slate-300"
-                                : "bg-sky-950/70 border-sky-800/60 text-sky-400"
-                            }`}
-                          >
-                            {d.source === "local" || d.gcs_available === false ? "Local" : "Cloud GCS"}
-                          </span>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-2.5 text-gray-300">
-                      <div className="flex items-center gap-1 flex-wrap max-w-xs">
-                        {d.classes && d.classes.length > 0 ? (
-                          d.classes.slice(0, 3).map((cls) => (
-                            <span
-                              key={cls}
-                              className="px-1.5 py-0.5 rounded text-[10px] bg-[#222530] text-gray-300 border border-[#2e323e]"
-                            >
-                              {cls}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-gray-500 italic">General</span>
-                        )}
-                        {d.classes && d.classes.length > 3 && (
-                          <span className="text-[10px] text-gray-400">
-                            +{d.classes.length - 3} más
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-2.5 text-gray-300 font-mono">{d.file_count} audios</td>
-                    <td className="py-2.5 text-gray-400 font-mono">
-                      <span className={d.local_file_count >= d.file_count ? "text-emerald-400" : "text-amber-400"}>
-                        {d.local_file_count}
-                      </span>
-                      /{d.file_count}
-                    </td>
-                    <td className="py-2.5 text-gray-400 font-mono">{formatBytes(d.total_size_bytes)}</td>
-                    <td className="py-2.5 text-gray-400 font-mono text-[11px]">
-                      {d.last_modified
-                        ? new Date(d.last_modified).toLocaleDateString("es-CL", {
-                            year: "numeric",
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
-                        : "—"}
-                    </td>
-                    <td className="py-2.5 text-center">
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-medium inline-block ${
-                          d.is_synced
-                            ? "bg-emerald-950/70 text-emerald-400 border border-emerald-800/60"
-                            : "bg-amber-950/70 text-amber-400 border border-amber-800/60"
-                        }`}
-                      >
-                        {d.is_synced ? "Sincronizado" : "Pendiente"}
-                      </span>
-                    </td>
-                    <td className="py-2.5 text-right pr-2">
-                      <button
-                        type="button"
-                        onClick={() => handleInspectDataset(d.name)}
-                        className="text-[11px] text-gray-400 hover:text-white px-2 py-1 rounded bg-[#1c1e24] hover:bg-[#252830] border border-[#2d303b] transition-colors"
-                      >
-                        Ver archivos
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Footer de Tabla con Acción Principal de Sincronización RF_02 y Disparador RF_03 */}
-        <div className="flex flex-col lg:flex-row items-center justify-between gap-3 pt-3 border-t border-[#23252e]/70">
-          <div className="flex items-center gap-3 flex-wrap w-full lg:w-auto justify-between sm:justify-start">
-            <span className="text-xs text-gray-400">
-              {selectedIds.length} dataset(s) seleccionado(s)
-            </span>
-
-            {/* Disparador opcional de preprocesamiento */}
-            <label className="flex items-center gap-2 cursor-pointer select-none bg-[#111215] hover:bg-[#161820] px-3 py-1.5 rounded-lg border border-[#262833] hover:border-emerald-700/60 transition-colors">
-              <input
-                type="checkbox"
-                checked={autoPreprocess}
-                onChange={(e) => setAutoPreprocess(e.target.checked)}
-                className="rounded bg-[#1a1c24] border-[#2e323e] text-emerald-500 focus:ring-0 cursor-pointer w-4 h-4"
-              />
-              <span className="text-xs font-semibold text-gray-200 flex items-center gap-1.5">
-                <svg className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-                </svg>
-                Preprocesar a tensores (Librosa)
-              </span>
-            </label>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleSync}
-            disabled={isSyncing || selectedIds.length === 0}
-            className="w-full lg:w-auto py-2 px-4 rounded-lg text-xs font-semibold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:from-emerald-700 active:to-teal-700 disabled:opacity-40 disabled:cursor-not-allowed border border-emerald-500/30 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/30"
-          >
-            {isSyncing ? (
-              <>
-                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                </svg>
-                <span>
-                  {autoPreprocess ? "Sincronizando y extrayendo tensores..." : "Sincronizando desde GCS..."}
-                </span>
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                </svg>
-                <span>Descargar Dataset al Entorno Local</span>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
+      {/* Inventario observado por origen y acciones independientes. */}
+      <div className="flex justify-end"><button type="button" aria-expanded={showCatalogue} onClick={() => setShowCatalogue(value => !value)} className="px-4 py-2 text-xs text-blue-300 border border-[#373a46] rounded-lg hover:bg-[#23252e]">{showCatalogue ? "Cerrar catálogo" : "Explorar datasets disponibles"}</button></div>
+      {showCatalogue && <DatasetCatalogue />}
+      <DatasetUpload datasets={datasets} canCreate={administrator && canCreateDataset} busy={isSyncing}
+        onUploaded={fetchDatasets} onBusyChange={setIsUploading} limits={uploadLimits} />
+      <DatasetInventory datasets={datasets} loading={isLoadingDatasets} busy={isSyncing || isUploading}
+        onRefresh={fetchDatasets} onDownload={handleSync} onInspect={handleInspectDataset} onPreprocess={handlePreprocess} />
 
       {/* ==================================================================== */}
       {/* 3. BANDEJA DE CURACIÓN E INCORPORACIÓN DE AUDIOS AL DATASET (RF_06 / ADR 0013) */}
@@ -856,7 +612,7 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
                 Revisar audios
               </h2>
               <p className="text-[11px] text-gray-400">
-                Incorporar guarda el audio localmente; puede preparar entrenamiento sin esperar GCS y su copia cloud se sincroniza después. Descartar de la cola no borra físicamente el audio.
+                Puedes revisar e incorporar tus propias correcciones en los datasets asignados. La incorporación guarda el audio localmente y registra sus metadatos en PostgreSQL; la copia a GCS se confirma por separado. Descartar de la cola no borra físicamente el audio.
               </p>
             </div>
           </div>
@@ -909,7 +665,7 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
                 Cola de curación vacía (0 audios pendientes de incorporación)
               </p>
               <p className="text-[11px] text-gray-400 max-w-lg mx-auto">
-                No hay audios enviados a revisión pendientes. Ejecuta una inferencia, confirma o corrige la clase y pulsa «Enviar a revisión».
+                No hay correcciones pendientes de incorporación. Ejecuta una inferencia, confirma o corrige la clase y pulsa «Guardar corrección».
               </p>
             </div>
             <div>

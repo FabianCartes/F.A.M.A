@@ -4,7 +4,12 @@ Módulo profundo que encapsula la persistencia relacional en PostgreSQL (Tabla r
 la curación semi-manual de feedback (aprobación / rechazo), y la sincronización con Google Cloud Storage.
 """
 import csv
-import fcntl
+import sys
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
+    import msvcrt
 import os
 from contextlib import contextmanager
 import io
@@ -23,6 +28,8 @@ from fastapi import HTTPException, status
 
 from app.models.prediction import Prediccion
 from app.models.feedback import Retroalimentacion
+from app.models.dataset import Audio, ConjuntoDatos
+from app.configuration import get_configuration
 from app.services import storage
 from app.services.feedback_sync import FeedbackSyncQueue
 from dataset_references import resolve_reference, reference_from_path
@@ -35,14 +42,26 @@ _BACKEND_ROOT = Path(__file__).resolve().parent.parent.parent
 @contextmanager
 def _filesystem_lock(path: Path):
     """Lock a stable sidecar inode across processes; never lock a replaced file."""
-    descriptor = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    flags = os.O_CREAT | os.O_RDWR
+    if hasattr(os, 'O_NOFOLLOW'): flags |= os.O_NOFOLLOW
+    if hasattr(os, 'O_CLOEXEC'): flags |= os.O_CLOEXEC
+    descriptor = os.open(path, flags, 0o600)
     try:
         # Creation modes are masked by umask; normalize without replacing the inode.
-        os.fchmod(descriptor, 0o600)
-        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        if hasattr(os, 'fchmod'):
+            os.fchmod(descriptor, 0o600)
+        if fcntl:
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+        else:
+            msvcrt.locking(descriptor, msvcrt.LK_LOCK, 1)
         yield
     finally:
         # Closing also releases the lock on errors or process exit.
+        if not fcntl:
+            try:
+                msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
+            except OSError:
+                pass
         os.close(descriptor)
 
 
@@ -50,7 +69,8 @@ class FeedbackService:
     """Módulo profundo para la gestión del ciclo de retroalimentación de inferencias bioacústicas."""
 
     def __init__(self, raw_data_dir: Optional[Path] = None):
-        self.raw_data_dir = raw_data_dir or (_BACKEND_ROOT / "data" / "raw")
+        from training.paths import get_raw_data_dir
+        self.raw_data_dir = Path(raw_data_dir) if raw_data_dir is not None else get_raw_data_dir()
 
     def _intent_path(self, feedback_id: int) -> Path:
         return self.raw_data_dir / f".feedback_{feedback_id}.json"
@@ -125,12 +145,15 @@ class FeedbackService:
             Retroalimentacion.id_prediccion == id_prediccion
         ).first()
 
-    def get_pending_feedback(self, db: Session, limit: int = 50) -> List[Dict[str, Any]]:
+    def get_pending_feedback(self, db: Session, limit: int = 50, access=None) -> List[Dict[str, Any]]:
         """
         Retrieve uncurated feedback records (procesado == False) with original prediction metadata.
         """
+        query = db.query(Retroalimentacion, Prediccion)
+        if access is not None and not access.administrator:
+            query = query.filter(Retroalimentacion.id_prediccion.in_(access.prediction_ids()))
         results = (
-            db.query(Retroalimentacion, Prediccion)
+            query
             .outerjoin(Prediccion, Retroalimentacion.id_prediccion == Prediccion.id_prediccion)
             .filter(Retroalimentacion.procesado == False)
             .order_by(Retroalimentacion.fecha_retroalimentacion.desc())
@@ -175,7 +198,9 @@ class FeedbackService:
 
     @staticmethod
     def _fsync_dir(path: Path):
-        descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+        if not hasattr(os, 'O_DIRECTORY'):
+            return
+        descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY | getattr(os, 'O_CLOEXEC', 0))
         try:
             os.fsync(descriptor)
         finally:
@@ -202,19 +227,29 @@ class FeedbackService:
         staging = path.with_suffix(path.suffix + ".pending")
         self._safe_path(path)
         self._safe_path(staging)
-        descriptor = os.open(staging, os.O_WRONLY | os.O_CREAT | os.O_TRUNC
-                             | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+
+        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+        if hasattr(os, 'O_NOFOLLOW'): flags |= os.O_NOFOLLOW
+        if hasattr(os, 'O_CLOEXEC'): flags |= os.O_CLOEXEC
+
+        descriptor = os.open(staging, flags, 0o600)
         with os.fdopen(descriptor, "wb") as stream:
             # O_CREAT does not change a reused staging inode's permissions.
-            os.fchmod(stream.fileno(), 0o600)
+            if hasattr(os, 'fchmod'):
+                os.fchmod(stream.fileno(), 0o600)
             stream.write(data)
             stream.flush()
-            os.fchmod(stream.fileno(), final_mode)
+            if hasattr(os, 'fchmod'):
+                os.fchmod(stream.fileno(), final_mode)
             os.fsync(stream.fileno())
         if no_replace:
             # Atomic no-clobber publication, unlike replace(check-then-write).
-            os.link(staging, path)
-            staging.unlink()
+            if hasattr(os, "link"):
+                os.link(staging, path)
+                staging.unlink()
+            else:
+                import shutil
+                shutil.move(str(staging), str(path))
         else:
             staging.replace(path)
         self._fsync_dir(path.parent)
@@ -327,7 +362,7 @@ class FeedbackService:
                                                     "frecuencia_muestreo", "duracion_segundos",
                                                     "tamano_bytes", "recordist")):
                 raise ValueError("Conflicto de metadatos para el audio canónico")
-            with metadata.open("rb") as stream:
+            with metadata.open("r+b") as stream:
                 os.fsync(stream.fileno())
             self._fsync_dir(dataset)
             return
@@ -339,7 +374,7 @@ class FeedbackService:
         return output.getvalue().encode("utf-8")
 
     def approve_feedback(self, db: Session, id_retroalimentacion: int,
-                         dataset_name: Optional[str] = None) -> Dict[str, Any]:
+                         dataset_name: Optional[str] = None, actor_id: Optional[int] = None) -> Dict[str, Any]:
         """Verify durable local audio/CSV, then commit processed + sync intent together.
 
         The filesystem intent survives rollback/crash and pins source, destination
@@ -394,7 +429,9 @@ class FeedbackService:
                 self._safe_path(destination)
                 publish_intent = recorded is None or not recorded.get("sha256")
                 if recorded is None:
-                    recorded = {**identity, "storage_class": storage_class, "filename": filename}
+                    recorded = {**identity, "storage_class": storage_class, "filename": filename,
+                                "incorporated_by": actor_id,
+                                "incorporated_at": datetime.now(timezone.utc).isoformat()}
                 elif recorded.get("filename") != filename or recorded.get("storage_class") != storage_class:
                     raise ValueError("Intención legacy o incompatible; requiere recuperación explícita")
                 digest = existing.sha256 if existing else recorded.get("sha256")
@@ -424,7 +461,7 @@ class FeedbackService:
                     if publish_intent:
                         self._publish(intent_path, json.dumps(recorded).encode("utf-8"))
                     # A prior replace may have succeeded before its directory fsync failed.
-                    with intent_path.open("rb") as stream:
+                    with intent_path.open("r+b") as stream:
                         os.fsync(stream.fileno())
                     self._fsync_dir(self.raw_data_dir)
                     self._safe_path(destination)
@@ -436,7 +473,7 @@ class FeedbackService:
                     if not destination.exists():
                         self._publish(destination, audio, no_replace=True)
                     else:
-                        with destination.open("rb") as stream:
+                        with destination.open("r+b") as stream:
                             os.fsync(stream.fileno())
                         self._fsync_dir(destination.parent)
                     # Publish verified audio before referring to it in a NEW CSV row.
@@ -444,12 +481,17 @@ class FeedbackService:
                     if metadata_update is not None:
                         self._publish(dataset / "metadata.csv", metadata_update, final_mode=0o644)
                     sync = queue.enqueue(db, id_retroalimentacion, dataset_name=stored_dataset,
-                                         storage_class=storage_class, sha256=digest)
+                                         storage_class=storage_class, sha256=digest,
+                                         incorporated_by=recorded.get("incorporated_by"),
+                                         incorporated_at=datetime.fromisoformat(recorded["incorporated_at"])
+                                         if recorded.get("incorporated_at") else None)
+                    self._register_incorporated_audio(db, stored_dataset, storage_class, filename,
+                                                      label, audio, digest, actor_id)
                     feedback.procesado = True
                     db.commit()
                 return {"status": "approved", "id_retroalimentacion": id_retroalimentacion,
                         "destination_path": str(destination), "clase": label, "filename": filename,
-                        "local_status": "incorporated", "sync_status": sync.status}
+                        "local_status": "incorporated", "sync_status": sync.status, "db_persisted": True}
         except HTTPException:
             db.rollback()
             raise
@@ -460,6 +502,34 @@ class FeedbackService:
             db.rollback()
             logger.exception("Local feedback incorporation failed")
             raise HTTPException(status_code=503, detail="No se pudo confirmar la incorporación local. Reintente con la misma intención.")
+
+    @staticmethod
+    def _register_incorporated_audio(db, name, storage_class, filename, label, content, digest, actor_id):
+        """Catalogue and counters join the processed/sync transaction; no cloud IO."""
+        bucket = get_configuration().bucket_name
+        prefix = f"gs://{bucket}/datasets/{name}/" if bucket else f"datasets/{name}/"
+        dataset = db.query(ConjuntoDatos).filter_by(nombre=name).with_for_update().first()
+        if dataset is None:
+            dataset = ConjuntoDatos(nombre=name, ruta_gcp=prefix, estado="incorporado_local",
+                                   id_usuario_carga=actor_id)
+            db.add(dataset)
+            db.flush()
+        path = f"{prefix}{storage_class}/{filename}"
+        row = db.query(Audio).filter_by(id_conjunto_datos=dataset.id_conjunto_datos,
+                                       nombre_archivo=filename).first()
+        if row is not None and (row.hash_archivo != digest or row.clase != label):
+            raise ValueError("El catálogo contiene otro audio para esta incorporación")
+        if row is None:
+            with wave.open(io.BytesIO(content), "rb") as wav:
+                row = Audio(id_conjunto_datos=dataset.id_conjunto_datos, nombre_archivo=filename,
+                            ruta_gcp=path, clase=label, hash_archivo=digest, tamano_bytes=len(content),
+                            frecuencia_muestreo=wav.getframerate(),
+                            duracion_segundos=wav.getnframes() / wav.getframerate())
+            db.add(row)
+        db.flush()
+        dataset.cantidad_audios, dataset.tamano_total_bytes = db.query(
+            func.count(Audio.id_audio), func.coalesce(func.sum(Audio.tamano_bytes), 0)
+        ).filter(Audio.id_conjunto_datos == dataset.id_conjunto_datos).one()
 
     def reject_feedback(self, db: Session, id_retroalimentacion: int) -> Dict[str, Any]:
         """
@@ -498,7 +568,7 @@ class FeedbackService:
             "id_retroalimentacion": feedback.id_retroalimentacion,
         }
 
-    def get_feedback_stats(self, db: Session) -> Dict[str, Any]:
+    def get_feedback_stats(self, db: Session, access=None) -> Dict[str, Any]:
         """
         Calcula la telemetría consolidada de retroalimentación de campo:
         - total_validated: número total de predicciones con feedback registrado.
@@ -508,8 +578,9 @@ class FeedbackService:
         - pending_curation_count: retroalimentaciones pendientes de curación humana.
         - corrections_breakdown: especies corregidas más frecuentes.
         """
-        total_validated = db.query(Retroalimentacion).count()
-        pending_curation_count = db.query(Retroalimentacion).filter(
+        query = db.query(Retroalimentacion) if access is None else access.query(Retroalimentacion)
+        total_validated = query.count()
+        pending_curation_count = query.filter(
             Retroalimentacion.procesado == False
         ).count()
 
@@ -523,7 +594,7 @@ class FeedbackService:
                 "corrections_breakdown": [],
             }
 
-        correct_count = db.query(Retroalimentacion).filter(
+        correct_count = query.filter(
             Retroalimentacion.fue_correcta == True
         ).count()
 
@@ -532,7 +603,7 @@ class FeedbackService:
 
         # Conteo agrupado de correcciones por especie
         breakdown_query = (
-            db.query(
+            query.with_entities(
                 Retroalimentacion.etiqueta_corregida,
                 func.count(Retroalimentacion.id_retroalimentacion).label("total"),
             )

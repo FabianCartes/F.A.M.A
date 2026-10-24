@@ -72,6 +72,7 @@ export default function FeedbackSyncPanel({ refreshKey }: { refreshKey: number }
               <tr className="border-b border-[#23252e]">
                 <th className="p-2">Dataset / Clase</th>
                 <th className="p-2">Estado local</th>
+                <th className="p-2">Registro y autoría</th>
                 <th className="p-2">Copia cloud</th>
                 <th className="p-2">Intentos</th>
               </tr>
@@ -81,6 +82,7 @@ export default function FeedbackSyncPanel({ refreshKey }: { refreshKey: number }
                 <tr key={record.id_retroalimentacion} className="border-b border-[#23252e]">
                   <td className="p-2"><p>{record.dataset_name}</p><p>{record.class_label}</p><p className="text-gray-400">Directorio: {record.storage_class}</p></td>
                   <td className="p-2 text-emerald-300">Incorporado localmente</td>
+                  <td className="p-2"><p>{record.db_persisted === true ? "Registrado en PostgreSQL" : "Registro SQL sin confirmar"}</p><p className="text-gray-400 mt-1">Propuesto por {record.proposed_by ? `cuenta #${record.proposed_by}` : "autor sin registrar"} · Incorporado por {record.incorporated_by ? `cuenta #${record.incorporated_by}` : "autor sin registrar"}</p>{record.incorporated_at && <p className="text-gray-500 mt-1">{new Date(record.incorporated_at).toLocaleString()}</p>}</td>
                   <td className="p-2">
                     <p>{record.sync_status === "synced" ? "Copia cloud confirmada" : "Pendiente de copia cloud"}</p>
                     {record.sync_status === "pending" && (

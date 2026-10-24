@@ -1,0 +1,47 @@
+# Variante explícita: docker compose -f docker-compose.yml -f docker-compose.cloud.yml ...
+# Requiere Compose >= 2.24.4 por !override.
+services:
+  db:
+    profiles: [local]
+
+  cloud-sql-proxy:
+    image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.26.2-alpine
+    user: "${HOST_UID:?Defina HOST_UID no root}:${HOST_GID:?Defina HOST_GID}"
+    restart: unless-stopped
+    command:
+      - --address=0.0.0.0
+      - --port=5432
+      - --credentials-file=/run/fama/credentials/application_default_credentials.json
+      - --run-connection-test
+      - --structured-logs
+      - --health-check
+      - --http-address=0.0.0.0
+      - --http-port=9090
+      - ${FAMA_CLOUD_SQL_CONNECTION_NAME:?Defina FAMA_CLOUD_SQL_CONNECTION_NAME}
+    volumes:
+      - ${FAMA_CREDENTIALS_DIR:?Defina FAMA_CREDENTIALS_DIR}:/run/fama/credentials:ro
+    healthcheck:
+      test: [CMD, wget, -q, -O, "-", http://127.0.0.1:9090/readiness]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - fama-network
+
+  backend:
+    depends_on: !override
+      cloud-sql-proxy:
+        condition: service_healthy
+    # El registro elegido contiene las referencias a secretos. No heredar la URL
+    # local ni los valores vacíos de la variante base sobre ese registro.
+    environment: !override
+      FAMA_CONFIG_DIR: /run/fama/installation/docker
+      FAMA_RUNTIME_DIR: /var/lib/fama
+      PYTHON_DOTENV_DISABLED: "1"
+      ENVIRONMENT: production
+      HOME: /home/fama
+    volumes: !override
+      - ${FAMA_RUNTIME_DIR:?Defina una carpeta persistente exclusiva para este entorno}:/var/lib/fama
+      - ${FAMA_CREDENTIALS_DIR:?Defina FAMA_CREDENTIALS_DIR}:/run/fama/credentials:ro
+      - ${FAMA_INSTALLATION_DIR:?Defina FAMA_INSTALLATION_DIR}:/run/fama/installation

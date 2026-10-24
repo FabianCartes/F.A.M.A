@@ -261,7 +261,8 @@ def test_model_info_http_is_passive_and_does_not_claim_a_default_fallback(status
     app = FastAPI()
     app.add_api_route("/api/model-info", main.get_model_info, methods=["GET"])
     app.dependency_overrides[main.get_db] = lambda: db
-    with TestClient(app) as http:
+    from tests.http_security import administrator_http
+    with administrator_http(app), TestClient(app) as http:
         response = http.get("/api/model-info")
 
     assert response.status_code == 200

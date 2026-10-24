@@ -5,6 +5,10 @@
 backend/.env
 backend/.env.*
 !backend/.env.example
+backend/credentials/
+backend/installation/
+runtime/
+*.dump
 
 # Google Cloud / Service Account keys & credentials (CRITICAL: Never commit secrets)
 proyectotesis-fama*.json
@@ -24,6 +28,8 @@ data/**
 backend/data/
 backend/data/**
 *.mp3
+!backend/tests/fixtures/audio/cbr_without_seek_table.mp3
+!backend/tests/fixtures/audio/vbr_without_seek_table.mp3
 *.wav
 !audios_prueba/audio_prueba.wav
 *.flac
@@ -77,6 +83,7 @@ frontend/.next/
 frontend/out/
 node_modules/
 .next/
+.next-*/
 
 # Virtual Environments
 venv/
