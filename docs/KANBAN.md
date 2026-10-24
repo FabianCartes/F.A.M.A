@@ -2,12 +2,12 @@
 kanban-plugin: basic
 ---
 
-## Integración de dev en afinamiento integral — comprobada antes de publicación
+## Integración de dev en afinamiento integral — publicada y verificada
 
 - [x] Conservar nuestros avances en `aa53e09`, integrar `dev` `adecb01` y resolver contratos de sesiones, permisos, evaluación y esquema.
 - [x] Unificar entrenamiento/validación/prueba según decisión del operador; conservar los repartos anteriores como historia y la activación administrativa explícita.
 - [x] Cobertura acumulada: 2781 PASS / 15 SKIP backend Linux, 479 PASS frontend; tipos, lint y compilaciones Webpack/Turbopack aprobados. Los nueve SKIP de plataforma/Compose se verifican por separado en Windows. Seis dependen de audios/pesos privados no montados.
-- [ ] Publicar el commit de integración en `fix/afinamiento-integral` y registrar el SHA remoto verificado.
+- [x] Publicado `e86415b` en `fix/afinamiento-integral`, SHA remoto verificado y `dev` conservada en `adecb01`. Checkout oficial fijado en `aa53e09` sin sustituir sus archivos.
 - [ ] Preparar mantenimiento del nodo oficial para migrar `0003_autonomy` a `0004_integration`; no aplicado en esta integración. ZIP y workers requieren Linux/Docker.
 
 [Procedimiento, evidencia y límites](manuales/integracion_dev_20261024.md).

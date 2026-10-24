@@ -1,6 +1,6 @@
 # Integración de dev en afinamiento integral
 
-Corte: 24 de octubre de 2026. Integración comprobada localmente; publicación preparada en `fix/afinamiento-integral`. El estado de GitHub se registra después de comprobar el push. El nodo oficial conserva su código y esquema anteriores.
+Corte: 24 de octubre de 2026. Integración comprobada y publicada en `fix/afinamiento-integral`, commit [`e86415b`](https://github.com/FabianCartes/F.A.M.A/commit/e86415bc1202db6ccd96052617b6a8f19b378568). Se verificó el SHA remoto y `dev` continúa en `adecb01`. Este cierre documental es posterior al commit de integración. El nodo oficial conserva su código y esquema anteriores.
 
 ## Origen y decisiones
 

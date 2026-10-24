@@ -1,5 +1,5 @@
 {
-  "code": "dev_integration_verified_before_publication",
+  "code": "dev_integration_published",
   "date": "2026-10-24",
   "repository": "https://github.com/FabianCartes/F.A.M.A",
   "target_branch": "fix/afinamiento-integral",
@@ -9,8 +9,15 @@
     "common_ancestor": "49f6bd50e88892a8f49abf9909f88c6ca3676aa3"
   },
   "publication": {
-    "status": "pending_commit_and_push",
-    "remote_dev_modified": false
+    "status": "published_and_remote_verified",
+    "integration_commit": "e86415bc1202db6ccd96052617b6a8f19b378568",
+    "verified_at_utc": "2026-10-24T16:54:27.842244+00:00",
+    "remote_heads": {
+      "refs/heads/dev": "adecb01868940421fb44ca56194439908f10b585",
+      "refs/heads/fix/afinamiento-integral": "e86415bc1202db6ccd96052617b6a8f19b378568"
+    },
+    "remote_dev_modified": false,
+    "receipt_scope": "Publicación del commit de integración; el cierre documental es posterior."
   },
   "operator_decision": "Entrenamiento, validación y prueba independientes; conservar manifiestos históricos 80/20.",
   "schema": {
@@ -929,5 +936,24 @@
       "frontend/app/installation/installation.css",
       "frontend/app/installation/page.tsx"
     ]
+  },
+  "official_runtime": {
+    "checkout_branch": "codex/official-runtime-20261024",
+    "commit": "aa53e09a9b935f752b01fe464cbc1a5bd10556c0",
+    "files_preserved": true,
+    "processes_restarted": false,
+    "observed_http_before_branch_pin": {
+      "frontend_login_3010": 200,
+      "backend_ready_8010": 200
+    },
+    "schema_deployment": "pending_0004_integration"
+  },
+  "laboratory_cleanup": {
+    "verified_at_utc": "2026-10-24T16:55:15.568169+00:00",
+    "owner_label": "codex-dev-integration",
+    "containers_removed": 28,
+    "internal_network_removed": "fama-merge-isolated-20261024",
+    "unrelated_containers_modified": false,
+    "logs_and_test_image_cache_preserved": true
   }
 }
