@@ -12,6 +12,9 @@ import FeedbackSyncPanel from "@/components/feedback/FeedbackSyncPanel";
 import DatasetInventory, { type DatasetItem } from "@/components/ingestion/DatasetInventory";
 import DatasetUpload, { type UploadLimits } from "@/components/ingestion/DatasetUpload";
 import DatasetCatalogue from "@/components/ingestion/DatasetCatalogue";
+import DatasetImportPanel from "@/components/ingestion/DatasetImportPanel";
+import DatasetExportDialog from "@/components/ingestion/DatasetExportDialog";
+
 
 // ============================================================================
 // INTERFACES DEL MODELO DE DOMINIO DE INGESTA (RF_02 / RF_06 / ADR 0013)
@@ -591,6 +594,8 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
         onUploaded={fetchDatasets} onBusyChange={setIsUploading} limits={uploadLimits} />
       <DatasetInventory datasets={datasets} loading={isLoadingDatasets} busy={isSyncing || isUploading}
         onRefresh={fetchDatasets} onDownload={handleSync} onInspect={handleInspectDataset} onPreprocess={handlePreprocess} />
+      <div className="flex flex-wrap gap-3"><DatasetExportDialog /><DatasetImportPanel /></div>
+
 
       {/* ==================================================================== */}
       {/* 3. BANDEJA DE CURACIÓN E INCORPORACIÓN DE AUDIOS AL DATASET (RF_06 / ADR 0013) */}

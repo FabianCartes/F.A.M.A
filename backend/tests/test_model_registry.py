@@ -43,6 +43,7 @@ class FakeAudioPredictor(AudioPredictor):
     (None, None, None),
 ])
 def test_db_registration_propagates_only_verified_storage_identity(tmp_path, monkeypatch, name, path, expected):
+    import hashlib
     from types import SimpleNamespace
     from unittest.mock import MagicMock
     from app.services.predictors import trained_predictor
@@ -50,7 +51,8 @@ def test_db_registration_propagates_only_verified_storage_identity(tmp_path, mon
     checkpoint.write_bytes(b"isolated checkpoint fixture" * 500)
     model = SimpleNamespace(id_modelo=41, activo=False, arquitectura="fixture",
                             ruta_binario_gcp="models/trained.pt",
-                            conjunto_datos=SimpleNamespace(nombre=name, ruta_gcp=path) if name else None)
+                            conjunto_datos=SimpleNamespace(nombre=name, ruta_gcp=path) if name else None,
+                            hash_binario=hashlib.sha256(checkpoint.read_bytes()).hexdigest())
     db = MagicMock()
     db.query.return_value.order_by.return_value.all.return_value = [model]
     captured = {}
@@ -63,6 +65,7 @@ def test_db_registration_propagates_only_verified_storage_identity(tmp_path, mon
     registry = ModelRegistry()
     registry.register_from_db(db, tmp_path)
     assert "dataset_name" in captured
+    assert captured["expected_checkpoint_sha256"] == model.hash_binario
     assert registry.get("41").dataset_name == expected
     assert registry.list_models()[0].dataset_name == expected
 
@@ -238,6 +241,11 @@ def test_registry_register_from_db_inactive_models_lazy_loaded(tmp_path):
     m_active.activo = True
     m_active.ruta_binario_gcp = f"models/{ckpt_file.name}"
     m_active.conjunto_datos = None
+    m_active.fecha_entrenamiento = None
+    m_active.clase_objetivo = None
+    import hashlib
+    checkpoint_hash = hashlib.sha256(ckpt_file.read_bytes()).hexdigest()
+    m_active.hash_binario = checkpoint_hash
 
     m_inactive = MagicMock()
     m_inactive.id_modelo = 102
@@ -245,6 +253,9 @@ def test_registry_register_from_db_inactive_models_lazy_loaded(tmp_path):
     m_inactive.activo = False
     m_inactive.ruta_binario_gcp = f"models/{ckpt_file.name}"
     m_inactive.conjunto_datos = None
+    m_inactive.fecha_entrenamiento = None
+    m_inactive.clase_objetivo = None
+    m_inactive.hash_binario = checkpoint_hash
 
     mock_db = MagicMock()
     mock_db.query.return_value.order_by.return_value.all.return_value = [m_active, m_inactive]
@@ -316,7 +327,6 @@ def test_discover_and_register_checkpoints_inactive_models_lazy_loaded(tmp_path)
 
     # El modelo no activo debe ser lazy_loaded (model is None)
     assert pred2.model is None
-
 
 
 

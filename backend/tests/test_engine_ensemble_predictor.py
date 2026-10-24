@@ -4,20 +4,24 @@ Pruebas unitarias e integración para el predictor del Super-Ensamble Tri-Modelo
 Campeón de Diagnóstico Acústico de Motores (All-RMS-Balanced).
 Metodología: Strict TDD + RDD.
 """
+import hashlib
 import io
 from pathlib import Path
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import patch, AsyncMock
 import numpy as np
 import pytest
 import soundfile as sf
 import torch
 import torch.nn as nn
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.main import app
-from app.database import get_db
+from app.database import Base, get_db
 from app.schemas.prediction import PredictionResult
-from app.services.registry import build_default_registry, get_model_registry
+from app.services.registry import ModelRegistry, get_model_registry
 from app.services.predictors.base import ModelWeightsError
 from app.services.predictors.engine_ensemble_predictor import (
     EngineEnsemblePredictor,
@@ -105,6 +109,42 @@ class StubSubModel(nn.Module):
         batch_size = x.shape[0]
         # Devuelve tupla (class_logits, attr_logits) para compatibilidad multi-task
         return self.logits.repeat(batch_size, 1), torch.zeros((batch_size, 7))
+
+
+@pytest.fixture
+def isolated_api_dependencies(tmp_path):
+    """Provide an explicit in-memory registry and SQLite DB for local TestClient calls."""
+    test_engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool,
+    )
+    Base.metadata.create_all(test_engine)
+    TestSession = sessionmaker(bind=test_engine, autoflush=False, autocommit=False)
+    registry = ModelRegistry()
+    probs = torch.zeros(13)
+    probs[0] = 1.0
+    checkpoint_paths = {name: tmp_path / f"{name}.pt" for name in DEFAULT_ENGINE_ENSEMBLE_WEIGHTS}
+    for path in checkpoint_paths.values(): path.write_bytes(b"synthetic injected-model fixture")
+    predictor = EngineEnsemblePredictor(checkpoint_paths=checkpoint_paths,
+        models={name: StubSubModel(probs) for name in DEFAULT_ENGINE_ENSEMBLE_WEIGHTS},
+        device=torch.device("cpu"),
+    )
+    registry.register(predictor, is_default=True)
+
+    def override_db():
+        with TestSession() as session:
+            yield session
+
+    original_overrides = dict(app.dependency_overrides)
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_model_registry] = lambda: registry
+    try:
+        from tests.http_security import administrator_http
+        with administrator_http(app):
+            yield registry
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)
+        test_engine.dispose()
 
 
 @pytest.mark.parametrize("failure", ["missing", "corrupt", "incompatible"])
@@ -198,6 +238,63 @@ def test_engine_ensemble_rejects_corrupt_audio(tmp_path):
     with pytest.raises(MalformedAudioError) as caught:
         predictor.predict(audio_path)
     assert isinstance(caught.value.__cause__, sf.LibsndfileError)
+
+
+def test_engine_evaluation_identity_requires_real_loaded_ordered_component_checkpoints(tmp_path):
+    probs = torch.zeros(13)
+    probs[0] = 1.0
+    models = {name: StubSubModel(probs) for name in DEFAULT_ENGINE_ENSEMBLE_WEIGHTS}
+    injected = EngineEnsemblePredictor(models=models, checkpoint_paths={}, device=torch.device("cpu"))
+    with pytest.raises(ValueError, match="checkpoint-backed"):
+        injected.evaluation_identity
+
+    paths = {name: tmp_path / f"{name}.pt" for name in DEFAULT_ENGINE_ENSEMBLE_WEIGHTS}
+    for path in paths.values():
+        torch.save(StubSubModel(probs).state_dict(), path)
+    class TinyLoadedModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.logits = nn.Parameter(torch.log(probs + 1e-8), requires_grad=False)
+        def load_state_dict(self, state_dict, strict=True):
+            assert strict
+            self.logits.data.copy_(state_dict["logits"])
+        def state_dict(self):
+            return {"logits": self.logits.detach().clone()}
+        def to(self, device):
+            return self
+        def eval(self):
+            return self
+
+    with patch("training.models.multitask_bioacoustic.MultiTaskBioacousticModel",
+               lambda **kwargs: TinyLoadedModel()), patch(
+               "training.models.panns_cnn14.PannsCNN14", lambda **kwargs: TinyLoadedModel()):
+        predictor = EngineEnsemblePredictor(checkpoint_paths=paths, device=torch.device("cpu"))
+        predictor.ensure_evaluation_ready()
+        identity = predictor.evaluation_identity
+        assert [item["name"] for item in identity["components"]] == ["resnet", "efficientnet", "panns"]
+        assert [item["sha256"] for item in identity["components"]] == [
+            __import__("hashlib").sha256(paths[name].read_bytes()).hexdigest()
+            for name in ("resnet", "efficientnet", "panns")]
+        paths["panns"].write_bytes(b"changed after model load")
+        with pytest.raises(ValueError, match="changed"):
+            predictor.assert_evaluation_unchanged()
+
+
+def test_engine_ensemble_nonfinite_component_logits_fail_closed(tmp_path):
+    class NonFiniteModel(nn.Module):
+        def forward(self, inputs):
+            logits = torch.zeros((inputs.shape[0], 13))
+            logits[0, 0] = float("nan")
+            return logits
+
+    models = {name: StubSubModel(torch.full((13,), 1 / 13))
+              for name in DEFAULT_ENGINE_ENSEMBLE_WEIGHTS}
+    models["resnet"] = NonFiniteModel()
+    predictor = EngineEnsemblePredictor(models=models, device=torch.device("cpu"))
+    audio_path = tmp_path / "input.wav"
+    audio_path.write_bytes(create_engine_wav_bytes())
+    with pytest.raises(ValueError, match="Non-finite ResNet"):
+        predictor.predict(audio_path)
 
 
 def test_engine_ensemble_linear_combination_of_probabilities(tmp_path):
@@ -311,12 +408,9 @@ def test_engine_ensemble_domain_negative_detection(tmp_path, status, expected_cl
     assert result.detalles["status"] == status
 
 
-def test_engine_ensemble_registry_integration():
-    """
-    Verifica que build_default_registry() registre automáticamente
-    el predictor 'car-engine-diagnostics-super-ensemble'.
-    """
-    registry = build_default_registry()
+def test_engine_ensemble_registry_integration(isolated_api_dependencies):
+    """An explicitly registered served predictor is available in an isolated registry."""
+    registry = isolated_api_dependencies
 
     assert registry.has_model("car-engine-diagnostics-super-ensemble")
     predictor = registry.get("car-engine-diagnostics-super-ensemble")
@@ -327,10 +421,8 @@ def test_engine_ensemble_registry_integration():
     assert "car-engine-diagnostics-super-ensemble" in model_ids
 
 
-@patch("app.main.upload_audio_to_gcp", new_callable=AsyncMock)
-def test_fastapi_models_endpoint_lists_engine_ensemble(mock_upload):
-    """Verifica que GET /api/models retorne el super-ensamble en el catálogo."""
-    mock_upload.return_value = True
+def test_fastapi_models_endpoint_lists_engine_ensemble(isolated_api_dependencies):
+    """GET /api/models uses only the explicitly injected registry and in-memory DB."""
     client = TestClient(app)
 
     response = client.get("/api/models")
@@ -341,19 +433,12 @@ def test_fastapi_models_endpoint_lists_engine_ensemble(mock_upload):
 
 
 @patch("app.main.upload_audio_to_gcp", new_callable=AsyncMock)
-def test_fastapi_predict_with_engine_ensemble(mock_upload, tmp_path):
+def test_fastapi_predict_with_engine_ensemble(mock_upload, tmp_path, isolated_api_dependencies):
     """
     Verifica que POST /api/predict?model_id=car-engine-diagnostics-super-ensemble
     ejecute exitosamente la inferencia acústica a través de la API REST.
     """
     mock_upload.return_value = True
-
-    # Usar sesión mock para BD si es necesario
-    mock_db = MagicMock()
-    mock_db.commit.return_value = None
-    mock_db.refresh.side_effect = lambda inst: setattr(inst, "id_prediccion", 777)
-
-    app.dependency_overrides[get_db] = lambda: mock_db
 
     client = TestClient(app)
     wav_bytes = create_engine_wav_bytes(sr=32000, duration=2.0)
@@ -363,9 +448,7 @@ def test_fastapi_predict_with_engine_ensemble(mock_upload, tmp_path):
         files={"file": ("motor_sample.wav", wav_bytes, "audio/wav")},
     )
 
-    app.dependency_overrides.clear()
-
-    assert response.status_code == 200
+    assert response.status_code == 200, response.text
     data = response.json()
     assert data["modelo_id"] == "car-engine-diagnostics-super-ensemble"
     assert data["clase"] in CLASS_NAMES_13
@@ -373,29 +456,66 @@ def test_fastapi_predict_with_engine_ensemble(mock_upload, tmp_path):
     assert data["filename"] == "motor_sample.wav"
 
 
-def test_engine_ensemble_predict_real_weights(tmp_path):
+def test_engine_ensemble_predict_with_synthetic_checkpoint_bytes(tmp_path, monkeypatch):
+    """Load synthetic checkpoint bytes through the public loader and predict a WAV.
+
+    This verifies checkpoint deserialization and the served inference path only; it
+    makes no claim about authentic model quality or private production weights.
     """
-    Verifica la inferencia real de extremo a extremo con los checkpoints en disco
-    del Super-Ensamble Tri-Modelo All-RMS-Balanced.
-    """
-    predictor = EngineEnsemblePredictor(lazy_load=False)
-    if predictor.sub_models is None:
-        pytest.skip("Checkpoints del Super-Ensamble de motores no presentes en disco")
+    winners = {
+        "resnet": CLASS_NAMES_13.index("normal_engine_idle"),
+        "efficientnet": CLASS_NAMES_13.index("bad_ignition"),
+        "panns": CLASS_NAMES_13.index("low_oil"),
+    }
+
+    class SyntheticCheckpointModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.class_logits = nn.Parameter(torch.zeros(13))
+            self.attribute_logits = nn.Parameter(torch.zeros(7))
+
+        def forward(self, inputs):
+            return (
+                self.class_logits.unsqueeze(0).expand(inputs.shape[0], -1),
+                self.attribute_logits.unsqueeze(0).expand(inputs.shape[0], -1),
+            )
+
+    monkeypatch.setattr(
+        "training.models.multitask_bioacoustic.MultiTaskBioacousticModel",
+        lambda **kwargs: SyntheticCheckpointModel(),
+    )
+    monkeypatch.setattr(
+        "training.models.panns_cnn14.PannsCNN14",
+        lambda **kwargs: SyntheticCheckpointModel(),
+    )
+    paths = {name: tmp_path / f"{name}.pt" for name in DEFAULT_ENGINE_ENSEMBLE_WEIGHTS}
+    for name, path in paths.items():
+        logits = torch.full((13,), -8.0)
+        logits[winners[name]] = 8.0
+        torch.save({"class_logits": logits, "attribute_logits": torch.zeros(7)}, path)
+
+    predictor = EngineEnsemblePredictor(
+        checkpoint_paths=paths, lazy_load=False, device=torch.device("cpu"),
+    )
     assert predictor.sub_models is not None
-    assert set(predictor.sub_models.keys()) == {"resnet", "efficientnet", "panns"}
+    assert set(predictor.sub_models) == set(DEFAULT_ENGINE_ENSEMBLE_WEIGHTS)
+    for name, winner in winners.items():
+        assert int(predictor.sub_models[name].class_logits.argmax()) == winner
+    assert [part["sha256"] for part in predictor.evaluation_identity["components"]] == [
+        hashlib.sha256(paths[name].read_bytes()).hexdigest()
+        for name in ("resnet", "efficientnet", "panns")
+    ]
 
-    wav_bytes = create_engine_wav_bytes(sr=32000, duration=2.0, freq=220.0)
-    audio_path = tmp_path / "engine_real_weights.wav"
-    audio_path.write_bytes(wav_bytes)
-
+    audio_path = tmp_path / "engine_synthetic_checkpoints.wav"
+    audio_path.write_bytes(create_engine_wav_bytes(sr=32000, duration=2.0, freq=220.0))
     result = predictor.predict(audio_path)
     assert isinstance(result, PredictionResult)
-    assert result.clase in CLASS_NAMES_13
-    assert 0.0 < result.confianza <= 1.0
+    assert result.clase == "normal_engine_idle"
+    assert result.confianza == pytest.approx(0.60, abs=1e-3)
     assert result.detalles["status"] == "classified_super_ensemble"
-    assert "ensemble_probabilities" in result.detalles
-    assert len(result.detalles["ensemble_probabilities"]) == 13
-    # La suma de las probabilidades combinadas del ensamble debe aproximar 1.0
-    total_prob = sum(result.detalles["ensemble_probabilities"].values())
-    assert total_prob == pytest.approx(1.0, abs=1e-2)
+    probabilities = result.detalles["ensemble_probabilities"]
+    assert probabilities["normal_engine_idle"] == pytest.approx(0.60, abs=1e-3)
+    assert probabilities["bad_ignition"] == pytest.approx(0.10, abs=1e-3)
+    assert probabilities["low_oil"] == pytest.approx(0.30, abs=1e-3)
+    assert sum(probabilities.values()) == pytest.approx(1.0, abs=1e-3)
 

@@ -22,7 +22,8 @@ from tests.test_ingestion_upload_integrity import upload_environment
 
 with patch.dict(os.environ, {"DATABASE_URL": "sqlite://", "PYTHON_DOTENV_DISABLED": "1"}), \
         patch("dotenv.load_dotenv", return_value=False), patch("sqlalchemy.MetaData.create_all"):
-    from app import main
+    from tests.training_admission import DeferredTrainingProcess
+from app import main
 
 
 @pytest.fixture
@@ -54,7 +55,7 @@ def functional(access, monkeypatch, tmp_path):
 
     monkeypatch.setattr("google.cloud.storage.Client", OfflineCloud)
     monkeypatch.setattr(training, "get_raw_data_dir", lambda name=None: tmp_path / "raw" / (name or ""))
-    monkeypatch.setattr(main, "training_service", training.TrainingService(checkpoints_dir=tmp_path / "weights"))
+    monkeypatch.setattr(main, "training_service", training.TrainingService(checkpoints_dir=tmp_path / "weights", process_factory=DeferredTrainingProcess))
     monkeypatch.setattr(dashboard, "training_service", SimpleNamespace(get_hardware_status=lambda: {}))
     client.app.dependency_overrides[get_model_registry] = lambda: ModelRegistry()
     for route in main.app.routes:
@@ -368,7 +369,7 @@ def test_prediction_records_verified_dataset_and_actor_for_later_access(function
     assign(client)
     response = client.post("/api/predict", headers={"Origin": ORIGIN},
                            data={"dataset_name": "engine_diagnostics"},
-                           files={"file": ("fixture.wav", b"synthetic input", "audio/wav")})
+                           files={"file": ("fixture.wav", __import__("tests.test_api_predict", fromlist=["create_dummy_wav_bytes"]).create_dummy_wav_bytes(), "audio/wav")})
     assert response.status_code == 200
     assert response.json()["detalles"]["dataset_name"] == "AvesChilenas"
     response = client.post("/api/feedback", headers={"Origin": ORIGIN},
@@ -385,6 +386,7 @@ def test_only_job_owner_or_administrator_can_observe_and_stop_training(functiona
     monkeypatch.setattr(training, "SessionLocal", sessions)
     monkeypatch.setattr(paths, "get_raw_data_dir", lambda name=None: tmp_path / "raw" / (name or ""))
     monkeypatch.setattr(paths, "get_processed_data_dir", lambda name=None: tmp_path / "processed" / (name or ""))
+    monkeypatch.setattr(paths, "get_prepared_data_dir", lambda name: tmp_path / "prepared" / name)
     partitions(tmp_path, "AvesChilenas")
     with sessions() as db:
         db.add(Usuario(id=3, email="peer@example.test", password_hash=db.get(Usuario, 2).password_hash,
@@ -474,3 +476,45 @@ def test_revocation_takes_effect_on_existing_cookie_without_relogin(functional, 
         assert administrator.delete("/api/access/users/2/datasets/10", headers={"Origin": ORIGIN}).status_code == 204
     assert client.cookies.get("__Host-fama_session") == cookie
     assert client.get("/api/ingestion/datasets/AvesChilenas/files").status_code == 404
+
+
+def test_unassigned_blocked_model_aliases_reveal_no_checkpoint_state(functional):
+    client, sessions = functional
+    with sessions() as db:
+        db.add(Modelo(id_modelo=120, id_conjunto_datos=20, arquitectura="fixture", epocas=1,
+                      tasa_aprendizaje=.01, tamano_lote=2, ruta_binario_gcp="models/private.pt", activo=True))
+        db.commit()
+        registry = ModelRegistry()
+        registry.register_from_db(db)
+    client.app.dependency_overrides[get_model_registry] = lambda: registry
+    assign(client)
+    for alias in (None, "fama_trained_model_120", "120", "private.pt"):
+        response = client.post("/api/predict", headers={"Origin":ORIGIN},
+            params={} if alias is None else {"model_id":alias},
+            files={"file":("fixture.wav",b"not executed","audio/wav")})
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Modelo no encontrado o no asignado."
+
+
+def test_incorporation_refuses_a_registered_dataset_in_another_bucket(functional, monkeypatch, tmp_path):
+    from app.services import storage
+    from tests.test_ingestion_upload_integrity import synthetic_wav
+    client, sessions = functional
+    monkeypatch.setattr(storage, "download_prediction_audio", lambda source: synthetic_wav())
+    (tmp_path/"raw"/"AvesChilenas"/"Chucao").mkdir(parents=True)
+    with sessions() as db:
+        db.get(ConjuntoDatos,10).ruta_gcp = "gs://foreign-bucket/datasets/AvesChilenas/"
+        db.add(Prediccion(id_prediccion=502, ruta_audio_prueba="raw_audios/synthetic.wav", etiqueta_predicha="Chucao", dataset_name="AvesChilenas", confianza=.8))
+        db.flush()
+        db.add(AccesoPrediccion(id_prediccion=502,id_conjunto_datos=10,id_usuario=2))
+        db.commit()
+    assign(client)
+    created=client.post("/api/feedback",headers={"Origin":ORIGIN},json={"id_prediccion":502,"fue_correcta":True})
+    identifier=created.json()["id_retroalimentacion"]
+    response=client.post(f"/api/feedback/{identifier}/approve",headers={"Origin":ORIGIN})
+    assert response.status_code == 422
+    assert "almacenamiento" in response.json()["detail"]
+    from app.models.dataset import Audio
+    with sessions() as db:
+        assert db.get(Retroalimentacion,identifier).procesado is False
+        assert db.query(Audio).count() == 0

@@ -16,8 +16,8 @@ class SchemaStatus:
     revision: str | None = None
 
 
-HEAD = "0003_autonomy"
-REVISIONS = ("0001_core", "0002_access", HEAD)
+HEAD = "0004_integration"
+REVISIONS = ("0001_core", "0002_access", "0003_autonomy", HEAD)
 
 
 def _check_expression(expression: str) -> str:
@@ -26,7 +26,7 @@ def _check_expression(expression: str) -> str:
     for index in range(0, len(parts), 2):
         normalized = re.sub(r"::(?:character varying|text|bigint|integer)(?:\[\])?", "", parts[index].lower())
         normalized = re.sub(r"=\s*any\s*\(\s*array\[", " in (", normalized)
-        parts[index] = re.sub(r"[\s\[\]()]", "", normalized)
+        parts[index] = re.sub(r"[\s\[\]()]", "", normalized.replace("!=", "<>"))
     return "".join(parts)
 
 
@@ -34,8 +34,10 @@ def _matches_revision(connection, revision: str) -> bool:
     from migrations.schema_0002 import metadata, CORE_TABLES
 
     expected = metadata
-    if revision == HEAD:
+    if revision == "0003_autonomy":
         from migrations.schema_0003 import metadata as expected
+    if revision == HEAD:
+        from migrations.schema_0004 import metadata as expected
     if revision == "0001_core":
         expected = MetaData()
         for name in CORE_TABLES:
@@ -57,9 +59,15 @@ def matches_schema(connection, expected: MetaData) -> bool:
     for name, table in expected.tables.items():
         if inspector.get_pk_constraint(name)["constrained_columns"] != [c.name for c in table.primary_key]:
             return False
-        actual_checks = {c["name"]: _check_expression(c["sqltext"]) for c in inspector.get_check_constraints(name)}
-        expected_checks = {c.name: _check_expression(str(c.sqltext)) for c in table.constraints if isinstance(c, CheckConstraint)}
-        if actual_checks != expected_checks:
+        from collections import Counter
+        checks = list(inspector.get_check_constraints(name))
+        named = {c.name: _check_expression(str(c.sqltext)) for c in table.constraints
+                 if isinstance(c, CheckConstraint) and c.name is not None}
+        actual_named = {c["name"]: _check_expression(c["sqltext"]) for c in checks if c["name"] in named}
+        unnamed = Counter(_check_expression(str(c.sqltext)) for c in table.constraints
+                          if isinstance(c, CheckConstraint) and c.name is None)
+        actual_unnamed = Counter(_check_expression(c["sqltext"]) for c in checks if c["name"] not in named)
+        if actual_named != named or actual_unnamed != unnamed:
             return False
     return True
 

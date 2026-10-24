@@ -6,6 +6,9 @@ utilizando Frontend HPSS de 3 canales y calibración multi-tarea.
 """
 from pathlib import Path
 from typing import Dict, List, Optional, Union
+import hashlib
+import json
+import math
 import numpy as np
 import librosa
 import torch
@@ -72,6 +75,7 @@ class EngineEnsemblePredictor(AudioPredictor):
 
         self.sub_models: Optional[Dict[str, nn.Module]] = models
         self.frontend = None
+        self._loaded_component_hashes: Optional[Dict[str, str]] = None
 
         self._metadata = ModelMetadata(
             id="car-engine-diagnostics-super-ensemble",
@@ -127,6 +131,103 @@ class EngineEnsemblePredictor(AudioPredictor):
             self.frontend.eval()
         return self.frontend
 
+    @property
+    def evaluation_config(self) -> Dict[str, object]:
+        """Effective inference contract shared by prediction and recording reports."""
+        return {
+            "predictor_config": {
+                "family": "EngineEnsemblePredictor",
+                "component_order": ["resnet", "efficientnet", "panns"],
+                "component_architectures": {
+                    "resnet": "MultiTaskBioacousticModel:resnet34d",
+                    "efficientnet": "MultiTaskBioacousticModel:efficientnet_b0",
+                    "panns": "PannsCNN14",
+                },
+                "component_weights": dict(self.weights),
+                "classes": list(self.classes),
+                "num_attributes": 7,
+                "device": str(self.device),
+            },
+            "preprocessing_config": {
+                "resampling": {"implementation": "load_and_resample", "target_sr": 32000,
+                               "duration_seconds": 2.0, "energy_vad": True,
+                               "hop_seconds": 1.0, "short_padding": "right-zero",
+                               "selection": "maximum-rms-window", "strict": True},
+                "filters": {"rms_silence_threshold": RMS_SILENCE_THRESHOLD,
+                            "spectral_flatness_noise_threshold": SPECTRAL_FLATNESS_NOISE_THRESHOLD,
+                            "flatness_non_silent_threshold": 1e-4,
+                            "flatness_non_silent_min_samples": 513,
+                            "flatness_fallback": "full-waveform-on-exception"},
+                "frontend": {"implementation": "HPSSAudioFrontEnd",
+                             "sample_rate": 32000, "n_fft": 2048, "hop_length": 256,
+                             "n_mels": 128, "f_min": 20.0, "f_max": 8000.0,
+                             "kernel_size": 15, "power": 2.0, "eps": 1e-6,
+                             "spectrogram_power": 1.0, "center": True,
+                             "pad_mode": "reflect", "mel_norm": "slaney",
+                             "mel_scale": "slaney", "channels": ["raw", "harmonic", "percussive"],
+                             "compression": "log(clamp(mel, min=eps)+1)"},
+                "inference": {"softmax_axis": -1, "aggregation": "weighted-probability-sum",
+                              "finite_logits_required": True},
+            },
+            "aggregation_config": {"algorithm": "weighted-sum-of-component-softmax-v1",
+                                    "weights": dict(self.weights),
+                                    "component_order": ["resnet", "efficientnet", "panns"]},
+        }
+
+    @staticmethod
+    def _sha256(path: Path) -> str:
+        digest = hashlib.sha256()
+        with Path(path).open("rb") as stream:
+            for block in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(block)
+        return digest.hexdigest()
+
+    def ensure_evaluation_ready(self) -> None:
+        """Load real component checkpoints and bind their exact bytes for evaluation."""
+        required = ("resnet", "efficientnet", "panns")
+        if tuple(self.checkpoint_paths) != required:
+            raise ValueError("Evaluation requires ordered resnet, efficientnet, panns checkpoints")
+        if tuple(self.weights) != required:
+            raise ValueError("Evaluation requires ordered resnet, efficientnet, panns weights")
+        if any(path.is_symlink() or not path.is_file() for path in self.checkpoint_paths.values()):
+            raise ValueError("Evaluation components must be regular, non-symlink checkpoint files")
+        values = list(self.weights.values())
+        if any(not math.isfinite(value) or value < 0 for value in values) or not math.isclose(sum(values), 1.0, abs_tol=1e-9):
+            raise ValueError("Evaluation ensemble weights must be finite, nonnegative and sum to one")
+        if self.classes != list(CLASS_NAMES_13):
+            raise ValueError("Evaluation class order differs from served EngineEnsemblePredictor order")
+        if self.sub_models is not None and self._loaded_component_hashes is None:
+            raise ValueError("Evaluation identity requires checkpoint-backed models, not injected models")
+        self._ensure_loaded()
+        if self._loaded_component_hashes is None:
+            raise ValueError("Evaluation identity requires checkpoint-backed models")
+        self.assert_evaluation_unchanged()
+
+    @property
+    def evaluation_identity(self) -> Dict[str, object]:
+        if self._loaded_component_hashes is None:
+            raise ValueError("Evaluation identity requires checkpoint-backed loaded models")
+        self.assert_evaluation_unchanged()
+        components = [{"name": name, "sha256": self._loaded_component_hashes[name]}
+                      for name in ("resnet", "efficientnet", "panns")]
+        config = self.evaluation_config
+        identity_payload = {"identity_version": 1, "components": components,
+                            "classes": list(self.classes), "weights": dict(self.weights),
+                            "config": config}
+        digest = hashlib.sha256(json.dumps(identity_payload, sort_keys=True,
+                                           separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+        return {"identity_version": 1, "components": components,
+                "classes": list(self.classes), "weights": dict(self.weights),
+                **config, "checkpoint_sha256": digest}
+
+    def assert_evaluation_unchanged(self) -> None:
+        if self._loaded_component_hashes is None:
+            raise ValueError("Evaluation identity requires checkpoint-backed loaded models")
+        current = {name: self._sha256(self.checkpoint_paths[name])
+                   for name in ("resnet", "efficientnet", "panns")}
+        if current != self._loaded_component_hashes:
+            raise ValueError("An engine ensemble component checkpoint changed during evaluation")
+
     def _ensure_loaded(self) -> None:
         """Carga perezosa de los pesos de los 3 modelos componentes."""
         if self.sub_models is not None:
@@ -139,6 +240,8 @@ class EngineEnsemblePredictor(AudioPredictor):
             raise ModelWeightsError("Checkpoints incompletos del super-ensamble de motores")
 
         try:
+            hashes_before = {name: self._sha256(self.checkpoint_paths[name])
+                             for name in ("resnet", "efficientnet", "panns")}
             from training.models.multitask_bioacoustic import MultiTaskBioacousticModel
             from training.models.panns_cnn14 import PannsCNN14
 
@@ -185,11 +288,16 @@ class EngineEnsemblePredictor(AudioPredictor):
             model_panns.to(self.device)
             model_panns.eval()
 
+            hashes_after = {name: self._sha256(self.checkpoint_paths[name])
+                            for name in ("resnet", "efficientnet", "panns")}
+            if hashes_before != hashes_after:
+                raise ValueError("Component checkpoint changed while loading")
             self.sub_models = {
                 "resnet": model_res,
                 "efficientnet": model_eff,
                 "panns": model_panns,
             }
+            self._loaded_component_hashes = hashes_after
         except Exception as err:
             self.sub_models = None
             raise ModelWeightsError("No se pudieron cargar los pesos del super-ensamble de motores") from err
@@ -251,14 +359,20 @@ class EngineEnsemblePredictor(AudioPredictor):
             # Inferencia en los tres sub-modelos
             out_res = self.sub_models["resnet"](spec_3ch)
             logits_res = out_res[0] if isinstance(out_res, tuple) else out_res
+            if not torch.isfinite(logits_res).all():
+                raise ValueError("Non-finite ResNet ensemble logits")
             p_res = torch.softmax(logits_res, dim=-1)
 
             out_eff = self.sub_models["efficientnet"](spec_3ch)
             logits_eff = out_eff[0] if isinstance(out_eff, tuple) else out_eff
+            if not torch.isfinite(logits_eff).all():
+                raise ValueError("Non-finite EfficientNet ensemble logits")
             p_eff = torch.softmax(logits_eff, dim=-1)
 
             out_panns = self.sub_models["panns"](spec_3ch)
             logits_panns = out_panns[0] if isinstance(out_panns, tuple) else out_panns
+            if not torch.isfinite(logits_panns).all():
+                raise ValueError("Non-finite PANNs ensemble logits")
             p_panns = torch.softmax(logits_panns, dim=-1)
 
             # Combinación lineal convexa: P_ens = 0.60 * Pr + 0.10 * Pe + 0.30 * Pp
@@ -267,6 +381,8 @@ class EngineEnsemblePredictor(AudioPredictor):
             w_panns = self.weights.get("panns", 0.30)
 
             p_ens = w_res * p_res + w_eff * p_eff + w_panns * p_panns
+            if not torch.isfinite(p_ens).all():
+                raise ValueError("Non-finite combined ensemble probabilities")
 
             pred_idx = int(torch.argmax(p_ens, dim=-1)[0].item())
             conf = round(float(p_ens[0, pred_idx].item()), 4)

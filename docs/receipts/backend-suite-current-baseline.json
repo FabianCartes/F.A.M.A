@@ -1,0 +1,175 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-15",
+  "purpose": "Current isolated backend baseline after cleanup; not a global-suite result or a reconstruction of historical failures.",
+  "checkout": {
+    "root": "/home/kevin/Work/fama",
+    "head": "95cae81fe2d06f10c8ddbf029322716545592ed5",
+    "interpreter": "/home/kevin/Work/fama/.venv/bin/python",
+    "python_version": "3.14.7",
+    "preexisting_modified": ["docs/KANBAN.md", "docs/KANBAN_VISUAL.md", "docs/README.md"],
+    "preexisting_untracked": ["docs/receipts/lock4-incorporacion-audit.json"],
+    "production_code_changed_by_this_task": false
+  },
+  "reproduction": {
+    "cwd": "/home/kevin/Work/fama/backend",
+    "environment": {
+      "PYTHON_DOTENV_DISABLED": "1",
+      "DATABASE_URL": "sqlite://",
+      "CUDA_VISIBLE_DEVICES": "",
+      "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+      "PYTHONDONTWRITEBYTECODE": "1",
+      "OMP_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1"
+    },
+    "argv_prefix": ["/home/kevin/Work/fama/.venv/bin/python", "tests/run_isolated_training_checks.py"],
+    "instructions": "Apply environment, use cwd and argv_prefix, then append the run argv_suffix. The existing runner supplies pytest isolation options and fails closed on nonpassing reports."
+  },
+  "runs": [
+    {
+      "id": "training_api_identity_catalogue_registry",
+      "argv_suffix": [
+        "tests/test_training_flow.py", "tests/test_training_service.py",
+        "tests/test_training_persistence.py", "tests/test_api_training.py",
+        "tests/test_training_schemas.py", "tests/test_loaded_checkpoint_identity.py",
+        "tests/test_api_model_catalogue.py", "tests/test_registry_db_sync.py"
+      ],
+      "process_exit_code": 0,
+      "pytest_exit_code": 0,
+      "passed": 320,
+      "failed": 0,
+      "skipped": 0,
+      "deselected_cases": [],
+      "pytest_duration_seconds": 29.51,
+      "warnings": {"count": 2, "reason": "librosa n_fft=2048 exceeds synthetic fixture signal length=512 in two training persistence cases"},
+      "passed_by_module": {
+        "tests/test_training_flow.py": 98,
+        "tests/test_training_service.py": 17,
+        "tests/test_training_persistence.py": 45,
+        "tests/test_api_training.py": 28,
+        "tests/test_training_schemas.py": 28,
+        "tests/test_loaded_checkpoint_identity.py": 31,
+        "tests/test_api_model_catalogue.py": 57,
+        "tests/test_registry_db_sync.py": 16
+      },
+      "sqlite_memory_connection_count": 260,
+      "nonpassing_reports": [],
+      "local_raw_output": "/home/kevin/.local/share/opencode/tool-output/tool_140f7e99c001WEFKhtcyfuib0D",
+      "local_raw_output_sha256": "4025cdfeea6a4d8070694191fa82b7e4105c97407c6f333ccdcd249df437dde9",
+      "raw_output_note": "Local harness capture contains all 320 call nodeids and runner CHECK_SUMMARY; not a portable repository artifact. The PostgreSQL-labelled application log is not evidence of a live PostgreSQL connection."
+    },
+    {
+      "id": "predictor_reevaluation_preprocess",
+      "argv_suffix": [
+        "tests/test_trained_predictor.py", "tests/test_model_reevaluation.py", "tests/test_preprocess.py", "-k",
+        "not test_cli_and_reevaluation_imports_do_not_initialize_ambient_database_runtime and not test_trained_predictor_lazy_loading_defers_model_instantiation and not test_trained_predictor_infers_real_audio and not test_trained_predictor_fails_fast_when_audio_missing and not test_trained_predictor_detects_silence"
+      ],
+      "process_exit_code": 0,
+      "pytest_exit_code": 0,
+      "passed": 56,
+      "failed": 0,
+      "skipped": 0,
+      "pytest_duration_seconds": 2.39,
+      "deselected_cases": [
+        "tests/test_trained_predictor.py::test_trained_predictor_lazy_loading_defers_model_instantiation",
+        "tests/test_trained_predictor.py::test_trained_predictor_infers_real_audio",
+        "tests/test_trained_predictor.py::test_trained_predictor_fails_fast_when_audio_missing",
+        "tests/test_trained_predictor.py::test_trained_predictor_detects_silence",
+        "tests/test_model_reevaluation.py::test_cli_and_reevaluation_imports_do_not_initialize_ambient_database_runtime"
+      ],
+      "deselection_reasons": {
+        "predictor_cases": "External checkpoint/audio outside synthetic CPU scope; not counted as passed.",
+        "import_wrapper": "Uses subprocess, forbidden by runner; exact payload checked separately, not the pytest wrapper."
+      },
+      "sqlite_memory_connection_count": 23,
+      "nonpassing_reports": [],
+      "stderr_note": "Expected argparse required-arguments error from passed negative CLI test; runner exited 0."
+    },
+    {
+      "id": "ambient_import_payload",
+      "argv_suffix": ["--ambient-import-probe"],
+      "process_exit_code": 0,
+      "pytest_exit_code": null,
+      "ambient_import_probe": "passed",
+      "probe_payload_sha256": "5cda26f98317e107ac026ff1555cec748aff24e79f43d5228eb51d253c0755d1",
+      "sqlite_memory_connection_count": 0,
+      "nonpassing_reports": []
+    }
+  ],
+  "proofs_reported_by_all_three_runs": {
+    "guard_before_collection_fixtures_and_body": true,
+    "phase_deadline_seconds": 30,
+    "private_scratch_cleanup": true,
+    "protected_paths_unchanged": true,
+    "protected_path_count": 30,
+    "network_live_db_forbidden": true,
+    "inventory": "docs/receipts/training-checks-inventory.json",
+    "limitation": "Application audit guard, not OS sandbox: native writes, races, hardlinks and preopened descriptors are outside its guarantee."
+  },
+  "protected_input_sha256": {
+    "backend/app/main.py": "4f819eb641f48e30e86be2366ced6d13dedcc20ce466a048d29fc08a380224b9",
+    "backend/app/database.py": "eedd985d8584fa2bb054dd9d9f30883fc6698a479b895b04c25df8436c323a1c",
+    "backend/app/schemas/training.py": "092bae3e7a495cee7e7cb98755fc8426d9f6c65e57d656c9515b28aa44374f8b",
+    "backend/app/schemas/model_info.py": "dc926a4861bede61e9a89b1e83985cbd5361b1d487aba0604ce80a0d38092dd1",
+    "backend/app/services/training.py": "bcde83edc0d033c186311080bb60dfcec2fbf96942a0a01915059edf45f51bce",
+    "backend/app/services/training_process.py": "021831793e701c6dc720e8302d64c1453daebe48c921642d2a12723f8f07c109",
+    "backend/app/services/standard_evaluation_guard.py": "d28051db206065f8fe1ffe6bbd981c4f2b38d13d1f9e2c6736e5956d6c116393",
+    "backend/app/services/registry.py": "d1450960dbe77e927b0dad75d38efb825b55ee0cebf9539e357605ac7951e763",
+    "backend/app/services/predictors/trained_predictor.py": "3b3257dd29906e02f635f3d0a7c7b46d0bccebbdbd8b6bdab7a9de70ce96c55b",
+    "backend/poc/preprocess.py": "bd7071160aeeb1285fc36503cb02817bf9520c8f129b14384bc03151c74e7341",
+    "backend/training/paths.py": "20541ae46f5c2332973b8108f83fb379344963f77dce1af353ae00fdbe1a0dab",
+    "backend/training/schemas/config.py": "95eb58b481abee3454795e51c0c9599d4f6a6844d1326def503c65c52f4ab229",
+    "backend/tests/conftest.py": "f8c656d669561e1f7afb478abb70186a0e5f5202921d5f283415d75287168630",
+    "backend/tests/test_training_flow.py": "671740037c3359ec63f507ff8a0ee1a42a66f5963d4e8d22b3ce4c3286dc7077",
+    "backend/tests/test_training_persistence.py": "618f3fd6284a463aaa85f99ac6f7f80166d49bce503348d9c882f2691769d2f7",
+    "backend/tests/test_training_service.py": "2a2fc3365861f4cf9448469650d80ec2c392341511ba574342dae95afa93366e",
+    "backend/tests/test_training_spawn.py": "aa18d26b17f3d56d98aef5f633345b7670c317a91f2323eefa5697ab2961dad1",
+    "backend/tests/test_training_schemas.py": "dc572e1fc2e5a603e54b28ee5c8f53b93810383766cd63943814d5b7509b5834",
+    "backend/tests/test_api_training.py": "36f61654dd91c598e6f6c9ba36ad0326c680c9d309a1001fb2c1f94b1084af01",
+    "backend/tests/test_preprocess.py": "9e3c89d7c245ff749b784abfd9cbaffcde0dbaf5f11088a3842c9f59b2ed4a33",
+    "backend/tests/test_trained_predictor.py": "187d65ea6fa4b10712bd39aaa4035588514538fda8a543a5c70c47e4256b3a64",
+    "backend/tests/test_model_reevaluation.py": "90f6ffec1537ba71aa7d2b40184e171d4586ef377193dea3af128fe9811e12d3",
+    "backend/tests/test_registry_db_sync.py": "1e61a3ff31c54288c788d0a2d3c7e2c865bf3b2eb468fa4ca227ed9ee07e88f7",
+    "backend/tests/test_api_model_catalogue.py": "75ddd8162d4a58fb3eb665333859b52904873e3648a949255c8f6a494d568f05",
+    "backend/tests/test_loaded_checkpoint_identity.py": "4d6a522553b9150f4585613533f59b012014bf2fbe9f918373d49c532aec7684",
+    "backend/tests/test_publication_preflight.py": "a6ae6ffd0baa1c0d7725f0f31c79214d27167e09a51865dead72c9ac0d346e8a",
+    "backend/tests/test_isolated_training_checks_runner.py": "d7b1c08b4c2e3f46964b4f9e622216369ec168850784591649c34d66ae137d84",
+    "backend/tests/run_isolated_training_checks.py": "f6716ad3f8e390363491491dd6674d8c2a4360c40df190b8878cc18578234c49",
+    "backend/tests/training_host_guard.py": "b14202dad23b23622019c2e252d2a71d27d3a8f5af4774dbea8b9f53b3391aaf",
+    "docs/receipts/training-checks-inventory.json": "4cf86a01b32adf4cc92d7ba596e265dbbc51c968e48a58e76455f1daee9974dd"
+  },
+  "historical_incidents": {
+    "status": "Not reconstructible from identified preserved sources; not current confirmed defects.",
+    "counts": ["12 FAIL / 5 SKIP", "26 FAIL / 1493 PASS / 5 SKIP"],
+    "sources_inspected_by_read_only_investigation": [
+      "/home/kevin/Work/fama-preservation/20261015T151502Z/",
+      "/home/kevin/Work/fama-preservation/20261015T163827Z-remaining/",
+      "docs/arquitectura/identidad-checkpoint-cargado.md",
+      "docs/seguimiento-frontend-definitivo.md"
+    ],
+    "missing_original_log": "/tmp/gentle-jobs-3Mwseg/job-4.log",
+    "six_training_flow_cases": "Historically corrected and rechecked; original individual mapping unavailable. Current module: 98 passed.",
+    "remaining_twenty": "Arithmetic remainder, not twenty identified unique defects.",
+    "overlap_between_incidents": "unknown",
+    "identified_case_not_executed": {
+      "nodeid": "tests/test_cli_paths.py::test_ingestion_service_both_datasets_synced",
+      "current_state": "Test remains; depends on default GCS/local inventory. No current result; needs controlled reproduction."
+    }
+  },
+  "operational_flow": {
+    "user_report": "Training -> inference -> add to dataset works.",
+    "new_end_to_end_operational_execution": false,
+    "related_existing_evidence": ["docs/receipts/model14-recovery.json", "docs/receipts/lock4-incorporacion-audit.json"],
+    "data6": "Still open: local incorporation does not prove membership in prepared data used by future training."
+  },
+  "scope": {
+    "total_pytest_passed": 376,
+    "total_failed": 0,
+    "total_skipped": 0,
+    "total_deselected": 5,
+    "separate_import_probe_passed": true,
+    "global_suite_executed": false,
+    "not_verified": ["Unreviewed backend test modules", "Current spawn test execution", "Python 3.12/Docker", "GPU", "Live PostgreSQL/GCS", "Real-data training", "Model quality", "Browser end-to-end flow"],
+    "follow_up": "Review fixtures and dependencies before adding explicit isolated module groups; separate external-service and subprocess requirements. Only fix production after a reproducible current defect."
+  }
+}

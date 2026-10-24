@@ -1,6 +1,6 @@
 # Conexiones Cloud SQL y GCS del nodo (etapa 5)
 
-La etapa 5 del [plan de instalación](plan_instalacion_gcp_y_asistente.md) prepara configuración privada, diagnóstico independiente y selección explícita del entorno nativo o Docker. Continúa los [usuarios SQL de la etapa 4](usuarios_postgresql_pruebas.md) y aplica el [ADR 0041](../adr/0041-conexiones-cloud-explicitas-mediante-proxy.md).
+La etapa 5 del [plan de instalación](plan_instalacion_gcp_y_asistente.md) prepara configuración privada, diagnóstico independiente y selección explícita del entorno nativo o Docker. Continúa los [usuarios SQL de la etapa 4](usuarios_postgresql_pruebas.md) y aplica el [ADR 0059](../adr/0059-conexiones-cloud-explicitas-mediante-proxy.md).
 
 ## Recursos de esta prueba
 

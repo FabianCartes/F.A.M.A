@@ -239,7 +239,7 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
   it("previews and saves a partition version after reviewing warnings, then sends it to training", async () => {
     const defaultFetch = global.fetch;
     const version = "a".repeat(64);
-    const summary = { version, counts: { train: 8, val: 2 }, warnings: ["Falta procedencia de grabador."],
+    const summary = { format: 2, version, counts: { train: 6, val: 2, test: 2 }, warnings: ["Falta procedencia de grabador."],
       created_at: "2026-10-23T12:00:00Z", created_by: 2 };
     global.fetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
       if (url.endsWith("/partitions/preview")) {
@@ -255,7 +255,7 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     await act(async () => { render(<TrainingView />); });
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Gestionar particiones" })); });
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Previsualizar reparto" })); });
-    expect(screen.getByText("8 para entrenamiento · 2 para validación")).toBeDefined();
+    expect(screen.getByText("6 para entrenamiento · 2 para validación · 2 para prueba")).toBeDefined();
     const save = screen.getByRole("button", { name: "Guardar versión y seleccionarla" });
     expect((save as HTMLButtonElement).disabled).toBe(true);
     await act(async () => { fireEvent.click(screen.getByRole("checkbox", { name: "He revisado las advertencias de esta partición" })); });
@@ -431,17 +431,17 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     });
 
     // Verificar que se llamó a POST /api/training/start con la lista de 2 modelos
-    const postCall = (global.fetch as any).mock.calls.find(
-      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    const postCall = vi.mocked(global.fetch).mock.calls.find(
+      (c) => String(c[0]) === `${API_BASE_URL}/api/training/start`
     );
     expect(postCall).toBeDefined();
-    const payload = JSON.parse(postCall[1].body);
+    const payload = JSON.parse(String(postCall?.[1]?.body));
 
     expect(payload.models).toBeDefined();
     expect(payload.models).toHaveLength(2);
     expect(payload.models[0].architecture).toBe("EfficientNet-B0");
     expect(payload.models[1].architecture).toBe("ConvNeXt-Nano");
-    const totalWeight = payload.models.reduce((acc: number, m: any) => acc + m.weight, 0);
+    const totalWeight = payload.models.reduce((acc: number, m: { weight: number }) => acc + m.weight, 0);
     expect(totalWeight).toBeCloseTo(1.0, 2);
   });
 
@@ -471,11 +471,11 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
       fireEvent.click(startBtn);
     });
 
-    const postCall = (global.fetch as any).mock.calls.find(
-      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    const postCall = vi.mocked(global.fetch).mock.calls.find(
+      (c) => String(c[0]) === `${API_BASE_URL}/api/training/start`
     );
     expect(postCall).toBeDefined();
-    const payload = JSON.parse(postCall[1].body);
+    const payload = JSON.parse(String(postCall?.[1]?.body));
 
     expect(payload.audio_config).toBeDefined();
     expect(payload.audio_config.target_sr).toBe(16000);
@@ -641,11 +641,11 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
       fireEvent.click(startBtn);
     });
 
-    const postCall = (global.fetch as any).mock.calls.find(
-      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    const postCall = vi.mocked(global.fetch).mock.calls.find(
+      (c) => String(c[0]) === `${API_BASE_URL}/api/training/start`
     );
     expect(postCall).toBeDefined();
-    const payload = JSON.parse(postCall[1].body);
+    const payload = JSON.parse(String(postCall?.[1]?.body));
     expect(payload.weight_decay).toBe(0.05);
   });
 
@@ -674,11 +674,11 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
       fireEvent.click(startBtn);
     });
 
-    const postCall = (global.fetch as any).mock.calls.find(
-      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    const postCall = vi.mocked(global.fetch).mock.calls.find(
+      (c) => String(c[0]) === `${API_BASE_URL}/api/training/start`
     );
     expect(postCall).toBeDefined();
-    const payload = JSON.parse(postCall[1].body);
+    const payload = JSON.parse(String(postCall?.[1]?.body));
     expect(payload.architecture).toBe("PANNs-CNN14");
     expect(payload.models[0].architecture).toBe("PANNs-CNN14");
   });
@@ -735,11 +735,11 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
       fireEvent.click(startBtn);
     });
 
-    const postCall = (global.fetch as any).mock.calls.find(
-      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    const postCall = vi.mocked(global.fetch).mock.calls.find(
+      (c) => String(c[0]) === `${API_BASE_URL}/api/training/start`
     );
     expect(postCall).toBeDefined();
-    const payload = JSON.parse(postCall[1].body);
+    const payload = JSON.parse(String(postCall?.[1]?.body));
 
     expect(payload.models[0].epochs).toBe(35);
     expect(payload.models[1].epochs).toBe(20);
@@ -776,11 +776,11 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
       fireEvent.click(startBtn);
     });
 
-    const postCall = (global.fetch as any).mock.calls.find(
-      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    const postCall = vi.mocked(global.fetch).mock.calls.find(
+      (c) => String(c[0]) === `${API_BASE_URL}/api/training/start`
     );
     expect(postCall).toBeDefined();
-    const payload = JSON.parse(postCall[1].body);
+    const payload = JSON.parse(String(postCall?.[1]?.body));
 
     expect(payload.models[0].weight).toBeCloseTo(0.6, 2);
     expect(payload.models[1].weight).toBeCloseTo(0.3, 2);
@@ -837,8 +837,8 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     });
 
     // La llamada al API no debe haberse realizado
-    const postCall = (global.fetch as any).mock.calls.find(
-      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    const postCall = vi.mocked(global.fetch).mock.calls.find(
+      (c) => String(c[0]) === `${API_BASE_URL}/api/training/start`
     );
     expect(postCall).toBeUndefined();
   });
@@ -937,8 +937,8 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     expect(fMinInput.className).toContain("border-red-500");
     expect(screen.getByText("El campo 'Frecuencia Mínima' no puede estar vacío.")).toBeDefined();
 
-    const postCall = (global.fetch as any).mock.calls.find(
-      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    const postCall = vi.mocked(global.fetch).mock.calls.find(
+      (c) => String(c[0]) === `${API_BASE_URL}/api/training/start`
     );
     expect(postCall).toBeUndefined();
   });
@@ -1061,11 +1061,11 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
       fireEvent.click(startBtn);
     });
 
-    const postCall = (global.fetch as any).mock.calls.find(
-      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    const postCall = vi.mocked(global.fetch).mock.calls.find(
+      (c) => String(c[0]) === `${API_BASE_URL}/api/training/start`
     );
     expect(postCall).toBeDefined();
-    const payload = JSON.parse(postCall[1].body);
+    const payload = JSON.parse(String(postCall?.[1]?.body));
     expect(payload.models[0].learning_rate).toBe(0.0008);
     expect(payload.models[0].batch_size).toBe(32);
     expect(payload.models[1].learning_rate).toBe(0.0002);
@@ -1110,6 +1110,24 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     expect(screen.getByText("El campo 'Batch Size del Modelo #1' no puede estar vacío.")).toBeDefined();
   });
 
+  it("sends the selected seed and rejects fractional seeds before submission", async () => {
+    await act(async () => { render(<TrainingView />); });
+    const input = screen.getByLabelText("Semilla aleatoria") as HTMLInputElement;
+    expect(input.value).toBe("42");
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "1.5" } });
+      fireEvent.click(screen.getByRole("button", { name: /Iniciar Entrenamiento/i }));
+    });
+    expect(vi.mocked(global.fetch).mock.calls.some(([url]) => url === `${API_BASE_URL}/api/training/start`)).toBe(false);
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "314" } });
+      fireEvent.click(screen.getByRole("button", { name: /Iniciar Entrenamiento/i }));
+    });
+    const call = vi.mocked(global.fetch).mock.calls.find(([url]) => url === `${API_BASE_URL}/api/training/start`);
+    expect(call).toBeDefined();
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual(expect.objectContaining({ seed: 314 }));
+  });
+
   it("renders early stopping toggle checked by default with info tooltip", async () => {
     await act(async () => {
       render(<TrainingView />);
@@ -1139,11 +1157,11 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
       fireEvent.click(startBtn);
     });
 
-    const postCall = (global.fetch as any).mock.calls.find(
-      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    const postCall = vi.mocked(global.fetch).mock.calls.find(
+      (c) => String(c[0]) === `${API_BASE_URL}/api/training/start`
     );
     expect(postCall).toBeDefined();
-    const payload = JSON.parse(postCall[1].body);
+    const payload = JSON.parse(String(postCall?.[1]?.body));
     expect(payload.early_stopping).toBe(false);
   });
 
@@ -1157,15 +1175,14 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
       fireEvent.click(startBtn);
     });
 
-    const postCall = (global.fetch as any).mock.calls.find(
-      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    const postCall = vi.mocked(global.fetch).mock.calls.find(
+      (c) => String(c[0]) === `${API_BASE_URL}/api/training/start`
     );
     expect(postCall).toBeDefined();
-    const payload = JSON.parse(postCall[1].body);
+    const payload = JSON.parse(String(postCall?.[1]?.body));
     expect(payload.early_stopping).toBe(true);
   });
 });
-
 
 
 

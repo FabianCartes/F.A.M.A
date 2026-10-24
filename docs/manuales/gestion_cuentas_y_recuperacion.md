@@ -2,7 +2,7 @@
 
 **Actualización de interfaz, 20 de octubre de 2026:** ya existe administración visual y cambio de contraseña propia; `/reset-password` se implementó en ACCESO-4A. Ver [manual de administración](administracion_visual.md). Las referencias posteriores a UI pendiente conservan el corte original del bloque backend; no describen la interfaz vigente. No se ha configurado envío de correo ni recuperación de emergencia.
 
-**18 de octubre de 2026.** Complementa [sesiones web](sesiones_web_y_acceso_administrado.md), [permisos de recursos](permisos_recursos_asignados.md) y [ADR 0036](../adr/0036-gestion-de-cuentas-y-recuperacion-administrada.md). Sin cuentas, BD, correo o servicios reales modificados.
+**18 de octubre de 2026.** Complementa [sesiones web](sesiones_web_y_acceso_administrado.md), [permisos de recursos](permisos_recursos_asignados.md) y [ADR 0054](../adr/0054-gestion-de-cuentas-y-recuperacion-administrada.md). Sin cuentas, BD, correo o servicios reales modificados.
 
 **Actualización posterior:** login y recuperación ya incorporan [cuotas persistentes de acceso](limites_login_y_recuperacion.md), con nueva clave HMAC explícita y respuestas 429/Retry-After. Las reservas se confirman antes de la transacción de credenciales, incluidos intentos que fallan después. La lista de pendientes del corte inicial al final debe leerse junto a esta actualización; auditoría, purga y validación de producción siguen pendientes.
 

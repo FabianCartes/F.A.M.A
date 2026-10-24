@@ -1,5 +1,7 @@
 """Training configuration and execution contracts through public service seams."""
 import re
+import random
+from functools import wraps
 from datetime import datetime, timezone
 
 import librosa
@@ -19,17 +21,7 @@ from tests.test_training_flow import training_env, partitions, register
 def service_env(training_env):
     service, sessions, root, thread = training_env
     register(sessions, "AvesChilenas")
-    raw = partitions(root, "AvesChilenas")
-    # Two classes make loss configuration observable, unlike a one-class fixture.
-    for split in ("train", "val"):
-        csv = raw / f"{split}.csv"
-        frame = pd.read_csv(csv)
-        audio = raw / "other" / f"{split}.wav"
-        audio.parent.mkdir(exist_ok=True)
-        audio.write_bytes(b"synthetic audio fixture")
-        other = {"clase": "Other", "nombre_archivo": audio.name,
-                 "file_path": f"other/{split}.wav", "file_stage": "raw", "recordist": split}
-        pd.concat([frame, pd.DataFrame([other])]).to_csv(csv, index=False)
+    partitions(root, "AvesChilenas", classes=("Fixture", "Other"))
     return service, sessions, root, thread
 
 
@@ -81,6 +73,26 @@ def run(service, **kwargs):
 def history(service, sessions):
     with sessions() as db:
         return service.get_history(db)
+
+
+def test_cancellation_during_final_validation_does_not_publish_artifacts(execution, monkeypatch):
+    service, sessions, _ = execution
+
+    class CancelDuringValidation(torch.nn.Module):
+        def __init__(self, num_classes):
+            super().__init__()
+            self.bias = torch.nn.Parameter(torch.zeros(num_classes))
+
+        def forward(self, inputs):
+            if not self.training:
+                assert service.stop_training()['status'] == 'stopping'
+            return self.bias.unsqueeze(0).expand(inputs.shape[0], -1)
+
+    monkeypatch.setattr(timm, 'create_model', lambda *args, num_classes, **kwargs: CancelDuringValidation(num_classes))
+    assert service.start_training('AvesChilenas', epochs=1, early_stopping=False)['status'] == 'started'
+    assert service.get_progress()['status'] == 'stopped'
+    assert history(service, sessions) == []
+    assert list(service.checkpoints_dir.iterdir()) == []
 
 
 def payloads(service, sessions):
@@ -146,7 +158,12 @@ def test_start_training_worker_with_custom_audio_physics(execution, monkeypatch)
     decoded = []
     transforms = []
     mel_transform = torchaudio.transforms.MelSpectrogram
+    real_decode = librosa.load
+    @wraps(real_decode)
     def decode(path, sr, **kwargs):
+        if sr != 16000:
+            # Final reports decode the real temporary WAVs, with published physics.
+            return real_decode(path, sr=sr, **kwargs)
         decoded.append((str(path), sr))
         return np.zeros(16, dtype=np.float32), sr
     def observe_mel(**kwargs):
@@ -163,8 +180,9 @@ def test_start_training_worker_with_custom_audio_physics(execution, monkeypatch)
     physics = {"target_sr": 16000, "duration_seconds": 2.0, "f_min": 50.0, "f_max": 4000.0,
                "n_mels": 128, "n_fft": 1024, "hop_length": 256}
     run(service, architecture="EfficientNet-B0", audio_config=physics)
-    assert decoded == [(str(root / "raw/AvesChilenas/fixture/train.wav"), 16000),
-                       (str(root / "raw/AvesChilenas/fixture/val.wav"), 16000)]
+    expected = [pd.read_csv(root / f"prepared/AvesChilenas/{split}.csv").iloc[0]["file_path"]
+                for split in ("train", "val")]
+    assert decoded[:len(expected)] == [(str(root / "raw/AvesChilenas" / path), 16000) for path in expected]
     assert transforms
     for transform in transforms:
         assert transform["sample_rate"] == 16000
@@ -229,7 +247,7 @@ def test_get_history_enriches_model_technical_sheet(service_env):
     item_1 = next(h for h in entries if h["id"] == 1)
     assert item_1["version"] == 1
     assert "v1" in item_1["name"]
-    assert "Motores" in item_1["name"]
+    assert "Dataset no verificado" in item_1["name"]
     assert item_1["filename"] == "fama_efficientnet_b0_1790642923_efficientnet_b0_best.pt"
     assert item_1["hyperparameters"]["learning_rate"] == 0.001
     assert item_1["hyperparameters"]["batch_size"] == 16
@@ -242,7 +260,7 @@ def test_get_history_enriches_model_technical_sheet(service_env):
     item_6 = next(h for h in entries if h["id"] == 6)
     assert item_6["version"] == 1
     assert "v1" in item_6["name"]
-    assert "Aves Chilenas" in item_6["name"]
+    assert "Dataset no verificado" in item_6["name"]
     assert item_6["filename"] == "fama_efficientnet_b0_1790539191_efficientnet_b0_best.pt"
     assert item_6["hyperparameters"]["learning_rate"] == 0.001
     assert item_6["hyperparameters"]["batch_size"] == 32
@@ -268,15 +286,15 @@ def test_get_history_semantic_versioning_per_dataset_and_architecture(service_en
                        ruta_binario_gcp=f"models/{filename}")
         db.commit()
     by_id = {h["id"]: h for h in history(service, sessions)}
-    assert by_id[1]["name"] == "Motores · EfficientNet-B0 (v1)"
+    assert by_id[1]["name"] == "Dataset no verificado · EfficientNet-B0 (v1)"
     assert by_id[1]["version"] == 1
-    assert by_id[6]["name"] == "Aves Chilenas · EfficientNet-B0 (v1)"
+    assert by_id[6]["name"] == "Dataset no verificado · EfficientNet-B0 (v1)"
     assert by_id[6]["version"] == 1
-    assert by_id[7]["name"] == "Aves Chilenas · EfficientNet-B0 (v2)"
+    assert by_id[7]["name"] == "Dataset no verificado · EfficientNet-B0 (v2)"
     assert by_id[7]["version"] == 2
-    assert by_id[8]["name"] == "Aves Chilenas · ResNet-34d (v1)"
+    assert by_id[8]["name"] == "Dataset no verificado · ResNet-34d (v1)"
     assert by_id[8]["version"] == 1
-    assert by_id[9]["name"] == "Motores · ResNet-34d (v1)"
+    assert by_id[9]["name"] == "Dataset no verificado · ResNet-34d (v1)"
     assert by_id[9]["version"] == 1
 
 
@@ -365,3 +383,39 @@ def test_training_worker_disabled_early_stopping_runs_all_epochs(execution):
     assert not any("Early Stopping activado" in log["message"] for log in progress["logs"])
     entry, = history(service, sessions)
     assert len(entry["metrics"]) == 10
+
+
+def test_seed_replays_worker_rngs_and_checkpoint_records_initialization(execution, monkeypatch):
+    service, sessions, _ = execution
+    draws = []
+    def synthetic_loader(dataset, **kwargs):
+        if kwargs["shuffle"]:
+            draws.append((random.random(), float(np.random.random()), float(torch.rand(1).item())))
+        return [(torch.ones(1, 4096), torch.zeros(1, dtype=torch.long))]
+    monkeypatch.setattr(training, "DataLoader", synthetic_loader)
+    run(service, architecture="AudioCNN", seed=17)
+    run(service, architecture="AudioCNN", seed=17)
+    run(service, architecture="AudioCNN", seed=18)
+    assert draws[0] == draws[1]
+    assert draws[0] != draws[2]
+    saved = [torch.load(service.checkpoints_dir / item["filename"], map_location="cpu", weights_only=True)
+             for item in history(service, sessions)]
+    assert sorted(payload["seed"] for payload in saved) == [17, 17, 18]
+    assert {payload["initialization_mode"] for payload in saved} == {"constructor_default"}
+
+
+def test_pretrained_constructor_failure_fails_job_without_untrained_retry(execution, monkeypatch):
+    service, sessions, _ = execution
+    attempted = []
+    def unavailable_pretrained(**options):
+        attempted.append(options["pretrained"])
+        raise RuntimeError("pretrained constructor unavailable")
+    monkeypatch.setattr(training, "BioacousticModel", unavailable_pretrained)
+    assert service.start_training("AvesChilenas", architecture="ConvNeXt-Nano", epochs=1)["status"] == "started"
+    progress = service.get_progress()
+    assert progress["status"] == "failed"
+    assert "pretrained constructor unavailable" in progress["error_message"]
+    assert attempted == [True]
+    assert history(service, sessions) == []
+    assert progress['metrics_history'] == []
+    assert list(service.checkpoints_dir.iterdir()) == []

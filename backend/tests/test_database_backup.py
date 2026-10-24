@@ -79,7 +79,7 @@ def test_backup_can_be_restored_exactly_into_an_empty_separate_database(database
     assert json.loads(result.stdout)['code'] == 'database_backup_created'
     manifest = json.loads((d['backup']/'manifest.json').read_text(encoding='utf-8'))
     assert manifest['tables']['public.usuario']['rows'] == 1
-    assert manifest['revision'] == '0003_autonomy'
+    assert manifest['revision'] == '0004_integration'
     assert 'synthetic-hash' not in (d['backup']/'manifest.json').read_text(encoding='utf-8')
     assert not list(d['backup'].glob('.pgpass-*'))
     restored = cli(d['profile'], 'restore', '--backup', d['backup'], '--target-url-file', d['target_file'], '--pg-bin', d['tools'])

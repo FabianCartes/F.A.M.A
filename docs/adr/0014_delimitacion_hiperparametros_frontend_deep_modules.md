@@ -1,5 +1,7 @@
 # ADR 0014: Delimitación de Parámetros Configurables en Frontend bajo Principios de Deep Modules y Presets de Dominio
 
+> **Nota de vigencia — retiro del entrenamiento legacy:** este documento conserva decisiones y resultados históricos. Los scripts standalone, las recetas de entrenamiento y las CLI PoC que menciona fueron retirados; no son instrucciones operativas vigentes. El entrenamiento soportado parte de la UI y `POST /api/training/start`. Los módulos importables compartidos y la evaluación independiente se conservan. Véase la [revisión actual de FastAPI y entrenamiento](../arquitectura/revision-fastapi.md).
+
 * **Estado:** Aceptado  
 * **Fecha:** 2026-09-29  
 * **Decisores:** Equipo F.A.M.A.  
@@ -102,4 +104,4 @@ Las siguientes variables y mecanismos permanecen encapsulados bajo el capó sin 
 * **Robustez Operativa:** Imposibilidad de que el usuario descalibre el pipeline DSP o cause divergencia numérica por combinaciones absurdas de parámetros.
 * **Ergonomía y Velocidad:** El usuario puede entrenar nuevos conjuntos de datos en minutos ajustando 4 o 5 hiperparámetros fundamentales o haciendo clic en un preset.
 * **Arquitectura Limpia y Mantenible:** Los contratos API (`Pydantic` en backend y `Zod` en frontend) permanecen compactos, estables y testeables mediante TDD.
-* **Modo Avanzado / Extensibilidad:** Si un investigador requiere calibrar hiperparámetros profundos de HPSS o SpecAugment fuera de los defaults, lo realiza directamente mediante las recetas declarativas en YAML ([`backend/training/recipes/`](../../backend/training/recipes/)), preservando la separación entre la interfaz de producto y la investigación de bajo nivel.
+* **Modo Avanzado / Extensibilidad:** Si un investigador requiere calibrar hiperparámetros profundos de HPSS o SpecAugment fuera de los defaults, lo realiza directamente mediante las recetas declarativas en YAML (`backend/training/recipes/`), preservando la separación entre la interfaz de producto y la investigación de bajo nivel.

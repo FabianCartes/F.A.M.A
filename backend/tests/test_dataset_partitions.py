@@ -5,6 +5,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from tests.training_admission import DeferredTrainingProcess
 from app import main
 from app.models.dataset import ConjuntoDatos, Audio
 from app.models.dataset_access import AsignacionDataset
@@ -25,7 +26,7 @@ def partition_http(web, tmp_path, monkeypatch):
     monkeypatch.setattr(paths, "get_raw_data_dir", lambda name=None: tmp_path / "raw" / (name or ""))
     monkeypatch.setattr(paths, "get_processed_data_dir", lambda name=None: tmp_path / "processed" / (name or ""))
     monkeypatch.setattr(training, "SessionLocal", sessions)
-    monkeypatch.setattr(main, "training_service", training.TrainingService(tmp_path / "checkpoints"))
+    monkeypatch.setattr(main, "training_service", training.TrainingService(tmp_path / "checkpoints", process_factory=DeferredTrainingProcess))
     monkeypatch.setattr(training.threading, "Thread", Mock())
     for route in main.app.routes:
         if getattr(route, "path", "") in {"/api/training/start", "/api/training/progress"}:
@@ -62,7 +63,7 @@ def test_researcher_previews_then_saves_an_immutable_version_without_replacing_l
     response = client.post(BASE + "/preview", headers={"Origin": ORIGIN}, json=POLICY)
     assert response.status_code == 200
     preview = response.json()
-    assert preview["counts"] == {"train": 8, "val": 2}
+    assert preview["counts"] == {"train": 6, "val": 2, "test": 2}
     assert len(preview["version"]) == 64
     assert preview["warnings"]  # Recordist provenance is unknown in this fixture.
     assert client.get(BASE).json()["versions"] == []
@@ -72,7 +73,7 @@ def test_researcher_previews_then_saves_an_immutable_version_without_replacing_l
     version = client.get(BASE + "/" + preview["version"]).json()
     assert version["version"] == preview["version"]
     assert version["created_by"] == 2
-    assert version["counts"] == {"train": 8, "val": 2}
+    assert version["counts"] == {"train": 6, "val": 2, "test": 2}
     assert len({entry["file_path"] for entry in version["entries"]}) == 10
     assert all(entry["file_stage"] == "raw" and len(entry["hash_sha256"]) == 64 for entry in version["entries"])
     assert {entry["clase"] for entry in version["entries"] if entry["split"] == "val"} == {"Chucao", "Canastero"}
@@ -255,3 +256,28 @@ def test_unreviewed_warnings_and_foreign_origin_cannot_publish(partition_http):
     assert client.post(BASE, headers={"Origin": "https://foreign.example.test"}, json={
         **body, "acknowledge_warnings": True}).status_code == 403
     assert client.get(BASE).json()["versions"] == []
+
+
+def test_new_partitions_have_independent_test_groups_and_legacy_versions_stay_readable(partition_http):
+    import json
+    from app.services.partitions import _encoded
+    client, _, raw = partition_http
+    version = save_version(client)
+    assert version["format"] == 2
+    groups = [{entry["source_group_id"] for entry in version["entries"] if entry["split"] == split}
+              for split in ("train", "val", "test")]
+    assert all(groups)
+    assert not (groups[0] & groups[1] or groups[0] & groups[2] or groups[1] & groups[2])
+    legacy = {key: value for key, value in version.items() if key not in {"version", "created_at", "created_by"}}
+    legacy["format"] = 1
+    legacy["policy"].pop("test_percent")
+    for entry in legacy["entries"]:
+        if entry["split"] == "test": entry["split"] = "train"
+    legacy["counts"] = {"train": 8, "val": 2}
+    identity = hashlib.sha256(_encoded(legacy)).hexdigest()
+    (raw/".partitions"/f"{identity}.json").write_bytes(_encoded(dict(legacy, version=identity)))
+    assert client.get(BASE+"/"+identity).status_code == 200
+    response = client.post("/api/training/start", headers={"Origin": ORIGIN}, json={
+        "dataset_name": "Sample", "partition_version": identity})
+    assert response.status_code == 400
+    assert "histórica" in response.json()["detail"]

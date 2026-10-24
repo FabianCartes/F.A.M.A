@@ -6,6 +6,7 @@ import soundfile as sf
 import numpy as np
 
 from app.main import app
+from tests.http_security import administrator_http
 from app.database import get_db
 from app.schemas.prediction import PredictionResult
 from app.services.registry import get_model_registry, ModelRegistry
@@ -81,7 +82,12 @@ def mock_db():
 def client(mock_registry, mock_db):
     app.dependency_overrides[get_model_registry] = lambda: mock_registry
     app.dependency_overrides[get_db] = lambda: mock_db
-    yield TestClient(app)
+    with administrator_http(app):
+        http = TestClient(app, raise_server_exceptions=False)
+        try:
+            yield http
+        finally:
+            http.close()
     app.dependency_overrides.clear()
 
 
@@ -155,7 +161,7 @@ def test_predict_invalid_model_returns_404_and_aborts_gcs(mock_upload, client):
     )
 
     assert response.status_code == 404
-    assert "modelo-fantasma" in response.json()["detail"]
+    assert response.json()["detail"] == "Modelo no encontrado o no asignado."
     # Garantía de seguridad: GCS NUNCA se invoca si el modelo no existe
     mock_upload.assert_not_called()
 
@@ -175,16 +181,9 @@ def test_predict_corrupt_wav_returns_safe_400_without_persistence(
     )
 
     assert response.status_code == 400, response.json()
-    assert response.json() == {
-        "detail": "Audio inválido o no soportado. Proporcione un archivo WAV válido."
-    }
-    assert isinstance(predictor.decode_error, MalformedAudioError)
-    assert isinstance(predictor.decode_error.__cause__, sf.LibsndfileError)
-    assert str(predictor.audio_path) in str(predictor.decode_error)
-    assert str(predictor.audio_path) not in response.text
-    assert not predictor.audio_path.exists()
-    assert mock_upload.await_args.args[0] == corrupt_wav
-    assert mock_upload.await_args.kwargs["filename"].endswith(".wav")
+    assert response.json() == {"detail": "Audio inválido. Proporcione un archivo WAV válido."}
+    assert not hasattr(predictor, "audio_path")  # Preflight rejects before upload/inference.
+    mock_upload.assert_not_awaited()
     mock_db.add.assert_not_called()
     mock_db.commit.assert_not_called()
     mock_db.refresh.assert_not_called()
@@ -227,7 +226,7 @@ def test_predict_inference_failure_never_persists_or_fabricates_success(
 
 
 @patch("app.main.upload_audio_to_gcp", new_callable=AsyncMock)
-def test_predict_unnormalized_decoder_error_stays_500_without_persistence(
+def test_predict_malformed_riff_is_rejected_by_preflight_without_persistence(
     mock_upload, client, mock_registry, mock_db,
 ):
     mock_upload.return_value = True
@@ -241,9 +240,10 @@ def test_predict_unnormalized_decoder_error_stays_500_without_persistence(
         )},
     )
 
-    assert response.status_code == 500
+    assert response.status_code == 400
     assert set(response.json()) == {"detail"}
-    assert not predictor.audio_path.exists()
+    assert not hasattr(predictor, "audio_path")
+    mock_upload.assert_not_awaited()
     mock_db.add.assert_not_called()
     mock_db.commit.assert_not_called()
     mock_db.refresh.assert_not_called()
@@ -308,6 +308,53 @@ def test_unconfirmed_source_never_produces_success(mock_upload, client, mock_db,
     mock_db.commit.assert_not_called()
 
 
+@pytest.mark.parametrize(
+    "details, expected_members",
+    [
+        (None, None),
+        ({"status": "silence"}, None),
+        ({"status": "noise"}, None),
+        ({"ensemble_weights": {}}, None),
+        ({"ensemble_weights": {"unverified": "0.5"}}, None),
+        ({"ensemble_weights": {"invalid": -0.1}}, None),
+        ({"ensemble_weights": {"invalid": True}}, None),
+        ({"ensemble_weights": {"resnet": 0.60, "efficientnet": 0.10, "panns": 0.30}},
+         ["resnet (60%)", "efficientnet (10%)", "panns (30%)"]),
+    ],
+)
+@patch("app.main.upload_audio_to_gcp", new_callable=AsyncMock)
+def test_predict_reports_only_execution_members(
+    mock_upload, client, mock_registry, details, expected_members,
+):
+    mock_upload.return_value = True
+
+    class ExecutionPredictor(DummyPredictor):
+        def predict(self, audio_file_path):
+            return PredictionResult(clase=self.label, confianza=self.conf, detalles=details)
+
+    predictor = ExecutionPredictor("execution-model")
+    predictor._meta.metrics = {"optimal_weights": {"catalogue-only": 1.0}}
+    mock_registry.register(predictor)
+    # Global readiness belongs to a different predictor and is not execution evidence.
+    with patch("app.main.ensemble_service.get_status", return_value={
+        "active_models": [{"name": "Unrelated model", "weight": 1.0}],
+        "is_fallback": True,
+    }):
+        response = client.post(
+            "/api/predict?model_id=execution-model",
+            data={"dataset_name": "unrelated-domain"},
+            files={"file": ("canto.wav", create_dummy_wav_bytes(), "audio/wav")},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["modelos_activos"] == expected_members
+    assert data["modelo"] == "Dummy execution-model"
+    assert data["modelo_id"] == "execution-model"
+    assert data["clase"] == "Chincol"
+    assert data["confianza"] == 0.95
+
+
 def test_predict_invalid_format_returns_400(client):
     response = client.post(
         "/api/predict",
@@ -315,3 +362,112 @@ def test_predict_invalid_format_returns_400(client):
     )
     assert response.status_code == 400
     assert "Solo se permiten archivos de audio con extensión .wav" in response.json()["detail"]
+
+
+@patch("app.main.upload_audio_to_gcp", new_callable=AsyncMock)
+def test_predict_rejects_persisted_model_without_hash_before_persistence(
+    mock_upload, client, mock_registry, mock_db, tmp_path,
+):
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    checkpoint = tmp_path / "fama_missing_identity_best.pt"
+    checkpoint.write_bytes(b"synthetic checkpoint bytes" * 500)
+    model = SimpleNamespace(
+        id_modelo=712,
+        activo=False,
+        arquitectura="fixture",
+        ruta_binario_gcp=f"models/{checkpoint.name}",
+        conjunto_datos=None,
+        hash_binario=None,
+    )
+    db = MagicMock()
+    db.query.return_value.order_by.return_value.all.return_value = [model]
+    mock_registry.register_from_db(db, tmp_path)
+
+    from fastapi.testclient import TestClient
+    safe_client = TestClient(app, raise_server_exceptions=False)
+    response = safe_client.post(
+        "/api/predict?model_id=fama_trained_model_712",
+        files={"file": ("canto.wav", create_dummy_wav_bytes(), "audio/wav")},
+    )
+    safe_client.close()
+
+    assert response.status_code == 503
+    assert "hash SHA-256 registrado" in response.json()["detail"]
+    mock_upload.assert_not_awaited()
+    mock_db.add.assert_not_called()
+    mock_db.commit.assert_not_called()
+    mock_db.refresh.assert_not_called()
+    assert set(response.json()) == {"detail"}
+
+
+def test_predict_rejects_replaced_persisted_checkpoint_without_saving_prediction(
+    client, mock_registry, mock_db, tmp_path,
+):
+    import hashlib
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    import torch
+
+    checkpoint = tmp_path / "fama_replaced_identity_best.pt"
+    torch.save({
+        "architecture": "AudioCNN",
+        "classes": ["A", "B"],
+        "padding": "x" * 12000,
+    }, checkpoint)
+    expected_hash = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+    model = SimpleNamespace(
+        id_modelo=713,
+        activo=False,
+        arquitectura="fixture",
+        ruta_binario_gcp=f"models/{checkpoint.name}",
+        conjunto_datos=None,
+        hash_binario=expected_hash,
+    )
+    db = MagicMock()
+    db.query.return_value.order_by.return_value.all.return_value = [model]
+    mock_registry.register_from_db(db, tmp_path)
+    checkpoint.write_bytes(checkpoint.read_bytes() + b"replacement")
+
+    with patch("app.main.upload_audio_to_gcp", new_callable=AsyncMock, return_value=True) as upload:
+        response = client.post(
+            "/api/predict?model_id=fama_trained_model_713",
+            files={"file": ("canto.wav", create_dummy_wav_bytes(), "audio/wav")},
+        )
+
+    assert response.status_code == 503
+    assert "no coincide con el hash SHA-256 registrado" in response.json()["detail"]
+    assert set(response.json()) == {"detail"}
+    upload.assert_awaited_once()
+    mock_db.add.assert_not_called()
+    mock_db.commit.assert_not_called()
+    mock_db.refresh.assert_not_called()
+
+
+@patch("app.main.upload_audio_to_gcp", new_callable=AsyncMock)
+def test_predict_exposes_loaded_checkpoint_identity_in_details(
+    mock_upload, client, mock_registry, mock_db,
+):
+    mock_upload.return_value = True
+    loaded_hash = "a" * 64
+
+    class ProvenancePredictor(DummyPredictor):
+        def predict(self, audio_file_path):
+            return PredictionResult(
+                clase=self.label,
+                confianza=self.conf,
+                detalles={"loaded_checkpoint_sha256": loaded_hash, "status": "classified"},
+            )
+
+    mock_registry.register(ProvenancePredictor("checkpoint-provenance"))
+    response = client.post(
+        "/api/predict?model_id=checkpoint-provenance",
+        files={"file": ("canto.wav", create_dummy_wav_bytes(), "audio/wav")},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["detalles"]["loaded_checkpoint_sha256"] == loaded_hash
+    assert mock_db.add.called
+    assert mock_db.commit.called

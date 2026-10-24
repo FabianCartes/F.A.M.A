@@ -12,7 +12,7 @@ export const FeedbackCreateRequestSchema = z
     id_prediccion: z.number().int().positive("El ID de predicción debe ser un entero positivo"),
     fue_correcta: z.boolean(),
     etiqueta_corregida: z.string().nullable().optional(),
-    id_usuario: z.number().int().positive().optional().default(1),
+    id_usuario: z.number().int().positive().optional(),
   })
   .refine(
     (data) => {

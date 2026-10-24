@@ -26,7 +26,7 @@ Se respaldan exclusivamente los bytes del checkpoint registrado, incluido su man
 
 El objeto se identifica como `gs://<bucket-configurado>/models/checkpoints/sha256/<sha256>.pt`. La referencia histórica `models/<nombre>.pt` de SQL se conserva para el nombre local y no constituye por sí misma una prueba de que exista un respaldo. No se añade una migración ni una tabla SQL.
 
-La creación usa `if_generation_match=0`. La descarga fija la generación observada y solicita bytes sin transcodificación; además de la verificación del SDK, se verifica SHA-256 localmente. La publicación local usa un temporal en el mismo directorio, fsync del archivo y enlace sin reemplazo; el directorio se sincroniza donde el sistema lo permite. Véase la [referencia oficial del SDK de GCS](https://docs.cloud.google.com/python/docs/reference/storage/latest/google.cloud.storage.blob.Blob) y el [ADR 0045](../adr/0045-respaldo-explicito-de-checkpoints-por-contenido.md).
+La creación usa `if_generation_match=0`. La descarga fija la generación observada y solicita bytes sin transcodificación; además de la verificación del SDK, se verifica SHA-256 localmente. La publicación local usa un temporal en el mismo directorio, fsync del archivo y enlace sin reemplazo; el directorio se sincroniza donde el sistema lo permite. Véase la [referencia oficial del SDK de GCS](https://docs.cloud.google.com/python/docs/reference/storage/latest/google.cloud.storage.blob.Blob) y el [ADR 0063](../adr/0063-respaldo-explicito-de-checkpoints-por-contenido.md).
 
 ## Alcance y límites
 

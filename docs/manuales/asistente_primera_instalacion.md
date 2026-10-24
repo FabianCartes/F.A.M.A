@@ -66,4 +66,4 @@ Las pruebas cruzan HTTP/CLI y formularios visibles. Utilizan PostgreSQL 16 desec
 
 La revisión en navegador recorrió todos los pasos y finalizó una instalación **sintética y desechable**, con PostgreSQL local real y GCS simulado. [Comprobaciones](../images/instalacion_etapa7_comprobaciones_20261022.png) y [resultado final](../images/instalacion_etapa7_finalizada_20261022.png). No acredita GCS real desde el asistente, vista móvil, reinicio con carga ML ni despliegue institucional. La configuración remota de pruebas permanece sin finalizar y sin primer administrador real: el siguiente recorrido conjunto corresponde a la etapa 8 del [plan](plan_instalacion_gcp_y_asistente.md).
 
-Decisión y consecuencias: [ADR 0042](../adr/0042-autorizacion-y-finalizacion-reanudable-de-instalacion.md). Comandos, resultados, hashes y limpieza: [recibo de etapa 7](../receipts/instalacion_etapa7_asistente_20261022.json).
+Decisión y consecuencias: [ADR 0060](../adr/0060-autorizacion-y-finalizacion-reanudable-de-instalacion.md). Comandos, resultados, hashes y limpieza: [recibo de etapa 7](../receipts/instalacion_etapa7_asistente_20261022.json).

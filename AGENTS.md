@@ -2,6 +2,21 @@
 
 Este documento define los principios y flujos de trabajo obligatorios para cualquier tarea de diseño e implementación de código en este repositorio.
 
+## Contexto y alcance
+
+F.A.M.A. es un framework MLOps híbrido para clasificación acústica multidominio, con aplicaciones en bioacústica y diagnóstico acústico de motores. No asumir que los datasets, las clases o los modelos de ambos dominios son intercambiables.
+
+| Área | Responsabilidad y referencias |
+| --- | --- |
+| `backend/app/` | API FastAPI, esquemas, servicios y persistencia de la aplicación. |
+| `backend/training/` | Componentes de entrenamiento ML; comprobar sus consumidores antes de cambiar contratos. |
+| `frontend/` | Interfaz Next.js/React. Consultar también `frontend/AGENTS.md` y las guías locales que indique. |
+| `docs/` | Documentación clasificada por contenido; índice en `docs/README.md` y seguimiento activo en `docs/KANBAN.md`. |
+
+* Antes de editar, revisar `git status` y las diferencias de los archivos afectados. Preservar cambios locales y archivos no rastreados ajenos a la tarea.
+* Consultar los `AGENTS.md` específicos del área que se vaya a modificar.
+* Contrastar documentos con el código del checkout actual. Distinguir implementación vigente, cambios locales, propuestas y registros históricos; una fecha reciente o un recibo anterior no prueban el estado actual.
+
 ---
 
 ## 1. Metodología de Desarrollo: TDD (Test-Driven Development)
@@ -11,6 +26,7 @@ Este documento define los principios y flujos de trabajo obligatorios para cualq
   2. **Verde:** Escribir el código mínimo necesario para hacer pasar la prueba.
   3. **Refactor:** Limpiar y optimizar la implementación asegurando que las pruebas se mantengan en verde.
 * La superficie de pruebas debe corresponder a la interfaz pública del módulo, no a detalles internos de implementación.
+* Aplicar TDD a cambios de comportamiento del código de producción. Para investigación o documentación, verificar fuentes, rutas y consistencia; no fabricar pruebas de código sin relación con el cambio.
 
 ---
 
@@ -38,7 +54,7 @@ Este documento define los principios y flujos de trabajo obligatorios para cualq
 
 ## 5. Búsqueda y Extensión de Skills
 * **Skill de referencia:** [`find-skills`](.agents/skills/find-skills/SKILL.md)
-* Cuando surja una necesidad especializada de herramientas o procesos, evaluar e incorporar skills disponibles en el ecosistema.
+* Usar las skills cuando la tarea corresponda a su propósito. Evaluar skills adicionales ante una necesidad concreta; no convertir su búsqueda o instalación en un paso rutinario de cada cambio.
 
 ---
 
@@ -67,7 +83,9 @@ Toda documentación de proyecto que se redacte debe quedar bajo `docs/`. Elegir 
 
 ---
 
-## 7. Convención de Mensajes de Commit
+## 7. Convenciones de Git: ramas y commits
+
+* Escribir en inglés los nombres de ramas nuevas; seguir el prefijo de la herramienta cuando corresponda.
 
 * Escribir en español todos los mensajes de commit nuevos, incluidos el alcance y la descripción. Mantener en inglés únicamente los tipos convencionales de Conventional Commits (`feat`, `fix`, `test`, `docs`, `refactor`, `chore`, etc.) y los identificadores técnicos que deban conservar su forma original.
 * Usar el formato `tipo(alcance): descripción en español`, con una descripción breve que explique el resultado o propósito del cambio.
@@ -75,7 +93,45 @@ Toda documentación de proyecto que se redacte debe quedar bajo `docs/`. Elegir 
 
 ---
 
-## 8. Seguimiento del trabajo guiado de acceso e instalación
+
+## 8. Entornos y comprobaciones
+
+Elegir las comprobaciones según el área y el contrato afectados. Informar comandos, resultados, exclusiones y límites de la verificación; no presentar pruebas deseleccionadas como aprobadas ni resultados históricos como una ejecución nueva.
+
+### Frontend
+
+Desde `frontend/`, los comandos declarados en `package.json` son:
+
+| Tarea | Comando |
+| --- | --- |
+| Instalar según `package-lock.json` | `npm ci` |
+| Desarrollo | `npm run dev` |
+| Pruebas | `npm test` |
+| Lint | `npm run lint` |
+| Compilación | `npm run build` |
+| Servir compilación | `npm start` |
+
+Consultar `frontend/package.json` para las versiones vigentes y las instrucciones locales antes de cambiar APIs del framework. No asumir que lint o build están aprobados por un registro previo.
+
+### Backend
+
+* Las dependencias se declaran en `backend/requirements.txt`; la imagen de `backend/Dockerfile` usa Python 3.12. Una prueba con otro intérprete no valida automáticamente la imagen.
+* Para comprobaciones de entrenamiento, seguir el procedimiento y sus prerrequisitos en [`integracion-flujo-entrenamiento.md`](docs/manuales/integracion-flujo-entrenamiento.md), junto con la actualización de [`consolidacion-worktrees.md`](docs/manuales/consolidacion-worktrees.md). Usar el runner local `backend/tests/run_isolated_training_checks.py` con selectores pertinentes y un intérprete validado.
+* Ese procedimiento usa SQLite en memoria, datos/modelos CPU sintéticos, temporales y cachés privados, red bloqueada y límites de tiempo. Su guarda de aplicación no equivale a un sandbox del sistema operativo ni valida GPU, PostgreSQL real o calidad de modelos.
+* No instalar ni cambiar entornos por inercia ante un fallo: identificar primero si falta un prerrequisito o existe una regresión.
+
+---
+
+## 9. Contratos de entrenamiento y evidencia ML
+
+* Distinguir admisión/inicio del trabajo, finalización, persistencia de checkpoints, evaluación, publicación y activación. Una respuesta de inicio no acredita las etapas posteriores.
+* Verificar identidad del dataset, particiones y procedencia de pesos y métricas al modificar el flujo. Consultar los ADR vigentes en `docs/adr/` y las pruebas públicas del servicio/API.
+* No afirmar disponibilidad de un modelo por su nombre o metadatos: comprobar los artefactos que exige el predictor. No deducir una subida a GCS de una ruta de checkpoint local.
+* No usar entrenamiento real, descargas de pesos, modificación de datasets o arranque de Docker como validación rutinaria de cambios documentales o pruebas focalizadas. Elegir esos procedimientos cuando formen parte del alcance solicitado y documentar sus efectos y prerrequisitos.
+
+---
+
+## 10. Seguimiento del trabajo guiado de acceso e instalación
 
 * Mantener la bitácora viva en `docs/manuales/bitacora_acceso_e_instalacion.md` al avanzar en acceso, GCP e instalación. Registrar tanto el trabajo del operador humano como el de Codex, con responsable, resultado, evidencia y siguiente paso.
 * Distinguir confirmaciones del operador, comprobaciones observadas, implementación y tareas pendientes. Conservar los recibos previos como cortes históricos; registrar las nuevas verificaciones en el recibo de su etapa bajo `docs/receipts/`.

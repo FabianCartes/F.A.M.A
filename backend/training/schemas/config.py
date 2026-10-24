@@ -5,7 +5,7 @@ Esquemas declarativos y validación de recetas de entrenamiento vía Pydantic v2
 from enum import Enum
 from pathlib import Path
 from typing import Optional, Tuple, Literal
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class AudioConfig(BaseModel):
@@ -154,4 +154,12 @@ class TrainingConfig(BaseModel):
     loss: LossConfig = Field(default_factory=LossConfig)
     optimizer: OptimizerConfig = Field(default_factory=OptimizerConfig)
     dataset: DatasetConfig
+    dataset_name: Optional[str] = Field(default=None, min_length=1, max_length=255)
     split: SplitConfig = Field(default_factory=SplitConfig)
+
+    @field_validator("dataset_name")
+    @classmethod
+    def validate_dataset_name(cls, value):
+        if value is not None and not value.strip():
+            raise ValueError("dataset_name must not be blank")
+        return value

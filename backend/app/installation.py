@@ -203,7 +203,7 @@ class Installation:
         from app.connections import diagnose
         from app.schema import check_schema
         from app.database_connection import database_engine
-        from migrations.schema_0003 import metadata
+        from migrations.schema_0004 import metadata, BOOTSTRAP_TABLES
         c = self.configuration()
         checks = diagnose(c)
         schema = check_schema(c.database_url) if c.database_url else None
@@ -250,10 +250,10 @@ class Installation:
                     valid = (set(row[0] for row in business) == set(metadata.tables)
                         and all(tuple(row[1:]) == (False,True,True,True,True,False,False,False,False) for row in business)
                         and len(version) == 1 and tuple(version[0][1:]) == (False,True,False,False,False,False,False,False,False)
-                        and len(sequences) == 9 and all(tuple(row) == (True,True,False) for row in sequences) and not any(role))
+                        and len(sequences) == 14 and all(tuple(row) == (True,True,False) for row in sequences) and not any(role))
                     checks["permissions"] = {"ok": valid, "code": "database_runtime_permissions_ready" if valid else "database_runtime_permissions_invalid"}
                     occupied = any(db.exec_driver_sql(f'SELECT 1 FROM public."{name}" LIMIT 1').first()
-                                   for name in metadata.tables)
+                                   for name in metadata.tables if name not in BOOTSTRAP_TABLES)
                 pending = (self.directory / "finalization.json").exists()
                 checks["first_admin"] = {"ok": not occupied or pending,
                     "code": "initial_administrator_resume_pending" if pending else
@@ -284,7 +284,7 @@ class Installation:
         from sqlalchemy.engine import make_url
         from app.database_connection import database_engine
         from app.passwords import hash_password
-        from migrations.schema_0003 import metadata
+        from migrations.schema_0004 import metadata, BOOTSTRAP_TABLES
         intent = self._intent()
         if intent and values:
             raise InstallationError("installation_resume_required", 409)
@@ -319,13 +319,13 @@ class Installation:
                             or tuple(users[0][3:]) != (intent["name"], "administrador", True)):
                         raise InstallationError("database_already_initialized", 409)
                     if any(db.exec_driver_sql(f'SELECT 1 FROM public."{name}" LIMIT 1').first()
-                           for name in metadata.tables if name not in {"usuario", "evento_seguridad"}):
+                           for name in metadata.tables if name not in {"usuario", "evento_seguridad"} | BOOTSTRAP_TABLES):
                         raise InstallationError("database_already_initialized", 409)
                     events = db.exec_driver_sql("SELECT action,outcome,actor_id,subject_user_id,dataset_id FROM public.evento_seguridad").all()
                     if events != [("account.created", "success", users[0][0], users[0][0], None)]:
                         raise InstallationError("database_already_initialized", 409)
                 else:
-                    if any(db.exec_driver_sql(f'SELECT 1 FROM public."{name}" LIMIT 1').first() for name in metadata.tables):
+                    if any(db.exec_driver_sql(f'SELECT 1 FROM public."{name}" LIMIT 1').first() for name in metadata.tables if name not in BOOTSTRAP_TABLES):
                         raise InstallationError("database_already_initialized", 409)
                     if intent is None:
                         intent = {"version": 1, "fingerprint": fingerprint, "email": values["email"].strip().lower(),

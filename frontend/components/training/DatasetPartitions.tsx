@@ -5,12 +5,13 @@ import { z } from "zod";
 import { API_BASE_URL, apiFetch } from "@/lib/api";
 
 const summarySchema = z.object({
+  format: z.number().int().optional(),
   version: z.string().regex(/^[0-9a-f]{64}$/),
-  counts: z.object({ train: z.number().int().positive(), val: z.number().int().positive() }),
+  counts: z.object({ train: z.number().int().positive(), val: z.number().int().positive(), test: z.number().int().positive().optional() }),
   warnings: z.array(z.string()).default([]), created_at: z.string().optional(), created_by: z.number().optional(),
 });
 const previewSchema = summarySchema.extend({
-  entries: z.array(z.object({ clase: z.string(), split: z.enum(["train", "val"]) })),
+  entries: z.array(z.object({ clase: z.string(), split: z.enum(["train", "val", "test"]) })),
   excluded: z.array(z.object({ file_path: z.string(), reason: z.string() })).default([]),
 });
 type Summary = z.infer<typeof summarySchema>;
@@ -32,6 +33,7 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect }:
   const [versions, setVersions] = useState<Summary[]>([]);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [validation, setValidation] = useState("20");
+  const [test, setTest] = useState("20");
   const [seed, setSeed] = useState("42");
   const [acknowledged, setAcknowledged] = useState(false);
   const [error, setError] = useState("");
@@ -55,17 +57,17 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect }:
     return () => { controller.abort(); active.current?.abort(); };
   }, [open, dataset, base]);
 
-  function changePolicy(value: string, field: "validation" | "seed") {
-    if (field === "validation") setValidation(value); else setSeed(value);
+  function changePolicy(value: string, field: "validation" | "test" | "seed") {
+    if (field === "validation") setValidation(value); else if (field === "test") setTest(value); else setSeed(value);
     setPreview(null); setAcknowledged(false); setMessage("");
   }
 
   async function prepare(save = false) {
     if (locked) return;
-    const percent = Number(validation), randomSeed = Number(seed);
-    if (!validation.trim() || !seed.trim() || !Number.isInteger(percent) || percent < 10 || percent > 40 ||
+    const percent = Number(validation), testPercent = Number(test), randomSeed = Number(seed);
+    if (!validation.trim() || !test.trim() || !seed.trim() || !Number.isInteger(percent) || percent < 10 || percent > 40 || !Number.isInteger(testPercent) || testPercent < 10 || testPercent > 40 || percent + testPercent > 60 ||
       !Number.isInteger(randomSeed) || randomSeed < 0 || randomSeed > 2147483647) {
-      setError("Usa entre 10 y 40 % para validación y una semilla entera entre 0 y 2147483647.");
+      setError("Usa entre 10 y 40 % para validación y prueba, deja al menos 40 % para entrenamiento y usa una semilla entera entre 0 y 2147483647.");
       return;
     }
     if (save && (!preview || preview.warnings.length > 0 && !acknowledged)) return;
@@ -75,7 +77,7 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect }:
     try {
       const data = await request(save ? base : `${base}/preview`, {
         method: "POST", signal: controller.signal, headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ validation_percent: percent, seed: randomSeed,
+        body: JSON.stringify({ validation_percent: percent, test_percent: testPercent, seed: randomSeed,
           ...(save ? { preview_version: preview?.version, acknowledge_warnings: acknowledged } : {}) }),
       });
       if (controller.signal.aborted) return;
@@ -114,7 +116,7 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect }:
         </button>
       </div>
       {open && <>
-        <p className="text-xs text-gray-400 leading-relaxed">Entrenamiento enseña al modelo; validación comprueba su rendimiento con otros audios. Una versión fija los archivos y su reparto. Añadir audios después no cambia las versiones guardadas. Esta división no reserva una prueba final independiente.</p>
+        <p className="text-xs text-gray-400 leading-relaxed">Entrenamiento enseña al modelo; validación ayuda a ajustar el entrenamiento; prueba evalúa el resultado final con audios independientes. Una versión fija los archivos y su reparto. Añadir audios después no cambia las versiones guardadas. Las versiones históricas 80/20 se conservan para consulta; los entrenamientos nuevos requieren los tres grupos.</p>
         {error && <p role="alert" className="text-xs text-rose-300 bg-rose-950/30 border border-rose-900 rounded-lg p-3">{error}</p>}
         {message && <p role="status" className="text-xs text-emerald-300">{message}</p>}
         {phase === "loading" && <p role="status" className="text-xs text-gray-400">Consultando versiones…</p>}
@@ -122,19 +124,20 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect }:
           <select aria-label="Versión para entrenar" value={selected} disabled={locked} onChange={event => onSelect(event.target.value)} className={`${fieldClass} mt-1`}>
             <option value="">Usar CSV existentes (requiere particiones preparadas)</option>
             {selected && !versions.some(item => item.version === selected) && <option value={selected}>Versión seleccionada {selected.slice(0, 12)}</option>}
-            {versions.map(item => <option key={item.version} value={item.version}>{item.version.slice(0, 12)} · {item.counts.train} entrenamiento / {item.counts.val} validación{item.created_at ? ` · ${new Date(item.created_at).toLocaleString("es-CL")}` : ""}</option>)}
+            {versions.map(item => <option key={item.version} value={item.version} disabled={item.format !== 2 || !item.counts.test}>{item.format !== 2 || !item.counts.test ? "Histórica 80/20 · " : ""}{item.version.slice(0, 12)} · {item.counts.train} entrenamiento / {item.counts.val} validación{item.counts.test ? ` / ${item.counts.test} prueba` : ""}{item.created_at ? ` · ${new Date(item.created_at).toLocaleString("es-CL")}` : ""}</option>)}
           </select>
         </label>
         <div className="border-t border-[#23252e] pt-4 space-y-3">
           <h3 className="text-xs font-semibold text-gray-200">Preparar una nueva versión</h3>
           <p className="text-xs text-gray-400">Solo se incluyen audios registrados y disponibles en este equipo. Se conservan juntos los duplicados y grupos de origen o grabador conocidos. El porcentaje puede variar para respetar esos grupos.</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
             <label className="text-xs text-gray-400">Validación (%)<input aria-label="Validación (%)" type="number" min={10} max={40} step={1} value={validation} disabled={locked} onChange={event => changePolicy(event.target.value, "validation")} className={`${fieldClass} mt-1`} /></label>
+            <label className="text-xs text-gray-400">Prueba (%)<input aria-label="Prueba (%)" type="number" min={10} max={40} step={1} value={test} disabled={locked} onChange={event => changePolicy(event.target.value, "test")} className={`${fieldClass} mt-1`} /></label>
             <label className="text-xs text-gray-400">Semilla del reparto<input aria-label="Semilla del reparto" type="number" min={0} max={2147483647} step={1} value={seed} disabled={locked} onChange={event => changePolicy(event.target.value, "seed")} className={`${fieldClass} mt-1`} /></label>
             <button type="button" disabled={locked} onClick={() => void prepare()} className="px-3 py-2 rounded-lg text-xs font-semibold border border-emerald-800 text-emerald-300 bg-emerald-950/30 disabled:opacity-50">{phase === "preview" ? "Calculando reparto…" : "Previsualizar reparto"}</button>
           </div>
           {preview && <div className="rounded-lg bg-[#111215] border border-[#23252e] p-4 space-y-3">
-            <p className="text-sm font-semibold text-gray-200">{preview.counts.train} para entrenamiento · {preview.counts.val} para validación</p>
+            <p className="text-sm font-semibold text-gray-200">{preview.counts.train} para entrenamiento · {preview.counts.val} para validación · {preview.counts.test} para prueba</p>
             <p className="text-xs text-gray-400">{preview.excluded.length} audios excluidos de esta propuesta. Los archivos y CSV existentes se conservan.</p>
             {preview.excluded.length > 0 && <details className="text-xs text-gray-400">
               <summary className="cursor-pointer text-gray-300">Ver audios excluidos y sus motivos</summary>
@@ -145,9 +148,9 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect }:
               </li>)}</ul>
             </details>}
             <table aria-label="Reparto por clase" className="w-full text-xs text-left">
-              <thead className="text-gray-500"><tr><th className="pb-2">Clase</th><th>Entrenamiento</th><th>Validación</th></tr></thead>
+              <thead className="text-gray-500"><tr><th className="pb-2">Clase</th><th>Entrenamiento</th><th>Validación</th><th>Prueba</th></tr></thead>
               <tbody className="text-gray-300">{classes.map(label => <tr key={label} className="border-t border-[#23252e]">
-                <td className="py-2">{label}</td>{["train", "val"].map(split => <td key={split}>{preview.entries.filter(entry => entry.clase === label && entry.split === split).length}</td>)}
+                <td className="py-2">{label}</td>{["train", "val", "test"].map(split => <td key={split}>{preview.entries.filter(entry => entry.clase === label && entry.split === split).length}</td>)}
               </tr>)}</tbody>
             </table>
             {preview.warnings.length > 0 && <div className="text-xs text-amber-200 bg-amber-950/20 border border-amber-900/50 rounded-lg p-3 space-y-2">

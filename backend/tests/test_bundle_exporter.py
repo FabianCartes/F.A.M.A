@@ -1,4 +1,5 @@
 import tempfile
+import hashlib
 from pathlib import Path
 import json
 import torch
@@ -40,6 +41,7 @@ def dummy_training_config():
         loss=LossConfig(name="cross_entropy"),
         dataset=DatasetConfig(metadata_csv=Path("/tmp/m.csv"), raw_dir=Path("/tmp/r")),
         split=SplitConfig(),
+        dataset_name="fixture",
     )
 
 
@@ -84,3 +86,109 @@ def test_bundle_exporter_creates_complete_package(dummy_training_config):
         # Validar que weights.pt contenga el state_dict de PyTorch
         state_dict = torch.load(weights_file, weights_only=True)
         assert "fc.weight" in state_dict
+
+
+def _evaluation_entries(bundle, *, class_override=None, val_overrides=None, test_overrides=None):
+    from app.schemas.evaluation import EvaluationProvenance
+    from ml_core.classification_metrics import calculate_classification_report
+
+    manifest = ModelManifest.model_validate_json((bundle / "manifest.json").read_text())
+    digest = hashlib.sha256((bundle / "weights.pt").read_bytes()).hexdigest()
+    from app.services.predictors.bundle_predictor import BundleAudioPredictor
+
+    effective = BundleAudioPredictor(bundle).evaluation_config
+    base_classes = class_override or manifest.classes
+    entries = {}
+    for split, overrides in (("val", val_overrides or {}), ("test", test_overrides or {})):
+        classes = overrides.get("classes", base_classes)
+        schema_version = overrides.get("schema_version", 1)
+        provenance = EvaluationProvenance(
+            schema_version=schema_version,
+            evaluator_version=overrides.get("evaluator_version", "recording-v1"),
+            checkpoint_sha256=digest,
+            dataset=overrides.get("dataset", "fixture"), split=split,
+            manifest_sha256=("c" if split == "val" else "d") * 64, classes=classes,
+            sample_count=2,
+            predictor_config=overrides.get("predictor_config", effective["predictor_config"]),
+            preprocessing_config=overrides.get("preprocessing_config", effective["preprocessing_config"]),
+            aggregation_config=overrides.get("aggregation_config", effective["aggregation_config"]),
+        )
+        entries[split] = {
+            "provenance": provenance.model_dump(),
+            "report": calculate_classification_report(
+                classes, classes, classes,
+                rejection_label="__rejected__" if schema_version == 2 else None,
+            ),
+        }
+    return entries
+
+
+def test_official_bundle_manifest_roundtrips_weight_bound_split_reports(dummy_training_config, tmp_path):
+    model = DummyModel()
+    provisional_root = tmp_path / '.test-exported-bundle.provisional-valid'
+    bundle = BundleExporter.export(provisional_root, model, dummy_training_config, ['a', 'b'])
+    digest = hashlib.sha256((bundle / 'weights.pt').read_bytes()).hexdigest()
+    reports = _evaluation_entries(bundle)
+    published = BundleExporter.publish_official(bundle, reports)
+    manifest = ModelManifest.model_validate_json((published / 'manifest.json').read_text())
+    assert manifest.final_evaluations.weights_sha256 == digest
+    assert set(manifest.final_evaluations.reports) == {'val', 'test'}
+    assert manifest.final_evaluations.reports['test'].report['metrics']['accuracy'] == 1.0
+    assert not bundle.exists()
+
+
+def _provisional_bundle(tmp_path, config):
+    stage = tmp_path / f".{config.model_id}.provisional-test"
+    return BundleExporter.export(stage, DummyModel(), config, ["a", "b"])
+
+
+def test_official_publish_rejects_report_class_order_different_from_bundle(dummy_training_config, tmp_path):
+    bundle = _provisional_bundle(tmp_path, dummy_training_config)
+    reports = _evaluation_entries(bundle, class_override=["b", "a"])
+    with pytest.raises(ValueError):
+        BundleExporter.publish_official(bundle, reports)
+    assert bundle.is_dir()
+    assert not (tmp_path / dummy_training_config.model_id).exists()
+
+
+@pytest.mark.parametrize("field", [
+    "dataset", "evaluator_version", "predictor_config", "preprocessing_config", "aggregation_config",
+])
+def test_official_publish_rejects_val_test_identity_mismatch(dummy_training_config, tmp_path, field):
+    bundle = _provisional_bundle(tmp_path, dummy_training_config)
+    reports = _evaluation_entries(bundle)
+    reports["test"]["provenance"][field] = (
+        "other-dataset" if field == "dataset" else
+        "recording-other" if field == "evaluator_version" else {"changed": True}
+    )
+    # Keep the test report internally valid after changing provenance.
+    from app.schemas.evaluation import EvaluationProvenance
+    reports["test"]["provenance"] = EvaluationProvenance.model_validate(
+        reports["test"]["provenance"]
+    ).model_dump()
+    with pytest.raises(ValueError):
+        BundleExporter.publish_official(bundle, reports)
+    assert bundle.is_dir()
+    assert not (tmp_path / dummy_training_config.model_id).exists()
+
+
+def test_official_publish_rejects_val_test_schema_version_mismatch(dummy_training_config, tmp_path):
+    bundle = _provisional_bundle(tmp_path, dummy_training_config)
+    reports = _evaluation_entries(bundle, test_overrides={"schema_version": 2})
+    with pytest.raises(ValueError):
+        BundleExporter.publish_official(bundle, reports)
+    assert bundle.is_dir()
+    assert not (tmp_path / dummy_training_config.model_id).exists()
+
+
+def test_official_publish_rejects_manifest_config_mutated_after_evaluation(dummy_training_config, tmp_path):
+    bundle = _provisional_bundle(tmp_path, dummy_training_config)
+    reports = _evaluation_entries(bundle)
+    manifest_path = bundle / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["audio_specs"]["target_sr"] = 16000
+    manifest_path.write_text(json.dumps(manifest))
+    with pytest.raises(ValueError):
+        BundleExporter.publish_official(bundle, reports)
+    assert bundle.is_dir()
+    assert not (tmp_path / dummy_training_config.model_id).exists()

@@ -1,6 +1,6 @@
 # Auditoría y limpieza de seguridad — backend
 
-**18 de octubre de 2026.** [ADR 0038](../adr/0038-auditoria-minima-y-limpieza-transaccional-acotada.md). Complementa [cuentas](gestion_cuentas_y_recuperacion.md), [cuotas](limites_login_y_recuperacion.md) y [permisos](permisos_recursos_asignados.md). Sin migración, limpieza, cuentas ni servicios reales operados.
+**18 de octubre de 2026.** [ADR 0056](../adr/0056-auditoria-minima-y-limpieza-transaccional-acotada.md). Complementa [cuentas](gestion_cuentas_y_recuperacion.md), [cuotas](limites_login_y_recuperacion.md) y [permisos](permisos_recursos_asignados.md). Sin migración, limpieza, cuentas ni servicios reales operados.
 
 ## Lectura de auditoría
 

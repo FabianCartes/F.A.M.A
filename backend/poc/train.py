@@ -1,7 +1,5 @@
 import sys
-import time
 import random
-from contextlib import ExitStack
 from pathlib import Path
 
 # Asegurar que la raíz del proyecto esté en sys.path
@@ -25,14 +23,37 @@ from poc.preprocess import (
     extract_active_windows,
     compute_rms,
     GPUAudioFrontEnd,
-    GPUSpecAugment,
     GeM,
     TARGET_SR,
     DURATION_SECONDS,
 )
-from poc.split import grouped_stratified_split
+from training.paths import get_prepared_data_dir
+from training.prepare_data import load_prepared_dataset, _validate_trio
 from dataset_references import resolve_reference
 
+
+
+class AdmittedPreparedSource:
+    """Owned CSV snapshot admitted by the preparation barrier, never caller frames.
+
+    Consumers receive copies and revalidate references/trio without rereading CSVs.
+    Audio bytes are not frozen; the existing physical-root checks still apply.
+    """
+
+    def __init__(self, *, dataset_name, roots):
+        if dataset_name not in ("AvesChilenas", "engine_diagnostics"):
+            raise ValueError("dataset_name is required and must name a supported dataset")
+        self._dataset_name = dataset_name
+        self._roots = dict(roots)
+        self._parts = load_prepared_dataset(
+            get_prepared_data_dir(dataset_name), roots=self._roots, dataset_name=dataset_name)
+
+    def frames(self, *, dataset_name, roots):
+        if dataset_name != self._dataset_name or dict(roots) != self._roots:
+            raise ValueError("Admitted source dataset_name and roots must match")
+        parts = tuple(frame.copy(deep=True) for frame in self._parts)
+        _validate_trio(parts, self._roots, self._dataset_name)
+        return parts
 
 
 def _validate_canonical_index(df: pd.DataFrame, roots) -> None:
@@ -604,281 +625,3 @@ def build_dataloaders(
     )
 
     return train_loader, val_loader
-
-
-def train_pipeline(
-    metadata_csv: Path,
-    raw_dir: Path,
-    checkpoint_dir: Path,
-    epochs: int = 15,
-    batch_size: int = 16,
-    lr: float = 1e-3,
-    num_workers: int = 4,
-    device: Optional[str] = None,
-    checkpoint_name: str = "augmented_best.pt",
-    seed: Optional[int] = None,
-    model_type: str = "efficientnet_b0",
-    loss_type: str = "focal",
-    focal_gamma: float = 2.0,
-    warmup_epochs: int = 3,
-    n_mels: int = 128,
-    mixup_alpha: float = 0.2,
-    mixup_prob: float = 0.5,
-    pitch_shift_bins: int = 2,
-    pitch_shift_prob: float = 0.3,
-    pool_type: str = "gem",
-    *,
-    roots: Mapping[str, Union[str, Path]],
-) -> Dict[str, Any]:
-    """
-    Ejecuta el ciclo de entrenamiento completo:
-    1. Carga particiones o genera split agrupado y estratificado.
-    2. Configura AudioDataset con Data Augmentation en Train y Determinismo en Val.
-    3. Construye DataLoaders concurrentes con multiprocesamiento y memoria fijada.
-    4. Entrena el modelo (EfficientNet o AudioCNN) registrando loss y accuracy por época con Mixup opcional.
-    5. Guarda el mejor checkpoint en checkpoints/<checkpoint_name>.
-    """
-    if seed is not None:
-        random.seed(seed)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(seed)
-
-    if device is None:
-        device_obj = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    else:
-        device_obj = torch.device(device)
-
-    print(f"\nIniciando entrenamiento en dispositivo: {device_obj}")
-
-    data_dir = metadata_csv.parent
-    train_file = data_dir / "train.csv"
-    val_file = data_dir / "val.csv"
-    test_file = data_dir / "test.csv"
-
-    roots = dict(roots)
-    split_files = (train_file, val_file, test_file)
-    present = [path.exists() or path.is_symlink() for path in split_files]
-    if any(present) and not all(present):
-        raise ValueError("incomplete partial split trio; recover or convert offline")
-    if all(present):
-        print("Cargando particiones existentes (train.csv, val.csv, test.csv)...")
-        for path in split_files:
-            # This binding validates CSV publication targets, never audio roots.
-            resolve_reference(path.name, "raw", {"raw": path.parent})
-        train_df = pd.read_csv(train_file, dtype=str, keep_default_na=False)
-        val_df = pd.read_csv(val_file, dtype=str, keep_default_na=False)
-        test_df = pd.read_csv(test_file, dtype=str, keep_default_na=False)
-        for frame in (train_df, val_df, test_df):
-            _validate_canonical_index(frame, roots)
-    else:
-        resolve_reference(metadata_csv.name, "raw", {"raw": metadata_csv.parent})
-        df = pd.read_csv(metadata_csv, dtype=str, keep_default_na=False)
-        _validate_canonical_index(df, roots)
-        train_df, val_df, test_df = grouped_stratified_split(df)
-        # Exclusive creation never replaces a concurrent publication. Failure may
-        # leave a partial trio; the next run must stop for offline recovery.
-        try:
-            with ExitStack() as stack:
-                streams = [stack.enter_context(path.open("x", encoding="utf-8", newline=""))
-                           for path in split_files]
-                for frame, stream in zip((train_df, val_df, test_df), streams):
-                    frame.to_csv(stream, index=False)
-        except OSError as exc:
-            raise ValueError("split publication failed; inspect partial trio offline") from exc
-
-    print(f"Split cargado -> Train: {len(train_df)}, Val: {len(val_df)}, Test: {len(test_df)}")
-
-    classes = sorted(train_df["clase"].unique())
-    label_to_idx = {c: i for i, c in enumerate(classes)}
-    idx_to_label = {i: c for c, i in label_to_idx.items()}
-
-    # Construcción concurrente y segura de DataLoaders (Productor-Consumidor)
-    train_loader, val_loader = build_dataloaders(
-        train_df=train_df,
-        val_df=val_df,
-        roots=roots,
-        raw_dir=raw_dir,
-        label_to_idx=label_to_idx,
-        batch_size=batch_size,
-        num_workers=num_workers,
-        device=device_obj,
-        n_mels=n_mels,
-        return_raw_waveform=True,
-    )
-
-    frontend = GPUAudioFrontEnd(n_mels=n_mels, normalize=True).to(device_obj)
-    spec_augment = GPUSpecAugment(
-        freq_mask_param=8,
-        time_mask_param=16,
-        prob=0.5,
-        pitch_shift_max_bins=pitch_shift_bins,
-        pitch_shift_prob=pitch_shift_prob,
-    ).to(device_obj)
-
-    is_cnn = model_type.lower() in ("audiocnn", "cnn")
-    if is_cnn:
-        model = AudioCNN(num_classes=len(classes)).to(device_obj)
-        optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
-    else:
-        model = BioacousticModel(
-            model_name=model_type,
-            num_classes=len(classes),
-            pretrained=True,
-            pool_type=pool_type,
-        ).to(device_obj)
-
-        if warmup_epochs > 0:
-            print(f"Configurando Warmup: backbone congelado durante las primeras {warmup_epochs} épocas...")
-            model.freeze_backbone()
-            optimizer = torch.optim.Adam(
-                filter(lambda p: p.requires_grad, model.parameters()),
-                lr=lr,
-            )
-        else:
-            optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-2)
-
-    if loss_type.lower() == "focal":
-        criterion = FocalLoss(gamma=focal_gamma)
-    else:
-        criterion = nn.CrossEntropyLoss()
-
-    checkpoint_dir = Path(checkpoint_dir)
-    checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    best_checkpoint_path = checkpoint_dir / checkpoint_name
-
-    history: Dict[str, List[float]] = {
-        "train_loss": [],
-        "train_acc": [],
-        "val_loss": [],
-        "val_acc": [],
-    }
-
-    best_val_acc = -1.0
-
-    print(f"\nIniciando entrenamiento con {model.__class__.__name__} ({model_type}) | Loss: {criterion.__class__.__name__} | Mels: {n_mels} | Mixup: alpha={mixup_alpha}, prob={mixup_prob}...", flush=True)
-    for epoch in range(1, epochs + 1):
-        if not is_cnn and warmup_epochs > 0 and epoch == warmup_epochs + 1:
-            print("\n>>> [Warmup finalizado] Descongelando backbone para Fine-Tuning con AdamW...", flush=True)
-            model.unfreeze_backbone()
-            optimizer = torch.optim.AdamW(model.parameters(), lr=lr * 0.1, weight_decay=1e-2)
-
-        t_epoch_start = time.time()
-        tr_loss, tr_acc = train_one_epoch(
-            model,
-            train_loader,
-            criterion,
-            optimizer,
-            device_obj,
-            epoch=epoch,
-            total_epochs=epochs,
-            show_progress=True,
-            mixup_alpha=mixup_alpha,
-            mixup_prob=mixup_prob,
-            frontend=frontend,
-            spec_augment=spec_augment,
-        )
-        v_loss, v_acc = evaluate_loss_acc(
-            model,
-            val_loader,
-            criterion,
-            device_obj,
-            frontend=frontend,
-        )
-        epoch_sec = time.time() - t_epoch_start
-
-        history["train_loss"].append(tr_loss)
-        history["train_acc"].append(tr_acc)
-        history["val_loss"].append(v_loss)
-        history["val_acc"].append(v_acc)
-
-        print(
-            f"Época [{epoch:02d}/{epochs:02d}] ({epoch_sec:.2f}s) "
-            f"Train Loss: {tr_loss:.4f} | Train Acc: {tr_acc * 100:.2f}% "
-            f"|| Val Loss: {v_loss:.4f} | Val Acc: {v_acc * 100:.2f}%",
-            flush=True,
-        )
-
-        if v_acc > best_val_acc:
-            best_val_acc = v_acc
-            torch.save(
-                {
-                    "epoch": epoch,
-                    "model_type": model_type,
-                    "pool_type": pool_type,
-                    "n_mels": n_mels,
-                    "mixup_alpha": mixup_alpha,
-                    "mixup_prob": mixup_prob,
-                    "pitch_shift_bins": pitch_shift_bins,
-                    "pitch_shift_prob": pitch_shift_prob,
-                    "model_state_dict": model.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                    "val_acc": v_acc,
-                    "val_loss": v_loss,
-                    "classes": classes,
-                    "label_to_idx": label_to_idx,
-                    "idx_to_label": idx_to_label,
-                },
-                best_checkpoint_path,
-            )
-            print(f"  -> Nuevo mejor modelo guardado en {best_checkpoint_path} (Val Acc: {v_acc * 100:.2f}%)", flush=True)
-
-    return {
-        "history": history,
-        "classes": classes,
-        "label_to_idx": label_to_idx,
-        "idx_to_label": idx_to_label,
-        "best_checkpoint_path": str(best_checkpoint_path),
-    }
-
-
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description="Entrenar modelo bioacústico F.A.M.A.")
-    parser.add_argument("--epochs", type=int, default=15, help="Número de épocas de entrenamiento")
-    parser.add_argument("--batch-size", type=int, default=16, help="Tamaño del lote")
-    parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
-    parser.add_argument("--workers", type=int, default=4, help="Workers concurrentes para DataLoader")
-    parser.add_argument("--device", type=str, default=None, help="Dispositivo (cuda o cpu)")
-    parser.add_argument("--checkpoint-name", type=str, default="augmented_best.pt", help="Nombre del checkpoint de salida")
-    parser.add_argument("--model-type", type=str, default="efficientnet_b0", help="Arquitectura del modelo (efficientnet_b0 o audiocnn)")
-    parser.add_argument("--pool-type", type=str, default="gem", choices=["gem", "avg"], help="Tipo de pooling global para EfficientNet (gem o avg)")
-    parser.add_argument("--loss-type", type=str, default="focal", help="Función de pérdida (focal o ce)")
-    parser.add_argument("--gamma", type=float, default=2.0, help="Parámetro gamma de Focal Loss")
-    parser.add_argument("--warmup-epochs", type=int, default=3, help="Épocas de warmup con backbone congelado")
-    parser.add_argument("--n-mels", type=int, default=128, help="Cantidad de bandas Mel")
-    parser.add_argument("--mixup-alpha", type=float, default=0.2, help="Parámetro alpha para distribución Beta en Mixup")
-    parser.add_argument("--mixup-prob", type=float, default=0.5, help="Probabilidad de aplicar Mixup por batch en entrenamiento")
-    parser.add_argument("--pitch-shift-bins", type=int, default=2, help="Cantidad máxima de bins Mel para Pitch Shift espectral")
-    parser.add_argument("--pitch-shift-prob", type=float, default=0.3, help="Probabilidad de aplicar Pitch Shift espectral por muestra")
-    args = parser.parse_args()
-
-    from training.paths import get_project_root, get_dataset_roots
-
-    repo_root = get_project_root()
-    roots = get_dataset_roots("AvesChilenas")
-    aves_raw_dir = roots["raw"]
-    train_pipeline(
-        metadata_csv=aves_raw_dir / "metadata.csv",
-        raw_dir=aves_raw_dir,
-        roots=roots,
-        checkpoint_dir=repo_root / "checkpoints",
-        epochs=args.epochs,
-        batch_size=args.batch_size,
-        lr=args.lr,
-        num_workers=args.workers,
-        device=args.device,
-        checkpoint_name=args.checkpoint_name,
-        model_type=args.model_type,
-        pool_type=args.pool_type,
-        loss_type=args.loss_type,
-        focal_gamma=args.gamma,
-        warmup_epochs=args.warmup_epochs,
-        n_mels=args.n_mels,
-        mixup_alpha=args.mixup_alpha,
-        mixup_prob=args.mixup_prob,
-        pitch_shift_bins=args.pitch_shift_bins,
-        pitch_shift_prob=args.pitch_shift_prob,
-    )
-

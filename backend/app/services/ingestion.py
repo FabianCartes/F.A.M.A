@@ -1,3 +1,4 @@
+from dataset_references import safe_path_component
 import os
 import asyncio
 import base64
@@ -371,7 +372,7 @@ class IngestionService:
 
     def list_dataset_files(self, dataset_name: str, db: Optional[Any] = None) -> List[Dict[str, Any]]:
         """Inventory with optional recorded metadata, not current cloud verification."""
-        self.validate_dataset_names([dataset_name])
+        self.validate_dataset_names([dataset_name], read_only=True)
         files = self._list_dataset_file_inventory(dataset_name)
         if db is None:
             return files
@@ -575,20 +576,15 @@ class IngestionService:
         except OSError:
             return False
 
-    @staticmethod
-    def _valid_path_component(value: str) -> bool:
-        if not value or value in (".", "..") or value.endswith((".", " ")):
-            return False
-        if any(ord(char) < 32 or char in '/\\:<>"|?*' for char in value):
-            return False
-        stem = value.split(".", 1)[0].upper()
-        reserved = {"CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"}
-        reserved.update(f"{prefix}{number}" for prefix in ("COM", "LPT") for number in "123456789¹²³")
-        return stem not in reserved
+    _valid_path_component = staticmethod(safe_path_component)
 
-    def validate_dataset_names(self, names: List[str]) -> None:
+    def validate_dataset_names(self, names: List[str], *, read_only: bool = False) -> None:
         """Validate a complete batch before any dataset can be transferred."""
-        if any(not self._valid_path_component(name) or len(name) > 100 for name in names):
+        def readable(name):
+            return (self._valid_path_component(name) or
+                    read_only and os.name == "posix" and isinstance(name, str) and ":" in name
+                    and self._valid_path_component(name.replace(":", "_")))
+        if any(not readable(name) or len(name) > 100 for name in names):
             raise IngestionValidationError("Invalid dataset name")
 
     @staticmethod
@@ -767,6 +763,7 @@ class IngestionService:
                 preprocessing_failed = (prep_info or {}).get("failed", 0) > 0
                 new_status = "sincronizacion_parcial" if failed or preprocessing_failed else "procesado" if preprocess else "sincronizado"
                 accepted_files = [item for item in processed_files if item["status"] in ("downloaded", "skipped")]
+                object_keys = {blob.name for blob in blobs}
                 total_audios = len(accepted_files)
                 total_bytes = sum(item["size"] for item in accepted_files)
 
@@ -801,6 +798,21 @@ class IngestionService:
                         .filter_by(id_conjunto_datos=ds.id_conjunto_datos, ruta_gcp=object_route)
                         .first()
                     )
+                    if audio_obj is None and f["object_key"] == prefix + fname:
+                        legacy_key = prefix + "General/" + fname
+                        # A real General object owns its row, regardless of listing order.
+                        if legacy_key not in object_keys:
+                            legacy_rows = db.query(Audio).filter_by(
+                                id_conjunto_datos=ds.id_conjunto_datos,
+                                ruta_gcp=f"gs://{self.bucket_name}/{legacy_key}",
+                            ).all()
+                            if legacy_rows:
+                                if (len(legacy_rows) != 1
+                                        or legacy_rows[0].clase != "General"
+                                        or legacy_rows[0].nombre_archivo != fname):
+                                    raise ValueError("Ambiguous legacy flat object identity")
+                                audio_obj = legacy_rows[0]
+                                audio_obj.ruta_gcp = object_route
                     if audio_obj is None:
                         audio_obj = Audio(
                             id_conjunto_datos=ds.id_conjunto_datos,

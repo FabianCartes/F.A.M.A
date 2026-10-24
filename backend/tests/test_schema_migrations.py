@@ -65,7 +65,7 @@ def test_autonomy_upgrade_from_access_preserves_data_and_does_not_invent_legacy_
                                 "'Aves/Chucao/feedback_901.wav', :digest, 'pending', 0)"), {'digest': 'a' * 64})
     result, report = migrate(database_url, "upgrade", "--apply")
     assert result.returncode == 0, result.stderr
-    assert report == {"code": "schema_current", "revision": "0003_autonomy"}
+    assert report == {"code": "schema_current", "revision": "0004_integration"}
     with engine.connect() as connection:
         assert 'solicitud_dataset' in inspect(connection).get_table_names()
         row = connection.execute(text("SELECT incorporated_by, incorporated_at, status FROM feedback_sync WHERE id_retroalimentacion=901")).one()
@@ -80,7 +80,7 @@ def test_empty_database_is_migrated_explicitly_and_repeated_upgrade_is_safe(data
 
     result, report = migrate(database_url, "upgrade", "--apply")
     assert result.returncode == 0, result.stderr
-    assert report == {"code": "schema_current", "revision": "0003_autonomy"}
+    assert report == {"code": "schema_current", "revision": "0004_integration"}
     result, report = migrate(database_url, "upgrade", "--apply")
     assert result.returncode == 0, result.stderr
     assert report["code"] == "schema_current"
@@ -99,7 +99,7 @@ def test_revision_does_not_hide_a_missing_or_modified_role_constraint(database_u
 
     result, report = migrate(database_url, "status")
     assert result.returncode == 1
-    assert report == {"code": "schema_incompatible", "revision": "0003_autonomy"}
+    assert report == {"code": "schema_incompatible", "revision": "0004_integration"}
     result, report = migrate(database_url, "upgrade", "--apply")
     assert result.returncode == 1
     assert report["code"] == "schema_incompatible"
@@ -201,7 +201,7 @@ def test_migrated_node_starts_and_authenticates_without_implicit_admin_or_real_a
         return [name for name in entries if name in {"__pycache__", "data", "checkpoints", ".pytest_cache"}
                 or (Path(directory, name).is_file() and Path(name).suffix not in {".py", ".yaml", ".yml"})]
 
-    for package in ("app", "poc", "training", "migrations"):
+    for package in ("app", "poc", "ml_core", "training", "migrations"):
         shutil.copytree(source / package, isolated / package, ignore=source_only)
     for name in ("main.py", "database.py", "dataset_references.py"):
         shutil.copy2(source / name, isolated / name)
@@ -268,3 +268,25 @@ with TestClient(main.app) as client:
     result = subprocess.run([sys.executable, "-c", script], env=environment,
                             cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr
+
+
+def test_dev_upgrade_preserves_access_schema_and_matches_all_runtime_models(database_url):
+    import importlib
+    from sqlalchemy import inspect
+    from app.schema import matches_schema
+    from app.database import Base
+    for module in (Path(__file__).resolve().parents[1]/"app"/"models").glob("*.py"):
+        if module.stem != "__init__": importlib.import_module("app.models."+module.stem)
+    result, report = migrate(database_url, "upgrade", "--apply", "--revision", "0003_autonomy")
+    assert result.returncode == 0, result.stderr
+    assert report == {"code": "schema_outdated", "revision": "0003_autonomy"}
+    result, report = migrate(database_url, "upgrade", "--apply")
+    assert result.returncode == 0, result.stderr
+    engine = create_engine(database_url)
+    with engine.connect() as connection:
+        from sqlalchemy import MetaData
+        expected = MetaData()
+        for table in Base.metadata.sorted_tables: table.to_metadata(expected)
+        assert matches_schema(connection, expected)
+        assert {"model_evaluation", "dataset_import", "sesion_web"}.issubset(inspect(connection).get_table_names())
+    engine.dispose()

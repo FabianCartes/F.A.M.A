@@ -1,6 +1,6 @@
 # Límites de login y recuperación — backend
 
-**18 de octubre de 2026.** [ADR 0037](../adr/0037-cuotas-persistentes-de-login-y-recuperacion.md). Complementa [sesiones](sesiones_web_y_acceso_administrado.md) y [cuentas](gestion_cuentas_y_recuperacion.md). No se ha cambiado `.env`, credenciales, BD real, proxy ni servicios.
+**18 de octubre de 2026.** [ADR 0055](../adr/0055-cuotas-persistentes-de-login-y-recuperacion.md). Complementa [sesiones](sesiones_web_y_acceso_administrado.md) y [cuentas](gestion_cuentas_y_recuperacion.md). No se ha cambiado `.env`, credenciales, BD real, proxy ni servicios.
 
 **Actualización posterior:** ya están implementadas la [auditoría mínima y limpieza explícita de expirados](auditoria_y_limpieza_seguridad.md). La limpieza no es automática ni se ha ejecutado sobre una BD real. Las menciones de pendientes de auditoría/purga al final corresponden al corte de esta unidad de cuotas; no implican que esté validado el despliegue.
 

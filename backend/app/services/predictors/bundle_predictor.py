@@ -50,6 +50,16 @@ class BundleAudioPredictor(AudioPredictor):
             self._ensure_loaded()
 
     @property
+    def classes(self) -> list[str]:
+        """Ordered output labels used by the loaded bundle."""
+        return list(self.manifest.classes)
+
+    @property
+    def evaluation_config(self) -> dict:
+        """Canonical effective configuration from the loaded bundle manifest."""
+        return self.manifest.effective_inference_config()
+
+    @property
     def has_weights(self) -> bool:
         weights_file = self.bundle_dir / self.manifest.model_specs.weights_file
         return weights_file.exists()
@@ -74,7 +84,7 @@ class BundleAudioPredictor(AudioPredictor):
 
             if family == "audio_cnn" or "cnn" in backbone.lower():
                 from poc.train import AudioCNN
-                model = AudioCNN(num_classes=num_classes)
+                model = AudioCNN(num_classes=num_classes, in_channels=self.manifest.model_specs.in_channels)
             else:
                 from poc.train import BioacousticModel
                 model = BioacousticModel(
@@ -127,7 +137,10 @@ class BundleAudioPredictor(AudioPredictor):
 
         # 2. Filtro de Ruido Blanco por Planitud Espectral
         try:
-            flatness = float(np.mean(librosa.feature.spectral_flatness(y=waveform)))
+            flatness = float(np.mean(librosa.feature.spectral_flatness(
+                y=waveform, n_fft=2048, hop_length=512, win_length=None,
+                window="hann", center=True, pad_mode="reflect", power=2.0,
+            )))
         except Exception:
             flatness = 0.0
 
@@ -164,8 +177,15 @@ class BundleAudioPredictor(AudioPredictor):
                 n_mels=self.manifest.audio_specs.n_mels,
                 fmin=self.manifest.audio_specs.f_min,
                 fmax=self.manifest.audio_specs.f_max,
+                win_length=None,
+                window="hann",
+                center=True,
+                pad_mode="constant",
+                power=2.0,
+                htk=False,
+                norm="slaney",
             )
-            mel_db = librosa.power_to_db(mel, ref=np.max)
+            mel_db = librosa.power_to_db(mel, ref=np.max, amin=1e-10, top_db=80.0)
             mel_list.append(mel_db)
 
         mel_tensor = torch.from_numpy(np.array(mel_list)).unsqueeze(1).float().to(self.device)

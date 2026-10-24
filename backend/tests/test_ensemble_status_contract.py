@@ -201,7 +201,7 @@ def test_prediction_response_attributes_execution_to_predictor_not_legacy_ensemb
 
     assert response.status_code == 200
     assert response.json()["modelo_id"] == "contract-birds"
-    assert response.json()["modelos_activos"] == ["HTTP contract fixture"]
+    assert response.json()["modelos_activos"] is None
     assert response.json()["modelos_ejecutados"] == ["HTTP contract fixture"]
 
 

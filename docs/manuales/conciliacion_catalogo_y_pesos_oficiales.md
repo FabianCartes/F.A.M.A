@@ -24,7 +24,7 @@ Se registraron `AvesChilenas` y `engine_diagnostics` en SQL con sus objetos fís
 
 ## Modelos y predeterminado
 
-La instalación habilita expresamente `chilean-birds-ensemble` mediante `FAMA_ENSEMBLES_JSON`. Una base sin declaración y sin modelos SQL conserva el catálogo vacío. Una activación SQL posterior conserva su prioridad al reiniciar. [ADR 0050](../adr/0050-declaracion-explicita-de-ensambles-por-instalacion.md).
+La instalación habilita expresamente `chilean-birds-ensemble` mediante `FAMA_ENSEMBLES_JSON`. Una base sin declaración y sin modelos SQL conserva el catálogo vacío. Una activación SQL posterior conserva su prioridad al reiniciar. [ADR 0068](../adr/0068-declaracion-explicita-de-ensambles-por-instalacion.md).
 
 Se desactivaron únicamente los indicadores simultáneos de los cinco modelos heredados, IDs 2–6. Sus filas y pesos permanecen seleccionables. La coincidencia de etiquetas no se convirtió en vínculo de entrenamiento: sus datasets históricos siguen sin relación acreditada.
 

@@ -116,7 +116,7 @@ def test_checks_real_runtime_database_and_storage_independently(node, monkeypatc
         response = client.post("/api/installation/check", headers=headers, json={})
         assert response.status_code == 200
         assert response.json()["ready"] is True, json.dumps(response.json(), sort_keys=True)
-        assert response.json()["checks"]["schema"] == {"ok": True, "code": "schema_current", "revision": "0003_autonomy"}
+        assert response.json()["checks"]["schema"] == {"ok": True, "code": "schema_current", "revision": "0004_integration"}
         from google.api_core.exceptions import Forbidden
         def deny(*args, **kwargs):
             raise Forbidden("PrivateStorageDetailsMustNotAppear")

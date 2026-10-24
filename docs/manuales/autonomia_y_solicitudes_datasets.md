@@ -1,6 +1,6 @@
 # Autonomía investigadora y solicitudes de datasets
 
-Implementación en `fix/afinamiento-integral`, conforme al [ADR 0043](../adr/0043-autonomia-investigadora-en-datasets-asignados.md). **Activada en el entorno de pruebas el 23 de octubre de 2026:** Cloud SQL en `0003_autonomy` y procesos de backend/interfaz actualizados en 8010/3010. El [recibo de implementación](../receipts/autonomia_datasets_implementacion_20261022.json) distingue las pruebas aisladas de la [activación y carga reales](../receipts/autonomia_activacion_real_20261023.json). El recorrido completo investigador continúa en la etapa 8.
+Implementación en `fix/afinamiento-integral`, conforme al [ADR 0061](../adr/0061-autonomia-investigadora-en-datasets-asignados.md). **Activada en el entorno de pruebas el 23 de octubre de 2026:** Cloud SQL en `0003_autonomy` y procesos de backend/interfaz actualizados en 8010/3010. El [recibo de implementación](../receipts/autonomia_datasets_implementacion_20261022.json) distingue las pruebas aisladas de la [activación y carga reales](../receipts/autonomia_activacion_real_20261023.json). El recorrido completo investigador continúa en la etapa 8.
 
 ## Gestión de audios
 

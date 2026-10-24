@@ -1,5 +1,7 @@
 # Bitácora de acceso, GCP e instalación de F.A.M.A.
 
+**2026-10-24 — integración previa a GitHub.** Operador: solicita integrar dev antes de publicar y elige entrenamiento/validación/prueba independientes. Codex: conserva los avances en `aa53e09`, integra `adecb01` en worktree aislado, resuelve autenticación, esquema, particiones y evaluación, renumera ADR y ejecuta las verificaciones documentadas. Resultado acumulado: 2781 PASS backend, 479 PASS frontend y comprobaciones nativas; sin cambios a Cloud SQL, credenciales ni procesos oficiales. Publicación en preparación; siguiente paso operativo: mantenimiento explícito para `0004_integration`. [Evidencia y límites](integracion_dev_20261024.md).
+
 **Estado vigente — 24 de octubre, arranque oficial:** el nodo de `http://localhost:3010` usa `fama_oficial`, `fama-audio-records-2026` y `runtime/oficial`. Perfil completado mediante adopción del administrador histórico, recuperación de contraseña solicitada por el operador e inicio de sesión verificado. Super-Ensamble de aves predeterminado y cinco modelos individuales seleccionables; inferencia real acotada correcta. Los cinco audios históricos diferentes están versionados en GCS, con 1205 filas conservadas en el índice; catálogo SQL de 1220 objetos de aves, 1386 de motores y un audio histórico industrial. Pesos respaldados por contenido y verificados. Los contadores globales ahora recorren todo el bucket: 2646 objetos observados. Siguen pesos del ensamble industrial, respaldo SQL externo/retención y despliegue universitario con HTTPS y servicio estable. [Estado operativo y límites](conciliacion_catalogo_y_pesos_oficiales.md), [recibo actual](../receipts/catalogo_oficial_publicado_20261024.json). Los bloques inferiores conservan sus cortes históricos.
 
 ## Catálogo publicado y nodo oficial iniciado — 24 de octubre
@@ -58,7 +60,7 @@
 
 **Estado real al cerrar:** lectura final de fama_oficial confirma cero tablas y perfil incompleto; origen conserva ocho tablas, cinco modelos/31 predicciones, un administrador activo y formato de hash compatible. Sin escritura de datos en origen, Cloud SQL o GCS, sin carga de modelos, reinicios de aplicación ni activación oficial.
 
-**Siguiente paso del operador:** ejecutar el [comando de preparación del esquema](traslado_historia_y_adopcion.md#paso-inmediato-del-operador-preparar-el-esquema-oficial), introducir localmente la contraseña de fama_oficial_migrador y compartir solo el JSON final. El comando está implementado/probado; su aplicación remota todavía no ocurrió. [ADR 0049](../adr/0049-traslado-explicito-de-historia-y-adopcion-de-cuenta.md), [recibo](../receipts/traslado_historia_preparado_20261024.json).
+**Siguiente paso del operador:** ejecutar el [comando de preparación del esquema](traslado_historia_y_adopcion.md#paso-inmediato-del-operador-preparar-el-esquema-oficial), introducir localmente la contraseña de fama_oficial_migrador y compartir solo el JSON final. El comando está implementado/probado; su aplicación remota todavía no ocurrió. [ADR 0067](../adr/0067-traslado-explicito-de-historia-y-adopcion-de-cuenta.md), [recibo](../receipts/traslado_historia_preparado_20261024.json).
 
 ## Perfil oficial comprobado y respaldo histórico recuperado — 24 de octubre
 
@@ -153,9 +155,9 @@ Los registros no contienen contraseñas, códigos de autorización, tokens, cook
 | Responsable | Trabajo realizado | Evidencia y alcance |
 | --- | --- | --- |
 | Operador | Solicitó retomar login/fondo en la rama de afinamiento y revisar el alcance implementado/pendiente. | Peticiones de esta conversación; las listas iniciales se contrastaron con código y pruebas. |
-| Codex | Backend de cookies HttpOnly, consulta/cierre de sesión, duración máxima/inactividad, roles y permisos por recursos asignados. | [Sesiones](sesiones_web_y_acceso_administrado.md), [recursos](permisos_recursos_asignados.md), ADR 0034–0035 y pruebas con sus cortes en KANBAN. |
-| Codex | Gestión de cuentas, suspensión/reactivación, rol/contraseña, último administrador activo y recuperación administrada de un uso. Límites persistentes, auditoría sin secretos y limpieza explícita de expirados. | [Cuentas](gestion_cuentas_y_recuperacion.md), [límites](limites_login_y_recuperacion.md), [auditoría](auditoria_y_limpieza_seguridad.md), ADR 0036–0038. |
-| Codex | Login centrado con SlicedWaves; pausa, movimiento reducido y alternativa estática; entrada protegida hasta confirmar cookie; expiración/logout y recuperación. | [Acceso visual](acceso_web_y_sliced_waves.md), corte del 19 de octubre, ADR 0039. |
+| Codex | Backend de cookies HttpOnly, consulta/cierre de sesión, duración máxima/inactividad, roles y permisos por recursos asignados. | [Sesiones](sesiones_web_y_acceso_administrado.md), [recursos](permisos_recursos_asignados.md), ADR 0052–0035 y pruebas con sus cortes en KANBAN. |
+| Codex | Gestión de cuentas, suspensión/reactivación, rol/contraseña, último administrador activo y recuperación administrada de un uso. Límites persistentes, auditoría sin secretos y limpieza explícita de expirados. | [Cuentas](gestion_cuentas_y_recuperacion.md), [límites](limites_login_y_recuperacion.md), [auditoría](auditoria_y_limpieza_seguridad.md), ADR 0054–0038. |
+| Codex | Login centrado con SlicedWaves; pausa, movimiento reducido y alternativa estática; entrada protegida hasta confirmar cookie; expiración/logout y recuperación. | [Acceso visual](acceso_web_y_sliced_waves.md), corte del 19 de octubre, ADR 0057. |
 | Operador | Autorizó administración completa: cuentas, asignaciones, contraseña propia, auditoría y mantenimiento. Eligió revisión local aislada con cuentas de prueba. | Respuestas expresas de esta conversación; no autorizan convertir esas cuentas en usuarios del entorno remoto. |
 | Codex | Implementó **Mi cuenta** y **Administración**, catálogo de cuentas/datasets, asignaciones, recuperación, auditoría y mantenimiento. | [Administración visual](administracion_visual.md), corte del 20 de octubre y KANBAN. |
 | Operador y Codex | Se explicaron ambas secciones y la diferencia entre cuenta, permisos y mantenimiento; el operador pidió mejorar claridad/estilo y ajustarlos a las vistas existentes. Codex rediseñó los paneles. | Manual de administración vigente y solicitudes de revisión visual. Las comprobaciones aisladas no acreditan aún el recorrido completo con servicios reales. |
@@ -169,7 +171,7 @@ La contraseña de F.A.M.A., el usuario SQL y la identidad de Google Cloud son tr
 - **Operador:** puso Docker a disposición y confirmó que su motor estaba listo.
 - **Codex:** separó instalación de arranque funcional, configuración persistente/referencias privadas y migraciones Alembic explícitas. Retiró la creación automática de tablas/administrador al arrancar; detecta esquema desconocido.
 - **Verificación:** PostgreSQL 16.15 temporal; base vacía, actualización que conserva cuenta, DML sin DDL y arranque/login/logout aislados. Selección final de 34 pruebas y otra regresión de 149, con alcances diferentes. Contenedor temporal retirado.
-- **Evidencia:** [manual](preparacion_instalacion_y_migraciones.md), [ADR 0040](../adr/0040-configuracion-persistente-y-migraciones-explicitas.md), [recibo de etapa 1](../receipts/instalacion_etapa1_postgresql_20261021.json).
+- **Evidencia:** [manual](preparacion_instalacion_y_migraciones.md), [ADR 0058](../adr/0058-configuracion-persistente-y-migraciones-explicitas.md), [recibo de etapa 1](../receipts/instalacion_etapa1_postgresql_20261021.json).
 
 ### 2. Proyecto, facturación y alertas — confirmado durante la guía
 
@@ -198,7 +200,7 @@ La contraseña de F.A.M.A., el usuario SQL y la identidad de Google Cloud son tr
 - **Codex:** añadió `app.node prepare/check/serve`, diagnóstico SQL/GCS y variante Compose de nube con proxy. El perfil elegido evita heredar la base local. Preparó protección de directorios y referencias de secretos; no conserva la contraseña del migrador.
 - **Operador:** preparó la contraseña real del usuario diario y confirmó el resultado de la preparación local.
 - **Verificación:** SQL y listado GCS desde Windows y un entorno Linux temporal contra los recursos reales de pruebas. La base estaba vacía antes de las migraciones. Regresión local previa: 50 pruebas en ocho archivos. Proxy/red Docker temporales retirados; proxy nativo conservado.
-- **Evidencia:** [manual](conexiones_cloud_sql_y_gcs.md), [ADR 0041](../adr/0041-conexiones-cloud-explicitas-mediante-proxy.md), [recibo de etapa 5](../receipts/instalacion_etapa5_conexiones_20261022.json).
+- **Evidencia:** [manual](conexiones_cloud_sql_y_gcs.md), [ADR 0059](../adr/0059-conexiones-cloud-explicitas-mediante-proxy.md), [recibo de etapa 5](../receipts/instalacion_etapa5_conexiones_20261022.json).
 
 ### 6. Migraciones y permisos remotos — 22 de octubre
 
@@ -214,7 +216,7 @@ La contraseña de F.A.M.A., el usuario SQL y la identidad de Google Cloud son tr
 - **Codex:** implementó los pasos visuales, autorización de 15 minutos vinculada al origen, configuración privada y comprobaciones de conexión/esquema/permisos. Primer administrador y auditoría se guardan en una transacción. Intención privada y bloqueos permiten reanudar sin duplicar cuentas ni adoptar una base existente. El cierre requiere reiniciar el backend.
 - **Verificación aislada:** 181 pruebas backend seleccionadas en 14 archivos; suite frontend completa de 306 pruebas en 31 archivos; TypeScript y ESLint focal sin diagnósticos. PostgreSQL temporal real con permisos limitados y GCS simulado en el SDK externo.
 - **Navegador:** recorrido completo y rechazo de reapertura sobre una instalación sintética; no se creó el administrador real. Servidores y PostgreSQL temporales retirados, proxy nativo conservado.
-- **Evidencia:** [manual](asistente_primera_instalacion.md), [ADR 0042](../adr/0042-autorizacion-y-finalizacion-reanudable-de-instalacion.md), [recibo de etapa 7](../receipts/instalacion_etapa7_asistente_20261022.json), [captura de finalización sintética](../images/instalacion_etapa7_finalizada_20261022.png).
+- **Evidencia:** [manual](asistente_primera_instalacion.md), [ADR 0060](../adr/0060-autorizacion-y-finalizacion-reanudable-de-instalacion.md), [recibo de etapa 7](../receipts/instalacion_etapa7_asistente_20261022.json), [captura de finalización sintética](../images/instalacion_etapa7_finalizada_20261022.png).
 
 ## Inventario de referencia de pruebas
 
@@ -323,7 +325,7 @@ Revisión de código, sin conceder permisos, subir audios ni aprobar correccione
 
 ### Recomendación anterior de gobierno de datos — no adoptada
 
-**Corte histórico:** la propuesta de permiso separado de validación que sigue no fue adoptada. La decisión posterior del operador concede autonomía completa sobre datasets asignados; rige el [ADR 0043](../adr/0043-autonomia-investigadora-en-datasets-asignados.md).
+**Corte histórico:** la propuesta de permiso separado de validación que sigue no fue adoptada. La decisión posterior del operador concede autonomía completa sobre datasets asignados; rige el [ADR 0061](../adr/0061-autonomia-investigadora-en-datasets-asignados.md).
 
 El operador solicitó una recomendación acorde con la finalidad de F.A.M.A., sin ordenar todavía cambios de permisos. Se contrastaron el perfil de usuarios de la memoria (investigador: carga/etiquetado/entrenamiento/feedback; administrador: accesos/infraestructura), RF06 y ADR 0013. El ADR histórico respalda separar propuesta y curación; no acredita por sí solo el estado vigente de GCS ni la calidad de las etiquetas.
 
@@ -337,7 +339,7 @@ Referencia externa consultada: [guía MLOps de Google Cloud](https://docs.cloud.
 
 El operador definió autonomía para descargar, preprocesar, entrenar, predecir, subir audios, corregir e incorporar aportes a un dataset asignado. Descubrir otros datasets permite solicitar acceso; el administrador decide la concesión. Se descarta el permiso adicional de curador propuesto antes. Se mantiene la incorporación humana como acción explícita, realizable por el mismo investigador sin aprobación administrativa.
 
-Codex registró la decisión en el [ADR 0043](../adr/0043-autonomia-investigadora-en-datasets-asignados.md), precisó los términos del [glosario](../arquitectura/CONTEXT.md) y ordenó el [plan de ajustes](plan_autonomia_investigador_y_catalogo.md): corregir inventario/descargas, ofrecer subida a los roles autorizados, completar incorporación SQL/GCS, implementar descubrimiento/solicitudes y verificar el recorrido integrado. La decisión de permisos está aceptada; este turno solo documenta y planifica. No se ejecutó código de producción nuevo, migración ni carga real.
+Codex registró la decisión en el [ADR 0061](../adr/0061-autonomia-investigadora-en-datasets-asignados.md), precisó los términos del [glosario](../arquitectura/CONTEXT.md) y ordenó el [plan de ajustes](plan_autonomia_investigador_y_catalogo.md): corregir inventario/descargas, ofrecer subida a los roles autorizados, completar incorporación SQL/GCS, implementar descubrimiento/solicitudes y verificar el recorrido integrado. La decisión de permisos está aceptada; este turno solo documenta y planifica. No se ejecutó código de producción nuevo, migración ni carga real.
 
 ### Implementación autorizada por el operador — en curso
 
@@ -445,7 +447,7 @@ Se sincronizaron ocho fuentes por hash con el runtime aislado y se reinició sol
 
 Los quince archivos previos, incluidos CSV y once audios locales, conservaron sus hashes. Consultas SQL de solo lectura antes/después confirmaron doce audios, un modelo de una época inactivo, mismo hash y esquema `0003_autonomy`. Se copió únicamente el nuevo manifiesto, sin reemplazo, a la muestra local original tras comprobar sus diez audios, para conservarlo fuera del runtime temporal. No hubo entrenamiento real nuevo, migración, nuevas escrituras GCS ni cambios al bucket oficial. La persistencia de la versión en un checkpoint nuevo se acreditó con ML sintético pequeño, no con un nuevo experimento científico.
 
-**Evidencia:** [manual](particiones_versionadas.md), [ADR 0044](../adr/0044-particiones-explicitas-y-manifiestos-inmutables.md), [recibo](../receipts/particiones_versionadas_20261023.json) y [captura](../images/particiones_versionadas_20261023.png). **Siguiente bloque:** respaldo y recuperación de checkpoints desde GCS; después, operación persistente y corte oficial controlado. Las comprobaciones no acreditan calidad científica, GPU ni la suite global.
+**Evidencia:** [manual](particiones_versionadas.md), [ADR 0062](../adr/0062-particiones-explicitas-y-manifiestos-inmutables.md), [recibo](../receipts/particiones_versionadas_20261023.json) y [captura](../images/particiones_versionadas_20261023.png). **Siguiente bloque:** respaldo y recuperación de checkpoints desde GCS; después, operación persistente y corte oficial controlado. Las comprobaciones no acreditan calidad científica, GPU ni la suite global.
 
 ### Respaldo y recuperación de checkpoints — 23 de octubre de 2026, tercer bloque previo al corte oficial
 
@@ -461,7 +463,7 @@ Se sincronizaron cinco fuentes por hash y se reinició solo backend 8010, ahora 
 
 Los diecisiete archivos previos del dataset/checkpoint, incluidos CSV y manifiesto local, conservaron sus hashes. SQL antes/después mantuvo doce audios, un modelo inactivo y esquema `0003_autonomy`. No se ejecutó entrenamiento nuevo, no se subieron audios, no se migró SQL ni se modificó `fama-audio-records-2026`. El respaldo de pesos quedó conservado en GCS, sin política nueva de borrado ni retención. Se respalda el checkpoint existente; los manifiestos locales no incluidos en él y la base SQL aún necesitan su propia estrategia de copia.
 
-**Evidencia:** [manual](respaldo_y_recuperacion_checkpoints.md), [ADR 0045](../adr/0045-respaldo-explicito-de-checkpoints-por-contenido.md), [recibo](../receipts/respaldo_checkpoints_20261023.json) y [captura](../images/respaldo_checkpoint_real_20261023.png). **Siguiente bloque:** directorios persistentes exclusivos por entorno y preparación operativa. Continúan recuperación SQL/administrativa y corte oficial controlado.
+**Evidencia:** [manual](respaldo_y_recuperacion_checkpoints.md), [ADR 0063](../adr/0063-respaldo-explicito-de-checkpoints-por-contenido.md), [recibo](../receipts/respaldo_checkpoints_20261023.json) y [captura](../images/respaldo_checkpoint_real_20261023.png). **Siguiente bloque:** directorios persistentes exclusivos por entorno y preparación operativa. Continúan recuperación SQL/administrativa y corte oficial controlado.
 
 ## Cuarto bloque previo al corte oficial: almacenamiento persistente — 23 de octubre
 
@@ -477,7 +479,7 @@ El lanzador arrancó backend parent 21008/worker 36632 y frontend parent 26660/w
 
 **Comprobación de conservación:** SQL mantuvo doce audios, un modelo inactivo, cero sincronizaciones pendientes y `0003_autonomy`. La versión `2262aaf0364a` mantuvo ocho train/dos val; el checkpoint mantuvo SHA-256 `a905275bdbc974643608580e6d29d5905ced30a8ce53b372fb88280c446f035d`, 16318381 bytes y respaldo GCS generación `1792799002816536`. La consulta de metadatos no repitió la descarga/verificación de bytes remotos del bloque anterior. No se migró SQL, no se entrenó ni se modificaron audios cloud, roles, contraseñas o el bucket oficial. El arranque normal puede mantener sus sesiones/telemetría; los diagnósticos de conservación utilizaron SQL en solo lectura y no escribieron en GCS.
 
-**Navegador:** pestaña 11 abierta por el operador, sesión Fabian/Administrador preservada, dataset y modelo visibles. Se abrió el panel de particiones y se seleccionó la versión existente 8/2 sin crear otra ni entrenar. La ficha técnica confirmó **Copia local íntegra** y **Respaldo disponible en GCS**. [Captura](../images/runtime_persistente_pruebas_20261023.png), [manual](directorios_persistentes_por_entorno.md), [ADR 0046](../adr/0046-almacenamiento-persistente-vinculado-al-entorno.md), [recibo](../receipts/directorios_persistentes_20261023.json). El siguiente bloque es copia/restauración de PostgreSQL en un destino separado, seguido de recuperación del operador y operación institucional.
+**Navegador:** pestaña 11 abierta por el operador, sesión Fabian/Administrador preservada, dataset y modelo visibles. Se abrió el panel de particiones y se seleccionó la versión existente 8/2 sin crear otra ni entrenar. La ficha técnica confirmó **Copia local íntegra** y **Respaldo disponible en GCS**. [Captura](../images/runtime_persistente_pruebas_20261023.png), [manual](directorios_persistentes_por_entorno.md), [ADR 0064](../adr/0064-almacenamiento-persistente-vinculado-al-entorno.md), [recibo](../receipts/directorios_persistentes_20261023.json). El siguiente bloque es copia/restauración de PostgreSQL en un destino separado, seguido de recuperación del operador y operación institucional.
 
 ## Quinto bloque previo al corte oficial: respaldo y restauración SQL — 23 de octubre
 
@@ -497,7 +499,7 @@ Origen antes/después y destino conservaron dos cuentas, un dataset, doce audios
 
 **Cierre de pruebas:** 27 PASS/tres archivos (129,21 s), sin SKIP ni fallos en la selección; catorce casos de backup/restore y regresión de perfiles/ACL. Se retiraron solo el contenedor del laboratorio y su volumen anónimo exclusivo, cotejando previamente ID/etiqueta/imagen y ausencia de montajes compartidos. Los tres contenedores anteriores y el proxy se conservaron; dump, manifiesto y herramientas privadas quedaron guardados. No se mantiene una segunda base local operativa tras el ensayo.
 
-El ensayo comprueba restauración lógica en PostgreSQL 16 local; no constituye restauración administrada/PITR de Cloud SQL, frecuencia/retención programada ni copia fuera del equipo. La instalación oficial necesitará una política de copias y su verificación en el destino elegido. [Guía](respaldo_y_restauracion_postgresql.md), [ADR 0047](../adr/0047-respaldo-logico-y-restauracion-sql-separada.md), [recibo](../receipts/respaldo_postgresql_20261023.json).
+El ensayo comprueba restauración lógica en PostgreSQL 16 local; no constituye restauración administrada/PITR de Cloud SQL, frecuencia/retención programada ni copia fuera del equipo. La instalación oficial necesitará una política de copias y su verificación en el destino elegido. [Guía](respaldo_y_restauracion_postgresql.md), [ADR 0065](../adr/0065-respaldo-logico-y-restauracion-sql-separada.md), [recibo](../receipts/respaldo_postgresql_20261023.json).
 
 **Siguiente bloque:** recuperación de emergencia del operador y cierre del procedimiento de arranque diario. Después se preparan base, perfil y catálogo oficiales; el cambio al uso real ocurre al arrancar ese perfil y comprobar el recorrido acotado acordado. HTTPS/acceso de red depende del equipo y acceso finales. Las mejoras científicas y la evaluación independiente conservan su seguimiento separado.
 
@@ -515,7 +517,7 @@ Las pruebas utilizan un PostgreSQL 16 local exclusivo, roles diarios limitados, 
 
 **Comprobación vigente:** la CLI únicamente inspeccionó al administrador ID 1 en `fama_pruebas`. Se confirmó activo y con rol administrador. Antes/después coincidieron las huellas de cuentas, sesiones (sin comparar el vencimiento deslizante que puede tocar el HTTP en vivo), recuperaciones y control de cuentas; auditoría/recuentos de recursos estables. El perfil, los 29 archivos locales y el dump privado previo conservaron hashes. No se introdujo ni cambió la contraseña real, no se revocaron sesiones reales, no hubo acceso/escrituras GCS ni migraciones. El restablecimiento efectivo se ejecutó solo sobre cuentas sintéticas del laboratorio.
 
-**Cierre:** 85 PASS/cuatro archivos backend (222,55 s), incluidos veinte casos de recuperación, sin omisiones ni fallos en la selección. Frontend: veinte pruebas administrativas aprobadas (13,00 s), TypeScript y lint focal correctos. No se declara suite global ni teclado físico verificado con contraseña real. El laboratorio reutilizó la imagen oficial PostgreSQL 16 disponible, con contenedor etiquetado propio, contraseña privada y puerto loopback aleatorio. Se retiraron únicamente ese contenedor y su volumen tras comprobar ID/etiqueta/imagen y ausencia de montajes compartidos; los contenedores anteriores se conservaron en su mismo estado, sin detener nodo ni proxy. El recibo registra pruebas, comprobación real y limpieza. [Guía](recuperacion_emergencia_administrador.md), [ADR 0048](../adr/0048-recuperacion-local-de-administradores-existentes.md), [recibo](../receipts/recuperacion_emergencia_20261023.json).
+**Cierre:** 85 PASS/cuatro archivos backend (222,55 s), incluidos veinte casos de recuperación, sin omisiones ni fallos en la selección. Frontend: veinte pruebas administrativas aprobadas (13,00 s), TypeScript y lint focal correctos. No se declara suite global ni teclado físico verificado con contraseña real. El laboratorio reutilizó la imagen oficial PostgreSQL 16 disponible, con contenedor etiquetado propio, contraseña privada y puerto loopback aleatorio. Se retiraron únicamente ese contenedor y su volumen tras comprobar ID/etiqueta/imagen y ausencia de montajes compartidos; los contenedores anteriores se conservaron en su mismo estado, sin detener nodo ni proxy. El recibo registra pruebas, comprobación real y limpieza. [Guía](recuperacion_emergencia_administrador.md), [ADR 0066](../adr/0066-recuperacion-local-de-administradores-existentes.md), [recibo](../receipts/recuperacion_emergencia_20261023.json).
 
 **Siguiente bloque:** preparar el entorno oficial una vez definido equipo y acceso; inventariar/registrar datasets y modelos del bucket oficial, preparar base/perfil/credenciales y política de copias. El cambio de uso se hace al arrancar el perfil oficial y comprobar el recorrido acotado. El arranque diario nativo ya tiene su [guía de directorios/lanzador](directorios_persistentes_por_entorno.md); HTTPS/red dependen del destino final. No se cambió al bucket oficial durante esta recuperación.
 

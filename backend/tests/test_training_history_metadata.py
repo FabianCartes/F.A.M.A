@@ -84,3 +84,37 @@ def test_history_reads_metadata_with_lazy_tensor_storage(persistence_env, monkey
 
     assert entry["classes"] == ["Fixture"]
     assert entry["audio_specs"]["target_sr"] == 8000
+
+
+@pytest.mark.parametrize("outside_root", [False, True])
+def test_history_preserves_database_bytes_for_local_artifact_metadata(training_env, outside_root):
+    import hashlib
+
+    service, sessions, root, _ = training_env
+    artifact = service.checkpoints_dir / "probe_v0.pt"
+    payload = {"classes": ["One", "One"]}
+    if outside_root:
+        target = root / "outside.pt"
+        torch.save(payload, target)
+        artifact.symlink_to(target)
+    else:
+        torch.save(payload, artifact)
+    with sessions() as db:
+        db.add(Modelo(arquitectura="fixture", clase_objetivo="Motores", epocas=2,
+                      tasa_aprendizaje=0.0, tamano_lote=0, precision=0.0, perdida=0.0,
+                      ruta_binario_gcp="models/probe_v0.pt", tamano_bytes=0))
+        db.commit()
+        connection = db.connection().connection.driver_connection
+        before = hashlib.sha256(connection.serialize()).digest()
+        artifact_before = hashlib.sha256(artifact.read_bytes()).digest()
+        entry, = service.get_history(db)
+        assert hashlib.sha256(connection.serialize()).digest() == before
+        assert hashlib.sha256(artifact.read_bytes()).digest() == artifact_before
+        assert entry["version"] == 0
+        assert entry["accuracy"] == entry["loss"] == 0.0
+        assert entry["hyperparameters"]["learning_rate"] == 0.0
+        assert entry["hyperparameters"]["batch_size"] == 0
+        assert entry["classes"] == []
+        assert entry["classes_count"] is None
+        assert entry["audio_specs"] is None
+        assert entry["file_size_bytes"] == (None if outside_root else artifact.stat().st_size)

@@ -14,6 +14,7 @@ from backend.training.paths import (
     get_processed_data_dir,
     get_checkpoints_dir,
 )
+from training import paths
 from training.paths import (
     PathResolver as TrainingPathResolver,
     get_project_root as training_get_project_root,
@@ -45,6 +46,41 @@ def test_get_raw_data_dir_with_dataset():
     assert raw_dataset.is_absolute()
     assert raw_dataset == get_project_root() / "backend" / "data" / "raw" / "engine_diagnostics"
     assert PathResolver.raw_data_dir("engine_diagnostics") == raw_dataset
+
+
+def test_training_read_paths_are_opt_in_for_aves_only(monkeypatch, tmp_path):
+    raw = tmp_path / "external-raw"
+    prepared = tmp_path / "external-prepared"
+    raw.mkdir()
+    prepared.mkdir()
+    monkeypatch.setenv("FAMA_TRAINING_AVESCHILENAS_RAW_READ_ROOT", str(raw))
+    monkeypatch.setenv("FAMA_TRAINING_AVESCHILENAS_PREPARED_READ_DIR", str(prepared))
+
+    assert paths.get_training_raw_read_root("AvesChilenas") == raw
+    assert paths.get_training_prepared_read_dir("AvesChilenas") == prepared
+    assert paths.get_training_raw_read_root("engine_diagnostics") == get_raw_data_dir("engine_diagnostics")
+    assert paths.get_training_prepared_read_dir("engine_diagnostics") == get_project_root() / "backend/data/prepared/engine_diagnostics"
+
+
+def test_training_read_paths_default_to_canonical_local_directories(monkeypatch):
+    monkeypatch.delenv("FAMA_TRAINING_AVESCHILENAS_RAW_READ_ROOT", raising=False)
+    monkeypatch.delenv("FAMA_TRAINING_AVESCHILENAS_PREPARED_READ_DIR", raising=False)
+    assert paths.get_training_raw_read_root("AvesChilenas") == get_raw_data_dir("AvesChilenas")
+    assert paths.get_training_prepared_read_dir("AvesChilenas") == get_project_root() / "backend/data/prepared/AvesChilenas"
+
+
+@pytest.mark.parametrize("variable,getter_name", [
+    ("FAMA_TRAINING_AVESCHILENAS_RAW_READ_ROOT", "get_training_raw_read_root"),
+    ("FAMA_TRAINING_AVESCHILENAS_PREPARED_READ_DIR", "get_training_prepared_read_dir"),
+])
+def test_configured_training_read_path_fails_closed_for_symlink(monkeypatch, tmp_path, variable, getter_name):
+    physical = tmp_path / "physical"
+    physical.mkdir()
+    alias = tmp_path / "alias"
+    alias.symlink_to(physical, target_is_directory=True)
+    monkeypatch.setenv(variable, str(alias))
+    with pytest.raises(ValueError, match="physical"):
+        getattr(paths, getter_name)("AvesChilenas")
 
 
 def test_get_processed_data_dir_default():
@@ -90,6 +126,7 @@ def test_get_checkpoints_dir_with_subpath():
 @pytest.mark.parametrize("stage", ["raw", "processed"])
 @pytest.mark.parametrize("alias_location", ["ancestor", "base", "dataset", "code_ancestor"])
 def test_configured_root_alias_is_rejected_by_consumer(monkeypatch, tmp_path, stage, alias_location):
+    (tmp_path / ".git").mkdir()  # Keep fallback discovery inside the synthetic project.
     from training import paths
     from dataset_references import resolve_reference
 
@@ -123,6 +160,7 @@ def test_configured_root_alias_is_rejected_by_consumer(monkeypatch, tmp_path, st
 
 @pytest.mark.parametrize("stage", ["raw", "processed"])
 def test_declared_stage_map_resolves_only_selected_root(monkeypatch, tmp_path, stage):
+    (tmp_path / ".git").mkdir()  # Do not discover the real checkout above private scratch.
     from training import paths
     from dataset_references import resolve_reference
 
@@ -151,6 +189,7 @@ def test_public_dataset_locator_preserves_declared_spelling(
 ):
     import importlib
 
+    (tmp_path / ".git").mkdir()  # A synthetic project marker makes fallback deterministic.
     paths = importlib.import_module(module_name)
     backend = tmp_path / "backend"
     physical = tmp_path / "physical"

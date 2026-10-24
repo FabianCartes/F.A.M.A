@@ -36,8 +36,8 @@ describe('accepted feedback synchronization through the rendered panel', () => {
     expect(within(rows[0]).getByText(/Subida fallida.*reintento automático/)).toBeDefined();
     expect(within(rows[1]).getByText(/Integridad inconsistente.*atención manual/)).toBeDefined();
     expect(within(rows[2]).getByText('Copia cloud confirmada')).toBeDefined();
-    expect(rows[0].textContent).not.toContain('Feedback #7');
-    expect(rows[0].textContent).not.toContain('Predicción #12');
+    expect(rows[0].textContent).toContain('Feedback #7');
+    expect(rows[0].textContent).toContain('Predicción #12');
     expect(within(rows[0]).getByText('AvesChilenas')).toBeDefined();
     expect(within(rows[0]).getByText('Rayadito')).toBeDefined();
     expect(rows[0].textContent).toContain('Directorio: rayadito');

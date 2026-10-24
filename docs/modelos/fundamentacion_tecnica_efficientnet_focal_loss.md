@@ -150,18 +150,25 @@ El gradiente de $\text{FL}$ respecto a la activación pre-softmax $z$ se amortig
 
 ---
 
-## 6. Mapeo Arquitectónico en el Repositorio
+## 6. Mapeo arquitectónico histórico del experimento
 
-La implementación sigue estrictamente principios de **Clean Code**, **Deep Modules** y **TDD**:
+Este mapa conserva la organización usada por el experimento; no es un inventario
+de interfaces vigentes. Los orquestadores `train_pipeline` y `run_benchmark` fueron
+retirados, incluidas sus CLI y la reexportación de entrenamiento desde `ml_core.train`.
+El entrenamiento actual parte de la UI → `POST /api/training/start` →
+`TrainingService`; las clases y helpers compartidos de inferencia/evaluación se
+conservan. Véase la [revisión actual de FastAPI y entrenamiento](../arquitectura/revision-fastapi.md).
+
+La implementación experimental se organizó según principios de **Clean Code**, **Deep Modules** y **TDD**:
 
 | Componente Técnico | Clase / Función | Archivo Fuente | Suite de Pruebas |
 | :--- | :--- | :--- | :--- |
 | **Front-End GPU** | `GPUAudioFrontEnd` | `backend/poc/preprocess.py` | `backend/tests/test_preprocess.py` |
 | **Arquitectura de Red** | `BioacousticEfficientNet` | `backend/poc/train.py` | `backend/tests/test_train.py` |
 | **Función de Pérdida** | `FocalLoss` | `backend/poc/train.py` | `backend/tests/test_train.py` |
-| **Pipeline de Entrenamiento** | `train_pipeline` | `backend/poc/train.py` | `backend/tests/test_train.py` |
+| **Pipeline de Entrenamiento — retirado** | `train_pipeline` (ya no disponible) | Ubicación histórica: `backend/poc/train.py` | Referencia histórica: `backend/tests/test_train.py`; retiro comprobado en `backend/tests/test_training_entrypoints.py` |
 | **Evaluación Test Set** | `run_evaluation` | `backend/poc/evaluate.py` | `backend/tests/test_evaluate.py` |
-| **Benchmark Multicorrida** | `run_benchmark` | `backend/poc/benchmark.py` | `backend/tests/test_benchmark.py` |
+| **Benchmark Multicorrida — retirado** | `run_benchmark` (ya no disponible) | Ubicación histórica: `backend/poc/benchmark.py` | Los helpers de métricas conservan cobertura en `backend/tests/test_benchmark.py`; retiro comprobado en `backend/tests/test_training_entrypoints.py` |
 
 ---
 

@@ -1,16 +1,80 @@
 """Reception metadata through inference, with SQLite and fake external boundaries."""
 import asyncio
 import io
+import wave
 from datetime import datetime, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from fastapi import UploadFile
+from fastapi.testclient import TestClient
 
 from tests.test_api_feedback import test_db
 from app.models.prediction import Prediccion
 import app.main as main
+from tests.test_api_predict import ContractPredictor
+from tests.http_security import administrator_http
+from app.services.registry import ModelRegistry
+from app.services.access import ResourceAccess
+from app.models.user import Usuario
+
+
+def synthetic_wav(frames=1, rate=1, channels=1, sample_width=2):
+    stream = io.BytesIO()
+    with wave.open(stream, "wb") as audio:
+        audio.setnchannels(channels)
+        audio.setsampwidth(sample_width)
+        audio.setframerate(rate)
+        audio.writeframes(b"\x00" * frames * channels * sample_width)
+    return stream.getvalue()
+
+
+@pytest.mark.parametrize("size, expected_status", [(46, 200), (48, 200), (49, 413), (64, 413)])
+def test_public_http_audio_limit_before_external_effects(test_db, monkeypatch, size, expected_status):
+    # Threshold-scale contract test, not a 100 MiB transport measurement.
+    monkeypatch.setattr(main, "MAX_AUDIO_BYTES", 48, raising=False)
+    payload = synthetic_wav() + b"\x00" * (size - 46)
+    from starlette.datastructures import UploadFile as MultipartUpload
+    original_read = MultipartUpload.read
+    reads = []
+
+    async def bounded_read(upload, size=-1):
+        assert 0 < size <= 1024 * 1024
+        reads.append(size)
+        upload.size = 1  # Metadata is not authoritative.
+        return await original_read(upload, size)
+
+    monkeypatch.setattr(MultipartUpload, "read", bounded_read)
+    uploader = AsyncMock(return_value=True)
+    predictor = ContractPredictor("fake-model")
+    predictor.metadata.dataset_name = "AvesChilenas"
+    predictor.predict = Mock(wraps=predictor.predict)
+    registry = ModelRegistry()
+    registry.register(predictor, is_default=True)
+    monkeypatch.setattr(main, "upload_audio_to_gcp", uploader)
+    monkeypatch.setattr(main.ensemble_service, "get_status", lambda **kwargs: {})
+    main.app.dependency_overrides[main.get_model_registry] = lambda: registry
+    try:
+        # No context manager: do not run startup/lifespan or discover real models.
+        client = TestClient(main.app)
+        with administrator_http(main.app):
+            response = client.post("/api/predict", files={"file": ("large.wav", payload, "audio/wav")},
+                                   headers={"Content-Length": "1"})
+        assert response.status_code == expected_status
+        assert reads
+        if expected_status == 413:
+            assert "100 MiB" in response.json()["detail"]
+            uploader.assert_not_awaited()
+            predictor.predict.assert_not_called()
+            assert test_db.query(Prediccion).count() == 0
+        else:
+            assert response.json()["clase"] == "Chucao"
+            assert uploader.call_args.args[0] == payload
+            assert test_db.query(Prediccion).count() == 1
+    finally:
+        client.close()
+        main.app.dependency_overrides.pop(main.get_model_registry, None)
 
 
 @pytest.mark.parametrize("filename, expected", [
@@ -40,12 +104,15 @@ def test_inference_persists_original_name_and_reception_before_read(test_db, mon
     uploaded = AsyncMock(return_value=True)
     monkeypatch.setattr(main, "upload_audio_to_gcp", uploaded)
     monkeypatch.setattr(main.ensemble_service, "get_status", lambda **kwargs: {})
-    predictor = SimpleNamespace(model_id="fake-model", dataset_name="AvesChilenas",
-                                predict=lambda path: SimpleNamespace(clase="Chucao", confianza=.9))
+    predictor = ContractPredictor("fake-model")
+    predictor.metadata.dataset_name = "AvesChilenas"
+    registry = ModelRegistry()
+    registry.register(predictor, is_default=True)
+    access = ResourceAccess(test_db, Usuario(id=1, rol="administrador", activo=True))
     response = asyncio.run(main.predict_audio(
-        file=SlowUpload(filename=filename, file=io.BytesIO(b"fake audio")),
+        file=SlowUpload(filename=filename, file=io.BytesIO(synthetic_wav())),
         model_id=None, dataset_name=None, db=test_db,
-        registry=SimpleNamespace(get=lambda model_id: predictor),
+        registry=registry, access=access,
     ))
     test_db.expire_all()
     stored = test_db.get(Prediccion, response["db_id"])

@@ -145,7 +145,7 @@ def test_predict_success_contract(mock_gcp, client, mock_db_session):
     assert data["modelo_id"] == "contract-birds"
     assert data["modelo"] == "HTTP contract fixture"
     assert data["is_fallback"] is False
-    assert isinstance(data["modelos_activos"], list)
+    assert data["modelos_activos"] is None
     assert data["detalles"] == {"is_mock": True, "fixture": "http-contract", "dataset_name": None}
     mock_gcp.assert_awaited_once()
     uploaded_filename = mock_gcp.await_args.kwargs["filename"]
@@ -153,7 +153,9 @@ def test_predict_success_contract(mock_gcp, client, mock_db_session):
     assert uploaded_filename.endswith(".wav")
     assert all(character in "0123456789abcdef" for character in uploaded_filename[:-4])
     assert uploaded_filename != "test_chucao.wav"
-    mock_gcp.assert_awaited_once_with(wav_data, filename=uploaded_filename)
+    assert mock_gcp.await_args.args == (wav_data,)
+    assert mock_gcp.await_args.kwargs["filename"] == uploaded_filename
+    assert callable(mock_gcp.await_args.kwargs["thread_runner"])
     mock_db_session.add.assert_called_once()
     saved = mock_db_session.add.call_args.args[0]
     assert saved.ruta_audio_prueba == f"raw_audios/{uploaded_filename}"

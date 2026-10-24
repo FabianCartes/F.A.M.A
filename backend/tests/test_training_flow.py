@@ -1,6 +1,9 @@
 """Training admission tests at the public service interface; no real training."""
 import os
-from unittest.mock import patch
+import wave
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
+from queue import Queue
 
 import numpy as np
 import librosa
@@ -17,6 +20,7 @@ from app.models.dataset import ConjuntoDatos
 from app.models.training import Modelo
 from app.services import training
 from training import paths
+from training.prepare_data import prepare_dataset
 
 
 def directory_alias(alias, target):
@@ -30,6 +34,8 @@ def directory_alias(alias, target):
 
 @pytest.fixture
 def training_env(tmp_path, monkeypatch):
+    monkeypatch.delenv("FAMA_TRAINING_AVESCHILENAS_RAW_READ_ROOT", raising=False)
+    monkeypatch.delenv("FAMA_TRAINING_AVESCHILENAS_PREPARED_READ_DIR", raising=False)
     engine = create_engine("sqlite:///:memory:", poolclass=StaticPool,
                            connect_args={"check_same_thread": False})
     Base.metadata.create_all(engine)
@@ -38,11 +44,47 @@ def training_env(tmp_path, monkeypatch):
     monkeypatch.setattr(training, "get_raw_data_dir", lambda name=None: tmp_path / "raw" / (name or ""))
     monkeypatch.setattr(paths, "get_raw_data_dir", lambda name=None: tmp_path / "raw" / (name or ""))
     monkeypatch.setattr(paths, "get_processed_data_dir", lambda name=None: tmp_path / "processed" / (name or ""))
+    monkeypatch.setattr(paths, "get_prepared_data_dir", lambda name: tmp_path / "prepared" / name)
     monkeypatch.setattr(training, "_BACKEND_DIR", tmp_path)
     service = training.TrainingService(tmp_path / "checkpoints")
-    # Thread scheduling is an external execution boundary. Never run ML here.
-    with patch("app.services.training.threading.Thread") as thread:
+    # Replace only process execution, leaving the real parent supervisor running.
+    thread = MagicMock(name="Thread")
+    runners = []
+    class InProcessRunner:
+        def __init__(self, target, *, args, seed):
+            self.config = args[0]
+            self.events = Queue()
+            self.alive = True
+            self.exitcode = None
+            runners.append(self)
+        def start(self):
+            thread(target=service._run_training_worker, args=(self.config,)).start()
+            if service.status in {"completed", "stopped", "failed"}:
+                self.finish()
+        def finish(self):
+            self.events.put({"type": "progress", "snapshot": service.get_progress()})
+            self.events.put({"type": "finished"})
+            self.exitcode = 0
+            self.alive = False
+        def receive(self, timeout=None):
+            return self.events.get(timeout=timeout)
+        def is_alive(self):
+            return self.alive
+        def request_stop(self):
+            service._stop_requested = True
+        def join(self, timeout=None):
+            pass
+        def close(self):
+            pass
+    service._process_factory = InProcessRunner
+    try:
         yield service, sessions, tmp_path, thread
+    finally:
+        for runner in runners:
+            if runner.alive:
+                service.status = "stopped"
+                runner.finish()
+        service.wait_for_completion(2)
     engine.dispose()
 
 
@@ -54,29 +96,91 @@ def register(sessions, name):
         return dataset.id_conjunto_datos
 
 
-def partitions(root, name, stage="raw", extension=".wav"):
+def partitions(root, name, stage="raw", extension=".wav", classes=("Fixture",)):
     raw = root / "raw" / name
     raw.mkdir(parents=True)
     audio_root = raw if stage == "raw" else root / "processed" / name / "processed_wav"
-    for split in ("train", "val"):
-        audio = audio_root / "fixture" / f"{split}{extension}"
+    rows = []
+    for split in ("train", "val", "test"):
+      for class_index, clase in enumerate(classes):
+        folder = "fixture" if class_index == 0 else "other"
+        audio = audio_root / folder / f"{split}{extension}"
         audio.parent.mkdir(parents=True, exist_ok=True)
-        audio.write_bytes(b"tiny audio fixture")
-        frame = pd.DataFrame([{"clase": "Fixture", "nombre_archivo": audio.name,
-                               "file_path": f"fixture/{split}{extension}", "file_stage": stage,
+        with wave.open(str(audio), 'wb') as out:
+            out.setnchannels(1)
+            out.setsampwidth(2)
+            out.setframerate(22050)
+            out.writeframes(b'\x00\x00' * 2205)
+        frame = pd.DataFrame([{"clase": clase, "nombre_archivo": audio.name,
+                               "file_path": f"{folder}/{split}{extension}", "file_stage": stage,
                                "recordist": split, "source_group": f"group-{split}",
-                               "hash_sha256": "0" * 64, "xc_id": "00042", "feedback_id": "0006",
+                               "hash_sha256": "0" * 64, "xc_id": f"00{class_index}{split}", "feedback_id": "0006",
                                "labels": '["Fixture"]'}])
         suffix = "_metadata" if name == "engine_diagnostics" else ""
-        frame.to_csv(raw / f"{split}{suffix}.csv", index=False)
+        rows.extend(frame.to_dict("records"))
+    index = raw / "metadata.csv"
+    pd.DataFrame(rows).to_csv(index, index=False)
+    prepared = root / "prepared" / name
+    prepared.parent.mkdir(exist_ok=True)
+    prepare_dataset(index, roots=paths.get_dataset_roots(name), dataset_name=name,
+                    output_dir=prepared, train_ratio=1/3, val_ratio=1/3, test_ratio=1/3)
+    # Raw legacy copies remain decoys, never the admission authority.
+    for csv in prepared.glob("*.csv"):
+        (raw / csv.name).write_bytes(csv.read_bytes())
     return raw
 
 
-@pytest.mark.parametrize("name", ["../AvesChilenas", "bad/name", "CON", "name.", "x" * 101])
-def test_unsafe_identity_is_rejected_before_scheduling(training_env, name):
+@pytest.mark.parametrize('fault', ['decode', 'test_label', 'test_id', 'test_group', 'test_path', 'reserved_label'])
+def test_final_evaluation_preflight_blocks_invalid_admission(training_env, monkeypatch, fault):
+    service, sessions, root, thread = training_env
+    register(sessions, 'AvesChilenas')
+    raw = partitions(root, 'AvesChilenas')
+    real_load = training.load_prepared_version
+    def admitted(*args, **kwargs):
+        parts, manifest = real_load(*args, **kwargs)
+        frames = list(parts)
+        if fault == 'decode':
+            (raw / frames[2].iloc[0]['file_path']).write_bytes(b'corrupt codec')
+        elif fault == 'reserved_label':
+            for frame in frames:
+                frame['clase'] = '__recording_rejected__'
+        else:
+            column = {'test_label': 'clase', 'test_id': 'xc_id',
+                      'test_group': 'recordist', 'test_path': 'file_path'}[fault]
+            frames[2][column] = 'unknown' if fault == 'test_label' else frames[0].iloc[0][column]
+        return tuple(frames), manifest
+    monkeypatch.setattr(training, 'load_prepared_version', admitted)
+    with pytest.raises(ValueError):
+        service.start_training('AvesChilenas')
+    thread.assert_not_called()
+    assert service.get_progress()['status'] == 'failed'
+
+
+@pytest.mark.parametrize('fault', ['recordist', 'source_id'])
+def test_engine_admission_preserves_canonical_group_and_class_scoped_source_identity(training_env, monkeypatch, fault):
+    service, sessions, root, thread = training_env
+    register(sessions, 'engine_diagnostics')
+    partitions(root, 'engine_diagnostics')
+    real_load = training.load_prepared_version
+    def admitted(*args, **kwargs):
+        parts, manifest = real_load(*args, **kwargs)
+        frames = list(parts)
+        for split, frame in zip(('train', 'val', 'test'), frames):
+            frame['source_id'] = split
+        frames[2][fault] = frames[0].iloc[0][fault]
+        return tuple(frames), manifest
+    monkeypatch.setattr(training, 'load_prepared_version', admitted)
+    with pytest.raises(ValueError, match='overlap'):
+        service.start_training('engine_diagnostics')
+    thread.assert_not_called()
+
+
+@pytest.mark.parametrize("name", ["medical_cough", "MotoresVehiculares", "aveschilenas", " AvesChilenas", "../AvesChilenas"])
+def test_invalid_or_unprepared_identity_is_rejected_before_scheduling(training_env, name):
+
     service, sessions, _, thread = training_env
     register(sessions, name)
-    with pytest.raises(ValueError, match="Invalid dataset name"):
+    with pytest.raises(ValueError, match="Invalid dataset name" if name.startswith("../") else "preparación ausente"):
         service.start_training(name)
     progress = service.get_progress()
     assert progress["status"] == "failed"
@@ -115,11 +219,11 @@ def test_invalid_source_is_rejected_before_scheduling(training_env, name, defect
     if defect != "missing_source":
         raw = partitions(root, name)
         suffix = "_metadata" if name == "engine_diagnostics" else ""
-        val_csv = raw / f"val{suffix}.csv"
+        val_csv = root / "prepared" / name / f"val{suffix}.csv"
         frame = pd.read_csv(val_csv)
         if defect == "missing_partition":
             # Rename within the temporary fixture, never delete repository files.
-            val_csv.rename(raw / "unavailable.csv")
+            val_csv.rename(val_csv.with_name("unavailable.csv"))
         elif defect == "empty":
             frame.iloc[:0].to_csv(val_csv, index=False)
         elif defect == "schema":
@@ -154,7 +258,7 @@ def test_invalid_source_is_rejected_before_scheduling(training_env, name, defect
             (raw / "fixture" / "val.txt").write_bytes(b"not supported")
             frame.assign(file_path="fixture/val.txt").to_csv(val_csv, index=False)
         elif defect == "empty_audio":
-            (raw / "fixture" / "val.wav").write_bytes(b"")
+            (raw / frame.iloc[0]["file_path"]).write_bytes(b"")
     with pytest.raises(ValueError):
         service.start_training(name)
     assert service.get_progress()["status"] == "failed"
@@ -164,7 +268,8 @@ def test_invalid_source_is_rejected_before_scheduling(training_env, name, defect
 
 
 @pytest.mark.parametrize("name", ["AvesChilenas", "engine_diagnostics", "FAMA_Prueba_Aves"])
-@pytest.mark.parametrize("audio_config", [None, {"target_sr": 16000}])
+@pytest.mark.parametrize("audio_config", [None, {"target_sr": 16000, "f_max": 8000}])
+
 @pytest.mark.parametrize("stage,extension", [("raw", ".wav"), ("raw", ".mp3"), ("processed", ".wav")])
 def test_accepted_source_reaches_ml_boundary_without_training(training_env, monkeypatch, name, audio_config,
                                                               stage, extension):
@@ -172,6 +277,11 @@ def test_accepted_source_reaches_ml_boundary_without_training(training_env, monk
     dataset_id = register(sessions, name)
     raw = partitions(root, name, stage, extension)
     audio_root = raw if stage == "raw" else root / "processed" / name / "processed_wav"
+    suffix = "_metadata" if name == "engine_diagnostics" else ""
+    prepared = root / "prepared" / name
+    expected = {split: pd.read_csv(prepared / f"{split}{suffix}.csv", dtype=str,
+                                   keep_default_na=False) for split in ("train", "val", "test")}
+    before = {csv: csv.read_bytes() for csv in prepared.iterdir()}
     alternate = root / "processed" / name / "processed_wav" if stage == "raw" else raw
     for split in ("train", "val"):
         decoy = alternate / "fixture" / f"{split}{extension}"
@@ -206,26 +316,30 @@ def test_accepted_source_reaches_ml_boundary_without_training(training_env, monk
             assert service.get_progress()["status"] == "training"
             assert self.args[0]["dataset_id"] == dataset_id
             # Change the filesystem after acceptance, before scheduled execution.
-            suffix = "_metadata" if name == "engine_diagnostics" else ""
+            source = self.args[0]["source"]
+            for split in expected:
+                pd.testing.assert_frame_equal(source[f"{split}_df"], expected[split])
+            frozen = {split: source[f"{split}_df"] for split in expected}
             (raw / f"train{suffix}.csv").write_text("invalid after acceptance\n")
             monkeypatch.setattr(training, "get_raw_data_dir", lambda *a: root / "wrong")
-            self.target(*self.args)
+            with patch.object(pd, "read_csv", side_effect=AssertionError("CSV read after admission")):
+                self.target(*self.args)
+            for split, frame in frozen.items():
+                assert source[f"{split}_df"] is frame
+                pd.testing.assert_frame_equal(frame, expected[split])
+            assert {csv: csv.read_bytes() for csv in prepared.iterdir()} == before
 
     thread.side_effect = InlineThread
     result = service.start_training(name, architecture="AudioCNN", audio_config=audio_config)
     assert result["status"] == "started"
-    assert observed == [str(audio_root / "fixture" / f"{split}{extension}") for split in ("train", "val")], \
-        service.get_progress()["error_message"]
+    assert observed == [str(audio_root / expected[split].iloc[0]["file_path"])
+                        for split in ("train", "val")], service.get_progress()["error_message"]
     for split in ("train", "val"):
         snapshot = pd.read_csv(root / f"{split}-snapshot.csv", dtype=str, keep_default_na=False)
-        assert snapshot.to_dict("records") == [{
-            "clase": "Fixture", "nombre_archivo": f"{split}{extension}",
-            "file_path": f"fixture/{split}{extension}", "file_stage": stage,
-            "recordist": split, "source_group": f"group-{split}", "hash_sha256": "0" * 64,
-            "xc_id": "00042", "feedback_id": "0006", "labels": '["Fixture"]'}]
+        pd.testing.assert_frame_equal(snapshot, expected[split])
         # The persisted index remains usable on a different physical host root.
         portable_root = root / "relocated" / split
-        portable_audio = portable_root / "fixture" / f"{split}{extension}"
+        portable_audio = portable_root / snapshot.iloc[0]["file_path"]
         portable_audio.parent.mkdir(parents=True)
         portable_audio.write_bytes(b"portable fixture")
         portable = training.GenericAudioDataset(snapshot, training.AudioConfig(), {"Fixture": 0},
@@ -239,7 +353,45 @@ def test_accepted_source_reaches_ml_boundary_without_training(training_env, monk
     assert list(service.checkpoints_dir.iterdir()) == []
 
 
-def test_training_catalog_offers_registered_identities_and_no_implicit_local_datasets(training_env):
+def test_training_admission_reads_configured_external_bird_roots(training_env, monkeypatch):
+    service, sessions, root, thread = training_env
+    name = "AvesChilenas"
+    register(sessions, name)
+    external_root = root / "external"
+    monkeypatch.setattr(paths, "get_raw_data_dir",
+                        lambda name=None: external_root / "raw" / (name or ""))
+    external_raw = partitions(external_root, name, classes=("ExternalFixture",))
+    external_prepared = external_root / "prepared" / name
+    before = {path: path.read_bytes() for path in (*external_raw.rglob("*"), *external_prepared.rglob("*"))
+              if path.is_file()}
+    monkeypatch.setenv("FAMA_TRAINING_AVESCHILENAS_RAW_READ_ROOT", str(external_raw))
+    monkeypatch.setenv("FAMA_TRAINING_AVESCHILENAS_PREPARED_READ_DIR", str(external_prepared))
+
+    assert service.start_training(name)["status"] == "started"
+    config = thread.call_args.kwargs["args"][0]
+    assert config["source"]["raw_dir"] == external_raw
+    assert config["source"]["roots"]["raw"] == external_raw
+    assert config["source"]["train_df"]["clase"].tolist() == ["ExternalFixture"]
+    assert {path: path.read_bytes() for path in before} == before
+    assert service.checkpoints_dir == root / "checkpoints"
+    thread.assert_called_once()
+
+
+def test_training_admission_rejects_invalid_configured_external_root(training_env, monkeypatch):
+    service, sessions, root, thread = training_env
+    register(sessions, "AvesChilenas")
+    partitions(root, "AvesChilenas")
+    monkeypatch.setenv("FAMA_TRAINING_AVESCHILENAS_RAW_READ_ROOT", str(root / "missing-raw"))
+
+    with pytest.raises(ValueError, match="physical"):
+        service.start_training("AvesChilenas")
+    assert service.get_progress()["status"] == "failed"
+    thread.assert_not_called()
+    assert list(service.checkpoints_dir.iterdir()) == []
+
+
+def test_training_catalog_only_offers_supported_registered_datasets(training_env):
+
     service, sessions, root, _ = training_env
     register(sessions, "medical_cough")
     supported_id = register(sessions, "engine_diagnostics")
@@ -268,7 +420,8 @@ def test_bird_legacy_metadata_requires_offline_conversion(training_env, metadata
         for split in ("train", "val"):
             csv = raw / f"{split}.csv"
             pd.read_csv(csv).drop(columns="file_path").to_csv(csv, index=False)
-    with pytest.raises(ValueError, match="file_path.*file_stage.*offline"):
+    (root / "prepared/AvesChilenas/.complete").write_text("malformed")
+    with pytest.raises(ValueError, match="preparación"):
         service.start_training("AvesChilenas")
     assert service.get_progress()["status"] == "failed"
     thread.assert_not_called()
@@ -289,8 +442,10 @@ def test_canonical_metadata_only_source_preserves_rows_without_rewriting_indices
     before = metadata_csv.read_bytes()
     for split in ("train", "val"):
         (raw / f"{split}.csv").rename(raw / f"{split}.unused")
-    assert service.start_training("AvesChilenas")["status"] == "started"
-    assert service.get_progress()["status"] == "training"
+    (root / "prepared/AvesChilenas").rename(root / "prepared/unused")
+    with pytest.raises(ValueError, match="preparación"):
+        service.start_training("AvesChilenas")
+    assert service.get_progress()["status"] == "failed"
     assert metadata_csv.read_bytes() == before
     assert not (raw / "train.csv").exists()
     assert not (raw / "val.csv").exists()
@@ -327,6 +482,58 @@ def test_identical_relative_paths_in_distinct_stages_are_not_split_overlap(train
     assert service.get_progress()["status"] == "training"
 
 
+@pytest.mark.parametrize("name", ["AvesChilenas", "engine_diagnostics"])
+@pytest.mark.parametrize("stage", ["raw", "processed"])
+@pytest.mark.parametrize("defect", ["missing_prepared", "integrity", "test_audio"])
+def test_prepared_trio_is_required_before_job_admission(training_env, name, stage, defect):
+    service, sessions, root, thread = training_env
+    register(sessions, name)
+    raw = partitions(root, name, stage)
+    prepared = root / "prepared" / name
+    suffix = "_metadata" if name == "engine_diagnostics" else ""
+    legacy_before = {csv: csv.read_bytes() for csv in raw.glob("*.csv")}
+    if defect == "missing_prepared":
+        prepared.rename(prepared.with_name("unavailable"))
+    elif defect == "integrity":
+        csv = prepared / f"test{suffix}.csv"
+        frame = pd.read_csv(csv, dtype=str, keep_default_na=False)
+        frame.assign(feedback_id="changed").to_csv(csv, index=False)
+    else:
+        frame = pd.read_csv(prepared / f"test{suffix}.csv")
+        audio_root = paths.get_dataset_roots(name)[stage]
+        (audio_root / frame.iloc[0]["file_path"]).write_bytes(b"")
+    with pytest.raises(ValueError):
+        service.start_training(name)
+    progress = service.get_progress()
+    assert progress["status"] == "failed"
+    assert progress["job_id"] is None
+    thread.assert_not_called()
+    assert {csv: csv.read_bytes() for csv in raw.glob("*.csv")} == legacy_before
+    assert list(service.checkpoints_dir.iterdir()) == []
+
+
+@pytest.mark.parametrize("seed", [True, False, None, 1.5, "42", -1, 2**32])
+def test_invalid_seed_has_no_admission_or_state_effects(training_env, monkeypatch, seed):
+    service, _, _, thread = training_env
+    before = service.get_progress()
+    def forbidden():
+        raise AssertionError("invalid seed reached registration")
+    monkeypatch.setattr(training, "SessionLocal", forbidden)
+    with pytest.raises(ValueError, match="seed"):
+        service.start_training("AvesChilenas", seed=seed)
+    assert service.get_progress() == before
+    thread.assert_not_called()
+
+
+@pytest.mark.parametrize(("options", "expected"), [({}, 42), ({"seed": 0}, 0), ({"seed": 2**32 - 1}, 2**32 - 1)])
+def test_training_seed_default_and_uint32_limits_reach_worker(training_env, options, expected):
+    service, sessions, root, thread = training_env
+    register(sessions, "AvesChilenas")
+    partitions(root, "AvesChilenas")
+    assert service.start_training("AvesChilenas", **options)["status"] == "started"
+    assert thread.call_args.kwargs["args"][0]["seed"] == expected
+
+
 def test_unavailable_registration_store_fails_closed(training_env, monkeypatch):
     service, _, _, thread = training_env
     def unavailable():
@@ -336,3 +543,28 @@ def test_unavailable_registration_store_fails_closed(training_env, monkeypatch):
         service.start_training("AvesChilenas")
     assert service.get_progress()["status"] == "failed"
     thread.assert_not_called()
+
+
+@pytest.mark.parametrize("name", ["../AvesChilenas", "bad/name", "CON", "name.", "x" * 101])
+def test_unsafe_identity_is_rejected_before_scheduling(training_env, name):
+    service, sessions, _, thread = training_env
+    register(sessions, name)
+    with pytest.raises(ValueError, match="Invalid dataset name"):
+        service.start_training(name)
+    progress = service.get_progress()
+    assert progress["status"] == "failed"
+    assert progress["job_id"] is None
+    assert name in progress["error_message"]
+    thread.assert_not_called()
+
+
+def test_training_catalog_offers_registered_identities_and_no_implicit_local_datasets(training_env):
+    service, sessions, root, _ = training_env
+    register(sessions, "medical_cough")
+    supported_id = register(sessions, "engine_diagnostics")
+    partitions(root, "engine_diagnostics")
+    with sessions() as db:
+        catalog = service.get_available_datasets(db)
+    assert [entry["id"] for entry in catalog] == ["medical_cough", "engine_diagnostics"]
+    assert catalog[1]["db_id"] == supported_id
+    assert service.get_available_datasets() == []

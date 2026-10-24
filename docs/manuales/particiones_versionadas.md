@@ -1,17 +1,17 @@
 # Preparar y utilizar particiones versionadas
 
-Implementación del 23 de octubre de 2026, rama `fix/afinamiento-integral`. Disponible para administradores e investigadores con acceso al dataset. No requiere migración SQL ni permisos administrativos adicionales.
+Implementación del 23 de octubre de 2026, actualizada al integrar dev el 24 de octubre, rama `fix/afinamiento-integral`. Disponible para administradores e investigadores con acceso al dataset. No requiere migración SQL ni permisos administrativos adicionales.
 
 ## Uso en Entrenamiento
 
 1. Selecciona el dataset y abre **Gestionar particiones**.
-2. Puedes elegir una versión guardada o preparar otra desde los audios registrados que están descargados en este equipo. La opción **Usar CSV existentes** conserva el funcionamiento anterior y requiere que esos CSV ya estén preparados.
-3. Deja inicialmente **20 % de validación** y **semilla 42**, o ajusta la validación entre 10 y 40 %. La semilla permite repetir el reparto con la misma selección y procedencia; no mide calidad.
-4. Pulsa **Previsualizar reparto**. Revisa las cantidades reales de entrenamiento/validación por clase y las advertencias. Se intenta respetar el porcentaje sin dividir grupos ni dejar una clase fuera del entrenamiento; el porcentaje efectivo puede diferir.
+2. Puedes elegir una versión guardada o preparar otra desde los audios registrados que están descargados en este equipo. La opción **Usar CSV existentes** conserva el funcionamiento anterior y requiere preparaciones de tres grupos verificadas en Linux. En Windows, preparar una versión desde los audios locales.
+3. Deja inicialmente **20 % de validación**, **20 % de prueba** y **semilla 42**, o ajusta cada grupo entre 10 y 40 %, dejando al menos 40 % objetivo para entrenamiento. La semilla permite repetir el reparto con la misma selección y procedencia; no mide calidad.
+4. Pulsa **Previsualizar reparto**. Revisa las cantidades reales de entrenamiento/validación/prueba por clase y las advertencias. Se intenta respetar el porcentaje sin dividir grupos ni dejar una clase fuera del entrenamiento; el porcentaje efectivo puede diferir.
 5. Cuando existan advertencias, confirma que las revisaste. Pulsa **Guardar versión y seleccionarla**. Esta operación guarda el manifiesto local y lo elige para el próximo trabajo; todavía no entrena.
 6. Inicia el entrenamiento con los parámetros habituales. El trabajo comprobará los archivos de esa versión y el modelo guardado conservará su manifiesto. El historial muestra el identificador corto de particiones cuando el checkpoint lo contiene.
 
-**Entrenamiento** es el conjunto utilizado para aprender; **validación** se utiliza durante el ajuste para observar rendimiento. Estas versiones no reservan un conjunto de prueba final independiente y no certifican por sí solas capacidad de generalización.
+**Entrenamiento** es el conjunto utilizado para aprender; **validación** se utiliza durante el ajuste para observar rendimiento. **Prueba** se reserva para evaluar el checkpoint final con grabaciones distintas. Las versiones nuevas tienen formato 2; las 80/20 de formato 1 permanecen como historia y deben sustituirse por una versión nueva para entrenar. La evaluación final no activa por sí sola el modelo global: esa acción sigue correspondiendo al administrador.
 
 ## Qué queda fijado
 
@@ -29,9 +29,9 @@ Se conserva el manifiesto en `backend/data/raw/<dataset>/.partitions/<version>.j
 - Los audios sin copia local se excluyen y se informa su cantidad. Descárgalos si deben participar.
 - Los audios incorporados mediante corrección que no tengan un grupo de origen registrado se excluyen de la propuesta. Esto evita tratar un posible derivado como una observación independiente; no borra ni revierte su incorporación. En este alcance, documentar ese origen en los metadatos sigue siendo un paso manual. La interfaz nueva no incluye un editor de procedencia.
 - Un grabador desconocido no se transforma en un grabador inventado. Marcadores como `unknown` o `human_feedback` no acreditan procedencia. La advertencia indica que no se puede garantizar independencia de grabadores o de derivados cuya relación no se conoce.
-- Si una clase solo dispone de un grupo, puede quedar únicamente en entrenamiento, con advertencia. Se necesita al menos una partición de validación no vacía y ninguna clase de validación puede quedar ausente de entrenamiento.
+- Si una clase solo dispone de un grupo, puede quedar únicamente en entrenamiento, con advertencia. Se necesitan validación y prueba no vacías y ninguna clase de validación puede quedar ausente de entrenamiento.
 
-No se reutilizan las funciones históricas que permiten separar filas cuando faltan grupos suficientes. Los CSV antiguos conservan su comportamiento y sus límites históricos.
+No se reutilizan las funciones históricas que permiten separar filas cuando faltan grupos suficientes. Las preparaciones CSV verificadas conservan su identidad y selección histórica explícita de dev. No se reutiliza validación como prueba.
 
 ## Operación y límites
 
@@ -47,6 +47,6 @@ Los manifiestos dañados o de otro destino de almacenamiento se rechazan. No edi
 
 Las pruebas se realizan mediante HTTP autenticado y la interfaz renderizada, con SQL/archivos temporales y ejecución ML sintética pequeña. Cubren grupos y duplicados, correcciones sin origen, clases contradictorias, permisos/origen de la petición, cambios de archivos, reintentos, destino de almacenamiento y manifiestos dañados. Las pruebas de entrenamiento comprueban la versión conservada en el checkpoint y rechazan publicar un modelo si cambia el audio durante la ejecución.
 
-Resultados y recorrido visible del entorno real de pruebas: [recibo](../receipts/particiones_versionadas_20261023.json). Diseño: [ADR 0044](../adr/0044-particiones-explicitas-y-manifiestos-inmutables.md). El bloque posterior ya permite [respaldar y recuperar checkpoints](respaldo_y_recuperacion_checkpoints.md); no copia por separado los manifiestos externos al checkpoint. El bucket oficial no se cambia con estas implementaciones.
+Resultados y recorrido visible del entorno real de pruebas: [recibo](../receipts/particiones_versionadas_20261023.json). Diseño: [ADR 0062](../adr/0062-particiones-explicitas-y-manifiestos-inmutables.md). El bloque posterior ya permite [respaldar y recuperar checkpoints](respaldo_y_recuperacion_checkpoints.md); no copia por separado los manifiestos externos al checkpoint. El bucket oficial no se cambia con estas implementaciones.
 
 Comprobación operativa del 23 de octubre: versión `2262aaf0364a`, ocho train/dos val de `FAMA_Prueba_Aves`, guardada y seleccionada desde la sesión administradora. Se mantuvieron los quince archivos anteriores y el modelo existente. El manifiesto también se conservó junto a la muestra original fuera de `.pytest_cache`; no se respaldó en GCS. [Captura del resultado](../images/particiones_versionadas_20261023.png).

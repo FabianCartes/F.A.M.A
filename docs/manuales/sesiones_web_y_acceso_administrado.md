@@ -1,6 +1,6 @@
 # Sesiones web y acceso administrado — implementación parcial
 
-**18 de octubre de 2026.** Primer bloque backend implementado y probado con SQLite temporal. No hay despliegue, acceso a Cloud SQL/GCS ni cambios en cuentas reales. Decisión: [ADR 0034](../adr/0034-sesiones-web-revocables-y-registro-administrado.md).
+**18 de octubre de 2026.** Primer bloque backend implementado y probado con SQLite temporal. No hay despliegue, acceso a Cloud SQL/GCS ni cambios en cuentas reales. Decisión: [ADR 0052](../adr/0052-sesiones-web-revocables-y-registro-administrado.md).
 
 **Actualización posterior:** el segundo bloque ya integra sesión obligatoria y asignaciones en las rutas funcionales; ver [permisos sobre recursos asignados](permisos_recursos_asignados.md). La lista de siguientes pasos y la advertencia de rutas sin protección al final describen el corte del primer bloque, no el estado del segundo. Siguen pendientes UI, gestión integral de cuentas, setup y validación/despliegue de producción.
 

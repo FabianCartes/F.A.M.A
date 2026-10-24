@@ -83,7 +83,11 @@ def upload_audio_to_gcp_sync(
 async def upload_audio_to_gcp(
     audio_content: Union[bytes, Path, str], filename: str,
     bucket_name: Optional[str] = None, destination_folder: str = "raw_audios",
+    *, timeout: Optional[float] = None, thread_runner=None,
 ) -> bool:
-    return await asyncio.to_thread(
-        upload_audio_to_gcp_sync, audio_content, filename, bucket_name, destination_folder
+    # No kwargs when not opted in: preserve strict legacy four-argument adapters.
+    options = {} if timeout is None else {"timeout": timeout}
+    runner = thread_runner or asyncio.to_thread
+    return await runner(
+        upload_audio_to_gcp_sync, audio_content, filename, bucket_name, destination_folder, **options
     )

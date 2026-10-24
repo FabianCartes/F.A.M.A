@@ -66,7 +66,7 @@ La gestión backend de cuentas ya permite crear/listar, suspender/reactivar, cam
 | **Consulta del Catálogo en GCS** (`RF_01`, `CU_INV_01`) | Total | Total |
 | **Sincronización Masiva Descendente** (`RF_02`) | Autorizado en datasets asignados | Control global y purga de caché |
 | **Carga de Audios hacia GCS** (`RF_01`) | Autorizado por lote o archivo | Control global de cuotas |
-| **Lanzamiento de Entrenamientos** (`RF_04`, `CU_INV_03`) | Encolamiento de tareas | Ejecución prioritaria y cola |
+| **Lanzamiento de Entrenamientos** (`RF_04`, `CU_INV_03`) | Inicio de trabajos desde la interfaz | Supervisión del proceso local |
 | **Interrupción de Procesos (Kill Job)** (`CU_ADM_05`) | Solo sus propios procesos | Interrupción forzada global |
 | **Activación de Modelos en Producción** (`CU_INV_05`) | Sugerir activación | Aprobación / Activación final |
 | **Inferencia en Tiempo Real** (`RF_05`, `CU_INV_06`) | Total con oscilograma dinámico | Total |
@@ -108,8 +108,8 @@ El asistente y las pantallas `/setup`/`/login` que se describen a continuación 
 - Login verifica configuración antes de comprobar credenciales y actualizar último acceso. Sin clave válida, login y comprobación de perfil con token devuelven HTTP 503 sanitizado; no se emite una sesión usando un fallback. La clave se lee al importar el módulo: aplicar valores reales y reiniciar requiere autorización separada.
 - Si la tabla de usuarios está vacía, `ADMIN_INITIAL_EMAIL` y `ADMIN_INITIAL_PASSWORD` deben ser explícitos. La contraseña tiene un mínimo de 12 caracteres y no puede ser la antigua contraseña pública; el email tiene validación básica, no verificación de propiedad. Sin esos datos no se crea un administrador por defecto.
 - Si ya hay usuarios, no se restablecen contraseñas, promueven roles ni añaden administradores automáticamente. Recuperar un administrador ausente y rotar credenciales históricas requieren operaciones propias autorizadas.
-- Se acordó que solo administradores autenticados podrán crear cuentas; **`/api/auth/register` aún no aplica esa política**, y su implementación, login web y permisos se pospusieron a la etapa de funcionalidades nuevas. No exponer esta transición como seguridad cerrada. Compose ya propaga las variables explícitas de autenticación desde su entorno; configurar `backend/.env` por sí solo no habilita un contenedor que no monta ese archivo. JSON externos quedan excluidos del contexto backend, sin cambiar montajes runtime; véase [ADR 0025](../adr/0025-configuracion-runtime-y-contexto-sin-credenciales.md).
-- Decisión y límites: [ADR 0024](../adr/0024-configuracion-explicita-de-autenticacion.md). No se modificó ningún `.env` real, cuenta desplegada, configuración de servicios ni credencial GCS.
+- Se acordó que solo administradores autenticados podrán crear cuentas; **`/api/auth/register` aún no aplica esa política**, y su implementación, login web y permisos se pospusieron a la etapa de funcionalidades nuevas. No exponer esta transición como seguridad cerrada. Compose ya propaga las variables explícitas de autenticación desde su entorno; configurar `backend/.env` por sí solo no habilita un contenedor que no monta ese archivo. JSON externos quedan excluidos del contexto backend, sin cambiar montajes runtime; véase [ADR 0043](../adr/0043-configuracion-runtime-y-contexto-sin-credenciales.md).
+- Decisión y límites: [ADR 0042](../adr/0042-configuracion-explicita-de-autenticacion.md). No se modificó ningún `.env` real, cuenta desplegada, configuración de servicios ni credencial GCS.
 
 ## 3. Módulo 1: Dashboard de Observaciones y Referencias Experimentales
 
@@ -162,7 +162,7 @@ Ubicado en el cuadrante inferior:
 * **Temperatura:** Solo se presenta si el sensor la informa; no se inventa una temperatura ni se confunde el sensor GPU con temperatura CPU.
 * **Salud:** BD consultada/degradada/desconocida describe esta lectura. GCS y motor de inferencia quedan no comprobados; el dashboard no activa, carga ni certifica modelos. Estado de ensamble sin fuente queda desconocido, no «Tríada Operativa» o «Modo Individual» por defecto.
 * **Actualización fallida:** Puede conservarse el último snapshot, con aviso explícito de que no es una lectura actual. No se garantiza orden entre polls concurrentes ni un SLA de refresco.
-* **Actividad:** Predicciones y último registro de modelo seleccionados desde BD, sin ingestas ficticias ni promesa de auditoría cronológica completa. Un modelo registrado no equivale a entrenamiento exitoso. Véase [ADR 0031](../adr/0031-dashboard-con-observaciones-y-origen-explicito.md).
+* **Actividad:** Predicciones y último registro de modelo seleccionados desde BD, sin ingestas ficticias ni promesa de auditoría cronológica completa. Un modelo registrado no equivale a entrenamiento exitoso. Véase [ADR 0049](../adr/0049-dashboard-con-observaciones-y-origen-explicito.md).
 
 ---
 
@@ -229,8 +229,8 @@ Para descargar audios desde Google Cloud hacia el hardware local:
    El sistema inicia la descarga diferencial:
    * **Contenido confirmado:** Un archivo existente se omite (`skipped`) cuando coincide con MD5/CRC32C declarado por el proveedor; igual tamaño por sí solo no prueba identidad. Si el checksum no está disponible, se descarga conservadoramente.
    * La descarga usa un temporal y comprueba tamaño/checksum disponibles antes de reemplazar el destino. Un fallo normal conserva el archivo anterior; no implica recuperación garantizada ante caída ni una transacción con la BD.
-   * Solo las transferencias aceptadas se registran como audios. Ante errores el dataset queda `sincronizacion_parcial`, conservando registros previos y sus contadores. Un mismo basename en clases distintas conserva identidades por objeto completo, no se fusiona. Esto no prueba existencia cloud actual ni calidad acústica; véase [ADR 0026](../adr/0026-sincronizacion-por-contenido-y-publicacion-local.md).
-   * La descarga por servicio rechaza nombres/rutas no portables y destinos que resuelven fuera de raw/dataset; mantiene subdirectorios remotos completos y omite marcadores de directorio. No renombra objetos históricos ni garantiza protección frente a sustitución concurrente de enlaces. La API devuelve 422 sanitizado para nombres/destinos inválidos; valida todos los nombres del lote antes de contactar cloud, sin prometer atomicidad frente a fallos posteriores: [ADR 0027](../adr/0027-rutas-portables-y-confinadas-en-descarga.md).
+   * Solo las transferencias aceptadas se registran como audios. Ante errores el dataset queda `sincronizacion_parcial`, conservando registros previos y sus contadores. Un mismo basename en clases distintas conserva identidades por objeto completo, no se fusiona. Esto no prueba existencia cloud actual ni calidad acústica; véase [ADR 0044](../adr/0044-sincronizacion-por-contenido-y-publicacion-local.md).
+   * La descarga por servicio rechaza nombres/rutas no portables y destinos que resuelven fuera de raw/dataset; mantiene subdirectorios remotos completos y omite marcadores de directorio. No renombra objetos históricos ni garantiza protección frente a sustitución concurrente de enlaces. La API devuelve 422 sanitizado para nombres/destinos inválidos; valida todos los nombres del lote antes de contactar cloud, sin prometer atomicidad frente a fallos posteriores: [ADR 0045](../adr/0045-rutas-portables-y-confinadas-en-descarga.md).
    * El I/O de descarga usa rutas extendidas Windows y un nombre temporal corto, sin alterar la identidad ni el `local_dir` informado. Conflictos de directorios y errores operativos por archivo se informan como fallo («No se pudo sincronizar el archivo.») y permiten continuar el lote. Si no se puede eliminar un temporal, esa entrada incluye `cleanup_pending=true`: no significa que se haya limpiado ni que exista recuperación automática. Fallos de raíz del dataset y otros lectores/preprocesamiento siguen fuera de esta garantía.
    * La API distingue `completed`, `partial` y `failed` según errores declarados de descarga, SQL y preprocesamiento; `total_failed` solo cuenta descargas fallidas. HTTP 200 no implica éxito completo. El panel presenta esos resultados y advierte persistencia/preprocesamiento/limpieza pendientes sin anunciar éxito integral. Si preprocesar falla, el dataset queda `sincronizacion_parcial`, no `procesado`. Un recorrido vacío sin errores puede seguir dando completed: no acredita datos listos para entrenar.
 4. **Consola de Telemetría en Vivo:** Una consola interactiva en la parte inferior de la pantalla muestra el progreso en tiempo real, contabilizando archivos procesados y reportando cualquier inconsistencia de red.
@@ -243,15 +243,15 @@ La vista actual no ofrece el botón/modal de subida directa descrito en versione
 2. Enviar multipart con `dataset_name`, `class_label` (opcional, default `General`) y uno o más campos `files`. No se debe usar la API con datos/servicios reales sin autorización y configuración operativa previa.
 3. Comprobar el resultado: 422 sanitizado por nombres/audio inválidos, 413 por exceso de tamaño y 503 por configuración inválida de límites. Antes de transferir se valida todo el lote. Si ya se llegó a transferir, comprobar también los resultados parciales descritos abajo: un fallo SQL puede dejar objetos subidos sin registro actualizado; no existe transacción distribuida ni rollback cloud automático.
    * La lectura propia del backend se hace en bloques de hasta 1 MiB; defaults configurables de 64 MiB por archivo y 256 MiB por suma de contenidos del lote mediante `FAMA_UPLOAD_MAX_FILE_BYTES`/`FAMA_UPLOAD_MAX_BATCH_BYTES`. No incluyen framing/campos multipart, ni RAM total, CPU, concurrencia o recepción previa del parser/proxy; no equivalen al requisito de datasets de 50 GB.
-   * La subida comprueba cabecera/extensión y recorre la decodificación en bloques. Un archivo vacío, sin frames, ilegible o incompatible rechaza el lote entero antes de la primera transferencia. La sincronización descendente no adopta automáticamente este filtro; véase [ADR 0030](../adr/0030-cargas-acusticas-validadas-y-acotadas.md).
+   * La subida comprueba cabecera/extensión y recorre la decodificación en bloques. Un archivo vacío, sin frames, ilegible o incompatible rechaza el lote entero antes de la primera transferencia. La sincronización descendente no adopta automáticamente este filtro; véase [ADR 0048](../adr/0048-cargas-acusticas-validadas-y-acotadas.md).
    * La identidad registrada es la URI completa del objeto: un mismo nombre en clases diferentes conserva audios distintos. Reemplazar el mismo objeto actualiza sus bytes sin aumentar el número de audios; los contadores se calculan desde las filas persistidas.
    * `uploaded` cuenta transferencias, no objetos únicos: repetir un destino dos veces en un lote produce dos transferencias pero un solo registro final. No hay garantía nueva para escritores concurrentes.
    * Dataset, clase y filenames deben ser componentes portables, no rutas; no se recortan ni renombran silenciosamente. La clase omitida usa `General`; vacía explícita se rechaza. Un nombre inválido produce 422 sanitizado y se valida todo el lote antes de transferir el primer archivo.
    * Se aplican los límites del esquema en caracteres: dataset/clase 100, filename 255 y URI completa 500. En descarga, objetos que excedan esos límites se informan como fallidos antes de transferir. No equivalen a límites de tamaño de audio ni garantizan que todas las rutas locales Windows sean escribibles.
    * Si falla la persistencia, `db_persisted=false` y `db_error` informa «No se pudieron guardar los registros de ingesta.» sin SQL ni detalles internos; también aplica a sincronización. No borra automáticamente el objeto subido/archivo descargado. Se mantiene HTTP 200 para resultados de lote: revisar `status` y estos campos, no interpretar el código como éxito integral.
-   * En subida, un fallo por archivo permite continuar el lote: `uploaded`/`files` describen transferencias confirmadas, `failed`/`errors` describen las fallidas con texto fijo. `status` distingue `completed`, `partial` y `failed`, incluyendo fallo de persistencia; se mantiene HTTP 200 para esos resultados. BD registra solo aceptados y conserva registros anteriores, con estado del último intento `subida_parcial`/`subido`. `db_persisted=true` no significa que todas las transferencias funcionaran. Sin BD solicitada por servicio, completed solo confirma transferencias. No se promete rollback cloud ni ausencia remota tras una excepción del proveedor: [ADR 0028](../adr/0028-resultados-parciales-en-subida-de-audios.md).
+   * En subida, un fallo por archivo permite continuar el lote: `uploaded`/`files` describen transferencias confirmadas, `failed`/`errors` describen las fallidas con texto fijo. `status` distingue `completed`, `partial` y `failed`, incluyendo fallo de persistencia; se mantiene HTTP 200 para esos resultados. BD registra solo aceptados y conserva registros anteriores, con estado del último intento `subida_parcial`/`subido`. `db_persisted=true` no significa que todas las transferencias funcionaran. Sin BD solicitada por servicio, completed solo confirma transferencias. No se promete rollback cloud ni ausencia remota tras una excepción del proveedor: [ADR 0046](../adr/0046-resultados-parciales-en-subida-de-audios.md).
    * La extracción de frecuencia/duración usa cabecera, sin remuestrear. La subida además valida por decodificación antes de aceptar. En sync pueden quedar desconocidos como null y duración cero observada; un reemplazo aceptado actualiza esos datos. Un reemplazo ilegible por upload ahora se rechaza sin alterar el anterior. No se certifica silencio, calidad ni aptitud para entrenamiento.
-   * El inspector HTTP existente `/api/ingestion/datasets/{dataset}/files` añade `recorded_metadata` con `sample_rate_hz`, `duration_seconds` y `source="database"`. Describe el registro de BD, no una comprobación actual de GCS; históricos pueden conservar valores de implementaciones anteriores. Si no se dispone del registro o falla la consulta, devuelve null sin detalles SQL. La asociación usa URI completa y conserva rutas planas/anidadas, sin inventar directorio General. No se añade pantalla nueva: [ADR 0029](../adr/0029-metadatos-acusticos-observados-y-lectura-registrada.md).
+   * El inspector HTTP existente `/api/ingestion/datasets/{dataset}/files` añade `recorded_metadata` con `sample_rate_hz`, `duration_seconds` y `source="database"`. Describe el registro de BD, no una comprobación actual de GCS; históricos pueden conservar valores de implementaciones anteriores. Si no se dispone del registro o falla la consulta, devuelve null sin detalles SQL. La asociación usa URI completa y conserva rutas planas/anidadas, sin inventar directorio General. No se añade pantalla nueva: [ADR 0047](../adr/0047-metadatos-acusticos-observados-y-lectura-registrada.md).
    * Seguridad/portabilidad integral de otros lectores, validación de formatos de sync, límites de recepción/recursos completos, fallos de cliente/bucket, sanitización de otros errores y reconciliación de resultados ambiguos siguen pendientes. Ni una carga estructuralmente válida ni HTTP 200 son una certificación de seguridad/calidad.
 
 ---
@@ -300,9 +300,9 @@ El panel siguiente es ilustrativo; sus cifras y acciones no acreditan resultados
    * **Tasa de Aprendizaje (Learning Rate):** Por defecto `0.001` para EfficientNet, `0.0005` para ConvNeXt y `0.0003` para ResNet.
    * **Épocas:** Rango recomendado entre 10 y 25 épocas.
    * **Tamaño del Lote (Batch Size):** Valor predeterminado `16` (en GPUs con 6-8 GB de VRAM) u `8` para ResNet-34d.
-5. **Iniciar Pipeline:** Haga clic en **[Comenzar Entrenamiento]**.
+5. **Iniciar Pipeline:** Haga clic en **[Comenzar Entrenamiento]** en la vista Entrenamiento; la UI envía `POST /api/training/start`.
    * La respuesta `started` incluye un `job_id`; supervise el progreso y su `error_message` hasta el estado final. Una admisión inválida devuelve HTTP 400 y progreso `failed`, sin lanzar el worker ni sustituir el dataset por otro.
-   * El servicio rechaza otro inicio mientras está en `training`; este control dentro del proceso no es una cola FIFO ni un bloqueo global de la GPU frente a otros procesos.
+   * El servicio rechaza otro inicio mientras está en `training` o `evaluating`; este control dentro del proceso no es una cola FIFO ni un bloqueo global de la GPU frente a otros procesos.
    * Las curvas y logs en vivo son telemetría; las métricas se insertan en BD al finalizar cada modelo, no mediante un commit por época.
 
 ### 5.3. Control de Procesos y Detención Segura (`CU_ADM_05`)
@@ -314,9 +314,9 @@ Si el usuario detecta divergencia en la pérdida o necesita liberar la GPU para 
 En la parte inferior del módulo se ubica la tabla de **Historial de Modelos**:
 * El historial consultado con BD incluye `dataset_id`, `dataset_name`, `filename`, `sha256` y métricas persistidas por época. Los nombres amigables, versiones y fichas descriptivas no sustituyen esa evidencia de origen ni la inspección del checkpoint.
 * Para entrenamientos web nuevos, `accuracy` y `loss` corresponden a la misma época del checkpoint seleccionado por mayor accuracy de validación. Un empate conserva la primera época seleccionada, aunque después baje la pérdida. El payload identifica `checkpoint_epoch` y `checkpoint_val_loss`; las curvas siguen conservando todas las épocas ejecutadas. No se corrigen automáticamente métricas de modelos históricos.
-* La ficha técnica muestra física, clases y función de pérdida explícitas del checkpoint local, no presets deducidos del dominio. Si falta el archivo o no se puede leer/validar esa metadata, muestra «No disponible» conservando el registro del modelo. El tamaño procede de la BD o, si no está registrado, del archivo local observado; no acredita integridad actual. La consulta deserializa metadata en CPU con almacenamiento tensorial mapeado: formatos/runtime incompatibles quedan desconocidos, sin fallback de carga completa. Véase [ADR 0022](../adr/0022-ficha-tecnica-sin-valores-inventados.md).
+* La ficha técnica muestra física, clases y función de pérdida explícitas del checkpoint local, no presets deducidos del dominio. Si falta el archivo o no se puede leer/validar esa metadata, muestra «No disponible» conservando el registro del modelo. El tamaño procede de la BD o, si no está registrado, del archivo local observado; no acredita integridad actual. La consulta deserializa metadata en CPU con almacenamiento tensorial mapeado: formatos/runtime incompatibles quedan desconocidos, sin fallback de carga completa. Véase [ADR 0040](../adr/0040-ficha-tecnica-sin-valores-inventados.md).
 
-**Compatibilidad PoC:** el predictor respeta pool_type declarado y el formato histórico model_type sin architecture conserva el default avg de su lector de evaluación; el formato actual mantiene GeM por defecto. No se rellenan parámetros ni se omiten claves incompatibles. n_mels legacy explícito se respeta y valida; no se deduce normalización GPU/HPSS/TTA por filename. Sigue identificado como legacy_librosa. [ADR 0032](../adr/0032-compatibilidad-explicita-de-checkpoints-poc.md).
+**Compatibilidad PoC:** el predictor respeta pool_type declarado y el formato histórico model_type sin architecture conserva el default avg de su lector de evaluación; el formato actual mantiene GeM por defecto. No se rellenan parámetros ni se omiten claves incompatibles. n_mels legacy explícito se respeta y valida; no se deduce normalización GPU/HPSS/TTA por filename. Sigue identificado como legacy_librosa. [ADR 0050](../adr/0050-compatibilidad-explicita-de-checkpoints-poc.md).
 
 **Evidencia real limitada:** el benchmark CPU autorizado consiguió cargar ese checkpoint tras la corrección, pero el único audio permitido terminó en filtro de ruido antes de la red. Su tiempo no es latencia de clasificación ni prueba de exactitud o cumplimiento de 3 s. [Informe/recibos](../modelos/benchmark_local_cpu_20261016.md). Otros casos, GPU o servicios requieren autorización nueva.
 * **[Activar Modelo]** invoca `POST /api/training/models/{id}/activate`: cambia la selección activa en BD e intenta actualizar el predeterminado del registro. Es una operación explícita, separada del descubrimiento del catálogo.
@@ -328,12 +328,12 @@ En la parte inferior del módulo se ubica la tabla de **Historial de Modelos**:
 
 Los índices se vinculan a `backend/data/raw/<dataset>` y a un mapa explícito de raíces físicas: raw en ese directorio y processed en `backend/data/processed/<dataset>/processed_wav`, no mediante el enlace bajo raw. Los CSV se leen con `pandas.read_csv(dtype=str, keep_default_na=False)`, con encabezados exactos:
 
-| Dataset | Particiones admitidas | Columnas obligatorias |
+| Dataset | Particiones preparadas obligatorias | Columnas obligatorias |
 | --- | --- | --- |
-| `AvesChilenas` | `train.csv` y `val.csv`; si ambos faltan, partición desde `metadata.csv` canónico | `clase`, `file_path` y `file_stage` |
-| `engine_diagnostics` | `train_metadata.csv` y `val_metadata.csv` obligatorios | `clase`, `file_path` y `file_stage` |
+| `AvesChilenas` | `train.csv`, `val.csv` y `test.csv`, con marcador `.complete` válido | `clase`, `file_path` y `file_stage` |
+| `engine_diagnostics` | `train_metadata.csv`, `val_metadata.csv` y `test_metadata.csv`, con marcador `.complete` válido | `clase`, `file_path` y `file_stage` |
 
-- Si falta solo una partición, se rechaza el inicio. La generación desde metadata de Aves necesita además `recordist` para el particionador agrupado; no promete separación por grabador cuando hay menos de tres grupos. Las particiones explícitas no reciben esa comprobación de agrupación.
+- El entrenamiento de aplicación consume únicamente el trío completo previamente preparado; no genera particiones desde `metadata.csv` ni admite una combinación parcial. La preparación y validación de ese trío es un paso offline distinto del inicio desde la UI.
 - Train y val deben ser no vacíos, con clases de texto no nulas ni en blanco; cada clase de val debe existir en train. No pueden compartir una ruta de audio resuelta.
 - `file_path` debe ser texto relativo POSIX seguro y no vacío; `file_stage` debe declarar `raw` o `processed`. No se admiten absolutas persistidas, búsqueda por nombre/`xc_id`, variantes de clase/slug ni fallback de referencias inválidas. La etapa es independiente de la extensión: un WAV puede ser raw.
 - Cada referencia debe señalar un archivo regular no vacío, con extensión `.wav`, `.mp3`, `.flac` u `.ogg`, bajo la raíz física de su etapa. Se rechazan symlinks en archivo, raíz o cualquier ancestro; no pre-resolver aliases antes de validar. Etiqueta semántica, carpeta y nombre original no son intercambiables.
@@ -449,7 +449,7 @@ La vista muestra avisos parciales en español; una advertencia no revierte la pe
 - Ante un fallo de actualización, incluido HTTP 503, mantiene el catálogo previo y muestra el error.
   Un catálogo vacío no inventa opciones ni habilita inferencia.
 - Si ninguna entrada confirma pesos, muestra «Sin modelos con pesos disponibles» y bloquea ejecución. Tras verificar/restaurar archivos, volver a la ventana permite consultar su disponibilidad actualizada. Esto no implica activación en BD ni inferencia garantizada.
-- El backend revalida disponibilidad al recibir `POST /api/predict`: ausencia/estado desconocido o error de comprobación devuelven HTTP 503 antes de subir el audio a GCS. No garantiza ausencia de subidas ante corrupción, incompatibilidad o fallos descubiertos después del preflight; véase [ADR 0023](../adr/0023-seleccion-con-pesos-confirmados.md).
+- El backend revalida disponibilidad al recibir `POST /api/predict`: ausencia/estado desconocido o error de comprobación devuelven HTTP 503 antes de subir el audio a GCS. No garantiza ausencia de subidas ante corrupción, incompatibilidad o fallos descubiertos después del preflight; véase [ADR 0041](../adr/0041-seleccion-con-pesos-confirmados.md).
 - El refresco no cambia la identificación del modelo ya ejecutado ni los metadatos de clases
   usados por el feedback de ese resultado. Elegir otro modelo afecta la siguiente inferencia.
 
@@ -484,7 +484,7 @@ GET `/api/model-info` es lectura pasiva del servicio bioacústico legacy: no des
 - **Ejecución:** la respuesta de predicción identifica al predictor invocado por `modelo_id`, `modelo` y `modelos_ejecutados`. `modelos_activos` es alias de compatibilidad, no lista de componentes con ponderaciones ni activación. Puede haber retorno de filtros antes de la red: invocación no prueba forward. El rol fallback no se elimina por `is_mock=false`.
 - **Tiempo:** «Última solicitud» empieza sin medición y luego usa el contador HTTP existente hasta recibir respuesta; no incluye necesariamente lectura JSON/render ni acredita ≤3 s hasta pantalla. No se reutilizan 0.14 s o cifras de benchmark como placeholder.
 
-Clientes anteriores deben manejar null, pesos desconocidos y modos unavailable/partial_ensemble, y no interpretar aliases legados como salud global. Concurrencia/reload atómico, identidad por versión/hash y parser exhaustivo siguen pendientes. Véase [ADR 0033](../adr/0033-estado-legacy-pasivo-y-ejecucion-atribuida.md).
+Clientes anteriores deben manejar null, pesos desconocidos y modos unavailable/partial_ensemble, y no interpretar aliases legados como salud global. Concurrencia/reload atómico, identidad por versión/hash y parser exhaustivo siguen pendientes. Véase [ADR 0051](../adr/0051-estado-legacy-pasivo-y-ejecucion-atribuida.md).
 
 ### 6.2. Inspección Acústica con Oscilograma Interactivo
 Al arrastrar o seleccionar un archivo de audio:
@@ -497,6 +497,8 @@ Al arrastrar o seleccionar un archivo de audio:
 4. **Reproductor Sincronizado:** Permite reproducir el sonido mediante un cabezal de lectura (*playhead*) que recorre la forma de onda en tiempo real, con capacidad de hacer clic en cualquier sección para saltar a ese punto temporal.
 
 ### 6.3. Ejecución de la Predicción
+**Descripción histórica, no garantía operativa vigente.** Se conserva el flujo original siguiente como antecedente. TTA, ejecución en VRAM, latencia inferior a 0.8 segundos y persistencia inmediata no quedan acreditadas por los recibos CPU ni por las pruebas aisladas. Para disponibilidad, atribución y límites de tiempo, consulte la sección 6.1; el recibo CPU terminó en `noise` sin observar forward del clasificador. La confianza no equivale a certeza diagnóstica.
+
 Haga clic en **[Analizar Señal Acústica]**:
 1. El archivo se envía al endpoint `POST /api/predict`.
 2. El backend procesa el audio aplicando **Test-Time Augmentation (TTA)** con ventaneo denso sobre la red activa en VRAM.
@@ -507,6 +509,8 @@ Haga clic en **[Analizar Señal Acústica]**:
    * **Persistencia Relacional:** La predicción queda registrada de forma inmediata en la tabla `prediccion` de PostgreSQL con su respectivo identificador numérico único (`db_id`).
 
 ### 6.4. El Ciclo de Retroalimentación Activa y Telemetría de Errores (`RF_06`, `CU_INV_07`)
+
+**Flujo histórico y objetivo de producto.** El diagrama y los pasos siguientes no son un contrato HTTP vigente ni prueba de un ciclo completo ejecutado. La copia cloud depende de localizar el audio y completar la transferencia; la captura/curación no implica reentrenamiento automático ni mejora de calidad demostrada. Consulte el [estado acotado y pendientes](estado_actual_y_pendientes.md) para los límites de la evidencia retenida.
 
 Este componente es la piedra angular del **MLOps continuo** en F.A.M.A. Garantiza que el conocimiento experto del ornitólogo o del mecánico retroalimente a la IA cuando esta comete un error taxonómico o de diagnóstico.
 
@@ -554,13 +558,15 @@ sequenceDiagram
 | :--- | :--- | :--- |
 | **"Error de conexión con Google Cloud Storage" en Ingesta** | La credencial JSON de GCP expiró, fue revocada o el bucket no existe. | El Administrador debe verificar en `/setup` o en el archivo de entorno que la variable `GOOGLE_APPLICATION_CREDENTIALS` apunte a una llave válida con rol `Storage Object Admin`. |
 | **"Predicción clasificada como Ruido Blanco / No Biológico"** | La señal grabada presenta una planitud espectral excesiva o está vacía/acolchada con ceros. | Verifique que el micrófono no haya grabado silencio plano o ruido de interferencia estática pura. |
-| **"Entrenamiento en Cola / Hardware Ocupado"** | Otro investigador tiene un entrenamiento activo en la GPU local. | El sistema no permite dos entrenamientos simultáneos para prevenir `CUDA OOM`. Espere a que concluya el trabajo en curso o consulte la posición en cola. |
+| **"Entrenamiento ocupado"** | El proceso backend que recibió la solicitud ya tiene un entrenamiento activo. El control de admisión es local a ese proceso; no existe una cola FIFO ni una posición de espera. | Consulte el progreso del trabajo activo desde la vista Entrenamiento y espere a que termine antes de volver a iniciarlo. El sistema no coordina otros procesos que utilicen la GPU. |
 | **"Audio no se reproduce en el navegador"** | Formato de audio incompatible o archivo WAV con códec no estándar (ej. float64 poco común). | Asegúrese de que el audio sea PCM estándar de 16 o 24 bits. F.A.M.A. transcodifica internamente en backend si se envía a inferencia. |
 | **"Memoria de Video (VRAM) Crítica"** | Un proceso externo de la máquina está consumiendo la GPU física. | El Administrador debe acceder al nodo on-premise y verificar procesos con `nvidia-smi`, cerrando aplicaciones recreativas o instancias huérfanas de PyTorch. |
 
 ---
 
 ## 8. Conclusiones y Valor Metodológico para la Tesis
+
+**Conclusión histórica de diseño, no cierre operativo.** Las afirmaciones siguientes expresan el objetivo metodológico del manual original. No acreditan producción, cumplimiento integral de requisitos ni el ciclo E2E hasta un nuevo modelo; la integración y sus comprobaciones finales siguen pendientes.
 
 El desarrollo y puesta en marcha de esta plataforma cumple cabalmente con los compromisos metodológicos de la **Actividad 12** de la memoria de grado:
 * **Trazabilidad de Requerimientos:** Cada botón, gráfico y flujo web corresponde exactamente a los Requerimientos Funcionales `RF_01` al `RF_06` y a la Especificación de Casos de Uso del Capítulo 5 de la Tesis.

@@ -91,6 +91,11 @@ class StartTrainingRequest(BaseModel):
     """
     dataset_name: str = "AvesChilenas"
     partition_version: Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    prepared_version: Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{64}$",
+                                          description="Pin an immutable prepared dataset identity")
+    allow_historical_preparation: bool = Field(default=False, strict=True,
+                                               description="Use a pinned historical preparation despite source-index changes")
+
     architecture: Optional[str] = "EfficientNet-B0"
     epochs: int = Field(default=10, ge=1, le=1000, description="Épocas de entrenamiento")
     learning_rate: float = 0.001
@@ -98,6 +103,8 @@ class StartTrainingRequest(BaseModel):
     batch_size: int = 16
     framework: str = "pytorch"
     is_tri_model: bool = False
+    seed: int = Field(default=42, strict=True, ge=0, le=4_294_967_295,
+                      description='Semilla de RNG del entrenamiento')
     early_stopping: bool = Field(
         default=True,
         description="Habilitar detención temprana automática (Early Stopping) según convergencia de validación",
@@ -116,6 +123,8 @@ class StartTrainingRequest(BaseModel):
     @model_validator(mode="after")
 
     def validate_and_normalize_models(self) -> "StartTrainingRequest":
+        if self.allow_historical_preparation and self.prepared_version is None:
+            raise ValueError("Historical preparation requires an explicit prepared_version")
         if self.models is not None:
             if len(self.models) == 0:
                 raise ValueError("La lista de modelos no puede estar vacía.")

@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-15",
+  "status": "locally_verified_uncommitted",
+  "base_commit": "23ad406d4705ccea880d6e79faea21e9ab78682e",
+  "branch": "feat/consistent-evaluation-publication",
+  "previous_receipt": "docs/receipts/worktree-consolidation.json",
+  "backup": {
+    "path": "/home/kevin/Work/fama-preservation/20261015T163827Z-remaining",
+    "manifest": "manifest.json",
+    "manifest_sha256": "2365576508f4a6c49c5d372e81b645d70251c258ffdb7d99d582f62646c911c5",
+    "archive_member_sha256_verified": true,
+    "archive_modes_and_symlinks_verified": true,
+    "all_worktree_heads_verified_in_restored_bundle": true,
+    "cuda_virtualenv_bytes_included": true,
+    "cuda_execution_or_relocated_virtualenv_tested": false,
+    "excluded_directories": [".codegraph", ".atl", "frontend/node_modules", "frontend/.next"],
+    "operations_script": "preservation-operations.py",
+    "recovery_requires_original_absolute_virtualenv_paths": true,
+    "external_interpreter": {
+      "path": "/usr/bin/python3.14",
+      "sha256": "d78f9cf7178ecff09963551399855543c297f37ac207e626228bfe43cb26a70c"
+    },
+    "initial_incomplete_second_source_archive": "Rejected after timeout and rebuilt; never accepted as verified."
+  },
+  "retirement": {
+    "previous_secondary_worktrees_removed": 46,
+    "additional_source_worktrees_removed": 2,
+    "additional_candidate_views_removed": 10,
+    "total_secondary_worktrees_removed": 58,
+    "remaining_registered_worktrees": ["/home/kevin/Work/fama"],
+    "branches_deleted": false,
+    "global_prune_used": false,
+    "force_removal": "Only exact archived states after immediate file and Git-state revalidation.",
+    "candidate_read_only_directory_recovery": "Git unregistered views but could not delete read-only directories; verified residual bytes, enabled owner write on exact retired directories and removed them. Original modes preserved in archive.",
+    "owner_sidecars": "Moved unchanged to corresponding archive directories."
+  },
+  "review_preservation": {
+    "review_store_outside_candidate_views_byte_identical": true,
+    "review_status_output_byte_identical": true,
+    "lineage_count": 20,
+    "existing_reviewing_lineages": 2,
+    "historical_malformed_states_preserved": true,
+    "store_reset_used": false,
+    "maintenance_lock_removed": false,
+    "review_approval_claimed": false
+  },
+  "scratch_inventory": [
+    {"path": ".t1-verify.xFHiCl", "type": "directory", "files": 342, "bytes": 7192874, "archived_and_removed": true},
+    {"path": ".t3-verify-X0LRjz", "type": "directory", "files": 246, "bytes": 2215728, "archived_and_removed": true},
+    {"path": ".t3-verify-current", "type": "regular_text_file", "files": 1, "bytes": 40, "archived_and_removed": true}
+  ],
+  "source_identity": {
+    "algorithm": "sha256-of-canonical-json-path-to-sha256",
+    "sha256": "fd367d91a66108da832e15dcbdcfd69fddfcdc1ceb8f8b5e2f4f8f5fc0ca4df7",
+    "source_file_count": 19,
+    "inventory_in_backup": "final-source-identity.json"
+  },
+  "spawn": {
+    "adr": "docs/adr/0024-entrenamiento-aislado-spawn.md",
+    "queue_capacity": 8,
+    "http_independent_supervision": true,
+    "requires_successful_exit_and_terminal_snapshot_and_finished_event": true,
+    "cancel_after_registration": "Preserve checkpoint and pending inactive model; do not start evaluation.",
+    "activation_policy": "Preserve principal automatic activation after coherent standard reports; archive source variant requiring manual activation."
+  },
+  "checks": {
+    "isolated_core": {"passed": 312, "deselected": 0, "warnings": 2, "exit_code": 0, "output_in_backup": "isolated-312.stdout"},
+    "real_spawn": {"passed": 9, "exit_code": 0, "test_file": "backend/tests/test_training_spawn.py"},
+    "runner_cli": {"passed": 4, "exit_code": 0, "warnings": ["Read-only existing pytest cache; tests passed."]},
+    "frontend_focused": {"passed": 122, "files": 5, "exit_code": 0},
+    "typescript": {"command": "npx tsc --noEmit --incremental false", "exit_code": 0},
+    "frontend_build": {"command": "npm run build", "exit_code": 0},
+    "frontend_changed_files_lint": {"errors": 25, "warnings": 1, "exit_code": 1, "approved": false},
+    "diff_whitespace": {"command": "git diff --check", "exit_code": 0}
+  },
+  "limitations": [
+    "Python 3.14 local environment does not validate Python 3.12 Docker image.",
+    "Real spawn tests use temporary SQLite file, synthetic CPU audio/model and no network in the child pipeline; not the in-memory-only isolated runner.",
+    "No CUDA training, deployment PostgreSQL, real dataset training, model quality or browser execution verified.",
+    "No new native review approval; preserved historical review state is not approval of this candidate.",
+    "Concurrent AGENTS.md edits preserved as unrelated user work.",
+    "No commit, push or PR created."
+  ]
+}

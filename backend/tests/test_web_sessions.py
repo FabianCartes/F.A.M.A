@@ -24,6 +24,10 @@ PASSWORD = "SyntheticPassword2026!"
 def web(monkeypatch):
     configure_access_limits(monkeypatch)
     monkeypatch.setenv("FAMA_WEB_ORIGIN", ORIGIN)
+    import os
+    from app.configuration import get_configuration, load_configuration, activate_configuration
+    previous_configuration = get_configuration()
+    activate_configuration(load_configuration(dict(os.environ)))
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     with engine.begin() as connection:
         connection.exec_driver_sql("PRAGMA foreign_keys=ON")
@@ -45,6 +49,7 @@ def web(monkeypatch):
     with TestClient(app, base_url=ORIGIN, raise_server_exceptions=False) as client:
         yield client, sessions
     engine.dispose()
+    activate_configuration(previous_configuration)
 
 
 def login(client, role="investigador"):

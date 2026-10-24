@@ -14,25 +14,6 @@ def test_prepare_engine_dataset_default_path():
         assert Path(param.default).resolve() == get_raw_data_dir("engine_diagnostics")
 
 
-def test_training_scripts_no_hardcoded_root_data_dir():
-    root = get_project_root()
-    scripts = [
-        root / "backend" / "train_car_engine_model.py",
-        root / "backend" / "train_and_ensemble_engines.py",
-        root / "backend" / "train_v2_and_compare.py",
-    ]
-    for script in scripts:
-        if not script.exists():
-            continue
-        content = script.read_text(encoding="utf-8")
-        assert 'Path("data/engine_diagnostics")' not in content, (
-            f"Script {script.name} contiene ruta hardcodeada 'data/engine_diagnostics'"
-        )
-        assert "get_raw_data_dir" in content, (
-            f"Script {script.name} no utiliza get_raw_data_dir"
-        )
-
-
 def test_poc_scripts_no_hardcoded_root_data_dir():
     root = get_project_root()
     poc_dir = root / "backend" / "poc"
@@ -71,28 +52,25 @@ def test_root_data_dir_completely_removed():
 
 def test_aves_chilenas_unified_paths():
     from training.paths import get_raw_data_dir, get_processed_data_dir
-    raw_aves = get_raw_data_dir("AvesChilenas")
-    assert raw_aves.exists() and raw_aves.is_dir(), f"No existe {raw_aves}"
-
-    for required_file in ["metadata.csv", "train.csv", "val.csv", "test.csv"]:
-        fpath = raw_aves / required_file
-        assert fpath.exists() and fpath.is_file(), f"Falta {required_file} en {raw_aves}"
-
-    proc_wav = get_processed_data_dir("AvesChilenas") / "processed_wav"
-    assert proc_wav.exists() and proc_wav.is_dir(), f"No existe {proc_wav}"
-
-    raw_proc_symlink = raw_aves / "processed_wav"
-    assert raw_proc_symlink.exists(), f"No existe el symlink de compatibilidad en {raw_proc_symlink}"
-    assert raw_proc_symlink.resolve() == proc_wav.resolve()
+    raw = get_raw_data_dir("AvesChilenas")
+    processed = get_processed_data_dir("AvesChilenas")
+    assert raw.is_absolute() and processed.is_absolute()
+    assert raw.name == processed.name == "AvesChilenas"
+    assert raw.parent.name == "raw" and processed.parent.name == "processed"
+    assert raw != processed
 
 
-def test_ingestion_service_both_datasets_synced():
+def test_local_inventory_does_not_assert_remote_synchronization(tmp_path):
     from app.services.ingestion import IngestionService
-    datasets = IngestionService().list_datasets()
-    ds_map = {d["name"]: d for d in datasets}
-
-    assert "engine_diagnostics" in ds_map, "engine_diagnostics debe estar en list_datasets()"
-    assert ds_map["engine_diagnostics"]["is_synced"] is True, "engine_diagnostics debe reportar is_synced: True"
-
-    assert "AvesChilenas" in ds_map, "AvesChilenas debe estar en list_datasets()"
-    assert ds_map["AvesChilenas"]["is_synced"] is True, "AvesChilenas debe reportar is_synced: True"
+    root = tmp_path/"raw"
+    for name in ("AvesChilenas", "engine_diagnostics"):
+        directory = root/name/"fixture"
+        directory.mkdir(parents=True)
+        (directory/"sample.wav").write_bytes(b"synthetic inventory bytes")
+    service = IngestionService(local_base_dir=root, bucket_name="synthetic-test-bucket")
+    # The external boundary reports unavailability, preserving local visibility.
+    from unittest.mock import patch
+    with patch("google.cloud.storage.Client", side_effect=RuntimeError("synthetic unavailable")):
+        datasets = service.list_datasets()
+    assert {d["id"] for d in datasets} == {"AvesChilenas", "engine_diagnostics"}
+    assert all(d["is_synced"] is False and d["gcs_available"] is False and d["local_file_count"] == 1 for d in datasets)

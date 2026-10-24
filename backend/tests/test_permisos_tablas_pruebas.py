@@ -70,7 +70,7 @@ def test_operator_autonomy_command_prompts_without_persisting_password_and_is_re
                                 cwd=SCRIPT.parents[1], env=dict(os.environ, PYTHON_DOTENV_DISABLED='1'),
                                 capture_output=True, text=True, timeout=30)
         assert result.returncode == 0, result.stderr
-        assert json.loads(result.stdout) == {'code': 'autonomy_update_ready', 'revision': '0003_autonomy'}
+        assert json.loads(result.stdout) == {'code': 'autonomy_update_ready', 'revision': '0004_integration'}
         assert PASSWORD not in result.stdout + result.stderr
     with connection(runtime) as database, database.cursor() as cursor:
         cursor.execute("SELECT has_table_privilege(current_user, 'solicitud_dataset', 'INSERT'), "
@@ -118,7 +118,7 @@ def test_normaliza_permisos_directos_anteriores_sin_alterar_la_revision(migrated
             has_table_privilege(current_user, 'public.usuario', 'TRIGGER')""")
         assert cursor.fetchone() == (False, False, False)
         cursor.execute("SELECT version_num FROM public.alembic_version")
-        assert cursor.fetchone() == ("0003_autonomy",)
+        assert cursor.fetchone() == ("0004_integration",)
 
 
 @pytest.mark.parametrize("change", ["owner", "missing"])

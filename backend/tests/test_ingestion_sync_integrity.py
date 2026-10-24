@@ -212,6 +212,85 @@ def test_equal_basenames_in_different_classes_keep_two_audio_records(sync_enviro
         engine.dispose()
 
 
+@pytest.mark.parametrize("scenario", ["legacy", "both-flat-first", "both-general-first", "exact", "ambiguous"])
+def test_flat_object_retry_preserves_persisted_identity(sync_environment, monkeypatch, scenario):
+    from app.models.dataset import Audio, ConjuntoDatos
+
+    service, blobs, local = sync_environment
+    monkeypatch.setattr(training, "get_raw_data_dir", lambda name=None: service.local_base_dir / (name or ""))
+    prefix = "datasets/AvesChilenas/"
+    flat_key = prefix + "audio.wav"
+    legacy_key = prefix + "General/audio.wav"
+    uri = "gs://fixture-bucket/"
+    content = b"x" * (1024 * 1024)
+    blobs.append(BlobFixture(content, flat_key))
+    if scenario.startswith("both-"):
+        blobs.append(BlobFixture(b"y" * len(content), legacy_key))
+        if scenario == "both-general-first":
+            blobs.reverse()
+    if scenario == "ambiguous":
+        # A preceding valid rewrite must roll back with the ambiguous identity.
+        blobs.insert(0, BlobFixture(content, prefix + "other.wav"))
+    for blob in blobs:
+        destination = local.parent.parent / blob.name[len(prefix):]
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(blob.content)
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    try:
+        with sessionmaker(bind=engine)() as db:
+            dataset = ConjuntoDatos(nombre="AvesChilenas", ruta_gcp=uri + prefix,
+                                    estado="sincronizado", cantidad_audios=1,
+                                    tamano_total_bytes=len(content))
+            db.add(dataset)
+            db.flush()
+            # Exact persisted baseline shape: flat objects had an invented General URI.
+            keys = [flat_key if scenario == "exact" else legacy_key]
+            if scenario == "ambiguous":
+                keys += [legacy_key, prefix + "General/other.wav"]
+                dataset.cantidad_audios = 3
+                dataset.tamano_total_bytes = 3 * len(content)
+            for key in keys:
+                db.add(Audio(id_conjunto_datos=dataset.id_conjunto_datos,
+                             nombre_archivo=key.rsplit("/", 1)[-1], clase="General",
+                             ruta_gcp=uri + key, tamano_bytes=len(content)))
+            db.commit()
+            before = [(row.id_audio, row.ruta_gcp, row.tamano_bytes)
+                      for row in db.query(Audio).order_by(Audio.id_audio).all()]
+            catalogue_before = training.training_service.get_available_datasets(db=db)
+            for _ in range(2):
+                result = service.sync_dataset_to_local("AvesChilenas", db=db)
+                rows = db.query(Audio).order_by(Audio.id_audio).all()
+                catalogue, = training.training_service.get_available_datasets(db=db)
+                assert (result["downloaded"], result["skipped"], result["failed"]) == (0, len(blobs), 0)
+                assert [item["status"] for item in result["files"]] == ["skipped"] * len(blobs)
+                if scenario == "ambiguous":
+                    assert result["db_persisted"] is False
+                    assert result["db_error"] == "No se pudieron guardar los registros de ingesta."
+                    assert [(row.id_audio, row.ruta_gcp, row.tamano_bytes) for row in rows] == before
+                    assert training.training_service.get_available_datasets(db=db) == catalogue_before
+                    assert (dataset.cantidad_audios, dataset.tamano_total_bytes) == (3, 3 * len(content))
+                else:
+                    assert result["db_persisted"] is True
+                    assert result["db_error"] is None
+                    expected_count = 2 if scenario.startswith("both-") else 1
+                    assert len(rows) == expected_count
+                    assert {row.ruta_gcp for row in rows} == {uri + blob.name for blob in blobs}
+                    original = next(row for row in rows if row.id_audio == before[0][0])
+                    expected_key = legacy_key if scenario.startswith("both-") else flat_key
+                    assert original.ruta_gcp == uri + expected_key
+                    assert (dataset.cantidad_audios, dataset.tamano_total_bytes) == (
+                        expected_count, expected_count * len(content))
+                    assert (catalogue["audio_count"], catalogue["size_mb"], catalogue["estado"]) == (
+                        expected_count, float(expected_count), "sincronizado")
+                assert all(blob.downloads == 0 for blob in blobs)
+                for blob in blobs:
+                    assert (local.parent.parent / blob.name[len(prefix):]).read_bytes() == blob.content
+    finally:
+        engine.dispose()
+
+
 def test_matching_md5_is_skipped_without_a_download(sync_environment):
     service, blobs, local = sync_environment
     blob = BlobFixture(b"verified")

@@ -5,9 +5,18 @@ from tests.test_training_flow import training_env
 
 def test_training_publishes_checkpoint_without_directory_descriptor_support(persistence_env, monkeypatch):
     import os
+    from app.services import training
+
+    class PublicationOS:
+        def __getattr__(self, name):
+            if name == "O_DIRECTORY":
+                raise AttributeError(name)
+            return getattr(os, name)
 
     service, sessions, _, _ = persistence_env
-    monkeypatch.delattr(os, "O_DIRECTORY", raising=False)
+    # Emulate only checkpoint publication; prepared-input readers retain the
+    # host's directory-descriptor protections during admission.
+    monkeypatch.setattr(training, "os", PublicationOS())
 
     start(service)
 

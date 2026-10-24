@@ -58,7 +58,6 @@ describe("feedbackApi (TDD Contract Tests for RF_06 & Semi-Manual Curation)", ()
           body: JSON.stringify({
             id_prediccion: 42,
             fue_correcta: true,
-            id_usuario: 1,
           }),
         })
       );

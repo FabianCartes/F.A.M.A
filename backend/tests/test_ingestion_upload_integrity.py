@@ -293,3 +293,26 @@ def test_upload_without_database_reports_only_transfer_completion(upload_environ
     assert result["db_persisted"] is False
     assert result["db_error"] is None
     assert result["failed"] == 0
+
+
+@pytest.mark.parametrize('replacement', [b'', b'broken', synthetic_wav(frames=0)])
+def test_rejected_refresh_preserves_serialized_database_and_cloud(upload_environment, monkeypatch, replacement):
+    import hashlib
+    from app.services.ingestion import IngestionAudioError
+
+    service, db, objects = upload_environment
+    service.upload_files_to_gcs([('prior.wav', synthetic_wav())], 'AvesChilenas', 'Chucao', db=db)
+    def database_digest():
+        connection = db.connection().connection.driver_connection
+        return hashlib.sha256(connection.serialize()).hexdigest()
+    before = database_digest()
+    previous_objects = dict(objects)
+    def unexpected_client():
+        pytest.fail('Rejected upload contacted cloud')
+    monkeypatch.setattr(service, '_get_client', unexpected_client)
+    with pytest.raises(IngestionAudioError) as caught:
+        service.upload_files_to_gcs([('new.wav', synthetic_wav()), ('prior.wav', replacement)],
+                                   'AvesChilenas', 'Chucao', db=db)
+    assert str(caught.value) == 'Invalid audio content'
+    assert database_digest() == before
+    assert objects == previous_objects

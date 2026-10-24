@@ -344,10 +344,11 @@ def test_existing_storage_adapter_bounds_worker_upload_and_disables_sdk_retries(
     assert sent == [(w.audio, {'content_type': 'audio/wav', 'timeout': 30, 'retry': None})]
 
 
-def test_rotation_revisits_released_entry_despite_other_repeated_failures(workflow):
+def test_rotation_revisits_released_entry_despite_other_repeated_failures(workflow, monkeypatch):
     fcntl = pytest.importorskip('fcntl', reason='Esta prueba requiere el bloqueo POSIX fcntl')
     from app.services.feedback_sync_worker import FeedbackSyncWorker
     w = workflow
+    monkeypatch.setattr(storage, "download_prediction_audio", lambda source: w.audio[:-2] + b"\x02\x00")
     with w.sessions() as db:
         pred = Prediccion(ruta_audio_prueba='raw_audios/' + 'b' * 32 + '.wav',
                           etiqueta_predicha='Rayadito', dataset_name='AvesChilenas', confianza=.9)

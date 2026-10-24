@@ -1,0 +1,49 @@
+{
+  "kind": "independent_training_legacy_final_verification",
+  "agent_task": "mv8yiwtq-6-tx4z",
+  "base_commit": "bc2729ec59581ecb928ca74b0d87afc2cf4df8c7",
+  "scope": "S1–S4: retired CLI, standalone trainer, recipes, train_pipeline/run_benchmark and reexport; shared interfaces preserved",
+  "reported_exit_code": 0,
+  "passed": 297,
+  "warnings": 2,
+  "stdout": "........................................................................ [ 24%]\n........................................................................ [ 48%]\n........................................................................ [ 72%]\n........................................................................ [ 96%]\n.........                                                                [100%]\n=============================== warnings summary ===============================\ntests/test_training_persistence.py::test_cpu_checkpoint_and_final_predictor_use_first_best_not_last[1.0--1.0]\ntests/test_training_persistence.py::test_cpu_checkpoint_and_final_predictor_use_first_best_not_last[-1.0--2.0]\n  /home/kevin/Work/fama/.venv/lib/python3.14/site-packages/librosa/core/spectrum.py:3004: UserWarning: n_fft=2048 is too large for input signal of length=512\n    stft(\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n297 passed, 2 warnings in 20.78s\n",
+  "stderr": "",
+  "selectors": [
+    "tests/test_training_entrypoints.py",
+    "tests/test_api_training.py",
+    "tests/test_training_flow.py",
+    "tests/test_training_service.py",
+    "tests/test_training_persistence.py",
+    "tests/test_training_schemas.py",
+    "tests/test_training_models.py",
+    "tests/test_bundle_exporter.py",
+    "tests/test_bundle_predictor.py",
+    "tests/test_standalone_evaluation.py",
+    "tests/test_poc_dataset_references.py",
+    "tests/test_benchmark.py",
+    "tests/test_cli_paths.py::test_prepare_engine_dataset_default_path",
+    "tests/test_cli_paths.py::test_poc_scripts_no_hardcoded_root_data_dir",
+    "tests/test_cli_paths.py::test_root_data_dir_completely_removed"
+  ],
+  "python_wrapper": "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in cleanup checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
+  "command_form": "/home/kevin/Work/fama/.venv/bin/python -B -c <python_wrapper> -q -p no:cacheprovider --basetemp \"$RUNTIME/pytest\" <selectors>",
+  "isolation": "Source copy including intended new test, private caches/HOME, SQLite, synthetic fixtures, dotenv disabled, CUDA hidden, offline; all socket connects blocked",
+  "retired_import_tests": 3,
+  "shared_exports_preserved": [
+    "AudioCNN",
+    "BioacousticModel",
+    "FocalLoss",
+    "apply_mixup"
+  ],
+  "not_run": [
+    "global backend suite",
+    "real training/data",
+    "real database",
+    "GCS",
+    "deployment/concurrency",
+    "native review"
+  ],
+  "native_assessment": "unassessable due untracked declaration despite INSPECT selection; conservative high-risk independent verification completed",
+  "documentation_followup": "Resolved by targeted recheck mv8yprhh-7-g8d8: historical map explicitly marks retired functions/CLIs/reexport, current flow and relative link validated; diff --check passed; production Python sources matched the 297-pass copy, no functional rerun",
+  "historical_receipt": "docs/receipts/training-legacy-independent-verification.json (322-pass prior candidate, not final evidence)"
+}

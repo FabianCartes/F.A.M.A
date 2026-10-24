@@ -97,7 +97,7 @@ def _digest(snapshot):
 def transfer_history(source_url, target_url, *, apply=False, confirm_source=None, confirm_target=None, expect_digest=None):
     """Preview in read-only transactions, or copy into an empty current target atomically."""
     from app.schema import _inspect_schema
-    from migrations.schema_0003 import metadata
+    from migrations.schema_0004 import metadata, BOOTSTRAP_TABLES
     source, target = _address(source_url), _address(target_url)
     if source.database == target.database:
         raise HistoryTransferError('history_source_equals_target')
@@ -128,7 +128,7 @@ def transfer_history(source_url, target_url, *, apply=False, confirm_source=None
                         raise HistoryTransferError('history_target_busy')
                     names = ','.join('public."' + name + '"' for name in (*metadata.tables, 'alembic_version'))
                     destination.exec_driver_sql('LOCK TABLE ' + names + ' IN SHARE ROW EXCLUSIVE MODE')
-                if any(destination.execute(table.select().limit(1)).first() for table in metadata.tables.values()):
+                if any(destination.execute(table.select().limit(1)).first() for table in metadata.tables.values() if table.name not in BOOTSTRAP_TABLES):
                     raise HistoryTransferError('history_target_not_empty')
                 if apply:
                     if digest != expect_digest:

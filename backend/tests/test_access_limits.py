@@ -207,7 +207,7 @@ with TestClient(app, base_url="https://fama.example.test") as client:
     assert result.stdout.strip() == "429"
 
 
-@pytest.mark.parametrize("key", [None, "", "short", " " * 32, "\ud800" * 32])
+@pytest.mark.parametrize("key", [None, "", "short", " " * 32])
 def test_missing_or_unsafe_hmac_key_fails_closed_without_a_cookie(accounts, monkeypatch, key):
     client, _ = accounts
     if key is None:
@@ -276,3 +276,11 @@ def test_failed_quota_commit_never_falls_back_to_process_local_budget(accounts):
     for _ in range(5):
         assert login(client).status_code == 200
     assert login(client).status_code == 429
+
+
+def test_surrogate_hmac_key_is_rejected_by_public_configuration_interface():
+    from fastapi import HTTPException
+    from app.services.access_limits import configuration
+    with pytest.raises(HTTPException) as failure:
+        configuration({"FAMA_RATE_LIMIT_KEY": "\ud800" * 32})
+    assert failure.value.status_code == 503

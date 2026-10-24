@@ -144,6 +144,7 @@ describe("trainingApi (TDD Contract Tests)", () => {
       batch_size: 16,
       framework: "pytorch",
       is_tri_model: false,
+      seed: 42,
       early_stopping: true,
     };
 
@@ -261,7 +262,7 @@ describe("trainingApi (TDD Contract Tests)", () => {
       const res = await startTraining(paramsWithModelEpochs);
       expect(res.status).toBe("started");
 
-      const callBody = JSON.parse((global.fetch as any).mock.calls[0][1].body);
+      const callBody = JSON.parse(String(vi.mocked(global.fetch).mock.calls[0][1]?.body));
       expect(callBody.models[0].epochs).toBe(35);
       expect(callBody.models[1].epochs).toBe(10);
     });
@@ -320,7 +321,7 @@ describe("trainingApi (TDD Contract Tests)", () => {
       const res = await startTraining(paramsWithModelHyperparams);
       expect(res.status).toBe("started");
 
-      const callBody = JSON.parse((global.fetch as any).mock.calls[0][1].body);
+      const callBody = JSON.parse(String(vi.mocked(global.fetch).mock.calls[0][1]?.body));
       expect(callBody.models[0].learning_rate).toBe(0.0007);
       expect(callBody.models[0].batch_size).toBe(32);
       expect(callBody.models[1].learning_rate).toBe(0.001);
@@ -456,6 +457,9 @@ describe("trainingApi (TDD Contract Tests)", () => {
           {
             id: 1,
             architecture: "Super-Ensamble Tri-Modelo",
+            name: "Aves Chilenas · Super-Ensamble Tri-Modelo (v3)",
+            dataset: "Aves Chilenas",
+            version: 3,
             epochs: 50,
             accuracy: 86.75,
             loss: 0.4521,
@@ -481,6 +485,9 @@ describe("trainingApi (TDD Contract Tests)", () => {
       );
       expect(history).toHaveLength(1);
       expect(history[0].architecture).toBe("Super-Ensamble Tri-Modelo");
+      expect(history[0].name).toBe("Aves Chilenas · Super-Ensamble Tri-Modelo (v3)");
+      expect(history[0].dataset).toBe("Aves Chilenas");
+      expect(history[0].version).toBe(3);
       expect(history[0].active).toBe(true);
     });
   });
@@ -522,6 +529,15 @@ describe("trainingApi (TDD Contract Tests)", () => {
   });
 
   describe("StartTrainingRequestSchema", () => {
+    it("defaults and validates the selected uint32 seed", () => {
+      expect(StartTrainingRequestSchema.parse({ dataset_name: "AvesChilenas" }).seed).toBe(42);
+      for (const seed of [0, 314, 4_294_967_295]) {
+        expect(StartTrainingRequestSchema.parse({ dataset_name: "AvesChilenas", seed }).seed).toBe(seed);
+      }
+      for (const seed of [-1, 4_294_967_296, 1.5, true, "42", null]) {
+        expect(StartTrainingRequestSchema.safeParse({ dataset_name: "AvesChilenas", seed }).success).toBe(false);
+      }
+    });
     it("defaults early_stopping to true and allows explicit false", () => {
       const parsedDefault = StartTrainingRequestSchema.parse({
         dataset_name: "AvesChilenas",

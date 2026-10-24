@@ -24,6 +24,11 @@ from tests.http_security import administrator_http
 
 @pytest.fixture(autouse=True)
 def fake_gcs(monkeypatch, tmp_path):
+    from dataclasses import replace
+    from app.configuration import get_configuration, activate_configuration
+    previous = get_configuration()
+    activate_configuration(replace(previous, bucket_name="synthetic-test-bucket"))
+    monkeypatch.setenv("GCS_BUCKET_NAME", "synthetic-test-bucket")
     monkeypatch.setattr(feedback_service, "raw_data_dir", tmp_path / "raw")
     class Client:
         def list_blobs(self, bucket_name, prefix):
@@ -41,6 +46,8 @@ def fake_gcs(monkeypatch, tmp_path):
             return stream.getvalue()
         def upload_from_string(self, data, **kwargs): pass
     monkeypatch.setattr(storage.storage, "Client", Client)
+    yield
+    activate_configuration(previous)
 
 
 @pytest.fixture
@@ -106,6 +113,27 @@ def _create_dummy_wav(path: Path) -> None:
         wf.setsampwidth(2)
         wf.setframerate(22050)
         wf.writeframes(b"\x00\x00" * 2205)  # 0.1s of silence
+
+
+def test_approval_query_preserves_human_reviewed_original_reference(client, test_db):
+    import csv
+
+    dataset = feedback_service.raw_data_dir / "AvesChilenas"
+    _create_dummy_wav(dataset / "rayadito/original.wav")
+    metadata = dataset / "metadata.csv"
+    metadata.write_text("nombre_archivo,clase,file_path,file_stage,xc_id,recordist\n"
+                        "original.wav,Rayadito,rayadito/original.wav,raw,origin001,recorder001\n")
+    pred = Prediccion(ruta_audio_prueba="raw_audios/0123456789abcdef0123456789abcdef.wav",
+                      etiqueta_predicha="Rayadito", dataset_name="AvesChilenas", confianza=.9)
+    test_db.add(pred)
+    test_db.commit()
+    feedback = client.post("/api/feedback", json={"id_prediccion": pred.id_prediccion, "fue_correcta": True})
+    assert feedback.status_code in (200, 201)
+    feedback_id = feedback.json()["id_retroalimentacion"]
+    response = client.post(f"/api/feedback/{feedback_id}/approve", params={"curation_source_id": "origin001"})
+    assert response.status_code == 200, response.text
+    with metadata.open() as stream:
+        assert list(csv.DictReader(stream))[-1]["curation_source_id"] == "origin001"
 
 
 def test_record_feedback_validation(client, test_db, sample_prediction, monkeypatch):

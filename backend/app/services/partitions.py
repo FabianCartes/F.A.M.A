@@ -86,7 +86,7 @@ class DatasetPartitions:
             raise PartitionError("Los metadatos de procedencia deben ser canónicos y no ambiguos.") from None
 
     @staticmethod
-    def _split(entries, validation_percent, seed):
+    def _split(entries, validation_percent, seed, test_percent):
         parents = list(range(len(entries)))
         labels_by_hash = defaultdict(set)
         for entry in entries:
@@ -122,33 +122,37 @@ class DatasetPartitions:
             candidates.append((hashlib.sha256(f"{seed}:{identity}".encode()).hexdigest(), group))
         candidates.sort()
         remaining = Counter(entry["clase"] for entry in entries)
-        targets = {label: max(1, round(count * validation_percent / 100)) for label, count in remaining.items()}
-        validation = Counter()
-        chosen = set()
-        while candidates:
-            options = []
-            for key, group in candidates:
-                counts = Counter(entry["clase"] for entry in group)
-                if any(remaining[label] <= count for label, count in counts.items()):
-                    continue
-                missing = sum(validation[label] == 0 for label in counts)
-                gain = sum(abs(targets[label] - validation[label]) - abs(targets[label] - validation[label] - count)
-                           for label, count in counts.items())
-                if missing or gain > 0:
-                    options.append((-missing, -gain, key, group, counts))
-            if not options:
-                break
-            _, _, key, group, counts = min(options, key=lambda item: item[:3])
-            chosen.add(key)
-            validation.update(counts)
-            remaining.subtract(counts)
-            candidates = [(candidate, rows) for candidate, rows in candidates if candidate != key]
+        assigned = {}
+        totals = remaining.copy()
+        for split, percent in (("test", test_percent), ("val", validation_percent)):
+            targets = {label: max(1, round(count * percent / 100)) for label, count in totals.items()}
+            selected = Counter()
+            while candidates:
+                options = []
+                for key, group in candidates:
+                    counts = Counter(entry["clase"] for entry in group)
+                    if any(remaining[label] <= count for label, count in counts.items()):
+                        continue
+                    missing = sum(selected[label] == 0 for label in counts)
+                    gain = sum(abs(targets[label] - selected[label]) - abs(targets[label] - selected[label] - count)
+                               for label, count in counts.items())
+                    if missing or gain > 0:
+                        options.append((-missing, -gain, key, group, counts))
+                if not options:
+                    break
+                _, _, key, group, counts = min(options, key=lambda item: item[:3])
+                assigned[key] = split
+                selected.update(counts)
+                remaining.subtract(counts)
+                candidates = [(candidate, rows) for candidate, rows in candidates if candidate != key]
         for group in groups.values():
             key = hashlib.sha256(f"{seed}:{group[0]['source_group_id']}".encode()).hexdigest()
             for entry in group:
-                entry["split"] = "val" if key in chosen else "train"
+                entry["split"] = assigned.get(key, "train")
 
-    def preview(self, validation_percent=20, seed=42):
+    def preview(self, validation_percent=20, seed=42, test_percent=20):
+        if not (10 <= validation_percent <= 40 and 10 <= test_percent <= 40 and validation_percent + test_percent <= 60):
+            raise PartitionError("Validación y prueba deben dejar al menos 40 % para entrenamiento.")
         self._safe_directory()
         if not self.raw.is_dir():
             raise PartitionError("Descarga los audios del dataset antes de preparar particiones.")
@@ -186,7 +190,7 @@ class DatasetPartitions:
                 raise PartitionError("La clase de los metadatos no coincide con el registro del audio.")
             for field in ("source_group", "recordist"):
                 entries[-1][field] = _identity(observed.get(field))
-        self._split(entries, validation_percent, seed)
+        self._split(entries, validation_percent, seed, test_percent)
         warnings = []
         if any(not entry["recordist"] for entry in entries):
             warnings.append("Falta procedencia de grabador; no se garantiza independencia entre grabadores o derivados sin relación registrada.")
@@ -198,12 +202,12 @@ class DatasetPartitions:
         for label in sorted({entry["clase"] for entry in entries}):
             if not any(entry["clase"] == label and entry["split"] == "val" for entry in entries):
                 warnings.append(f"La clase {label} solo tiene representación en entrenamiento.")
-        counts = {split: sum(entry["split"] == split for entry in entries) for split in ("train", "val")}
+        counts = {split: sum(entry["split"] == split for entry in entries) for split in ("train", "val", "test")}
         if not all(counts.values()):
-            raise PartitionError("Se necesitan audios suficientes para entrenamiento y validación sin compartir grupos.")
-        spec = {"format": 1, "dataset": self.dataset.nombre, "dataset_id": self.dataset.id_conjunto_datos,
+            raise PartitionError("Se necesitan audios suficientes para entrenamiento, validación y prueba sin compartir grupos.")
+        spec = {"format": 2, "dataset": self.dataset.nombre, "dataset_id": self.dataset.id_conjunto_datos,
                 "storage_uri": prefix,
-                "policy": {"algorithm": "grouped-hash-v1", "validation_percent": validation_percent, "seed": seed},
+                "policy": {"algorithm": "grouped-hash-v2", "validation_percent": validation_percent, "test_percent": test_percent, "seed": seed},
                 "counts": counts, "entries": entries, "excluded": excluded, "warnings": warnings}
         return {**spec, "version": hashlib.sha256(_encoded(spec)).hexdigest()}
 
@@ -244,12 +248,33 @@ class DatasetPartitions:
             if (row is None or row.clase != entry["clase"] or row.ruta_gcp != prefix + entry["file_path"]
                     or row.hash_archivo and row.hash_archivo != entry["hash_sha256"]):
                 raise PartitionError("El registro de un audio cambió desde esta versión; revisa la selección.")
+        if manifest.get("format") != 2:
+            raise PartitionError("Versión histórica 80/20: consérvala para consulta y crea una versión con prueba independiente para entrenar.")
+        from app.services.recording_evaluator import LabelledRecording, validate_recording_splits
+        import soundfile as sf
+        recordings = {}
+        for split in ("train", "val", "test"):
+            records = []
+            for entry in manifest["entries"]:
+                if entry["split"] != split: continue
+                path = resolve_reference(entry["file_path"], entry["file_stage"], self.roots)
+                try:
+                    info = sf.info(path)
+                    if info.frames <= 0 or info.samplerate <= 0 or info.channels <= 0: raise ValueError()
+                except Exception:
+                    raise PartitionError("Hay audios no decodificables en esta versión.") from None
+                records.append(LabelledRecording(str(entry["audio_id"]), entry["clase"], path,
+                    entry["file_path"], entry["file_stage"], entry["source_group_id"]))
+            recordings[split] = tuple(records)
+        validate_recording_splits(recordings)
         frame = pd.DataFrame(manifest["entries"])
         return {"raw_dir": self.raw, "roots": self.roots, "train_df": frame[frame["split"] == "train"].copy(),
-                "val_df": frame[frame["split"] == "val"].copy(), "partition_manifest": manifest}
+                "val_df": frame[frame["split"] == "val"].copy(),
+                "test_df": frame[frame["split"] == "test"].copy(), "recordings": recordings,
+                "partition_manifest": manifest}
 
-    def save(self, validation_percent, seed, preview_version, acknowledge_warnings, actor_id):
-        manifest = self.preview(validation_percent, seed)
+    def save(self, validation_percent, seed, preview_version, acknowledge_warnings, actor_id, test_percent=20):
+        manifest = self.preview(validation_percent, seed, test_percent)
         if manifest["version"] != preview_version:
             raise PartitionError("Los audios o metadatos cambiaron. Genera otra vista previa antes de guardar.")
         if manifest["warnings"] and not acknowledge_warnings:

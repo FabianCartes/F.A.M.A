@@ -32,7 +32,7 @@ from app.models.training import Modelo
 from app.services.registry import build_default_registry
 from training.paths import get_checkpoints_dir
 if sys.argv[2] == "prepare":
-    import torch
+    import torch, hashlib
     from poc.train import AudioCNN
     Base.metadata.create_all(engine)
     root = get_checkpoints_dir()
@@ -42,7 +42,8 @@ if sys.argv[2] == "prepare":
                 "classes": ["A", "B"], "architecture": "AudioCNN"}, checkpoint)
     with SessionLocal() as db:
         db.add(Modelo(arquitectura="AudioCNN", epocas=1, tasa_aprendizaje=.001,
-                      tamano_lote=2, ruta_binario_gcp=checkpoint.as_uri(), activo=False))
+                      tamano_lote=2, ruta_binario_gcp=checkpoint.as_uri(), activo=False,
+                      hash_binario=hashlib.sha256(checkpoint.read_bytes()).hexdigest(), tamano_bytes=checkpoint.stat().st_size))
         db.commit()
 registry = build_default_registry()
 models = registry.list_models()

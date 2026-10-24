@@ -89,7 +89,8 @@ python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 - `GET /api/dashboard/stats`: Estadísticas globales y métricas de los dos modelos campeones.
 - `GET /api/ingestion/datasets`: Listado de datasets en el Data Lake y local.
 - `POST /api/ingestion/sync`: Sincronización asíncrona bidireccional con Google Cloud Storage.
-- `POST /api/training/train`: Inicio y orquestación de entrenamientos (individuales o tríadas completas).
+- `POST /api/training/start`: Inicio de entrenamientos individuales o ensambles; la operación habitual parte de la vista Entrenamiento de la UI y el servicio delega el cómputo a un worker local.
+- `GET /api/training/progress` y `POST /api/training/stop`: Consulta y detención cooperativa del trabajo activo en el proceso que lo ejecuta.
 
 ### Contrato de errores de inferencia
 

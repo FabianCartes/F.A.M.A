@@ -72,7 +72,7 @@ def test_operator_prepares_current_schema_and_daily_permissions_without_saving_m
     result,report=prepare(official)
     assert result.returncode == 0,result.stdout+result.stderr
     assert report['code']=='official_schema_prepared'
-    assert report['revision']=='0003_autonomy'
+    assert report['revision']=='0004_integration'
     assert report['runtime_permissions_ready'] is True
     for file in official[0].parent.rglob('*'):
         if file.is_file():

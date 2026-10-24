@@ -1,7 +1,7 @@
 """Domain and Database Models Layer"""
 from app.models.prediction import Prediccion
 from app.models.dataset import ConjuntoDatos, Audio
-from app.models.training import Modelo, MetricaEntrenamiento
+from app.models.training import Modelo, MetricaEntrenamiento, ModelEvaluation
 from app.models.feedback import Retroalimentacion
 from app.models.feedback_sync import FeedbackSync
 from app.models.user import Usuario
@@ -13,6 +13,8 @@ from app.models.account_control import ControlCuentas
 from app.models.password_reset import RecuperacionCuenta
 from app.models.access_quota import CuotaAcceso
 from app.models.security_audit import EventoSeguridad
+from app.models.dataset_import import ImportedDataset, DatasetImport
+
 
 __all__ = [
     "Prediccion",
@@ -20,6 +22,7 @@ __all__ = [
     "Audio",
     "Modelo",
     "MetricaEntrenamiento",
+    "ModelEvaluation",
     "Retroalimentacion",
     "FeedbackSync",
     "Usuario",
@@ -31,4 +34,6 @@ __all__ = [
     "RecuperacionCuenta",
     "CuotaAcceso",
     "EventoSeguridad",
+    "ImportedDataset",
+    "DatasetImport",
 ]

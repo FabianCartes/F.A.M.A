@@ -89,4 +89,4 @@ La regresión principal dio **226 PASS / 8 SKIP**; otras **16 pruebas físicas/s
 
 Tras el reinicio real, `/ready` devolvió 200, la API sin sesión devolvió 401 y seleccionar la raíz ya ocupada devolvió `runtime_in_use`. El navegador conservó la sesión administradora, el dataset y la versión `2262aaf0364a` de ocho train/dos val; la ficha confirmó copia local íntegra y respaldo disponible. La consulta cloud leyó metadatos, no volvió a descargar ni certificar los bytes remotos. SQL conservó 12 audios, un modelo inactivo y `0003_autonomy`; no hubo nuevas cargas GCS ni entrenamiento.
 
-[ADR 0046](../adr/0046-almacenamiento-persistente-vinculado-al-entorno.md), [recibo verificable](../receipts/directorios_persistentes_20261023.json), [captura](../images/runtime_persistente_pruebas_20261023.png) y [bitácora](bitacora_acceso_e_instalacion.md).
+[ADR 0064](../adr/0064-almacenamiento-persistente-vinculado-al-entorno.md), [recibo verificable](../receipts/directorios_persistentes_20261023.json), [captura](../images/runtime_persistente_pruebas_20261023.png) y [bitácora](bitacora_acceso_e_instalacion.md).

@@ -1,6 +1,6 @@
 # Usuarios PostgreSQL de pruebas (etapa 4)
 
-Este procedimiento corresponde exclusivamente a la instancia `proyectotesis-fama:us-central1:fama-postgres-pruebas` y a su base vacía `fama_pruebas`, con PostgreSQL 16. Continúa el [plan de instalación](plan_instalacion_gcp_y_asistente.md) y la separación entre operador DDL y aplicación DML del [ADR 0040](../adr/0040-configuracion-persistente-y-migraciones-explicitas.md).
+Este procedimiento corresponde exclusivamente a la instancia `proyectotesis-fama:us-central1:fama-postgres-pruebas` y a su base vacía `fama_pruebas`, con PostgreSQL 16. Continúa el [plan de instalación](plan_instalacion_gcp_y_asistente.md) y la separación entre operador DDL y aplicación DML del [ADR 0058](../adr/0058-configuracion-persistente-y-migraciones-explicitas.md).
 
 La cuenta de servicio de Google Cloud autoriza el proxy y el acceso a GCS. Los usuarios siguientes son identidades internas de PostgreSQL; las cuentas administrador/investigador de la web se crearán después en sus tablas.
 

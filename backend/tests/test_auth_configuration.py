@@ -1,8 +1,5 @@
 """Public auth configuration contracts, without deployed credentials or DB."""
-import os
-import subprocess
-import sys
-from pathlib import Path
+import importlib.util
 import pytest
 
 from app.services import auth
@@ -15,28 +12,16 @@ def synthetic_bootstrap_display_name(monkeypatch):
     monkeypatch.setenv("ADMIN_INITIAL_NAME", "Synthetic administrator")
 
 
-def test_missing_environment_key_cannot_issue_a_session():
-    environment = dict(os.environ)
-    environment.pop("JWT_SECRET_KEY", None)
-    environment.update(DATABASE_URL="sqlite://", PYTHON_DOTENV_DISABLED="1",
-                       PYTHONDONTWRITEBYTECODE="1")
-    script = """
-from app.services.auth import create_access_token
-try:
-    create_access_token({'sub': '1'})
-except RuntimeError:
-    print('authentication_not_configured')
-else:
-    print('session_issued')
-"""
+def test_missing_environment_key_cannot_issue_a_session(monkeypatch):
+    monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
+    # Fresh module execution observes the missing environment key without
+    # escaping the repository's original in-process isolation guard.
+    spec = importlib.util.spec_from_file_location("isolated_auth_configuration", auth.__file__)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
 
-    result = subprocess.run(
-        [sys.executable, "-c", script], env=environment,
-        cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, timeout=30,
-    )
-
-    assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "authentication_not_configured"
+    with pytest.raises(module.AuthenticationConfigurationError):
+        module.create_access_token({"sub": "1"})
 
 
 def test_login_without_web_configuration_returns_503_and_never_a_session(auth_client, monkeypatch):

@@ -1,13 +1,15 @@
 import sys
-import tempfile
+import asyncio
+from functools import partial
+from time import perf_counter
 from pathlib import Path
 from typing import Optional, Tuple, List
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Form, Query, status
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Form, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 import torch
 import torch.nn as nn
@@ -46,6 +48,9 @@ except ImportError:
     )
     from poc.train import BioacousticModel
 
+from app.middleware.inference_limits import InferenceLimits
+from app.services.inference_execution import InferenceExecution
+from app.services.inference_input import InvalidInferenceAudio, validate_audio
 from app.services.storage import upload_audio_to_gcp
 from app.services.ingestion import (
     ingestion_service, IngestionValidationError, IngestionConfigurationError,
@@ -65,7 +70,10 @@ from app.routes.users import router as users_router
 from app.routes.security import router as security_router
 from app.services.web_sessions import current_web_user
 from app.services.access import resource_access, ResourceAccess
+from app.routes.import_capability import zip_router
+
 from app.services.registry import get_model_registry, ModelRegistry, ModelNotFoundError
+from app.services.evaluation_catalogue import read_model_evaluations
 from app.schemas.model_info import ModelListResponse
 from app.schemas.prediction import PredictionResponse
 from app.schemas.feedback import FeedbackCreateRequest, ApproveFeedbackResponse, FeedbackSyncState
@@ -473,6 +481,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+inference_execution = InferenceExecution()
+MAX_INFERENCE_BODY_BYTES = 110 * 1024 * 1024
+INFERENCE_WAIT_SECONDS = 270
+app.add_middleware(InferenceLimits, execution=inference_execution,
+                   body_limit=lambda: MAX_INFERENCE_BODY_BYTES,
+                   wait_seconds=lambda: INFERENCE_WAIT_SECONDS)
+
 # Configuración de CORS para permitir peticiones desde el frontend (Next.js)
 app.add_middleware(
     CORSMiddleware,
@@ -492,6 +507,8 @@ from app.routes.partitions import router as partitions_router
 app.include_router(partitions_router)
 from app.routes.checkpoints import router as checkpoint_router
 app.include_router(checkpoint_router)
+app.include_router(zip_router())
+
 
 
 # ============================================================================
@@ -573,13 +590,20 @@ def list_models(
     Retorna la lista de todos los modelos bioacústicos disponibles en el catálogo,
     sus especificaciones técnicas, clases soportadas, disponibilidad de pesos y el modelo por defecto.
     """
-    publication_errors = registry.publish_from_db(db, checkpoints_root=training_service.checkpoints_dir)
+    admitted_pair_ids = {}
+    publication_errors = registry.publish_from_db(
+        db, checkpoints_root=training_service.checkpoints_dir,
+        admitted_pair_ids=admitted_pair_ids,
+    )
     if any(error["code"] == "database_unavailable" for error in publication_errors):
         raise HTTPException(status_code=503, detail={
             "message": "Model catalogue publication incomplete",
             "errors": publication_errors,
         })
     models = registry.list_models(only_with_weights=only_available)
+    evaluations = read_model_evaluations(db, models, admitted_pair_ids)
+    for model in models:
+        model.evaluations = evaluations.by_model_id.get(model.id)
     default_id = registry.get_default_model_id() or ""
     if not access.administrator:
         models = [item for item in models if access.model_allowed(item.id, item.dataset_name)]
@@ -592,12 +616,17 @@ def list_models(
         total=len(models),
         default_model_id=default_id,
         publication_errors=publication_errors,
+        evaluation_catalogue_status="available" if evaluations.available else "unavailable",
+        evaluation_catalogue_error=evaluations.error_code,
     )
 
 
 # ============================================================================
 # ENDPOINT DE PREDICCIÓN BIOACÚSTICA
 # ============================================================================
+MAX_AUDIO_BYTES = 100 * 1024 * 1024
+
+
 @app.post(
     "/api/predict",
     response_model=PredictionResponse,
@@ -613,6 +642,8 @@ async def predict_audio(
     db: Session = Depends(get_db),
     registry: ModelRegistry = Depends(get_model_registry),
     access: ResourceAccess = Depends(resource_access),
+    request: Request = None,
+
 ):
     """
     Recibe un archivo de audio por HTTP multipart/form-data.
@@ -637,6 +668,13 @@ async def predict_audio(
         )
 
     # 2. Validación y resolución temprana del modelo (evita subir a GCS si el modelo no existe)
+    requested = model_id if model_id and model_id != "default" else registry.get_default_model_id()
+    if requested and requested.startswith("fama_trained_model_") and not access.administrator:
+        suffix = requested.removeprefix("fama_trained_model_")
+        if (not suffix.isascii() or not suffix.isdecimal() or len(suffix) > 10
+                or not 1 <= int(suffix) <= 2 ** 31 - 1
+                or access.query(Modelo).filter_by(id_modelo=int(suffix)).first() is None):
+            raise HTTPException(404, "Modelo no encontrado o no asignado.")
     try:
         predictor = registry.get(model_id)
     except ModelNotFoundError as err:
@@ -644,30 +682,65 @@ async def predict_audio(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Modelo no encontrado o no asignado.",
         )
-
+    except ModelWeightsError as weights_err:
+        if not access.administrator and not (requested and requested.startswith("fama_trained_model_")):
+            raise HTTPException(404, "Modelo no encontrado o no asignado.") from None
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Modelo no disponible para inferencia: {weights_err}",
+        )
     if not access.model_allowed(predictor.model_id, predictor.dataset_name):
         raise HTTPException(404, "Modelo no encontrado o no asignado.")
+    lease = getattr(request.state, "inference_lease", None) if request is not None else None
+    owns_lease = lease is None
+    if owns_lease:
+        lease = inference_execution.acquire()
+    if lease is None:
+        raise HTTPException(status_code=503, detail="Inferencia ocupada. Intente nuevamente más tarde.",
+                            headers={"Retry-After": "5"})
+
+    total_started, request_outcome = perf_counter(), "ok"
+
     try:
-        # Catalogue metadata can be stale; recheck the adapter before any upload.
-        # This checks storage availability, not architecture compatibility.
+        # Storage availability is separate from architecture compatibility.
         try:
             has_weights = predictor.has_weights
         except Exception as availability_error:
             raise ModelWeightsError("No se pudo comprobar la disponibilidad de pesos.") from availability_error
         if has_weights is not True:
             raise ModelWeightsError(f"Modelo '{predictor.model_id}': archivos de pesos no disponibles.")
-        audio_bytes = await file.read()
+        with lease.stage("read"):
+            audio_buffer = bytearray()
+            while True:
+                chunk = await file.read(min(1024 * 1024, MAX_AUDIO_BYTES + 1 - len(audio_buffer)))
+                if not chunk:
+                    break
+                if len(audio_buffer) + len(chunk) > MAX_AUDIO_BYTES:
+                    raise HTTPException(
+                        status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                        detail="El archivo supera el límite de 100 MiB (104.857.600 bytes).",
+                    )
+                audio_buffer.extend(chunk)
+            audio_bytes = bytes(audio_buffer)
+            del audio_buffer
+        try:
+            await lease.run(validate_audio, audio_bytes, stage="validation")
+        except InvalidInferenceAudio as audio_error:
+            raise HTTPException(status_code=400, detail=str(audio_error))
         from uuid import uuid4
         source_filename = f"{uuid4().hex}.wav"
 
         # 3. Persistencia en la nube: Subida a Google Cloud Storage (RNF_03)
         try:
-            gcp_success = await upload_audio_to_gcp(audio_bytes, filename=source_filename)
-        except Exception as gcp_err:
+            gcp_success = await upload_audio_to_gcp(
+                audio_bytes, filename=source_filename, timeout=60,
+                thread_runner=partial(lease.run, stage="upload"),
+            )
+        except Exception:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Fallo en la persistencia en Google Cloud Storage: {gcp_err}",
-            )
+                detail="Fallo en la persistencia en Google Cloud Storage.",
+            ) from None
 
         if not gcp_success:
             raise HTTPException(
@@ -675,13 +748,9 @@ async def predict_audio(
                 detail="No fue posible confirmar la subida a Google Cloud Storage.",
             )
 
-        # 4. Procesar audio localmente de forma temporal para la inferencia acústica
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_audio:
-            tmp_audio.write(audio_bytes)
-            tmp_path = Path(tmp_audio.name)
-
+        # 4. Keep synchronous inference off the event loop; never pass db to its thread.
         try:
-            pred_result = predictor.predict(tmp_path)
+            pred_result = await lease.predict(predictor, audio_bytes)
             clase = pred_result.clase
             confianza = float(pred_result.confianza)
         except MalformedAudioError:
@@ -694,26 +763,25 @@ async def predict_audio(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=f"Modelo '{predictor.model_id}' no disponible para inferencia: {weights_err}",
             )
-        finally:
-            if tmp_path.exists():
-                tmp_path.unlink()
 
         # 5. Persistencia relacional en PostgreSQL (Tabla 'prediccion')
         try:
-            registro_prediccion = Prediccion(
-                ruta_audio_prueba=f"raw_audios/{source_filename}",
-                etiqueta_predicha=clase,
-                confianza=confianza,
-                modelo_id=predictor.model_id,
-                dataset_name=predictor.dataset_name,
-                nombre_original=nombre_original,
-                fecha_carga=fecha_carga,
-            )
-            db.add(registro_prediccion)
-            access.record_prediction_origin(registro_prediccion)
-            db.commit()
-            db.refresh(registro_prediccion)
-            db_id = registro_prediccion.id_prediccion
+            with lease.stage("persist"):
+                registro_prediccion = Prediccion(
+                    ruta_audio_prueba=f"raw_audios/{source_filename}",
+                    etiqueta_predicha=clase,
+                    confianza=confianza,
+                    modelo_id=predictor.model_id,
+                    dataset_name=predictor.dataset_name,
+                    nombre_original=nombre_original,
+                    fecha_carga=fecha_carga,
+                )
+                db.add(registro_prediccion)
+                access.record_prediction_origin(registro_prediccion)
+                db.commit()
+                db.refresh(registro_prediccion)
+                db_id = registro_prediccion.id_prediccion
+
         except Exception as db_save_err:
             db.rollback()
             raise HTTPException(
@@ -725,8 +793,25 @@ async def predict_audio(
         executed_model_name = predictor.metadata.name
         executed_labels = [executed_model_name]
         detalles = dict(getattr(pred_result, "detalles", None) or {})
+        # Only result-level weights prove participation in this execution. Catalogue
+        # metadata/global readiness cannot establish members (e.g. silence bypasses).
+        execution_weights = detalles.get("ensemble_weights")
+        active_labels = None
+        if isinstance(execution_weights, dict) and execution_weights:
+            if all(
+                isinstance(name, str) and name.strip()
+                and isinstance(weight, (int, float)) and not isinstance(weight, bool)
+                and np.isfinite(weight) and 0 <= weight <= 1
+                for name, weight in execution_weights.items()
+            ):
+                active_labels = [
+                    f"{name} ({int(round(weight * 100))}%)"
+                    for name, weight in execution_weights.items()
+                ]
         detalles["dataset_name"] = registro_prediccion.dataset_name
-        is_fallback = getattr(predictor, "is_fallback", False)
+        is_fallback = getattr(predictor, "is_fallback", None)
+        if is_fallback is None and detalles.get("is_mock") is False:
+            is_fallback = False
 
         return {
             "filename": filename,
@@ -737,32 +822,57 @@ async def predict_audio(
             "modelo_id": predictor.model_id,
             "modelo": executed_model_name,
             "is_fallback": is_fallback,
-            "modelos_activos": executed_labels,
+            "modelos_activos": active_labels,
             "modelos_ejecutados": executed_labels,
             "detalles": detalles,
         }
 
+    except asyncio.CancelledError:
+        request_outcome = "cancelled"
+        raise
     except HTTPException:
+        request_outcome = "error"
         raise
     except ModelWeightsError as weights_err:
+        request_outcome = "error"
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Modelo no disponible para inferencia: {weights_err}",
         )
     except Exception as err:
+        request_outcome = "error"
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error durante el procesamiento del audio: {str(err)}",
         )
+    finally:
+        if owns_lease:
+            lease.release()
+            lease.record("total", total_started, request_outcome)
 
 
 
 # ============================================================================
 # ENDPOINTS DE INGESTA BIDIRECCIONAL GCS ↔ LOCAL (RF_02)
 # ============================================================================
+def validate_ingestion_segment(value: str) -> str:
+    """Legacy routes accept a name, never a relative filesystem reference."""
+    import unicodedata
+    if (not value or value in (".", "..") or value.startswith((".", "__"))
+            or any(c in value for c in "/\\")
+            or any(unicodedata.category(c).startswith("C") for c in value)):
+        raise ValueError("Dataset and class names must be safe single path segments")
+    return value
+
+
 class SyncRequest(BaseModel):
     datasets: List[str]
     preprocess: bool = False
+
+    @field_validator("datasets")
+    @classmethod
+    def safe_destinations(cls, values):
+        return [validate_ingestion_segment(value) for value in values]
 
 
 @app.get("/api/ingestion/status")
@@ -806,8 +916,9 @@ def list_ingestion_dataset_files(dataset_name: str, db: Session = Depends(get_db
     """
     access.require_dataset(dataset_name)
     try:
+        validate_ingestion_segment(dataset_name)
         files = ingestion_service.list_dataset_files(dataset_name, db=db)
-    except IngestionValidationError:
+    except ValueError:
         raise HTTPException(status_code=422, detail="Nombre de dataset inválido.") from None
     return {"dataset": dataset_name, "files": files}
 
@@ -898,6 +1009,11 @@ async def upload_ingestion_files(
     """
     access.require_dataset(dataset_name)
     try:
+        validate_ingestion_segment(dataset_name)
+        validate_ingestion_segment(class_label)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Nombres de carga inválidos.") from None
+    try:
         max_file_bytes, max_batch_bytes = ingestion_service.get_upload_limits()
     except IngestionConfigurationError:
         raise HTTPException(status_code=503, detail="Configuración de carga no disponible.") from None
@@ -967,12 +1083,18 @@ def start_training_pipeline(req: StartTrainingRequest, access: ResourceAccess = 
             "batch_size": req.batch_size,
             "framework": req.framework,
             "is_tri_model": req.is_tri_model,
+            "seed": req.seed,
             "early_stopping": req.early_stopping,
         }
         if getattr(req, "_explicit_models", False) and req.models is not None:
             kwargs["models"] = [m.model_dump() for m in req.models]
         if req.partition_version is not None:
             kwargs["partition_version"] = req.partition_version
+        if req.prepared_version is not None:
+            kwargs["prepared_version"] = req.prepared_version
+        if req.allow_historical_preparation:
+            kwargs["allow_historical_preparation"] = True
+
         if req.audio_config is not None:
             kwargs["audio_config"] = req.audio_config.model_dump()
         if req.windowing_config is not None:
@@ -1093,6 +1215,10 @@ def get_pending_feedback(
 @app.post("/api/feedback/{id_retroalimentacion}/approve", response_model=ApproveFeedbackResponse)
 def approve_feedback(
     id_retroalimentacion: int,
+    curation_source_id: Optional[str] = Query(
+        None, min_length=1, max_length=200,
+        description="Human-reviewed original canonical xc_id; catalog reference validation is not acoustic verification.",
+    ),
     dataset_name: Optional[str] = Query(
         None, min_length=1, max_length=100,
         description="Compatibilidad legacy: debe coincidir con el destino persistido; no permite cambiarlo.",
@@ -1105,9 +1231,11 @@ def approve_feedback(
     actualiza metadata.csv y marca el registro como procesado.
     """
     access.require_feedback(id_retroalimentacion)
-    return feedback_service.approve_feedback(
-        db=db, id_retroalimentacion=id_retroalimentacion, dataset_name=dataset_name, actor_id=access.user.id,
-    )
+    kwargs = {"db": db, "id_retroalimentacion": id_retroalimentacion, "dataset_name": dataset_name, "actor_id": access.user.id}
+    if curation_source_id is not None:
+        kwargs["curation_source_id"] = curation_source_id
+    return feedback_service.approve_feedback(**kwargs)
+
 
 
 @app.post("/api/feedback/{id_retroalimentacion}/reject")

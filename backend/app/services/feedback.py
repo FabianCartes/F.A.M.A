@@ -338,7 +338,8 @@ class FeedbackService:
             raise ValueError("Clase ambigua: los metadatos locales no identifican un único directorio")
         return selected.pop()
 
-    def _incorporate_metadata(self, dataset, storage_class, filename, label, audio, digest):
+    def _incorporate_metadata(self, dataset, storage_class, filename, label, audio, digest,
+                             curation_source_id=None):
         metadata = dataset / "metadata.csv"
         self._safe_path(metadata)
         with wave.open(io.BytesIO(audio), "rb") as wav:
@@ -353,10 +354,14 @@ class FeedbackService:
                       xc_id=filename.removesuffix(".wav"), recordist="human_feedback",
                       licencia="", pais="", localidad="", lat="", lon="", calidad="",
                       file_path=f"{storage_class}/{filename}", file_stage="raw")
+        if curation_source_id:
+            values["curation_source_id"] = curation_source_id
         rows, columns = self._read_canonical_metadata(dataset)
         columns = columns + [c for c in values if c not in columns]
         duplicates = [row for row in rows if row.get("nombre_archivo") == filename]
         if duplicates:
+            if len(duplicates) == 1 and duplicates[0].get("curation_source_id", "") != (curation_source_id or ""):
+                raise ValueError("Conflicting curation source in canonical metadata")
             if len(duplicates) != 1 or any(duplicates[0].get(k) != str(values[k])
                                           for k in ("clase", "hash_archivo", "xc_id", "file_path", "file_stage",
                                                     "frecuencia_muestreo", "duracion_segundos",
@@ -374,7 +379,9 @@ class FeedbackService:
         return output.getvalue().encode("utf-8")
 
     def approve_feedback(self, db: Session, id_retroalimentacion: int,
-                         dataset_name: Optional[str] = None, actor_id: Optional[int] = None) -> Dict[str, Any]:
+                         dataset_name: Optional[str] = None, actor_id: Optional[int] = None,
+                         curation_source_id: Optional[str] = None) -> Dict[str, Any]:
+
         """Verify durable local audio/CSV, then commit processed + sync intent together.
 
         The filesystem intent survives rollback/crash and pins source, destination
@@ -386,6 +393,9 @@ class FeedbackService:
             raise HTTPException(status_code=404, detail="Retroalimentación no encontrada.")
         queue = FeedbackSyncQueue()
         try:
+            if curation_source_id is not None and (type(curation_source_id) is not str
+                    or not curation_source_id.strip() or len(curation_source_id) > 200):
+                raise ValueError("curation_source_id must name an original canonical recording")
             existing = queue.get(db, id_retroalimentacion)
             if feedback.procesado and existing is None:
                 raise HTTPException(status_code=409, detail="La retroalimentación ya fue finalizada.")
@@ -417,6 +427,10 @@ class FeedbackService:
                     raise HTTPException(status_code=409, detail="La retroalimentación ya fue finalizada.")
                 identity = {"dataset": stored_dataset, "class": label, "source": pred.ruta_audio_prueba}
                 recorded = json.loads(intent_path.read_text(encoding="utf-8")) if intent_path.exists() else None
+                if recorded and curation_source_id is not None and recorded.get("curation_source_id") != curation_source_id:
+                    raise ValueError("The pinned curation source cannot change on replay")
+                if recorded:
+                    curation_source_id = recorded.get("curation_source_id")
                 if recorded and any(recorded.get(k) != v for k, v in identity.items()):
                     raise ValueError("El destino, clase o fuente de la intención no pueden cambiar")
                 if existing and (existing.dataset_name != stored_dataset or existing.class_label != label):
@@ -432,6 +446,9 @@ class FeedbackService:
                     recorded = {**identity, "storage_class": storage_class, "filename": filename,
                                 "incorporated_by": actor_id,
                                 "incorporated_at": datetime.now(timezone.utc).isoformat()}
+                    if curation_source_id is not None:
+                        recorded["curation_source_id"] = curation_source_id
+
                 elif recorded.get("filename") != filename or recorded.get("storage_class") != storage_class:
                     raise ValueError("Intención legacy o incompatible; requiere recuperación explícita")
                 digest = existing.sha256 if existing else recorded.get("sha256")
@@ -451,6 +468,13 @@ class FeedbackService:
                 # Serialize duplicate admission with intent/audio/CSV publication.
                 with _filesystem_lock(dataset / ".metadata.lock"):
                     rows, _ = self._read_canonical_metadata(dataset)
+                    if curation_source_id is not None:
+                        sources = [row for row in rows if row.get("xc_id") == curation_source_id]
+                        if (stored_dataset != "AvesChilenas" or len(sources) != 1
+                                or not sources[0].get("recordist", "").strip()
+                                or sources[0]["recordist"] == "human_feedback"
+                                or sources[0].get("curation_source_id", "")):
+                            raise ValueError("Invalid curation source: require an original canonical bird recording")
                     canonical_path = f"{storage_class}/{filename}"
                     if any(row.get("hash_archivo") == digest
                            and row["file_path"] != canonical_path for row in rows):
@@ -469,7 +493,8 @@ class FeedbackService:
                         raise ValueError("El archivo canónico existente tiene contenido diferente")
                     # Validate WAV and CSV before publishing any new audio.
                     self._mkdir(destination.parent)
-                    metadata_update = self._incorporate_metadata(dataset, storage_class, filename, label, audio, digest)
+                    metadata_update = self._incorporate_metadata(dataset, storage_class, filename, label, audio, digest,
+                                                                 curation_source_id=curation_source_id)
                     if not destination.exists():
                         self._publish(destination, audio, no_replace=True)
                     else:
@@ -514,6 +539,11 @@ class FeedbackService:
                                    id_usuario_carga=actor_id)
             db.add(dataset)
             db.flush()
+        else:
+            registered_prefix = dataset.ruta_gcp.rstrip("/") + "/"
+            if registered_prefix not in {prefix, f"datasets/{name}/"}:
+                raise ValueError("El dataset no coincide con el almacenamiento de esta instalación.")
+            prefix = registered_prefix
         path = f"{prefix}{storage_class}/{filename}"
         row = db.query(Audio).filter_by(id_conjunto_datos=dataset.id_conjunto_datos,
                                        nombre_archivo=filename).first()

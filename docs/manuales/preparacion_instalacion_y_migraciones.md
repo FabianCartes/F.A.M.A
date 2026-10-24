@@ -70,4 +70,4 @@ $env:DATABASE_URL = 'sqlite://'
 .\backend\.venv\Scripts\python.exe -m pytest --noconftest backend/tests/test_installation_configuration.py backend/tests/test_installation_startup.py backend/tests/test_schema_migrations.py -q
 ```
 
-`--noconftest` evita cargar el entrenamiento global para estas pruebas de instalación. La regresión de módulos existentes usa sus fixtures habituales y adaptadores externos simulados. Esta etapa no certifica conexión Cloud SQL/GCS, inferencia, el asistente web ni despliegue institucional. Decisión: [ADR 0040](../adr/0040-configuracion-persistente-y-migraciones-explicitas.md).
+`--noconftest` evita cargar el entrenamiento global para estas pruebas de instalación. La regresión de módulos existentes usa sus fixtures habituales y adaptadores externos simulados. Esta etapa no certifica conexión Cloud SQL/GCS, inferencia, el asistente web ni despliegue institucional. Decisión: [ADR 0058](../adr/0058-configuracion-persistente-y-migraciones-explicitas.md).

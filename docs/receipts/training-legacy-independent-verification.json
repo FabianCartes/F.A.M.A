@@ -1,0 +1,25 @@
+{
+  "kind": "independent_training_legacy_verification",
+  "agent_task": "mv8y1i9s-5-ieke",
+  "scope": "Retired CLI and standalone trainer; shared callable legacy functions remain pending scope decision",
+  "baseline_commit": "bc2729ec59581ecb928ca74b0d87afc2cf4df8c7",
+  "reported_exit_code": 0,
+  "passed": 322,
+  "warnings": 2,
+  "isolation": "Source copy, private caches, SQLite, synthetic fixtures; socket.socket.connect blocked",
+  "stdout": "........................................................................ [ 22%]\n........................................................................ [ 44%]\n........................................................................ [ 67%]\n........................................................................ [ 89%]\n..................................                                       [100%]\n=============================== warnings summary ===============================\ntests/test_training_persistence.py::test_cpu_checkpoint_and_final_predictor_use_first_best_not_last[1.0--1.0]\ntests/test_training_persistence.py::test_cpu_checkpoint_and_final_predictor_use_first_best_not_last[-1.0--2.0]\n  /home/kevin/Work/fama/.venv/lib/python3.14/site-packages/librosa/core/spectrum.py:3004: UserWarning: n_fft=2048 is too large for input signal of length=512\n    stft(\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n322 passed, 2 warnings in 23.35s\n",
+  "stderr": "",
+  "not_run": [
+    "global backend suite",
+    "real training",
+    "real database",
+    "GCS",
+    "deployment/concurrency",
+    "native review"
+  ],
+  "remaining_callable_legacy": [
+    "poc.train.train_pipeline",
+    "poc.benchmark.run_benchmark",
+    "ml_core.train reexport"
+  ]
+}

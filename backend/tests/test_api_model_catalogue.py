@@ -5,13 +5,14 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 with patch("app.database.Base.metadata.create_all"):
     from app import main
 from app.database import Base, get_db
 from app.models.training import Modelo
+from ml_core.classification_metrics import calculate_classification_report
 from app.services.registry import ModelRegistry, get_model_registry
 from app.services.predictors.trained_predictor import TrainedModelPredictor
 from tests.test_model_registry import FakeAudioPredictor
@@ -23,17 +24,20 @@ def catalogue(tmp_path, monkeypatch):
 
     class MetadataPredictor(FakeAudioPredictor):
         """Controlled external ML adapter: metadata parsing, no tensor execution."""
-        def __init__(self, checkpoint_path, model_id, name, is_default, lazy_load, dataset_name):
+        def __init__(self, checkpoint_path, model_id, name, is_default, lazy_load, dataset_name,
+                     expected_checkpoint_sha256):
             if not lazy_load:
                 raise RuntimeError("Catalogue must not initialize tensor inference")
             payload = json.loads(checkpoint_path.read_text())
             super().__init__(model_id, name, is_default)
             self._meta.classes = payload["classes"]
             self._meta.dataset_name = dataset_name
+            self._meta.metrics = payload.get("metrics")
+            self.expected_checkpoint_sha256 = expected_checkpoint_sha256
 
     monkeypatch.setattr(trained_predictor, "TrainedModelPredictor", MetadataPredictor)
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False},
-                           poolclass=StaticPool)
+    engine = create_engine("sqlite:///" + (tmp_path / "catalogue.sqlite").as_posix(),
+                           connect_args={"check_same_thread": False})
     Base.metadata.create_all(engine)
     sessions = sessionmaker(bind=engine)
     checkpoints_root = tmp_path / "checkpoints"
@@ -56,13 +60,16 @@ def catalogue(tmp_path, monkeypatch):
         checkpoint.write_text(contents if contents is not None else json.dumps({
             "classes": ["Motor sano", "Falla"], "padding": "x" * 11000,
         }))
+        import hashlib
+        checkpoint_hash = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
         with sessions() as db:
             if dataset is not None:
                 db.add(dataset)
             db.add(Modelo(id_modelo=model_id, conjunto_datos=dataset,
                           arquitectura="EfficientNet-B0", epocas=1,
                           tasa_aprendizaje=0.001, tamano_lote=2, activo=active,
-                          ruta_binario_gcp=route or checkpoint.as_uri()))
+                          ruta_binario_gcp=route or checkpoint.as_uri(),
+                          hash_binario=checkpoint_hash))
             db.commit()
         return checkpoint
 
@@ -75,6 +82,756 @@ def catalogue(tmp_path, monkeypatch):
         main.app.dependency_overrides.pop(get_db, None)
         main.app.dependency_overrides.pop(get_model_registry, None)
         engine.dispose()
+
+
+@pytest.mark.parametrize("sync", ["publish_from_db", "register_from_db"])
+@pytest.mark.parametrize("dataset_name,label", [
+    ("engine_diagnostics", "Motores"), ("AvesChilenas", "Aves Chilenas"),
+    (None, "Dataset no verificado"),
+])
+def test_trained_names_match_history_in_both_registry_paths(catalogue, monkeypatch, sync, dataset_name, label):
+    from datetime import datetime
+    from unittest.mock import AsyncMock
+    from app.models.dataset import ConjuntoDatos
+    from tests.test_prediction_audio_metadata import synthetic_wav
+
+    client, registry, persist, engine = catalogue
+    dataset = ConjuntoDatos(nombre=dataset_name, ruta_gcp=f"datasets/{dataset_name}") if dataset_name else None
+    missing = persist(10, dataset=dataset, active=False)
+    checkpoint = persist(11, active=False)
+    missing.unlink()  # Unpublished rows still participate in display versioning.
+    with Session(engine) as db:
+        first, second = db.get(Modelo, 10), db.get(Modelo, 11)
+        second.id_conjunto_datos = first.id_conjunto_datos
+        for row in (first, second):
+            row.fecha_entrenamiento = datetime(2026, 1, row.id_modelo)
+            row.clase_objetivo = "15 Clases (AvesChilenas)"  # Not dataset provenance.
+        db.commit()
+        getattr(registry, sync)(db, checkpoints_root=checkpoint.parent)
+    item = next(m for m in client.get("/api/models").json()["models"] if m["id"] == "fama_trained_model_11")
+    history = client.get("/api/training/history").json()["history"]
+    trained = next(m for m in history if m["id"] == 11)
+    assert item["name"] == trained["name"] == f"{label} · EfficientNet-B0 (v2)"
+    assert item["architecture"] == "EfficientNet-B0"
+    assert item["dataset"] == label
+    assert item["version"] == trained["version"] == 2
+    assert item["dataset_name"] is None or item["dataset_name"] == dataset_name
+    with Session(engine) as db:
+        db.get(Modelo, 11).activo = True
+        db.commit()
+        registry.register_from_db(db, checkpoint.parent)
+    assert registry.get().metadata.name == item["name"]
+    assert registry.get().model_id == "fama_trained_model_11"
+    monkeypatch.setattr(main, "upload_audio_to_gcp", AsyncMock(return_value=True))
+    prediction = client.post("/api/predict?model_id=fama_trained_model_11",
+                             files={"file": ("fixture.wav", synthetic_wav(), "audio/wav")})
+    assert prediction.status_code == 200, prediction.text
+    assert prediction.json()["modelo"] == trained["name"]
+    assert prediction.json()["modelo_id"] == "fama_trained_model_11"
+
+
+def test_names_refresh_without_reloading_weights_and_keep_explicit_versions(catalogue):
+    from datetime import datetime
+
+    client, registry, persist, engine = catalogue
+    checkpoint = persist(11, active=False)
+    explicit = persist(12, active=False)
+    renamed = explicit.with_name("reference_v7.pt")
+    explicit.rename(renamed)
+    with Session(engine) as db:
+        db.get(Modelo, 12).ruta_binario_gcp = renamed.as_uri()
+        for row in db.query(Modelo).all():
+            row.fecha_entrenamiento = datetime(2026, 1, row.id_modelo)
+        db.commit()
+    assert client.get("/api/models").status_code == 200
+    predictor = registry.get("fama_trained_model_11")
+    original_hash = predictor.expected_checkpoint_sha256
+    assert predictor.metadata.version == 1
+    older = persist(10, active=False)
+    older.unlink()
+    with Session(engine) as db:
+        db.get(Modelo, 10).fecha_entrenamiento = datetime(2026, 1, 1)
+        db.commit()
+    items = {m["id"]: m for m in client.get("/api/models").json()["models"]}
+    assert registry.get("fama_trained_model_11") is predictor
+    assert predictor.expected_checkpoint_sha256 == original_hash
+    assert items["fama_trained_model_11"]["name"] == "Dataset no verificado · EfficientNet-B0 (v2)"
+    assert items["fama_trained_model_12"]["version"] == 7
+    assert checkpoint.is_file()
+
+
+def add_evaluation(engine, model_id, split, status, *, y_true=None, y_pred=None,
+                   schema_version=1, rejection_label=None,
+                   failure_reason="synthetic internal failure"):
+    from app.services.evaluations import EvaluationService
+
+    y_true = y_true or ["a", "a", "b"]
+    y_pred = y_pred or ["a", "b", "b"]
+    identity = {
+        "id_modelo": model_id, "schema_version": schema_version, "evaluator_version": "catalogue-test-v1",
+        "checkpoint_sha256": "a" * 64, "dataset": "engine_diagnostics", "split": split,
+        "manifest_sha256": "b" * 64, "classes": ["a", "b"], "sample_count": len(y_true),
+        "predictor_config": {"name": "synthetic"},
+        "preprocessing_config": {"sample_rate": 32000},
+        "aggregation_config": {"method": "combined"}, "code_revision": None,
+    }
+    with Session(engine) as db:
+        service = EvaluationService(db)
+        attempt = service.create(identity)
+        if status == "pending":
+            return attempt
+        attempt = service.start(attempt["id_evaluation"])
+        if status == "running":
+            return attempt
+        if status == "failed":
+            return service.fail(attempt["id_evaluation"], failure_reason)
+        assert status == "completed"
+        report = calculate_classification_report(
+            y_true, y_pred, ["a", "b"], rejection_label=rejection_label)
+        return service.complete(attempt["id_evaluation"], report)
+
+
+def seed_standard_model(catalogue, model_id, *, state="standard_eval_completed", fault=None,
+                        active=False, sample_counts=None):
+    import hashlib
+    import torch
+    from app.models.dataset import ConjuntoDatos
+    from app.services.recording_evaluator import EVALUATOR_VERSION
+    from app.services.standard_evaluation_guard import (
+        ADMITTED_MANIFEST_PAIR_KEY, admitted_manifest_pair_provenance,
+        build_evaluation_configuration, resolve_training_audio,
+    )
+    from poc.preprocess import build_gpu_audio_frontend_contract
+
+    client, _, persist, engine = catalogue
+    with Session(engine, expire_on_commit=False) as db:
+        dataset = ConjuntoDatos(nombre="engine_diagnostics", ruta_gcp="datasets/engine_diagnostics")
+        db.add(dataset)
+        db.commit()
+        dataset_id, dataset_name = dataset.id_conjunto_datos, dataset.nombre
+        db.expunge(dataset)
+    checkpoint = persist(model_id, dataset=dataset, active=active)
+    job_id = f"synthetic-job-{model_id}"
+    training_audio = resolve_training_audio(dataset_name, None)
+    preprocessing_contract = build_gpu_audio_frontend_contract(
+        sample_rate=training_audio["target_sr"],
+        duration_seconds=training_audio["duration_seconds"],
+        n_mels=training_audio["n_mels"], n_fft=training_audio["n_fft"],
+        hop_length=training_audio["hop_length"], f_min=training_audio["f_min"],
+        f_max=training_audio["f_max"],
+    )
+    payload = {
+        "dataset_id": dataset_id, "dataset_name": dataset_name,
+        "job_id": job_id, "classes": ["a", "b"], "architecture": "EfficientNet-B0",
+        "audio_config": None, "windowing_config": None,
+        "preprocessing_contract": preprocessing_contract,
+        "state_dict": {}, "test_padding": "x" * 11000,
+        "source_directory": "/private/synthetic/path", "secret_marker": "synthetic-secret-marker",
+    }
+    torch.save(payload, checkpoint)
+    checkpoint_hash = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+    with Session(engine) as db:
+        model = db.get(Modelo, model_id)
+        model.estado = state
+        model.hash_binario = checkpoint_hash
+        db.commit()
+
+    configs = dict(zip(
+        ("predictor_config", "preprocessing_config", "aggregation_config"),
+        build_evaluation_configuration(
+            {"job_id": job_id, "architecture": payload["architecture"], "windowing_config": None},
+            training_audio, payload["preprocessing_contract"])))
+    if fault == "wrong_architecture":
+        configs["predictor_config"] = {**configs["predictor_config"], "architecture": "Other"}
+    if fault in ("config", "coherent_wrong_config"):
+        configs["preprocessing_config"] = {
+            **configs["preprocessing_config"], "silence_rms_threshold": 0.75,
+        }
+    evaluation_splits = ("val",) if fault == "missing_test" else ("val", "test")
+    manifest_hashes = {"val": "d" * 64, "test": "e" * 64}
+    sample_counts = sample_counts or {"val": 2, "test": 2}
+    for split in evaluation_splits:
+        split_configs = dict(configs)
+        split_classes = ["a", "b"]
+        split_hash = checkpoint_hash
+        split_dataset = dataset_name
+        schema_version = 2
+        evaluator_version = EVALUATOR_VERSION
+        manifest_pair = admitted_manifest_pair_provenance(
+            manifest_hashes["val"], manifest_hashes["test"])
+        if fault == "cross_generation_pair":
+            manifest_pair = admitted_manifest_pair_provenance(
+                "d" * 64, "f" * 64) if split == "val" else admitted_manifest_pair_provenance(
+                    "a" * 64, "e" * 64)
+        split_configs["predictor_config"] = {
+            **split_configs["predictor_config"], ADMITTED_MANIFEST_PAIR_KEY: manifest_pair,
+        }
+        if fault == "missing_pair_identity" and split == "val":
+            split_configs["predictor_config"].pop(ADMITTED_MANIFEST_PAIR_KEY)
+        elif fault == "tampered_pair_identity" and split == "test":
+            split_configs["predictor_config"][ADMITTED_MANIFEST_PAIR_KEY] = {
+                **manifest_pair, "sha256": "f" * 64,
+            }
+        if fault == "wrong_hash":
+            split_hash = "c" * 64
+        elif fault == "wrong_classes":
+            split_classes = ["b", "a"]
+        elif fault == "wrong_job" and split == "test":
+            split_configs["predictor_config"] = {**configs["predictor_config"], "job_id": "other-job"}
+        elif fault == "wrong_config" and split == "test":
+            split_configs["preprocessing_config"] = {**configs["preprocessing_config"], "crop": "left"}
+        elif fault == "wrong_dataset" and split == "test":
+            split_dataset = "AvesChilenas"
+        elif fault == "wrong_schema":
+            schema_version = 1
+        elif fault == "wrong_evaluator":
+            evaluator_version = "other-evaluator"
+        count = sample_counts[split]
+        labels = [split_classes[index % len(split_classes)] for index in range(count)]
+        predictions = [label if index % 2 == 0 else "__recording_rejected__"
+                       for index, label in enumerate(labels)]
+        identity = {
+            "id_modelo": model_id, "schema_version": schema_version,
+            "evaluator_version": evaluator_version, "checkpoint_sha256": split_hash,
+            "dataset": split_dataset, "split": split, "manifest_sha256": manifest_hashes[split],
+            "classes": split_classes, "sample_count": count,
+            **split_configs, "code_revision": None,
+        }
+        with Session(engine) as db:
+            from app.services.evaluations import EvaluationService
+            service = EvaluationService(db)
+            attempt = service.create(identity)
+            service.start(attempt["id_evaluation"])
+            if schema_version == 2:
+                report = calculate_classification_report(
+                    labels, predictions, split_classes, rejection_label="__recording_rejected__")
+            else:
+                report = calculate_classification_report(labels, labels, split_classes)
+            service.complete(attempt["id_evaluation"], report)
+    return client, checkpoint, payload, checkpoint_hash
+
+
+def install_torch_metadata_adapter(monkeypatch):
+    import torch
+    from app.services.predictors import trained_predictor
+    from tests.test_model_registry import FakeAudioPredictor
+
+    class CheckpointMetadataPredictor(FakeAudioPredictor):
+        def __init__(self, checkpoint_path, model_id, name, is_default, lazy_load, dataset_name,
+                     expected_checkpoint_sha256):
+            assert lazy_load is True
+            payload = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+            super().__init__(model_id, name, is_default)
+            self._meta.classes = payload["classes"]
+            self._meta.dataset_name = dataset_name
+            self.expected_checkpoint_sha256 = expected_checkpoint_sha256
+            self.model = None
+
+        def predict(self, audio_path):
+            pytest.fail("Registry guard must not run inference")
+
+    monkeypatch.setattr(trained_predictor, "TrainedModelPredictor", CheckpointMetadataPredictor)
+
+
+@pytest.mark.parametrize("fault", [
+    "pending", "failed", "component", "missing_test", "wrong_hash", "wrong_classes",
+    "wrong_config", "coherent_wrong_config", "wrong_architecture", "wrong_job", "wrong_dataset",
+    "wrong_schema", "wrong_evaluator", "missing_pair_identity", "tampered_pair_identity",
+])
+def test_catalogue_rejects_unverified_standard_models_before_publication(catalogue, monkeypatch, fault):
+    states = {
+        "pending": "standard_eval_pending", "failed": "standard_eval_failed",
+        "component": "standard_component_evaluated",
+    }
+    state = states.get(fault, "standard_eval_completed")
+    client, _, _, _ = seed_standard_model(
+        catalogue, 401, state=state, fault=None if fault in states else fault)
+    install_torch_metadata_adapter(monkeypatch)
+
+    response = client.get("/api/models")
+    payload = response.json()
+    assert response.status_code == 200
+    expected_reasons = {
+        "pending": "model_state_incomplete", "failed": "model_state_incomplete",
+        "component": "model_state_incomplete", "missing_test": "evaluation_pair_incomplete",
+        "wrong_hash": "evaluation_pair_incomplete", "wrong_classes": "evaluation_pair_incomplete",
+        "wrong_config": "runtime_configuration_incompatible",
+        "coherent_wrong_config": "runtime_configuration_incompatible",
+        "wrong_architecture": "runtime_configuration_incompatible",
+        "wrong_job": "runtime_configuration_incompatible",
+        "wrong_dataset": "evaluation_pair_incomplete", "wrong_schema": "evaluation_pair_incomplete",
+        "wrong_evaluator": "evaluation_pair_incomplete",
+        "missing_pair_identity": "pair_provenance_invalid",
+        "tampered_pair_identity": "pair_provenance_invalid",
+    }
+    assert all(model["id"] != "fama_trained_model_401" for model in payload["models"])
+    assert payload["publication_errors"] == [{
+        "model_id": "fama_trained_model_401",
+        "code": "standard_evaluation_invalid",
+        "reason": expected_reasons[fault],
+    }]
+    assert "/private/synthetic/path" not in response.text
+    assert "synthetic-secret-marker" not in response.text
+
+
+def test_catalogue_exposes_sanitized_reason_for_incompatible_runtime_configuration(catalogue, monkeypatch):
+    client, _, _, _ = seed_standard_model(catalogue, 399, fault="coherent_wrong_config")
+    install_torch_metadata_adapter(monkeypatch)
+
+    response = client.get("/api/models")
+
+    assert response.status_code == 200
+    assert response.json()["publication_errors"] == [{
+        "model_id": "fama_trained_model_399",
+        "code": "standard_evaluation_invalid",
+        "reason": "runtime_configuration_incompatible",
+    }]
+    assert "/private/synthetic/path" not in response.text
+    assert "synthetic-secret-marker" not in response.text
+    assert "Falta un par completado" not in response.text
+
+
+def test_catalogue_rejects_val_test_from_different_admitted_manifest_pairs(catalogue, monkeypatch):
+    # These split manifests come from separate admissions; individual identities match
+    # the current artifact/configuration, but there is no shared pair identity.
+    client, _, _, _ = seed_standard_model(catalogue, 400, fault="cross_generation_pair")
+    install_torch_metadata_adapter(monkeypatch)
+
+    response = client.get("/api/models")
+
+    assert response.status_code == 200
+    assert all(model["id"] != "fama_trained_model_400" for model in response.json()["models"])
+    assert all("admitted_completed" not in split
+               for model in response.json()["models"]
+               for split in (model.get("evaluations") or {}).values())
+    assert response.json()["publication_errors"] == [{
+        "model_id": "fama_trained_model_400",
+        "code": "standard_evaluation_invalid",
+        "reason": "pair_provenance_invalid",
+    }]
+
+
+def test_catalogue_keeps_unrecognized_standard_failure_generic_and_sanitized(catalogue, monkeypatch):
+    client, _, _, _ = seed_standard_model(catalogue, 398)
+    from app.services import standard_evaluation_guard
+
+    secret = "/private/guard/path token=synthetic-secret"
+    def unexpected_failure(*args, **kwargs):
+        raise RuntimeError(secret)
+    monkeypatch.setattr(standard_evaluation_guard, "select_admitted_standard_pair", unexpected_failure)
+
+    response = client.get("/api/models")
+
+    assert response.status_code == 200
+    assert response.json()["publication_errors"] == [{
+        "model_id": "fama_trained_model_398",
+        "code": "standard_evaluation_invalid",
+    }]
+    assert secret not in response.text
+    assert "reason" not in response.json()["publication_errors"][0]
+
+
+def test_catalogue_accepts_shared_manifest_pair_with_independent_split_manifests_and_counts(
+    catalogue, monkeypatch,
+):
+    import hashlib
+    import json
+
+    client, _, _, _ = seed_standard_model(catalogue, 400, sample_counts={"val": 2, "test": 3})
+    install_torch_metadata_adapter(monkeypatch)
+
+    response = client.get("/api/models")
+
+    assert response.status_code == 200
+    model = next(model for model in response.json()["models"]
+                 if model["id"] == "fama_trained_model_400")
+    val = model["evaluations"]["val"]["latest_completed"]["provenance"]
+    test = model["evaluations"]["test"]["latest_completed"]["provenance"]
+    assert val["manifest_sha256"] != test["manifest_sha256"]
+    assert val["sample_count"] == 2
+    assert test["sample_count"] == 3
+    val_pair = val["predictor_config"]["admitted_val_test_manifest_pair"]
+    assert test["predictor_config"]["admitted_val_test_manifest_pair"] == val_pair
+    canonical = json.dumps({
+        "domain": "fama.standard-evaluation.admitted-val-test-manifest-pair",
+        "version": 1,
+        "val_manifest_sha256": val["manifest_sha256"],
+        "test_manifest_sha256": test["manifest_sha256"],
+    }, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8")
+    assert val_pair == {"version": 1, "sha256": hashlib.sha256(canonical).hexdigest()}
+
+
+def test_catalogue_marks_the_guard_admitted_pair_separately_from_newer_incompatible_reports(
+    catalogue, monkeypatch,
+):
+    from app.models.training import ModelEvaluation
+    from app.schemas.evaluation import EvaluationIdentity
+    from app.services.evaluations import EvaluationService
+    from app.services.standard_evaluation_guard import (
+        ADMITTED_MANIFEST_PAIR_KEY, admitted_manifest_pair_provenance,
+    )
+
+    client, _, _, engine = catalogue
+    seed_standard_model(catalogue, 405)
+    install_torch_metadata_adapter(monkeypatch)
+    original_ids = {}
+    with Session(engine) as db:
+        originals = db.query(ModelEvaluation).filter_by(
+            id_modelo=405, status="completed").all()
+        for row in originals:
+            original_ids[row.split] = row.id_evaluation
+    assert set(original_ids) == {"val", "test"}
+
+    newer_ids = {}
+    manifests = {"val": "f" * 64, "test": "e" * 64}
+    pair = admitted_manifest_pair_provenance(manifests["val"], manifests["test"])
+    for split in ("val", "test"):
+        with Session(engine) as db:
+            original = db.get(ModelEvaluation, original_ids[split])
+            identity = {field: getattr(original, field) for field in EvaluationIdentity.model_fields}
+            identity["manifest_sha256"] = manifests[split]
+            identity["predictor_config"] = {
+                **identity["predictor_config"],
+                "job_id": "newer-incompatible-runtime",
+                ADMITTED_MANIFEST_PAIR_KEY: pair,
+            }
+            evaluations = EvaluationService(db)
+            attempt = evaluations.create(identity)
+            evaluations.start(attempt["id_evaluation"])
+            newer_ids[split] = evaluations.complete(
+                attempt["id_evaluation"], original.report)["id_evaluation"]
+
+    response = client.get("/api/models")
+
+    assert response.status_code == 200
+    model = next(item for item in response.json()["models"] if item["id"] == "fama_trained_model_405")
+    evaluations = model["evaluations"]
+    assert evaluations["val"]["latest_completed"]["id_evaluation"] == newer_ids["val"]
+    assert evaluations["test"]["latest_completed"]["id_evaluation"] == newer_ids["test"]
+    admitted_val = evaluations["val"]["admitted_completed"]
+    admitted_test = evaluations["test"]["admitted_completed"]
+    assert admitted_val["id_evaluation"] == original_ids["val"]
+    assert admitted_test["id_evaluation"] == original_ids["test"]
+    assert admitted_val["provenance"]["manifest_sha256"] == "d" * 64
+    assert admitted_test["provenance"]["manifest_sha256"] == "e" * 64
+    assert admitted_val["id_evaluation"] != evaluations["val"]["latest_completed"]["id_evaluation"]
+    assert admitted_test["id_evaluation"] != evaluations["test"]["latest_completed"]["id_evaluation"]
+    assert "/private/" not in response.text
+
+
+def test_catalogue_keeps_valid_standard_and_legacy_predictors_lazy(catalogue, monkeypatch):
+    import hashlib
+
+    client, registry, _, _ = catalogue
+    client, checkpoint, _, _ = seed_standard_model(catalogue, 402)
+    install_torch_metadata_adapter(monkeypatch)
+
+    response = client.get("/api/models")
+    assert response.status_code == 200
+    payload = response.json()
+    standard = next(model for model in payload["models"] if model["id"] == "fama_trained_model_402")
+    assert standard["has_weights"] is True
+    assert standard["evaluations"]["val"]["latest_completed"]["provenance"]["checkpoint_sha256"] == hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+    assert registry.get("402").model is None
+    assert registry.get("selected").model_id == "selected"
+
+
+def test_catalogue_preserves_cached_standard_predictor_after_same_artifact_failed_attempt(catalogue, monkeypatch):
+    client, registry, _, engine = catalogue
+    client, _, _, _ = seed_standard_model(catalogue, 403)
+    install_torch_metadata_adapter(monkeypatch)
+    first = client.get("/api/models")
+    assert first.status_code == 200
+    assert any(model["id"] == "fama_trained_model_403" for model in first.json()["models"]), first.json()
+    cached = registry.get("fama_trained_model_403")
+    assert registry.get("403") is cached
+    default_before = registry.get_default_model_id()
+
+    add_evaluation(engine, 403, "val", "failed")
+    response = client.get("/api/models")
+    assert response.status_code == 200
+    model = next(model for model in response.json()["models"] if model["id"] == "fama_trained_model_403")
+    assert model["evaluations"]["val"]["latest_attempt"]["status"] == "failed"
+    assert model["evaluations"]["val"]["latest_completed"] is not None
+    assert response.json()["publication_errors"] == []
+    assert registry.has_model("fama_trained_model_403")
+    assert registry.get("fama_trained_model_403") is cached
+    assert registry.get("403") is cached
+    assert registry.get_default_model_id() == default_before
+
+
+@pytest.mark.parametrize("retry_status", ["pending", "failed"])
+def test_catalogue_preserves_old_coherent_pair_after_new_incomplete_attempt(
+    catalogue, monkeypatch, retry_status,
+):
+    from app.models.training import ModelEvaluation
+    from app.schemas.evaluation import EvaluationIdentity
+    from app.services.evaluations import EvaluationService
+    from app.services.standard_evaluation_guard import (
+        ADMITTED_MANIFEST_PAIR_KEY, admitted_manifest_pair_provenance,
+    )
+
+    client, registry, _, engine = catalogue
+    client, _, _, _ = seed_standard_model(catalogue, 403, active=True)
+    install_torch_metadata_adapter(monkeypatch)
+    first = client.get("/api/models")
+    assert any(model["id"] == "fama_trained_model_403" for model in first.json()["models"])
+    cached = registry.get("fama_trained_model_403")
+    default_before = registry.get_default_model_id()
+
+    with Session(engine) as db:
+        old_val = db.query(ModelEvaluation).filter_by(
+            id_modelo=403, split="val", status="completed").one()
+        old_val_id = old_val.id_evaluation
+        old_manifest = old_val.manifest_sha256
+        identity = {field: getattr(old_val, field) for field in EvaluationIdentity.model_fields}
+        identity["manifest_sha256"] = "f" * 64
+        identity["predictor_config"] = {
+            **identity["predictor_config"],
+            ADMITTED_MANIFEST_PAIR_KEY: admitted_manifest_pair_provenance("f" * 64, "c" * 64),
+        }
+        evaluations = EvaluationService(db)
+        retry = evaluations.create(identity)
+        if retry_status == "failed":
+            evaluations.start(retry["id_evaluation"])
+            evaluations.fail(retry["id_evaluation"], "synthetic admitted retry failure")
+
+    response = client.get("/api/models")
+    model = next(model for model in response.json()["models"] if model["id"] == "fama_trained_model_403")
+    val = model["evaluations"]["val"]
+    assert response.status_code == 200
+    assert val["latest_attempt"]["status"] == retry_status
+    assert val["latest_completed"]["provenance"]["manifest_sha256"] == old_manifest
+    assert val["admitted_completed"]["id_evaluation"] == old_val_id
+    assert response.json()["publication_errors"] == []
+    assert registry.get("fama_trained_model_403") is cached
+    assert registry.get("403") is cached
+    assert registry.get_default_model_id() == default_before
+    with Session(engine) as db:
+        assert db.get(Modelo, 403).activo is True
+
+
+def test_catalogue_evicts_cached_standard_predictor_when_checkpoint_identity_changes(catalogue, monkeypatch):
+    from app.services.registry import ModelNotFoundError
+
+    client, registry, _, _ = catalogue
+    client, checkpoint, _, _ = seed_standard_model(catalogue, 404, active=True)
+    install_torch_metadata_adapter(monkeypatch)
+    first = client.get("/api/models")
+    assert any(model["id"] == "fama_trained_model_404" for model in first.json()["models"])
+    cached = registry.get("fama_trained_model_404")
+    assert registry.get("404") is cached
+
+    checkpoint.write_bytes(checkpoint.read_bytes() + b"changed-synthetic-checkpoint")
+    response = client.get("/api/models")
+    assert response.status_code == 200
+    assert all(model["id"] != "fama_trained_model_404" for model in response.json()["models"])
+    assert response.json()["publication_errors"] == [{
+        "model_id": "fama_trained_model_404",
+        "code": "standard_evaluation_invalid",
+        "reason": "checkpoint_invalid",
+    }]
+    assert not registry.has_model("fama_trained_model_404")
+    with pytest.raises(ModelNotFoundError):
+        registry.get("404")
+
+
+def test_catalogue_classifies_a_missing_standard_checkpoint_without_exposing_its_path(catalogue, monkeypatch):
+    client, checkpoint, _, _ = seed_standard_model(catalogue, 397)
+    install_torch_metadata_adapter(monkeypatch)
+    checkpoint.unlink()
+
+    response = client.get("/api/models")
+
+    assert response.status_code == 200
+    assert response.json()["publication_errors"] == [{
+        "model_id": "fama_trained_model_397",
+        "code": "standard_evaluation_invalid",
+        "reason": "checkpoint_invalid",
+    }]
+    assert str(checkpoint) not in response.text
+
+
+def test_catalogue_exposes_full_val_test_evaluations_and_distinguishes_zero_from_absence(catalogue):
+    client, _, persist, engine = catalogue
+    persist(101, active=False, contents=json.dumps({
+        "classes": ["Motor sano", "Falla"], "metrics": {"accuracy": 0.81}, "padding": "x" * 11000,
+    }))
+    persist(102, active=False)
+    with Session(engine) as db:
+        legacy = db.get(Modelo, 101)
+        legacy.precision = 0.9375
+        db.commit()
+    val = add_evaluation(engine, 101, "val", "completed")
+    test = add_evaluation(engine, 101, "test", "completed", y_true=["a"], y_pred=["a"])
+
+    response = client.get("/api/models")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["evaluation_catalogue_status"] == "available"
+    models = {item["id"]: item for item in payload["models"]}
+    evaluation = models["fama_trained_model_101"]["evaluations"]
+    assert models["fama_trained_model_102"]["evaluations"] is None
+    assert models["fama_trained_model_101"]["metrics"] == {"accuracy": 0.81}
+    assert "precision_macro" not in models["fama_trained_model_101"]["metrics"]
+    assert evaluation["val"]["latest_attempt"]["id_evaluation"] == val["id_evaluation"]
+    assert evaluation["val"]["latest_completed"]["id_evaluation"] == val["id_evaluation"]
+    assert evaluation["val"]["latest_completed"]["provenance"] == {
+        "schema_version": 1, "evaluator_version": "catalogue-test-v1",
+        "checkpoint_sha256": "a" * 64, "dataset": "engine_diagnostics", "split": "val",
+        "manifest_sha256": "b" * 64, "classes": ["a", "b"],
+        "predictor_config": {"name": "synthetic"},
+        "preprocessing_config": {"sample_rate": 32000},
+        "aggregation_config": {"method": "combined"}, "sample_count": 3,
+        "code_revision": None,
+    }
+    assert evaluation["val"]["latest_completed"]["report"] == calculate_classification_report(
+        ["a", "a", "b"], ["a", "b", "b"], ["a", "b"])
+    assert evaluation["val"]["latest_completed"]["report"]["metrics"]["accuracy"] == 2 / 3
+    assert evaluation["val"]["latest_completed"]["report"]["coverage"] == {
+        "absent_classes": [], "complete": True,
+    }
+    assert evaluation["test"]["latest_attempt"]["id_evaluation"] == test["id_evaluation"]
+    test_report = evaluation["test"]["latest_completed"]["report"]
+    assert test_report == calculate_classification_report(["a"], ["a"], ["a", "b"])
+    assert test_report["metrics"]["accuracy"] == 1.0
+    assert test_report["coverage"] == {"absent_classes": ["b"], "complete": False}
+    assert test_report["per_class"][1] == {
+        "label": "b", "precision": 0.0, "recall": 0.0, "f1": 0.0, "support": 0,
+        "zero_denominator": {"precision": True, "recall": True, "f1": True},
+    }
+
+
+def test_catalogue_selects_latest_attempt_and_completed_in_one_read_only_batch(catalogue, monkeypatch):
+    import torch
+    from app.services.evaluations import EvaluationService
+    from tests.test_model_registry import FakeAudioPredictor
+
+    client, registry, persist, engine = catalogue
+    for model_id in (201, 202, 203):
+        persist(model_id, active=False)
+    registry.register(FakeAudioPredictor("car-engine-diagnostics-super-ensemble", "Synthetic ensemble"))
+    registry.register(FakeAudioPredictor("fama_trained_model_201-alias", "Noncanonical alias"))
+    completed = add_evaluation(engine, 201, "val", "completed")
+    private_path = "/srv/private-evaluation/checkpoints/secret-weights.pt"
+    secret_marker = "SYNTHETIC-SECRET-catalogue-7f82"
+    failed = add_evaluation(
+        engine, 201, "val", "failed", failure_reason=f"{private_path} token={secret_marker}")
+    pending = add_evaluation(engine, 201, "test", "pending")
+    running = add_evaluation(engine, 202, "val", "running")
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Catalogue read must not infer, mutate evaluation state, or load weights")
+    monkeypatch.setattr(FakeAudioPredictor, "predict", forbidden)
+    monkeypatch.setattr(torch, "load", forbidden)
+    for method in ("create", "start", "complete", "fail", "read"):
+        monkeypatch.setattr(EvaluationService, method, forbidden)
+
+    evaluation_reads = []
+    mutations = []
+    def observe_sql(connection, cursor, statement, parameters, context, executemany):
+        normalized = statement.lstrip().lower()
+        if "model_evaluation" in normalized and normalized.startswith("select"):
+            evaluation_reads.append(statement)
+        if normalized.startswith(("insert", "update", "delete")):
+            mutations.append(statement)
+    event.listen(engine, "before_cursor_execute", observe_sql)
+    try:
+        response = client.get("/api/models")
+    finally:
+        event.remove(engine, "before_cursor_execute", observe_sql)
+
+    assert response.status_code == 200
+    assert len(evaluation_reads) == 1
+    assert not mutations
+    payload = response.json()
+    models = {item["id"]: item for item in payload["models"]}
+    val = models["fama_trained_model_201"]["evaluations"]["val"]
+    assert val["latest_attempt"]["id_evaluation"] == failed["id_evaluation"]
+    assert val["latest_attempt"]["status"] == "failed"
+    assert val["latest_completed"]["id_evaluation"] == completed["id_evaluation"]
+    assert private_path not in response.text
+    assert secret_marker not in response.text
+    assert "error_reason" not in response.text
+    assert val["latest_completed"]["report"]["metrics"]["accuracy"] == 2 / 3
+    test = models["fama_trained_model_201"]["evaluations"]["test"]
+    assert test["latest_attempt"]["id_evaluation"] == pending["id_evaluation"]
+    assert test["latest_attempt"]["status"] == "pending"
+    assert test["latest_completed"] is None
+    other = models["fama_trained_model_202"]["evaluations"]["val"]
+    assert other["latest_attempt"]["id_evaluation"] == running["id_evaluation"]
+    assert other["latest_attempt"]["status"] == "running"
+    assert other["latest_completed"] is None
+    assert models["fama_trained_model_203"]["evaluations"] is None
+    assert models["car-engine-diagnostics-super-ensemble"]["evaluations"] is None
+    assert models["fama_trained_model_201-alias"]["evaluations"] is None
+    assert set(models) == {
+        "selected", "fama_trained_model_201", "fama_trained_model_202",
+        "fama_trained_model_203", "car-engine-diagnostics-super-ensemble",
+        "fama_trained_model_201-alias",
+    }
+    registered_before = [metadata.id for metadata in registry.list_models()]
+    assert client.get("/api/models").status_code == 200
+    assert [metadata.id for metadata in registry.list_models()] == registered_before
+
+
+def test_catalogue_preserves_v2_rejection_report_and_schema_version(catalogue):
+    client, _, persist, engine = catalogue
+    persist(303, active=False)
+    attempt = add_evaluation(
+        engine, 303, "test", "completed", schema_version=2,
+        y_true=["a", "a", "b"], y_pred=["a", "rejected", "b"],
+        rejection_label="rejected",
+    )
+    response = client.get("/api/models")
+    assert response.status_code == 200
+    model = next(m for m in response.json()["models"] if m["id"] == "fama_trained_model_303")
+    completed = model["evaluations"]["test"]["latest_completed"]
+    expected = calculate_classification_report(
+        ["a", "a", "b"], ["a", "rejected", "b"], ["a", "b"],
+        rejection_label="rejected",
+    )
+    assert completed["id_evaluation"] == attempt["id_evaluation"]
+    assert completed["provenance"]["schema_version"] == 2
+    assert completed["report"] == expected
+    assert completed["report"]["prediction_columns"] == ["a", "b", "rejected"]
+    assert completed["report"]["rejection"] == {"label": "rejected", "count": 1, "rate": 1 / 3}
+
+
+def test_catalogue_does_not_hide_invalid_completed_records_as_legacy(catalogue):
+    from app.models.training import ModelEvaluation
+
+    client, _, persist, engine = catalogue
+    persist(302, active=False)
+    attempt = add_evaluation(engine, 302, "val", "completed")
+    with Session(engine) as db:
+        row = db.get(ModelEvaluation, attempt["id_evaluation"])
+        row.report = {"metrics": {"accuracy": 0.99}}
+        db.commit()
+
+    response = client.get("/api/models")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["evaluation_catalogue_status"] == "unavailable"
+    assert payload["evaluation_catalogue_error"] == "evaluation_records_invalid"
+    assert payload["models"][1]["evaluations"] is None
+    assert "0.99" not in response.text
+
+
+def test_catalogue_reports_unavailable_when_evaluation_table_is_missing(catalogue):
+    from app.models.training import ModelEvaluation
+
+    client, _, persist, engine = catalogue
+    persist(301, active=False)
+    ModelEvaluation.__table__.drop(engine)
+    response = client.get("/api/models")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["evaluation_catalogue_status"] == "unavailable"
+    assert payload["evaluation_catalogue_error"] == "evaluation_store_unavailable"
+    assert payload["models"][0]["id"] == "selected"
+    assert payload["models"][1]["evaluations"] is None
+    assert str(engine.url) not in response.text
 
 
 def test_default_catalogue_does_not_enroll_static_or_unpublished_disk_models(catalogue, monkeypatch):
@@ -98,7 +855,10 @@ def test_default_catalogue_does_not_enroll_static_or_unpublished_disk_models(cat
     main.app.dependency_overrides[get_model_registry] = lambda: registry
     response = client.get("/api/models")
     assert response.status_code == 200
-    assert response.json() == {"models": [], "total": 0, "default_model_id": "", "publication_errors": []}
+    assert response.json() == {
+        "models": [], "total": 0, "default_model_id": "", "publication_errors": [],
+        "evaluation_catalogue_status": "available", "evaluation_catalogue_error": None,
+    }
     # A new valid DB publication remains allowed; there is no permanent ID allowlist.
     persist(73)
     payload = client.get("/api/models").json()
@@ -276,13 +1036,17 @@ def test_one_failed_checkpoint_does_not_prevent_other_publications(catalogue):
 
 @pytest.mark.parametrize("malformed", [False, True])
 def test_real_lazy_adapter_reads_only_synthetic_checkpoint(catalogue, monkeypatch, malformed):
+    import hashlib
     import torch
     from app.services.predictors import trained_predictor
-    client, registry, persist, _ = catalogue
+    client, registry, persist, engine = catalogue
     checkpoint = persist()
     torch.save({"architecture": "AudioCNN", "classes": 42 if malformed else ["Synthetic A", "Synthetic B"],
                 "best_val_acc": 85.0, "padding": "x" * 12000,
                 "state_dict": {"synthetic": torch.zeros(1)}}, checkpoint)
+    with Session(engine) as db:
+        db.get(Modelo, 11).hash_binario = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+        db.commit()
     monkeypatch.setattr(trained_predictor, "TrainedModelPredictor", TrainedModelPredictor)
     response = client.get("/api/models")
     if malformed:
@@ -365,3 +1129,81 @@ def test_concurrent_catalogue_requests_keep_one_predictor(catalogue):
     payload, predictor = results[0]
     assert payload["total"] == 2
     assert all(result == payload and instance is predictor for result, instance in results)
+
+
+def test_catalogue_exposes_sha256_of_registered_checkpoint_bytes(catalogue, monkeypatch):
+    import hashlib
+    import torch
+    from app.services.predictors import trained_predictor
+
+    client, registry, persist, engine = catalogue
+    checkpoint = persist()
+    torch.save({
+        "architecture": "AudioCNN", "classes": ["Synthetic A", "Synthetic B"],
+        "best_val_acc": 99.0, "padding": "x" * 12000,
+    }, checkpoint)
+    with Session(engine) as db:
+        db.get(Modelo, 11).hash_binario = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+        db.commit()
+    monkeypatch.setattr(trained_predictor, "TrainedModelPredictor", TrainedModelPredictor)
+
+    response = client.get("/api/models")
+
+    assert response.status_code == 200
+    model = next(item for item in response.json()["models"] if item["id"] == "fama_trained_model_11")
+    first_digest = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+    assert model.get("checkpoint_sha256") == first_digest
+    assert model["loaded_checkpoint_sha256"] is None
+    assert registry.get("11").model is None
+
+    checkpoint.write_bytes(checkpoint.read_bytes() + b"different synthetic checkpoint bytes")
+    changed_response = client.get("/api/models")
+    changed_model = next(item for item in changed_response.json()["models"]
+                         if item["id"] == "fama_trained_model_11")
+    changed_digest = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+    assert changed_model.get("checkpoint_sha256") == changed_digest
+    assert changed_digest != first_digest
+    assert registry.get("11").model is None
+
+
+@pytest.mark.parametrize("unavailable", ["missing", "unreadable"])
+def test_catalogue_returns_null_checkpoint_hash_when_file_is_unavailable(
+    catalogue, monkeypatch, unavailable,
+):
+    from pathlib import Path
+    import hashlib
+    import torch
+    from app.services.predictors import trained_predictor
+
+    client, registry, persist, engine = catalogue
+    checkpoint = persist()
+    torch.save({
+        "architecture": "AudioCNN", "classes": ["Synthetic A", "Synthetic B"],
+        "padding": "x" * 12000,
+    }, checkpoint)
+    with Session(engine) as db:
+        db.get(Modelo, 11).hash_binario = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+        db.commit()
+    monkeypatch.setattr(trained_predictor, "TrainedModelPredictor", TrainedModelPredictor)
+    assert client.get("/api/models").status_code == 200
+
+    if unavailable == "missing":
+        checkpoint.unlink()
+    else:
+        original_open = Path.open
+
+        def deny_checkpoint(path, *args, **kwargs):
+            if path == checkpoint:
+                raise PermissionError(f"Private checkpoint path: {checkpoint}")
+            return original_open(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "open", deny_checkpoint)
+
+    response = client.get("/api/models")
+
+    assert response.status_code == 200
+    model = next(item for item in response.json()["models"] if item["id"] == "fama_trained_model_11")
+    assert model["checkpoint_sha256"] is None
+    assert str(checkpoint) not in response.text
+    assert "Private checkpoint path" not in response.text
+    assert registry.get("11").model is None

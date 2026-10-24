@@ -83,7 +83,7 @@ def test_migrador_puede_migrar_y_aplicacion_no_puede_crear_tablas(isolated_serve
         cwd=SCRIPT.parents[1], env=environment, capture_output=True, text=True, timeout=30,
     )
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout) == {"code": "schema_current", "revision": "0002_access"}
+    assert json.loads(result.stdout) == {"code": "schema_current", "revision": "0004_integration"}
 
     with connection(operator.set(username="fama_app", password=PASSWORD)) as database, database.cursor() as cursor:
         with pytest.raises(psycopg2.errors.InsufficientPrivilege):

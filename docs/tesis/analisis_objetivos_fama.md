@@ -23,7 +23,7 @@ La revisión histórica del 2 de octubre distingue **implementado** (código pre
 
 ### Contradicciones históricas que no deben arrastrarse como estado actual
 
-- Las referencias inferiores a defaults JWT/bootstrap inseguros quedaron superadas por AFIN-7/8 y ADR 0024. No significa que todos los defaults/secretos del proyecto estén resueltos.
+- Las referencias inferiores a defaults JWT/bootstrap inseguros quedaron superadas por AFIN-7/8 y ADR 0042. No significa que todos los defaults/secretos del proyecto estén resueltos.
 - La descripción histórica de entrenamiento que solo advertía fallo SQL no refleja los contratos actuales probados de persistencia antes de completed (véanse manual y KANBAN). No implica un entrenamiento real nuevo.
 - La mención histórica a `mock_fallback` en `EngineEnsemblePredictor` no coincide con el archivo actual examinado: hoy contiene `ModelWeightsError` para pesos incompletos y fallo de carga. La comprobación temprana de disponibilidad se probó en AFIN-5; esto no certifica todos los modelos ni su calidad.
 - El hallazgo de defaults/curvas/evento ficticios de `DashboardService` fue corregido en AFIN-22. AFIN-25 corrigió además GET model-info y su consumidor, separando registro/archivo/carga y atribuyendo la respuesta al predictor invocado. No implica telemetría universalmente validada: catálogo/inventario, otras fuentes/perfiles, versiones y auditoría integral siguen pendientes. Origen explícito no es evidencia de inferencia correcta, activación ni un experimento nuevo.
@@ -45,6 +45,10 @@ El caso de preprocesamiento no cierra RNF01 global. La ruta del predictor correg
 **Puerta para retomar funcionalidades:** se puede continuar desarrollo controlado en la rama de afinamiento, pero aún quedan correcciones de lo existente. Antes de declarar objetivos operativos cumplidos se deben cerrar esos defectos y ejecutar el E2E y los benchmarks autorizados. Los porcentajes citados abajo pertenecen a la tesis/revisión histórica; no son una medición nueva de avance.
 
 ---
+
+## Antecedente histórico — revisión del 2 de octubre de 2026
+
+Las secciones siguientes conservan el análisis de esa fecha, incluidas afirmaciones después superadas sobre `mock_fallback`, persistencia y autenticación. No describen el árbol integrado actual ni acreditan ejecuciones nuevas. Para interpretar esas diferencias, prevalecen la actualización acotada y las contradicciones históricas identificadas arriba; su evidencia tampoco cierra la integración posterior.
 
 ## ¿Qué es F.A.M.A. y cuál es su propósito?
 

@@ -24,6 +24,24 @@ describe('IngestionView persisted inference dataset and curation', () => {
   });
   afterEach(() => { global.fetch = originalFetch; });
 
+  it('places import next to download without changing the existing download action', async () => {
+    await open();
+    const download = screen.getByRole('button', { name: 'Descargar desde GCS' });
+    expect(screen.getByRole('button', {name:'Preprocesar audios locales'})).toBeDefined();
+    const upload = screen.getByRole('button', { name: 'Importar dataset' });
+
+    const exportZip = screen.getByRole('button', { name: 'Descargar versión como ZIP' });
+    expect(exportZip.parentElement).toBe(upload.parentElement);
+
+    expect(upload.classList.contains('text-xs')).toBe(true);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(screen.getAllByRole('checkbox')[1]);
+    await act(async () => { fireEvent.click(download); });
+    const sync = vi.mocked(global.fetch).mock.calls.find(([url, options]) => String(url).endsWith('/api/ingestion/sync') && options?.method === 'POST');
+    expect(sync).toBeDefined();
+    expect(JSON.parse(String(sync?.[1]?.body))).toEqual({ datasets: ['AvesChilenas'], preprocess: false });
+  });
+
   it('keeps accepted local audio visible separately while cloud is pending after approval', async () => {
     vi.mocked(feedbackApi.getPendingFeedback).mockResolvedValueOnce([item]).mockResolvedValue([]);
     vi.mocked(feedbackApi.getFeedbackSync).mockResolvedValueOnce([]).mockResolvedValue([{
@@ -51,7 +69,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
     expect(screen.queryByText(/Audio #42/)).toBeNull();
   });
 
-  it('identifies audio by original name and local reception seconds without visible IDs', async () => {
+  it('identifies queued audio by original name and local reception seconds, with IDs only in synchronization', async () => {
     const filename = '<canto> & ' + 'nombre largo '.repeat(20) + '.wav';
     vi.mocked(feedbackApi.getPendingFeedback).mockResolvedValue([{ ...item,
       audio_filename: filename, fecha_carga: '2026-10-06T20:30:17+00:00',
@@ -71,14 +89,15 @@ describe('IngestionView persisted inference dataset and curation', () => {
       year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit', second: '2-digit',
     });
-    // Apply the query's own whitespace normalization to the expected Intl text;
-    // Windows/ICU may use nonbreaking spaces without changing the local time.
     expect(queue().getByText(getDefaultNormalizer()(`Cargado el ${local}`))).toBeDefined();
-    expect(screen.queryByText(/#42|#101|technical-uuid/)).toBeNull();
+    expect(queue().queryByText(/#42|#101/)).toBeNull();
+    expect(screen.queryByText(/technical-uuid/)).toBeNull();
     expect(screen.queryByRole('columnheader', { name: 'Feedback / Predicción' })).toBeNull();
     const sync = within(screen.getByRole('region', { name: 'Sincronización de audios incorporados' }));
     expect(sync.getByText('Chucao')).toBeDefined();
     expect(sync.getByText('2')).toBeDefined();
+    expect(sync.getByText(/Feedback #42/)).toBeDefined();
+    expect(sync.getByText(/Predicción #101/)).toBeDefined();
   });
 
   it.each([null, undefined, ''])('does not invent original names or upload dates for missing metadata (%s)', async value => {
@@ -318,6 +337,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
     await act(async () => { fireEvent.click(within(screen.getByRole('table')).getAllByRole('checkbox')[0]); });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Descargar desde GCS' })); });
 
+
     expect(screen.getByText(/Sincronización parcial:/)).toBeDefined();
     expect(screen.getByText(/persistencia en BD no confirmada/)).toBeDefined();
     expect(screen.queryByText(/Sincronización completada:/)).toBeNull();
@@ -338,6 +358,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
     await act(async () => { fireEvent.click(within(screen.getByRole('table')).getAllByRole('checkbox')[0]); });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Descargar desde GCS' })); });
 
+
     expect(screen.getByText(sample.summary)).toBeDefined();
     expect(screen.queryByText(/Sincronización completada:/)).toBeNull();
     if (sample.preprocessing) expect(screen.getByText(/1 error\(es\) en preprocesamiento/)).toBeDefined();
@@ -354,6 +375,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
     await act(async () => { fireEvent.click(within(screen.getByRole('table')).getAllByRole('checkbox')[0]); });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Descargar desde GCS' })); });
 
+
     expect(screen.getByText(/limpieza de temporales pendiente/)).toBeDefined();
     expect(screen.getByText(/Sincronización parcial:/)).toBeDefined();
   });
@@ -367,6 +389,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
     await open();
     await act(async () => { fireEvent.click(within(screen.getByRole('table')).getAllByRole('checkbox')[0]); });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Descargar desde GCS' })); });
+
 
     expect(screen.getByText(/Sincronización completada:/)).toBeDefined();
     expect(screen.getByText(/Registrado y actualizado en PostgreSQL/)).toBeDefined();

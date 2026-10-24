@@ -3,6 +3,7 @@ backend/training/paths.py
 Módulo canónico de resolución de rutas del proyecto (PathResolver).
 Proporciona rutas absolutas e independientes del directorio de trabajo actual (cwd).
 """
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -63,6 +64,58 @@ def get_processed_data_dir(dataset_name: Optional[str] = None) -> Path:
     if dataset_name:
         return proc_dir / dataset_name
     return proc_dir
+
+
+def get_prepared_data_dir(dataset_name: str) -> Path:
+    """Declare the separate prepared destination; never create directories."""
+    if (not isinstance(dataset_name, str) or not dataset_name
+            or dataset_name in (".", "..") or "/" in dataset_name
+            or "\\" in dataset_name):
+        raise ValueError("dataset_name must be a single directory name")
+    return Path(__file__).absolute().parent.parent / "data" / "prepared" / dataset_name
+
+
+def _configured_training_read_dir(variable: str, default: Path) -> Path:
+    configured = os.environ.get(variable)
+    if configured is None:
+        return default
+    if (not configured.startswith("/") or configured.startswith("//")
+            or "\\" in configured or any(part in (".", "..") for part in configured.split("/"))):
+        raise ValueError(f"{variable} must be an absolute physical directory")
+    path = Path(configured)
+    if len(path.parts) < 2:
+        raise ValueError(f"{variable} must be an existing readable physical directory")
+    descriptor = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        for part in path.parts[1:]:
+            next_descriptor = os.open(
+                part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = next_descriptor
+        os.listdir(descriptor)
+    except (OSError, ValueError):
+        raise ValueError(f"{variable} must be an existing readable physical directory") from None
+    finally:
+        os.close(descriptor)
+    return path
+
+
+def get_training_raw_read_root(dataset_name: str) -> Path:
+    """Resolve the service's optional, read-only raw source for AvesChilenas."""
+    default = get_raw_data_dir(dataset_name)
+    if dataset_name != "AvesChilenas":
+        return default
+    return _configured_training_read_dir(
+        "FAMA_TRAINING_AVESCHILENAS_RAW_READ_ROOT", default)
+
+
+def get_training_prepared_read_dir(dataset_name: str) -> Path:
+    """Resolve the service's optional prepared-index source for AvesChilenas."""
+    default = get_prepared_data_dir(dataset_name)
+    if dataset_name != "AvesChilenas":
+        return default
+    return _configured_training_read_dir(
+        "FAMA_TRAINING_AVESCHILENAS_PREPARED_READ_DIR", default)
 
 
 def get_dataset_roots(dataset_name: str) -> dict[str, Path]:

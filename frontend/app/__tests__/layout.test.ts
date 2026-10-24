@@ -1,16 +1,44 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, it, expect, vi } from "vitest";
 import RootLayout, { metadata, viewport } from "../layout";
 
-// next/font/google is a build-time boundary: only the Next.js compiler can
-// transform its loaders, so outside the bundler the exports are inert.
-vi.mock("next/font/google", () => ({
-  Montserrat: () => ({ variable: "font-montserrat", className: "font-montserrat", style: {} }),
-  Open_Sans: () => ({ variable: "font-open-sans", className: "font-open-sans", style: {} }),
+// next/font/local is a build-time boundary: Vitest simulates generated classes;
+// real Next.js builds validate the loader configuration and font binaries.
+vi.mock("next/font/local", () => ({
+  default: vi
+    .fn()
+    .mockReturnValueOnce({
+      variable: "font-montserrat",
+      className: "",
+      style: {},
+    })
+    .mockReturnValueOnce({
+      variable: "font-open-sans",
+      className: "",
+      style: {},
+    }),
 }));
 
 describe("RootLayout public metadata contract (App Router head)", () => {
-  it("renders an element that accepts children", () => {
-    expect(typeof RootLayout).toBe("function");
+  it("renders its children in the Spanish document with both font classes", () => {
+    const markup = renderToStaticMarkup(
+      RootLayout({
+        children: createElement(
+          "main",
+          null,
+          "Sonidos: ñandú, acción, pingüino, ¿sí? ¡Claro!",
+        ),
+      }),
+    );
+
+    expect(markup).toContain(
+      '<html lang="es" class="font-montserrat font-open-sans dark">',
+    );
+    expect(markup).toContain("Sonidos: ñandú, acción, pingüino, ¿sí? ¡Claro!");
+    expect(markup).toContain(
+      'class="min-h-screen bg-gray-950 text-white antialiased"',
+    );
   });
 
   it("declares the document title for the platform", () => {

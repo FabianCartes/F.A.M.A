@@ -1,6 +1,6 @@
 # Administración visual de cuentas y acceso
 
-**20 de octubre de 2026. Rama `fix/afinamiento-integral`.** Continuación de ACCESO-4A sobre las sesiones y contratos existentes de ADR 0034–0039. El cierre de pruebas y sus límites se registran en [KANBAN](../KANBAN.md).
+**20 de octubre de 2026. Rama `fix/afinamiento-integral`.** Continuación de ACCESO-4A sobre las sesiones y contratos existentes de ADR 0052–0039. El cierre de pruebas y sus límites se registran en [KANBAN](../KANBAN.md).
 
 ## Mi cuenta
 
@@ -23,7 +23,7 @@ Para una cuenta administradora, esta última opción explica el **Acceso global 
 
 Las cuentas nuevas se crean desde el formulario lateral; el rol inicial propuesto es investigador. No hay registro público ni borrado físico de cuentas. Los administradores tienen acceso global; las asignaciones delimitan el acceso de investigadores.
 
-**Alcance comprobado por lectura de código el 22 de octubre:** una asignación no es un permiso solo de lectura/entrenamiento. Las rutas de ingesta permiten subir audios a datasets asignados y las de feedback permiten aprobar/rechazar correcciones vinculadas a ellos; esas decisiones no están reservadas al administrador. El operador definió después que esa autonomía de uso, carga e incorporación forma parte de la asignación: no se exigirá revisión administrativa ni un permiso separado de curador. La política figura en el [ADR 0043](../adr/0043-autonomia-investigadora-en-datasets-asignados.md); sus ajustes pendientes, en el [plan](plan_autonomia_investigador_y_catalogo.md). El panel de asignaciones solo enumera datasets registrados en PostgreSQL. No existe todavía un catálogo general ni solicitudes de acceso para investigadores. Ver el detalle y límites en la [bitácora viva](bitacora_acceso_e_instalacion.md).
+**Alcance comprobado por lectura de código el 22 de octubre:** una asignación no es un permiso solo de lectura/entrenamiento. Las rutas de ingesta permiten subir audios a datasets asignados y las de feedback permiten aprobar/rechazar correcciones vinculadas a ellos; esas decisiones no están reservadas al administrador. El operador definió después que esa autonomía de uso, carga e incorporación forma parte de la asignación: no se exigirá revisión administrativa ni un permiso separado de curador. La política figura en el [ADR 0061](../adr/0061-autonomia-investigadora-en-datasets-asignados.md); sus ajustes pendientes, en el [plan](plan_autonomia_investigador_y_catalogo.md). El panel de asignaciones solo enumera datasets registrados en PostgreSQL. No existe todavía un catálogo general ni solicitudes de acceso para investigadores. Ver el detalle y límites en la [bitácora viva](bitacora_acceso_e_instalacion.md).
 
 Actualizar o paginar el catálogo descarta el editor seleccionado para evitar conservar una edición basada en datos anteriores. Cambiar de persona aborta las lecturas previas y descarta su enlace de recuperación. Los errores HTTP no se convierten en estados de éxito ni muestran detalles internos del backend.
 

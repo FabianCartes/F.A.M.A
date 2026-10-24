@@ -22,11 +22,16 @@ backend/*credentials*.json
 gcp-key*.json
 backend/gcp-key*.json
 
+# Private operational backups and database dumps
+/backups/
+/.fama-zip-manual/
+
 # Datasets and raw media
 data/
 data/**
 backend/data/
 backend/data/**
+/backend/data-dev/
 *.mp3
 !backend/tests/fixtures/audio/cbr_without_seek_table.mp3
 !backend/tests/fixtures/audio/vbr_without_seek_table.mp3
@@ -100,6 +105,8 @@ ENV/
 Thumbs.db
 
 # Agent & Tooling artifacts
+/.playwright-mcp/
 .atl/
 .codegraph/
-
+.obsidian/
+docs/.obsidian/

@@ -1,0 +1,101 @@
+# Integración del flujo de entrenamiento en la carpeta principal
+
+> Actualización del 15 de octubre de 2026: la [consolidación de worktrees](consolidacion-worktrees.md)
+> incorpora selector de semilla UI/API, ejecución spawn y runner autocontenido. Los registros de
+> integración que siguen describen sus árboles históricos, no la verificación actual.
+Destino: `/home/kevin/Work/fama`, rama `fix/prediction-view-truthfulness`, HEAD inicial `d9c374fa3467fea4307b54ed6bdb644839c45dcc`. Origen: `283bf212e94bea21826b45badd457e2fe22a0d2e`.
+Entrega local sin commits por instrucción explícita; runner aislado con intérprete del origen y módulos del destino. Seguimiento activo enlazado desde docs/KANBAN.md.
+
+## Specs
+- S1: «Aplico, unifica a la carpeta principal ~/Work/fama».
+- S2: «Aplicar cambios puntuales, no reemplazos completos de archivos.» y «Conservar las modificaciones existentes del destino.»
+- S3: «Excluir expresamente:» «datasets y audios;» «checkpoints;» «credenciales y archivos .env;» «recibos, claims y runtimes de los intentos históricos;» «modificaciones ajenas al flujo que ya existan en la carpeta principal.»
+- S4: «La nueva verificación debe cargar los módulos desde ~/Work/fama y usar:» «SQLite en memoria;» «audio y modelos CPU sintéticos;» «temporales y cachés privados;» «red bloqueada;» «guarda original y adaptador temporal dir_fd previamente validado;» «límites de tiempo y captura de stacks.»
+- S5: «Comprobar el contrato API integral, el aislamiento de hilos y las regresiones de los consumidores afectados. Verificar también que los archivos ajenos al traslado permanezcan intactos.»
+- S6: «Se supone que desde el frontend uno entrena y el backend automaticamente deberia hacer todo el flujo para que se publiquen pesos y metricas, para que quede listo para hacer inferenicias».
+- S7: «Dejemos para despues el tema de modelo activo».
+- S8: «No cambies de rama ni ejecutes Docker, entrenamiento real, afinamiento, activación, commits, push o merge.»
+- S10: «Autorizo» — respuesta a «¿Autorizás adaptar las comprobaciones de reevaluación a un procedimiento compatible —servicio con SQLite en memoria y probe de imports en un proceso aislado separado con la guarda original— sin habilitar subprocesos dentro del runner actual?»
+- S9: «Informar:» «archivos integrados y diferencias preservadas;» «resultados exactos de las pruebas;» «conflictos o comprobaciones pendientes;» «qué versión de código construiría Docker.»
+
+## Tasks
+- T1 | S1-S3,S8 | inline | done | Línea base de 360 archivos de código/docs/frontend; 19 rastreados dirty; índice vacío; sin commit autorizado.
+- T2 | S4 | inline + verificación independiente | done | Recuperar runner original (7844 caracteres) y adaptador (1322); adaptar sin launcher, recibos ni datos históricos.
+- T3 | S1-S3,S5-S8,S10 | inline | done (código y checks propios aprobados; sin commit autorizado) | Traslado por cortes RED/GREEN: aislamiento de hilos; rutas; semilla/procedencia/inicialización; contrato API. Servicio/tests se solapan, por eso no hay escritores paralelos independientes. Sin commit autorizado.
+- T4 | S2,S4-S10 | inline + verificación independiente | done (S1-S10 aprobados dentro del alcance; revisión nativa no disponible; sin commit autorizado) | Suite de consumidores, API y preservación; revisión nativa según assessment; sin commit autorizado.
+
+
+## Uso y límites del código integrado
+
+- El servicio admite `seed=42` por defecto; exige un entero entre `0` y `2**32 - 1` (no bool). Un valor inválido se rechaza antes de admisión o cambios de estado. La consolidación posterior incorpora su selección y propagación desde API/frontend, con entrenamiento en un hijo spawn supervisado independientemente del sondeo HTTP.
+- El checkpoint registra `seed` e `initialization_mode`: `constructor_default` para AudioCNN/PANNs y `pretrained_constructor` para los modelos construidos con pesos preentrenados. La ejecución spawn aísla los RNG del hijo respecto de la API; no promete determinismo total entre equipos, versiones o hardware CUDA. Véase el [ADR 0024](../adr/0024-entrenamiento-aislado-spawn.md).
+- Si falla el constructor preentrenado, el job falla conservando su error: no se reintenta silenciosamente con pesos aleatorios.
+- Para `AvesChilenas`, las variables opcionales `FAMA_TRAINING_AVESCHILENAS_RAW_READ_ROOT` y `FAMA_TRAINING_AVESCHILENAS_PREPARED_READ_DIR` configuran directorios de lectura físicos, absolutos, existentes y legibles, sin symlinks. Cada variable es independiente; omitirla conserva su ruta canónica. Un valor inválido rechaza admisión sin fallback. Otros datasets no usan estos overrides.
+- La aplicación no copia ni modifica esas fuentes; esto no establece permisos de solo lectura del sistema operativo. Checkpoints y salidas permanecen locales. El registro exacto del dataset en la base de datos sigue siendo requisito.
+- DATA-6 incorpora admisión por manifiesto schema2: detecta el desfase del índice y conserva la identidad de preparación en el checkpoint. Los preparados schema1 siguen siendo legibles para consumidores históricos, pero no acreditan procedencia para nuevos entrenamientos. Consulte [versiones preparadas](versiones-preparadas-dataset.md) para regeneración explícita, selección histórica y agrupación curada; la implementación local no regenera datos reales ni acredita despliegue.
+- Entrenamiento, guardado de pesos, evaluación y publicación se verifican por las interfaces públicas del servicio y API. Se conserva la política de activación existente del destino: su rediseño queda expresamente para después.
+
+### Reproducir comprobaciones aisladas
+
+Desde `/home/kevin/Work/fama/backend`, con el intérprete validado del checkout principal:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// \
+CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
+/home/kevin/Work/fama/.venv/bin/python \
+  tests/run_isolated_training_checks.py <selectores pytest>
+```
+
+El runner resuelve el checkout desde su propia ruta y carga `tests/training_host_guard.py` local. Usa `docs/receipts/training-checks-inventory.json`; el baseline histórico queda intacto. Rechaza entradas ausentes, escapes de raíz y Python optimizado antes de iniciar las pruebas. Admite selectores y opciones de pytest, crea scratch/cachés privados y limita fases a 30 s con captura de stacks. Prohíbe red y SQLite persistente. No depende de otro worktree. El audit guard no es un sandbox OS y no cubre carreras, hardlinks, I/O nativo o descriptores preabiertos. La fuente y los resultados históricos no se reutilizan como prueba del destino. No instalar ni cambiar entornos por inercia ante un fallo.
+
+### Comprobación separada de imports
+
+El modo `--ambient-import-probe` ejecuta, en un proceso fresco ya guardado, el payload exacto extraído por AST del test `test_cli_and_reevaluation_imports_do_not_initialize_ambient_database_runtime`. No lanza un subproceso desde la guarda; comprueba las mismas aserciones de importación perezosa y registra SHA del payload, exit, ausencia de conexiones y limpieza. No se presenta como ejecución pytest de su wrapper subprocess.
+
+Ejecutar ese modo con el comando anterior y, después, la suite de nueve archivos con `-k 'not test_cli_and_reevaluation_imports_do_not_initialize_ambient_database_runtime'`. La suite sintética final debe informar cinco deseleccionados: el wrapper de imports comprobado separadamente y cuatro casos que requieren checkpoint histórico/audio real (`test_trained_predictor_lazy_loading_defers_model_instantiation`, `test_trained_predictor_infers_real_audio`, `test_trained_predictor_fails_fast_when_audio_missing`, `test_trained_predictor_detects_silence`). Esos cuatro casos quedan fuera del alcance autorizado; no cuentan como aprobados ni se sustituyen con artefactos históricos. Nunca ocultar esa diferencia. Reevaluación usa SQLite en memoria; el caso CLI reutiliza el engine real de la fixture en la frontera externa SQLAlchemy, sin sustituir la operación de reevaluación.
+
+### Baseline focal posterior a las limpiezas
+
+Actualización del 15 de octubre de 2026 sobre HEAD `95cae81fe2d06f10c8ddbf029322716545592ed5`, con Python 3.14.7 y cambios documentales locales preservados. El usuario confirma operativo entrenamiento → inferencia → agregar al dataset; las comprobaciones siguientes no son una nueva ejecución operacional del ciclo ni resuelven DATA-6.
+
+1. Repetir los ocho selectores explícitos de la [consolidación](consolidacion-worktrees.md#verificación-nueva-tras-integrar-spawn). Resultado nuevo: **320 PASS**, cero skips/deselecciones, dos advertencias FFT de señales sintéticas cortas; 29,51 s.
+2. Con el mismo prefijo de entorno e intérprete, ejecutar el grupo de consumidores:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// \
+CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+/home/kevin/Work/fama/.venv/bin/python tests/run_isolated_training_checks.py \
+  tests/test_trained_predictor.py tests/test_model_reevaluation.py tests/test_preprocess.py \
+  -k 'not test_cli_and_reevaluation_imports_do_not_initialize_ambient_database_runtime and not test_trained_predictor_lazy_loading_defers_model_instantiation and not test_trained_predictor_infers_real_audio and not test_trained_predictor_fails_fast_when_audio_missing and not test_trained_predictor_detects_silence'
+```
+
+Resultado nuevo: **56 PASS / 5 deselecciones**, cero skips, 2,39 s. Los cuatro casos de artefactos reales no están aprobados; el quinto es el wrapper subprocess. La salida argparse de argumentos obligatorios corresponde al caso negativo aprobado `test_cli_requires_explicit_inputs_before_database_access`, no a un fallo del runner.
+
+3. Ejecutar `--ambient-import-probe` con el mismo entorno: resultado nuevo PASS, exit 0 y cero conexiones SQLite. Esto comprueba el payload exacto del wrapper excluido, no ejecuta dicho wrapper mediante pytest.
+
+Las tres ejecuciones comprobaron guardas, hashes de 30 entradas protegidas y limpieza del scratch. La primera imprime un mensaje genérico de «PostgreSQL» desde la aplicación; la prueba de conexiones registra únicamente SQLite en memoria (260 conexiones) y red prohibida, no una conexión PostgreSQL real. El grupo de consumidores registra 23 conexiones SQLite en memoria.
+
+**Cobertura y siguiente ampliación:** 376 PASS en once módulos, cinco deselecciones y probe aparte; no suite global. Antes de añadir módulos, revisar sus fixtures y dependencias. `test_ingestion_service_both_datasets_synced` consulta GCS/inventario local real y no se ejecutó; que el runner admita su selector no lo convierte en hermético. Spawn conserva su procedimiento separado. Módulos no revisados quedan no evaluados. No ampliar permisos del runner para convertir un prerrequisito ausente en éxito. Solo un defecto vigente reproducido justifica cambiar producción mediante TDD.
+
+Los reportes originales de 12 FAIL / 5 SKIP y 26 FAIL / 1493 PASS / 5 SKIP no se recuperaron de los respaldos identificados: quedan como antecedentes históricos incompletos, sin afirmar que sus fallos pasen hoy ni contabilizarlos como defectos vigentes. Resultados, comandos, exclusiones y huellas del checkout en [backend-suite-current-baseline.json](../receipts/backend-suite-current-baseline.json).
+
+## Log
+- L19: Verificación independiente final mv65n1re-4-kuf9 S1-S10 aprobados: importsprobeexit0/payloadSHA5cda.../0SQLite; suite344PASS5deselected2FFT warnings18.97s/exit0/memory260/nonpassing[]/guard/SHAcleanup; faultproof solo en memoria AssertionError después code0=>exit1/statusfailed/exactmessage/SHAcleanup. Diffcheck0; baseline360 con9cambiospermitidos/351intactos/0missingunexpected, HEADd9c374f/indexvacío, service3hunksactivo preservados. Sin ediciones del verificador. T4cerrado; nativeASSESSunassessable poruntracked/no reviewDue ofrecido, no aprobación nativa ni authoritycreated. No certificar Docker3.12/GPU/PG/browser/MLquality/4realartifactcasos. No commits por autorización explícita.
+- L18: Suite sintética final job4exit0/wall25:344PASS5deselected2FFTwarnings20.70s, nonpassing_reports[],memory260,guardantesall/hash/cleanupPASS.5exclusiones expresas segúnmanual:1payloadimportsPASSaparte+4realartifactfueraalcance. CLIrequiredargsstderr es caso negativo esperado. T3checkspropioscerrados, T4independientefinalnext, no commit autorizado. La corrección runnerexceptcode1 observó éxito normal; falta faultprobeindependiente para confirmar propagaciónfallo tras code0.
+- L17: ASSESS con RDDon es unassessable por untracked; plan independientehigh requerido; no se inventó reviewDue ni se inició revisión. Job3 wrapperexit0/wall26:344PASS4SKIP1deselected2FFTwarnings21.15s/memory260/SHAcleanup; AssertionError proof allpassed capturado con code0 es BUG DEL RUNNER, no certificado de cierre. Corregido exceptcode1 para failclosed.4SKIP son tests dependientes checkpoint histórico/audio real ausente fueraCPUsynthetic, se deseleccionan explícitamente junto wrapperimports verificadoaparte. Nueva suite después cambio concreto failclosed+scope sintético; no importar datos ni alterar4tests.
+- L16: S10: fixture reevaluación previa bajo guarda RED1ERROR0.22s (SQLitefile denegado); adaptada a memory+StaticPool. Preflight+CLI GREEN2PASS0.61s/exit0/memory2. Ambient-import-probe separadoexit0/wall2.3s, payloadSHA5cda26f98317e107ac026ff1555cec748aff24e79f43d5228eb51d253c0755d1,0SQLite/sourceguardSHA/privatecleanupPASS. Payload original no modificado. Nueva suite se repite por cambios de fixture+procedimiento concretos, con una deselección explícita del wrapper subprocess y sin ampliar guarda. Diffcheckexit0.
+- L15 (usuario): «Autorizo». Autoriza servicio SQLite en memoria y probe imports en proceso fresco separado con guarda original, no permiso subprocess en runner. Adaptación test-only, sin modificar producción/activo.
+- L1: Solicitud inicial «Plan de integración»: comparación de origen validado y destino, traslado mínimo de entrenamiento/evaluación/publicación, conservación de cambios locales, exclusiones de datos/credenciales/evidencia histórica, verificación aislada del destino y cierre sin Docker ni entrenamiento real. El texto completo original está en la conversación y en continuidad Engram 2504/2505.
+- L2 (usuario): «Se supone que desde el frontend uno entrena y el backend automaticamente deberia hacer todo el flujo para que se publiquen pesos y metricas, para que quede listo para hacer inferenicias».
+- L3 (usuario): «Dejemos para despues el tema de modelo activo».
+- L4 (usuario): «Aplico, unifica a la carpeta principal ~/Work/fama».
+- L5: Guarda de evaluación y preprocess idénticos byte a byte entre árboles actuales. Conservar predictor destino con checkpoint_sha256, esquema y contrato GPU locales. No portar eliminación de activación/compensación del origen. Scripts host-bound fuera del traslado; solo leer guarda original para pruebas.
+- L12: Suite corregida9archivos job-2 exit1/wall25s:298PASS/1FAIL/2warnings FFT19.82s. Falla test_cli_and_reevaluation_imports_do_not_initialize_ambient_database_runtime porque intenta subprocess, prohibido por guarda original; no proceso lanzado. La fixture reevaluation_case además requiere SQLite en archivo (test_model_reevaluation.py:50/113), incompatible SQLite memoria. No más pruebas ni cambios de permisos por inercia. Final verificación independiente del flujo no ejecutada; revisión nativa no iniciada por cierre funcional incompleto.
+- L14: Docker no ejecutado. Compose usa ./backend y Dockerfile COPY . .; .dockerignore excluye tests/, data/, pesos*.pt/*.pth y .env*. Una construcción nueva incorporaría training.py/paths.py integrados y demás ediciones locales de backend, no HEAD fuente puro. Imagen actual no reconstruida. Pruebas con intérprete fuente3.14 no acreditan imagen Docker3.12.
+- L13: Integridad final:352/360rutas idénticas,8modificadas dentro allowlist,0missing/0unexpected, HEADd9c374f e índice vacío conservados. training.py actual difiere de origen SOLO en3hunks de activación/compensación conservados. Predictor/schema/guard/preprocess, persistencia local, tests consumidores y frontend fuera de traslado intactos. Diffcheckfinalexit0 después de normalizar EOF (los2intentos parciales anteriores todavía devolvían2; no eran aprobación).
+- L11: Primera suite9archivos job-1 exit1: 11PASS/1FAIL1.07s; guard bloqueó mkdir backend/data/raw/Fixture desde test_paths que descubría checkout real por fallback. Corrección3fixtures: tmp_path/.git privado, sin cambiar localizador/guarda ni crear datos reales. test_paths70PASS0.16s, guard/hashes/cleanupPASS. Diffcheck mostró EOF vacío exit2; normalizado antes de nueva suite. Comando suite ahora se repite porque cambió esa fixture, no por inercia.
+- L10: Hilo externo RED1FAIL0.80s→GREEN1PASS0.76s; rutas RED6FAIL0.27s→GREEN6PASS0.16s; seed RED11FAIL0.42s→GREEN11PASS1.19s; no-fallback RED1FAIL0.16s→GREEN1PASS0.14s; API integral adaptada1PASS1.26s(call0.444). Todos exits RED1/GREEN0, memory/guard/hash/cleanup/denynet comprobados. API ya satisfecha al añadir prueba: no se fabricó RED. Edición exacta service tests inicialmente rechazada por anchor inexistente (sin mutación), recuperada con anchor único; intento de leer store tras script fallido no disponible, sin comandos de prueba ni mutación.
+- L9: Probe independiente corregido mv64uthf-3-7wi8 exit0/stderr vacío: sintaxis, privado/modo0600/lectura/escapes/O_NOFOLLOW/fd cerrado/hashes/limpieza PASS. Parent comparó adaptador exactamente con original (1322). Habilita RED/GREEN, no certifica flujo ni imports. Comando de pruebas: cd /home/kevin/Work/fama/backend && PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /home/kevin/Work/fama-review-new-model-flow/.venv-cuda/bin/python tests/run_isolated_training_checks.py <selectores pytest>.
+- L8: Verificador mv64rp38-2-02kd bloqueado: comando relativo .venv-cuda/bin/python inexistente en destino, exit127 antes de Python, stdout vacío. Parent comprobó ruta absoluta /home/kevin/Work/fama-review-new-model-flow/.venv-cuda/bin/python ejecutable (exit0), y relativa destino ausente (exit1). Incidente de ruta, no prueba fallida del adaptador; autorizada una corrección acotada de invocación, sin instalaciones ni pytest.
+- L7: Runner adaptado en backend/tests/run_isolated_training_checks.py. Primer chequeo AST falló por nota de truncamiento incluida accidentalmente desde read; retirada la nota y AST PASS. Verificador previo mv64rp38-2-02kd revisa adaptación y probe sintético stdlib antes de pytest. Ninguna prueba del destino ejecutada aún.
+- L6: Baseline reproducible en docs/receipts/training-integration-baseline.json (hashes de 360 rutas, no datos/credenciales/recibos históricos). Runner original recuperado del store de sesión previa; no se ejecutó su invocación contra el origen.

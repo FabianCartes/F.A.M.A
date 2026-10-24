@@ -1,6 +1,6 @@
 # Permisos sobre recursos asignados
 
-**18 de octubre de 2026 — implementación backend, sin despliegue real.** [Decisión ADR 0035](../adr/0035-asignaciones-explicitas-y-propiedad-de-entrenamiento.md).
+**18 de octubre de 2026 — implementación backend, sin despliegue real.** [Decisión ADR 0053](../adr/0053-asignaciones-explicitas-y-propiedad-de-entrenamiento.md).
 
 ## Asignaciones administradas
 

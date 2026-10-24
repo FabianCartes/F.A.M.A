@@ -54,47 +54,321 @@ interface BackendModelStatus {
 }
 
 interface PredictionResponse {
-  detalles?: { dataset_name?: string | null; device?: string | null } | null;
+  detalles?: { dataset_name?: string | null; loaded_checkpoint_sha256?: unknown; device?: string | null } | null;
   filename: string;
   gcp_upload: boolean;
   db_id?: number | null;
   clase: string;
   confianza: number;
   modelo?: string;
+  modelo_id?: string;
   is_fallback?: boolean;
   modelos_activos?: string[];
   modelos_ejecutados?: string[];
 }
 
 interface HistoryItem {
-  id: string | number;
+  id: number | null;
   filename: string;
   timestamp: string;
   clase: string;
-  badgeCode: string;
+
   confianza: number;
   modelo?: string;
   domain?: string;
 }
 
 export interface ModelEvaluationMetrics {
-  accuracy?: number;
-  f1_macro?: number;
-  precision_macro?: number;
-  ece?: number;
-  [key: string]: number | string | boolean | undefined;
+  accuracy?: number | null;
+  f1_macro?: number | null;
+  precision_macro?: number | null;
+  ece?: number | null;
+  [key: string]: number | string | boolean | null | undefined;
+}
+
+interface EvaluationProvenance {
+  schema_version?: number;
+  evaluator_version?: string;
+  checkpoint_sha256?: string;
+  dataset?: string;
+  split?: "val" | "test";
+  sample_count?: number;
+}
+
+interface FinalEvaluationReport {
+  schema_version?: unknown;
+  sample_count?: unknown;
+  classes?: unknown;
+  metrics?: Record<string, unknown> | null;
+  per_class?: unknown;
+  support?: unknown;
+  confusion_matrix?: unknown;
+  prediction_columns?: unknown;
+  coverage?: { complete?: unknown; absent_classes?: unknown } | null;
+  rejection?: { label?: unknown; count?: unknown; rate?: unknown } | null;
+}
+
+interface EvaluationAttempt {
+  id_evaluation?: unknown;
+  status?: unknown;
+  created_at?: unknown;
+  started_at?: unknown;
+  finished_at?: unknown;
+  provenance?: EvaluationProvenance | null;
+}
+
+interface CompletedEvaluation {
+  id_evaluation?: unknown;
+  report?: FinalEvaluationReport | null;
+  provenance?: EvaluationProvenance | null;
+  created_at?: unknown;
+  started_at?: unknown;
+  finished_at?: unknown;
+}
+
+interface EvaluationSplit {
+  latest_attempt?: EvaluationAttempt | null;
+  latest_completed?: CompletedEvaluation | null;
+  admitted_completed?: CompletedEvaluation | null;
+}
+
+interface ModelEvaluations {
+  val?: EvaluationSplit | null;
+  test?: EvaluationSplit | null;
 }
 
 export interface RegisteredModel {
   id: string;
   name: string;
+  architecture?: string | null;
+  dataset?: string | null;
+  version?: number | null;
   description: string;
   target_sr: number;
   duration_seconds: number;
   classes: string[];
   is_default: boolean;
   has_weights?: boolean;
+  checkpoint_sha256?: string | null;
+  loaded_checkpoint_sha256?: string | null;
   metrics?: ModelEvaluationMetrics;
+  evaluations?: ModelEvaluations | null;
+}
+
+const EVALUATION_STATUS_LABELS: Record<string, string> = {
+  pending: "Pendiente",
+  running: "En curso",
+  completed: "Completado",
+  failed: "Fallido",
+};
+
+function formatFinalRate(value: unknown): string {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1
+    ? `${(value * 100).toFixed(2)}%`
+    : "No disponible";
+}
+
+function formatFinalCount(value: unknown): string {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? value.toLocaleString("es-CL")
+    : "No disponible";
+}
+
+function validCheckpointHash(value: unknown): string | null {
+  return typeof value === "string" && /^[a-f0-9]{64}$/i.test(value) ? value : null;
+}
+
+function registeredCheckpointMatch(modelHash: unknown, reportHash: unknown): "Coincide" | "No coincide" | "No verificable" {
+  const validModelHash = validCheckpointHash(modelHash);
+  const validReportHash = validCheckpointHash(reportHash);
+  if (!validModelHash || !validReportHash) return "No verificable";
+  return validModelHash.toLowerCase() === validReportHash.toLowerCase() ? "Coincide" : "No coincide";
+}
+
+function evaluationAttemptLabel(attempt?: EvaluationAttempt | null): string | null {
+  if (!attempt) return null;
+  if (typeof attempt.status !== "string") return "Estado no disponible";
+  return EVALUATION_STATUS_LABELS[attempt.status] || "Estado no reconocido";
+}
+
+function safeTimestamp(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function EvaluationSplitCard({
+  label,
+  split,
+  modelCheckpointHash,
+}: {
+  label: string;
+  split?: EvaluationSplit | null;
+  modelCheckpointHash?: string | null;
+}) {
+  const latestAttempt = split?.latest_attempt;
+  const latestCompleted = split?.latest_completed;
+  const admittedCompleted = split?.admitted_completed;
+  const displayedCompleted = admittedCompleted || latestCompleted;
+  const report = displayedCompleted?.report;
+  const metrics = report?.metrics;
+  const metricRows = [
+    ["Accuracy", metrics?.accuracy],
+    ["Precision macro", metrics?.precision_macro],
+    ["Recall macro", metrics?.recall_macro],
+    ["F1 macro", metrics?.f1_macro],
+    ["F1 ponderado", metrics?.f1_weighted],
+    ["Balanced accuracy", metrics?.balanced_accuracy],
+  ] as const;
+  const coverage = report?.coverage;
+  const absentClasses = Array.isArray(coverage?.absent_classes)
+    ? coverage.absent_classes.filter((value): value is string | number => typeof value === "string" || (typeof value === "number" && Number.isFinite(value))).map(String)
+    : null;
+  const classNames = Array.isArray(report?.classes)
+    ? report.classes.filter((value): value is string | number => typeof value === "string" || (typeof value === "number" && Number.isFinite(value)))
+    : [];
+  const perClass = Array.isArray(report?.per_class) ? report.per_class.filter(isRecord) : [];
+  const confusionMatrix = Array.isArray(report?.confusion_matrix) && report.confusion_matrix.every((row) =>
+    Array.isArray(row) && row.every((value) => Number.isSafeInteger(value) && Number(value) >= 0)
+  ) ? report.confusion_matrix as number[][] : null;
+  const predictionColumns = Array.isArray(report?.prediction_columns)
+    ? report.prediction_columns.filter((value): value is string | number => typeof value === "string" || (typeof value === "number" && Number.isFinite(value)))
+    : classNames;
+  const provenance = displayedCompleted?.provenance;
+  const checkpointHash = typeof provenance?.checkpoint_sha256 === "string" && /^[0-9a-f]{64}$/i.test(provenance.checkpoint_sha256)
+    ? provenance.checkpoint_sha256
+    : null;
+  const attemptStatus = evaluationAttemptLabel(latestAttempt) || "No hay intentos registrados";
+  const attemptId = Number.isSafeInteger(latestAttempt?.id_evaluation) && Number(latestAttempt?.id_evaluation) > 0
+    ? Number(latestAttempt?.id_evaluation)
+    : null;
+  const completedId = Number.isSafeInteger(displayedCompleted?.id_evaluation) && Number(displayedCompleted?.id_evaluation) > 0
+    ? Number(displayedCompleted?.id_evaluation)
+    : null;
+  const rejection = report?.schema_version === 2 ? report.rejection : null;
+  const rejectionCount = rejection && Number.isSafeInteger(rejection.count) && Number(rejection.count) >= 0
+    ? formatFinalCount(rejection.count)
+    : "No disponible";
+  const rejectionRate = rejection && typeof rejection.rate === "number" && Number.isFinite(rejection.rate) && rejection.rate >= 0 && rejection.rate <= 1
+    ? formatFinalRate(rejection.rate)
+    : "No disponible";
+  const checkpointMatch = registeredCheckpointMatch(modelCheckpointHash, provenance?.checkpoint_sha256);
+  const zeroDenominatorLabels = (value: unknown) => {
+    if (!isRecord(value)) return [];
+    return ["precision", "recall", "f1"].filter((metric) => value[metric] === true);
+  };
+
+  return (
+    <article className="min-w-0 space-y-4" aria-label={`Evaluación ${label}`}>
+      <h3 className="text-sm font-semibold text-white">{label}</h3>
+      <section aria-label={`Último intento ${label}`} className="rounded-lg border border-[#252834] bg-[#111215] p-3 space-y-1 text-xs text-gray-300">
+        <h4 className="font-semibold text-gray-200">Último intento{attemptId ? ` #${attemptId}` : ""}: {attemptStatus}</h4>
+        {latestAttempt ? <>
+          {safeTimestamp(latestAttempt.created_at) && <p className="break-all text-[11px] text-gray-400">Creado: {safeTimestamp(latestAttempt.created_at)}</p>}
+          {safeTimestamp(latestAttempt.started_at) && <p className="break-all text-[11px] text-gray-400">Inicio: {safeTimestamp(latestAttempt.started_at)}</p>}
+          {safeTimestamp(latestAttempt.finished_at) && <p className="break-all text-[11px] text-gray-400">Finalizado: {safeTimestamp(latestAttempt.finished_at)}</p>}
+        </> : <p className="text-[11px] text-gray-400">Sin intentos registrados para este split.</p>}
+      </section>
+
+      {report && displayedCompleted ? (
+        <div className="space-y-4 rounded-lg border border-[#252834] bg-[#111215] p-3">
+          <div>
+            <p className="text-xs font-semibold text-emerald-300">{admittedCompleted ? "Informe aplicable del par admitido" : "Informe histórico completado"}{completedId ? ` #${completedId}` : ""}</p>
+            <p className="mt-1 text-xs text-gray-300">Muestras: {formatFinalCount(report.sample_count)}</p>
+            {safeTimestamp(displayedCompleted.created_at) && <p className="break-all text-[11px] text-gray-400">Informe creado: {safeTimestamp(displayedCompleted.created_at)}</p>}
+            {safeTimestamp(displayedCompleted.started_at) && <p className="break-all text-[11px] text-gray-400">Informe iniciado: {safeTimestamp(displayedCompleted.started_at)}</p>}
+            {safeTimestamp(displayedCompleted.finished_at) && <p className="break-all text-[11px] text-gray-400">Informe finalizado: {safeTimestamp(displayedCompleted.finished_at)}</p>}
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[18rem] text-left text-xs" aria-label={`Métricas del ${admittedCompleted ? "informe admitido" : "informe histórico"} ${label}`}>
+              <thead className="text-gray-400">
+                <tr><th scope="col" className="py-1 pr-3">Métrica</th><th scope="col" className="py-1">Valor</th></tr>
+              </thead>
+              <tbody>
+                {metricRows.map(([name, value]) => (
+                  <tr key={name} className="border-t border-[#252834]">
+                    <th scope="row" className="py-1 pr-3 font-medium text-gray-300">{name}</th>
+                    <td className="py-1 font-mono text-white">{formatFinalRate(value)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {perClass.length > 0 && <div className="overflow-x-auto">
+            <table className="w-full min-w-[32rem] text-left text-xs" aria-label={`Métricas por clase ${label}`}>
+              <thead className="text-gray-400"><tr>
+                <th scope="col" className="py-1 pr-3">Clase</th><th scope="col" className="py-1 pr-3">Precision</th>
+                <th scope="col" className="py-1 pr-3">Recall</th><th scope="col" className="py-1 pr-3">F1</th><th scope="col" className="py-1">Soporte</th>
+              </tr></thead>
+              <tbody>{perClass.map((row, index) => {
+                const labelValue = typeof row.label === "string" || (typeof row.label === "number" && Number.isFinite(row.label))
+                  ? String(row.label)
+                  : classNames[index] === undefined ? `Clase ${index + 1}` : String(classNames[index]);
+                const undefinedMetrics = zeroDenominatorLabels(row.zero_denominator);
+                return <tr key={`${labelValue}-${index}`} className="border-t border-[#252834]">
+                  <th scope="row" className="py-1 pr-3 font-medium text-gray-300">
+                    {labelValue}
+                    {undefinedMetrics.length > 0 && <span className="block text-[11px] font-normal text-gray-400">Denominador nulo: {undefinedMetrics.join(", ")}</span>}
+                  </th>
+                  <td className="py-1 pr-3 font-mono">{formatFinalRate(row.precision)}</td>
+                  <td className="py-1 pr-3 font-mono">{formatFinalRate(row.recall)}</td>
+                  <td className="py-1 pr-3 font-mono">{formatFinalRate(row.f1)}</td>
+                  <td className="py-1 font-mono">{formatFinalCount(row.support)}</td>
+                </tr>;
+              })}</tbody>
+            </table>
+          </div>}
+          {confusionMatrix && <div className="overflow-x-auto">
+            <table className="w-full min-w-[24rem] text-left text-xs" aria-label={`Matriz de confusión ${label}`}>
+              <caption className="pb-1 text-left font-semibold text-gray-300">Matriz de confusión · filas reales, columnas predichas</caption>
+              <thead className="text-gray-400"><tr>
+                <th scope="col" className="py-1 pr-3">Real \ Predicha</th>
+                {confusionMatrix[0]?.map((_, index) => <th scope="col" key={index} className="py-1 px-2">{predictionColumns[index] || classNames[index] || `Clase ${index + 1}`}</th>)}
+              </tr></thead>
+              <tbody>{confusionMatrix.map((row, rowIndex) => <tr key={rowIndex} className="border-t border-[#252834]">
+                <th scope="row" className="py-1 pr-3 font-medium text-gray-300">{classNames[rowIndex] || `Clase ${rowIndex + 1}`}</th>
+                {row.map((value, columnIndex) => <td key={columnIndex} className="py-1 px-2 font-mono">{formatFinalCount(value)}</td>)}
+              </tr>)}</tbody>
+            </table>
+          </div>}
+          <div className="space-y-1 text-xs text-gray-300">
+            <p>{coverage?.complete === true
+              ? "Cobertura completa"
+              : coverage?.complete === false
+                ? `Cobertura incompleta${absentClasses?.length ? ` · clases ausentes: ${absentClasses.join(", ")}` : ""}`
+                : "Cobertura no disponible"}</p>
+            {Array.isArray(report.support) && <p>Soporte por clase: {report.support.map(formatFinalCount).join(", ")}</p>}
+            {rejection && <p>Rechazos: {rejectionCount} ({rejectionRate}){typeof rejection.label === "string" ? ` · etiqueta ${rejection.label}` : ""}</p>}
+          </div>
+          <dl className="grid min-w-0 grid-cols-1 gap-1 text-[11px] text-gray-400 sm:grid-cols-2">
+            <div><dt className="inline">Schema del informe:</dt> <dd className="inline">{typeof report.schema_version === "number" ? report.schema_version : "No disponible"}</dd></div>
+            <div><dt className="inline">Schema de procedencia:</dt> <dd className="inline">{typeof provenance?.schema_version === "number" ? provenance.schema_version : "No disponible"}</dd></div>
+            <div><dt className="inline">Split:</dt> <dd className="inline">{provenance?.split || "No disponible"}</dd></div>
+            <div><dt className="inline">Evaluador:</dt> <dd className="inline">{provenance?.evaluator_version || "No disponible"}</dd></div>
+            <div className="break-words"><dt className="inline">Dataset:</dt> <dd className="inline">{provenance?.dataset || "No disponible"}</dd></div>
+            <div className="min-w-0 break-all"><dt className="inline">SHA-256 del checkpoint:</dt> <dd className="inline font-mono">{checkpointHash || "No disponible"}</dd></div>
+          </dl>
+          <p className="text-[11px] text-amber-200">{admittedCompleted
+            ? "La guarda admitió este informe junto con su split par; esto no acredita los parámetros cargados actualmente en runtime."
+            : checkpointMatch === "Coincide"
+              ? "Informe histórico: el SHA-256 coincide con el checkpoint registrado, pero esto no acredita compatibilidad de evaluación ni parámetros cargados actualmente en runtime."
+              : "Informe histórico; NO es aplicable al checkpoint registrado porque la identidad no coincide o no se puede verificar."}</p>
+        </div>
+      ) : (
+        <p className="rounded-lg border border-[#252834] bg-[#111215] p-3 text-xs text-gray-400">No hay un informe completado para este split.</p>
+      )}
+      {admittedCompleted && latestCompleted && latestCompleted.id_evaluation !== admittedCompleted.id_evaluation && (
+        <section aria-label={`Informe histórico más reciente ${label}`} className="rounded-lg border border-[#252834] bg-[#111215] p-3 space-y-2 text-xs text-gray-300">
+          <h4 className="font-semibold text-gray-200">Informe histórico completado #{Number.isSafeInteger(latestCompleted.id_evaluation) ? Number(latestCompleted.id_evaluation) : "No disponible"}</h4>
+          <p>Muestras: {formatFinalCount(latestCompleted.report?.sample_count)}</p>
+          <p>Accuracy: {formatFinalRate(latestCompleted.report?.metrics?.accuracy)} · F1 macro: {formatFinalRate(latestCompleted.report?.metrics?.f1_macro)}</p>
+          <p className="text-[11px] text-amber-200">No pertenece al par admitido y se conserva como historial; su hash no acredita compatibilidad runtime.</p>
+        </section>
+      )}
+    </article>
+  );
 }
 
 export function resolveModelDomain(
@@ -130,8 +404,12 @@ const ENGINE_FAULT_LABELS: Record<string, string> = {
 
 interface CurrentPrediction extends PredictionResponse {
   inferenceModel: string;
+  inferenceModelId: string;
+  modelMismatch: boolean;
   inferenceClasses: string[];
   inferenceDomain: string;
+  inferenceEnsemble: boolean;
+  inferenceRegisteredCheckpointHash: string | null;
   sequence: number;
 }
 
@@ -225,25 +503,30 @@ export default function PredictionView() {
   const [loading, setLoading] = useState<boolean>(false);
   const [result, setResult] = useState<CurrentPrediction | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [latency, setLatency] = useState<string>("No medida");
+  const [latency, setLatency] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [classFilter, setClassFilter] = useState<string>("all");
-  const [modelStatus, setModelStatus] = useState<BackendModelStatus | null>(null);
+  const [modelStatusSnapshot, setModelStatus] = useState<(BackendModelStatus & { requestedDomain: string }) | null>(null);
   const [availableModels, setAvailableModels] = useState<RegisteredModel[]>([]);
-  const [selectedModelId, setSelectedModelId] = useState<string>("");
+  const [selectionState, setSelectionState] = useState({ modelId: "", evaluationDialogOpen: false, evaluationDialogModelId: null as string | null });
+  const selectedModelId = selectionState.modelId;
   const [catalogueError, setCatalogueError] = useState<string | null>(null);
-  const [publicationErrors, setPublicationErrors] = useState<{ model_id?: string; code: string }[]>([]);
+  const [catalogueLoaded, setCatalogueLoaded] = useState(false);
+  const [evaluationCatalogueStatus, setEvaluationCatalogueStatus] = useState<"available" | "unavailable" | "legacy">("legacy");
+  const [evaluationCatalogueErrorCode, setEvaluationCatalogueErrorCode] = useState<string | null>(null);
+  const [publicationErrors, setPublicationErrors] = useState<{ model_id?: string; code: string; reason?: string }[]>([]);
   const [audioStats, setAudioStats] = useState<AudioWaveformStats | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [isDecodingAudio, setIsDecodingAudio] = useState<boolean>(false);
-  const [revealProgress, setRevealProgress] = useState<number>(0);
-  const [isRevealing, setIsRevealing] = useState<boolean>(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const playheadRef = useRef<SVGGElement | null>(null);
   const timeLabelRef = useRef<HTMLSpanElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const evaluationDialogRef = useRef<HTMLDivElement | null>(null);
+  const evaluationDialogCloseRef = useRef<HTMLButtonElement | null>(null);
+  const evaluationDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const inferenceSequence = useRef(0);
 
   const selectedModel = useMemo(() => {
@@ -256,6 +539,44 @@ export default function PredictionView() {
   const selectedDomain = useMemo(() => {
     return resolveModelDomain(selectedModel, selectedModelId);
   }, [selectedModel, selectedModelId]);
+
+  const evaluationDialogVisible = selectionState.evaluationDialogOpen && selectionState.evaluationDialogModelId === selectedModelId;
+  useEffect(() => {
+    if (evaluationDialogVisible) evaluationDialogCloseRef.current?.focus();
+  }, [evaluationDialogVisible]);
+
+  const closeEvaluationDialog = useCallback(() => {
+    setSelectionState((state) => ({ ...state, evaluationDialogOpen: false, evaluationDialogModelId: null }));
+    evaluationDialogTriggerRef.current?.focus();
+  }, []);
+
+  const handleEvaluationDialogKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeEvaluationDialog();
+      return;
+    }
+    if (event.key !== "Tab" || !evaluationDialogRef.current) return;
+    const focusable = Array.from(evaluationDialogRef.current.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    ));
+    if (focusable.length === 0) {
+      event.preventDefault();
+      evaluationDialogRef.current.focus();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && (document.activeElement === first || !evaluationDialogRef.current.contains(document.activeElement))) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && (document.activeElement === last || !evaluationDialogRef.current.contains(document.activeElement))) {
+      event.preventDefault();
+      first.focus();
+    }
+  }, [closeEvaluationDialog]);
+
+  const modelStatus = modelStatusSnapshot?.requestedDomain === selectedDomain ? modelStatusSnapshot : null;
 
   const isEngineModel = useMemo(() => {
     return selectedDomain === "engine_diagnostics";
@@ -279,23 +600,11 @@ export default function PredictionView() {
   const classesCount = currentClasses.length;
 
   const durationSeconds = selectedModel?.duration_seconds;
-  const formattedDuration = durationSeconds != null ? `${durationSeconds.toFixed(1)}s` : "No disponible";
+  const formattedDuration = durationSeconds != null && durationSeconds > 0 ? `${durationSeconds.toFixed(1)}s` : "duración no publicada";
 
   const targetSr = selectedModel?.target_sr;
-  const formattedSr = targetSr != null ? `${(targetSr / 1000).toFixed(0)} kHz` : "No disponible";
-  const formattedSrHz = targetSr != null ? `${targetSr.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")} Hz` : "No disponible";
-
-  const formattedMetric = useMemo(() => {
-    if (selectedModel?.metrics) {
-      if (selectedModel.metrics.f1_macro != null) {
-        return `${(Number(selectedModel.metrics.f1_macro) * 100).toFixed(2)}% F1`;
-      }
-      if (selectedModel.metrics.accuracy != null) {
-        return `${(Number(selectedModel.metrics.accuracy) * 100).toFixed(2)}% Acc`;
-      }
-    }
-    return "No disponible";
-  }, [selectedModel]);
+  const formattedSr = targetSr != null && targetSr > 0 ? `${targetSr / 1000} kHz` : "frecuencia no publicada";
+  const formattedSrHz = targetSr != null && targetSr > 0 ? `${targetSr.toLocaleString("es-CL")} Hz` : "frecuencia no publicada";
 
   const bioModels = useMemo(() => {
     return availableModels.filter((m) => resolveModelDomain(m, m.id) === "AvesChilenas");
@@ -326,31 +635,61 @@ export default function PredictionView() {
       controller = new AbortController();
       try {
         const res = await fetch(`${API_BASE_URL}/api/models`, { signal: controller.signal });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+          let databaseUnavailable = false;
+          try {
+            const failure = await res.clone().json();
+            databaseUnavailable = Array.isArray(failure?.detail?.errors) &&
+              failure.detail.errors.some((item: { code?: unknown }) => item?.code === "database_unavailable");
+          } catch {
+            // Error responses are untrusted; retain only the HTTP status and known code.
+          }
+          throw new Error(`HTTP ${res.status}${databaseUnavailable ? " database_unavailable" : ""}`);
+        }
         const data = await res.json();
         if (request !== generation) return;
         if (!Array.isArray(data.models)) throw new Error("invalid_catalogue");
         setCatalogueError(null);
+        setCatalogueLoaded(true);
         setPublicationErrors(Array.isArray(data.publication_errors) ? data.publication_errors : []);
+        setEvaluationCatalogueStatus(
+          data.evaluation_catalogue_status === "available" || data.evaluation_catalogue_status === "unavailable"
+            ? data.evaluation_catalogue_status
+            : "legacy"
+        );
+        setEvaluationCatalogueErrorCode(
+          data.evaluation_catalogue_error === "evaluation_store_unavailable" || data.evaluation_catalogue_error === "evaluation_records_invalid"
+            ? data.evaluation_catalogue_error
+            : null
+        );
         const models: RegisteredModel[] = data.models;
         const priorCatalogue = previousModels;
         previousModels = models;
         setAvailableModels(models);
-        setSelectedModelId((current) => {
+        setSelectionState((state) => {
+          const current = state.modelId;
           const selectable = models.filter((m) => m.has_weights === true);
-          if (selectable.some((m) => m.id === current)) return current;
+          if (selectable.some((m) => m.id === current)) return state;
           const defaultModel = selectable.find((m) => m.id === data.default_model_id);
           const domain = resolveModelDomain(priorCatalogue.find((m) => m.id === current), current);
           const sameDomain = selectable.filter((m) => resolveModelDomain(m) === domain);
           const replacement = current
             ? sameDomain.find((m) => m.id === defaultModel?.id) || sameDomain[0] || defaultModel || selectable[0]
             : defaultModel || selectable[0];
-          return replacement?.id || "";
+          return {
+            ...state,
+            modelId: replacement?.id || "",
+            evaluationDialogOpen: false,
+            evaluationDialogModelId: null,
+          };
         });
       } catch (err) {
         if (request !== generation) return;
-        const status = err instanceof Error && /^HTTP \d{3}$/.test(err.message) ? ` (${err.message})` : "";
-        setCatalogueError(`No se pudo actualizar el catálogo de modelos${status}. Se conserva el último catálogo disponible; vuelve a esta ventana para reintentar.`);
+        const errorMessage = err instanceof Error ? err.message : "";
+        const statusMatch = errorMessage.match(/^HTTP (\d{3})(?: database_unavailable)?$/);
+        const status = statusMatch ? ` (HTTP ${statusMatch[1]})` : "";
+        const databaseUnavailable = errorMessage.endsWith(" database_unavailable");
+        setCatalogueError(`No se pudo actualizar el catálogo de modelos${status}${databaseUnavailable ? ": la base de datos no está disponible" : ""}. Se conserva el último catálogo disponible; vuelve a esta ventana para reintentar.`);
       }
     }
     const onVisible = () => { if (document.visibilityState === "visible") void fetchModels(); };
@@ -366,6 +705,7 @@ export default function PredictionView() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     async function fetchModelStatus() {
       try {
         const url = selectedDomain
@@ -374,13 +714,17 @@ export default function PredictionView() {
         const res = await fetch(url);
         if (res.ok) {
           const data = (await res.json()) as BackendModelStatus;
-          setModelStatus(data);
+          if (!cancelled) setModelStatus({ ...data, requestedDomain: selectedDomain });
+        } else if (!cancelled) {
+          setModelStatus(null);
         }
       } catch (err) {
+        if (!cancelled) setModelStatus(null);
         console.warn("No se pudo conectar a /api/model-info:", err);
       }
     }
     fetchModelStatus();
+    return () => { cancelled = true; };
   }, [selectedDomain]);
 
   useEffect(() => {
@@ -563,41 +907,6 @@ export default function PredictionView() {
     return ratio * 500;
   }, [currentTime, audioStats]);
 
-  // Animación progresiva de barrido de izquierda a derecha (efecto osciloscopio bioacústico)
-  const triggerRevealAnimation = useCallback(() => {
-    if (!audioStats) return;
-    setIsRevealing(true);
-    setRevealProgress(0);
-
-    const durationMs = 1200; // 1.2 segundos de barrido
-    const startTime = performance.now();
-
-    const animate = (now: number) => {
-      const elapsed = now - startTime;
-      const linear = Math.min(1, elapsed / durationMs);
-      // Easing cúbico para desaceleración suave y estética
-      const eased = 1 - Math.pow(1 - linear, 3);
-      setRevealProgress(eased);
-
-      if (linear < 1) {
-        requestAnimationFrame(animate);
-      } else {
-        setIsRevealing(false);
-        setRevealProgress(1);
-      }
-    };
-
-    requestAnimationFrame(animate);
-  }, [audioStats]);
-
-  useEffect(() => {
-    if (!audioStats) return;
-    const animId = requestAnimationFrame(() => {
-      triggerRevealAnimation();
-    });
-    return () => cancelAnimationFrame(animId);
-  }, [audioStats, triggerRevealAnimation]);
-
   const [history, setHistory] = useState<HistoryItem[]>([]);
 
   const handleFileSelection = useCallback(
@@ -613,8 +922,6 @@ export default function PredictionView() {
       setAudioStats(null);
       setIsPlaying(false);
       setCurrentTime(0);
-      setRevealProgress(0);
-      setIsRevealing(false);
 
       if (!selectedFile) {
         setFile(null);
@@ -624,6 +931,14 @@ export default function PredictionView() {
       if (!selectedFile.name.toLowerCase().endsWith(".wav")) {
         setError("Formato inválido. Por favor selecciona exclusivamente un archivo .wav.");
         setFile(null);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        return;
+      }
+
+      if (selectedFile.size > 100 * 1024 * 1024) {
+        setError("El archivo supera el límite de 100 MiB (104.857.600 bytes). Selecciona un WAV más pequeño.");
+        setFile(null);
+        setIsDecodingAudio(false);
         if (fileInputRef.current) fileInputRef.current.value = "";
         return;
       }
@@ -648,6 +963,11 @@ export default function PredictionView() {
       return;
     }
 
+    if (file.size > 100 * 1024 * 1024) {
+      setError("El archivo supera el límite de 100 MiB (104.857.600 bytes). Selecciona un WAV más pequeño.");
+      return;
+    }
+
     if (!selectedModel) {
       setError("No hay un modelo disponible para ejecutar la inferencia.");
       return;
@@ -658,12 +978,15 @@ export default function PredictionView() {
     }
 
     setLoading(true);
+    setLatency(null);
     setError(null);
     setResult(null);
     const startTime = performance.now();
     const sequence = ++inferenceSequence.current;
     const inferenceClasses = [...(selectedModel?.classes || [])];
     const inferenceModel = selectedModel?.name || selectedModelId;
+    const inferenceModelId = selectedModelId;
+    const inferenceRegisteredCheckpointHash = validCheckpointHash(selectedModel.checkpoint_sha256);
 
     try {
       const formData = new FormData();
@@ -678,19 +1001,41 @@ export default function PredictionView() {
         body: formData,
       });
 
-      const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
-      setLatency(`${elapsed}s`);
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        const detail = data?.detail || `Error HTTP ${response.status}: ${response.statusText}`;
-        throw new Error(detail);
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        // Proxies can return HTML, plain text or an empty body; never expose it.
+        data = null;
       }
 
+      if (!response.ok) {
+        const detail = data?.detail;
+        const messages = (Array.isArray(detail) ? detail : [detail]).map((item) => {
+          if (typeof item === "string") return item;
+          if (item && typeof item === "object") {
+            if (typeof item.message === "string") return item.message;
+            if (typeof item.msg === "string") return item.msg;
+          }
+          return "";
+        }).filter(Boolean);
+        throw new Error(messages.join("; ") || `Error HTTP ${response.status}${response.statusText ? `: ${response.statusText}` : ""}. No se pudo completar la inferencia.`);
+      }
+
+      if (!data || typeof data.filename !== "string" || !data.filename ||
+          typeof data.clase !== "string" || !data.clase ||
+          typeof data.confianza !== "number" || !Number.isFinite(data.confianza) ||
+          data.confianza < 0 || data.confianza > 1 || typeof data.gcp_upload !== "boolean") {
+        throw new Error("Respuesta de inferencia inválida. No se recibió una predicción válida del servidor.");
+      }
+      const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
       const predData = data as PredictionResponse;
       if (sequence !== inferenceSequence.current) return;
-      setResult({ ...predData, inferenceClasses, inferenceModel, inferenceDomain: selectedDomain, sequence });
+      setLatency(`${elapsed}s`);
+      const modelMismatch = predData.modelo_id
+        ? predData.modelo_id !== inferenceModelId
+        : Boolean(predData.modelo && predData.modelo !== inferenceModel && predData.modelo !== inferenceModelId);
+      setResult({ ...predData, inferenceClasses, inferenceModel, inferenceModelId, modelMismatch, inferenceDomain: selectedDomain, inferenceEnsemble: isEnsemble, inferenceRegisteredCheckpointHash, sequence });
 
       const isEngine =
         isEngineModel ||
@@ -698,22 +1043,13 @@ export default function PredictionView() {
 
       // Agregar al inicio del historial de predicciones con badge code y modelo utilizado
       const newItem: HistoryItem = {
-        id: predData.db_id || `prediction-${sequence}`,
+        id: typeof predData.db_id === "number" && Number.isInteger(predData.db_id) && predData.db_id > 0 ? predData.db_id : null,
         filename: predData.filename,
         timestamp: new Date().toLocaleString(),
         clase: predData.clase,
-        badgeCode: isEngine
-          ? "ENG-" + String(predData.db_id).padStart(3, "0")
-          : "AVE-" + String(predData.db_id).padStart(3, "0"),
+
         confianza: predData.confianza,
-        modelo:
-          predData.modelo ||
-          selectedModel?.name ||
-          (isEngine
-            ? "Super-Ensamble Acústico de Motores"
-            : predData.is_fallback
-            ? "AudioCNN Fallback"
-            : "Super-Ensamble Tri-Modelo Bioacústico"),
+        modelo: predData.modelo || "No informado por la API",
         domain: isEngine ? "engine_diagnostics" : "AvesChilenas",
       };
 
@@ -765,7 +1101,12 @@ export default function PredictionView() {
             <select
               id="model-select"
               value={selectedModelId}
-              onChange={(e) => setSelectedModelId(e.target.value)}
+              onChange={(e) => setSelectionState((state) => ({
+                ...state,
+                modelId: e.target.value,
+                evaluationDialogOpen: false,
+                evaluationDialogModelId: null,
+              }))}
               className="bg-[#101114] border border-[#2d303b] text-white text-xs font-semibold rounded px-2.5 py-1 focus:outline-none focus:border-blue-500 cursor-pointer min-w-0 w-full sm:w-auto max-w-[240px] sm:max-w-[340px] truncate"
             >
               {availableModels.length > 0 ? (
@@ -799,10 +1140,9 @@ export default function PredictionView() {
           {/* Indicador de Latencia / Estado a la derecha */}
           <div
             className="flex items-center gap-2 px-2.5 py-1.5 rounded-full bg-black/40 border border-green-800/40 text-green-400 text-xs font-mono shrink-0 whitespace-nowrap"
-            title={`Tiempo de la última solicitud hasta respuesta HTTP: ${latency}; no mide forward ni pantalla`}
+            title="Tiempo total observado por el navegador, incluida transferencia y lectura de respuesta"
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0" />
-            <span>Última solicitud: {latency}</span>
+            <span>Tiempo total de solicitud: {latency ?? "no disponible"}</span>
           </div>
         </div>
       </div>
@@ -815,7 +1155,11 @@ export default function PredictionView() {
       )}
       {publicationErrors.length > 0 && (
         <div role="status" aria-label="Publicación de modelos" className="text-xs text-amber-300">
-          <p>Algunos modelos no pudieron publicarse. Los modelos disponibles siguen siendo seleccionables.</p>
+          <p>{publicationErrors.some((issue) => issue.code === "database_unavailable")
+            ? "La base de datos no está disponible; no se pudo determinar qué modelos pueden publicarse."
+            : availableModels.length === 0
+              ? "No hay modelos publicados disponibles; no hay modelos seleccionables hasta resolver los errores indicados."
+              : "Algunos modelos no pudieron publicarse. Los modelos publicados siguen siendo seleccionables."}</p>
           <ul>
             {publicationErrors.map((issue, index) => {
               const labels: Record<string, string> = {
@@ -825,12 +1169,26 @@ export default function PredictionView() {
                 checkpoint_unreadable: "archivo de pesos ilegible",
                 checkpoint_outside_root: "archivo de pesos fuera de la ubicación permitida",
                 database_unavailable: "base de datos no disponible",
+                standard_evaluation_invalid: "evaluación estándar inválida",
+              };
+              const reasons: Record<string, string> = {
+                runtime_configuration_incompatible: "runtime del predictor incompatible con los informes; revisar configuración y solicitar reevaluación explícita",
+                evaluation_pair_incomplete: "falta un par de informes val/test completados; completar la evaluación estándar antes de publicar",
+                checkpoint_invalid: "checkpoint inválido o distinto de la identidad registrada; revisar el artefacto y su hash",
+                pair_provenance_invalid: "procedencia val/test incoherente; verificar que ambos informes pertenezcan al mismo par admitido",
+                model_state_incomplete: "evaluación estándar no finalizada; completarla antes de publicar",
               };
               const id = issue.model_id && /^[a-zA-Z0-9_-]+$/.test(issue.model_id) ? issue.model_id : "Modelo sin identificador";
-              return <li key={index}>{id}: {labels[issue.code] || "error de publicación"}</li>;
+              const reason = issue.reason ? reasons[issue.reason] : undefined;
+              return <li key={index}>{id}: {reason || labels[issue.code] || "error de publicación"}</li>;
             })}
           </ul>
         </div>
+      )}
+      {catalogueLoaded && !catalogueError && availableModels.length === 0 && publicationErrors.length === 0 && (
+        <p role="status" aria-label="Disponibilidad de modelos" className="text-xs text-amber-300">
+          La consulta fue correcta, pero no hay modelos publicados ni modelos seleccionables.
+        </p>
       )}
 
       {/* Banner de Especificaciones y Contrato Acústico del Modelo */}
@@ -877,7 +1235,7 @@ export default function PredictionView() {
               </span>
             </div>
             <p className="text-[11px] text-gray-300 mt-0.5">
-              {`Contrato declarado: Audios de ${formattedDuration} a ${formattedSrHz} · ${selectedModel?.name || "No disponible"}`}
+              {`Contrato publicado: Audios de ${formattedDuration} a ${formattedSrHz} · ${selectedModel?.name || "Sin modelo disponible"}`}
             </p>
           </div>
         </div>
@@ -885,9 +1243,6 @@ export default function PredictionView() {
         <div className="flex items-center gap-2 font-mono text-[11px] shrink-0 self-end sm:self-auto">
           <span className="bg-[#111215] px-2.5 py-1 rounded border border-[#23252e]">
             {formattedDuration} @ {formattedSr}
-          </span>
-          <span className="bg-[#111215] px-2.5 py-1 rounded border border-[#23252e] text-emerald-400 font-semibold">
-            Métrica declarada: {formattedMetric}
           </span>
         </div>
       </div>
@@ -1051,15 +1406,6 @@ export default function PredictionView() {
               </span>
             </div>
 
-            <div className="rounded-lg p-3.5 border bg-[#111215] border-[#252834]">
-              <span className="text-[10px] text-gray-500 block uppercase font-mono">Rendimiento / Métrica</span>
-              <span className="text-xs font-bold text-emerald-400 font-mono mt-1 block">
-                {formattedMetric}
-              </span>
-              <span className="text-[10px] text-gray-400 mt-1 block">
-                Métrica declarada en catálogo; conjunto de evaluación no comprobado
-              </span>
-            </div>
           </div>
         </div>
       )}
@@ -1070,10 +1416,10 @@ export default function PredictionView() {
         <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-gray-400 font-medium">Modelo seleccionado en catálogo</span>
+              <span className="text-xs text-gray-400 font-medium">Modelo seleccionado</span>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-950/60 border border-green-800/60 text-green-400 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                 {!selectedModel ? "Sin modelo disponible" : isEnsemble ? "Ensamble seleccionado; composición no comprobada" : "Modelo seleccionado"}
+                {selectedModel ? "Modelo seleccionado" : "Sin modelo disponible"}
               </span>
             </div>
             <div className="flex items-start justify-between">
@@ -1082,7 +1428,7 @@ export default function PredictionView() {
                   {selectedModel?.name || "Sin modelo disponible"}
                 </h2>
                 <p className="text-[11px] text-gray-400 mt-0.5">
-                  {selectedModel?.description || "Descripción no declarada"}
+                  {selectedModel?.description || "Descripción no publicada"}
                 </p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
@@ -1090,51 +1436,156 @@ export default function PredictionView() {
                   Última respuesta: {result?.detalles?.device || "Dispositivo no informado"}
                 </span>
                 <span className="text-xs text-blue-400 font-mono bg-blue-950/50 border border-blue-800/50 px-2 py-0.5 rounded">
-                  Datos declarados
+                  {Number.isInteger(selectedModel?.version) ? `Versión v${selectedModel?.version}` : "Versión no publicada"}
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 mt-5 pt-4 border-t border-[#23252e]/70 text-xs">
+          <section aria-label="Identidad de checkpoints del modelo seleccionado" className="mt-4 border-t border-[#23252e]/70 pt-3 space-y-2">
+            <h3 className="text-xs font-semibold text-gray-200">Checkpoint registrado y cargado</h3>
+            <dl className="grid min-w-0 grid-cols-1 gap-1 text-[11px] text-gray-400 sm:grid-cols-2">
+              <div className="min-w-0 break-all"><dt className="inline">Checkpoint registrado:</dt> <dd className="inline font-mono">{validCheckpointHash(selectedModel?.checkpoint_sha256) || "No disponible"}</dd></div>
+              <div className="min-w-0 break-all"><dt className="inline">Checkpoint cargado por la instancia:</dt> <dd className="inline font-mono">{validCheckpointHash(selectedModel?.loaded_checkpoint_sha256) || "No disponible"}</dd></div>
+              <div><dt className="inline">Correspondencia instancia / registro:</dt> <dd className="inline">{registeredCheckpointMatch(selectedModel?.checkpoint_sha256, selectedModel?.loaded_checkpoint_sha256)}</dd></div>
+            </dl>
+            <p className="text-[11px] text-gray-400">La procedencia se registra al cargar; no acredita continuamente los parámetros en memoria.</p>
+          </section>
+          <section aria-label="Evaluaciones finales del modelo seleccionado" className="mt-5 border-t border-[#23252e]/70 pt-4 space-y-3">
             <div>
-              <span className="text-gray-400 block text-[11px]">Accuracy declarada</span>
-              <span className="text-sm font-bold text-white font-mono mt-0.5 block">
-                {selectedModel?.metrics?.accuracy != null
-                  ? `${(Number(selectedModel.metrics.accuracy) * 100).toFixed(2)}%`
-                  : "No disponible"}
-              </span>
+              <h3 className="text-xs font-semibold text-gray-200">Evaluación final · checkpoint registrado</h3>
+              <p className="mt-1 text-[11px] text-gray-400">La comparación identifica el archivo registrado; no acredita los pesos cargados actualmente en runtime.</p>
             </div>
-            <div>
-              <span className="text-gray-400 block text-[11px]">
-                Macro F1 declarada
-              </span>
-              <span className="text-sm font-bold text-green-400 font-mono mt-0.5 block">
-                {selectedModel?.metrics?.f1_macro != null
-                  ? `${(Number(selectedModel.metrics.f1_macro) * 100).toFixed(2)}%`
-                  : "No disponible"}
-              </span>
+            {evaluationCatalogueStatus === "unavailable" ? (
+              <p role="status" className="text-xs text-amber-200">
+                Catálogo de evaluaciones no disponible: {evaluationCatalogueErrorCode === "evaluation_records_invalid"
+                  ? "hay registros que no se pueden mostrar."
+                  : evaluationCatalogueErrorCode === "evaluation_store_unavailable"
+                    ? "el almacenamiento no está disponible."
+                    : "no se pudo consultar."}
+              </p>
+            ) : evaluationCatalogueStatus === "legacy" ? (
+              <p role="status" className="text-xs text-gray-300">Esta respuesta antigua del catálogo no informa el estado de las evaluaciones finales.</p>
+            ) : !selectedModel ? (
+              <p role="status" className="text-xs text-gray-300">Selecciona un modelo para consultar sus informes finales.</p>
+            ) : !selectedModel.evaluations?.val?.latest_attempt && !selectedModel.evaluations?.val?.latest_completed &&
+              !selectedModel.evaluations?.test?.latest_attempt && !selectedModel.evaluations?.test?.latest_completed ? (
+              <p role="status" className="text-xs text-gray-300">Catálogo de evaluaciones disponible; no hay informes finales para este modelo.</p>
+            ) : null}
+            <div className="overflow-x-auto">
+              <table aria-label="Resumen de evaluaciones finales" className="w-full min-w-[34rem] text-left text-xs">
+                <thead className="text-gray-400">
+                  <tr>
+                    <th scope="col" className="py-1.5 pr-3">Split</th>
+                    <th scope="col" className="py-1.5 pr-3">Accuracy</th>
+                    <th scope="col" className="py-1.5 pr-3">F1 macro</th>
+                    <th scope="col" className="py-1.5">Correspondencia</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {([ ["Validación", selectedModel?.evaluations?.val], ["Test", selectedModel?.evaluations?.test] ] as const).map(([label, candidateSplit]) => {
+                    const split = evaluationCatalogueStatus === "available" ? candidateSplit : null;
+                    const admittedCompleted = split?.admitted_completed;
+                    const completedReport = admittedCompleted || split?.latest_completed;
+                    const report = completedReport?.report;
+                    const match = admittedCompleted
+                      ? "Par admitido"
+                      : evaluationCatalogueStatus === "available"
+                        ? registeredCheckpointMatch(selectedModel?.checkpoint_sha256, split?.latest_completed?.provenance?.checkpoint_sha256)
+                        : "No verificable";
+                    const attemptLabel = evaluationAttemptLabel(split?.latest_attempt);
+                    return (
+                      <tr key={label} className="border-t border-[#252834] align-top">
+                        <th scope="row" className="py-2 pr-3 font-medium text-gray-200">{label}</th>
+                        <td className="py-2 pr-3 font-mono text-white">{formatFinalRate(report?.metrics?.accuracy)}</td>
+                        <td className="py-2 pr-3 font-mono text-white">{formatFinalRate(report?.metrics?.f1_macro)}</td>
+                        <td className="py-2 text-gray-200">
+                          <span>{match}</span>
+                          {!split?.latest_completed && attemptLabel && <span className="block text-[11px] text-gray-400">Sin informe completado · último intento: {attemptLabel}</span>}
+                          {split?.latest_completed && !admittedCompleted && (match === "Coincide"
+                            ? <span className="block max-w-xs text-[11px] text-amber-200">Solo histórico; coincidir en SHA-256 no acredita compatibilidad de configuración ni runtime.</span>
+                            : <span className="block max-w-xs text-[11px] text-amber-200">Informe histórico; no es aplicable al checkpoint registrado.</span>)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-            <div>
-              <span className="text-gray-400 block text-[11px]">
-                Precision macro declarada
-              </span>
-              <span className="text-sm font-bold text-blue-400 font-mono mt-0.5 block">
-                {selectedModel?.metrics?.precision_macro != null
-                  ? `${(Number(selectedModel.metrics.precision_macro) * 100).toFixed(2)}%`
-                  : "No disponible"}
-              </span>
-            </div>
-            <div className="col-span-3 flex items-center justify-between pt-2 border-t border-[#23252e]/40 text-[11px] text-gray-400">
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-[#23252e]/40 text-[11px] text-gray-400">
               <span className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                {`Contrato declarado ${formattedDuration} @ ${formattedSr}; selección no implica activación`}
+                {`Contrato publicado: ${formattedDuration} @ ${formattedSr}`}
               </span>
               <span className="text-gray-500 font-mono">
                 {classesCount} clases declaradas
               </span>
             </div>
-          </div>
+            <button
+              type="button"
+              disabled={!selectedModel}
+              onClick={(event) => {
+                evaluationDialogTriggerRef.current = event.currentTarget;
+                setSelectionState((state) => ({
+                  ...state,
+                  evaluationDialogModelId: selectedModelId,
+                  evaluationDialogOpen: true,
+                }));
+              }}
+              className="rounded-lg border border-blue-700 bg-blue-950/50 px-3 py-2 text-xs font-semibold text-blue-200 hover:bg-blue-900/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-300 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Ver detalle de evaluación
+            </button>
+          </section>
+          {evaluationDialogVisible && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 sm:p-6">
+              <div
+                ref={evaluationDialogRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="evaluation-dialog-title"
+                tabIndex={-1}
+                onKeyDown={handleEvaluationDialogKeyDown}
+                className="max-h-[90vh] w-full max-w-5xl overflow-y-auto overflow-x-hidden rounded-xl border border-[#343744] bg-[#16171b] p-4 shadow-2xl sm:p-6"
+              >
+                <header className="mb-4 flex items-start justify-between gap-4 border-b border-[#292c36] pb-3">
+                  <div className="min-w-0">
+                    <h2 id="evaluation-dialog-title" className="text-base font-bold text-white">Detalle de evaluación final</h2>
+                    <p className="mt-1 break-words text-xs text-gray-300">{selectedModel?.name || "Modelo seleccionado"} · checkpoint registrado: {selectedModel?.checkpoint_sha256 && /^[a-f0-9]{64}$/i.test(selectedModel.checkpoint_sha256) ? selectedModel.checkpoint_sha256 : "SHA-256 no verificable"}</p>
+                    <p className="mt-1 text-[11px] text-gray-400">Los informes no acreditan qué parámetros están cargados actualmente en runtime.</p>
+                  </div>
+                  <button
+                    ref={evaluationDialogCloseRef}
+                    type="button"
+                    onClick={() => closeEvaluationDialog()}
+                    className="shrink-0 rounded-md border border-[#414451] px-3 py-2 text-xs text-gray-200 hover:bg-[#252833] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-300"
+                  >
+                    Cerrar detalle
+                  </button>
+                </header>
+                {evaluationCatalogueStatus === "unavailable" ? (
+                  <p role="status" className="mb-4 text-xs text-amber-200">Catálogo de evaluaciones no disponible: {evaluationCatalogueErrorCode === "evaluation_records_invalid" ? "hay registros que no se pueden mostrar." : evaluationCatalogueErrorCode === "evaluation_store_unavailable" ? "el almacenamiento no está disponible." : "no se pudo consultar."}</p>
+                ) : evaluationCatalogueStatus === "legacy" ? (
+                  <p role="status" className="mb-4 text-xs text-gray-300">Esta respuesta antigua del catálogo no informa el estado de las evaluaciones finales.</p>
+                ) : !selectedModel?.evaluations?.val?.latest_attempt && !selectedModel?.evaluations?.val?.latest_completed &&
+                  !selectedModel?.evaluations?.test?.latest_attempt && !selectedModel?.evaluations?.test?.latest_completed ? (
+                  <p role="status" className="mb-4 text-xs text-gray-300">Catálogo de evaluaciones disponible; no hay informes finales para este modelo.</p>
+                ) : null}
+                <div className="grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-2">
+                  <EvaluationSplitCard
+                    label="Validación (val)"
+                    split={evaluationCatalogueStatus === "available" ? selectedModel?.evaluations?.val : null}
+                    modelCheckpointHash={selectedModel?.checkpoint_sha256}
+                  />
+                  <EvaluationSplitCard
+                    label="Test (test)"
+                    split={evaluationCatalogueStatus === "available" ? selectedModel?.evaluations?.test : null}
+                    modelCheckpointHash={selectedModel?.checkpoint_sha256}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Tarjeta: Cargar Audio */}
@@ -1209,11 +1660,12 @@ export default function PredictionView() {
             {/* Header del Oscilograma con Audio y Metadatos Reales */}
             <div className="flex items-center justify-between mb-2.5">
               <div>
-                <span className="text-xs text-gray-300 font-medium block">Visualización de señal acústica</span>
+                <span className="text-xs text-gray-300 font-medium block">Audio original · canal 1 (mono/estéreo)</span>
+                <span className="text-[10px] text-gray-500 block">Oscilograma, RMS y pico calculados en el navegador; no representan el audio preprocesado por el modelo.</span>
                 <span className="text-[10px] text-gray-500 mt-0.5 block">
                   {audioStats
                     ? `${(audioStats.sampleRate / 1000).toFixed(1)} kHz · ${audioStats.channels === 1 ? "Mono" : "Estéreo"} · ${audioStats.duration.toFixed(2)}s`
-                    : "Oscilograma en tiempo real"}
+                    : "Sin audio decodificado"}
                 </span>
               </div>
 
@@ -1285,10 +1737,6 @@ export default function PredictionView() {
                         <stop offset="50%" stopColor="#2563eb" stopOpacity="0.16" />
                         <stop offset="100%" stopColor="#1d4ed8" stopOpacity="0.48" />
                       </linearGradient>
-                      {/* Máscara de recorte animada para el barrido progresivo */}
-                      <clipPath id="waveformRevealClip">
-                        <rect x="0" y="0" width={revealProgress * 500} height="120" />
-                      </clipPath>
                     </defs>
 
                     {/* Líneas guía de amplitud */}
@@ -1297,7 +1745,7 @@ export default function PredictionView() {
                     <line x1="0" y1="100" x2="500" y2="100" stroke="#1c1f2b" strokeWidth="1" strokeDasharray="2 4" />
 
                     {/* Grupo de forma de onda recortado progresivamente */}
-                    <g clipPath="url(#waveformRevealClip)">
+                    <g>
                       {/* Polígono relleno de la envolvente simétrica */}
                       <path d={waveformPaths.fillD} fill="url(#waveformGradient)" />
 
@@ -1306,48 +1754,8 @@ export default function PredictionView() {
                       <path d={waveformPaths.bottomStrokeD} fill="none" stroke="#3b82f6" strokeWidth="1.2" />
                     </g>
 
-                    {/* Haz láser de escaneo en la vanguardia del barrido */}
-                    {isRevealing && (
-                      <g>
-                        {/* Resplandor exterior del haz */}
-                        <line
-                          x1={revealProgress * 500}
-                          y1="0"
-                          x2={revealProgress * 500}
-                          y2="120"
-                          stroke="#38bdf8"
-                          strokeWidth="4"
-                          strokeOpacity="0.35"
-                        />
-                        {/* Línea central del láser */}
-                        <line
-                          x1={revealProgress * 500}
-                          y1="0"
-                          x2={revealProgress * 500}
-                          y2="120"
-                          stroke="#e0f2fe"
-                          strokeWidth="1.5"
-                          strokeOpacity="0.95"
-                        />
-                        {/* Puntos luminosos en el frente de onda */}
-                        <circle
-                          cx={revealProgress * 500}
-                          cy="60"
-                          r="4"
-                          fill="#38bdf8"
-                          fillOpacity="0.8"
-                        />
-                        <circle
-                          cx={revealProgress * 500}
-                          cy="60"
-                          r="2"
-                          fill="#ffffff"
-                        />
-                      </g>
-                    )}
-
                     {/* Cabezal de reproducción (Playhead) interactivo con animación suave */}
-                    {audioUrl && !isRevealing && (
+                    {audioUrl && (
                       <g ref={playheadRef} transform={`translate(${playheadX}, 0)`}>
                         <line
                           x1={0}
@@ -1403,29 +1811,9 @@ export default function PredictionView() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {isRevealing ? (
-                    <span className="text-cyan-400 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
-                      Escaneando: {Math.round(revealProgress * 100)}%
-                    </span>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        onClick={triggerRevealAnimation}
-                        className="text-[9px] text-gray-500 hover:text-cyan-400 transition-colors flex items-center gap-1 cursor-pointer"
-                        title="Repetir animación de escaneo"
-                      >
-                        <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                        Re-escanear
-                      </button>
-                      <span ref={timeLabelRef} className="text-gray-500">
-                        {currentTime > 0 ? `${currentTime.toFixed(2)}s / ${audioStats.duration.toFixed(2)}s` : `${audioStats.duration.toFixed(2)}s`}
-                      </span>
-                    </>
-                  )}
+                  <span ref={timeLabelRef} className="text-gray-500">
+                    {currentTime.toFixed(2)}s / {audioStats.duration.toFixed(2)}s
+                  </span>
                 </div>
               </div>
             )}
@@ -1458,7 +1846,7 @@ export default function PredictionView() {
         {/* Tarjeta: Resultado */}
         <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 flex flex-col justify-between">
           <span className="text-xs text-gray-400 font-medium block mb-2">
-            {isEnsemble ? "Veredicto del Super-Ensamble" : "Veredicto del Modelo"}
+            {result?.inferenceEnsemble ? "Veredicto del Super-Ensamble" : "Veredicto del Modelo"}
           </span>
 
           {result ? (
@@ -1492,9 +1880,33 @@ export default function PredictionView() {
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="text-gray-400">Modelo ejecutado:</span>
                   <span className="text-blue-400 font-mono font-semibold">
-                    {result.modelo || result.inferenceModel}
+                    {result.modelo || result.modelo_id || "No informado por la API"}
+                    {result.modelo && result.modelo_id && ` (${result.modelo_id})`}
                   </span>
                 </div>
+                {result.modelMismatch && (
+                  <p role="alert" className="text-xs text-amber-300">
+                    El modelo ejecutado difiere del modelo solicitado: {result.inferenceModel} ({result.inferenceModelId}). El resultado corresponde al modelo informado por la API.
+                  </p>
+                )}
+                <section aria-label="Identidad del checkpoint del resultado" className="border-t border-[#23252e]/70 pt-2 space-y-1">
+                  <h3 className="text-[11px] font-semibold text-gray-300">Identidad del checkpoint del resultado</h3>
+                  <dl className="grid min-w-0 grid-cols-1 gap-1 text-[10px] text-gray-400">
+                    <div className="min-w-0 break-all"><dt className="inline">Checkpoint registrado al solicitar:</dt> <dd className="inline font-mono">{result.inferenceRegisteredCheckpointHash || "No disponible"}</dd></div>
+                    <div className="min-w-0 break-all"><dt className="inline">Checkpoint cargado informado por el predictor:</dt> <dd className="inline font-mono">{validCheckpointHash(result.detalles?.loaded_checkpoint_sha256) || "No disponible"}</dd></div>
+                    <div><dt className="inline">Correspondencia con el registro solicitado:</dt> <dd className="inline">{registeredCheckpointMatch(result.inferenceRegisteredCheckpointHash, result.detalles?.loaded_checkpoint_sha256)}</dd></div>
+                  </dl>
+                  <p className="text-[10px] text-gray-500">El hash describe la procedencia informada al cargar; no acredita continuamente los parámetros en memoria.</p>
+                </section>
+                {result.inferenceEnsemble && result.modelos_activos && result.modelos_activos.length > 0 && (
+                  <div className="flex flex-wrap gap-1 pt-1 border-t border-[#23252e]/70">
+                    {result.modelos_activos.map((model, index) => (
+                      <span key={index} className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-emerald-950/60 text-emerald-300 border border-emerald-800/50">
+                        ✓ {model}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 {result.modelos_ejecutados && result.modelos_ejecutados.length > 0 && (
                   <div className="flex flex-wrap gap-1 pt-1 border-t border-[#23252e]/70">
                     {result.modelos_ejecutados.map((m, idx) => (
@@ -1521,7 +1933,7 @@ export default function PredictionView() {
               {/* Nivel de confianza */}
               <div>
                 <div className="flex justify-between items-center text-xs text-gray-300 mb-1">
-                  <span>Confianza calibrada:</span>
+                  <span>Puntuación del modelo (sin calibración acreditada):</span>
                   <span className="font-mono font-bold text-white">
                     {(result.confianza * 100).toFixed(2)}%
                   </span>
@@ -1575,6 +1987,7 @@ export default function PredictionView() {
         <h2 className="text-xs text-gray-300 font-semibold">Predicciones de esta vista</h2>
         <p className="text-xs text-gray-500">Resultados de esta vista; al cambiar de sección se vacía esta lista.</p>
 
+
         {/* Filtros de Búsqueda y Clases */}
         <div className="flex flex-col sm:flex-row gap-2.5">
           <div className="relative flex-1">
@@ -1617,9 +2030,10 @@ export default function PredictionView() {
         {/* Lista de Registros */}
         <div className="space-y-2">
           {history.length === 0 && <p className="text-xs text-gray-500">Todavía no hay predicciones en esta vista.</p>}
+
           {filteredHistory.map((item) => (
             <div
-              key={item.id}
+              key={`${item.timestamp}-${item.filename}-${history.indexOf(item)}`}
               className="bg-[#111215] border border-[#1f2128] hover:border-[#2d303b] transition-colors rounded-lg px-4 py-3 flex items-center justify-between"
             >
               <div>
@@ -1639,7 +2053,7 @@ export default function PredictionView() {
 
               <div className="flex items-center gap-2">
                 <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-[#1e2027] border border-[#2d303b] text-gray-300">
-                  {item.badgeCode || "PRED"}
+                  {item.id !== null ? `ID de predicción: ${item.id}` : "ID de predicción no disponible"}
                 </span>
                 <span className="text-xs font-bold text-green-400 font-mono">
                   {(item.confianza * 100).toFixed(1)}%

@@ -1,11 +1,44 @@
--- Ejecutar como fama_migrador en fama_pruebas después de 0003_autonomy.
+-- Ejecutar como fama_migrador en fama_pruebas después de 0004_integration.
 DO $fama$
 DECLARE
     tablas text[] := ARRAY[
-        'acceso_prediccion', 'asignacion_dataset', 'audio', 'conjunto_datos',
-        'control_cuentas', 'cuota_acceso', 'evento_seguridad', 'feedback_sync',
-        'metrica_entrenamiento', 'modelo', 'prediccion', 'recuperacion_cuenta',
-        'retroalimentacion', 'sesion_web', 'solicitud_dataset', 'usuario'
+        'acceso_prediccion',
+        'asignacion_dataset',
+        'audio',
+        'conjunto_datos',
+        'control_cuentas',
+        'cuota_acceso',
+        'dataset_export',
+        'dataset_export_session',
+        'dataset_import',
+        'dataset_import_chunk',
+        'dataset_import_chunk_activity',
+        'dataset_import_chunk_schema',
+        'dataset_import_class',
+        'dataset_import_file',
+        'dataset_import_issue',
+        'dataset_import_job',
+        'dataset_import_job_gate',
+        'dataset_import_metadata_backfill',
+        'dataset_import_receipt',
+        'dataset_import_receipt_schema',
+        'dataset_import_summary',
+        'evento_seguridad',
+        'feedback_sync',
+        'imported_dataset',
+        'imported_dataset_member',
+        'imported_dataset_revision',
+        'imported_dataset_revision_object',
+        'imported_dataset_summary',
+        'metrica_entrenamiento',
+        'model_evaluation',
+        'modelo',
+        'prediccion',
+        'recuperacion_cuenta',
+        'retroalimentacion',
+        'sesion_web',
+        'solicitud_dataset',
+        'usuario'
     ];
     revisiones text[];
     tabla text;
@@ -17,12 +50,12 @@ BEGIN
     END IF;
 
     IF to_regclass('public.alembic_version') IS NULL THEN
-        RAISE EXCEPTION 'Se requiere aplicar primero la revision 0003_autonomy'
+        RAISE EXCEPTION 'Se requiere aplicar primero la revision 0004_integration'
             USING ERRCODE = '55000';
     END IF;
     SELECT array_agg(version_num::text) INTO revisiones FROM public.alembic_version;
-    IF revisiones IS DISTINCT FROM ARRAY['0003_autonomy']::text[] THEN
-        RAISE EXCEPTION 'Se requiere la revision 0003_autonomy'
+    IF revisiones IS DISTINCT FROM ARRAY['0004_integration']::text[] THEN
+        RAISE EXCEPTION 'Se requiere la revision 0004_integration'
             USING ERRCODE = '55000';
     END IF;
 

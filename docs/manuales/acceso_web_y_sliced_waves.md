@@ -1,6 +1,6 @@
 # Acceso web y SlicedWaves
 
-**19 de octubre de 2026.** [ADR 0039](../adr/0039-acceso-web-del-mismo-origen-y-fondo-aislado.md). Interfaz conectada a los contratos de [sesiones](sesiones_web_y_acceso_administrado.md), [cuentas](gestion_cuentas_y_recuperacion.md) y [cuotas](limites_login_y_recuperacion.md); validación automatizada sin servidor ni cuentas reales.
+**19 de octubre de 2026.** [ADR 0057](../adr/0057-acceso-web-del-mismo-origen-y-fondo-aislado.md). Interfaz conectada a los contratos de [sesiones](sesiones_web_y_acceso_administrado.md), [cuentas](gestion_cuentas_y_recuperacion.md) y [cuotas](limites_login_y_recuperacion.md); validación automatizada sin servidor ni cuentas reales.
 
 ## Pantallas y comportamiento
 

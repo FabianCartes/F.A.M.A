@@ -15,6 +15,7 @@ router = APIRouter(prefix="/api/training/datasets/{dataset_name}/partitions", ta
 class PartitionPolicy(BaseModel):
     model_config = ConfigDict(extra="forbid")
     validation_percent: int = Field(default=20, ge=10, le=40, strict=True)
+    test_percent: int = Field(default=20, ge=10, le=40, strict=True)
     seed: int = Field(default=42, ge=0, le=2**31 - 1, strict=True)
 
 
@@ -53,13 +54,13 @@ def list_partitions(store: DatasetPartitions = Depends(partitions)):
 
 @router.post("/preview")
 def preview_partitions(policy: PartitionPolicy, store: DatasetPartitions = Depends(partitions)):
-    return run(lambda: store.preview(policy.validation_percent, policy.seed))
+    return run(lambda: store.preview(policy.validation_percent, policy.seed, policy.test_percent))
 
 
 @router.post("")
 def save_partitions(policy: SavePartition, store: DatasetPartitions = Depends(partitions), access: ResourceAccess = Depends(resource_access)):
     return run(lambda: store.save(policy.validation_percent, policy.seed, policy.preview_version,
-                                 policy.acknowledge_warnings, access.user.id))
+                                 policy.acknowledge_warnings, access.user.id, policy.test_percent))
 
 
 @router.get("/{version}")

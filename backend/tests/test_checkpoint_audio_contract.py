@@ -247,3 +247,36 @@ def test_training_persists_resolved_partial_audio_configuration(persistence_env)
         "n_fft": 512, "hop_length": 512, "f_min": 50.0, "f_max": 8000.0,
     }
     assert payload["preprocessing"]["window_selection"] == "max_rms"
+
+
+@pytest.mark.parametrize('invalid', [
+    {'audio_config': {}},
+    {'preprocessing': {'version': True, 'frontend': 'gpu_mel_zscore', 'window_selection': 'max_rms'}},
+])
+def test_lazy_acoustic_rejection_preserves_identity_and_can_retry(tmp_path, monkeypatch, invalid):
+    import hashlib
+
+    monkeypatch.setattr(timm, 'create_model', lambda *args, **kwargs: SpectralClassifier())
+    config = {'target_sr': 8000, 'duration_seconds': 1.0, 'n_mels': 32, 'n_fft': 256,
+              'hop_length': 64, 'f_min': 0.0, 'f_max': 4000.0}
+    payload = {'architecture': 'fixture', 'classes': ['Baja', 'Alta'], 'audio_config': config,
+               'state_dict': BioacousticModel('fixture', num_classes=2, pretrained=False).state_dict()}
+    checkpoint = tmp_path / 'retry.pt'
+    audio = tmp_path / 'tone.wav'
+    sf.write(audio, 0.3 * np.sin(2 * np.pi * 440 * np.arange(8000) / 8000), 8000)
+    torch.save(payload, checkpoint)
+    original = checkpoint.read_bytes()
+    predictor = TrainedModelPredictor(checkpoint, lazy_load=True)
+    torch.save({**payload, **invalid}, checkpoint)
+    before = checkpoint.read_bytes(), audio.read_bytes()
+    with pytest.raises(ModelWeightsError):
+        predictor.predict(audio)
+    assert (checkpoint.read_bytes(), audio.read_bytes()) == before
+    assert predictor.metadata.loaded_checkpoint_sha256 is None
+    assert predictor.metadata.target_sr == 8000
+    checkpoint.write_bytes(original)
+    result = predictor.predict(audio)
+    expected = hashlib.sha256(original).hexdigest()
+    assert result.detalles['status'] == 'classified'
+    assert result.detalles['loaded_checkpoint_sha256'] == expected
+    assert predictor.metadata.loaded_checkpoint_sha256 == expected

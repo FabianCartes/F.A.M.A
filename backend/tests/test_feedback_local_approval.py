@@ -87,6 +87,36 @@ def test_approval_publishes_readable_metadata_and_private_artifacts(local_workfl
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
+@pytest.mark.parametrize("source_id", ["origin001", "missing"])
+def test_approval_pins_canonical_curation_source_and_replays_without_erasing_it(local_workflow, source_id):
+    w = local_workflow
+    dataset = w.service.raw_data_dir / "AvesChilenas"
+    (dataset / "rayadito/original.wav").write_bytes(w.audio + b"original")
+    metadata = dataset / "metadata.csv"
+    metadata.write_text("nombre_archivo,clase,file_path,file_stage,xc_id,recordist\n"
+                        "original.wav,Rayadito,rayadito/original.wav,raw,origin001,recordist001\n")
+    before = metadata.read_bytes()
+    if source_id == "missing":
+        with pytest.raises(HTTPException) as error:
+            w.service.approve_feedback(w.db, 1, curation_source_id=source_id)
+        assert error.value.status_code == 422
+        assert metadata.read_bytes() == before
+        assert not (dataset / "rayadito/feedback_1.wav").exists()
+        assert not w.fb.procesado
+        return
+    result = w.service.approve_feedback(w.db, 1, curation_source_id=source_id)
+    with metadata.open() as stream:
+        rows = list(csv.DictReader(stream))
+    assert rows[-1]["curation_source_id"] == "origin001"
+    assert rows[-1]["recordist"] == "human_feedback"
+    assert w.service.approve_feedback(w.db, 1) == result
+    pinned = metadata.read_bytes()
+    with pytest.raises(HTTPException) as error:
+        w.service.approve_feedback(w.db, 1, curation_source_id="other")
+    assert error.value.status_code == 422
+    assert metadata.read_bytes() == pinned
+
+
 @pytest.mark.parametrize("staging_mode", [0o666, 0o200])
 def test_approval_normalizes_reused_staging_before_write_and_fsync(local_workflow, monkeypatch, staging_mode):
     w = local_workflow

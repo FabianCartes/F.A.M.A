@@ -169,7 +169,11 @@ def test_sync_rejects_invalid_dataset_in_batch_before_cloud_access(client, uploa
     response = client.post("/api/ingestion/sync", json={"datasets": ["AvesChilenas", "../private"]})
 
     assert response.status_code == 422
-    assert response.json()["detail"] == "Nombres de dataset inválidos."
+    # Preserve dev's request-schema validation before endpoint execution.
+    error, = response.json()["detail"]
+    assert error["loc"] == ["body", "datasets"]
+    assert error["type"] == "value_error"
+    assert "safe single path segments" in error["msg"]
 
 
 def test_sync_rejects_overlong_dataset_in_batch_before_cloud_access(client, monkeypatch):
@@ -631,3 +635,34 @@ def test_cloud_inspector_keeps_nested_filename_and_ignores_directory_markers(cli
     assert audio["name"] == "audio.wav"
     assert audio["class_name"] == "Chucao"
     assert audio["path"] == "datasets/AvesChilenas/Chucao/session/audio.wav"
+
+
+@pytest.mark.parametrize(
+    "filename,content",
+    [("audio.exe", b"unsupported"), ("audio.wav", b"malformed"), ("empty.wav", b"")],
+)
+def test_rejected_http_upload_preserves_database_and_cloud_bytes(
+    client, upload_environment, filename, content
+):
+    import hashlib
+
+    _, db, objects = upload_environment
+
+    def database_hash():
+        connection = db.connection().connection.driver_connection
+        return hashlib.sha256(connection.serialize()).hexdigest()
+
+    before = database_hash()
+    cloud_before = dict(objects)
+    response = client.post(
+        "/api/ingestion/upload",
+        data={"dataset_name": "AvesChilenas"},
+        files={"files": (filename, content, "audio/wav")},
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "Archivo de audio inválido o formato no admitido."
+    }
+    assert database_hash() == before
+    assert objects == cloud_before
