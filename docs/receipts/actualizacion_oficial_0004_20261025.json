@@ -1,0 +1,346 @@
+{
+  "code": "official_0004_deployed_and_verified",
+  "date": "2026-10-25",
+  "checked_at_utc": "2026-10-25T21:30:38.657787+00:00",
+  "operator_action": "Solicita aplicar la actualización pendiente y facilita la entrada del migrador.",
+  "application_source_commit": "54bdaafb2ee8784262743ecaf77bf14857f042d7",
+  "previous_application_commit": "aa53e09a9b935f752b01fe464cbc1a5bd10556c0",
+  "branch": "fix/afinamiento-integral",
+  "workspace": "C:/Users/fabia/Desktop/F.A.M.A",
+  "url": "http://localhost:3010/",
+  "database": "fama_oficial",
+  "bucket": "fama-audio-records-2026",
+  "schema": {
+    "before": "0003_autonomy",
+    "after": "0004_integration",
+    "business_tables": 37,
+    "total_tables": 38,
+    "sequences": 14,
+    "application_permissions": "DML en tablas de negocio, lectura de alembic_version y USAGE/SELECT de secuencias; sin DDL."
+  },
+  "migration_preservation": {
+    "all_previous_business_rows_equal_before_metadata_registration": true,
+    "all_previous_sequence_states_equal": true,
+    "unchanged_core_table_digests_after_login_and_hash_registration": [
+      "public.conjunto_datos",
+      "public.audio",
+      "public.prediccion",
+      "public.retroalimentacion",
+      "public.feedback_sync",
+      "public.metrica_entrenamiento",
+      "public.asignacion_dataset",
+      "public.solicitud_dataset"
+    ],
+    "counts": {
+      "users": 1,
+      "datasets": 3,
+      "audio_records": 2607,
+      "models": 5,
+      "predictions": 31
+    },
+    "new_control_rows": {
+      "public.dataset_export": 0,
+      "public.dataset_export_session": 0,
+      "public.dataset_import": 0,
+      "public.dataset_import_chunk": 0,
+      "public.dataset_import_chunk_activity": 0,
+      "public.dataset_import_chunk_schema": 1,
+      "public.dataset_import_class": 0,
+      "public.dataset_import_file": 0,
+      "public.dataset_import_issue": 0,
+      "public.dataset_import_job": 0,
+      "public.dataset_import_job_gate": 1,
+      "public.dataset_import_metadata_backfill": 0,
+      "public.dataset_import_receipt": 0,
+      "public.dataset_import_receipt_schema": 1,
+      "public.dataset_import_summary": 0,
+      "public.imported_dataset": 0,
+      "public.imported_dataset_member": 0,
+      "public.imported_dataset_revision": 0,
+      "public.imported_dataset_revision_object": 0,
+      "public.imported_dataset_summary": 0,
+      "public.model_evaluation": 0
+    }
+  },
+  "intentional_operational_writes": {
+    "web_session_and_audit_rows": "Login/consulta/logout de comprobación; revocación solo de las sesiones creadas por la comprobación.",
+    "historical_model_hashes": {
+      "code": "historical_checkpoint_hashes_registered",
+      "checked_at_utc": "2026-10-25T21:23:22.567475+00:00",
+      "models": [
+        {
+          "model_id": 2,
+          "checkpoint": "efficientnet_gpu_pipeline_35e_best.pt",
+          "previous_hash": null,
+          "sha256": "79ce8e3e574296e360814b89151cf5666ab0b1050e297baed06b3762dfef94b6",
+          "bytes": 48822960,
+          "gcs_object": "operator_backups/checkpoints/sha256/79ce8e3e574296e360814b89151cf5666ab0b1050e297baed06b3762dfef94b6.pt",
+          "gcs_generation": "1792828628570301"
+        },
+        {
+          "model_id": 3,
+          "checkpoint": "convnext_nano_35e_best.pt",
+          "previous_hash": null,
+          "sha256": "f3ea78451c9ec5677c0e28c47063217ea9d5068eac4bac6b34115094a042a064",
+          "bytes": 179709621,
+          "gcs_object": "operator_backups/checkpoints/sha256/f3ea78451c9ec5677c0e28c47063217ea9d5068eac4bac6b34115094a042a064.pt",
+          "gcs_generation": "1792828653013125"
+        },
+        {
+          "model_id": 4,
+          "checkpoint": "resnet34d_35e_best.pt",
+          "previous_hash": null,
+          "sha256": "da5a79625906be7bc4f732c7f55e065a56b2368460756e7f306e815c18b0da5f",
+          "bytes": 255989559,
+          "gcs_object": "operator_backups/checkpoints/sha256/da5a79625906be7bc4f732c7f55e065a56b2368460756e7f306e815c18b0da5f.pt",
+          "gcs_generation": "1792828698045928"
+        },
+        {
+          "model_id": 5,
+          "checkpoint": "augmented_best.pt",
+          "previous_hash": null,
+          "sha256": "dc2264a7abcba11adba101e5f02c394349ddcff2d2e71a0c43f099c7cf20f430",
+          "bytes": 4312689,
+          "gcs_object": "operator_backups/checkpoints/sha256/dc2264a7abcba11adba101e5f02c394349ddcff2d2e71a0c43f099c7cf20f430.pt",
+          "gcs_generation": "1792828728354947"
+        },
+        {
+          "model_id": 6,
+          "checkpoint": "baseline_best.pt",
+          "previous_hash": null,
+          "sha256": "ff22fc9baaf0324583bfa7993e45142bfa74e4552ff11985ef66a10f241dbb8c",
+          "bytes": 4312610,
+          "gcs_object": "operator_backups/checkpoints/sha256/ff22fc9baaf0324583bfa7993e45142bfa74e4552ff11985ef66a10f241dbb8c.pt",
+          "gcs_generation": "1792828732094148"
+        }
+      ],
+      "default_changed": false,
+      "activation_flags_changed": false,
+      "metrics_or_dataset_links_created": false,
+      "gcs_objects_modified": false
+    },
+    "passwords_reset": false,
+    "accounts_created": false,
+    "training_or_evaluation_reports_created": false,
+    "dataset_relationships_invented": false,
+    "new_predictions_created": false,
+    "gcs_objects_modified": false
+  },
+  "service_checks": {
+    "database": {
+      "ok": true,
+      "code": "database_connected"
+    },
+    "storage": {
+      "ok": true,
+      "code": "storage_read_connected"
+    },
+    "schema": {
+      "ok": true,
+      "code": "schema_current",
+      "revision": "0004_integration"
+    },
+    "configuration": {
+      "ok": true,
+      "code": "configuration_ready"
+    },
+    "first_admin": {
+      "ok": false,
+      "code": "database_already_initialized"
+    },
+    "permissions": {
+      "ok": true,
+      "code": "database_runtime_permissions_ready"
+    }
+  },
+  "model_catalogue": {
+    "code": "official_model_catalogue_verified",
+    "http_status": 200,
+    "total": 6,
+    "default_model_id": "chilean-birds-ensemble",
+    "publication_errors": [],
+    "models": [
+      {
+        "id": "chilean-birds-ensemble",
+        "has_weights": true
+      },
+      {
+        "id": "fama_trained_model_6",
+        "has_weights": true
+      },
+      {
+        "id": "fama_trained_model_5",
+        "has_weights": true
+      },
+      {
+        "id": "fama_trained_model_4",
+        "has_weights": true
+      },
+      {
+        "id": "fama_trained_model_3",
+        "has_weights": true
+      },
+      {
+        "id": "fama_trained_model_2",
+        "has_weights": true
+      }
+    ]
+  },
+  "local_files": {
+    "code": "official_local_files_preserved",
+    "checkpoints": 5,
+    "configuration_bytes_unchanged": true,
+    "index_bytes_unchanged": true
+  },
+  "frontend": {
+    "mode": "production-standalone",
+    "next_version": "16.3.4",
+    "build": "Turbopack + TypeScript aprobados en este checkout",
+    "build_log_sha256": "810b76f50bf0b1baf51b25339f83a6bdc06a99bd68be92ac8f96c0276af2028a",
+    "dist_dir": ".next-oficial-0004",
+    "assets": {
+      "code": "official_frontend_assets_verified",
+      "login_html_status": 200,
+      "assets": [
+        {
+          "kind": ".css",
+          "status": 200
+        },
+        {
+          "kind": ".js",
+          "status": 200
+        }
+      ],
+      "standalone": true
+    }
+  },
+  "pip_check_exit": 0,
+  "readiness": {
+    "backend_health_http": 200,
+    "backend_ready_http": 200,
+    "backend_ready_code": "schema_current",
+    "backend_ready_seconds_observed": 30.59,
+    "frontend_login_http": 200
+  },
+  "backups": [
+    {
+      "path": "backend/installation/cloud-oficial/backups/pre-0004-quiescente-20261025",
+      "revision": "0003_autonomy",
+      "tables": 17,
+      "sequences": 9,
+      "archive_bytes": 161228,
+      "archive_sha256": "3227fc96815520af0ef201ac6d86de9b32cdf83d54a900d289c074a923d9a168"
+    },
+    {
+      "path": "backend/installation/cloud-oficial/backups/post-0004-20261025",
+      "revision": "0004_integration",
+      "tables": 38,
+      "sequences": 14,
+      "archive_bytes": 228528,
+      "archive_sha256": "ba84845846beb8d54a684b2dc3648ec2d4d8627d86cd56faacd369a711fa3672"
+    }
+  ],
+  "restore_verification": {
+    "code": "official_before_and_after_backups_restore_verified",
+    "network": "none",
+    "ports_published": false,
+    "production_databases_modified": false,
+    "checks": [
+      {
+        "backup": "pre-0004-quiescente-20261025",
+        "revision": "0003_autonomy",
+        "tables": 17,
+        "sequences": 9,
+        "all_table_digests_equal": true,
+        "all_sequence_states_equal": true,
+        "archive_sha256": "3227fc96815520af0ef201ac6d86de9b32cdf83d54a900d289c074a923d9a168"
+      },
+      {
+        "backup": "post-0004-20261025",
+        "revision": "0004_integration",
+        "tables": 38,
+        "sequences": 14,
+        "all_table_digests_equal": true,
+        "all_sequence_states_equal": true,
+        "archive_sha256": "ba84845846beb8d54a684b2dc3648ec2d4d8627d86cd56faacd369a711fa3672"
+      }
+    ],
+    "temporary_container_removed": true,
+    "checked_at_utc": "2026-10-25T21:28:05.332650+00:00",
+    "cloud_adc_or_connection_secrets_mounted": false,
+    "private_sql_archives_mounted_read_only": true,
+    "archives_contain_authentication_hashes": true
+  },
+  "runtime_configuration_secrets_unchanged": true,
+  "migration_password_saved": false,
+  "session_cookies_saved": false,
+  "recovery_reference": "codex/official-runtime-20261024 apunta a aa53e09; requiere restaurar también la base anterior para volver al código previo.",
+  "execution_correction": "La revisión se aplicó una sola vez. La primera ejecución de permisos se detuvo por interpretar el cuerpo SQL con parámetros DBAPI; se reanudó con cursor.execute sin parámetros y transacción, conservando todas las guardas de base/rol.",
+  "remaining": [
+    "ZIP y sus workers requieren Linux/Docker; Windows nativo devuelve available=false.",
+    "No entrenamiento nuevo ni inferencia nueva con escritura en GCS/SQL durante este mantenimiento.",
+    "No configuración de HTTPS/red ni despliegue universitario.",
+    "Copias SQL verificadas localmente; retención y copia externa pendientes."
+  ],
+  "documentation": "docs/manuales/actualizacion_oficial_0004_20261025.md",
+  "initial_http_checks_before_historical_hash_registration": {
+    "code": "official_http_flow_verified",
+    "checks": [
+      {
+        "path": "/api/auth/login",
+        "method": "POST",
+        "status": 200,
+        "role": "administrador",
+        "http_only_cookie": true
+      },
+      {
+        "path": "/api/auth/me",
+        "status": 200
+      },
+      {
+        "path": "/api/users",
+        "status": 200
+      },
+      {
+        "path": "/api/models",
+        "status": 200,
+        "total": 1,
+        "default_model_id": "chilean-birds-ensemble",
+        "publication_errors": 5,
+        "evaluation_catalogue_status": "available"
+      },
+      {
+        "path": "/api/ingestion/datasets",
+        "status": 200,
+        "datasets": 3
+      },
+      {
+        "path": "/api/dashboard/stats",
+        "status": 200
+      },
+      {
+        "path": "/api/ingestion/imports/access",
+        "status": 200,
+        "available": false
+      },
+      {
+        "path": "/api/auth/logout",
+        "method": "POST",
+        "status": 204
+      },
+      {
+        "path": "/api/auth/me",
+        "after_logout": true,
+        "status": 401
+      }
+    ],
+    "cookies_saved": false,
+    "password_saved": false
+  },
+  "integration_worktree": {
+    "archived": true,
+    "operational_notes_copied_to_main_checkout": true,
+    "test_evidence_preserved_at": ".pytest_cache/dev-integration-tools/preserved-worktree-evidence",
+    "main_checkout_branch": "fix/afinamiento-integral"
+  }
+}

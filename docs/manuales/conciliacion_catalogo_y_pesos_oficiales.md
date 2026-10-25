@@ -1,5 +1,7 @@
 # Catálogo, pesos y arranque del nodo oficial
 
+**Actualización oficial aplicada, 25 de octubre:** `fama_oficial` está en `0004_integration` y la carpeta habitual ejecuta `fix/afinamiento-integral` (`54bdaaf`). Login real, permisos, GCS, datasets, dashboard y catálogo de seis modelos comprobados; cinco hashes históricos completados tras contrastarlos con GCS. Respaldos anterior/posterior restaurados y verificados en laboratorio aislado. Perfil, contraseñas e índices conservados. [Operación y límites](actualizacion_oficial_0004_20261025.md), [recibo](../receipts/actualizacion_oficial_0004_20261025.json).
+
 **Actualización: 24 de octubre de 2026. Rama: `fix/afinamiento-integral`.** El perfil nativo oficial quedó completado y arrancado en `http://localhost:3010`, con PostgreSQL `fama_oficial` y bucket `fama-audio-records-2026`. Inicio de sesión, selección de modelo e inventario comprobados en el navegador; los cortes anteriores permanecen en sus recibos.
 
 ## Decisiones y ejecución

@@ -1,5 +1,11 @@
 # Centro de Documentación Técnica — F.A.M.A.
 
+**Nodo oficial actualizado a 0004, 25 de octubre:** [mantenimiento aplicado y recuperación](./manuales/actualizacion_oficial_0004_20261025.md), [recibo actual](./receipts/actualizacion_oficial_0004_20261025.json). Código integrado activo en la carpeta habitual, seis modelos disponibles y copias anterior/posterior restauradas en laboratorio.
+
+**Identidad de login oficial:** [diagnóstico del 24 de octubre](./receipts/diagnostico_identidad_login_20261024.json), consulta de solo lectura; cuenta oficial activa y credenciales conservadas.
+
+**Reinicio operativo del 24 de octubre:** [recibo observado](./receipts/reinicio_oficial_20261024.json) de web, backend y Cloud SQL; código/esquema oficiales anteriores conservados.
+
 **Integración con dev, 24 de octubre:** [procedimiento y resultados](./manuales/integracion_dev_20261024.md), [ADR 0069](./adr/0069-integracion-de-acceso-evaluacion-y-datasets.md) y [recibo reproducible](./receipts/integracion_dev_20261024.json). Distingue código integrado y verificado del mantenimiento todavía pendiente del nodo oficial.
 
 **Nodo oficial iniciado, 24 de octubre:** [catálogo, pesos y arranque](./manuales/conciliacion_catalogo_y_pesos_oficiales.md) registra decisiones aplicadas, índices/versiones conservados, cuenta histórica recuperada, comprobación del navegador y pendientes institucionales. [ADR 0068](./adr/0068-declaracion-explicita-de-ensambles-por-instalacion.md) explica la declaración persistente de ensambles. [Recibo actual](./receipts/catalogo_oficial_publicado_20261024.json) conserva evidencias; [bucket](./images/catalogo_oficial_20261024.png) e [inventario visible](./images/datasets_oficiales_20261024.png) muestran el entorno real. Los recibos anteriores mantienen sus cortes históricos.

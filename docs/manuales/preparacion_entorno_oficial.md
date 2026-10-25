@@ -1,5 +1,7 @@
 # Preparación del entorno oficial
 
+**Actualización oficial aplicada, 25 de octubre:** `fama_oficial` está en `0004_integration` y la carpeta habitual ejecuta `fix/afinamiento-integral` (`54bdaaf`). Login real, permisos, GCS, datasets, dashboard y catálogo de seis modelos comprobados; cinco hashes históricos completados tras contrastarlos con GCS. Respaldos anterior/posterior restaurados y verificados en laboratorio aislado. Perfil, contraseñas e índices conservados. [Operación y límites](actualizacion_oficial_0004_20261025.md), [recibo](../receipts/actualizacion_oficial_0004_20261025.json).
+
 **Estado vigente — 24 de octubre, arranque oficial:** el nodo de `http://localhost:3010` usa `fama_oficial`, `fama-audio-records-2026` y `runtime/oficial`. Perfil completado mediante adopción del administrador histórico, recuperación de contraseña solicitada por el operador e inicio de sesión verificado. Super-Ensamble de aves predeterminado y cinco modelos individuales seleccionables; inferencia real acotada correcta. Los cinco audios históricos diferentes están versionados en GCS, con 1205 filas conservadas en el índice; catálogo SQL de 1220 objetos de aves, 1386 de motores y un audio histórico industrial. Pesos respaldados por contenido y verificados. Los contadores globales ahora recorren todo el bucket: 2646 objetos observados. Siguen pesos del ensamble industrial, respaldo SQL externo/retención y despliegue universitario con HTTPS y servicio estable. [Estado operativo y límites](conciliacion_catalogo_y_pesos_oficiales.md), [recibo actual](../receipts/catalogo_oficial_publicado_20261024.json). Los bloques inferiores conservan sus cortes históricos.
 
 **Corte: 23 de octubre de 2026. Rama: `fix/afinamiento-integral`.**
@@ -13,9 +15,9 @@ El operador confirmó que F.A.M.A. se utilizará primero en este PC y después s
 | Elemento | Uso actual de pruebas | Propuesta oficial |
 | --- | --- | --- |
 | Bucket | `fama-pruebas` | `fama-audio-records-2026`, ya existente |
-| Base PostgreSQL | Cloud SQL 16, `fama_pruebas` | `fama_oficial`, creada en la misma instancia; esquema 0003_autonomy, permisos e historia trasladada/verificada |
-| Perfil nativo | `backend/installation/cloud-pruebas/native` | `backend/installation/cloud-oficial/native`, preparado y comprobado; sin activar |
-| Almacenamiento del nodo | `runtime/pruebas` | `runtime/oficial`, preparado con pesos y un audio; resto en preparación |
+| Base PostgreSQL | Cloud SQL 16, `fama_pruebas` | `fama_oficial`, creada en la misma instancia; esquema 0004_integration, permisos e historia trasladada/verificada |
+| Perfil nativo | `backend/installation/cloud-pruebas/native` | `backend/installation/cloud-oficial/native`, completado y activo |
+| Almacenamiento del nodo | `runtime/pruebas` | `runtime/oficial`, activo con cinco pesos y el índice histórico de 1205 audios |
 | Credenciales técnicas | Identidades de pruebas | Usuario SQL diario y migrador propios; credenciales oficiales separadas |
 | Acceso web inicial | `http://localhost:3010` | Mismo acceso al efectuar el cambio controlado; no se iniciarán ambos nodos sobre ese puerto |
 

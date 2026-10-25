@@ -8,7 +8,7 @@ kanban-plugin: basic
 - [x] Unificar entrenamiento/validación/prueba según decisión del operador; conservar los repartos anteriores como historia y la activación administrativa explícita.
 - [x] Cobertura acumulada: 2781 PASS / 15 SKIP backend Linux, 479 PASS frontend; tipos, lint y compilaciones Webpack/Turbopack aprobados. Los nueve SKIP de plataforma/Compose se verifican por separado en Windows. Seis dependen de audios/pesos privados no montados.
 - [x] Publicado `e86415b` en `fix/afinamiento-integral`, SHA remoto verificado y `dev` conservada en `adecb01`. Checkout oficial fijado en `aa53e09` sin sustituir sus archivos.
-- [ ] Preparar mantenimiento del nodo oficial para migrar `0003_autonomy` a `0004_integration`; no aplicado en esta integración. ZIP y workers requieren Linux/Docker.
+- [x] Mantenimiento oficial aplicado el 25 de octubre: `0004_integration`, permisos y datos comprobados; carpeta habitual en la rama integrada, interfaz standalone y seis modelos seleccionables. Respaldos anterior/posterior restaurados y verificados. [Registro](manuales/actualizacion_oficial_0004_20261025.md). ZIP y workers siguen requiriendo Linux/Docker.
 
 [Procedimiento, evidencia y límites](manuales/integracion_dev_20261024.md).
 

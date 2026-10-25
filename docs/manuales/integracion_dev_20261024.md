@@ -1,5 +1,7 @@
 # Integración de dev en afinamiento integral
 
+**Aplicación posterior, 25 de octubre:** la migración pendiente ya se aplicó a la base oficial y el código integrado está activo en el checkout original. [Ejecución, comprobaciones y recuperación](actualizacion_oficial_0004_20261025.md). Los párrafos del corte del 24 describen su estado histórico previo al mantenimiento.
+
 Corte: 24 de octubre de 2026. Integración comprobada y publicada en `fix/afinamiento-integral`, commit [`e86415b`](https://github.com/FabianCartes/F.A.M.A/commit/e86415bc1202db6ccd96052617b6a8f19b378568). Se verificó el SHA remoto y `dev` continúa en `adecb01`. Este cierre documental es posterior al commit de integración. El nodo oficial conserva su código y esquema anteriores.
 
 ## Origen y decisiones
@@ -49,7 +51,7 @@ El nodo de los puertos 3010/8010 conserva `fama_oficial`, el bucket oficial y `r
 
 ## Mantenimiento para usar la versión integrada en el nodo oficial
 
-Este procedimiento queda pendiente y debe ejecutarse como una operación separada:
+El mantenimiento descrito a continuación se ejecutó el 25 de octubre; se conserva el procedimiento previsto. El resultado observado y la ejecución con credenciales solo en memoria están en el registro posterior:
 
 1. Definir la ventana de mantenimiento y detener los escritores del nodo. Conservar el checkout y perfil anteriores. Con el código de `aa53e09`, generar y comprobar una copia SQL nueva mediante `app.node backup`; conservar también configuración privada, runtime y checkpoints. La CLI nueva espera `0004_integration` y no sustituye el respaldo previo de una base 0003.
 2. Preparar el checkout integrado y sus dependencias sin iniciar servidores. La contraseña del usuario migrador se introduce localmente y solo durante el mantenimiento; no queda en Git ni en recibos.
