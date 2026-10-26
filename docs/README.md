@@ -1,5 +1,7 @@
 # Centro de Documentación Técnica — F.A.M.A.
 
+**Entrega a Kevin:** [responsabilidades, datos compartibles, archivos y preparación de su equipo](./manuales/entrega_a_kevin.md). Guía sin secretos; permisos, cuenta y arranque de Kevin aún por verificar.
+
 **Nodo oficial actualizado a 0004, 25 de octubre:** [mantenimiento aplicado y recuperación](./manuales/actualizacion_oficial_0004_20261025.md), [recibo actual](./receipts/actualizacion_oficial_0004_20261025.json). Código integrado activo en la carpeta habitual, seis modelos disponibles y copias anterior/posterior restauradas en laboratorio.
 
 **Identidad de login oficial:** [diagnóstico del 24 de octubre](./receipts/diagnostico_identidad_login_20261024.json), consulta de solo lectura; cuenta oficial activa y credenciales conservadas.

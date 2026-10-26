@@ -13,6 +13,13 @@ kanban-plugin: basic
 [Procedimiento, evidencia y límites](manuales/integracion_dev_20261024.md).
 
 
+## Equipo de Kevin — preparación pendiente
+
+- [x] Guía sin secretos e inventario de archivos preparados. [Entrega](manuales/entrega_a_kevin.md).
+- [ ] Confirmar correo Google y sistema operativo de Kevin; verificar/conceder el acceso técnico requerido.
+- [ ] Crear su cuenta web, entregar credenciales SQL de aplicación por canal privado y preparar su perfil/runtime.
+- [ ] Recuperar pesos e índices, comprobar hashes y verificar el primer arranque en su PC.
+
 ## ZIP grandes y reconstrucción GCS — implementación en curso
 
 - [x] ZIP-LARGE-1: Corte 1 completo en implementación local (T1a + T1b): runtime, HTTP y panel paginados verificados con datos sintéticos. Corrección B1 revalidada; revisión nativa de cuatro perspectivas aprobada y acuse consumido. Commit del corte autorizado; comprobación focal nueva: 43 backend y 11 frontend aprobadas. Sin certificación de escala, migración real ni despliegue.

@@ -1,5 +1,7 @@
 # Estado actual y pendientes para retomar F.A.M.A.
 
+**Entrega a Kevin, preparada el 25 de octubre:** [guía de responsabilidades y material compartible](entrega_a_kevin.md). Faltan correo Google y sistema operativo para concretar accesos y arranque; todavía no se han concedido permisos ni creado su cuenta con esta guía.
+
 **Actualización oficial aplicada, 25 de octubre:** `fama_oficial` está en `0004_integration` y la carpeta habitual ejecuta `fix/afinamiento-integral` (`54bdaaf`). Login real, permisos, GCS, datasets, dashboard y catálogo de seis modelos comprobados; cinco hashes históricos completados tras contrastarlos con GCS. Respaldos anterior/posterior restaurados y verificados en laboratorio aislado. Perfil, contraseñas e índices conservados. [Operación y límites](actualizacion_oficial_0004_20261025.md), [recibo](../receipts/actualizacion_oficial_0004_20261025.json).
 
 **Integración con dev publicada y verificada, 24 de octubre:** `aa53e09` + `origin/dev` `adecb01`, con tres grupos independientes, sesiones ZIP y activación administrativa explícita. Cobertura acumulada de 2781 PASS backend y 479 PASS frontend, más verificaciones nativas; tipos, lint y ambas compilaciones aprobados. Publicado `e86415b` en `fix/afinamiento-integral`; `dev` permanece intacta. El checkout original queda en `codex/official-runtime-20261024` y el worktree de integración contiene la rama actualizada. El servicio oficial conserva código y esquema anteriores; `0004_integration` requiere mantenimiento separado. [Registro actual](integracion_dev_20261024.md).
