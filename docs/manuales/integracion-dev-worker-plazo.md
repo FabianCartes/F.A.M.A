@@ -2,6 +2,16 @@
 Objetivo: integrar únicamente la elección del plazo cooperativo en el CLI existente de dev, sin importar la base histórica completa.
 Rama aislada `feat/zip-dev-first-block`, base `adecb01868940421fb44ca56194439908f10b585`; referencia funcional de origen `e65acc877ee80b39dcd90c6ec8e27a7aafe0673c`.
 
+## Actualización T6.3 (alcance posterior, no reescribe la evidencia histórica)
+
+El builder compartido ahora permite `FAMA_IMPORT_STORAGE_PROFILE` opcional para
+HTTP/worker; ver [contrato físico](presupuesto-fisico-importacion-dev.md). No se
+modifican dominio `(0,3600]`, default300, flag explícito900, watch/local-only,
+cleanup o señales. El perfil inválido rechaza antes de construir engine con la
+salida genérica existente; help explica la variable sin alterar salidas normales.
+Esta ampliación posterior no convierte los recibos de este primer bloque en
+pruebas de almacenamiento físico, activación real o ZIP grande.
+
 ## Specs
 S1. Usuario: "Vamos con tu recomendación". Recomendación aceptada: "avanzar con el primer bloque coherente de integración hacia dev, en una rama aislada, sin modificar todavía dev ni iniciar servicios".
 S2. Usuario: "Review the delivered subagent output and continue." Contrastar el mapa con fuentes reales; no ampliar el alcance por negativos no corroborados. Durante la preparación no se autorizaban merge, push, PR, cambio de dev/checkout original, servicios, activación, datos reales o GCS. S7 permite después únicamente el avance rápido de dev local; las demás exclusiones permanecen.

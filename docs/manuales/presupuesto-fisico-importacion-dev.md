@@ -2,10 +2,10 @@
 
 ## Estado y alcance
 
-**T6.1 aceptada; T6.2 integra el ciclo mediante opt-in explícito del servicio.**
-No hay activación de perfil ni selección común API/worker: corresponden a T6.3,
-junto con la calificación operativa. La aceptación de T6.2 y la verificación
-independiente pertenecen al padre. No se ejecutó el ZIP real ni se inició servicio
+**T6.1 y T6.2 aceptadas; T6.3 incorpora selección común API/worker y una función
+explícita para activar exclusivamente un laboratorio nuevo vacío.** La calificación
+operativa, provisión SSD, locks de procesos y activación real siguen pendientes del
+padre. La aceptación y la verificación independiente pertenecen al padre. No se ejecutó el ZIP real ni se inició servicio
 alguno. El SSD solo recibió snapshots nuevos de fuentes públicas y artefactos
 sintéticos mediante helpers del padre; no se leyeron datasets históricos ni el ZIP.
 
@@ -17,6 +17,50 @@ de la configuración explícita para admitir recepción antes de crear el worker
 el upload legacy sin reserva y las exportaciones físicas (admisión y claim), sin
 incorporar ejecución de exportaciones, S76 completo, sesiones web, entrenamiento,
 GCS real ni cambios a `--execution-seconds`.
+
+## Selección común y laboratorio nuevo (T6.3, sin activación operativa)
+
+`runtime_import_service(root, attempt_root=None)` selecciona el mismo módulo para
+`get_import_service()` HTTP y el CLI de worker. Sin `FAMA_IMPORT_STORAGE_PROFILE`
+conserva los límites y comportamiento existentes. Una variable vacía no equivale
+a ausencia: rechaza con HTTP503 saneado; el worker sale 1 con su mensaje genérico
+habitual, sin construir engine. El perfil es JSON físico absoluto, regular,
+propiedad del usuario, sin enlaces ni escritura de grupo/otros y máximo 64 KiB.
+Rechaza claves duplicadas, campos desconocidos y mappings incompatibles. Solo
+acepta `roots`, `pools`, `free_floors` y opcional `manifest_bytes` (64 MiB por defecto).
+La raíz HTTP/CLI debe coincidir con `roots.imports`; el CLI también compara su
+`--staging-root` con `roots.attempts`. El builder valida los seis roles, no crea
+rutas, no conecta DB, no migra, no registra pools ni modifica TMPDIR o cachés.
+El rol `exports` es obligatorio para describir capacidad, **no habilita exports**.
+
+`scripts.migrate_dataset_storage.activate_empty_lab(engine, policy,
+writers_stopped=True)` recibe un engine **explícito ya migrado/preparado** y una
+`PhysicalStorage` de raíces previamente provisionadas. Sin el flag exacto rechaza.
+Exige gate verificado, estado prepared, cero imports/datasets/jobs/grants
+(incluso retirados) y cero pools. Nunca adopta un store histórico ni reactiva uno
+activo. Bajo BEGIN IMMEDIATE SQLite o lock del gate PostgreSQL inserta pools/hash/
+pisos y cambia prepared→active; verifica el resultado antes de commit. Cualquier
+fallo revierte la transacción. `inspect_storage(engine)` permite observar el
+resultado. No existe CLI nuevo, activación HTTP, engine ambiental ni creación
+implícita de DB. El llamador garantiza escritores detenidos: el booleano no prueba
+parada real ni reemplaza la calificación de procesos.
+
+`backend/config/local-large-zip.sh` contiene únicamente números exportables;
+no se carga automáticamente ni contiene rutas/credenciales/activación. Perfil
+candidato: ZIP 6 GiB, expansión 10 GiB, WAV 96 MiB/600 s, validación 900 s,
+concurrencia 1, piso 1 GiB, dataset 15 GiB/50000 archivos, chunks 16 MiB y reservas
+lógicas por dueño/global 16 GiB. Requiere >=48 GiB libres y capacidad física
+calificada para 26 GiB más piso. El worker mantiene default 300 s: para este ensayo
+el launcher debe pasar **`--execution-seconds 900` explícitamente**.
+
+El launcher del padre debe fijar scratch/TMPDIR y todas las cachés en SSD **antes
+de iniciar Python**, además de la SQLite nueva en SSD. El mapping físico no mueve
+por sí solo temporales Python, cachés o directorios privados de DB de fixtures.
+Los writers pesados son recepción ZIP/objects, intentos/manifiestos y salidas del
+validador; el sandbox nativo existente limpia entorno y liga salidas al intento.
+No se deshabilitan sus guardas ni se añade fallback. Esta configuración no prueba
+sandbox, stop fence, exclusión multiproceso ni disponibilidad física operacional.
+T6.4 (prueba del ZIP real) sigue pendiente y separada de estos tests sintéticos.
 
 ## Interfaz y autoridad física
 

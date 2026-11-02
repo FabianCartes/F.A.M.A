@@ -7,7 +7,7 @@ import threading
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, epilog="FAMA_IMPORT_STORAGE_PROFILE optionally selects an existing physical JSON profile; no activation or migration.")
     parser.add_argument("--database-url", required=True, help="Explicit migrated database; no ambient URL or migration.")
     parser.add_argument("--import-root", required=True, help="Existing private physical absolute import root shared with the API.")
     parser.add_argument("--staging-root", required=True, help="Existing private attempt root, stable across restarts, on the same filesystem.")
@@ -43,15 +43,15 @@ def main(argv=None):
         from app.services.dataset_import_execution import ImportExecution
         from app.services.dataset_import_jobs import ImportJobQueue
         from app.services.dataset_import_worker import _private_root
-        from app.services.dataset_imports import DatasetImports
+        from app.services.dataset_storage_runtime import runtime_import_service
 
         root, staging = _private_root(args.import_root), _private_root(args.staging_root)
         if root.stat().st_dev != staging.stat().st_dev:
             raise ValueError("Publication requires the same filesystem")
+        service = runtime_import_service(root, attempt_root=staging)
         engine = create_engine(normalize_database_url(args.database_url))
         queue = ImportJobQueue(sessionmaker(bind=engine),
                                allowed_kinds=("preview", "confirm") if args.local_only else None)
-        service = DatasetImports(root)
         if args.cleanup_only:
             with queue.sessions() as db:
                 result = service.cleanup(db, attempt_root=staging)

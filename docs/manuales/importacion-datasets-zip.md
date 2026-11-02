@@ -10,6 +10,19 @@ Para recepción reanudable, exportación nativa y mantenimiento, consultar la
 Los pasos Docker de este manual requieren autorización separada; no forman parte
 de esa comprobación aislada.
 
+## Perfil físico opt-in (sin activación automática)
+
+HTTP y worker comparten `FAMA_IMPORT_STORAGE_PROFILE`, ruta absoluta a JSON
+físico existente, propio, no escribible por grupo/otros, sin symlinks y <=64 KiB.
+Ausencia conserva defaults; vacío/inválido/mapping diferente falla cerrado con
+503 saneado (CLI exit1, sin construir engine). No prepara carpetas, DB o pools.
+Véase [contrato físico y laboratorio vacío](presupuesto-fisico-importacion-dev.md)
+para los seis roles, activación explícita y requisitos SSD/TMPDIR/cachés.
+`backend/config/local-large-zip.sh` es solo un perfil numérico candidato, nunca se
+carga automáticamente: requiere >=48 GiB libres, pool calificado 26 GiB más piso
+y worker con `--execution-seconds 900` explícito. No habilita exports ni acredita
+prueba con ZIP grande. El default del worker sigue siendo 300 s.
+
 ## Uso
 
 1. En **Gestión de audios**, pulsa **Importar dataset**, junto a **Descargar desde GCS

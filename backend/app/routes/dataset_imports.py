@@ -70,7 +70,8 @@ def access(request: Request):
 
 def get_import_service():
     root = os.environ.get("FAMA_IMPORT_ROOT", str(Path(__file__).resolve().parents[2] / "data" / "dataset-imports"))
-    return DatasetImports(root)
+    from app.services.dataset_storage_runtime import runtime_import_service
+    return runtime_import_service(root)
 
 
 def get_import_storage():

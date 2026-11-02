@@ -1,4 +1,4 @@
-"""Public maintenance functions for a new EMPTY lab; no CLI or activation.
+"""Public maintenance functions for a new EMPTY lab; no CLI or ambient activation.
 
 The caller supplies an explicit engine and stops participating writers. This
 module never loads ambient configuration, reconciles existing work, or creates
@@ -70,3 +70,52 @@ def migrate_storage(engine, *, writers_stopped=False):
         if current["state"] in ("absent", "uninitialized"):
             conn.execute(StorageSchema.__table__.insert(), dict(id=1, version=1, state="prepared"))
         return dict(_inspect(conn), action="prepare")
+
+
+def activate_empty_lab(engine, policy, *, writers_stopped=False):
+    """Activate only prepared, empty metadata using caller-provisioned roots.
+
+    No historical adoption or reactivation. Verification runs before commit inside
+    the same serialized transaction, so a failed verification leaves no authority.
+    """
+    if writers_stopped is not True:
+        raise ValueError("stop_writers_before_storage_activation")
+    from app.services.dataset_storage import PhysicalStorage
+    from app.services.dataset_import_worker import _private_root
+    from app.models.dataset_import import DatasetImport, ImportedDataset
+    from app.models.dataset_import_job import ImportJob, ImportJobGate
+    from scripts.migrate_dataset_import_jobs import _verify_table
+    from sqlalchemy.orm import Session
+
+    if not isinstance(policy, PhysicalStorage):
+        raise ValueError("physical_storage_required")
+    if engine.dialect.name not in ("sqlite", "postgresql"):
+        raise ValueError("unsupported_storage_database")
+    for path in policy.roots.values():
+        _private_root(path)
+    with engine.begin() as conn:
+        if engine.dialect.name == "sqlite":
+            conn.exec_driver_sql("BEGIN IMMEDIATE")
+        else:
+            conn.exec_driver_sql("LOCK TABLE dataset_import_job_gate IN SHARE ROW EXCLUSIVE MODE")
+        _verify_table(conn, ImportJobGate.__table__)
+        gates = conn.execute(select(ImportJobGate.__table__)).mappings().all()
+        if len(gates) != 1 or gates[0]["id"] != 1 or gates[0]["version"] != 1:
+            raise ValueError("storage_requires_verified_job_gate")
+        current = _inspect(conn)
+        if current["state"] != "prepared" or current["pools"]:
+            raise ValueError("storage_requires_prepared_empty_lab")
+        for model in (DatasetImport, ImportedDataset, ImportJob, StorageGrant):
+            _verify_table(conn, model.__table__)
+            if conn.scalar(select(func.count()).select_from(model.__table__)):
+                raise ValueError("storage_requires_empty_lab")
+        for identity, floor in policy.free_floors.items():
+            conn.execute(StoragePool.__table__.insert(), dict(
+                id=identity, configuration_sha256=policy.configuration_sha256,
+                free_floor_bytes=floor))
+        conn.execute(StorageSchema.__table__.update().where(
+            StorageSchema.id == 1, StorageSchema.state == "prepared").values(state="active"))
+        with Session(bind=conn) as db:
+            policy.verify(db)
+        result = dict(_inspect(conn), action="activate")
+    return result
