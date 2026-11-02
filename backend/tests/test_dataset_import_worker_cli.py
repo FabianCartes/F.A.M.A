@@ -122,3 +122,59 @@ def test_cli_claimed_does_not_mean_execution_succeeded(imports, tmp_path, monkey
     state = client.get(job["status_url"]).json()
     assert state["status"] == "failed"
     assert state["error"] == {"code": "execution_failed"}
+
+
+@pytest.mark.parametrize("seconds", [None, 900, 3600])
+def test_cli_execution_option_and_omission_keep_public_job_contract(
+        imports, tmp_path, monkeypatch, capsys, seconds):
+    main, args = command(imports, monkeypatch)
+    client, _, _, _ = imports
+    source = uploaded(client, tmp_path)
+    job = client.post(f"/api/ingestion/imports/{source}/preview",
+                      json={"request_key": "execution-bound", "root": ""}).json()
+    args += ["--local-only"]
+    if seconds is not None:
+        args += ["--execution-seconds", str(seconds)]
+    assert main(args) == 0
+    output = capsys.readouterr()
+    assert output.out == '{"claimed": true}\n' and output.err == ""
+    assert client.get(job["status_url"]).json()["status"] == "succeeded"
+
+
+@pytest.mark.parametrize("value,cleanup,message", [
+    ("0", False, "--execution-seconds requires a finite value greater than 0 and at most 3600"),
+    ("-1", False, "--execution-seconds requires a finite value greater than 0 and at most 3600"),
+    ("3601", False, "--execution-seconds requires a finite value greater than 0 and at most 3600"),
+    ("nan", False, "--execution-seconds requires a finite value greater than 0 and at most 3600"),
+    ("inf", False, "--execution-seconds requires a finite value greater than 0 and at most 3600"),
+    ("-inf", False, "--execution-seconds requires a finite value greater than 0 and at most 3600"),
+    ("900", True, "--execution-seconds is not supported with --cleanup-only"),
+])
+def test_cli_execution_bound_rejected_before_resources(
+        imports, tmp_path, monkeypatch, capsys, value, cleanup, message):
+    import sys
+
+    main, args = command(imports, monkeypatch)
+    client, _, _, _ = imports
+    source = uploaded(client, tmp_path)
+    before = client.get(f"/api/ingestion/imports/{source}").json()
+    counts = client.execution.queue.active_counts(1)
+    connections = []
+
+    def forbidden(*a, **kw):
+        connections.append(True)
+        raise AssertionError("Argument rejection must not connect")
+
+    monkeypatch.setattr("sqlalchemy.create_engine", forbidden)
+    monkeypatch.setattr(sys, "argv", ["import-worker"])
+    args += [f"--execution-seconds={value}"] + (["--cleanup-only"] if cleanup else ["--local-only"])
+    with pytest.raises(SystemExit) as exited:
+        main(args)
+    assert exited.value.code == 2
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert output.err.startswith("usage: import-worker ")
+    assert output.err.endswith(f"import-worker: error: {message}\n")
+    assert connections == []
+    assert client.get(f"/api/ingestion/imports/{source}").json() == before
+    assert client.execution.queue.active_counts(1) == counts

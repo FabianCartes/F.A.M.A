@@ -4,6 +4,8 @@ kanban-plugin: basic
 
 ## ZIP grandes y reconstrucción GCS — implementación en curso
 
+- [ ] **ZIP-DEV-WORKER — primer bloque aislado en verificación:** `--execution-seconds` sobre el CLI existente de dev, con default300/lease60 intactos. Focal10PASS y suite85PASS del destino; no resultados históricos reutilizados. [Alcance y tareas](manuales/integracion-dev-worker-plazo.md). Sin portar auth/esquema/pool/perfilZIP grande ni ejecutar servicios, merge, push o PR.
+
 - [x] ZIP-LARGE-1: Corte 1 completo en implementación local (T1a + T1b): runtime, HTTP y panel paginados verificados con datos sintéticos. Corrección B1 revalidada; revisión nativa de cuatro perspectivas aprobada y acuse consumido. Commit del corte autorizado; comprobación focal nueva: 43 backend y 11 frontend aprobadas. Sin certificación de escala, migración real ni despliegue.
 - [x] ZIP-LARGE-2a: base aditiva de trabajos y admisión transaccional implementada; 195 regresiones aprobadas antes de corrección B1, 13 casos focales finales, prueba separada de nueve procesos y revalidación independiente de 38 casos aprobados. Revisión aislada sobre a4ccb34 aprobada y acuse consumido; commit aa1675b. La revisión acumulada anterior quedó omitida tras su rechazo por presupuesto. No acredita worker, fencing, HTTP202 ni panel. [Procedimiento](manuales/trabajos-importacion-datasets.md).
 - [x] ZIP-LARGE-2b: núcleo de ejecución con reclamación, lease, heartbeat independiente, fencing de estado y staging por intento implementado; 58 casos y pruebas independientes de caída/reemplazo aprobados. Revisión nativa aprobada y acuse consumido; núcleo en commit 2c22ae1, integración de publicación protegida en T2c/T2d, commit e3e65a3. Prueba integral de publicación entre procesos pendiente en T2e.

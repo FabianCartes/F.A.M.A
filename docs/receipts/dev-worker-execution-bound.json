@@ -1,0 +1,194 @@
+{
+  "schema": "fama.dev-worker-execution-bound.v1",
+  "status": "verified_target_cli_before_local_commit",
+  "branch": "feat/zip-dev-first-block",
+  "base_commit": "adecb01868940421fb44ca56194439908f10b585",
+  "scope": "Only explicit cooperative --execution-seconds selection in existing dev CLI; no large-ZIP enablement or delivery to dev.",
+  "canonical_task_document": "docs/manuales/integracion-dev-worker-plazo.md",
+  "risk": {
+    "item": 3,
+    "reason": "Shared CLI parser used by previous normal/local/cleanup/watch modes."
+  },
+  "contract": {
+    "finite_seconds_exclusive_min": 0,
+    "finite_seconds_inclusive_max": 3600,
+    "omitted_execution_seconds": 300,
+    "lease_seconds_unchanged": 60,
+    "heartbeat_seconds_unchanged": 20,
+    "forward_only_when_explicit": true,
+    "invalid_error": "--execution-seconds requires a finite value greater than 0 and at most 3600",
+    "cleanup_error": "--execution-seconds is not supported with --cleanup-only",
+    "rejection_exit_code": 2,
+    "rejection_stdout": ""
+  },
+  "results": {
+    "bound-red": {
+      "process_exit_code": 1,
+      "pytest_exit_code": 1,
+      "status": "failed",
+      "sqlite_memory_connection_count": 2,
+      "private_scratch_cleanup": true,
+      "network_live_db_forbidden": true,
+      "protected_paths_unchanged": true,
+      "protected_path_count": 30,
+      "passed": 1,
+      "failed": 1,
+      "stdout_log": ".git/agent-scratch/dev-worker-bound-red.out",
+      "stderr_log": ".git/agent-scratch/dev-worker-bound-red.err",
+      "deselected_count": 9,
+      "not_run_after_fail_fast": 1
+    },
+    "bound-green": {
+      "process_exit_code": 0,
+      "pytest_exit_code": 0,
+      "status": "passed",
+      "sqlite_memory_connection_count": 3,
+      "private_scratch_cleanup": true,
+      "network_live_db_forbidden": true,
+      "protected_paths_unchanged": true,
+      "protected_path_count": 30,
+      "passed": 3,
+      "failed": 0,
+      "stdout_log": ".git/agent-scratch/dev-worker-bound-green.out",
+      "stderr_log": ".git/agent-scratch/dev-worker-bound-green.err",
+      "deselected_count": 9
+    },
+    "rejection-red": {
+      "process_exit_code": 1,
+      "pytest_exit_code": 1,
+      "status": "failed",
+      "sqlite_memory_connection_count": 1,
+      "private_scratch_cleanup": true,
+      "network_live_db_forbidden": true,
+      "protected_paths_unchanged": true,
+      "protected_path_count": 30,
+      "passed": 0,
+      "failed": 1,
+      "stdout_log": ".git/agent-scratch/dev-worker-rejection-red.out",
+      "stderr_log": ".git/agent-scratch/dev-worker-rejection-red.err",
+      "deselected_count": 12,
+      "not_run_after_fail_fast": 6
+    },
+    "focused-green": {
+      "process_exit_code": 0,
+      "pytest_exit_code": 0,
+      "status": "passed",
+      "sqlite_memory_connection_count": 10,
+      "private_scratch_cleanup": true,
+      "network_live_db_forbidden": true,
+      "protected_paths_unchanged": true,
+      "protected_path_count": 30,
+      "passed": 10,
+      "failed": 0,
+      "stdout_log": ".git/agent-scratch/dev-worker-focused-green.out",
+      "stderr_log": ".git/agent-scratch/dev-worker-focused-green.err",
+      "deselected_count": 9
+    },
+    "suite": {
+      "process_exit_code": 0,
+      "pytest_exit_code": 0,
+      "status": "passed",
+      "sqlite_memory_connection_count": 74,
+      "private_scratch_cleanup": true,
+      "network_live_db_forbidden": true,
+      "protected_paths_unchanged": true,
+      "protected_path_count": 30,
+      "passed": 85,
+      "failed": 0,
+      "stdout_log": ".git/agent-scratch/dev-worker-suite.out",
+      "stderr_log": ".git/agent-scratch/dev-worker-suite.err",
+      "deselected_count": 0
+    },
+    "differential": {
+      "process_exit_code": 0,
+      "pytest_exit_code": 0,
+      "status": "passed",
+      "sqlite_memory_connection_count": 5,
+      "private_scratch_cleanup": true,
+      "network_live_db_forbidden": true,
+      "protected_paths_unchanged": true,
+      "protected_path_count": 30,
+      "passed": 5,
+      "failed": 0,
+      "stdout_log": ".git/agent-scratch/dev-worker-differential.out",
+      "stderr_log": ".git/agent-scratch/dev-worker-differential.err",
+      "deselected_count": 0
+    }
+  },
+  "differential": {
+    "base_cli_extracted_from_git_in_private_scratch": true,
+    "committed_tests_do_not_read_git": true,
+    "modes": [
+      "normal",
+      "local",
+      "cleanup",
+      "watch_poll3",
+      "invalid_root"
+    ],
+    "old_new_invocations": 10,
+    "stdout_stderr_exit_equal": true,
+    "http_and_public_counters_preserved": true
+  },
+  "source_sha256": {
+    "backend/scripts/run_dataset_import_worker.py": "13cd79d81183fe4c36e6d591a016de0dca57273d78b2d7d5d3acdda7cce122d5",
+    "backend/tests/test_dataset_import_worker_cli.py": "d08eb643db2c41edb36dc5ef6bc140355c9e0cb3fb9d3b8a48a3b1bc2be16102",
+    "backend/app/services/dataset_import_execution.py": "f9d949a260aea0c4c00aba405d64c155748c5a5c2e92758659f9dc3148176680",
+    "backend/app/services/dataset_import_worker.py": "e3a831527f8a678e0188a22d98313269e2d4400c635ccf72f277a80eb393a23a",
+    "backend/tests/test_dataset_import_local_worker.py": "643dbab300594ef7fbc20b8f3851e8534a0c2692754a820c0a6b17628501fcf6"
+  },
+  "preservation_before_commit": {
+    "dev_unchanged": true,
+    "original_branch_preserved": true,
+    "original_index_preserved": true,
+    "original_status_preserved": true,
+    "target_isolated_branch": true,
+    "target_base_preserved_before_commit": true,
+    "profile_source_head_preserved": true,
+    "profile_source_clean": true,
+    "accepted_history_head_preserved": true,
+    "accepted_history_clean": true,
+    "s76_receipt_preserved": true,
+    "profile_receipt_preserved": true,
+    "target_app_helpers_unmodified": true
+  },
+  "independent_verifier": {
+    "task": "mvzarjk2-3-oprg",
+    "status": "qualified_source_only_no_severe_blocker",
+    "source_only": true,
+    "executor": "parent",
+    "specs": {
+      "S1": "scope_consistent_parent_operational_proof",
+      "S2": "scope_consistent_parent_preservation_proof",
+      "S3": "pass_source",
+      "S4": "pass_source_and_test_design",
+      "S5": "pass_qualified_parent_differential",
+      "S6": "pass_qualified_parent_execution_no_wallclock_trial"
+    },
+    "executed_commands_or_tests": false
+  },
+  "native_assessment": {
+    "status": "pending"
+  },
+  "limits": {
+    "python": "3.14.8 local; not Python3.12 image",
+    "isolation": "Synthetic CPU, SQLite memory, blocked network, private scratch; audit guard is not an OS sandbox.",
+    "positive_cli_tests": "Public job success for omission/900/3600; exact keyword propagation/defaults source-verified, not wall-clock900s.",
+    "not_run": [
+      "real PostgreSQL",
+      "Docker",
+      "frontend",
+      "real SSD datasets",
+      "S76 replay",
+      "GCS",
+      "services",
+      "physical pool activation",
+      "merge",
+      "push",
+      "PR"
+    ]
+  },
+  "startup_authorized": false,
+  "services_pause": true,
+  "live_window_authorized": false,
+  "commit": "pending"
+}

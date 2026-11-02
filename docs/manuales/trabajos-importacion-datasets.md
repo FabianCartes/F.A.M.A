@@ -619,6 +619,13 @@ crea tablas, migra, carga la API ni arranca un supervisor. No infiere la URL de
 `DATABASE_URL` ni carga archivos dotenv; los límites existentes de importación
 y cola siguen leyendo sus variables documentadas.
 
+`--execution-seconds` permite elegir el plazo cooperativo de cada intento:
+valor finito mayor que 0 y hasta 3600 segundos; omitirlo conserva 300 segundos.
+No cambia lease60s, heartbeat20s, validador ni timeout HTTP, y no mata hilos.
+Valores inválidos devuelven exit2 con `--execution-seconds requires a finite value greater than 0 and at most 3600`;
+con `--cleanup-only`, exit2 con `--execution-seconds is not supported with --cleanup-only`.
+Ambos rechazos son anteriores a recursos. [Alcance y verificación del bloque](integracion-dev-worker-plazo.md).
+
 Cada invocación reclama como máximo un trabajo admisible, incluido un intento
 con lease vencido. Devuelve exit0 y `{"claimed": true}` si reclamó trabajo, o
 `{"claimed": false}` si no había ninguno. **No es una respuesta de éxito del

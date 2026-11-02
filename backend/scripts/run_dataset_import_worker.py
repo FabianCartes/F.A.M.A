@@ -20,12 +20,19 @@ def main(argv=None):
                         help="Supervise local-only attempts in this foreground process; SIGINT/SIGTERM stop after the current attempt.")
     parser.add_argument("--poll-seconds", type=float,
                         help="Wait between watch attempts, including idle polls (finite 1–3600 seconds; default 2).")
+    parser.add_argument("--execution-seconds", type=float,
+                        help="Per-attempt cooperative execution bound in seconds (finite >0 and <=3600; default 300). Does not change the lease, validator or HTTP timeout.")
     args = parser.parse_args(argv)
     if args.watch and not args.local_only:
         parser.error("--watch requires --local-only")
     if args.poll_seconds is not None and (not args.watch or not math.isfinite(args.poll_seconds)
                                           or not 1 <= args.poll_seconds <= 3600):
         parser.error("--poll-seconds requires --watch and a finite value between 1 and 3600")
+    if args.execution_seconds is not None:
+        if not math.isfinite(args.execution_seconds) or not 0 < args.execution_seconds <= 3600:
+            parser.error("--execution-seconds requires a finite value greater than 0 and at most 3600")
+        if args.cleanup_only:
+            parser.error("--execution-seconds is not supported with --cleanup-only")
     interval = args.poll_seconds if args.poll_seconds is not None else 2
     engine = None
     handlers = {}
@@ -53,7 +60,8 @@ def main(argv=None):
             if not args.local_only:
                 from app.services.dataset_import_storage import GCSImportStorage
                 storage = GCSImportStorage()
-            execution = ImportExecution(queue, service, staging, storage=storage)
+            options = {"execution_seconds": args.execution_seconds} if args.execution_seconds is not None else {}
+            execution = ImportExecution(queue, service, staging, storage=storage, **options)
             stop = threading.Event() if args.watch else None
             if stop is not None:
                 for number in (signal.SIGINT, signal.SIGTERM):
