@@ -1,6 +1,6 @@
 {
   "schema": "fama.dev-worker-execution-bound.v1",
-  "status": "verified_target_cli_before_local_commit",
+  "status": "verified_local_integration_block_not_merged",
   "branch": "feat/zip-dev-first-block",
   "base_commit": "adecb01868940421fb44ca56194439908f10b585",
   "scope": "Only explicit cooperative --execution-seconds selection in existing dev CLI; no large-ZIP enablement or delivery to dev.",
@@ -167,7 +167,25 @@
     "executed_commands_or_tests": false
   },
   "native_assessment": {
-    "status": "pending"
+    "status": "assessed_after_explicit_staging",
+    "initial_precondition": "Untracked paths require explicit declaration; first assessment had no candidate and was unassessable. Exactly seven authorized files staged once, without source changes.",
+    "native_risk": "medium",
+    "risk": "high",
+    "agent_escalation_item": 3,
+    "changed_paths": 7,
+    "changed_lines": 332,
+    "review_due": false,
+    "review_due_reason": "under_budget",
+    "native_review_outcome": "unknown",
+    "candidate_consumed": false,
+    "native_review_started_by_this_process": false,
+    "native_review_approved": false,
+    "plan": {
+      "writer_self_verification": true,
+      "independent_verifier": true,
+      "both_completed": true
+    },
+    "scope": "Exact sourceunit before this passive metadata closure; not native approval."
   },
   "limits": {
     "python": "3.14.8 local; not Python3.12 image",
@@ -190,5 +208,24 @@
   "startup_authorized": false,
   "services_pause": true,
   "live_window_authorized": false,
-  "commit": "pending"
+  "commit": "5a7c79f82294bd33a8941496f564e06918602016",
+  "source_tree": "44d855174e4eb340d0796a0cbd084820107cac1d",
+  "source_commit_readback": {
+    "passed_checks": 7,
+    "all_source_commit_blobs_equal_worktree": true,
+    "clean_after_source_commit": true,
+    "source_hashes_equal_tested_sources": true,
+    "evidence": ".git/agent-scratch/dev-worker-source-readback.json"
+  },
+  "delivery_strategy": {
+    "mode": "auto-chain",
+    "boundary": "feature-branch-chain",
+    "source_unit": {
+      "base": "adecb01868940421fb44ca56194439908f10b585",
+      "tip": "5a7c79f82294bd33a8941496f564e06918602016",
+      "authored_lines": 332
+    },
+    "closure_unit": "Passive docs and receipt only, immediately after sourceunit; no source changes.",
+    "historical_hook_note": "138 commits already on dev beyond origin/main are not part of this integration block; do not deliver historical origin/main range."
+  }
 }
