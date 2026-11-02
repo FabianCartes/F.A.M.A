@@ -131,7 +131,7 @@ def _safe_path(value):
     return value
 
 
-def _write_manifest(sessions, revision_id, path):
+def _write_manifest(sessions, revision_id, path, *, writer=None):
     with sessions() as db:
         row = db.get(DatasetRevision, revision_id)
         header = dict(schema_version=1, dataset_id=row.dataset_id, dataset_revision=row.revision,
@@ -140,7 +140,7 @@ def _write_manifest(sessions, revision_id, path):
     # Line-delimited entries inside a standard JSON array allow bounded readers.
     count = total = 0
     cursor = ""
-    with path.open("wb") as stream:
+    with (writer if writer is not None else path.open("wb")) as stream:
         stream.write(json.dumps(header, ensure_ascii=True, sort_keys=True).encode()[:-1] + b', "files": [\n')
         while True:
             batch = _batch(sessions, revision_id, cursor, SyncLimits(bytes=15 * 1024**3))
@@ -198,7 +198,15 @@ def synchronize(execution, attempt, staging):
                 _checkpoint(execution, attempt, revision_id, verified)
         cursor = batch[-1]["member_id"]
     path = staging / "manifest.json"
-    header, digest, size = _write_manifest(execution.queue.sessions, revision_id, path)
+    from app.services.dataset_storage import physical_storage
+    with execution.queue.publication(attempt) as (db, _):
+        physical = physical_storage(execution.service, db)
+        if physical is not None:
+            physical.require(db, execution.service, f"{attempt['import_id']}:{attempt['id']}",
+                             "sync", physical.manifest_bytes, attempt=attempt["attempt"],
+                             token=attempt["token"], role="manifests")
+    writer = physical.writer(path, physical.manifest_bytes, role="manifests") if physical is not None else None
+    header, digest, size = _write_manifest(execution.queue.sessions, revision_id, path, writer=writer)
     key = f"private-imports/{attempt['owner_id']}/{header['dataset_id']}/revisions/{header['dataset_revision']}/{digest}.json"
     with execution.queue.publication(attempt):
         pass

@@ -1,9 +1,9 @@
-"""Inactive physical budget policy, adapted from the preserved storage reference.
+"""Explicit opt-in physical budget policy, adapted from the preserved reference.
 
 Promises include materialized bytes: this is conservative authority, not disk
 preallocation. Caller holds filesystem ownership locks BEFORE the queue gate,
 serializes every request under that gate, and owns commit/rollback. Constructors
-and verification never create directories or tables. No lifecycle is wired here.
+and verification never create directories or tables. Runtime activation is external.
 """
 import hashlib
 import json
@@ -109,11 +109,12 @@ def _mount(path):
 class PhysicalStorage:
     """Single Linux host/mount namespace; private same-user local roots only."""
 
-    def __init__(self, *, roots, pools, free_floors):
+    def __init__(self, *, roots, pools, free_floors, manifest_bytes=64 * 1024**2):
         if set(roots) != ROLES or set(pools) != ROLES or set(free_floors) != set(pools.values()):
             raise ValueError("Every writer role requires an explicit physical pool")
         if any(not isinstance(pool, str) or not 1 <= len(pool) <= 64 for pool in pools.values()):
             raise ValueError("Invalid physical pool identity")
+        self.manifest_bytes = _integer(manifest_bytes, positive=True)
         self.roots = {role: Path(path) for role, path in roots.items()}
         self.pools = dict(pools)
         self.free_floors = {pool: _integer(value, positive=True) for pool, value in free_floors.items()}
@@ -133,6 +134,7 @@ class PhysicalStorage:
         self.configuration_sha256 = _hash({
             "version": 1, "roots": {role: str(path) for role, path in self.roots.items()},
             "pools": self.pools, "floors": self.free_floors, "mounts": self.mounts,
+            "manifest_bytes": self.manifest_bytes,
         })
 
     def verify(self, db, service=None):
@@ -144,7 +146,7 @@ class PhysicalStorage:
             if service is not None:
                 if Path(service.root) != self.roots["imports"]:
                     _reject()
-                if Path(service.attempt_root) != self.roots["attempts"]:
+                if getattr(service, "attempt_root", None) is None or Path(service.attempt_root) != self.roots["attempts"]:
                     _reject()
             for role, path in self.roots.items():
                 if _mount(path) != self.mounts[role]:
@@ -225,6 +227,82 @@ class PhysicalStorage:
                 or row.phase != phase or row.attempt != attempt or row.token != token
                 or row.envelope_bytes != amount or row.policy_sha256 != self.policy_hash(service.limits)):
             _reject()
+        return row
+
+    def attempt(self, db, service, attempt, *, reviewed=None):
+        """Caller owns current attempt/import locks and a validated queue fence.
+
+        An initial envelope has no writer. Its transfer commits with the exact
+        running token before extraction. Old attempts otherwise remain charged.
+        """
+        from app.models.dataset_import import DatasetImport
+        source = db.get(DatasetImport, attempt["import_id"])
+        if attempt["kind"] == "confirm" and source.status == "imported":
+            return  # Replay cannot create payload and may follow completed cleanup.
+        if attempt["kind"] == "sync":
+            self.acquire(db, resource=f"{attempt['import_id']}:{attempt['id']}", phase="sync",
+                         attempt=attempt["attempt"], token=attempt["token"],
+                         amounts={self.pools["manifests"]: self.manifest_bytes}, policy=self.policy_hash(service.limits))
+            return
+        from app.models.dataset_import_receipt import ImportReceipt
+        receipt = db.get(ImportReceipt, attempt["import_id"])
+        if receipt is None:
+            _reject()
+        self.require(db, service, attempt["import_id"], "archive", receipt.size_bytes)
+        amount = service.limits.expanded_bytes * (1 if attempt["kind"] == "confirm" else 2)
+        phase = "preview" if attempt["kind"] == "preview" and not source.request.get("auto_import") else "attempt"
+        pool = self.pools["attempts"]
+        resource = f"{attempt['import_id']}:{attempt['id']}"
+        initial = db.get(StorageGrant, _hash([attempt["import_id"], "initial", 0, 0, pool]),
+                         populate_existing=True)
+        with db.begin_nested():
+            if attempt["kind"] == "preview" and initial is not None and initial.state == "live":
+                self.require(db, service, attempt["import_id"], "initial", amount)
+                initial.state = "retired"
+                db.flush()
+            elif reviewed is not None:
+                old_resource, number, token = reviewed
+                old = db.get(StorageGrant, _hash([old_resource, "preview", number, token, pool]),
+                             populate_existing=True)
+                if old is not None and old.state == "live":
+                    self.require(db, service, old_resource, "preview", 2 * amount,
+                                 attempt=number, token=token, role="attempts")
+                    # Succeeded is a durable token fence AND caller owns its
+                    # flock. Retain extraction's half; transfer only output.
+                    old.state = "retired"
+                    db.flush()
+                    self.acquire(db, resource=old_resource, phase="retained", attempt=number, token=token,
+                                 amounts={pool: amount}, policy=self.policy_hash(service.limits))
+            self.acquire(db, resource=resource, phase=phase, attempt=attempt["attempt"],
+                         token=attempt["token"], amounts={pool: amount}, policy=self.policy_hash(service.limits))
+
+    def reclaim(self, db, service, identity, retained_bytes):
+        """After durable deletion, with import AND every attempt flock held.
+
+        Cleanup's committed deleting fence rejects future callbacks. Remaining
+        object bytes are transferred, not forgiven because status is imported.
+        """
+        self.verify(db, service)
+        _integer(retained_bytes)
+        rows = db.query(StorageGrant).filter(StorageGrant.state == "live").filter(
+            (StorageGrant.resource_id == identity) | StorageGrant.resource_id.startswith(identity + ":")).all()
+        if retained_bytes > sum(row.envelope_bytes for row in rows):
+            _reject()
+        for row in rows:
+            if row.phase != "published" or not retained_bytes:
+                row.state = "retired"
+        db.flush()
+        if retained_bytes:
+            self.acquire(db, resource=identity, phase="published", attempt=0, token=0,
+                         amounts={self.pools["objects"]: retained_bytes}, policy=self.policy_hash(service.limits))
+
+    def check_free(self, role, amount=0):
+        if shutil.disk_usage(self.roots[role]).free - amount < self.free_floors[self.pools[role]]:
+            _reject(507)
+
+    def writer(self, destination, maximum, *, role):
+        from app.services.dataset_manifest_stream import BoundedWriter
+        return BoundedWriter(destination, maximum, check=lambda amount=0: self.check_free(role, amount))
 
     def retire(self, db, resource, *, durable_stop=False, phase=None):
         """Caller attests a DURABLE stop fence under exclusive filesystem locks.
@@ -242,3 +320,19 @@ class PhysicalStorage:
         for row in query:
             row.state = "retired"
         db.flush()
+
+
+def physical_storage(service, db):
+    """Only explicit configuration plus an active marker authorizes physical I/O."""
+    policy = getattr(service, "storage_policy", None)
+    if policy is not None:
+        policy.verify(db, service)
+        return policy
+    try:
+        if inspect(db.connection()).has_table(StorageSchema.__tablename__):
+            marker = db.get(StorageSchema, 1, populate_existing=True)
+            if marker is not None and (marker.version != 1 or marker.state != "prepared"):
+                _reject()
+    except SQLAlchemyError:
+        _reject()
+    return None

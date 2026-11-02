@@ -5,6 +5,8 @@ import fcntl
 import shutil
 import time
 import uuid
+import re
+from contextlib import ExitStack
 
 from sqlalchemy import func
 
@@ -44,9 +46,45 @@ class ImportExecution:
         fd = os.open(staging, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self.preparation(attempt)
             return self._execute(attempt, staging, report)
         finally:
             os.close(fd)
+
+    def preparation(self, attempt):
+        """Before payload writes, own filesystem locks then validate queue token.
+
+        The callback already owns its attempt flock through actual unwind. The
+        worker's cooperative timeout does not release that ownership.
+        """
+        from app.services.dataset_storage import physical_storage
+        with self.queue.sessions() as db, self.service.mutation(db, attempt["import_id"]), ExitStack() as locks:
+            reviewed = None
+            source = db.get(DatasetImport, attempt["import_id"])
+            summary = required_summary(db, ImportSummary, source.id)
+            name = summary.preview.get("staging_attempt", "")
+            match = re.fullmatch(r"([0-9a-f]{32})-([1-9][0-9]*)-([1-9][0-9]*)", name)
+            if (self.service.storage_policy is not None and attempt["kind"] == "confirm"
+                    and source.status == "ready" and match and not source.request.get("auto_import")):
+                from app.models.dataset_import_job import ImportJob
+                old = db.get(ImportJob, match[1])
+                if (old and old.import_id == source.id and old.kind == "preview" and old.status == "succeeded"
+                        and old.attempt == int(match[2]) and old.token == int(match[3])):
+                    fd = os.open(self.root / name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                    locks.callback(os.close, fd)
+                    try:
+                        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        reviewed = (f"{source.id}:{old.id}", old.attempt, old.token)
+                    except BlockingIOError:
+                        pass  # Unwinding is not death: retain charge, acquire fresh output.
+            db.rollback()
+            self.queue._current(db, attempt)
+            from app.services.dataset_import_cleanup import require_available
+            require_available(db, attempt["import_id"])
+            physical = physical_storage(self.service, db)
+            if physical is not None:
+                physical.attempt(db, self.service, attempt, reviewed=reviewed)
+            db.commit()
 
     def _execute(self, attempt, staging, report):
         self.service._initialize()

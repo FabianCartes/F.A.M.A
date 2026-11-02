@@ -82,6 +82,12 @@ class ExportQueue:
                 or type(revision) is not int or revision < 0):
             reject(422, "Solicitud de exportación no válida.")
         with self.sessions() as db, db.begin():
+            from app.services.dataset_storage import physical_storage
+            # Retain owner authorization; refuse unsupported physical execution
+            # before the first queue mutation, not after creating an export job.
+            self.service.dataset(db, owner, dataset_id)
+            if physical_storage(self.service, db) is not None:
+                reject(503, "Las exportaciones no están habilitadas con presupuesto físico.")
             _gate(db)
             reference = authorized_reference(self.service, db, owner, dataset_id, revision)
             if reference["status"] != "complete":
@@ -117,6 +123,9 @@ class ExportQueue:
     def claim(self, *, lease_seconds):
         duration = lease_duration(lease_seconds)
         with self.sessions() as db, db.begin():
+            from app.services.dataset_storage import physical_storage
+            if physical_storage(self.service, db) is not None:
+                reject(503, "Las exportaciones no están habilitadas con presupuesto físico.")
             _gate(db)
             now = self.jobs._now(db)
             row = db.scalar(select(DatasetExport).where(or_(DatasetExport.status == "queued",

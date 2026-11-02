@@ -1,22 +1,26 @@
-# Presupuesto físico de importación: corte independiente e inactivo
+# Presupuesto físico de importación: integración opt-in sin activación
 
 ## Estado y alcance
 
-**Política independiente T6.1 comprobada con datos sintéticos; todavía inactiva.**
-La revisión independiente del padre y la integración del ciclo completo siguen
-pendientes. No se ejecutó el ZIP real ni se inició servicio alguno. El SSD solo
-recibió snapshots nuevos de fuentes públicas y sus artefactos de prueba, mediante
-el helper del padre. No se leyeron datasets históricos ni el ZIP original.
+**T6.1 aceptada; T6.2 integra el ciclo mediante opt-in explícito del servicio.**
+No hay activación de perfil ni selección común API/worker: corresponden a T6.3,
+junto con la calificación operativa. La aceptación de T6.2 y la verificación
+independiente pertenecen al padre. No se ejecutó el ZIP real ni se inició servicio
+alguno. El SSD solo recibió snapshots nuevos de fuentes públicas y artefactos
+sintéticos mediante helpers del padre; no se leyeron datasets históricos ni el ZIP.
 
-Los módulos nuevos no se exportan desde `models/__init__.py`, no crean tablas al
-importarse y no están conectados a recepción, worker, publicación o limpieza.
-El comportamiento predeterminado de dev no cambia. Este corte cubre la política
-independiente de S12/S13; no incorpora S76 completo, sesiones web, entrenamiento,
-GCS, exportaciones ejecutables ni cambios a `--execution-seconds`.
+`DatasetImports(root, limits=..., storage_policy=None)` conserva el modo normal.
+El opt-in conecta recepción fragmentada, preparación de intentos, manifiestos y
+limpieza; no crea tablas ni activa pools. El constructor obtiene `attempt_root`
+de la configuración explícita para admitir recepción antes de crear el worker.
+`ImportExecution` verifica la misma raíz antes de escribir payloads. Se rechazan
+el upload legacy sin reserva y las exportaciones físicas (admisión y claim), sin
+incorporar ejecución de exportaciones, S76 completo, sesiones web, entrenamiento,
+GCS real ni cambios a `--execution-seconds`.
 
-## Interfaz para el siguiente corte
+## Interfaz y autoridad física
 
-`PhysicalStorage(roots=..., pools=..., free_floors=...)` inspecciona únicamente
+`PhysicalStorage(roots=..., pools=..., free_floors=..., manifest_bytes=64*1024**2)` inspecciona únicamente
 raíces existentes, absolutas, físicas, privadas y del usuario actual. No prepara
 rutas ni esquema. Exige seis roles: `imports`, `objects`, `attempts`, `manifests`,
 `scratch`, `exports`. Los cuatro primeros comparten un pool; `objects` es
@@ -55,7 +59,7 @@ transacción siguen contando. Parámetros numéricos/identidades mal formados de
 `acquire` producen `ValueError`; incompatibilidad de perfil o autoridad produce
 HTTP503 y falta de capacidad HTTP507, ambos sin concesión parcial.
 
-## Reproducción y evidencia observada
+## Reproducción y evidencia histórica T6.1
 
 El intento inicial desde el worktree Btrfs tuvo RED por módulo ausente y luego
 rechazó su filesystem antes de SQLite. No se relajaron la allowlist, la guarda ni
@@ -152,24 +156,139 @@ Esto acredita relectura tras commits controlados entre sesiones, **no**
 serialización simultánea, fencing de procesos ni importación real. El padre
 conserva la aceptación y el recheck exacto del gap; no se inició otro verificador.
 
-## Obligaciones pendientes antes de activación (T6.2+)
+## Ciclo integrado T6.2 (S12/S13)
 
-1. Verificar concurrencia real con gate/locks y parada durable. El retiro probado
-   es una atestación dentro de SQLite, no una prueba de muerte de procesos.
-2. Añadir preparación explícita de esquema, ownership de intentos, writers acotados,
-   recepción/publicación/limpieza y configuración común API/worker. Nada de ello
-   está conectado por este corte. No existe `dataset_manifest_stream` nuevo.
-3. Calificar remounts/namespaces, varios pools físicos y PostgreSQL. Se probaron
-   raíces privadas reales de ext4 y rechazo por cambios de privacidad, no cambios
-   de mount ni adquisición concurrente en varios dispositivos.
-4. Calificar capacidades, pisos y ubicación de todos los archivos pesados bajo
-   el destino SSD aprobado, conservando el original; recién después considerar
-   la ventana manual. Un presupuesto no demuestra preasignación física,
-   recuperación de bytes, lectura válida de audios ni importación completada.
-5. La prueba local Python 3.14 no acredita Docker/Python 3.12. La guarda de
-   aplicación no equivale a un sandbox OS. La revisión independiente sigue siendo
-   necesaria antes de aceptar esta unidad de concurrencia/rutas.
+- La reserva lógica del recibo mantiene ZIP + una expansión y sus límites previos.
+  La concesión física independiente cobra ZIP + dos expansiones antes del commit.
+  Append/finalize exigen la autoridad viva exacta del archivo antes de abrir payload;
+  cada bloque nuevo comprueba que su tamaño no atraviese el piso físico.
+- El callback posee el flock del intento hasta terminar realmente. Su preparación
+  toma además el lock de importación y después el gate; valida el token vigente y
+  transfiere la reserva inicial antes de extraer. El worker puede haber creado un
+  directorio vacío antes: no acredita autoridad ni permite escribir payloads.
+- Confirmación puede transferir la mitad de una preview no automática solamente
+  con su job `succeeded` durable y su flock adquirido. La otra mitad sigue cobrando
+  la extracción. Si el lock está ocupado, se conserva todo el cargo viejo y se
+  necesita presupuesto nuevo. Intentos abandonados no se descuentan por timeout.
+- La publicación solo libera la promesa lógica histórica; **no libera concesiones
+  físicas por el estado `imported`**. Limpieza toma el lock de importación y todos
+  los flocks descubiertos, confirma el fence `deleting`, elimina staging/intentos y
+  sincroniza sus directorios. Solo entonces transfiere el cargo a los bytes reales
+  que siguen en `objects`. Un fallo de borrado/fsync conserva el cargo anterior.
+  Una raíz de intentos diferente se rechaza antes de borrar; no prueba parada.
+- Sync cobra un envelope de manifiesto por intento/token. El writer limita los
+  bytes antes de cada escritura y revalida el piso, incluido el próximo bloque.
+  Sync posterior a limpieza no requiere resucitar la autoridad del ZIP eliminado.
+  Los manifiestos locales siguen cobrados hasta su eliminación durable.
+- Un marcador activo con servicio no configurado falla cerrado antes de crear
+  archivos de lock. El estado `prepared` nunca autoriza un servicio físico.
+  No se modifican autenticación, acceso por propietario ni rutas HTTP.
 
-No corresponde verificación diferencial de helpers compartidos: solo se añaden
-módulos desconectados y se enlaza documentación; no se modificó ningún helper,
-runner, migración o consumidor existente.
+### Preparación explícita: solo metadatos nuevos y vacíos
+
+`backend/scripts/migrate_dataset_storage.py` ofrece `inspect_storage(engine)` y
+`migrate_storage(engine, writers_stopped=True)`. No añade CLI, no carga dotenv ni
+elige una DB ambiental. Inspeccionar no crea tablas; preparar exige gate verificado,
+base de importaciones/datasets/jobs vacía y ninguna autoridad/pool previa. Crea
+solo metadatos aditivos en estado `prepared`, nunca un pool activo. No adopta ni
+reconcilia trabajo histórico. No se ejecutó migración sobre una DB real: las pruebas
+usan SQLite en memoria y preparan pools activos explícitamente como fixtures.
+La activación y reconciliación operativas siguen fuera de este corte.
+
+### Evidencia TDD del ciclo
+
+Todos los snapshots siguientes usan el prefijo `storage-budget-check-` bajo el
+SSD autorizado y conservan stdout/stderr/result/manifest. La ejecución focal usa:
+
+```sh
+/home/kevin/Work/fama/.venv/bin/python /home/kevin/Work/fama/.git/agent-scratch/run_storage_budget_on_ssd.py tests/test_dataset_import_physical_lifecycle.py
+```
+
+| Snapshot | Evidencia observada |
+| --- | --- |
+| `ofhoqbc3` | RED: constructor no acepta `storage_policy` |
+| `078521n2` | Fixture incompleta: faltaba preparación del protocolo de recibos; corregida antes del RED de comportamiento |
+| `zlmgveff` → `jow4tjl9` | RED: reserva física insuficiente aceptada HTTP200 → GREEN HTTP507 y posterior reserva exacta aceptada |
+| `eq3wdfoj` → `qaueip69` → `xruaj0at` | RED append y luego RED finalize aceptaban token corrupto; GREEN ambos rechazan HTTP503 sin cambios de payload/recibo |
+| `vlcioqug` → `ibg7oetc` | RED: intento extraía con autoridad inicial corrupta → GREEN; aparece RED transferencia confirm sin capacidad adicional |
+| `8sk03aia` → `ruj8p788` | Transferencia GREEN; RED cargo de staging no se recuperaba tras borrado → GREEN conserva solo bytes publicados |
+| `h7h9f_qp` → `jdiy2jca` | RED servicio no configurado creaba import → GREEN antes de locks; RED upload sin reserva |
+| `3qu38cus` → `43s2lm9a` | Upload sin reserva GREEN; export físico RED → GREEN; writer de manifiesto RED superaba envelope de 32 bytes |
+| `jmc2zflf` | GREEN writer acotado y piso tras transferencia; 15 PASS incluyendo migración |
+| `efrkh0g8` → `ceb6y1y3` → `c_5vlh8v` | RED raíz de limpieza incorrecta aceptada → GREEN; RED sync exigía ZIP ya retirado → GREEN |
+| `wyjjkmun` → `drj696qk` | RED append ignoraba piso → piso inferior GREEN y RED bloque que atravesaba el piso |
+| `bd14nnpa` | GREEN límite previo a escritura; triangulación de flock ocupado y fsync fallido; 22 PASS |
+| `utruikyn` → `0_7zajt3` | RED claim de export físico no rechazaba → GREEN; 22 PASS con migración y prueba posterior de cargo conservado |
+
+La migración tuvo RED por módulo ausente en `edj28kah`, seguido de **3 PASS** en
+`thl524c5`, mediante el mismo helper con `tests/test_dataset_storage_migration.py`.
+Las reglas ya correctas al añadir pruebas (prepared no autoriza, retención hasta
+limpieza, flock que impide borrar y fsync fallido) son triangulación del contrato
+reutilizado, no RED fabricados. Las fixtures pueden sembrar corrupción; ninguna
+aserción consulta filas internas de concesiones. Los efectos y capacidad restante
+se observan con HTTP, archivos sintéticos y solicitudes públicas posteriores.
+
+## Obligaciones pendientes antes de activación (T6.3/T6.4)
+
+1. Configuración común API/worker y selección operativa de las seis raíces; ningún
+   entrypoint, perfil ambiental o servicio se activa en T6.2.
+2. Calificación de procesos, concurrencia real, sandbox, límites de tiempo y parada.
+   Un flock sintético ocupado no acredita muerte de procesos; timeout cooperativo
+   nunca se usa como tal prueba. Conservar el presupuesto 26 GiB y piso 1 GiB del
+   perfil previsto, sin confundirlo con las magnitudes pequeñas de las fixtures.
+3. Calificar remounts/namespaces, varios pools, PostgreSQL y Docker/Python 3.12.
+   Las comprobaciones presentes son SQLite en memoria sobre ext4 con red bloqueada;
+   la guarda de aplicación no equivale a un sandbox OS ni a calificación operacional.
+4. Verificar ubicación/capacidad de todos los payloads bajo el nuevo destino SSD,
+   conservar el original y solo después abrir una ventana manual autorizada.
+5. El padre conserva ASSESS y la única verificación independiente de esta unidad
+   de concurrencia/rutas (riesgos 4 y 2), así como commits y seguimiento canónico.
+
+La nota anterior de T6.1 sobre ausencia de diferencial solo describe aquel corte
+independiente. T6.2 sí modifica consumidores compartidos y exige la comparación
+pública baseline/candidato mediante el helper read-only suministrado por el padre.
+
+## Cierre observado T6.2
+
+La suite requerida se particionó **antes** de ejecutarla para no exceder el timeout
+externo de 25 s del helper (bash foreground 30 s; guarda interna original 30 s).
+No hubo timeout, retry, background ni cambio del runner/guarda.
+
+```sh
+/home/kevin/Work/fama/.venv/bin/python /home/kevin/Work/fama/.git/agent-scratch/run_storage_budget_on_ssd.py tests/test_dataset_storage_budget.py tests/test_dataset_import_physical_lifecycle.py tests/test_dataset_storage_migration.py tests/test_dataset_import_receipts.py tests/test_dataset_import_chunks.py tests/test_dataset_import_cleanup.py
+/home/kevin/Work/fama/.venv/bin/python /home/kevin/Work/fama/.git/agent-scratch/run_storage_budget_on_ssd.py tests/test_dataset_import_execution.py tests/test_dataset_import_quotas.py tests/test_dataset_import_worker_cli.py tests/test_dataset_import_manifests.py
+/home/kevin/Work/fama/.venv/bin/python /home/kevin/Work/fama/.git/agent-scratch/run_storage_lifecycle_differential.py
+```
+
+- Primera partición: `storage-budget-check-u3ic6z5r`, **exit 0, 94 PASS en
+  17.78 s**, 95 conexiones SQLite en memoria, stderr vacío.
+- Segunda: `storage-budget-check-fsh1c1q3`, **exit 0, 54 PASS en 14.23 s**,
+  52 conexiones SQLite en memoria. Stderr contiene únicamente los mensajes de
+  CLI negativos esperados ya descritos en T6.1 (usage/argumentos obligatorios y
+  `Import worker unavailable; preserve state and inspect the operation manual.`).
+- Total del cierre: **148 PASS**, sin skips, exclusiones ni deselecciones. Ambas
+  particiones conservaron las 306 fuentes copiadas sin cambios, las 30 entradas
+  protegidas intactas y retiraron el scratch privado. Logs completos y manifiestos
+  SHA permanecen en esos snapshots; no se borraron los artefactos de evidencia.
+- Diferencial ejecutado una vez después de implementar: **exit 0**,
+  `storage-public-differential-ojgomkpg/result.json`. Baseline fijo
+  `91399af45f1f2dfc5a8052421fb43ddff2754a6b` y candidato ejecutaron el mismo probe
+  público, SHA256 `55a76f82a676d643076c6ef2b0b18b047bfe2abbaae5fe23e2b4b114960ca067`.
+  Cada brazo: 1 PASS, exit 0, stderr vacío, una conexión SQLite en memoria,
+  30 protegidos intactos y scratch retirado (1.01 s baseline, 0.98 s candidato).
+  Exit, traza pública proyectada y stderr coinciden exactamente. La proyección
+  común excluye IDs/tiempos **antes** de comparar: preview, publicación/replay,
+  catálogo, descarga SHA, reserva, chunks/replay/rechazo conservando prefijo,
+  finalize, cancel, cleanup y descarga retenida. No se afirma igualdad del stdout
+  crudo del runner, que contiene rutas/tiempos; ambos stdout originales se conservan.
+  El candidato permaneció byteidéntico al snapshot durante el diferencial.
+- La última focal previa al cierre, `0_7zajt3`, ejecutó lifecycle+migration:
+  **22 PASS en 6.18 s**, exit 0, sin deselecciones; 22 conexiones SQLite en memoria,
+  306 fuentes sin cambios, 30 protegidos intactos, cleanup del scratch y stderr vacío.
+
+La integración excede la heurística de 400 líneas porque reserva, transferencia,
+retiro, pruebas públicas y explicación deben preservar un único ciclo coherente;
+no se comprimió código ni se separó artificialmente una recepción insegura.
+La evidencia sigue siendo sintética: no se activa perfil, servicio ni migración
+real, no se abre el ZIP original, no se prueba escala máxima ni varios procesos.
+Los resultados no sustituyen ASSESS/verificación independiente del padre.

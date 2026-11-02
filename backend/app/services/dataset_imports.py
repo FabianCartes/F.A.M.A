@@ -48,9 +48,14 @@ def _durable_directory(path):
 
 
 class DatasetImports:
-    def __init__(self, root, *, limits=None):
+    def __init__(self, root, *, limits=None, storage_policy=None):
         self.root = Path(root)
         self.limits = limits or ImportLimits.from_environment()
+        self.storage_policy = storage_policy
+        if storage_policy is not None:
+            # Receipt can precede construction of the worker. Never infer a
+            # different attempt root or fail with AttributeError in that order.
+            self.attempt_root = storage_policy.roots["attempts"]
 
     def _initialize(self):
         if not self.root.is_absolute() or self.root != self.root.resolve():
@@ -72,6 +77,8 @@ class DatasetImports:
 
     @contextmanager
     def mutation(self, db, key=None):
+        from app.services.dataset_storage import physical_storage
+        physical_storage(self, db)  # Fail closed before even creating lock files.
         self._initialize()
         lock_name = "mutation.lock" if key is None else "import-" + hashlib.sha256(key.encode()).hexdigest() + ".lock"
         fd = os.open(self.root / lock_name, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
@@ -114,13 +121,19 @@ class DatasetImports:
         required_summary(db, ImportSummary, row.id)
         return row
 
-    def require_idle(self, db, import_id):
+    def require_idle(self, db, import_id, *, allow_unreserved=False):
         """Protect source mutation against already admitted/recoverable work."""
         from app.models.dataset_import_job import ImportJob
         from app.services.dataset_import_jobs import ACTIVE, _gate
         _gate(db)
         from app.services.dataset_import_cleanup import require_available
         require_available(db, import_id)
+        from app.services.dataset_storage import physical_storage, _reject
+        physical = physical_storage(self, db)
+        if physical is not None and not allow_unreserved:
+            from app.services.dataset_import_receipts import has_receipt
+            if not has_receipt(db, import_id):
+                _reject()  # The legacy whole-body route has no physical envelope.
         if db.query(ImportJob.id).filter(ImportJob.import_id == import_id, ImportJob.status.in_(ACTIVE)).first():
             reject(409, "La importación tiene un trabajo activo. Consulta su estado antes de modificarla.")
 
@@ -185,7 +198,9 @@ class DatasetImports:
             db.commit()
             return self.view(row)
 
-    def space(self):
+    def space(self, amount=0):
+        if self.storage_policy is not None:
+            self.storage_policy.check_free("imports", amount)
         if shutil.disk_usage(self.root).free < self.limits.free_bytes:
             reject(507, "Espacio disponible insuficiente. Libera espacio o consulta al administrador.")
 
@@ -240,7 +255,7 @@ class DatasetImports:
     def cancel(self, db, owner, job_id):
         with self.mutation(db, job_id):
             row = self.job(db, owner, job_id)
-            self.require_idle(db, job_id)
+            self.require_idle(db, job_id, allow_unreserved=True)
             if row.status in ("imported", "committing"):
                 reject(409, "No se puede cancelar una importación confirmada o en recuperación.")
             row.status = "cancelled"
