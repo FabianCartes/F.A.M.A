@@ -1,0 +1,67 @@
+{
+  "schema": "fama.dev-worker-local-delivery.v1",
+  "kind": "authorized_local_delivery_manifest_with_observed_source_fast_forward",
+  "authorization": {
+    "request": "Cerremos la entrega a dev",
+    "human_selection": "Integrar en dev local",
+    "effect": "Incorporar los dos commits a dev sin push ni PR, preservando el checkout original y sin iniciar servicios."
+  },
+  "source_delivery": {
+    "branch": "dev",
+    "from_commit": "adecb01868940421fb44ca56194439908f10b585",
+    "to_commit": "c70540f812db3d8961299611b627a6e504b5f1ef",
+    "source_commits": [
+      "5a7c79f82294bd33a8941496f564e06918602016",
+      "c70540f812db3d8961299611b627a6e504b5f1ef"
+    ],
+    "method": "git merge --ff-only",
+    "observed_checks": {
+      "local_dev_is_exact_source_tip": true,
+      "dev_worktree_is_dev_and_clean": true,
+      "source_commits_exactly_two": true,
+      "tested_source_hashes_equal_in_both_worktrees": true,
+      "historical_verification_receipt_unchanged": true,
+      "original_branch_preserved": true,
+      "original_status_preserved": true,
+      "original_index_preserved": true,
+      "no_new_backend_changes_in_preparation": true,
+      "dev_descends_from_expected_base": true
+    }
+  },
+  "documentation_closure": {
+    "source": "feat/zip-dev-first-block",
+    "scope": "README, KANBAN, canonical guide and this delivery manifest only",
+    "method": "Separate passive commit followed by local fast-forward",
+    "final_ref_proof": ".git/agent-scratch/dev-worker-local-delivery-final.json"
+  },
+  "existing_verification": {
+    "receipt": "docs/receipts/dev-worker-execution-bound.json",
+    "sha256": "3f54c26c3a512e668cb4f1118b53177da6042353af9420f18cdfb4d331ea4dc8",
+    "tests_previously_passed": 85,
+    "tests_deselected_in_complete_suite": 0,
+    "differential_previously_passed": 5,
+    "source_only_independent_verifier": "mvzarjk2-3-oprg",
+    "rerun_now": false,
+    "reason": "Delivery changes Git refs and passive documentation only; tested backend bytes are identical."
+  },
+  "source_sha256": {
+    "backend/scripts/run_dataset_import_worker.py": "13cd79d81183fe4c36e6d591a016de0dca57273d78b2d7d5d3acdda7cce122d5",
+    "backend/tests/test_dataset_import_worker_cli.py": "d08eb643db2c41edb36dc5ef6bc140355c9e0cb3fb9d3b8a48a3b1bc2be16102",
+    "backend/app/services/dataset_import_execution.py": "f9d949a260aea0c4c00aba405d64c155748c5a5c2e92758659f9dc3148176680",
+    "backend/app/services/dataset_import_worker.py": "e3a831527f8a678e0188a22d98313269e2d4400c635ccf72f277a80eb393a23a",
+    "backend/tests/test_dataset_import_local_worker.py": "643dbab300594ef7fbc20b8f3851e8534a0c2692754a820c0a6b17628501fcf6"
+  },
+  "limits": [
+    "Local dev only; no remote publication or PR.",
+    "No services, data access, storage activation or GCS.",
+    "Does not enable the large-ZIP profile.",
+    "Prior receipt remains an immutable historical snapshot, not a live dev-ref assertion.",
+    "Actual final branch identity is established by Git and final readback, not this manifest alone."
+  ],
+  "pushed": false,
+  "pull_request_created": false,
+  "services_started": false,
+  "startup_authorized": false,
+  "services_pause": true,
+  "live_window_authorized": false
+}

@@ -1,6 +1,6 @@
 # Centro de Documentación Técnica — F.A.M.A.
 
-**Primer bloque ZIP hacia dev — completo en rama aislada:** [plazo explícito del worker](./manuales/integracion-dev-worker-plazo.md) y [recibo verificable](./receipts/dev-worker-execution-bound.json). Fuente `5a7c79f`,85PASS y diferencial5casos; solo opción del CLI, sin auth/esquema/almacenamiento ni perfil grande. `dev` y servicios intactos; no es entrega integrada ni aprobación nativa.
+**Primer bloque ZIP — entrega exclusiva a dev local:** [alcance y seguimiento](./manuales/integracion-dev-worker-plazo.md), [verificación del código](./receipts/dev-worker-execution-bound.json) y [manifiesto de entrega](./receipts/dev-worker-local-delivery.json). Fuente `5a7c79f` + cierre `c70540f` incorporados por avance rápido, sin nuevo backend. No push, PR, servicios ni perfil ZIP grande. Los recibos anteriores conservan el estado histórico de su ejecución; no describen refs en tiempo real.
 
 Bienvenido al repositorio documental del proyecto **F.A.M.A.** (*Framework MLOps Híbrido para Clasificación Acústica Multi-Dominio*).
 
