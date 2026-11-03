@@ -40,6 +40,13 @@ export const jobSchema = z.object({
 });
 export const datasetSchema = z.object({ id: z.string(), name: z.string(), file_count: z.number(), revision: z.number().int().nonnegative().optional() });
 export const datasetsPageSchema = pageMetadataSchema.extend({ datasets: z.array(datasetSchema).max(200) });
+export const catalogDatasetSchema = datasetSchema.extend({
+  description: z.string().nullable(), revision: z.number().int().nonnegative(),
+  class_count: z.number().int().nonnegative(), total_size_bytes: z.number().int().nonnegative(),
+  synced_file_count: z.number().int().nonnegative(),
+});
+export const catalogPageSchema = pageMetadataSchema.extend({ datasets: z.array(catalogDatasetSchema).max(200) });
+export type CatalogDataset = z.infer<typeof catalogDatasetSchema>;
 export const jobsPageSchema = pageMetadataSchema.extend({ imports: z.array(jobSchema).max(200) });
 export const limitsSchema = z.object({
   received_bytes: z.number(), expanded_bytes: z.number(), entries: z.number(), depth: z.number(),

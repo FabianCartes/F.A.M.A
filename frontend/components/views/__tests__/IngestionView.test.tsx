@@ -1,9 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, act, within, getDefaultNormalizer } from '@testing-library/react';
+import { render, screen, fireEvent, act, within, getDefaultNormalizer, waitFor } from '@testing-library/react';
 import IngestionView from '../IngestionView';
 import * as feedbackApi from '@/lib/api/feedbackApi';
 
 vi.mock('@/lib/api/feedbackApi', () => ({ getPendingFeedback: vi.fn(), getFeedbackSync: vi.fn(), approveFeedback: vi.fn(), rejectFeedback: vi.fn(), getFeedbackStats: vi.fn(), sendFeedback: vi.fn() }));
+const privateCatalogFixture = (input: RequestInfo | URL) => {
+  const path = new URL(String(input), 'http://localhost').pathname;
+  if (path === '/api/ingestion/imports/access') return { development_mode: true };
+  if (path === '/api/ingestion/imports/datasets') return { datasets: [], next_cursor: null, total: 0, snapshot: 'empty' };
+  return undefined;
+};
 const mockStatus = { connected: true, bucket: 'fama-audio-records-2026', total_objects: 120, total_bytes: 10485760, error: null };
 const mockDatasets = [{ id: 'AvesChilenas', name: 'AvesChilenas', file_count: 45, classes: ['Chucao', 'rayadito'], total_size_bytes: 25000000, last_modified: null, local_file_count: 45, is_synced: true }];
 const item = { id_retroalimentacion: 42, id_prediccion: 101, dataset_name: 'AvesChilenas', ruta_audio_prueba: 'test.wav', audio_filename: 'test.wav', etiqueta_predicha: 'Chincol', etiqueta_corregida: 'Chucao', confianza: 0.942, fue_correcta: false, procesado: false, id_usuario: 1 };
@@ -20,9 +26,47 @@ describe('IngestionView persisted inference dataset and curation', () => {
     vi.mocked(feedbackApi.getFeedbackSync).mockResolvedValue([]);
     vi.mocked(feedbackApi.approveFeedback).mockResolvedValue({ status: 'approved', local_status: 'incorporated', sync_status: 'pending', id_retroalimentacion: 42, destination_path: 'datasets/AvesChilenas/Chucao/test.wav', clase: 'Chucao', filename: 'test.wav' });
     vi.mocked(feedbackApi.rejectFeedback).mockResolvedValue({ status: 'rejected', id_retroalimentacion: 42 });
-    global.fetch = vi.fn(async input => ({ ok: true, json: async () => String(input).includes('/datasets') ? { datasets: mockDatasets } : mockStatus }) as Response);
+    global.fetch = vi.fn(async input => ({ ok: true, json: async () => privateCatalogFixture(input) ?? (String(input).includes('/datasets') ? { datasets: mockDatasets } : mockStatus) }) as Response);
   });
   afterEach(() => { global.fetch = originalFetch; });
+
+  it('shows same-name legacy and private imported datasets in one table with separate local and GCS counts', async () => {
+    const legacy = { ...mockDatasets[0], id: 'shared-id', name: 'Colección compartida',
+      file_count: 5, local_file_count: 2, gcs_file_count: 5, is_synced: false };
+    const imported = { id: 'shared-id', name: 'Colección compartida', description: 'Importación privada',
+      revision: 1, file_count: 3, class_count: 1, total_size_bytes: 6144, synced_file_count: 1 };
+    global.fetch = vi.fn(async input => {
+      const path = new URL(String(input), 'http://localhost').pathname;
+      let body: unknown = mockStatus;
+      if (path === '/api/ingestion/imports/access') body = { development_mode: true };
+      else if (path === '/api/ingestion/imports/datasets') {
+        body = { datasets: [imported], next_cursor: null, total: 1, snapshot: 'catalog-1' };
+      } else if (path === '/api/ingestion/datasets') body = { datasets: [legacy] };
+      return { ok: true, status: 200, json: async () => body } as Response;
+    });
+
+    await open();
+    const table = within(screen.getByRole('table'));
+    await waitFor(() => expect(table.getAllByText('Colección compartida')).toHaveLength(2));
+    const names = table.getAllByText('Colección compartida');
+    expect(names).toHaveLength(2);
+    expect(screen.getByText('2 colecciones')).toBeDefined();
+    const rows = names.map(name => name.closest('tr')!);
+    expect(rows[0]).not.toBe(rows[1]);
+    const legacyRow = rows.find(row => within(row).queryByText('Cloud GCS'));
+    const importedRow = rows.find(row => within(row).queryByText('Importado ZIP'));
+    expect(legacyRow).toBeDefined();
+    expect(importedRow).toBeDefined();
+    const headers = table.getAllByRole('columnheader');
+    const localIndex = headers.indexOf(table.getByRole('columnheader', { name: /(?:audios|archivos).*local/i }));
+    const cloudIndex = headers.indexOf(table.getByRole('columnheader', { name: /(?:audios|archivos).*(?:GCS|nube)/i }));
+    const legacyCells = within(legacyRow!).getAllByRole('cell');
+    const importedCells = within(importedRow!).getAllByRole('cell');
+    expect(legacyCells[localIndex].textContent?.trim()).toBe('2');
+    expect(legacyCells[cloudIndex].textContent?.trim()).toBe('5');
+    expect(importedCells[localIndex].textContent?.trim()).toBe('3');
+    expect(importedCells[cloudIndex].textContent?.trim()).toBe('1');
+  });
 
   it('places import next to download without changing the existing download action', async () => {
     await open();
@@ -239,7 +283,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
   });
 
   it.each([undefined, [], ['Chincol']])('leaves class catalog validation to backend (%s) and uses the pending dataset ID, not display name', async classes => {
-    global.fetch = vi.fn(async input => ({ ok: true, json: async () => String(input).includes('/datasets') ? { datasets: [{ ...mockDatasets[0], name: 'Visible name', classes }] } : mockStatus }) as Response);
+    global.fetch = vi.fn(async input => ({ ok: true, json: async () => privateCatalogFixture(input) ?? (String(input).includes('/datasets') ? { datasets: [{ ...mockDatasets[0], name: 'Visible name', classes }] } : mockStatus) }) as Response);
     vi.mocked(feedbackApi.getPendingFeedback).mockResolvedValueOnce([item]).mockResolvedValueOnce([]);
     await open();
     expect(queue().getByText('AvesChilenas')).toBeDefined();
@@ -250,7 +294,8 @@ describe('IngestionView persisted inference dataset and curation', () => {
   });
 
   it.each(['empty', 'failed'])('does not require ingestion catalog when association is persisted (%s)', async mode => {
-    global.fetch = vi.fn(async input => String(input).includes('/datasets') ? { ok: mode !== 'failed', status: 503, json: async () => ({ datasets: [] }) } as Response : { ok: true, json: async () => mockStatus } as Response);
+    global.fetch = vi.fn(async input => privateCatalogFixture(input) ? { ok: true, json: async () => privateCatalogFixture(input) } as Response
+      : String(input).includes('/datasets') ? { ok: mode !== 'failed', status: 503, json: async () => ({ datasets: [] }) } as Response : { ok: true, json: async () => mockStatus } as Response);
     vi.mocked(feedbackApi.getPendingFeedback).mockResolvedValue([item]);
     await open();
     expect(queue().getByText('AvesChilenas')).toBeDefined();
@@ -319,7 +364,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
   });
 
   it('handles disconnected GCS and local dataset badge', async () => {
-    global.fetch = vi.fn(async input => ({ ok: true, json: async () => String(input).includes('/datasets') ? { datasets: [{ ...mockDatasets[0], source: 'local', gcs_available: false }] } : { ...mockStatus, connected: false, error: 'Sin conexión' } }) as Response);
+    global.fetch = vi.fn(async input => ({ ok: true, json: async () => privateCatalogFixture(input) ?? (String(input).includes('/datasets') ? { datasets: [{ ...mockDatasets[0], source: 'local', gcs_available: false }] } : { ...mockStatus, connected: false, error: 'Sin conexión' }) }) as Response);
     await open();
     expect(screen.getByText(/GCP: Desconectado/)).toBeDefined();
     expect(screen.getByText(/Data Lake en modo local/)).toBeDefined();
@@ -331,8 +376,8 @@ describe('IngestionView persisted inference dataset and curation', () => {
     const partial = { status: 'partial', total_downloaded: 1, total_skipped: 0, total_failed: 0, total_preprocessed: 0,
       results: [{ dataset: 'AvesChilenas', downloaded: 1, skipped: 0, failed: 0, db_persisted: false,
         db_error: 'No se pudieron guardar los registros de ingesta.' }] };
-    global.fetch = vi.fn(async input => ({ ok: true, json: async () => String(input).includes('/sync') ? partial
-      : String(input).includes('/datasets') ? { datasets: mockDatasets } : mockStatus }) as Response);
+    global.fetch = vi.fn(async input => ({ ok: true, json: async () => privateCatalogFixture(input) ?? (String(input).includes('/sync') ? partial
+      : String(input).includes('/datasets') ? { datasets: mockDatasets } : mockStatus) }) as Response);
     await open();
     await act(async () => { fireEvent.click(within(screen.getByRole('table')).getAllByRole('checkbox')[0]); });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Descargar desde GCS para entrenamiento local' })); });
@@ -351,8 +396,8 @@ describe('IngestionView persisted inference dataset and curation', () => {
       total_failed: sample.failed, total_preprocessed: 0,
       results: [{ dataset: 'AvesChilenas', downloaded: sample.downloaded, skipped: 0, failed: sample.failed,
         db_persisted: sample.persisted, preprocess_info: { failed: sample.preprocessing } }] };
-    global.fetch = vi.fn(async input => ({ ok: true, json: async () => String(input).includes('/sync') ? result
-      : String(input).includes('/datasets') ? { datasets: mockDatasets } : mockStatus }) as Response);
+    global.fetch = vi.fn(async input => ({ ok: true, json: async () => privateCatalogFixture(input) ?? (String(input).includes('/sync') ? result
+      : String(input).includes('/datasets') ? { datasets: mockDatasets } : mockStatus) }) as Response);
     await open();
     await act(async () => { fireEvent.click(within(screen.getByRole('table')).getAllByRole('checkbox')[0]); });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Descargar desde GCS para entrenamiento local' })); });
@@ -367,8 +412,8 @@ describe('IngestionView persisted inference dataset and curation', () => {
     const result = { status: 'partial', total_downloaded: 1, total_skipped: 0, total_failed: 1, total_preprocessed: 0,
       results: [{ dataset: 'AvesChilenas', downloaded: 1, skipped: 0, failed: 1, db_persisted: true,
         files: [{ status: 'error', cleanup_pending: true }] }] };
-    global.fetch = vi.fn(async input => ({ ok: true, json: async () => String(input).includes('/sync') ? result
-      : String(input).includes('/datasets') ? { datasets: mockDatasets } : mockStatus }) as Response);
+    global.fetch = vi.fn(async input => ({ ok: true, json: async () => privateCatalogFixture(input) ?? (String(input).includes('/sync') ? result
+      : String(input).includes('/datasets') ? { datasets: mockDatasets } : mockStatus) }) as Response);
     await open();
     await act(async () => { fireEvent.click(within(screen.getByRole('table')).getAllByRole('checkbox')[0]); });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Descargar desde GCS para entrenamiento local' })); });
@@ -381,8 +426,8 @@ describe('IngestionView persisted inference dataset and curation', () => {
     const result = { status: 'completed', total_downloaded: 1, total_skipped: 0, total_failed: 0, total_preprocessed: 1,
       results: [{ dataset: 'AvesChilenas', downloaded: 1, skipped: 0, failed: 0, preprocessed: 1,
         db_persisted: true, preprocess_info: { failed: 0 } }] };
-    global.fetch = vi.fn(async input => ({ ok: true, json: async () => String(input).includes('/sync') ? result
-      : String(input).includes('/datasets') ? { datasets: mockDatasets } : mockStatus }) as Response);
+    global.fetch = vi.fn(async input => ({ ok: true, json: async () => privateCatalogFixture(input) ?? (String(input).includes('/sync') ? result
+      : String(input).includes('/datasets') ? { datasets: mockDatasets } : mockStatus) }) as Response);
     await open();
     await act(async () => { fireEvent.click(within(screen.getByRole('table')).getAllByRole('checkbox')[0]); });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Descargar desde GCS para entrenamiento local' })); });

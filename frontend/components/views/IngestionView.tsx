@@ -11,12 +11,16 @@ import { PendingFeedbackItem } from "@/lib/schemas/feedback";
 import FeedbackSyncPanel from "@/components/feedback/FeedbackSyncPanel";
 import DatasetImportPanel from "@/components/ingestion/DatasetImportPanel";
 import DatasetExportDialog from "@/components/ingestion/DatasetExportDialog";
+import ImportDetailPage from "@/components/ingestion/ImportDetailPage";
+import { importBase, importRequest, catalogPageSchema, audioSchema, saveDownload,
+  type CatalogDataset } from "@/lib/api/datasetImports";
 
 // ============================================================================
 // INTERFACES DEL MODELO DE DOMINIO DE INGESTA (RF_02 / RF_06 / ADR 0013)
 // ============================================================================
 export interface IngestionViewProps {
   onNavigate?: (view: string) => void;
+  sessionToken?: string;
 }
 
 interface StorageStatus {
@@ -36,6 +40,7 @@ interface DatasetItem {
   total_size_bytes: number;
   last_modified: string | null;
   local_file_count: number;
+  gcs_file_count?: number | null;
   is_synced: boolean;
   domain?: "bioacoustic" | "industrial";
   domain_label?: string;
@@ -86,7 +91,7 @@ function uploadDateLabel(value?: string | null): string {
   })}`;
 }
 
-export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
+export default function IngestionView({ onNavigate, sessionToken = "" }: IngestionViewProps = {}) {
   // Estado de almacenamiento GCS
   const [storageStatus, setStorageStatus] = useState<StorageStatus | null>(null);
   const [isLoadingStatus, setIsLoadingStatus] = useState<boolean>(true);
@@ -95,6 +100,67 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
   const [datasets, setDatasets] = useState<DatasetItem[]>([]);
   const [isLoadingDatasets, setIsLoadingDatasets] = useState<boolean>(true);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [privateCatalog, setPrivateCatalog] = useState<{ token: string; datasets: CatalogDataset[]; next: string | null; total: number | null }>({ token: sessionToken, datasets: [], next: null, total: null });
+  const [privateLoading, setCatalogLoading] = useState(true);
+  const [privateError, setCatalogError] = useState("");
+  const [privateDetail, setPrivateDetail] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState("");
+  const catalogRequest = useRef<AbortController | null>(null);
+  const catalogMatchesSession = privateCatalog.token === sessionToken;
+  const importedDatasets = catalogMatchesSession ? privateCatalog.datasets : [];
+  const catalogLoading = privateLoading || !catalogMatchesSession;
+  const catalogError = catalogMatchesSession ? privateError : "";
+  const collectionTotal = catalogMatchesSession && !catalogLoading && !catalogError ? privateCatalog.total : null;
+
+  // Effect-driven loads update state only after real request completion.
+  const loadPrivateCatalog = useCallback((cursor: string | null = null) => {
+    catalogRequest.current?.abort();
+    const controller = new AbortController();
+    catalogRequest.current = controller;
+    return importRequest(sessionToken, `${importBase}/access`, { signal: controller.signal })
+      .then(response => response.json())
+      .then(access => {
+        if (controller.signal.aborted) return;
+        if (access.development_mode !== true && !sessionToken) {
+          throw new Error("Inicia sesión para consultar el catálogo privado de importaciones.");
+        }
+        return importRequest(sessionToken, `${importBase}/datasets${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { signal: controller.signal })
+          .then(response => response.json())
+          .then(raw => {
+            const page = catalogPageSchema.parse(raw);
+            if (controller.signal.aborted) return;
+            setPrivateCatalog({ token: sessionToken, datasets: page.datasets, next: page.next_cursor, total: page.total });
+            setCatalogError("");
+            setPrivateDetail(null);
+            setDownloadError("");
+          });
+      })
+      .catch(reason => {
+        if (controller.signal.aborted) return;
+        setPrivateCatalog({ token: sessionToken, datasets: [], next: null, total: null });
+        setPrivateDetail(null);
+        setDownloadError("");
+        setCatalogError(reason instanceof Error ? reason.message : "No se pudo consultar el catálogo privado.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setCatalogLoading(false);
+      });
+  }, [sessionToken]);
+
+  // User events clear the previous page immediately; effects need no synchronous reset.
+  const fetchPrivateCatalog = useCallback((cursor: string | null = null) => {
+    setCatalogLoading(true);
+    setCatalogError("");
+    setPrivateCatalog({ token: sessionToken, datasets: [], next: null, total: null });
+    setPrivateDetail(null);
+    setDownloadError("");
+    return loadPrivateCatalog(cursor);
+  }, [sessionToken, loadPrivateCatalog]);
+
+  useEffect(() => {
+    void loadPrivateCatalog();
+    return () => catalogRequest.current?.abort();
+  }, [loadPrivateCatalog]);
 
   // Sincronización masiva (RF_02 GCS -> Local) y Preprocesamiento Tensorial (RF_03)
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
@@ -522,6 +588,7 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
             onClick={() => {
               fetchStatus();
               fetchDatasets();
+              void fetchPrivateCatalog();
               fetchPendingFeedbacks();
               setSyncRefreshKey(previous => previous + 1);
             }}
@@ -592,16 +659,18 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-200 font-semibold block">
-              Datasets Disponibles en GCS (Data Lake)
+              Datasets disponibles (local y GCS)
             </span>
             <span className="text-[10px] px-2 py-0.5 rounded bg-[#1c1e24] text-gray-400 font-mono">
-              {datasets.length} colecciones
+              {collectionTotal === null
+                ? `${datasets.length} colecciones legadas · catálogo privado ${catalogError ? "no disponible" : "cargando…"}`
+                : `${datasets.length + collectionTotal} colecciones`}
             </span>
           </div>
 
           <button
             type="button"
-            onClick={fetchDatasets}
+            onClick={() => { void fetchDatasets(); void fetchPrivateCatalog(); }}
             disabled={isLoadingDatasets}
             className="text-[11px] text-gray-400 hover:text-gray-200 transition-colors flex items-center gap-1"
           >
@@ -627,9 +696,9 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
                 </th>
                 <th className="pb-3 font-medium">Dataset (Colección)</th>
                 <th className="pb-3 font-medium">Clases / Categorías</th>
-                <th className="pb-3 font-medium">Archivos en Nube</th>
+                <th className="pb-3 font-medium">Archivos en GCS</th>
                 <th className="pb-3 font-medium">Archivos Locales</th>
-                <th className="pb-3 font-medium">Tamaño GCS</th>
+                <th className="pb-3 font-medium">Tamaño</th>
                 <th className="pb-3 font-medium">Última Modificación</th>
                 <th className="pb-3 font-medium text-center">Estado</th>
                 <th className="pb-3 font-medium text-right pr-2">Acción</th>
@@ -648,7 +717,7 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
                     </div>
                   </td>
                 </tr>
-              ) : datasets.length === 0 ? (
+              ) : datasets.length === 0 && importedDatasets.length === 0 && !catalogLoading && !catalogError ? (
                 <tr>
                   <td colSpan={9} className="py-8 text-center">
                     <div className="max-w-md mx-auto space-y-2">
@@ -680,7 +749,7 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
                 </tr>
               ) : (
                 datasets.map((d) => (
-                  <tr key={d.id} className="hover:bg-[#1c1e24]/40 transition-colors">
+                  <tr key={`legacy:${d.id}`} className="hover:bg-[#1c1e24]/40 transition-colors">
                     <td className="py-2.5">
                       <input
                         type="checkbox"
@@ -740,12 +809,9 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
                         )}
                       </div>
                     </td>
-                    <td className="py-2.5 text-gray-300 font-mono">{d.file_count} audios</td>
+                    <td className="py-2.5 text-gray-300 font-mono" title="Conteo del listado remoto; desconocido si no fue posible consultar GCS.">{d.gcs_file_count ?? "Desconocido"}</td>
                     <td className="py-2.5 text-gray-400 font-mono">
-                      <span className={d.local_file_count >= d.file_count ? "text-emerald-400" : "text-amber-400"}>
-                        {d.local_file_count}
-                      </span>
-                      /{d.file_count}
+                      {d.local_file_count}
                     </td>
                     <td className="py-2.5 text-gray-400 font-mono">{formatBytes(d.total_size_bytes)}</td>
                     <td className="py-2.5 text-gray-400 font-mono text-[11px]">
@@ -762,12 +828,12 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
                     <td className="py-2.5 text-center">
                       <span
                         className={`px-2 py-0.5 rounded text-[10px] font-medium inline-block ${
-                          d.is_synced
+                          d.gcs_file_count != null && d.is_synced
                             ? "bg-emerald-950/70 text-emerald-400 border border-emerald-800/60"
                             : "bg-amber-950/70 text-amber-400 border border-amber-800/60"
                         }`}
                       >
-                        {d.is_synced ? "Sincronizado" : "Pendiente"}
+                        {d.gcs_file_count == null ? "GCS desconocido" : d.is_synced ? "Sincronizado" : "Pendiente"}
                       </span>
                     </td>
                     <td className="py-2.5 text-right pr-2">
@@ -782,8 +848,48 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
                   </tr>
                 ))
               )}
+              {importedDatasets.map(dataset => (
+                <tr key={`import:${dataset.id}`} className="hover:bg-[#1c1e24]/40 transition-colors">
+                  <td />
+                  <td className="py-2.5 font-medium text-gray-200">
+                    <span className="font-semibold">{dataset.name}</span>{" "}
+                    <span className="text-[10px] text-slate-300">Importado ZIP</span>
+                  </td>
+                  <td className="py-2.5 text-gray-300">{dataset.class_count} clase(s)</td>
+                  <td className="py-2.5 font-mono text-gray-300" title="Acuses durables históricos de subida; no verifica la existencia actual en GCS.">{dataset.synced_file_count}</td>
+                  <td className="py-2.5 font-mono text-gray-300">{dataset.file_count}</td>
+                  <td className="py-2.5 text-gray-400">{formatBytes(dataset.total_size_bytes)}</td>
+                  <td className="py-2.5 text-gray-400">—</td>
+                  <td className="py-2.5 text-center text-gray-400">Publicada localmente</td>
+                  <td className="py-2.5 text-right pr-2">
+                    <button type="button" className="text-[11px] text-gray-300 underline" onClick={() => { setPrivateDetail(dataset.id); setDownloadError(""); }}>Consultar audios</button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
+        </div>
+
+        <div className="space-y-2 text-xs text-gray-400">
+          {catalogLoading && <p role="status">Consultando catálogo privado…</p>}
+          {catalogError && <p role="alert">Catálogo privado no disponible: {catalogError}</p>}
+          <p>Importado ZIP: el conteo GCS corresponde a acuses durables históricos de subida, no a una verificación actual del bucket.</p>
+          <div className="flex gap-3">
+            <button type="button" disabled={catalogLoading} onClick={() => void fetchPrivateCatalog()}>Primera página de importaciones</button>
+            <button type="button" disabled={catalogLoading || privateCatalog.token !== sessionToken || !privateCatalog.next} onClick={() => void fetchPrivateCatalog(privateCatalog.next)}>Siguiente página de importaciones</button>
+          </div>
+          {privateDetail && importedDatasets.some(dataset => dataset.id === privateDetail) && <div>
+            <button type="button" onClick={() => setPrivateDetail(null)}>Cerrar consulta de audios</button>
+            <ImportDetailPage key={`${sessionToken}:${privateDetail}`} token={sessionToken}
+              endpoint={`${importBase}/datasets/${encodeURIComponent(privateDetail)}/files`} collection="files" label="audios importados" schema={audioSchema}
+              renderItem={file => <button type="button" className="underline" onClick={() => {
+                setDownloadError("");
+                void importRequest(sessionToken, `${importBase}/datasets/${encodeURIComponent(privateDetail)}/files/${file.sha256}`)
+                  .then(response => saveDownload(response, file.original_path.split("/").pop() || "audio.wav"))
+                  .catch(reason => setDownloadError(reason instanceof Error ? reason.message : "No se pudo descargar el audio."));
+              }}>{file.original_path} ({file.class_name})</button>} />
+            {downloadError && <p role="alert">{downloadError}</p>}
+          </div>}
         </div>
 
         {/* Footer de Tabla con Acción Principal de Sincronización RF_02 y Disparador RF_03 */}
@@ -837,7 +943,7 @@ export default function IngestionView({ onNavigate }: IngestionViewProps = {}) {
             )}
           </button>
           <DatasetExportDialog />
-          <DatasetImportPanel />
+          <DatasetImportPanel sessionToken={sessionToken} onCatalogChange={fetchPrivateCatalog} />
           </div>
         </div>
         <p className="text-[11px] text-gray-400">

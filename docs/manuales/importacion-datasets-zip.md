@@ -12,9 +12,25 @@ de esa comprobación aislada.
 
 ## Contadores disponibles para el catálogo unificado
 
-La API ofrece contadores aditivos; la integración de una sola tabla en la interfaz
-queda para el corte siguiente. Los catálogos privado y legado conservan identidades
-separadas: no se deben unir por nombre.
+**Gestión de audios** muestra una sola tabla **Datasets disponibles (local y GCS)**
+con archivos locales y archivos en GCS. Las filas **Importado ZIP** pertenecen al
+catálogo privado; las filas del catálogo legado conservan sus acciones anteriores.
+Los catálogos mantienen identidades separadas por origen e ID, incluso si coinciden
+sus nombres e IDs. No se unen por nombre.
+
+El catálogo privado conserva la autenticación y el modo de acceso del importador.
+Si falta sesión o falla la consulta, se muestra un error específico; no se presenta
+como catálogo vacío ni se convierte el fallo en contadores cero. El catálogo legado
+sigue disponible. **Actualizar** y el refresco global consultan ambas fuentes.
+**Primera página de importaciones** y **Siguiente página de importaciones** recorren
+una página privada a la vez, sin cargar todos los miembros para obtener contadores.
+
+En una fila importada, **Consultar audios** abre la consulta paginada de WAV propios;
+pulsar un archivo lo descarga mediante la API pública autenticada. No selecciona la
+fila para descargar desde GCS, preprocesar o entrenar con acciones del catálogo legado.
+El conteo GCS de estas filas representa acuses históricos, no una auditoría actual
+del bucket. En las filas legadas, **Desconocido** significa que no existe un conteo
+remoto acreditado; no demuestra sincronización aunque haya archivos locales.
 
 - `GET /api/ingestion/imports/datasets`: `file_count` conserva el número local
   publicado del resumen del dataset. El nuevo `synced_file_count` cuenta miembros

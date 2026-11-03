@@ -19,7 +19,9 @@ const statusLabels: Record<string, string> = {
 const inputClass = "mt-1 block w-full rounded-lg border border-[#2d303b] bg-[#111215] px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500";
 const buttonClass = "rounded-lg border border-emerald-800/60 bg-emerald-950/40 px-3 py-2 text-xs font-semibold text-emerald-400 hover:bg-emerald-900/50 transition-colors focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed";
 
-export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken?: string } = {}) {
+export default function DatasetImportPanel({ sessionToken = "", onCatalogChange }: {
+  sessionToken?: string; onCatalogChange?: () => void;
+} = {}) {
   const [open, setOpen] = useState(false);
   const [started, setStarted] = useState(false);
   const [developmentMode, setDevelopmentMode] = useState(false);
@@ -45,6 +47,11 @@ export default function DatasetImportPanel({ sessionToken = "" }: { sessionToken
   const active = useRef(false);
   const requestKey = useRef("");
   const operationKey = useRef({ signature: "", key: "" });
+  const publishedDataset = job?.status === "imported" ? job.dataset_id : null;
+  const publishedSyncCount = job?.preview.synced_count;
+  useEffect(() => {
+    if (publishedDataset) onCatalogChange?.();
+  }, [publishedDataset, publishedSyncCount, onCatalogChange]);
   const executionId = job?.execution?.id;
   const executionStatus = job?.execution?.status;
   const importId = job?.id;
