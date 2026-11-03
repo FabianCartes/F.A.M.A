@@ -18,6 +18,39 @@ if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
 
 
+@pytest.mark.parametrize("online", [False, True])
+def test_catalog_explicit_gcs_count_never_uses_local_fallback(tmp_path, online):
+    from app.services.ingestion import IngestionService
+
+    local = tmp_path / "raw" / "LocalOnly" / "birds"
+    local.mkdir(parents=True)
+    (local / "a.wav").write_bytes(b"synthetic")
+    shared = tmp_path / "raw" / "Shared" / "birds"
+    shared.mkdir(parents=True)
+    (shared / "a.wav").write_bytes(b"synthetic")
+    service = IngestionService(bucket_name="test", local_base_dir=tmp_path / "raw",
+                               local_processed_dir=tmp_path / "processed")
+    with patch("google.cloud.storage.Client") as client:
+        if online:
+            blob = MagicMock(size=10, updated=None)
+            blob.name = "datasets/Shared/birds/a.wav"
+            client.return_value.list_blobs.return_value = [blob]
+        else:
+            client.return_value.list_blobs.side_effect = OSError("offline")
+        rows = {row["name"]: row for row in service.list_datasets()}
+    local_row = rows["LocalOnly"]
+    assert local_row["file_count"] == local_row["local_file_count"] == 1
+    assert local_row["is_synced"] is True
+    assert local_row["source"] == "local"
+    assert local_row["gcs_available"] is online
+    assert local_row["gcs_file_count"] == (0 if online else None)
+    shared_row = rows["Shared"]
+    assert shared_row["file_count"] == shared_row["local_file_count"] == 1
+    assert shared_row["is_synced"] is True
+    assert shared_row["source"] == ("gcs" if online else "local")
+    assert shared_row["gcs_file_count"] == (1 if online else None)
+
+
 def test_get_storage_status_connected(tmp_path):
     """Verifica que el servicio retorne el estado de conexión al bucket GCS."""
     from app.services.ingestion import IngestionService

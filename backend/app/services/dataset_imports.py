@@ -213,8 +213,25 @@ class DatasetImports:
             return dict(id=dataset.id, name=dataset.name, description=dataset.description,
                         revision=dataset.revision, file_count=summary.file_count,
                         class_count=summary.class_count, total_size_bytes=summary.total_size_bytes)
-        return page(db.query(ImportedDataset).filter_by(owner_id=owner), ImportedDataset.id,
-                    scope=f"datasets:{owner}", snapshot="catalog", key="datasets", serialize=serialize, **pagination)
+        result = page(db.query(ImportedDataset).filter_by(owner_id=owner), ImportedDataset.id,
+                      scope=f"datasets:{owner}", snapshot="catalog", key="datasets", serialize=serialize, **pagination)
+        ids = [dataset["id"] for dataset in result["datasets"]]
+        # Upload acknowledgements belong to the original import, not later
+        # duplicate previews. Restrict to published membership for this page.
+        synced = dict(db.query(DatasetMember.dataset_id, func.count(func.distinct(DatasetMember.id)))
+            .join(ImportedDataset, ImportedDataset.id == DatasetMember.dataset_id)
+            .join(ImportFile, (ImportFile.import_id == DatasetMember.source_import_id)
+                  & (ImportFile.source_import_id == DatasetMember.source_import_id)
+                  & (ImportFile.sha256 == DatasetMember.sha256))
+            .join(DatasetImport, DatasetImport.id == ImportFile.import_id)
+            .filter(ImportedDataset.owner_id == owner, DatasetImport.owner_id == owner,
+                    DatasetMember.dataset_id.in_(ids),
+                    DatasetMember.dataset_revision <= ImportedDataset.revision,
+                    ImportFile.sync_status == "synced")
+            .group_by(DatasetMember.dataset_id).all()) if ids else {}
+        for dataset in result["datasets"]:
+            dataset["synced_file_count"] = synced.get(dataset["id"], 0)
+        return result
 
     def list_jobs(self, db, owner, **pagination):
         return page(db.query(DatasetImport).filter_by(owner_id=owner), DatasetImport.id,

@@ -119,6 +119,55 @@ def test_import_is_local_queryable_downloadable_and_replayable(imports, tmp_path
     assert not (service.root.parent / "raw").exists()
 
 
+def test_catalog_counts_published_members_and_durable_source_sync(imports, tmp_path):
+    from app.routes.dataset_imports import get_import_storage, get_import_user
+    from tests.test_dataset_import_sync import MemoryObjects
+
+    client, _, app, _ = imports
+    storage = MemoryObjects()
+    app.dependency_overrides[get_import_storage] = lambda: storage
+    first = prepare(client, tmp_path, entries=[
+        ("birds/a.wav", wav_bytes()), ("birds/copy.wav", wav_bytes())])
+    target = confirm(client, first).json()["dataset_id"]
+
+    def counts():
+        response = client.get("/api/ingestion/imports/datasets")
+        assert response.status_code == 200, response.text
+        dataset = next(row for row in response.json()["datasets"] if row["id"] == target)
+        return dataset["file_count"], dataset["synced_file_count"]
+
+    assert counts() == (1, 0)
+    # Acknowledgement of the same hash in another source must not leak here.
+    other = confirm(client, prepare(client, tmp_path, key="other-source", name="Other")).json()
+    assert operation(client, other["id"], "sync").json()["sync_status"] == "synced"
+    assert counts() == (1, 0)
+    assert operation(client, first["id"], "sync").json()["sync_status"] == "synced"
+    assert counts() == (1, 1)
+    second = prepare(client, tmp_path, key="second", target_id=target, sample=2)
+    assert confirm(client, second).json()["added_count"] == 1
+    assert counts() == (2, 1)
+    # A ready preview is not published membership, even for the same target.
+    prepare(client, tmp_path, key="unpublished", target_id=target, sample=3)
+    assert counts() == (2, 1)
+    duplicate = prepare(client, tmp_path, key="duplicate", target_id=target)
+    assert confirm(client, duplicate).json()["added_count"] == 0
+    assert operation(client, duplicate["id"], "sync").json()["sync_status"] == "synced"
+    assert counts() == (2, 1)
+    assert operation(client, second["id"], "sync").json()["sync_status"] == "synced"
+    # Durable acknowledgements remain historical evidence, not a live bucket audit.
+    storage.objects.clear()
+    assert counts() == (2, 2)
+    files = client.get(f"/api/ingestion/imports/datasets/{target}/files").json()["files"]
+    assert len(files) == 2
+    app.dependency_overrides[get_import_user] = lambda: SimpleNamespace(id=2)
+    foreign = confirm(client, prepare(client, tmp_path, key="foreign", name="Birds")).json()
+    assert operation(client, foreign["id"], "sync").json()["sync_status"] == "synced"
+    own = client.get("/api/ingestion/imports/datasets").json()["datasets"]
+    assert [(row["file_count"], row["synced_file_count"]) for row in own] == [(1, 1)]
+    app.dependency_overrides[get_import_user] = lambda: SimpleNamespace(id=1)
+    assert counts() == (2, 2)
+
+
 def test_duplicate_and_label_conflict_do_not_change_published_membership(imports, tmp_path):
     client, _, _, _ = imports
     first = confirm(client, prepare(client, tmp_path)).json()
@@ -282,7 +331,7 @@ def test_downloadable_example_is_an_importable_synthetic_zip(imports, tmp_path):
     from app.services.dataset_zip import validate_zip, ImportLimits
     source = tmp_path / "example.zip"
     source.write_bytes(example.content)
-    result = validate_zip(source, tmp_path / "example", root="aves", limits=ImportLimits())
+    result = validate_zip(source, tmp_path / "example", root="", limits=ImportLimits())
     assert result["errors"] == []
     assert result["unique_count"] == 2
     assert result["classes"] == ["chucao", "colilarga"]

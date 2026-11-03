@@ -193,7 +193,10 @@ class IngestionService:
             client = self._get_client()
             blobs = list(client.list_blobs(self.bucket_name, prefix="datasets/"))
         except Exception:
-            return self.list_local_datasets(gcs_available=False)
+            local = self.list_local_datasets(gcs_available=False)
+            for dataset in local:
+                dataset["gcs_file_count"] = None
+            return local
 
         # Agrupar por dataset_name
         datasets_map: Dict[str, Dict[str, Any]] = {}
@@ -270,6 +273,7 @@ class IngestionService:
             data["is_synced"] = is_synced
             data["source"] = "gcs"
             data["gcs_available"] = True
+            data["gcs_file_count"] = data["file_count"]
             result.append(data)
 
         # Si GCS está conectado, fusionar los datasets de GCS con los locales
@@ -277,6 +281,8 @@ class IngestionService:
         gcs_names = {d["name"] for d in result}
         for loc_ds in local_datasets:
             if loc_ds["name"] not in gcs_names:
+                # Only the successful dataset-prefix listing establishes zero.
+                loc_ds["gcs_file_count"] = 0
                 result.append(loc_ds)
 
         return result

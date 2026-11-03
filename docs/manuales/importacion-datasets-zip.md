@@ -10,6 +10,35 @@ Para recepción reanudable, exportación nativa y mantenimiento, consultar la
 Los pasos Docker de este manual requieren autorización separada; no forman parte
 de esa comprobación aislada.
 
+## Contadores disponibles para el catálogo unificado
+
+La API ofrece contadores aditivos; la integración de una sola tabla en la interfaz
+queda para el corte siguiente. Los catálogos privado y legado conservan identidades
+separadas: no se deben unir por nombre.
+
+- `GET /api/ingestion/imports/datasets`: `file_count` conserva el número local
+  publicado del resumen del dataset. El nuevo `synced_file_count` cuenta miembros
+  únicos publicados con acuse durable de sincronización en su importación de origen
+  exacta y hash. Agrega las distintas importaciones del dataset, no solo el progreso
+  de una vista previa; excluye duplicados y revisiones todavía no publicadas. Cero
+  es válido cuando todos los miembros siguen pendientes. Mantiene el filtro de
+  propietario y la paginación; resuelve los acuses en una consulta para la página.
+  Es evidencia histórica de subida, **no** una comprobación de existencia actual
+  del objeto remoto ni de integridad de todo el bucket.
+- `GET /api/ingestion/datasets` (legado): el nuevo `gcs_file_count` es el conteo
+  explícito obtenido del listado exitoso de objetos del dataset. Puede ser cero
+  para un dataset solo local después de ese listado. Si la consulta falla, es
+  `null` (desconocido), nunca el número local ni un cero inferido de modo offline.
+  No se modifican `file_count`, `local_file_count`, `is_synced`, `source` ni
+  `gcs_available`: `file_count` sigue siendo remoto en filas GCS y local en el
+  fallback. `is_synced=true` en fallback conserva su significado legado y no
+  demuestra una subida. El helper de descubrimiento exclusivamente local no
+  consulta GCS ni acredita un conteo remoto.
+
+Estos campos no agregan consultas reales a GCS al catálogo privado, escrituras,
+migraciones ni cambios de autorización. No habilitan acciones de entrenamiento
+o acciones del catálogo legado para datasets privados.
+
 ## Perfil físico opt-in (sin activación automática)
 
 HTTP y worker comparten `FAMA_IMPORT_STORAGE_PROFILE`, ruta absoluta a JSON
