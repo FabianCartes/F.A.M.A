@@ -125,6 +125,8 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 
 ### Evidencia operacional
 
+* [`receipts/local-collection-operation.json`](./receipts/local-collection-operation.json): Dos ciclos reales de la colección dedicada (1.194 audios/15 clases), Next, muestras SHA, exclusión y cierre cooperativo; instancia detenida, sin GCS/entrenamiento ni integración en dev.
+
 * [`receipts/backend-suite-current-baseline.json`](./receipts/backend-suite-current-baseline.json): Baseline focal posterior a las limpiezas: 320 + 56 pruebas aprobadas, cinco deselecciones y probe de imports separado; comandos, hashes y límites frente a los conteos globales históricos de 12/26 fallos.
 
 * [`receipts/lock4-incorporacion-audit.json`](./receipts/lock4-incorporacion-audit.json): Auditoría local de cinco incorporaciones de feedback, duplicados WAV y 78 pruebas aisladas de incorporación/deduplicación; límites históricos y seguimientos DATA-6/DATA-7.

@@ -1,0 +1,233 @@
+{
+  "version": 1,
+  "status": "PASS_LOCAL_COLLECTION_ONLY",
+  "code_commit": "40dbd76054fe0094c1425f6ef9a4da1d63a39627",
+  "instance_root": "/run/media/kevin/FAMA_P2/fama-dev-large-zip/local-instance",
+  "original_backup": "/run/media/kevin/FAMA_P2/fama-dev-large-zip/manual-large-zip-nf1me5r1",
+  "qualification": {
+    "command": "python -B .git/agent-scratch/qualify_local_collection_runtime.py",
+    "job": "job-22",
+    "exit_code": 0,
+    "reported_duration": "1m23s",
+    "raw_evidence": "/run/media/kevin/FAMA_P2/fama-dev-large-zip/local-instance/operation-qualification/result.json"
+  },
+  "dataset": {
+    "id": "08429ae80a4d49369960189ab805c9ae",
+    "revision": 1,
+    "owner_id": -1,
+    "published_members": 1194,
+    "class_count": 15,
+    "published_bytes": 8523910642
+  },
+  "cycles": [
+    {
+      "cycle": 1,
+      "session": "/run/media/kevin/FAMA_P2/fama-dev-large-zip/local-instance/runtime/session-y_5vywmi",
+      "public_pages": 6,
+      "members": 1194,
+      "classes": 15,
+      "published_bytes": 8523910642,
+      "downloaded_samples": [
+        {
+          "sha256": "ae0b409178b71d3e2a9a7b3fdf7258c545cd1ed1d79b01240aaaeb5ef2adf758",
+          "size_bytes": 5787156
+        },
+        {
+          "sha256": "47fd3e83116624da6ac2d209e7f7838b989a35f41f445bea44e20ac910ea029f",
+          "size_bytes": 8504506
+        }
+      ],
+      "duplicate_launcher_rejected": true,
+      "supervisor_exit": 0,
+      "stop": {
+        "data_preserved": true,
+        "forced_kill": false,
+        "reason": "requested_signal",
+        "remaining_owned_groups": {}
+      },
+      "owned_pids_and_groups_absent": true
+    },
+    {
+      "cycle": 2,
+      "session": "/run/media/kevin/FAMA_P2/fama-dev-large-zip/local-instance/runtime/session-7657c72z",
+      "public_pages": 6,
+      "members": 1194,
+      "classes": 15,
+      "published_bytes": 8523910642,
+      "downloaded_samples": [
+        {
+          "sha256": "ae0b409178b71d3e2a9a7b3fdf7258c545cd1ed1d79b01240aaaeb5ef2adf758",
+          "size_bytes": 5787156
+        },
+        {
+          "sha256": "47fd3e83116624da6ac2d209e7f7838b989a35f41f445bea44e20ac910ea029f",
+          "size_bytes": 8504506
+        }
+      ],
+      "duplicate_launcher_rejected": true,
+      "supervisor_exit": 0,
+      "stop": {
+        "data_preserved": true,
+        "forced_kill": false,
+        "reason": "requested_signal",
+        "remaining_owned_groups": {}
+      },
+      "owned_pids_and_groups_absent": true
+    }
+  ],
+  "browser": {
+    "status": "PASS",
+    "actual_prebuilt_next": true,
+    "header": "1 colecciones",
+    "row_cells": [
+      "",
+      "aves_dataset Importado ZIP",
+      "15 clase(s)",
+      "0",
+      "1194",
+      "7.94 GB",
+      "—",
+      "Publicada localmente",
+      "Consultar audios"
+    ],
+    "private_row_buttons": [
+      "Consultar audios"
+    ],
+    "first_detail_page_files": 50,
+    "first_file": {
+      "id": "006e0dbcc7e4415b984348dfdede1639",
+      "original_path": "canastero/1156653.wav",
+      "relative_path": "canastero/1156653.wav",
+      "class_name": "canastero",
+      "sha256": "ae0b409178b71d3e2a9a7b3fdf7258c545cd1ed1d79b01240aaaeb5ef2adf758",
+      "size_bytes": 5787156,
+      "duplicate": false,
+      "existing": false,
+      "sync_status": "pending"
+    },
+    "expected_unavailable_routes": [
+      {
+        "status": 404,
+        "url": "http://127.0.0.1:3000/api/training/hardware"
+      },
+      {
+        "status": 404,
+        "url": "http://127.0.0.1:3000/api/feedback/stats"
+      },
+      {
+        "status": 404,
+        "url": "http://127.0.0.1:3000/api/model-info?dataset_name=AvesChilenas"
+      },
+      {
+        "status": 404,
+        "url": "http://127.0.0.1:3000/api/models"
+      },
+      {
+        "status": 404,
+        "url": "http://127.0.0.1:3000/api/ingestion/status"
+      },
+      {
+        "status": 404,
+        "url": "http://127.0.0.1:3000/api/ingestion/datasets"
+      },
+      {
+        "status": 404,
+        "url": "http://127.0.0.1:3000/api/feedback/sync?limit=50"
+      },
+      {
+        "status": 404,
+        "url": "http://127.0.0.1:3000/api/feedback/pending?limit=50"
+      }
+    ],
+    "raw_evidence": "/run/media/kevin/FAMA_P2/fama-dev-large-zip/local-instance/operation-qualification/browser-result.json"
+  },
+  "original_controls_unchanged": true,
+  "original_controls_scope": [
+    {
+      "file": "manual.sqlite3",
+      "checks": [
+        "sha256",
+        "inode",
+        "size",
+        "mtime_ns",
+        "ctime_ns",
+        "mode",
+        "uid",
+        "gid"
+      ]
+    },
+    {
+      "file": "profile.json",
+      "checks": [
+        "sha256",
+        "inode",
+        "size",
+        "mtime_ns",
+        "ctime_ns",
+        "mode",
+        "uid",
+        "gid"
+      ]
+    },
+    {
+      "file": "environment.json",
+      "checks": [
+        "sha256",
+        "inode",
+        "size",
+        "mtime_ns",
+        "ctime_ns",
+        "mode",
+        "uid",
+        "gid"
+      ]
+    }
+  ],
+  "code_verification": {
+    "parent": {
+      "passed": 9,
+      "seconds": 16.73,
+      "snapshot": "storage-relocation-sandbox-8fmxx1uw"
+    },
+    "independent_focal": {
+      "passed": 4,
+      "deselected": 5,
+      "seconds": 13.4,
+      "snapshot": "storage-relocation-sandbox-fp8ecs8g",
+      "resolved": [
+        "B1",
+        "B2",
+        "outcome"
+      ]
+    }
+  },
+  "native_review": {
+    "lineage": "review-edbc9105e8b65ada",
+    "tier": "high",
+    "reviewers_admitted": 4,
+    "result": "approved",
+    "acknowledgement": "completed",
+    "authority": "burned",
+    "consumed_revision": "sha256:6a9cbbbe312a7f923c8a22a6aa278093e982a5685e639f235d8217f75ca57332",
+    "advisory_warnings": [
+      "R3-001",
+      "R3-002",
+      "R4-001",
+      "R4-002"
+    ],
+    "advisory_disposition": "Informational, non-blocking, separate later work; no correction or review reopening"
+  },
+  "final_runtime_state": "stopped",
+  "exclusions": [
+    "No GCS presence audit or cloud execution; 0 is historical upload acknowledgements, not bucket proof",
+    "No training, new real ZIP import, original lab activation, Docker or full-platform startup",
+    "Operational downloads cover two unique samples per cycle, not another whole-store content audit",
+    "Local Python 3.14 evidence does not qualify Docker Python 3.12 or real PostgreSQL",
+    "Full frontend lint remains unapproved: prior run had 26 errors in unchanged training files; changed-file lint passed earlier",
+    "No merge into main dev9d2bc39, push, PR, deletion, permissions change or reference retirement"
+  ],
+  "risk": [
+    "item 5: process/environment orchestration; independent verification and actual two-cycle proof observed",
+    "item 2: existing loopback/development guard preserved; synthetic public API auth checks observed"
+  ]
+}

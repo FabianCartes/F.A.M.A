@@ -72,5 +72,38 @@ La copia publicada sintética preserva identidad, catálogo y descarga mediante 
 real y worker real. El frontend de pruebas es un pequeño proxy Node controlado,
 NO Next: sirve solo para inyectar fallo de reporte, congelar/reanudar el worker,
 repetir SIGTERM, comprobar flock, procesos propios ausentes y dummy ajeno intacto.
-No reemplaza la aceptación operativa pendiente del orquestador: bundle Next real, colección 1194/15,
-dos descargas comparadas y dos ciclos completos de inicio/parada sin hijos propios.
+No reemplaza la aceptación operativa del bundle Next real y la colección copiada.
+
+## Instancia dedicada verificada
+
+El [recibo operacional](../receipts/local-collection-operation.json) registra la
+aceptación local del código `40dbd76`: dos ciclos reales con Next/API/worker,
+seis páginas y 1.194 audios únicos en 15 clases (8.523.910.642 bytes), dos
+muestras descargadas con tamaño/SHA correcto en cada ciclo, exclusión del
+segundo launcher y parada SIGTERM con salida 0 y grupos propios ausentes.
+El navegador mostró `aves_dataset`, 1.194 locales y 0 acuses históricos GCS;
+«Consultar audios» abrió la primera página de 50 archivos. No hubo importación,
+entrenamiento ni acción GCS. El respaldo original conservó los controles de
+SQLite/perfil/entorno; esta ejecución no repite una auditoría de todos sus bytes.
+
+La instancia quedó **detenida**, no instalada como servicio. Para iniciarla
+manualmente con el mismo checkout e intérprete ya comprobados:
+
+```bash
+cd /home/kevin/Work/fama/.git/agent-worktrees/unified-import-catalog
+/home/kevin/Work/fama/.venv/bin/python -B backend/scripts/run_local_collection.py \
+  --root /run/media/kevin/FAMA_P2/fama-dev-large-zip/local-instance \
+  --frontend-root /run/media/kevin/FAMA_P2/fama-dev-large-zip/local-instance/ui
+```
+
+Abrir `http://127.0.0.1:3000` solo después de READY; detener con Ctrl-C y esperar
+el cierre. Esta ruta usa la rama de la feature, **no** la base principal `dev`.
+El original `manual-large-zip-nf1me5r1` permanece como respaldo offline y nunca
+debe ejecutarse simultáneamente. No borrar el checkout ni ninguna copia.
+
+Los 404 de modelos, entrenamiento, feedback y catálogo legacy son límites
+esperados del backend reducido. La etiqueta global «GCP Conectado» no prueba
+acceso remoto; la vista de ingesta informa GCP desconectado y la columna de la
+importación refleja solo acuses históricos. El lint global de frontend sigue sin
+aprobar por 26 errores de archivos ajenos al cambio; este recibo no los corrige
+ni afirma disponibilidad de la plataforma completa.
