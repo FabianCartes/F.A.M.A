@@ -8,15 +8,12 @@ global.fetch = vi.fn();
 describe("TrainingView - Parameter Help & Explanations Tooltips", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (global.fetch as any).mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        is_training: false,
-        status: "idle",
-        metrics: [],
-        models: [],
-      }),
-    });
+    vi.mocked(global.fetch).mockImplementation(async () => new Response(JSON.stringify({
+      is_training: false,
+      status: "idle",
+      metrics: [],
+      models: [],
+    })));
   });
 
   it("renders help question mark triggers for audio features and hyperparameters", async () => {

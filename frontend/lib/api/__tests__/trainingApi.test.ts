@@ -262,7 +262,7 @@ describe("trainingApi (TDD Contract Tests)", () => {
       const res = await startTraining(paramsWithModelEpochs);
       expect(res.status).toBe("started");
 
-      const callBody = JSON.parse((global.fetch as any).mock.calls[0][1].body);
+      const callBody = JSON.parse(String(vi.mocked(global.fetch).mock.calls[0][1]?.body));
       expect(callBody.models[0].epochs).toBe(35);
       expect(callBody.models[1].epochs).toBe(10);
     });
@@ -321,7 +321,7 @@ describe("trainingApi (TDD Contract Tests)", () => {
       const res = await startTraining(paramsWithModelHyperparams);
       expect(res.status).toBe("started");
 
-      const callBody = JSON.parse((global.fetch as any).mock.calls[0][1].body);
+      const callBody = JSON.parse(String(vi.mocked(global.fetch).mock.calls[0][1]?.body));
       expect(callBody.models[0].learning_rate).toBe(0.0007);
       expect(callBody.models[0].batch_size).toBe(32);
       expect(callBody.models[1].learning_rate).toBe(0.001);

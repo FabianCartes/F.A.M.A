@@ -5,7 +5,6 @@ import {
   validateFrequencyRange,
   validateWindowDuration,
   validateAudioPhysics,
-  AudioDomainPresetKey,
 } from "../audioDomainPresets";
 
 describe("Audio Domain Presets and Physics Validation", () => {

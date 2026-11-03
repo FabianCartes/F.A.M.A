@@ -192,17 +192,17 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     });
 
     // Verificar que se llamó a POST /api/training/start con la lista de 2 modelos
-    const postCall = (global.fetch as any).mock.calls.find(
-      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    const postCall = vi.mocked(global.fetch).mock.calls.find(
+      (c) => c[0] === `${API_BASE_URL}/api/training/start`
     );
     expect(postCall).toBeDefined();
-    const payload = JSON.parse(postCall[1].body);
+    const payload = JSON.parse(String(postCall?.[1]?.body));
 
     expect(payload.models).toBeDefined();
     expect(payload.models).toHaveLength(2);
     expect(payload.models[0].architecture).toBe("EfficientNet-B0");
     expect(payload.models[1].architecture).toBe("ConvNeXt-Nano");
-    const totalWeight = payload.models.reduce((acc: number, m: any) => acc + m.weight, 0);
+    const totalWeight = payload.models.reduce((acc: number, m: { weight: number }) => acc + m.weight, 0);
     expect(totalWeight).toBeCloseTo(1.0, 2);
   });
 
@@ -232,11 +232,11 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
       fireEvent.click(startBtn);
     });
 
-    const postCall = (global.fetch as any).mock.calls.find(
-      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    const postCall = vi.mocked(global.fetch).mock.calls.find(
+      (c) => c[0] === `${API_BASE_URL}/api/training/start`
     );
     expect(postCall).toBeDefined();
-    const payload = JSON.parse(postCall[1].body);
+    const payload = JSON.parse(String(postCall?.[1]?.body));
 
     expect(payload.audio_config).toBeDefined();
     expect(payload.audio_config.target_sr).toBe(16000);
@@ -402,11 +402,11 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
       fireEvent.click(startBtn);
     });
 
-    const postCall = (global.fetch as any).mock.calls.find(
-      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    const postCall = vi.mocked(global.fetch).mock.calls.find(
+      (c) => c[0] === `${API_BASE_URL}/api/training/start`
     );
     expect(postCall).toBeDefined();
-    const payload = JSON.parse(postCall[1].body);
+    const payload = JSON.parse(String(postCall?.[1]?.body));
     expect(payload.weight_decay).toBe(0.05);
   });
 
@@ -435,11 +435,11 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
       fireEvent.click(startBtn);
     });
 
-    const postCall = (global.fetch as any).mock.calls.find(
-      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    const postCall = vi.mocked(global.fetch).mock.calls.find(
+      (c) => c[0] === `${API_BASE_URL}/api/training/start`
     );
     expect(postCall).toBeDefined();
-    const payload = JSON.parse(postCall[1].body);
+    const payload = JSON.parse(String(postCall?.[1]?.body));
     expect(payload.architecture).toBe("PANNs-CNN14");
     expect(payload.models[0].architecture).toBe("PANNs-CNN14");
   });
@@ -496,11 +496,11 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
       fireEvent.click(startBtn);
     });
 
-    const postCall = (global.fetch as any).mock.calls.find(
-      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    const postCall = vi.mocked(global.fetch).mock.calls.find(
+      (c) => c[0] === `${API_BASE_URL}/api/training/start`
     );
     expect(postCall).toBeDefined();
-    const payload = JSON.parse(postCall[1].body);
+    const payload = JSON.parse(String(postCall?.[1]?.body));
 
     expect(payload.models[0].epochs).toBe(35);
     expect(payload.models[1].epochs).toBe(20);
@@ -537,11 +537,11 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
       fireEvent.click(startBtn);
     });
 
-    const postCall = (global.fetch as any).mock.calls.find(
-      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    const postCall = vi.mocked(global.fetch).mock.calls.find(
+      (c) => c[0] === `${API_BASE_URL}/api/training/start`
     );
     expect(postCall).toBeDefined();
-    const payload = JSON.parse(postCall[1].body);
+    const payload = JSON.parse(String(postCall?.[1]?.body));
 
     expect(payload.models[0].weight).toBeCloseTo(0.6, 2);
     expect(payload.models[1].weight).toBeCloseTo(0.3, 2);
@@ -598,8 +598,8 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     });
 
     // La llamada al API no debe haberse realizado
-    const postCall = (global.fetch as any).mock.calls.find(
-      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    const postCall = vi.mocked(global.fetch).mock.calls.find(
+      (c) => c[0] === `${API_BASE_URL}/api/training/start`
     );
     expect(postCall).toBeUndefined();
   });
@@ -698,8 +698,8 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     expect(fMinInput.className).toContain("border-red-500");
     expect(screen.getByText("El campo 'Frecuencia Mínima' no puede estar vacío.")).toBeDefined();
 
-    const postCall = (global.fetch as any).mock.calls.find(
-      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    const postCall = vi.mocked(global.fetch).mock.calls.find(
+      (c) => c[0] === `${API_BASE_URL}/api/training/start`
     );
     expect(postCall).toBeUndefined();
   });
@@ -822,11 +822,11 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
       fireEvent.click(startBtn);
     });
 
-    const postCall = (global.fetch as any).mock.calls.find(
-      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    const postCall = vi.mocked(global.fetch).mock.calls.find(
+      (c) => c[0] === `${API_BASE_URL}/api/training/start`
     );
     expect(postCall).toBeDefined();
-    const payload = JSON.parse(postCall[1].body);
+    const payload = JSON.parse(String(postCall?.[1]?.body));
     expect(payload.models[0].learning_rate).toBe(0.0008);
     expect(payload.models[0].batch_size).toBe(32);
     expect(payload.models[1].learning_rate).toBe(0.0002);
@@ -918,11 +918,11 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
       fireEvent.click(startBtn);
     });
 
-    const postCall = (global.fetch as any).mock.calls.find(
-      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    const postCall = vi.mocked(global.fetch).mock.calls.find(
+      (c) => c[0] === `${API_BASE_URL}/api/training/start`
     );
     expect(postCall).toBeDefined();
-    const payload = JSON.parse(postCall[1].body);
+    const payload = JSON.parse(String(postCall?.[1]?.body));
     expect(payload.early_stopping).toBe(false);
   });
 
@@ -936,11 +936,11 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
       fireEvent.click(startBtn);
     });
 
-    const postCall = (global.fetch as any).mock.calls.find(
-      (c: any[]) => c[0] === `${API_BASE_URL}/api/training/start`
+    const postCall = vi.mocked(global.fetch).mock.calls.find(
+      (c) => c[0] === `${API_BASE_URL}/api/training/start`
     );
     expect(postCall).toBeDefined();
-    const payload = JSON.parse(postCall[1].body);
+    const payload = JSON.parse(String(postCall?.[1]?.body));
     expect(payload.early_stopping).toBe(true);
   });
 });

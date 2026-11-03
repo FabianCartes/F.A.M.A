@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { API_BASE_URL } from "@/lib/api";
 import type { ModelHistoryItem } from "@/lib/schemas/training";
-import { rebalanceWeights, sumWeights, normalizeWeightsTo100 } from "@/lib/utils/ensembleWeights";
+import { sumWeights, normalizeWeightsTo100 } from "@/lib/utils/ensembleWeights";
 import {
   AUDIO_DOMAIN_PRESETS,
   AudioDomainPresetKey,
