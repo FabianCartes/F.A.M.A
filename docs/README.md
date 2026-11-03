@@ -29,6 +29,8 @@ docs/
 
 ## Índice Detallado por Carpeta
 
+* [`manuales/operacion-local-coleccion.md`](./manuales/operacion-local-coleccion.md): Sesión local en primer plano sobre una copia dedicada, bundle Next precompilado, puertos, cierre cooperativo y límites de verificación.
+
 * [`manuales/traslado-local-almacenamiento.md`](./manuales/traslado-local-almacenamiento.md): Copia fuera de línea de un laboratorio SQLite a una raíz nueva, preservación de identidad y autoridad física, capacidad, fallos y retiro humano; no activa servicios.
 
 * [`seguimiento-frontend-definitivo.md`](./seguimiento-frontend-definitivo.md): Contrato de preprocesamiento de nuevos checkpoints estándar, evidencia focal y límites antes de entrenar.
