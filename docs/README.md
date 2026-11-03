@@ -29,6 +29,8 @@ docs/
 
 ## Índice Detallado por Carpeta
 
+* [`manuales/traslado-local-almacenamiento.md`](./manuales/traslado-local-almacenamiento.md): Copia fuera de línea de un laboratorio SQLite a una raíz nueva, preservación de identidad y autoridad física, capacidad, fallos y retiro humano; no activa servicios.
+
 * [`seguimiento-frontend-definitivo.md`](./seguimiento-frontend-definitivo.md): Contrato de preprocesamiento de nuevos checkpoints estándar, evidencia focal y límites antes de entrenar.
 **Para retomar el proyecto:** [`manuales/estado_actual_y_pendientes.md`](./manuales/estado_actual_y_pendientes.md) separa correcciones, pendientes, funcionalidades aplazadas, benchmark CPU autorizado y validación operacional necesaria (corte del 17 de octubre de 2026).
 * [`integracion-afinamiento-integral.md`](./manuales/integracion-afinamiento-integral.md): Alcance, decisiones de conciliación y verificación nueva de la integración; no sustituye las evidencias históricas.
