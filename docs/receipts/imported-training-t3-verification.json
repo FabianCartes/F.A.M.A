@@ -1,0 +1,441 @@
+{
+  "status": "functionally_verified_pending_local_commit",
+  "scope": "T3 only; authenticated imported catalog/admission/worker/checkpoint/source association; not T4 UI or T5 evaluation/publication/predictor",
+  "base_commit": "957f9ec41e20f702b42c0c0e2ef62423bfb695b9",
+  "candidate_sha256": {
+    "backend/app/main.py": "b48417df471710d5189ecb01d46657b12b6eb1210aa92cc65aa3fb88f1dd4395",
+    "backend/app/schemas/training.py": "5f9e284992f25360e6e72d0c5b1a0a5b2d9b55ccbffc87526106fd0871bcce26",
+    "backend/app/services/training.py": "1d915298f596a22339321c383b57a3d960e26828ed58765e2f87740f2b65e11d",
+    "backend/app/services/imported_training_source.py": "265aefeecfb18f7ab21dc7e137ed5081894bf073ecba5a59faabca7bbe6f7b64",
+    "backend/app/models/imported_training_source.py": "bdec6e23187e5545b578975627bfcd923851952c4e45c31c6d701e77e108e31e",
+    "backend/scripts/migrate_imported_training_source.py": "d957f1f3936a90a6a69d64f95b65ee6c7e5c4cb29bbd38aed3db567f3cde68a6",
+    "backend/tests/test_imported_training_admission.py": "54d82f8a1839ea362cde301c73e35e3ff9ed5896c9d0cb924b84c958810156c6",
+    "backend/tests/test_imported_training_source.py": "d9b64cc79526f7146e75dcfd9d0b3d711a4969266020226e902284e63680acd7",
+    "backend/tests/test_imported_training_persistence.py": "f6ae92e439da47f42107b907311f4f6360cf85318f03b48fc832cf85f4e243fa",
+    "backend/tests/test_training_flow.py": "8b3671166d2a15c23b394a69de67628e5695267df6706ffab145015537844550",
+    "backend/tests/test_training_spawn.py": "06ebe61e3bcdf16cd6dae23eb1a28fce08eee15fb6789b925ab0f6e420ce2060",
+    "backend/tests/test_imported_training_startup.py": "92e703838faa3cff3fb880a474d7b2c44893c2e5446035b86a7f95263fe7a58c"
+  },
+  "guarded_suite": {
+    "exit": 0,
+    "passed": 263,
+    "warnings": 2,
+    "pytest_seconds": 36.2,
+    "command_metadata": "docs/receipts/imported-training-t3-tdd/39.json",
+    "summary": {
+      "phase": "isolated_training_fixture_consumer_suite",
+      "process_exit_code": 0,
+      "pytest_exit_code": 0,
+      "deselected_cases": [],
+      "status": "passed",
+      "guard_before_collection_fixtures_and_body": true,
+      "phase_deadline_seconds": 30,
+      "nonpassing_reports": [],
+      "sqlite_memory_connection_count": 251,
+      "excluded_completed_cases": [],
+      "private_scratch_cleanup": true,
+      "code_guard_and_documentation_preserved": true,
+      "only_sqlite_synthetic_cpu": true,
+      "network_live_db_forbidden": true,
+      "no_further_environment_recovery": true,
+      "protected_paths_unchanged": true,
+      "protected_path_count": 30,
+      "inventory": "docs/receipts/training-checks-inventory.json",
+      "call_report_count": 263
+    }
+  },
+  "separate_spawn": {
+    "exit": 0,
+    "passed": 11,
+    "pytest_seconds": 32.9,
+    "imported_cases": 2,
+    "authorization": "Autorizo; plan L27",
+    "metadata": "docs/receipts/imported-training-t3-tdd/30.json",
+    "scope": "real processes/private file SQLite/CPU; pipeline child network blocked; not original runner guard",
+    "candidate_timing": "before final read-only schema-preflight fix33-34; same worker/supervisor/association behavior",
+    "scratch_removed": true
+  },
+  "differential": {
+    "result": "passed",
+    "evidence": "docs/receipts/imported-training-t3-differential.json",
+    "base_and_candidate_exits": [
+      0,
+      0
+    ],
+    "scope": "10 HTTP operations x2 legacy datasets; new optional nulls/include_imported=false/invalid supplied bearer",
+    "normalization": "volatile job/version identities, timestamps and elapsed_seconds only",
+    "scratch_removed": true,
+    "candidate_timing": "Before final bootstrap-only correction; subsequent observed DDL comparison36vs37 shows exactly new imported table excluded and no other table changes; final regression39 covers startup correction."
+  },
+  "tdd": {
+    "triplets": [
+      {
+        "number": "01",
+        "exit": 1,
+        "metadata": "docs/receipts/imported-training-t3-tdd/01.json"
+      },
+      {
+        "number": "02",
+        "exit": 1,
+        "metadata": "docs/receipts/imported-training-t3-tdd/02.json"
+      },
+      {
+        "number": "03",
+        "exit": 0,
+        "metadata": "docs/receipts/imported-training-t3-tdd/03.json"
+      },
+      {
+        "number": "04",
+        "exit": 1,
+        "metadata": "docs/receipts/imported-training-t3-tdd/04.json"
+      },
+      {
+        "number": "05",
+        "exit": 0,
+        "metadata": "docs/receipts/imported-training-t3-tdd/05.json"
+      },
+      {
+        "number": "06",
+        "exit": 1,
+        "metadata": "docs/receipts/imported-training-t3-tdd/06.json"
+      },
+      {
+        "number": "07",
+        "exit": 0,
+        "metadata": "docs/receipts/imported-training-t3-tdd/07.json"
+      },
+      {
+        "number": "08",
+        "exit": 1,
+        "metadata": "docs/receipts/imported-training-t3-tdd/08.json"
+      },
+      {
+        "number": "09",
+        "exit": 0,
+        "metadata": "docs/receipts/imported-training-t3-tdd/09.json"
+      },
+      {
+        "number": "10",
+        "exit": 1,
+        "metadata": "docs/receipts/imported-training-t3-tdd/10.json"
+      },
+      {
+        "number": "11",
+        "exit": 0,
+        "metadata": "docs/receipts/imported-training-t3-tdd/11.json"
+      },
+      {
+        "number": "12",
+        "exit": 1,
+        "metadata": "docs/receipts/imported-training-t3-tdd/12.json"
+      },
+      {
+        "number": "13",
+        "exit": 1,
+        "metadata": "docs/receipts/imported-training-t3-tdd/13.json"
+      },
+      {
+        "number": "14",
+        "exit": 0,
+        "metadata": "docs/receipts/imported-training-t3-tdd/14.json"
+      },
+      {
+        "number": "15",
+        "exit": 1,
+        "metadata": "docs/receipts/imported-training-t3-tdd/15.json"
+      },
+      {
+        "number": "16",
+        "exit": 0,
+        "metadata": "docs/receipts/imported-training-t3-tdd/16.json"
+      },
+      {
+        "number": "17",
+        "exit": 1,
+        "metadata": "docs/receipts/imported-training-t3-tdd/17.json"
+      },
+      {
+        "number": "18",
+        "exit": 1,
+        "metadata": "docs/receipts/imported-training-t3-tdd/18.json"
+      },
+      {
+        "number": "19",
+        "exit": 0,
+        "metadata": "docs/receipts/imported-training-t3-tdd/19.json"
+      },
+      {
+        "number": "20",
+        "exit": 1,
+        "metadata": "docs/receipts/imported-training-t3-tdd/20.json"
+      },
+      {
+        "number": "21",
+        "exit": 0,
+        "metadata": "docs/receipts/imported-training-t3-tdd/21.json"
+      },
+      {
+        "number": "22",
+        "exit": 0,
+        "metadata": "docs/receipts/imported-training-t3-tdd/22.json"
+      },
+      {
+        "number": "23",
+        "exit": 1,
+        "metadata": "docs/receipts/imported-training-t3-tdd/23.json"
+      },
+      {
+        "number": "24",
+        "exit": 0,
+        "metadata": "docs/receipts/imported-training-t3-tdd/24.json"
+      },
+      {
+        "number": "25",
+        "exit": 1,
+        "metadata": "docs/receipts/imported-training-t3-tdd/25.json"
+      },
+      {
+        "number": "26",
+        "exit": 0,
+        "metadata": "docs/receipts/imported-training-t3-tdd/26.json"
+      },
+      {
+        "number": "27",
+        "exit": 1,
+        "metadata": "docs/receipts/imported-training-t3-tdd/27.json"
+      },
+      {
+        "number": "28",
+        "exit": 0,
+        "metadata": "docs/receipts/imported-training-t3-tdd/28.json"
+      },
+      {
+        "number": "29",
+        "exit": 1,
+        "metadata": "docs/receipts/imported-training-t3-tdd/29.json"
+      },
+      {
+        "number": "30",
+        "exit": 0,
+        "metadata": "docs/receipts/imported-training-t3-tdd/30.json"
+      },
+      {
+        "number": "31",
+        "exit": 1,
+        "metadata": "docs/receipts/imported-training-t3-tdd/31.json"
+      },
+      {
+        "number": "32",
+        "exit": 0,
+        "metadata": "docs/receipts/imported-training-t3-tdd/32.json"
+      },
+      {
+        "number": "33",
+        "exit": 1,
+        "metadata": "docs/receipts/imported-training-t3-tdd/33.json"
+      },
+      {
+        "number": "34",
+        "exit": 0,
+        "metadata": "docs/receipts/imported-training-t3-tdd/34.json"
+      },
+      {
+        "number": "35",
+        "exit": 0,
+        "metadata": "docs/receipts/imported-training-t3-tdd/35.json"
+      },
+      {
+        "number": "36",
+        "exit": 1,
+        "metadata": "docs/receipts/imported-training-t3-tdd/36.json"
+      },
+      {
+        "number": "37",
+        "exit": 0,
+        "metadata": "docs/receipts/imported-training-t3-tdd/37.json"
+      },
+      {
+        "number": "38",
+        "exit": 0,
+        "metadata": "docs/receipts/imported-training-t3-tdd/38.json"
+      },
+      {
+        "number": "39",
+        "exit": 0,
+        "metadata": "docs/receipts/imported-training-t3-tdd/39.json"
+      }
+    ],
+    "combined_reconciliation": "docs/receipts/imported-training-t3-tdd/00-reconcile.combined.log",
+    "coverage_not_retrospective_red": "New checks on existing candidate branches are ordinary coverage, not fabricated RED; schema fix33-34 and legacy regression27-28 retain genuine RED/GREEN."
+  },
+  "failures_preserved": [
+    {
+      "evidence": "00-reconcile.combined.log",
+      "exit": 1,
+      "passed": 13,
+      "failed": 1,
+      "reason": "test initially imposed authentication on legacy start contraryS10; corrected test target imported, pinned actual legacy query regression27-28"
+    },
+    {
+      "evidence": "29.json",
+      "exit": 1,
+      "passed": 256,
+      "failed": 1,
+      "warnings": 2,
+      "reason": "parent selected spawn inside original guard that prohibits it; separate L27 authorized procedure30 afterwards"
+    },
+    {
+      "evidence": "31.json",
+      "exit": 1,
+      "passed": 3,
+      "failed": 1,
+      "reason": "post-admission corruption fixture chose test member unused by train/val; corrected to train row32"
+    },
+    {
+      "evidence": "33.json",
+      "exit": 1,
+      "passed": 0,
+      "failed": 1,
+      "deselected": 9,
+      "reason": "real candidate bug admitted incompatible source schema; read-only preflight fixed34"
+    },
+    {
+      "evidence": "36.json",
+      "exit": 1,
+      "failed": 1,
+      "deselected": 1,
+      "reason": "real automaticDDL bug on eager ORM import, fixed and tested in37/38; no productionDDL"
+    }
+  ],
+  "independent": {
+    "task": "mw1hhbri-f-9djy",
+    "status": "inconclusive",
+    "approval": false,
+    "verdicts": {
+      "S1": "pass within T3 synthetic checkpoint scope",
+      "S2": "pass bounded legacy/import contract",
+      "S8": "pass synthetic local WAV single-label",
+      "S9": "pass pinned profile/classes",
+      "S10": "pass tested auth/owner paths",
+      "S11": "inconclusive on unconditional no-auto-DDL across startup/import orders"
+    },
+    "check": {
+      "exit": 0,
+      "passed": 38,
+      "pytest_seconds": 8.03,
+      "skips": 0,
+      "deselected": 0,
+      "sqlite_memory_connections": 55,
+      "protected_paths_unchanged": 30,
+      "private_scratch_cleanup": true,
+      "command": "cd backend && PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /home/kevin/Work/fama/.venv/bin/python tests/run_isolated_training_checks.py tests/test_imported_training_admission.py tests/test_imported_training_source.py tests/test_imported_training_persistence.py"
+    },
+    "unresolved": "main.py99 Base.metadata.create_all would include source ORM table if registered by earlier import; info flag alone does not exclude it. Normal lazy order appears safe; other supported order not established. No actual production DDL or confirmed severe defect observed. Needs bounded isolated import-order probe, not second reviewer/model.",
+    "evidence_limits": "Subagent tool output combined streams; no separate raw stderr or persistent full-output path provided. Counts and claims are from the delivered independent handoff, not fabricated raw logs. Memory unavailable to child; parent observation6372 saves verdict.",
+    "resolution": "Specific S11 question reproduced and fixed by parent under explicit user authorizationL30; no verifier rerun or model substitution; original verdict remains inconclusive."
+  },
+  "native_review": {
+    "mode": "on(global)",
+    "assessment": "unassessable: untracked files require explicit declaration",
+    "escalation_item": 2,
+    "risk": "high",
+    "independent_required": true,
+    "reviewDue": "not supplied",
+    "continuation": "not supplied",
+    "review_started": false,
+    "approval": false,
+    "final_assessment": "After final source mutation: unassessable again due untracked files; escalation item2 high, independent plan retained; no reviewDue or continuation supplied, no START/authority/native approval."
+  },
+  "preservation": "docs/receipts/imported-training-t3-preservation.json (8 paths matched; initial parser error corrected before comparison)",
+  "not_exercised": [
+    "Docker/Python3.12",
+    "GPU",
+    "real PostgreSQL/schema/locks",
+    "real training/datasets/GCS/services/migrations",
+    "quality/performance/scale",
+    "T4UI",
+    "T5evaluation/publication/predictor imported",
+    "T7operational"
+  ],
+  "work_unit_commit": null,
+  "closure_basis": "Independent38PASS/verdict inconclusive before startup correction; user authorized parent isolated S11 probe and fix. RED36/GREEN37-38 and final39 resolve the specific missing proof; no independent post-fix or native approval claimed.",
+  "guarded_suite_before_startup_fix": {
+    "exit": 0,
+    "passed": 263,
+    "warnings": 2,
+    "pytest_seconds": 34.55,
+    "command_metadata": "docs/receipts/imported-training-t3-tdd/35.json",
+    "summary": {
+      "phase": "isolated_training_fixture_consumer_suite",
+      "process_exit_code": 0,
+      "pytest_exit_code": 0,
+      "deselected_cases": [],
+      "status": "passed",
+      "guard_before_collection_fixtures_and_body": true,
+      "phase_deadline_seconds": 30,
+      "nonpassing_reports": [],
+      "sqlite_memory_connection_count": 251,
+      "excluded_completed_cases": [],
+      "private_scratch_cleanup": true,
+      "code_guard_and_documentation_preserved": true,
+      "only_sqlite_synthetic_cpu": true,
+      "network_live_db_forbidden": true,
+      "no_further_environment_recovery": true,
+      "protected_paths_unchanged": true,
+      "protected_path_count": 30,
+      "inventory": "docs/receipts/training-checks-inventory.json",
+      "call_report_count": 263
+    }
+  },
+  "startup_order_resolution": {
+    "authorization": "Autorizo;planL30",
+    "evidence": "docs/receipts/imported-training-t3-startup.json",
+    "red36": {
+      "exit": 1,
+      "failed": 1,
+      "deselected": 1,
+      "pytest_seconds": 0.77
+    },
+    "green37_eager": {
+      "exit": 0,
+      "passed": 1,
+      "deselected": 1,
+      "pytest_seconds": 0.73
+    },
+    "green38_normal": {
+      "exit": 0,
+      "passed": 1,
+      "deselected": 1,
+      "pytest_seconds": 0.77
+    },
+    "meaning_of_deselections": "Each order runs in its own fresh runner; each counterpart is exercised separately, not omitted. No test is falsely counted as passed.",
+    "ddl_delta_eager_before_after": {
+      "removed": [
+        "imported_model_source"
+      ],
+      "added": []
+    },
+    "legacy_bootstrap_preserved": [
+      "modelo",
+      "conjunto_datos",
+      "usuario"
+    ],
+    "scope": "actual DDL events observed only on SQLite memory under original guard,30protected/cleanupPASS; no production DDL"
+  },
+  "whitespace": {
+    "full_staged_check_exit": 2,
+    "reason": "original whitespace in raw execution logs retained unchanged; 66 diagnostic lines",
+    "authored_code_documentation_exit": 0,
+    "evidence": "docs/receipts/imported-training-t3-whitespace.json"
+  },
+  "review_workload": {
+    "authored_diff_lines": 1369,
+    "staged_before_whitespace_receipt": {
+      "files": 144,
+      "insertions": 4115,
+      "deletions": 42
+    },
+    "reason": "one coherent T3 admission/worker/durability behavior plus TDD/raw/machine evidence, within 1500–2200 forecast; not artificially split",
+    "strategy": "auto-chain/feature-branch-chain"
+  }
+}

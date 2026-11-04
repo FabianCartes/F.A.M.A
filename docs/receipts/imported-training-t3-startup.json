@@ -1,0 +1,31 @@
+{
+  "authorization": "Autorizo;planL30",
+  "red36": {
+    "exit": 1,
+    "observed_table_created": true
+  },
+  "green37_eager": {
+    "exit": 0,
+    "passed": 1,
+    "deselected_other_order": 1,
+    "pytest_seconds": 0.73
+  },
+  "green38_normal": {
+    "exit": 0,
+    "passed": 1,
+    "deselected_other_order": 1,
+    "pytest_seconds": 0.77
+  },
+  "observed_eager_schema_difference": {
+    "removed": [
+      "imported_model_source"
+    ],
+    "added": []
+  },
+  "normal_legacy_tables_created": [
+    "modelo",
+    "conjunto_datos",
+    "usuario"
+  ],
+  "scope": "actual CREATE TABLE events only on fresh SQLiteMEM engines; each case separate original guarded runner; 30protectedpaths/cleanupPASS each; no production DDL or verifier rerun"
+}

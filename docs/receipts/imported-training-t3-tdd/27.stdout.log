@@ -1,0 +1,25 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-iq9yufla
+[Database] Tablas sincronizadas exitosamente en PostgreSQL.
+F
+=================================== FAILURES ===================================
+_ test_legacy_queries_preserve_access_without_using_supplied_credentials[datasets] _
+
+client = <starlette.testclient.TestClient object at 0x7fe733875e80>
+training_env = (<app.services.training.TrainingService object at 0x7fe7337efed0>, sessionmaker(class_='Session', bind=Engine(sqlite:/...ining-consumer-suite-iq9yufla/pytest/test_legacy_queries_preserve_a0'), <MagicMock name='Thread' id='140631042425920'>)
+path = 'datasets'
+
+    @pytest.mark.parametrize("path", ["datasets", "history", "progress"])
+    def test_legacy_queries_preserve_access_without_using_supplied_credentials(client, training_env, path):
+        expected = client.get("/api/training/" + path)
+        response = client.get("/api/training/" + path, headers={"Authorization": "Bearer invalid"})
+>       assert response.status_code == expected.status_code == 200
+E       assert 401 == 200
+E        +  where 401 = <Response [401 Unauthorized]>.status_code
+E        +  and   200 = <Response [200 OK]>.status_code
+
+tests/test_imported_training_admission.py:209: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_imported_training_admission.py::test_legacy_queries_preserve_access_without_using_supplied_credentials[datasets]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed in 0.99s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": [], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_imported_training_admission.py::test_legacy_queries_preserve_access_without_using_supplied_credentials[datasets]", "phase": "call", "outcome": "failed", "duration_seconds": 0.048}], "nonpassing_reports": [{"nodeid": "tests/test_imported_training_admission.py::test_legacy_queries_preserve_access_without_using_supplied_credentials[datasets]", "phase": "call", "outcome": "failed", "duration_seconds": 0.048}], "sqlite_memory_connection_count": 1, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

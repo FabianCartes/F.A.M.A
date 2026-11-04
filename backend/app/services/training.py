@@ -60,6 +60,7 @@ ARCHITECTURE_PRESETS: Dict[str, Dict[str, Any]] = {
 TRIAD_ARCHITECTURES: List[str] = ["EfficientNet-B0", "ConvNeXt-Nano", "ResNet-34d"]
 ENGINE_TRIAD_ARCHITECTURES: List[str] = ["ResNet-34d", "EfficientNet-B0", "PANNs-CNN14"]
 SUPPORTED_DATASETS = frozenset({"AvesChilenas", "engine_diagnostics"})
+_INTERNAL_ACCESS = object()
 
 
 def _json_config(value):
@@ -97,6 +98,8 @@ class TrainingService:
     def __init__(self, checkpoints_dir: Optional[Path] = None, process_factory=None):
         self.checkpoints_dir = Path(checkpoints_dir or (_BACKEND_DIR / "checkpoints"))
         self._process_factory = process_factory or TrainingProcess
+        self.imported_sources = None
+        self.current_source_owner = None
         self._worker_process = None
         self._progress_callback = None
         self._stop_event = None
@@ -157,7 +160,7 @@ class TrainingService:
                 if event["type"] == "progress":
                     snapshot = event["snapshot"]
                     status = snapshot.get("status", "training")
-                    if status in {"completed", "stopped", "failed"}:
+                    if status in {"completed", "checkpoint_persisted", "stopped", "failed"}:
                         final_status = status
                     with self._lock:
                         for key, attr in {
@@ -313,11 +316,15 @@ class TrainingService:
 
         return datasets
 
-    def get_progress(self) -> Dict[str, Any]:
+    def get_progress(self, *, owner_id=_INTERNAL_ACCESS) -> Dict[str, Any]:
         """
         Retorna una instantánea del progreso del entrenamiento en tiempo real para el sondeo de la UI.
         """
         with self._lock:
+            if (owner_id is not _INTERNAL_ACCESS and self.current_source_owner is not None
+                    and self.current_source_owner != owner_id):
+                from app.services.imported_training_source import ImportedSourceError
+                raise ImportedSourceError()
             elapsed = round(time.time() - self.start_timestamp, 1) if self.start_timestamp else 0.0
             return {
                 "status": self.status,
@@ -340,11 +347,15 @@ class TrainingService:
                 "error_message": self.error_message,
             }
 
-    def stop_training(self) -> Dict[str, Any]:
+    def stop_training(self, *, owner_id=_INTERNAL_ACCESS) -> Dict[str, Any]:
         """
         Solicita la interrupción cooperativa segura del entrenamiento en ejecución (CU_INV_03 Paso 2.a).
         """
         with self._lock:
+            if (owner_id is not _INTERNAL_ACCESS and self.current_source_owner is not None
+                    and self.current_source_owner != owner_id):
+                from app.services.imported_training_source import ImportedSourceError
+                raise ImportedSourceError()
             if self.status != "training":
                 return {"status": self.status, "message": "No hay ningún entrenamiento activo para detener."}
             self._stop_requested = True
@@ -441,6 +452,10 @@ class TrainingService:
         seed: int = 42,
         prepared_version: Optional[str] = None,
         allow_historical_preparation: bool = False,
+        imported_dataset_id: Optional[str] = None,
+        snapshot_id: Optional[str] = None,
+        imported_prepared_version: Optional[str] = None,
+        owner_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Inicia un nuevo ciclo de entrenamiento bioacústico en un proceso spawn.
@@ -457,20 +472,47 @@ class TrainingService:
         if allow_historical_preparation and prepared_version is None:
             raise ValueError("Historical preparation requires an explicit prepared_version")
 
+        imported_source = None
+        if imported_dataset_id is not None:
+            from app.services.imported_training_source import configured_sources, ImportedSourceError
+            if prepared_version is not None or allow_historical_preparation or is_tri_model:
+                raise ImportedSourceError("profile_conflict", "Selección importada incompatible con opciones legacy.")
+            selected_models = models or [{"architecture": architecture}]
+            if len(selected_models) != 1:
+                raise ImportedSourceError("profile_conflict", "El perfil preparado exige una arquitectura única.")
+            architecture = selected_models[0]["architecture"]
+            sources = self.imported_sources or configured_sources(SessionLocal)
+            imported_source = sources.resolve(owner_id, imported_dataset_id, snapshot_id,
+                imported_prepared_version, architecture=architecture,
+                audio_config=_json_config(audio_config), windowing_config=_json_config(windowing_config))
+            from scripts.migrate_imported_training_source import validate_imported_sources
+            with SessionLocal() as admission_db:
+                try:
+                    validate_imported_sources(admission_db.get_bind())
+                except RuntimeError as error:
+                    raise ImportedSourceError() from error
+            audio_config = dict(imported_source["identity"]["profile"]["audio"])
+            windowing_config = {"hop_seconds": imported_source["identity"]["profile"]["window_hop_seconds"],
+                                "aggregation_mode": "max", "gem_p": 3.0, "vad_threshold": 0.0}
+
         with self._lock:
             if self.status in {"training", "evaluating"} or self._worker_process is not None:
                 raise RuntimeError("Ya existe un proceso de entrenamiento en ejecución.")
 
             try:
-                if dataset_name not in SUPPORTED_DATASETS:
-                    raise ValueError(f"Dataset '{dataset_name}' no soportado para entrenamiento.")
-                with SessionLocal() as db:
-                    matches = [ds for ds in db.query(ConjuntoDatos).filter_by(nombre=dataset_name).all()
-                               if ds.nombre == dataset_name]
-                    if len(matches) != 1:
-                        raise ValueError(f"Dataset '{dataset_name}' requiere un registro exacto y único.")
-                    dataset_id = matches[0].id_conjunto_datos
-                source = self._prepare_source(dataset_name, prepared_version, allow_historical_preparation)
+                if imported_source is not None:
+                    source, dataset_id = imported_source, None
+                    dataset_name = "imported:" + imported_dataset_id
+                else:
+                    if dataset_name not in SUPPORTED_DATASETS:
+                        raise ValueError(f"Dataset '{dataset_name}' no soportado para entrenamiento.")
+                    with SessionLocal() as db:
+                        matches = [ds for ds in db.query(ConjuntoDatos).filter_by(nombre=dataset_name).all()
+                                   if ds.nombre == dataset_name]
+                        if len(matches) != 1:
+                            raise ValueError(f"Dataset '{dataset_name}' requiere un registro exacto y único.")
+                        dataset_id = matches[0].id_conjunto_datos
+                    source = self._prepare_source(dataset_name, prepared_version, allow_historical_preparation)
                 audio_config = _json_config(audio_config)
                 windowing_config = _json_config(windowing_config)
                 regularization_config = _json_config(regularization_config)
@@ -525,6 +567,7 @@ class TrainingService:
             mode_tag = "ensemble" if is_ensemble else resolved_models[0]["architecture"].lower().replace('-', '_')
             job_id = f"fama_{mode_tag}_{uuid.uuid4().hex}"
             self.current_job_id = job_id
+            self.current_source_owner = owner_id if imported_source is not None else None
             self.seed = seed
             self.status = "training"
             self.is_tri_model = is_tri_model or (len(resolved_models) == 3)
@@ -822,12 +865,19 @@ class TrainingService:
         try:
             # Consume the admitted source snapshot, never re-resolve another dataset.
             source = config["source"]
-            raw_dir = source["raw_dir"]
-            train_df, val_df = source["train_df"], source["val_df"]
-            classes = sorted(train_df["clase"].unique().tolist())
+            imported = source.get("kind") == "imported"
+            if imported:
+                raw_dir = None
+                train_df, val_df = (source["splits"][s] for s in ("train", "val"))
+                classes = list(source["classes"])
+                training_audio = dict(source["identity"]["profile"]["audio"])
+            else:
+                raw_dir = source["raw_dir"]
+                train_df, val_df = source["train_df"], source["val_df"]
+                classes = sorted(train_df["clase"].unique().tolist())
+                from app.services.standard_evaluation_guard import resolve_training_audio
+                training_audio = resolve_training_audio(dataset_name, config.get("audio_config"))
             label_to_idx = {c: i for i, c in enumerate(classes)}
-            from app.services.standard_evaluation_guard import resolve_training_audio
-            training_audio = resolve_training_audio(dataset_name, config.get("audio_config"))
             target_sr, duration_seconds, n_mels, n_fft, hop_length, f_min, f_max = (
                 training_audio[key] for key in (
                     "target_sr", "duration_seconds", "n_mels", "n_fft", "hop_length", "f_min", "f_max"))
@@ -883,7 +933,11 @@ class TrainingService:
 
 
                 # Instanciar DataLoaders de PyTorch
-                if is_engine or config.get("audio_config") is not None:
+                if imported:
+                    from app.services.imported_training_source import ImportedAudioDataset
+                    train_ds = ImportedAudioDataset(source, "train")
+                    val_ds = ImportedAudioDataset(source, "val")
+                elif is_engine or config.get("audio_config") is not None:
                     audio_cfg = AudioConfig(
                         target_sr=target_sr,
                         duration_seconds=duration_seconds,
@@ -1205,6 +1259,8 @@ class TrainingService:
                     "state_dict": saved_state,
                     "created_at": datetime.now(timezone.utc).isoformat(),
                 }
+                if imported:
+                    checkpoint_payload["imported_source"] = source["identity"]
                 if self._is_stop_requested():
                     with self._lock:
                         self.status = 'stopped'
@@ -1216,11 +1272,24 @@ class TrainingService:
                 commit_attempted = False
                 try:
                     db = SessionLocal()
-                    dataset = db.query(ConjuntoDatos).filter_by(
-                        id_conjunto_datos=config["dataset_id"], nombre=dataset_name
-                    ).with_for_update().one_or_none()
-                    if dataset is None or dataset.nombre != dataset_name or config["dataset_id"] is None:
-                        raise RuntimeError("El dataset aceptado ya no tiene un registro de origen válido.")
+                    if imported:
+                        from app.models.dataset_import import ImportedDataset
+                        from app.models.training_snapshot import TrainingSnapshot
+                        from app.models.imported_training_source import ImportedModelSource
+                        identity = source["identity"]
+                        dataset = db.query(ImportedDataset).filter_by(id=identity["dataset_id"],
+                            owner_id=identity["owner_id"]).with_for_update().one_or_none()
+                        snapshot = db.query(TrainingSnapshot).filter_by(id=identity["snapshot_id"],
+                            owner_id=identity["owner_id"], dataset_id=identity["dataset_id"],
+                            state="ready", manifest_sha256=identity["snapshot_manifest_sha256"]).one_or_none()
+                        if dataset is None or snapshot is None:
+                            raise RuntimeError("Fuente importada no disponible.")
+                    else:
+                        dataset = db.query(ConjuntoDatos).filter_by(
+                            id_conjunto_datos=config["dataset_id"], nombre=dataset_name
+                        ).with_for_update().one_or_none()
+                        if dataset is None or dataset.nombre != dataset_name or config["dataset_id"] is None:
+                            raise RuntimeError("El dataset aceptado ya no tiene un registro de origen válido.")
                     nuevo_modelo = Modelo(
                         id_conjunto_datos=config["dataset_id"],
                         clase_objetivo=f"{len(classes)} Clases ({dataset_name})",
@@ -1236,8 +1305,14 @@ class TrainingService:
                         activo=False,
                         estado="standard_eval_pending",
                     )
+                    if imported:
+                        nuevo_modelo.id_usuario = identity["owner_id"]
                     db.add(nuevo_modelo)
                     db.flush()
+                    if imported:
+                        db.add(ImportedModelSource(model_id=nuevo_modelo.id_modelo,
+                            owner_id=identity["owner_id"], dataset_id=identity["dataset_id"],
+                            snapshot_id=identity["snapshot_id"], identity=identity))
 
                     model_metrics = [
                         m for m in self.metrics_history
@@ -1290,6 +1365,11 @@ class TrainingService:
                     with self._lock:
                         self.status = 'stopped'
                     return
+                if imported:
+                    with self._lock:
+                        self.status = "checkpoint_persisted"
+                    self._add_log("INFO", "Checkpoint y fuente persistidos; evaluación y publicación pendientes (T5).")
+                    return
                 self._evaluate_registered_checkpoint(
                     model_id, checkpoint_path, file_hash, config, classes, training_audio,
                     preprocessing_contract, is_ensemble, arch)
@@ -1339,7 +1419,7 @@ class TrainingService:
         except Exception:
             return {}, None
 
-    def get_history(self, db: Optional[Session] = None) -> List[Dict[str, Any]]:
+    def get_history(self, db: Optional[Session] = None, *, owner_id=None) -> List[Dict[str, Any]]:
         """
         Retorna el historial de modelos entrenados enriquecido con la Ficha Técnica (CU_INV_04).
         """
@@ -1352,10 +1432,20 @@ class TrainingService:
                 modelos = db.query(Modelo).order_by(Modelo.fecha_entrenamiento.desc()).all()
 
                 names = model_display_names(modelos)
+                from sqlalchemy import inspect
+                associations = {}
+                if inspect(db.get_bind()).has_table("imported_model_source"):
+                    from app.models.imported_training_source import ImportedModelSource
+                    associations = {r.model_id: r for r in db.query(ImportedModelSource).all()}
 
                 for m in modelos:
+                    association = associations.get(m.id_modelo)
+                    if association is not None and association.owner_id != owner_id:
+                        continue
                     filename = Path(m.ruta_binario_gcp).name if m.ruta_binario_gcp else f"modelo_{m.id_modelo}.pt"
                     checkpoint, local_file_size = self._history_checkpoint(filename)
+                    if checkpoint.get("imported_source") and association is None:
+                        continue  # Fail closed if durable provenance is unavailable.
                     target_lower = (m.clase_objetivo or "").lower()
 
                     is_birds = "aves" in target_lower or "chilenas" in target_lower
@@ -1419,6 +1509,7 @@ class TrainingService:
                         "dataset": display["dataset"],
                         "dataset_id": m.id_conjunto_datos,
                         "dataset_name": m.conjunto_datos.nombre if m.conjunto_datos else None,
+                        **({"imported_source": association.identity} if association is not None else {}),
                         "sha256": m.hash_binario,
                         "metrics": [{"epoca": metric.epoca, "precision": metric.precision,
                                      "perdida": metric.perdida, "tiempo_epoca": metric.tiempo_epoca}

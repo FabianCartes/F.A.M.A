@@ -1,0 +1,39 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-8ggy5mnd
+[Database] Tablas sincronizadas exitosamente en PostgreSQL.
+F
+=================================== FAILURES ===================================
+________________ test_foreign_imported_start_is_non_disclosing _________________
+
+client = <starlette.testclient.TestClient object at 0x7fbf66aa02f0>
+training_env = (<app.services.training.TrainingService object at 0x7fbf62d0e850>, sessionmaker(class_='Session', bind=Engine(sqlite:/...ining-consumer-suite-8ggy5mnd/pytest/test_foreign_imported_start_is0'), <MagicMock name='Thread' id='140459973809824'>)
+cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7fbf62966660>, {'id': 'f7942f03f63b40ecaa588225b8ef447...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7fbf62de9bd0>, '201a91e973954b9f80f4f48a98ec6a3b')
+tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-8ggy5mnd/pytest/test_foreign_imported_start_is0')
+authenticated = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwiZXhwIjoxNzkzNzg1MTMwLCJpYXQiOjE3OTM3NTYzMzB9.0ECku_A9owi7rZIZB94Cxd1t6jCInyrZU3Pn8XSr-eM'}
+
+    def test_foreign_imported_start_is_non_disclosing(client, training_env, cohort, tmp_path, authenticated):
+        from app.services.imported_training_source import ImportedTrainingSource
+        from training.imported_dataset_preparation import ImportedDatasetPreparation
+        runtime, sessions, root, process = training_env
+        register(sessions, "AvesChilenas")
+        partitions(root, "AvesChilenas")
+        preparations = ImportedDatasetPreparation(cohort[0], tmp_path / "imported-prepared")
+        prepared = create(preparations, cohort)
+        runtime.imported_sources = ImportedTrainingSource(preparations)
+        before = client.get("/api/training/progress").json()
+        history = client.get("/api/training/history").json()
+        for dataset_id, snapshot_id in ((cohort[5], cohort[1]["id"]), ("0" * 32, "0" * 32)):
+            response = client.post("/api/training/start", headers=authenticated, json={
+                "imported_dataset_id": dataset_id, "snapshot_id": snapshot_id,
+                "imported_prepared_version": prepared["version_id"], "architecture": "AudioCNN",
+            })
+>           assert response.status_code == 404, response.text
+E           AssertionError: {"status":"started","job_id":"fama_audiocnn_5be51a97fe514beb9db38cb4cd980d95","message":"Entrenamiento de AudioCNN iniciado para 10 épocas.","preparation":{"version_id":"cbfc5ec408fb38868f23f3372f098a554af89e61df3d98aade5304b4c38fc4de","historical":false}}
+E           assert 200 == 404
+E            +  where 200 = <Response [200 OK]>.status_code
+
+tests/test_imported_training_admission.py:59: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_imported_training_admission.py::test_foreign_imported_start_is_non_disclosing
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed in 1.38s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": [], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_imported_training_admission.py::test_foreign_imported_start_is_non_disclosing", "phase": "call", "outcome": "failed", "duration_seconds": 0.102}], "nonpassing_reports": [{"nodeid": "tests/test_imported_training_admission.py::test_foreign_imported_start_is_non_disclosing", "phase": "call", "outcome": "failed", "duration_seconds": 0.102}], "sqlite_memory_connection_count": 2, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

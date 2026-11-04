@@ -1,0 +1,33 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-mf325y_8
+[Database] Tablas sincronizadas exitosamente en PostgreSQL.
+F
+=================================== FAILURES ===================================
+___________ test_imported_selection_is_complete_and_exclusive[body0] ___________
+
+client = <starlette.testclient.TestClient object at 0x7efd73551e80>
+training_env = (<app.services.training.TrainingService object at 0x7efd734de990>, sessionmaker(class_='Session', bind=Engine(sqlite:/...ining-consumer-suite-mf325y_8/pytest/test_imported_selection_is_com0'), <MagicMock name='Thread' id='139627090641984'>)
+body = {'snapshot_id': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'}
+
+    @pytest.mark.parametrize("body", [
+        {"snapshot_id": "a" * 32}, {"imported_dataset_id": "b" * 32},
+        {"imported_dataset_id": "b" * 32, "snapshot_id": "a" * 32, "imported_prepared_version": "c" * 64,
+         "dataset_name": "AvesChilenas"},
+        {"imported_dataset_id": "b" * 32, "snapshot_id": "a" * 32, "imported_prepared_version": "c" * 64,
+         "allow_historical_preparation": True},
+        {"imported_dataset_id": "b" * 32, "snapshot_id": "a" * 32, "imported_prepared_version": "c" * 64,
+         "owner_id": 1},
+    ])
+    def test_imported_selection_is_complete_and_exclusive(client, training_env, body):
+        before = training_env[0].get_progress()
+        response = client.post("/api/training/start", json=body)
+>       assert response.status_code == 422, response.text
+E       AssertionError: {"detail":"Dataset 'AvesChilenas': Dataset 'AvesChilenas' requiere un registro exacto y único."}
+E       assert 400 == 422
+E        +  where 400 = <Response [400 Bad Request]>.status_code
+
+tests/test_imported_training_admission.py:115: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_imported_training_admission.py::test_imported_selection_is_complete_and_exclusive[body0]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed in 0.97s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": [], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_imported_training_admission.py::test_imported_selection_is_complete_and_exclusive[body0]", "phase": "call", "outcome": "failed", "duration_seconds": 0.042}], "nonpassing_reports": [{"nodeid": "tests/test_imported_training_admission.py::test_imported_selection_is_complete_and_exclusive[body0]", "phase": "call", "outcome": "failed", "duration_seconds": 0.042}], "sqlite_memory_connection_count": 1, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

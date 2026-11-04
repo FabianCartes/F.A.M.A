@@ -90,6 +90,12 @@ class StartTrainingRequest(BaseModel):
     y desacoplamiento del dominio acústico mediante AudioConfigSchema, WindowingConfigSchema y RegularizationConfigSchema.
     """
     dataset_name: str = "AvesChilenas"
+    imported_dataset_id: Optional[str] = Field(default=None, strict=True, pattern=r"^[0-9a-f]{32}$",
+        description="Owned imported dataset ID; requires active Bearer authentication and exact snapshot/preparation; alternative to legacy selection.")
+    snapshot_id: Optional[str] = Field(default=None, strict=True, pattern=r"^[0-9a-f]{32}$",
+        description="Ready immutable local snapshot belonging to the authenticated imported-dataset owner.")
+    imported_prepared_version: Optional[str] = Field(default=None, strict=True, pattern=r"^[0-9a-f]{64}$",
+        description="Exact T2 preparation version; pins classes and explicit audio/architecture profile. No implicit latest or legacy re-preparation.")
     prepared_version: Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{64}$",
                                           description="Pin an immutable prepared dataset identity")
     allow_historical_preparation: bool = Field(default=False, strict=True,
@@ -112,6 +118,21 @@ class StartTrainingRequest(BaseModel):
     windowing_config: Optional[WindowingConfigSchema] = None
     regularization_config: Optional[RegularizationConfigSchema] = None
     _explicit_models: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_imported_selection(cls, data):
+        if isinstance(data, dict) and any(data.get(k) is not None for k in (
+                "imported_dataset_id", "snapshot_id", "imported_prepared_version")):
+            required = ("imported_dataset_id", "snapshot_id", "imported_prepared_version")
+            if not all(data.get(k) is not None for k in required):
+                raise ValueError("La selección importada exige dataset, snapshot y preparación explícitos.")
+            if ("dataset_name" in data or data.get("prepared_version") is not None
+                    or data.get("allow_historical_preparation") or data.get("is_tri_model")):
+                raise ValueError("La selección importada es alternativa a la selección legacy.")
+            if set(data) - set(cls.model_fields):
+                raise ValueError("La selección importada no admite rutas, propietario ni campos adicionales.")
+        return data
 
     def __init__(self, **data):
         has_models = "models" in data and data["models"] is not None

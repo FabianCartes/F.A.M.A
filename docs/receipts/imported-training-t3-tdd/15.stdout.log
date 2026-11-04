@@ -1,0 +1,62 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-vtjzagyn
+F
+=================================== FAILURES ===================================
+___________ test_real_cpu_worker_persists_source_pending_evaluation ____________
+
+cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7ff3d5ef5fd0>, {'id': '553dd205aac347bf9f80aa482451aed...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7ff3d604d010>, 'abc1c9939cc641eab88ee37a3a8ee688')
+training_env = (<app.services.training.TrainingService object at 0x7ff3d4cab610>, sessionmaker(class_='Session', bind=Engine(sqlite:/...ining-consumer-suite-vtjzagyn/pytest/test_real_cpu_worker_persists_0'), <MagicMock name='Thread' id='140685233226480'>)
+tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-vtjzagyn/pytest/test_real_cpu_worker_persists_0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7ff3d64f2060>
+
+    def test_real_cpu_worker_persists_source_pending_evaluation(cohort, training_env, tmp_path, monkeypatch):
+        import torch
+        from app.services import training
+        from app.services.imported_training_source import ImportedTrainingSource
+        from training.imported_dataset_preparation import ImportedDatasetPreparation
+        from scripts.migrate_imported_training_source import migrate_imported_sources
+        runtime, _, _, process = training_env
+        sessions = cohort[0].sessions
+        migrate_imported_sources(sessions.kw["bind"], writers_stopped=True)
+        preparations = ImportedDatasetPreparation(cohort[0], tmp_path / "imported-prepared")
+        prepared = create(preparations, cohort)
+        runtime.imported_sources = ImportedTrainingSource(preparations)
+        monkeypatch.setattr(training, "SessionLocal", sessions)
+        monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+        # Execute the actual worker and loaders. Only the external process boundary is inline.
+        class Inline:
+            def __init__(self, target, args, **kwargs):
+                self.target, self.args = target, args
+            def start(self):
+                self.target(*self.args)
+        process.side_effect = Inline
+        result = runtime.start_training("", imported_dataset_id=cohort[5], snapshot_id=cohort[1]["id"],
+            imported_prepared_version=prepared["version_id"], owner_id=1,
+            architecture="AudioCNN", epochs=1, batch_size=2, early_stopping=False)
+        assert result["status"] == "started"
+        assert runtime.get_progress()["status"] == "checkpoint_persisted", runtime.get_progress()
+        with sessions() as db:
+            entry, = runtime.get_history(db, owner_id=1)
+        assert entry["status"] == "standard_eval_pending"
+        assert entry["active"] is False
+        association = runtime.imported_sources.model_source(1, entry["id"])
+        assert association["dataset_id"] == cohort[5]
+        assert association["snapshot_id"] == cohort[1]["id"]
+        assert association["preparation_version"] == prepared["version_id"]
+        checkpoint = torch.load(runtime.checkpoints_dir / entry["filename"], weights_only=True)
+        assert checkpoint["imported_source"] == association
+        assert checkpoint["classes"] == ["ants", "zebra"]
+        assert checkpoint["audio_config"]["target_sr"] == 8000
+        assert len(entry["metrics"]) == 1
+        with sessions() as db:
+>           assert runtime.get_history(db) == []
+E           AssertionError: assert [{'id': 1, 'n...ficado', ...}] == []
+E             
+E             Left contains one more item: {'id': 1, 'name': 'Dataset no verificado · AudioCNN (v1)', 'version': 1, 'dataset': 'Dataset no verificado', ...}
+E             Use -v to get more diff
+
+tests/test_imported_training_persistence.py:67: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_imported_training_persistence.py::test_real_cpu_worker_persists_source_pending_evaluation
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed in 0.99s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": [], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_imported_training_persistence.py::test_real_cpu_worker_persists_source_pending_evaluation", "phase": "call", "outcome": "failed", "duration_seconds": 0.303}], "nonpassing_reports": [{"nodeid": "tests/test_imported_training_persistence.py::test_real_cpu_worker_persists_source_pending_evaluation", "phase": "call", "outcome": "failed", "duration_seconds": 0.303}], "sqlite_memory_connection_count": 2, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

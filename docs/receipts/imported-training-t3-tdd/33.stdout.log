@@ -1,0 +1,88 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-724t7tna
+[Database] Tablas sincronizadas exitosamente en PostgreSQL.
+F
+=================================== FAILURES ===================================
+_ test_owned_invalid_selection_has_no_admission_effects[schema-source_unavailable-Fuente importada no disponible.] _
+
+client = <starlette.testclient.TestClient object at 0x7f7627b4da90>
+training_env = (<app.services.training.TrainingService object at 0x7f762bd53b10>, sessionmaker(class_='Session', bind=Engine(sqlite:/...ining-consumer-suite-724t7tna/pytest/test_owned_invalid_selection_h0'), <MagicMock name='Thread' id='140145515463744'>)
+cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7f7627952660>, {'id': 'f9e8756a7a154f12ab7afe14aae5269...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7f762777e5d0>, 'f7456b4f136c46fdaa50cce27f051737')
+tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-724t7tna/pytest/test_owned_invalid_selection_h0')
+authenticated = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwiZXhwIjoxNzkzNzg2OTI0LCJpYXQiOjE3OTM3NTgxMjR9.3cHEWV9UDuooWeaAAf9BvgcUyiv6XSKY2HaVkh0hlGI'}
+damage = 'schema', code = 'source_unavailable'
+message = 'Fuente importada no disponible.'
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f7627ce3e10>
+
+    @pytest.mark.parametrize("damage,code,message", [
+        ("snapshot", "source_unavailable", "Fuente importada no disponible."),
+        ("schema", "source_unavailable", "Fuente importada no disponible."),
+        ("version", "source_unavailable", "Fuente importada no disponible."),
+        ("incomplete", "source_unavailable", "Fuente importada no disponible."),
+        ("hash", "source_unavailable", "Fuente importada no disponible."),
+        ("missing", "source_unavailable", "Fuente importada no disponible."),
+        ("split", "source_unavailable", "Fuente importada no disponible."),
+        ("architecture", "profile_conflict", "La arquitectura no coincide con el perfil preparado."),
+        ("audio", "profile_conflict", "El audio solicitado no coincide con el perfil preparado."),
+        ("window", "profile_conflict", "Las ventanas no coinciden con el perfil preparado."),
+    ])
+    def test_owned_invalid_selection_has_no_admission_effects(client, training_env, cohort, tmp_path,
+                                                             authenticated, damage, code, message, monkeypatch):
+        from app.services import auth
+        from app.services.imported_training_source import ImportedTrainingSource
+        from training.imported_dataset_preparation import ImportedDatasetPreparation
+        runtime, _, _, process = training_env
+        preparations = ImportedDatasetPreparation(cohort[0], tmp_path / "imported-prepared")
+        prepared = create(preparations, cohort)
+        runtime.imported_sources = ImportedTrainingSource(preparations)
+        body = {"imported_dataset_id": cohort[5], "snapshot_id": cohort[1]["id"],
+                "imported_prepared_version": prepared["version_id"], "architecture": "AudioCNN"}
+        if damage == "schema":
+            from sqlalchemy import MetaData, Table, Column, Integer
+            from app.models.imported_training_source import ImportedModelSource
+            from app.services import training
+            engine = cohort[0].sessions.kw["bind"]
+            ImportedModelSource.__table__.drop(engine, checkfirst=True)
+            Table("imported_model_source", MetaData(), Column("model_id", Integer, primary_key=True)).create(engine)
+            monkeypatch.setattr(training, "SessionLocal", cohort[0].sessions)
+        elif damage == "snapshot":
+            body["snapshot_id"] = "0" * 32
+        elif damage == "version":
+            body["imported_prepared_version"] = "0" * 64
+        elif damage == "architecture":
+            body["architecture"] = "PANNs-CNN14"
+        elif damage == "audio":
+            body["audio_config"] = {"target_sr": 16000, "f_max": 8000}
+        elif damage == "window":
+            body["windowing_config"] = {"hop_seconds": 0.25}
+        elif damage == "incomplete":
+            from app.models.training_snapshot import TrainingSnapshot
+            with cohort[0].sessions() as db:
+                db.get(TrainingSnapshot, cohort[1]["id"]).state = "building"
+                db.commit()
+        elif damage == "split":
+            path = preparations.root / prepared["version_id"] / "test.csv"
+            path.chmod(0o600)
+            path.write_bytes(b"bad partition")
+        else:
+            member = next(cohort[0].iter_verified(1, cohort[1]["id"]))[0]
+            path = cohort[0].root / cohort[1]["id"] / member["member_id"]
+            if damage == "missing":
+                path.rename(path.with_suffix(".retained"))
+            else:
+                path.chmod(0o600)
+                path.write_bytes(b"modified audio")
+        owner = {"Authorization": "Bearer " + auth.create_access_token({"sub": "1"})}
+        before = runtime.get_progress()
+        history = client.get("/api/training/history").json()
+        response = client.post("/api/training/start", headers=owner, json=body)
+>       assert response.status_code == 404, response.text
+E       AssertionError: {"status":"started","job_id":"fama_audiocnn_1f3906ede66f42c1aef7b0d99b8baa03","message":"Entrenamiento de AudioCNN iniciado para 10 épocas.","preparation":{"version_id":"0143c1cc4be8d90b58aba6557bd950f7e963e6a540c378d78a2cc915d8de9bf9","historical":false}}
+E       assert 200 == 404
+E        +  where 200 = <Response [200 OK]>.status_code
+
+tests/test_imported_training_admission.py:193: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[schema-source_unavailable-Fuente importada no disponible.]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 9 deselected in 1.33s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": ["tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[snapshot-source_unavailable-Fuente importada no disponible.]", "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[version-source_unavailable-Fuente importada no disponible.]", "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[incomplete-source_unavailable-Fuente importada no disponible.]", "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[hash-source_unavailable-Fuente importada no disponible.]", "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[missing-source_unavailable-Fuente importada no disponible.]", "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[split-source_unavailable-Fuente importada no disponible.]", "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[architecture-profile_conflict-La arquitectura no coincide con el perfil preparado.]", "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[audio-profile_conflict-El audio solicitado no coincide con el perfil preparado.]", "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[window-profile_conflict-Las ventanas no coinciden con el perfil preparado.]"], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[schema-source_unavailable-Fuente importada no disponible.]", "phase": "call", "outcome": "failed", "duration_seconds": 0.062}], "nonpassing_reports": [{"nodeid": "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[schema-source_unavailable-Fuente importada no disponible.]", "phase": "call", "outcome": "failed", "duration_seconds": 0.062}], "sqlite_memory_connection_count": 2, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

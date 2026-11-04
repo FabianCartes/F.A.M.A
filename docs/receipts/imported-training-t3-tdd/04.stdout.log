@@ -1,0 +1,19 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-6onz3ykd
+F
+=================================== FAILURES ===================================
+_____________________ test_foreign_source_is_not_disclosed _____________________
+
+cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7fa31ffadd30>, {'id': '24ecd23143b74c7a873a6e044782894...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7fa3200f0d70>, '0a1b1fc957eb4d65954e5e1908632ca0')
+tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-6onz3ykd/pytest/test_foreign_source_is_not_dis0')
+
+    def test_foreign_source_is_not_disclosed(cohort, tmp_path):
+        from training.imported_dataset_preparation import ImportedDatasetPreparation
+>       from app.services.imported_training_source import ImportedTrainingSource, ImportedSourceError
+E       ModuleNotFoundError: No module named 'app.services.imported_training_source'
+
+tests/test_imported_training_source.py:9: ModuleNotFoundError
+=========================== short test summary info ============================
+FAILED tests/test_imported_training_source.py::test_foreign_source_is_not_disclosed
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed in 0.70s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": [], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_imported_training_source.py::test_foreign_source_is_not_disclosed", "phase": "call", "outcome": "failed", "duration_seconds": 0.005}], "nonpassing_reports": [{"nodeid": "tests/test_imported_training_source.py::test_foreign_source_is_not_disclosed", "phase": "call", "outcome": "failed", "duration_seconds": 0.005}], "sqlite_memory_connection_count": 1, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

@@ -1,0 +1,98 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-6ir9bnw3
+[Database] Tablas sincronizadas exitosamente en PostgreSQL.
+F
+=================================== FAILURES ===================================
+___________ test_real_cpu_worker_persists_source_pending_evaluation ____________
+
+cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7f2de04ee120>, {'id': '755d4172f2ba442f89ea817d5d43262...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7f2de067aa50>, 'c802c4adf7884d75bbf98ef6ee995611')
+training_env = (<app.services.training.TrainingService object at 0x7f2ddff45950>, sessionmaker(class_='Session', bind=Engine(sqlite:/...ining-consumer-suite-6ir9bnw3/pytest/test_real_cpu_worker_persists_0'), <MagicMock name='Thread' id='139835009144144'>)
+tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-6ir9bnw3/pytest/test_real_cpu_worker_persists_0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f2de0742c40>
+client = <starlette.testclient.TestClient object at 0x7f2ddff45d10>
+
+    def test_real_cpu_worker_persists_source_pending_evaluation(cohort, training_env, tmp_path, monkeypatch, client):
+        import torch
+        from app.services import training
+        from app.services.imported_training_source import ImportedTrainingSource
+        from training.imported_dataset_preparation import ImportedDatasetPreparation
+        from scripts.migrate_imported_training_source import migrate_imported_sources
+        runtime, _, _, process = training_env
+        sessions = cohort[0].sessions
+        migrate_imported_sources(sessions.kw["bind"], writers_stopped=True)
+        preparations = ImportedDatasetPreparation(cohort[0], tmp_path / "imported-prepared")
+        prepared = create(preparations, cohort)
+        runtime.imported_sources = ImportedTrainingSource(preparations)
+        monkeypatch.setattr(training, "SessionLocal", sessions)
+        monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+        # Execute the actual worker and loaders. Only the external process boundary is inline.
+        class Inline:
+            def __init__(self, target, args, **kwargs):
+                self.target, self.args = target, args
+            def start(self):
+                self.target(*self.args)
+        process.side_effect = Inline
+        result = runtime.start_training("", imported_dataset_id=cohort[5], snapshot_id=cohort[1]["id"],
+            imported_prepared_version=prepared["version_id"], owner_id=1,
+            architecture="AudioCNN", epochs=1, batch_size=2, early_stopping=False)
+        assert result["status"] == "started"
+        assert runtime.get_progress()["status"] == "checkpoint_persisted", runtime.get_progress()
+        with sessions() as db:
+            entry, = runtime.get_history(db, owner_id=1)
+        assert entry["status"] == "standard_eval_pending"
+        assert entry["active"] is False
+        association = runtime.imported_sources.model_source(1, entry["id"])
+        assert association["dataset_id"] == cohort[5]
+        assert association["snapshot_id"] == cohort[1]["id"]
+        assert association["preparation_version"] == prepared["version_id"]
+        checkpoint = torch.load(runtime.checkpoints_dir / entry["filename"], weights_only=True)
+        assert checkpoint["imported_source"] == association
+        assert checkpoint["classes"] == ["ants", "zebra"]
+        assert checkpoint["audio_config"]["target_sr"] == 8000
+        assert len(entry["metrics"]) == 1
+        with sessions() as db:
+            assert runtime.get_history(db) == []
+            assert runtime.get_history(db, owner_id=2) == []
+            activation = runtime.set_active_model(entry["id"], db)
+            assert activation["success"] is False
+            from app.services.registry import ModelRegistry
+            registry = ModelRegistry()
+            assert registry.register_from_db(db, runtime.checkpoints_dir) is None
+            assert registry.list_models() == []
+        from app.services.imported_training_source import ImportedSourceError
+        with pytest.raises(ImportedSourceError):
+            runtime.imported_sources.model_source(2, entry["id"])
+        from tests.test_api_training import main
+        from app.database import get_db
+        from app.models.user import Usuario
+        from app.services import auth
+        monkeypatch.setattr(auth, "SECRET_KEY", "synthetic-t3-signing-key-not-a-production-secret-2026")
+        with sessions() as db:
+            for user_id in (1, 2):
+                db.add(Usuario(id=user_id, email=f"user{user_id}@example.test", password_hash="unused",
+                    nombre_completo="Synthetic", rol="investigador", activo=True))
+            db.commit()
+        previous = main.app.dependency_overrides[get_db]
+        def source_db():
+            with sessions() as db:
+                yield db
+        main.app.dependency_overrides[get_db] = source_db
+        try:
+            owner = {"Authorization": "Bearer " + auth.create_access_token({"sub": "1"})}
+            foreign = {"Authorization": "Bearer " + auth.create_access_token({"sub": "2"})}
+            assert client.get("/api/training/history").json() == {"history": []}
+            assert client.get("/api/training/history?include_imported=true", headers=foreign).json() == {"history": []}
+            public_entry, = client.get("/api/training/history?include_imported=true", headers=owner).json()["history"]
+            assert public_entry["imported_source"] == association
+            activation_url = f"/api/training/models/{entry['id']}/activate"
+>           assert client.post(activation_url).status_code == 401
+E           AssertionError: assert 200 == 401
+E            +  where 200 = <Response [200 OK]>.status_code
+E            +    where <Response [200 OK]> = post('/api/training/models/1/activate')
+E            +      where post = <starlette.testclient.TestClient object at 0x7f2ddff45d10>.post
+
+tests/test_imported_training_persistence.py:102: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_imported_training_persistence.py::test_real_cpu_worker_persists_source_pending_evaluation
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed in 1.71s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": [], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_imported_training_persistence.py::test_real_cpu_worker_persists_source_pending_evaluation", "phase": "call", "outcome": "failed", "duration_seconds": 0.537}], "nonpassing_reports": [{"nodeid": "tests/test_imported_training_persistence.py::test_real_cpu_worker_persists_source_pending_evaluation", "phase": "call", "outcome": "failed", "duration_seconds": 0.537}], "sqlite_memory_connection_count": 2, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

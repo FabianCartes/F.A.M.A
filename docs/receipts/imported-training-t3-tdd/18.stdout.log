@@ -1,0 +1,48 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-npwvrzl5
+[Database] Tablas sincronizadas exitosamente en PostgreSQL.
+F
+=================================== FAILURES ===================================
+____________ test_imported_progress_stop_and_history_require_owner _____________
+
+client = <starlette.testclient.TestClient object at 0x7f9a9a4e8440>
+training_env = (<app.services.training.TrainingService object at 0x7f9a966d7d90>, sessionmaker(class_='Session', bind=Engine(sqlite:/...ining-consumer-suite-npwvrzl5/pytest/test_imported_progress_stop_an0'), <MagicMock name='Thread' id='140301923736880'>)
+cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7f9a96106120>, {'id': '4dd6f0a0cf1b4e59bc19c85f0989bc3...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7f9a961c1d10>, 'fd00f72d71a94e6482a8ca3ab0dc6827')
+tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-npwvrzl5/pytest/test_imported_progress_stop_an0')
+authenticated = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwiZXhwIjoxNzkzNzg1NjkxLCJpYXQiOjE3OTM3NTY4OTF9.qfWMcQR-lka1AsEF63eiZhmBdR_ih78z1cuTxaD_B1s'}
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f9a966ea3f0>
+
+    def test_imported_progress_stop_and_history_require_owner(client, training_env, cohort, tmp_path, authenticated, monkeypatch):
+        import pickle
+        from app.services import auth
+        from app.services.imported_training_source import ImportedTrainingSource
+        from training.imported_dataset_preparation import ImportedDatasetPreparation
+        from scripts.migrate_imported_training_source import migrate_imported_sources
+        runtime, sessions, _, process = training_env
+        from app.services import training
+        monkeypatch.setattr(training, "SessionLocal", cohort[0].sessions)
+        migrate_imported_sources(cohort[0].sessions.kw["bind"], writers_stopped=True)
+        preparations = ImportedDatasetPreparation(cohort[0], tmp_path / "imported-prepared")
+        prepared = create(preparations, cohort)
+        runtime.imported_sources = ImportedTrainingSource(preparations)
+        owner = {"Authorization": "Bearer " + auth.create_access_token({"sub": "1"})}
+        response = client.post("/api/training/start", headers=owner, json={
+            "imported_dataset_id": cohort[5], "snapshot_id": cohort[1]["id"],
+            "imported_prepared_version": prepared["version_id"], "architecture": "AudioCNN",
+        })
+        assert response.status_code == 200, response.text
+        config = pickle.loads(pickle.dumps(process.call_args.kwargs["args"][0]))
+        assert config["source"]["identity"]["preparation_version"] == prepared["version_id"]
+        before = runtime.get_progress()
+        for method, path in (("get", "/api/training/progress"), ("post", "/api/training/stop")):
+            response = getattr(client, method)(path)
+>           assert response.status_code == 401, response.text
+E           AssertionError: {"status":"training","job_id":"fama_audiocnn_3dce476dd8db48aeb8726b19d9599493","seed":42,"is_tri_model":false,"current_model_index":1,"total_models":1,"current_architecture":"AudioCNN","models_config":[{"architecture":"AudioCNN","weight":1.0}],"epoch":0,"total_epochs":10,"train_loss":0.0,"val_loss":0.0,"train_acc":0.0,"val_acc":0.0,"metrics_history":[],"logs":[],"elapsed_seconds":0.0,"error_message":null}
+E           assert 200 == 401
+E            +  where 200 = <Response [200 OK]>.status_code
+
+tests/test_imported_training_admission.py:92: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_imported_training_admission.py::test_imported_progress_stop_and_history_require_owner
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed in 1.33s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": [], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_imported_training_admission.py::test_imported_progress_stop_and_history_require_owner", "phase": "call", "outcome": "failed", "duration_seconds": 0.052}], "nonpassing_reports": [{"nodeid": "tests/test_imported_training_admission.py::test_imported_progress_stop_and_history_require_owner", "phase": "call", "outcome": "failed", "duration_seconds": 0.052}], "sqlite_memory_connection_count": 2, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

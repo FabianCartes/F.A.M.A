@@ -1,0 +1,39 @@
+{
+  "status": "passed",
+  "paths": {
+    "backend/tests/run_isolated_training_checks.py": {
+      "expected": "f6716ad3f8e390363491491dd6674d8c2a4360c40df190b8878cc18578234c49",
+      "actual": "f6716ad3f8e390363491491dd6674d8c2a4360c40df190b8878cc18578234c49"
+    },
+    "backend/tests/training_host_guard.py": {
+      "expected": "b14202dad23b23622019c2e252d2a71d27d3a8f5af4774dbea8b9f53b3391aaf",
+      "actual": "b14202dad23b23622019c2e252d2a71d27d3a8f5af4774dbea8b9f53b3391aaf"
+    },
+    "docs/manuales/p5-manual-review-slices-historical.md": {
+      "expected": "680e749e4a7418c6fd14f66cf3a9325278607beddf0986ec75a3fce3eddc7a87",
+      "actual": "680e749e4a7418c6fd14f66cf3a9325278607beddf0986ec75a3fce3eddc7a87"
+    },
+    "docs/manuales/prueba-manual-local-sin-gcs.md": {
+      "expected": "fc5674d67517375b4a62a89b0cf1840c672fbb8b8943db8c7e0033c1440fb67b",
+      "actual": "fc5674d67517375b4a62a89b0cf1840c672fbb8b8943db8c7e0033c1440fb67b"
+    },
+    "docs/manuales/prueba-manual-principal-importacion.md": {
+      "expected": "1ebee3e9dc1e03c24890dea89b10a68726167f81bb2651df4791e7b305d8086f",
+      "actual": "1ebee3e9dc1e03c24890dea89b10a68726167f81bb2651df4791e7b305d8086f"
+    },
+    "docs/receipts/training-checks-inventory.json": {
+      "expected": "4cf86a01b32adf4cc92d7ba596e265dbbc51c968e48a58e76455f1daee9974dd",
+      "actual": "4cf86a01b32adf4cc92d7ba596e265dbbc51c968e48a58e76455f1daee9974dd"
+    },
+    "frontend/components/views/TrainingView.tsx": {
+      "expected": "6649c381604fb8d2768a0b28f130655eea5b1cbf14f74fa7b3c55d5379eaecba",
+      "actual": "6649c381604fb8d2768a0b28f130655eea5b1cbf14f74fa7b3c55d5379eaecba"
+    },
+    "frontend/components/views/__tests__/TrainingView.test.tsx": {
+      "expected": "0507870d3ecee28cb6007156cb190d90624a0c8dc4921ff66e4a70ce37b1be90",
+      "actual": "0507870d3ecee28cb6007156cb190d90624a0c8dc4921ff66e4a70ce37b1be90"
+    }
+  },
+  "previous_attempt": "failed before comparison (baseline stored as JSON string); no mutations",
+  "final_check": "all8paths match beforelocalcommit"
+}

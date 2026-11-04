@@ -1,0 +1,4 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-w7g4ei2a
+.
+1 passed in 0.69s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 0, "pytest_exit_code": 0, "deselected_cases": [], "status": "passed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_imported_training_persistence.py::test_explicit_migration_from_absent_table", "phase": "call", "outcome": "passed", "duration_seconds": 0.014}], "nonpassing_reports": [], "sqlite_memory_connection_count": 1, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

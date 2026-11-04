@@ -50,7 +50,7 @@ def training_env(tmp_path, monkeypatch):
             runners.append(self)
         def start(self):
             thread(target=service._run_training_worker, args=(self.config,)).start()
-            if service.status in {"completed", "stopped", "failed"}:
+            if service.status in {"completed", "checkpoint_persisted", "stopped", "failed"}:
                 self.finish()
         def finish(self):
             self.events.put({"type": "progress", "snapshot": service.get_progress()})

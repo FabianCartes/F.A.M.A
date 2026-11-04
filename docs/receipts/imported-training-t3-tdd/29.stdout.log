@@ -1,0 +1,474 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-uq84fjty
+[Database] Tablas sincronizadas exitosamente en PostgreSQL.
+................................................................................................................................................................................................................................................................F
+=================================== FAILURES ===================================
+________________ test_service_drains_spawn_without_http_polling ________________
+
+self = <app.services.training.TrainingService object at 0x7feff1644b90>
+dataset_name = 'AvesChilenas', architecture = 'EfficientNet-B0', epochs = 1
+learning_rate = 0.001, batch_size = 16, framework = 'pytorch'
+is_tri_model = False, models = None, audio_config = None
+windowing_config = None, regularization_config = None, weight_decay = 0.01
+early_stopping = True, seed = 42, prepared_version = None
+allow_historical_preparation = False, imported_dataset_id = None
+snapshot_id = None, imported_prepared_version = None, owner_id = None
+
+    def start_training(
+        self,
+        dataset_name: str,
+        architecture: str = "EfficientNet-B0",
+        epochs: int = 10,
+        learning_rate: float = 1e-3,
+        batch_size: int = 16,
+        framework: str = "pytorch",
+        is_tri_model: bool = False,
+        models: Optional[List[Any]] = None,
+        audio_config: Optional[Any] = None,
+        windowing_config: Optional[Any] = None,
+        regularization_config: Optional[Any] = None,
+        weight_decay: float = 0.01,
+        early_stopping: bool = True,
+        seed: int = 42,
+        prepared_version: Optional[str] = None,
+        allow_historical_preparation: bool = False,
+        imported_dataset_id: Optional[str] = None,
+        snapshot_id: Optional[str] = None,
+        imported_prepared_version: Optional[str] = None,
+        owner_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Inicia un nuevo ciclo de entrenamiento bioacústico en un proceso spawn.
+        Soporta modo individual, pipeline secuencial de la Tríada Completa o Ensamble Dinámico (1 a 3 modelos),
+        y parametrización universal multi-dominio de audio, ventaneo y regularización.
+        """
+        if type(seed) is not int or not 0 <= seed <= 2**32 - 1:
+            raise ValueError("seed debe ser un entero entre 0 y 2**32 - 1.")
+        if prepared_version is not None and (type(prepared_version) is not str
+                or len(prepared_version) != 64 or any(c not in "0123456789abcdef" for c in prepared_version)):
+            raise ValueError("prepared_version must be a lowercase SHA-256 identity")
+        if type(allow_historical_preparation) is not bool:
+            raise ValueError("allow_historical_preparation must be a boolean")
+        if allow_historical_preparation and prepared_version is None:
+            raise ValueError("Historical preparation requires an explicit prepared_version")
+    
+        imported_source = None
+        if imported_dataset_id is not None:
+            from app.services.imported_training_source import configured_sources, ImportedSourceError
+            if prepared_version is not None or allow_historical_preparation or is_tri_model:
+                raise ImportedSourceError("profile_conflict", "Selección importada incompatible con opciones legacy.")
+            selected_models = models or [{"architecture": architecture}]
+            if len(selected_models) != 1:
+                raise ImportedSourceError("profile_conflict", "El perfil preparado exige una arquitectura única.")
+            architecture = selected_models[0]["architecture"]
+            sources = self.imported_sources or configured_sources(SessionLocal)
+            imported_source = sources.resolve(owner_id, imported_dataset_id, snapshot_id,
+                imported_prepared_version, architecture=architecture,
+                audio_config=_json_config(audio_config), windowing_config=_json_config(windowing_config))
+            from sqlalchemy import inspect
+            with SessionLocal() as admission_db:
+                if not inspect(admission_db.get_bind()).has_table("imported_model_source"):
+                    raise ImportedSourceError()
+            audio_config = dict(imported_source["identity"]["profile"]["audio"])
+            windowing_config = {"hop_seconds": imported_source["identity"]["profile"]["window_hop_seconds"],
+                                "aggregation_mode": "max", "gem_p": 3.0, "vad_threshold": 0.0}
+    
+        with self._lock:
+            if self.status in {"training", "evaluating"} or self._worker_process is not None:
+                raise RuntimeError("Ya existe un proceso de entrenamiento en ejecución.")
+    
+            try:
+                if imported_source is not None:
+                    source, dataset_id = imported_source, None
+                    dataset_name = "imported:" + imported_dataset_id
+                else:
+                    if dataset_name not in SUPPORTED_DATASETS:
+                        raise ValueError(f"Dataset '{dataset_name}' no soportado para entrenamiento.")
+                    with SessionLocal() as db:
+                        matches = [ds for ds in db.query(ConjuntoDatos).filter_by(nombre=dataset_name).all()
+                                   if ds.nombre == dataset_name]
+                        if len(matches) != 1:
+                            raise ValueError(f"Dataset '{dataset_name}' requiere un registro exacto y único.")
+                        dataset_id = matches[0].id_conjunto_datos
+                    source = self._prepare_source(dataset_name, prepared_version, allow_historical_preparation)
+                audio_config = _json_config(audio_config)
+                windowing_config = _json_config(windowing_config)
+                regularization_config = _json_config(regularization_config)
+            except Exception as exc:
+                self.status = "failed"
+                self.current_job_id = None
+                self.error_message = f"Dataset '{dataset_name}': {exc}"
+                self.start_timestamp = None
+                self.current_epoch = 0
+                self.total_epochs = 0
+                self.metrics_history = []
+                self.logs = []
+                self._add_log("ERROR", self.error_message)
+                raise ValueError(self.error_message) from exc
+    
+            is_engine = dataset_name == "engine_diagnostics"
+            triad_list = ENGINE_TRIAD_ARCHITECTURES if is_engine else TRIAD_ARCHITECTURES
+    
+            if models is not None and len(models) > 0:
+                resolved_models = []
+                for m in models:
+                    if isinstance(m, dict):
+                        m_epochs = m.get("epochs")
+                        m_lr = m.get("learning_rate")
+                        m_batch = m.get("batch_size")
+                        resolved_models.append({
+                            "architecture": m["architecture"],
+                            "weight": float(m.get("weight", 1.0)),
+                            "epochs": int(m_epochs) if m_epochs is not None else None,
+                            "learning_rate": float(m_lr) if m_lr is not None else None,
+                            "batch_size": int(m_batch) if m_batch is not None else None,
+                        })
+                    else:
+                        m_epochs = getattr(m, "epochs", None)
+                        m_lr = getattr(m, "learning_rate", None)
+                        m_batch = getattr(m, "batch_size", None)
+                        resolved_models.append({
+                            "architecture": getattr(m, "architecture"),
+                            "weight": float(getattr(m, "weight", 1.0)),
+                            "epochs": int(m_epochs) if m_epochs is not None else None,
+                            "learning_rate": float(m_lr) if m_lr is not None else None,
+                            "batch_size": int(m_batch) if m_batch is not None else None,
+                        })
+                is_ensemble = len(resolved_models) > 1
+            elif is_tri_model:
+                resolved_models = [{"architecture": a, "weight": 1.0 / len(triad_list)} for a in triad_list]
+                is_ensemble = True
+            else:
+                resolved_models = [{"architecture": architecture, "weight": 1.0}]
+                is_ensemble = False
+    
+            mode_tag = "ensemble" if is_ensemble else resolved_models[0]["architecture"].lower().replace('-', '_')
+            job_id = f"fama_{mode_tag}_{uuid.uuid4().hex}"
+            self.current_job_id = job_id
+            self.current_source_owner = owner_id if imported_source is not None else None
+            self.seed = seed
+            self.status = "training"
+            self.is_tri_model = is_tri_model or (len(resolved_models) == 3)
+            self.models_config = resolved_models
+            self.total_models = len(resolved_models)
+            self.current_model_index = 1
+            self.current_architecture = resolved_models[0]["architecture"]
+            self.current_epoch = 0
+            self.total_epochs = max(1, epochs)
+            self.current_train_loss = 0.0
+            self.current_val_loss = 0.0
+            self.current_train_acc = 0.0
+            self.current_val_acc = 0.0
+            self.metrics_history = []
+            self.logs = []
+            self.error_message = None
+            self.start_timestamp = time.time()
+            self._stop_requested = False
+    
+        config = {
+            "job_id": job_id,
+            "dataset_name": dataset_name,
+            "dataset_id": dataset_id,
+            "source": source,
+            "architecture": architecture,
+            "epochs": self.total_epochs,
+            "learning_rate": learning_rate,
+            "batch_size": batch_size,
+            "framework": framework,
+            "is_tri_model": self.is_tri_model,
+            "models": resolved_models,
+            "audio_config": audio_config,
+            "windowing_config": windowing_config,
+            "regularization_config": regularization_config,
+            "weight_decay": weight_decay,
+            "early_stopping": early_stopping,
+            "seed": seed,
+        }
+    
+        runner = None
+        try:
+            runner = self._process_factory(
+                run_training_worker, args=(config, str(self.checkpoints_dir)), seed=seed,
+            )
+            with self._lock:
+                self._completion = threading.Event()
+                self._worker_process = runner
+>           runner.start()
+
+app/services/training.py:616: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/services/training_process.py:64: in start
+    self._process.start()
+/usr/lib/python3.14/multiprocessing/process.py:121: in start
+    self._popen = self._Popen(self)
+                  ^^^^^^^^^^^^^^^^^
+/usr/lib/python3.14/multiprocessing/context.py:294: in _Popen
+    return Popen(process_obj)
+           ^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.14/multiprocessing/popen_spawn_posix.py:32: in __init__
+    super().__init__(process_obj)
+/usr/lib/python3.14/multiprocessing/popen_fork.py:20: in __init__
+    self._launch(process_obj)
+/usr/lib/python3.14/multiprocessing/popen_spawn_posix.py:65: in _launch
+    with open(parent_w, 'wb', closefd=False) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/training_host_guard.py:51: in audit
+    check(event, path)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+event = 'open', path = 12, fd = None, entry = False
+
+    def check(event, path, fd=None, entry=False):
+        target = resolve(path, fd, entry)
+        if target not in files and not any(target == root or root in target.parents for root in roots):
+>           raise RuntimeError(f'Mutation blocked: {event}')
+E           RuntimeError: Mutation blocked: open
+
+tests/training_host_guard.py:43: RuntimeError
+
+The above exception was the direct cause of the following exception:
+
+training_env = (<app.services.training.TrainingService object at 0x7feff1644b90>, sessionmaker(class_='Session', bind=Engine(sqlite:/...ining-consumer-suite-uq84fjty/pytest/test_service_drains_spawn_with0'), <MagicMock name='Thread' id='140668993149248'>)
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7feff2553ee0>
+
+    def test_service_drains_spawn_without_http_polling(training_env, monkeypatch):
+        from app.services.training_process import TrainingProcess
+    
+        service, sessions, root, _ = training_env
+        register(sessions, "AvesChilenas")
+        partitions(root, "AvesChilenas")
+        monkeypatch.setattr(training, "threading", threading)
+        children = []
+    
+        def factory(target, *, args, seed):
+            child = TrainingProcess(flood_progress, args=args, seed=seed)
+            children.append(child)
+            return child
+    
+        service._process_factory = factory
+>       service.start_training("AvesChilenas", epochs=1)
+
+tests/test_training_spawn.py:34: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.services.training.TrainingService object at 0x7feff1644b90>
+dataset_name = 'AvesChilenas', architecture = 'EfficientNet-B0', epochs = 1
+learning_rate = 0.001, batch_size = 16, framework = 'pytorch'
+is_tri_model = False, models = None, audio_config = None
+windowing_config = None, regularization_config = None, weight_decay = 0.01
+early_stopping = True, seed = 42, prepared_version = None
+allow_historical_preparation = False, imported_dataset_id = None
+snapshot_id = None, imported_prepared_version = None, owner_id = None
+
+    def start_training(
+        self,
+        dataset_name: str,
+        architecture: str = "EfficientNet-B0",
+        epochs: int = 10,
+        learning_rate: float = 1e-3,
+        batch_size: int = 16,
+        framework: str = "pytorch",
+        is_tri_model: bool = False,
+        models: Optional[List[Any]] = None,
+        audio_config: Optional[Any] = None,
+        windowing_config: Optional[Any] = None,
+        regularization_config: Optional[Any] = None,
+        weight_decay: float = 0.01,
+        early_stopping: bool = True,
+        seed: int = 42,
+        prepared_version: Optional[str] = None,
+        allow_historical_preparation: bool = False,
+        imported_dataset_id: Optional[str] = None,
+        snapshot_id: Optional[str] = None,
+        imported_prepared_version: Optional[str] = None,
+        owner_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Inicia un nuevo ciclo de entrenamiento bioacústico en un proceso spawn.
+        Soporta modo individual, pipeline secuencial de la Tríada Completa o Ensamble Dinámico (1 a 3 modelos),
+        y parametrización universal multi-dominio de audio, ventaneo y regularización.
+        """
+        if type(seed) is not int or not 0 <= seed <= 2**32 - 1:
+            raise ValueError("seed debe ser un entero entre 0 y 2**32 - 1.")
+        if prepared_version is not None and (type(prepared_version) is not str
+                or len(prepared_version) != 64 or any(c not in "0123456789abcdef" for c in prepared_version)):
+            raise ValueError("prepared_version must be a lowercase SHA-256 identity")
+        if type(allow_historical_preparation) is not bool:
+            raise ValueError("allow_historical_preparation must be a boolean")
+        if allow_historical_preparation and prepared_version is None:
+            raise ValueError("Historical preparation requires an explicit prepared_version")
+    
+        imported_source = None
+        if imported_dataset_id is not None:
+            from app.services.imported_training_source import configured_sources, ImportedSourceError
+            if prepared_version is not None or allow_historical_preparation or is_tri_model:
+                raise ImportedSourceError("profile_conflict", "Selección importada incompatible con opciones legacy.")
+            selected_models = models or [{"architecture": architecture}]
+            if len(selected_models) != 1:
+                raise ImportedSourceError("profile_conflict", "El perfil preparado exige una arquitectura única.")
+            architecture = selected_models[0]["architecture"]
+            sources = self.imported_sources or configured_sources(SessionLocal)
+            imported_source = sources.resolve(owner_id, imported_dataset_id, snapshot_id,
+                imported_prepared_version, architecture=architecture,
+                audio_config=_json_config(audio_config), windowing_config=_json_config(windowing_config))
+            from sqlalchemy import inspect
+            with SessionLocal() as admission_db:
+                if not inspect(admission_db.get_bind()).has_table("imported_model_source"):
+                    raise ImportedSourceError()
+            audio_config = dict(imported_source["identity"]["profile"]["audio"])
+            windowing_config = {"hop_seconds": imported_source["identity"]["profile"]["window_hop_seconds"],
+                                "aggregation_mode": "max", "gem_p": 3.0, "vad_threshold": 0.0}
+    
+        with self._lock:
+            if self.status in {"training", "evaluating"} or self._worker_process is not None:
+                raise RuntimeError("Ya existe un proceso de entrenamiento en ejecución.")
+    
+            try:
+                if imported_source is not None:
+                    source, dataset_id = imported_source, None
+                    dataset_name = "imported:" + imported_dataset_id
+                else:
+                    if dataset_name not in SUPPORTED_DATASETS:
+                        raise ValueError(f"Dataset '{dataset_name}' no soportado para entrenamiento.")
+                    with SessionLocal() as db:
+                        matches = [ds for ds in db.query(ConjuntoDatos).filter_by(nombre=dataset_name).all()
+                                   if ds.nombre == dataset_name]
+                        if len(matches) != 1:
+                            raise ValueError(f"Dataset '{dataset_name}' requiere un registro exacto y único.")
+                        dataset_id = matches[0].id_conjunto_datos
+                    source = self._prepare_source(dataset_name, prepared_version, allow_historical_preparation)
+                audio_config = _json_config(audio_config)
+                windowing_config = _json_config(windowing_config)
+                regularization_config = _json_config(regularization_config)
+            except Exception as exc:
+                self.status = "failed"
+                self.current_job_id = None
+                self.error_message = f"Dataset '{dataset_name}': {exc}"
+                self.start_timestamp = None
+                self.current_epoch = 0
+                self.total_epochs = 0
+                self.metrics_history = []
+                self.logs = []
+                self._add_log("ERROR", self.error_message)
+                raise ValueError(self.error_message) from exc
+    
+            is_engine = dataset_name == "engine_diagnostics"
+            triad_list = ENGINE_TRIAD_ARCHITECTURES if is_engine else TRIAD_ARCHITECTURES
+    
+            if models is not None and len(models) > 0:
+                resolved_models = []
+                for m in models:
+                    if isinstance(m, dict):
+                        m_epochs = m.get("epochs")
+                        m_lr = m.get("learning_rate")
+                        m_batch = m.get("batch_size")
+                        resolved_models.append({
+                            "architecture": m["architecture"],
+                            "weight": float(m.get("weight", 1.0)),
+                            "epochs": int(m_epochs) if m_epochs is not None else None,
+                            "learning_rate": float(m_lr) if m_lr is not None else None,
+                            "batch_size": int(m_batch) if m_batch is not None else None,
+                        })
+                    else:
+                        m_epochs = getattr(m, "epochs", None)
+                        m_lr = getattr(m, "learning_rate", None)
+                        m_batch = getattr(m, "batch_size", None)
+                        resolved_models.append({
+                            "architecture": getattr(m, "architecture"),
+                            "weight": float(getattr(m, "weight", 1.0)),
+                            "epochs": int(m_epochs) if m_epochs is not None else None,
+                            "learning_rate": float(m_lr) if m_lr is not None else None,
+                            "batch_size": int(m_batch) if m_batch is not None else None,
+                        })
+                is_ensemble = len(resolved_models) > 1
+            elif is_tri_model:
+                resolved_models = [{"architecture": a, "weight": 1.0 / len(triad_list)} for a in triad_list]
+                is_ensemble = True
+            else:
+                resolved_models = [{"architecture": architecture, "weight": 1.0}]
+                is_ensemble = False
+    
+            mode_tag = "ensemble" if is_ensemble else resolved_models[0]["architecture"].lower().replace('-', '_')
+            job_id = f"fama_{mode_tag}_{uuid.uuid4().hex}"
+            self.current_job_id = job_id
+            self.current_source_owner = owner_id if imported_source is not None else None
+            self.seed = seed
+            self.status = "training"
+            self.is_tri_model = is_tri_model or (len(resolved_models) == 3)
+            self.models_config = resolved_models
+            self.total_models = len(resolved_models)
+            self.current_model_index = 1
+            self.current_architecture = resolved_models[0]["architecture"]
+            self.current_epoch = 0
+            self.total_epochs = max(1, epochs)
+            self.current_train_loss = 0.0
+            self.current_val_loss = 0.0
+            self.current_train_acc = 0.0
+            self.current_val_acc = 0.0
+            self.metrics_history = []
+            self.logs = []
+            self.error_message = None
+            self.start_timestamp = time.time()
+            self._stop_requested = False
+    
+        config = {
+            "job_id": job_id,
+            "dataset_name": dataset_name,
+            "dataset_id": dataset_id,
+            "source": source,
+            "architecture": architecture,
+            "epochs": self.total_epochs,
+            "learning_rate": learning_rate,
+            "batch_size": batch_size,
+            "framework": framework,
+            "is_tri_model": self.is_tri_model,
+            "models": resolved_models,
+            "audio_config": audio_config,
+            "windowing_config": windowing_config,
+            "regularization_config": regularization_config,
+            "weight_decay": weight_decay,
+            "early_stopping": early_stopping,
+            "seed": seed,
+        }
+    
+        runner = None
+        try:
+            runner = self._process_factory(
+                run_training_worker, args=(config, str(self.checkpoints_dir)), seed=seed,
+            )
+            with self._lock:
+                self._completion = threading.Event()
+                self._worker_process = runner
+            runner.start()
+            with self._lock:
+                if self._stop_requested:
+                    runner.request_stop()
+            if runner.is_alive():
+                supervisor = threading.Thread(target=self._supervise_worker, args=(runner,),
+                                              daemon=True, name=f"TrainingSupervisor-{job_id}")
+                supervisor.start()
+            else:
+                self._supervise_worker(runner)
+        except Exception as exc:
+            if runner is not None:
+                runner.abort_start()
+            with self._lock:
+                self.status = "failed"
+                self.error_message = f"No se pudo iniciar el proceso de entrenamiento: {exc}"
+                self._worker_process = None
+                self._completion.set()
+>           raise RuntimeError(self.error_message) from exc
+E           RuntimeError: No se pudo iniciar el proceso de entrenamiento: Mutation blocked: open
+
+app/services/training.py:634: RuntimeError
+=============================== warnings summary ===============================
+tests/test_training_persistence.py::test_cpu_checkpoint_and_final_predictor_use_first_best_not_last[1.0--1.0]
+tests/test_training_persistence.py::test_cpu_checkpoint_and_final_predictor_use_first_best_not_last[-1.0--2.0]
+  /home/kevin/Work/fama/.venv/lib/python3.14/site-packages/librosa/core/spectrum.py:3004: UserWarning: n_fft=2048 is too large for input signal of length=512
+    stft(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_training_spawn.py::test_service_drains_spawn_without_http_polling
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 256 passed, 2 warnings in 33.42s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": [], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_imported_training_admission.py::test_imported_start_requires_auth_before_admission", "phase": "call", "outcome": "passed", "duration_seconds": 0.086}, {"nodeid": "tests/test_imported_training_admission.py::test_foreign_imported_start_is_non_disclosing", "phase": "call", "outcome": "passed", "duration_seconds": 0.061}, {"nodeid": "tests/test_imported_training_admission.py::test_imported_progress_stop_and_history_require_owner", "phase": "call", "outcome": "passed", "duration_seconds": 0.041}, {"nodeid": "tests/test_imported_training_admission.py::test_imported_catalog_requires_auth_and_preserves_legacy_catalog", "phase": "call", "outcome": "passed", "duration_seconds": 0.038}, {"nodeid": "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[snapshot-source_unavailable-Fuente importada no disponible.]", "phase": "call", "outcome": "passed", "duration_seconds": 0.021}, {"nodeid": "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[version-source_unavailable-Fuente importada no disponible.]", "phase": "call", "outcome": "passed", "duration_seconds": 0.023}, {"nodeid": "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[incomplete-source_unavailable-Fuente importada no disponible.]", "phase": "call", "outcome": "passed", "duration_seconds": 0.022}, {"nodeid": "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[hash-source_unavailable-Fuente importada no disponible.]", "phase": "call", "outcome": "passed", "duration_seconds": 0.024}, {"nodeid": "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[missing-source_unavailable-Fuente importada no disponible.]", "phase": "call", "outcome": "passed", "duration_seconds": 0.024}, {"nodeid": "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[split-source_unavailable-Fuente importada no disponible.]", "phase": "call", "outcome": "passed", "duration_seconds": 0.029}, {"nodeid": "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[architecture-profile_conflict-La arquitectura no coincide con el perfil preparado.]", "phase": "call", "outcome": "passed", "duration_seconds": 0.024}, {"nodeid": "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[audio-profile_conflict-El audio solicitado no coincide con el perfil preparado.]", "phase": "call", "outcome": "passed", "duration_seconds": 0.031}, {"nodeid": "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[window-profile_conflict-Las ventanas no coinciden con el perfil preparado.]", "phase": "call", "outcome": "passed", "duration_seconds": 0.031}, {"nodeid": "tests/test_imported_training_admission.py::test_invalid_credentials_cannot_fall_back_from_imported_selection", "phase": "call", "outcome": "passed", "duration_seconds": 0.041}, {"nodeid": "tests/test_imported_training_admission.py::test_legacy_queries_preserve_access_without_using_supplied_credentials[datasets]", "phase": "call", "outcome": "passed", "duration_seconds": 0.007}, {"nodeid": "tests/test_imported_training_admission.py::test_legacy_queries_preserve_access_without_using_supplied_credentials[history]", "phase": "call", "outcome": "passed", "duration_seconds": 0.012}, {"nodeid": "tests/test_imported_training_admission.py::test_legacy_queries_preserve_access_without_using_supplied_credentials[progress]", "phase": "call", "outcome": "passed", "duration_seconds": 0.006}, {"nodeid": "tests/test_imported_training_admission.py::test_imported_selection_is_complete_and_exclusive[body0]", "phase": "call", "outcome": "passed", "duration_seconds": 0.003}, {"nodeid": "tests/test_imported_training_admission.py::test_imported_selection_is_complete_and_exclusive[body1]", "phase": "call", "outcome": "passed", "duration_seconds": 0.003}, {"nodeid": "tests/test_imported_training_admission.py::test_imported_selection_is_complete_and_exclusive[body2]", "phase": "call", "outcome": "passed", "duration_seconds": 0.003}, {"nodeid": "tests/test_imported_training_admission.py::test_imported_selection_is_complete_and_exclusive[body3]", "phase": "call", "outcome": "passed", "duration_seconds": 0.003}, {"nodeid": "tests/test_imported_training_admission.py::test_imported_selection_is_complete_and_exclusive[body4]", "phase": "call", "outcome": "passed", "duration_seconds": 0.003}, {"nodeid": "tests/test_imported_training_source.py::test_foreign_source_is_not_disclosed", "phase": "call", "outcome": "passed", "duration_seconds": 0.009}, {"nodeid": "tests/test_imported_training_source.py::test_source_pins_classes_and_consumes_verified_audio", "phase": "call", "outcome": "passed", "duration_seconds": 0.201}, {"nodeid": "tests/test_imported_training_source.py::test_source_rejects_incompatible_or_damaged_selection[architecture]", "phase": "call", "outcome": "passed", "duration_seconds": 0.01}, {"nodeid": "tests/test_imported_training_source.py::test_source_rejects_incompatible_or_damaged_selection[missing]", "phase": "call", "outcome": "passed", "duration_seconds": 0.011}, {"nodeid": "tests/test_imported_training_source.py::test_source_rejects_incompatible_or_damaged_selection[corrupt]", "phase": "call", "outcome": "passed", "duration_seconds": 0.011}, {"nodeid": "tests/test_imported_training_source.py::test_source_rejects_incompatible_or_damaged_selection[profile]", "phase": "call", "outcome": "passed", "duration_seconds": 0.01}, {"nodeid": "tests/test_imported_training_source.py::test_source_rejects_incompatible_or_damaged_selection[split]", "phase": "call", "outcome": "passed", "duration_seconds": 0.01}, {"nodeid": "tests/test_imported_training_persistence.py::test_explicit_migration_from_absent_table", "phase": "call", "outcome": "passed", "duration_seconds": 0.003}, {"nodeid": "tests/test_imported_training_persistence.py::test_real_cpu_worker_persists_source_pending_evaluation", "phase": "call", "outcome": "passed", "duration_seconds": 0.175}, {"nodeid": "tests/test_training_flow.py::test_final_evaluation_preflight_blocks_invalid_admission[decode]", "phase": "call", "outcome": "passed", "duration_seconds": 0.047}, {"nodeid": "tests/test_training_flow.py::test_final_evaluation_preflight_blocks_invalid_admission[test_label]", "phase": "call", "outcome": "passed", "duration_seconds": 0.038}, {"nodeid": "tests/test_training_flow.py::test_final_evaluation_preflight_blocks_invalid_admission[test_id]", "phase": "call", "outcome": "passed", "duration_seconds": 0.042}, {"nodeid": "tests/test_training_flow.py::test_final_evaluation_preflight_blocks_invalid_admission[test_group]", "phase": "call", "outcome": "passed", "duration_seconds": 0.039}, {"nodeid": "tests/test_training_flow.py::test_final_evaluation_preflight_blocks_invalid_admission[test_path]", "phase": "call", "outcome": "passed", "duration_seconds": 0.038}, {"nodeid": "tests/test_training_flow.py::test_final_evaluation_preflight_blocks_invalid_admission[reserved_label]", "phase": "call", "outcome": "passed", "duration_seconds": 0.035}, {"nodeid": "tests/test_training_flow.py::test_engine_admission_preserves_canonical_group_and_class_scoped_source_identity[recordist]", "phase": "call", "outcome": "passed", "duration_seconds": 0.041}, {"nodeid": "tests/test_training_flow.py::test_engine_admission_preserves_canonical_group_and_class_scoped_source_identity[source_id]", "phase": "call", "outcome": "passed", "duration_seconds": 0.036}, {"nodeid": "tests/test_training_flow.py::test_unsupported_identity_is_rejected_before_scheduling[medical_cough]", "phase": "call", "outcome": "passed", "duration_seconds": 0.002}, {"nodeid": "tests/test_training_flow.py::test_unsupported_identity_is_rejected_before_scheduling[MotoresVehiculares]", "phase": "call", "outcome": "passed", "duration_seconds": 0.002}, {"nodeid": "tests/test_training_flow.py::test_unsupported_identity_is_rejected_before_scheduling[aveschilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.002}, {"nodeid": "tests/test_training_flow.py::test_unsupported_identity_is_rejected_before_scheduling[ AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.002}, {"nodeid": "tests/test_training_flow.py::test_unsupported_identity_is_rejected_before_scheduling[../AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.002}, {"nodeid": "tests/test_training_flow.py::test_requires_exact_unambiguous_registration[registrations0]", "phase": "call", "outcome": "passed", "duration_seconds": 0.034}, {"nodeid": "tests/test_training_flow.py::test_requires_exact_unambiguous_registration[registrations1]", "phase": "call", "outcome": "passed", "duration_seconds": 0.034}, {"nodeid": "tests/test_training_flow.py::test_requires_exact_unambiguous_registration[registrations2]", "phase": "call", "outcome": "passed", "duration_seconds": 0.034}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[missing_source-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.003}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[missing_source-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.003}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[missing_partition-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.034}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[missing_partition-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.03}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[empty-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.034}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[empty-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.031}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[schema-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.032}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[schema-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.037}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[unknown_label-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.034}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[unknown_label-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.032}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[missing_audio-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.032}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[missing_audio-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.031}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[outside_source-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.033}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[outside_source-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.031}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[overlap-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.032}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[overlap-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.033}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[missing_stage-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.033}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[missing_stage-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.032}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[unknown_stage-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.033}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[unknown_stage-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.032}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[blank_stage-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.034}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[blank_stage-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.032}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[wrong_stage-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.033}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[wrong_stage-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.031}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[missing_path-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.035}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[missing_path-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.032}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[blank_path-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.033}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[blank_path-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.033}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[traversal-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.033}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[traversal-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.03}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[alias-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.032}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[alias-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.03}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[legacy_alias-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.033}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[legacy_alias-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.256}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[unsupported_extension-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.041}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[unsupported_extension-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.032}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[empty_audio-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.038}, {"nodeid": "tests/test_training_flow.py::test_invalid_source_is_rejected_before_scheduling[empty_audio-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.039}, {"nodeid": "tests/test_training_flow.py::test_accepted_source_reaches_ml_boundary_without_training[raw-.wav-None-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.137}, {"nodeid": "tests/test_training_flow.py::test_accepted_source_reaches_ml_boundary_without_training[raw-.wav-None-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.133}, {"nodeid": "tests/test_training_flow.py::test_accepted_source_reaches_ml_boundary_without_training[raw-.wav-audio_config1-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.156}, {"nodeid": "tests/test_training_flow.py::test_accepted_source_reaches_ml_boundary_without_training[raw-.wav-audio_config1-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.15}, {"nodeid": "tests/test_training_flow.py::test_accepted_source_reaches_ml_boundary_without_training[raw-.mp3-None-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.145}, {"nodeid": "tests/test_training_flow.py::test_accepted_source_reaches_ml_boundary_without_training[raw-.mp3-None-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.152}, {"nodeid": "tests/test_training_flow.py::test_accepted_source_reaches_ml_boundary_without_training[raw-.mp3-audio_config1-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.164}, {"nodeid": "tests/test_training_flow.py::test_accepted_source_reaches_ml_boundary_without_training[raw-.mp3-audio_config1-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.17}, {"nodeid": "tests/test_training_flow.py::test_accepted_source_reaches_ml_boundary_without_training[processed-.wav-None-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.143}, {"nodeid": "tests/test_training_flow.py::test_accepted_source_reaches_ml_boundary_without_training[processed-.wav-None-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.137}, {"nodeid": "tests/test_training_flow.py::test_accepted_source_reaches_ml_boundary_without_training[processed-.wav-audio_config1-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.135}, {"nodeid": "tests/test_training_flow.py::test_accepted_source_reaches_ml_boundary_without_training[processed-.wav-audio_config1-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.153}, {"nodeid": "tests/test_training_flow.py::test_training_admission_reads_configured_external_bird_roots", "phase": "call", "outcome": "passed", "duration_seconds": 0.037}, {"nodeid": "tests/test_training_flow.py::test_training_admission_rejects_invalid_configured_external_root", "phase": "call", "outcome": "passed", "duration_seconds": 0.032}, {"nodeid": "tests/test_training_flow.py::test_training_catalog_only_offers_supported_registered_datasets", "phase": "call", "outcome": "passed", "duration_seconds": 0.03}, {"nodeid": "tests/test_training_flow.py::test_bird_legacy_metadata_requires_offline_conversion[False]", "phase": "call", "outcome": "passed", "duration_seconds": 0.034}, {"nodeid": "tests/test_training_flow.py::test_bird_legacy_metadata_requires_offline_conversion[True]", "phase": "call", "outcome": "passed", "duration_seconds": 0.032}, {"nodeid": "tests/test_training_flow.py::test_canonical_metadata_only_source_preserves_rows_without_rewriting_indices", "phase": "call", "outcome": "passed", "duration_seconds": 0.033}, {"nodeid": "tests/test_training_flow.py::test_selected_dataset_root_alias_fails_before_scheduling[raw]", "phase": "call", "outcome": "passed", "duration_seconds": 0.034}, {"nodeid": "tests/test_training_flow.py::test_selected_dataset_root_alias_fails_before_scheduling[processed]", "phase": "call", "outcome": "passed", "duration_seconds": 0.036}, {"nodeid": "tests/test_training_flow.py::test_identical_relative_paths_in_distinct_stages_are_not_split_overlap", "phase": "call", "outcome": "passed", "duration_seconds": 0.052}, {"nodeid": "tests/test_training_flow.py::test_prepared_trio_is_required_before_job_admission[missing_prepared-raw-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.039}, {"nodeid": "tests/test_training_flow.py::test_prepared_trio_is_required_before_job_admission[missing_prepared-raw-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.03}, {"nodeid": "tests/test_training_flow.py::test_prepared_trio_is_required_before_job_admission[missing_prepared-processed-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.032}, {"nodeid": "tests/test_training_flow.py::test_prepared_trio_is_required_before_job_admission[missing_prepared-processed-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.03}, {"nodeid": "tests/test_training_flow.py::test_prepared_trio_is_required_before_job_admission[integrity-raw-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.033}, {"nodeid": "tests/test_training_flow.py::test_prepared_trio_is_required_before_job_admission[integrity-raw-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.035}, {"nodeid": "tests/test_training_flow.py::test_prepared_trio_is_required_before_job_admission[integrity-processed-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.033}, {"nodeid": "tests/test_training_flow.py::test_prepared_trio_is_required_before_job_admission[integrity-processed-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.036}, {"nodeid": "tests/test_training_flow.py::test_prepared_trio_is_required_before_job_admission[test_audio-raw-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.04}, {"nodeid": "tests/test_training_flow.py::test_prepared_trio_is_required_before_job_admission[test_audio-raw-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.035}, {"nodeid": "tests/test_training_flow.py::test_prepared_trio_is_required_before_job_admission[test_audio-processed-AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.04}, {"nodeid": "tests/test_training_flow.py::test_prepared_trio_is_required_before_job_admission[test_audio-processed-engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.038}, {"nodeid": "tests/test_training_flow.py::test_invalid_seed_has_no_admission_or_state_effects[True]", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_flow.py::test_invalid_seed_has_no_admission_or_state_effects[False]", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_flow.py::test_invalid_seed_has_no_admission_or_state_effects[None]", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_flow.py::test_invalid_seed_has_no_admission_or_state_effects[1.5]", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_flow.py::test_invalid_seed_has_no_admission_or_state_effects[42]", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_flow.py::test_invalid_seed_has_no_admission_or_state_effects[-1]", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_flow.py::test_invalid_seed_has_no_admission_or_state_effects[4294967296]", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_flow.py::test_training_seed_default_and_uint32_limits_reach_worker[options0-42]", "phase": "call", "outcome": "passed", "duration_seconds": 0.044}, {"nodeid": "tests/test_training_flow.py::test_training_seed_default_and_uint32_limits_reach_worker[options1-0]", "phase": "call", "outcome": "passed", "duration_seconds": 0.039}, {"nodeid": "tests/test_training_flow.py::test_training_seed_default_and_uint32_limits_reach_worker[options2-4294967295]", "phase": "call", "outcome": "passed", "duration_seconds": 0.039}, {"nodeid": "tests/test_training_flow.py::test_unavailable_registration_store_fails_closed", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_api_training.py::test_api_reports_stale_preparation_and_requires_deliberate_history[False]", "phase": "call", "outcome": "passed", "duration_seconds": 0.041}, {"nodeid": "tests/test_api_training.py::test_api_reports_stale_preparation_and_requires_deliberate_history[True]", "phase": "call", "outcome": "passed", "duration_seconds": 0.048}, {"nodeid": "tests/test_api_training.py::test_api_rejects_invalid_preparation_selection_before_admission[body0]", "phase": "call", "outcome": "passed", "duration_seconds": 0.004}, {"nodeid": "tests/test_api_training.py::test_api_rejects_invalid_preparation_selection_before_admission[body1]", "phase": "call", "outcome": "passed", "duration_seconds": 0.003}, {"nodeid": "tests/test_api_training.py::test_api_rejects_invalid_preparation_selection_before_admission[body2]", "phase": "call", "outcome": "passed", "duration_seconds": 0.003}, {"nodeid": "tests/test_api_training.py::test_api_rejects_invalid_preparation_selection_before_admission[body3]", "phase": "call", "outcome": "passed", "duration_seconds": 0.003}, {"nodeid": "tests/test_api_training.py::test_api_selects_immutable_child_without_adopting_legacy_root", "phase": "call", "outcome": "passed", "duration_seconds": 0.045}, {"nodeid": "tests/test_api_training.py::test_api_admits_curated_derivatives_with_their_original_groups", "phase": "call", "outcome": "passed", "duration_seconds": 0.076}, {"nodeid": "tests/test_api_training.py::test_api_propagates_selected_seed[0]", "phase": "call", "outcome": "passed", "duration_seconds": 0.043}, {"nodeid": "tests/test_api_training.py::test_api_propagates_selected_seed[314]", "phase": "call", "outcome": "passed", "duration_seconds": 0.039}, {"nodeid": "tests/test_api_training.py::test_api_propagates_selected_seed[4294967295]", "phase": "call", "outcome": "passed", "duration_seconds": 0.04}, {"nodeid": "tests/test_api_training.py::test_api_rejects_invalid_seed_without_admission[-1]", "phase": "call", "outcome": "passed", "duration_seconds": 0.004}, {"nodeid": "tests/test_api_training.py::test_api_rejects_invalid_seed_without_admission[4294967296]", "phase": "call", "outcome": "passed", "duration_seconds": 0.004}, {"nodeid": "tests/test_api_training.py::test_api_rejects_invalid_seed_without_admission[1.5]", "phase": "call", "outcome": "passed", "duration_seconds": 0.003}, {"nodeid": "tests/test_api_training.py::test_api_rejects_invalid_seed_without_admission[True]", "phase": "call", "outcome": "passed", "duration_seconds": 0.003}, {"nodeid": "tests/test_api_training.py::test_api_rejects_invalid_seed_without_admission[42]", "phase": "call", "outcome": "passed", "duration_seconds": 0.003}, {"nodeid": "tests/test_api_training.py::test_api_rejects_invalid_seed_without_admission[None]", "phase": "call", "outcome": "passed", "duration_seconds": 0.003}, {"nodeid": "tests/test_api_training.py::test_start_rejection_is_visible_in_api_progress[medical_cough-True]", "phase": "call", "outcome": "passed", "duration_seconds": 0.007}, {"nodeid": "tests/test_api_training.py::test_start_rejection_is_visible_in_api_progress[AvesChilenas-False]", "phase": "call", "outcome": "passed", "duration_seconds": 0.008}, {"nodeid": "tests/test_api_training.py::test_start_rejection_is_visible_in_api_progress[AvesChilenas-True]", "phase": "call", "outcome": "passed", "duration_seconds": 0.009}, {"nodeid": "tests/test_api_training.py::test_api_accepts_supported_registered_source[AvesChilenas]", "phase": "call", "outcome": "passed", "duration_seconds": 0.063}, {"nodeid": "tests/test_api_training.py::test_api_accepts_supported_registered_source[engine_diagnostics]", "phase": "call", "outcome": "passed", "duration_seconds": 0.054}, {"nodeid": "tests/test_api_training.py::test_api_reports_checkpoint_registration_outcome[False]", "phase": "call", "outcome": "passed", "duration_seconds": 0.37}, {"nodeid": "tests/test_api_training.py::test_api_reports_checkpoint_registration_outcome[True]", "phase": "call", "outcome": "passed", "duration_seconds": 0.094}, {"nodeid": "tests/test_api_training.py::test_training_fixture_preserves_external_background_threads", "phase": "call", "outcome": "passed", "duration_seconds": 0.001}, {"nodeid": "tests/test_api_training.py::test_api_completes_training_with_saved_reports_and_available_model", "phase": "call", "outcome": "passed", "duration_seconds": 0.366}, {"nodeid": "tests/test_api_training.py::test_get_training_hardware", "phase": "call", "outcome": "passed", "duration_seconds": 0.003}, {"nodeid": "tests/test_api_training.py::test_get_training_datasets", "phase": "call", "outcome": "passed", "duration_seconds": 0.004}, {"nodeid": "tests/test_api_training.py::test_catalog_excludes_unsupported_registered_dataset", "phase": "call", "outcome": "passed", "duration_seconds": 0.041}, {"nodeid": "tests/test_api_training.py::test_training_lifecycle", "phase": "call", "outcome": "passed", "duration_seconds": 0.009}, {"nodeid": "tests/test_api_training.py::test_get_training_history", "phase": "call", "outcome": "passed", "duration_seconds": 0.007}, {"nodeid": "tests/test_api_training.py::test_training_lifecycle_triad", "phase": "call", "outcome": "passed", "duration_seconds": 0.003}, {"nodeid": "tests/test_api_training.py::test_training_lifecycle_dynamic_ensemble", "phase": "call", "outcome": "passed", "duration_seconds": 0.004}, {"nodeid": "tests/test_api_training.py::test_start_training_api_passes_multi_domain_configs", "phase": "call", "outcome": "passed", "duration_seconds": 0.004}, {"nodeid": "tests/test_api_training.py::test_start_training_api_passes_weight_decay", "phase": "call", "outcome": "passed", "duration_seconds": 0.003}, {"nodeid": "tests/test_api_training.py::test_start_training_api_passes_model_epochs", "phase": "call", "outcome": "passed", "duration_seconds": 0.003}, {"nodeid": "tests/test_training_service.py::test_cancellation_during_final_validation_does_not_publish_artifacts", "phase": "call", "outcome": "passed", "duration_seconds": 0.071}, {"nodeid": "tests/test_training_service.py::test_start_training_dynamic_duo_models_initialization", "phase": "call", "outcome": "passed", "duration_seconds": 0.008}, {"nodeid": "tests/test_training_service.py::test_start_training_dynamic_trio_custom_models", "phase": "call", "outcome": "passed", "duration_seconds": 0.009}, {"nodeid": "tests/test_training_service.py::test_start_training_worker_executes_dynamic_models_sequentially", "phase": "call", "outcome": "passed", "duration_seconds": 0.576}, {"nodeid": "tests/test_training_service.py::test_start_training_worker_with_custom_audio_physics", "phase": "call", "outcome": "passed", "duration_seconds": 0.338}, {"nodeid": "tests/test_training_service.py::test_start_training_worker_with_regularization_loss_config", "phase": "call", "outcome": "passed", "duration_seconds": 0.663}, {"nodeid": "tests/test_training_service.py::test_checkpoint_incremental_nomenclature_versioning", "phase": "call", "outcome": "passed", "duration_seconds": 0.71}, {"nodeid": "tests/test_training_service.py::test_get_history_enriches_model_technical_sheet", "phase": "call", "outcome": "passed", "duration_seconds": 0.005}, {"nodeid": "tests/test_training_service.py::test_get_history_semantic_versioning_per_dataset_and_architecture", "phase": "call", "outcome": "passed", "duration_seconds": 0.008}, {"nodeid": "tests/test_training_service.py::test_start_training_worker_receives_weight_decay", "phase": "call", "outcome": "passed", "duration_seconds": 0.362}, {"nodeid": "tests/test_training_service.py::test_start_training_dynamic_ensemble_preserves_custom_epochs", "phase": "call", "outcome": "passed", "duration_seconds": 0.009}, {"nodeid": "tests/test_training_service.py::test_start_training_dynamic_ensemble_preserves_custom_hyperparameters", "phase": "call", "outcome": "passed", "duration_seconds": 0.702}, {"nodeid": "tests/test_training_service.py::test_start_training_propagates_early_stopping_flag", "phase": "call", "outcome": "passed", "duration_seconds": 0.689}, {"nodeid": "tests/test_training_service.py::test_training_worker_early_stopping_halts_on_patience_exhaustion", "phase": "call", "outcome": "passed", "duration_seconds": 0.348}, {"nodeid": "tests/test_training_service.py::test_training_worker_disabled_early_stopping_runs_all_epochs", "phase": "call", "outcome": "passed", "duration_seconds": 0.346}, {"nodeid": "tests/test_training_service.py::test_seed_replays_worker_rngs_and_checkpoint_records_initialization", "phase": "call", "outcome": "passed", "duration_seconds": 1.141}, {"nodeid": "tests/test_training_service.py::test_pretrained_constructor_failure_fails_job_without_untrained_retry", "phase": "call", "outcome": "passed", "duration_seconds": 0.072}, {"nodeid": "tests/test_training_schemas.py::test_audio_config_valid_physics", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_schemas.py::test_audio_config_invalid_physics_raises", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_schemas.py::test_split_config_proportions_validation", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_schemas.py::test_training_config_full_instantiation", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_schemas.py::test_model_manifest_validation", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_schemas.py::test_dataset_config_path_resolution", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_schemas.py::test_dataset_config_path_resolution_docker_root", "phase": "call", "outcome": "passed", "duration_seconds": 0.001}, {"nodeid": "tests/test_training_schemas.py::test_model_ensemble_item_valid", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_schemas.py::test_model_ensemble_item_invalid_architecture", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_schemas.py::test_model_ensemble_item_invalid_weight", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_schemas.py::test_start_training_request_dynamic_models_valid", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_schemas.py::test_start_training_request_models_length_limits", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_schemas.py::test_start_training_request_weight_normalization", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_schemas.py::test_start_training_request_backward_compatibility", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_schemas.py::test_audio_config_schema_valid", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_schemas.py::test_audio_config_schema_nyquist_violation_raises", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_schemas.py::test_audio_config_schema_fmin_ge_fmax_raises", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_schemas.py::test_audio_config_schema_hop_greater_than_nfft_raises", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_schemas.py::test_audio_config_schema_bounds_validation", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_schemas.py::test_windowing_config_schema_valid_and_bounds", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_schemas.py::test_regularization_config_schema_valid_and_bounds", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_schemas.py::test_start_training_request_with_multi_domain_configs", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_schemas.py::test_start_training_request_weight_decay", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_schemas.py::test_model_ensemble_item_epochs_validation", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_schemas.py::test_start_training_request_preserves_model_epochs", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_schemas.py::test_model_ensemble_item_hyperparameters_validation", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_schemas.py::test_start_training_request_preserves_model_hyperparameters", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_schemas.py::test_start_training_request_early_stopping", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_persistence.py::test_checkpoint_retains_admitted_preparation_after_index_changes", "phase": "call", "outcome": "passed", "duration_seconds": 0.333}, {"nodeid": "tests/test_training_persistence.py::test_main_persists_two_final_reports_before_success_and_activation", "phase": "call", "outcome": "passed", "duration_seconds": 0.342}, {"nodeid": "tests/test_training_persistence.py::test_main_accepts_schema_configs_without_substituting_training_physics", "phase": "call", "outcome": "passed", "duration_seconds": 0.342}, {"nodeid": "tests/test_training_persistence.py::test_final_evaluation_failure_preserves_artifact_and_previous_active[val]", "phase": "call", "outcome": "passed", "duration_seconds": 0.102}, {"nodeid": "tests/test_training_persistence.py::test_final_evaluation_failure_preserves_artifact_and_previous_active[test]", "phase": "call", "outcome": "passed", "duration_seconds": 0.111}, {"nodeid": "tests/test_training_persistence.py::test_final_evaluation_failure_preserves_artifact_and_previous_active[persistence]", "phase": "call", "outcome": "passed", "duration_seconds": 0.111}, {"nodeid": "tests/test_training_persistence.py::test_evaluation_revalidates_admitted_reference_after_training", "phase": "call", "outcome": "passed", "duration_seconds": 0.095}, {"nodeid": "tests/test_training_persistence.py::test_restored_predictor_failure_marks_both_attempts_failed_without_activation", "phase": "call", "outcome": "passed", "duration_seconds": 0.104}, {"nodeid": "tests/test_training_persistence.py::test_component_reports_do_not_publish_an_unevaluated_combined_ensemble", "phase": "call", "outcome": "passed", "duration_seconds": 0.604}, {"nodeid": "tests/test_training_persistence.py::test_publication_commit_error_restores_previous_active_and_reports_failure[before_commit]", "phase": "call", "outcome": "passed", "duration_seconds": 0.116}, {"nodeid": "tests/test_training_persistence.py::test_publication_commit_error_restores_previous_active_and_reports_failure[after_commit]", "phase": "call", "outcome": "passed", "duration_seconds": 0.108}, {"nodeid": "tests/test_training_persistence.py::test_manual_activation_blocks_new_incomplete_models_but_preserves_legacy[standard_eval_pending]", "phase": "call", "outcome": "passed", "duration_seconds": 0.01}, {"nodeid": "tests/test_training_persistence.py::test_manual_activation_blocks_new_incomplete_models_but_preserves_legacy[standard_eval_failed]", "phase": "call", "outcome": "passed", "duration_seconds": 0.006}, {"nodeid": "tests/test_training_persistence.py::test_manual_activation_blocks_new_incomplete_models_but_preserves_legacy[standard_component_evaluated]", "phase": "call", "outcome": "passed", "duration_seconds": 0.006}, {"nodeid": "tests/test_training_persistence.py::test_manual_activation_preserves_same_artifact_pair_after_failed_retry", "phase": "call", "outcome": "passed", "duration_seconds": 0.354}, {"nodeid": "tests/test_training_persistence.py::test_manual_activation_rejects_wrong_report_identity[hash]", "phase": "call", "outcome": "passed", "duration_seconds": 0.395}, {"nodeid": "tests/test_training_persistence.py::test_manual_activation_rejects_wrong_report_identity[job]", "phase": "call", "outcome": "passed", "duration_seconds": 0.397}, {"nodeid": "tests/test_training_persistence.py::test_manual_activation_rejects_wrong_report_identity[classes]", "phase": "call", "outcome": "passed", "duration_seconds": 0.35}, {"nodeid": "tests/test_training_persistence.py::test_manual_activation_rejects_wrong_report_identity[dataset]", "phase": "call", "outcome": "passed", "duration_seconds": 0.354}, {"nodeid": "tests/test_training_persistence.py::test_manual_activation_rejects_wrong_report_identity[report]", "phase": "call", "outcome": "passed", "duration_seconds": 0.349}, {"nodeid": "tests/test_training_persistence.py::test_manual_activation_rejects_wrong_report_identity[config]", "phase": "call", "outcome": "passed", "duration_seconds": 0.346}, {"nodeid": "tests/test_training_persistence.py::test_activation_without_persistence_cannot_announce_success", "phase": "call", "outcome": "passed", "duration_seconds": 0.001}, {"nodeid": "tests/test_training_persistence.py::test_manual_activation_rechecks_checkpoint_and_exact_reports", "phase": "call", "outcome": "passed", "duration_seconds": 0.333}, {"nodeid": "tests/test_training_persistence.py::test_cpu_checkpoint_and_final_predictor_use_first_best_not_last[1.0--1.0]", "phase": "call", "outcome": "passed", "duration_seconds": 0.461}, {"nodeid": "tests/test_training_persistence.py::test_cpu_checkpoint_and_final_predictor_use_first_best_not_last[-1.0--2.0]", "phase": "call", "outcome": "passed", "duration_seconds": 0.388}, {"nodeid": "tests/test_training_persistence.py::test_repeated_jobs_never_overwrite_an_existing_checkpoint", "phase": "call", "outcome": "passed", "duration_seconds": 0.674}, {"nodeid": "tests/test_training_persistence.py::test_commit_failure_is_failed_and_does_not_leave_unregistered_artifacts", "phase": "call", "outcome": "passed", "duration_seconds": 0.08}, {"nodeid": "tests/test_training_persistence.py::test_dataset_identity_must_still_match_when_registering[renamed]", "phase": "call", "outcome": "passed", "duration_seconds": 0.071}, {"nodeid": "tests/test_training_persistence.py::test_dataset_identity_must_still_match_when_registering[deleted]", "phase": "call", "outcome": "passed", "duration_seconds": 0.076}, {"nodeid": "tests/test_training_persistence.py::test_new_checkpoint_persists_effective_gpu_frontend_contract[None]", "phase": "call", "outcome": "passed", "duration_seconds": 0.327}, {"nodeid": "tests/test_training_persistence.py::test_new_checkpoint_persists_effective_gpu_frontend_contract[4000.0]", "phase": "call", "outcome": "passed", "duration_seconds": 0.323}, {"nodeid": "tests/test_training_persistence.py::test_frontend_roundtrip_preserves_optional_nyquist[None]", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_persistence.py::test_frontend_roundtrip_preserves_optional_nyquist[4000.0]", "phase": "call", "outcome": "passed", "duration_seconds": 0.0}, {"nodeid": "tests/test_training_persistence.py::test_completed_history_and_checkpoint_expose_verified_provenance", "phase": "call", "outcome": "passed", "duration_seconds": 0.341}, {"nodeid": "tests/test_training_persistence.py::test_external_save_failures_are_visible_and_clean_only_new_files[serialize]", "phase": "call", "outcome": "passed", "duration_seconds": 0.067}, {"nodeid": "tests/test_training_persistence.py::test_external_save_failures_are_visible_and_clean_only_new_files[fsync]", "phase": "call", "outcome": "passed", "duration_seconds": 0.067}, {"nodeid": "tests/test_training_persistence.py::test_external_save_failures_are_visible_and_clean_only_new_files[publish]", "phase": "call", "outcome": "passed", "duration_seconds": 0.069}, {"nodeid": "tests/test_training_persistence.py::test_external_save_failures_are_visible_and_clean_only_new_files[session]", "phase": "call", "outcome": "passed", "duration_seconds": 0.075}, {"nodeid": "tests/test_training_persistence.py::test_external_save_failures_are_visible_and_clean_only_new_files[flush]", "phase": "call", "outcome": "passed", "duration_seconds": 0.079}, {"nodeid": "tests/test_training_persistence.py::test_external_save_failures_are_visible_and_clean_only_new_files[metric]", "phase": "call", "outcome": "passed", "duration_seconds": 0.079}, {"nodeid": "tests/test_training_persistence.py::test_uuid_collision_never_replaces_existing_files[final]", "phase": "call", "outcome": "passed", "duration_seconds": 0.07}, {"nodeid": "tests/test_training_persistence.py::test_uuid_collision_never_replaces_existing_files[temporary]", "phase": "call", "outcome": "passed", "duration_seconds": 0.068}, {"nodeid": "tests/test_training_persistence.py::test_partial_ensemble_failure_keeps_only_the_committed_model", "phase": "call", "outcome": "passed", "duration_seconds": 0.34}, {"nodeid": "tests/test_training_persistence.py::test_ambiguous_post_commit_error_preserves_registered_checkpoint", "phase": "call", "outcome": "passed", "duration_seconds": 0.085}, {"nodeid": "tests/test_training_persistence.py::test_unverifiable_commit_retains_artifact_and_reports_uncertainty", "phase": "call", "outcome": "passed", "duration_seconds": 0.07}, {"nodeid": "tests/test_training_persistence.py::test_job_without_epoch_metrics_cannot_claim_completed", "phase": "call", "outcome": "passed", "duration_seconds": 0.072}, {"nodeid": "tests/test_training_spawn.py::test_service_drains_spawn_without_http_polling", "phase": "call", "outcome": "failed", "duration_seconds": 0.041}], "nonpassing_reports": [{"nodeid": "tests/test_training_spawn.py::test_service_drains_spawn_without_http_polling", "phase": "call", "outcome": "failed", "duration_seconds": 0.041}], "sqlite_memory_connection_count": 242, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

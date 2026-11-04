@@ -1,0 +1,46 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-tks15ew4
+[Database] Tablas sincronizadas exitosamente en PostgreSQL.
+F
+=================================== FAILURES ===================================
+____________ test_imported_progress_stop_and_history_require_owner _____________
+
+client = <starlette.testclient.TestClient object at 0x7fa007904440>
+training_env = (<app.services.training.TrainingService object at 0x7fa003b22c10>, sessionmaker(class_='Session', bind=Engine(sqlite:/...ining-consumer-suite-tks15ew4/pytest/test_imported_progress_stop_an0'), <MagicMock name='Thread' id='140325233925088'>)
+cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7fa003772270>, {'id': 'c12bba571d634b6ebc9290a9e971bfc...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7fa0037ce210>, 'fe8efe18cb984db1b51e8d10f6614287')
+tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-tks15ew4/pytest/test_imported_progress_stop_an0')
+authenticated = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwiZXhwIjoxNzkzNzg1NjY0LCJpYXQiOjE3OTM3NTY4NjR9.PugAqpH9ex6_faccxLvJJ2VrWoqwpwMxE-Qt4dMRe_g'}
+
+    def test_imported_progress_stop_and_history_require_owner(client, training_env, cohort, tmp_path, authenticated):
+        import pickle
+        from app.services import auth
+        from app.services.imported_training_source import ImportedTrainingSource
+        from training.imported_dataset_preparation import ImportedDatasetPreparation
+        from scripts.migrate_imported_training_source import migrate_imported_sources
+        runtime, sessions, _, process = training_env
+>       migrate_imported_sources(sessions.kw["bind"], writers_stopped=True)
+
+tests/test_imported_training_admission.py:75: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+engine = Engine(sqlite:///%3Amemory%3A), writers_stopped = True
+
+    def migrate_imported_sources(engine, *, writers_stopped=False):
+        if writers_stopped is not True:
+            raise RuntimeError("All writers must be stopped explicitly")
+        if engine.dialect.name not in ("sqlite", "postgresql"):
+            raise RuntimeError("Unsupported schema dialect")
+        target = ImportedModelSource.__table__
+        with engine.begin() as connection:
+            inspector = inspect(connection)
+            for table in (Modelo.__table__, TrainingSnapshot.__table__, target):
+                if not inspector.has_table(table.name):
+                    if table is not target:
+>                       raise RuntimeError("Required source schema absent")
+E                       RuntimeError: Required source schema absent
+
+scripts/migrate_imported_training_source.py:19: RuntimeError
+=========================== short test summary info ============================
+FAILED tests/test_imported_training_admission.py::test_imported_progress_stop_and_history_require_owner
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed in 1.16s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": [], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_imported_training_admission.py::test_imported_progress_stop_and_history_require_owner", "phase": "call", "outcome": "failed", "duration_seconds": 0.007}], "nonpassing_reports": [{"nodeid": "tests/test_imported_training_admission.py::test_imported_progress_stop_and_history_require_owner", "phase": "call", "outcome": "failed", "duration_seconds": 0.007}], "sqlite_memory_connection_count": 2, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

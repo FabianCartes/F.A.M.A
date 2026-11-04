@@ -1,0 +1,38 @@
+{
+  "all": {
+    "command": [
+      "git",
+      "diff",
+      "--cached",
+      "--check"
+    ],
+    "exit": 2,
+    "stdout": "docs/receipts/imported-training-t3-tdd/01.stdout.log:21: trailing whitespace.\n+tests/test_imported_training_admission.py:16: \ndocs/receipts/imported-training-t3-tdd/01.stdout.log:22: trailing whitespace.\n+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \ndocs/receipts/imported-training-t3-tdd/01.stdout.log:31: trailing whitespace.\n+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \ndocs/receipts/imported-training-t3-tdd/15.stdout.log:53: trailing whitespace.\n+E             \ndocs/receipts/imported-training-t3-tdd/17.stdout.log:22: trailing whitespace.\n+tests/test_imported_training_admission.py:75: \ndocs/receipts/imported-training-t3-tdd/17.stdout.log:23: trailing whitespace.\n+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \ndocs/receipts/imported-training-t3-tdd/29.stdout.log:53: trailing whitespace.\n+    \ndocs/receipts/imported-training-t3-tdd/29.stdout.log:74: trailing whitespace.\n+    \ndocs/receipts/imported-training-t3-tdd/29.stdout.log:78: trailing whitespace.\n+    \ndocs/receipts/imported-training-t3-tdd/29.stdout.log:107: trailing whitespace.\n+    \ndocs/receipts/imported-training-t3-tdd/29.stdout.log:110: trailing whitespace.\n+    \ndocs/receipts/imported-training-t3-tdd/29.stdout.log:143: trailing whitespace.\n+    \ndocs/receipts/imported-training-t3-tdd/29.stdout.log:166: trailing whitespace.\n+    \ndocs/receipts/imported-training-t3-tdd/29.stdout.log:186: trailing whitespace.\n+    \ndocs/receipts/imported-training-t3-tdd/29.stdout.log:197: trailing whitespace.\n+app/services/training.py:616: \ndocs/receipts/imported-training-t3-tdd/29.stdout.log:198: trailing whitespace.\n+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \ndocs/receipts/imported-training-t3-tdd/29.stdout.log:216: trailing whitespace.\n+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \ndocs/receipts/imported-training-t3-tdd/29.stdout.log:235: trailing whitespace.\n+    \ndocs/receipts/imported-training-t3-tdd/29.stdout.log:241: trailing whitespace.\n+    \ndocs/receipts/imported-training-t3-tdd/29.stdout.log:246: trailing whitespace.\n+    \ndocs/receipts/imported-training-t3-tdd/29.stdout.log:250: trailing whitespace.\n+tests/test_training_spawn.py:34: \ndocs/receipts/imported-training-t3-tdd/29.stdout.log:251: trailing whitespace.\n+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \ndocs/receipts/imported-training-t3-tdd/29.stdout.log:299: trailing whitespace.\n+    \ndocs/receipts/imported-training-t3-tdd/29.stdout.log:320: trailing whitespace.\n+    \ndocs/receipts/imported-training-t3-tdd/29.stdout.log:324: trailing whitespace.\n+    \ndocs/receipts/imported-training-t3-tdd/29.stdout.log:353: trailing whitespace.\n+    \ndocs/receipts/imported-training-t3-tdd/29.stdout.log:356: trailing whitespace.\n+    \ndocs/receipts/imported-training-t3-tdd/29.stdout.log:389: trailing whitespace.\n+    \ndocs/receipts/imported-training-t3-tdd/29.stdout.log:412: trailing whitespace.\n+    \ndocs/receipts/imported-training-t3-tdd/29.stdout.log:432: trailing whitespace.\n+    \ndocs/receipts/imported-training-t3-tdd/31.stdout.log:50: trailing whitespace.\n+    \ndocs/receipts/imported-training-t3-tdd/31.stdout.log:60: trailing whitespace.\n+E             \ndocs/receipts/imported-training-t3-tdd/36.stdout.log:16: trailing whitespace.\n+    \n",
+    "stderr": ""
+  },
+  "authored": {
+    "command": [
+      "git",
+      "diff",
+      "--cached",
+      "--check",
+      "--",
+      "backend",
+      "docs/README.md",
+      "docs/KANBAN.md",
+      "docs/arquitectura/entrenamiento-datasets-importados-plan.md",
+      "docs/adr/0053-procedencia-durable-de-entrenamiento-importado.md",
+      "docs/manuales/entrenamiento-datasets-importados.md",
+      "docs/receipts/imported-training-t3-differential.py"
+    ],
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "authored_diff_lines": {
+    "add": 1327,
+    "delete": 42,
+    "sum": 1369,
+    "remaining": "machine receipts and unmodified raw evidence, kept with behavior"
+  }
+}

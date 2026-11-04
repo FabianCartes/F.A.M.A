@@ -1,0 +1,66 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-n00sizmh
+[Database] Tablas sincronizadas exitosamente en PostgreSQL.
+F
+=================================== FAILURES ===================================
+______________ test_imported_start_requires_auth_before_admission ______________
+
+client = <starlette.testclient.TestClient object at 0x7f49470282f0>
+training_env = (<app.services.training.TrainingService object at 0x7f494338c2d0>, sessionmaker(class_='Session', bind=Engine(sqlite:/...ining-consumer-suite-n00sizmh/pytest/test_imported_start_requires_a0'), <MagicMock name='Thread' id='139952700688096'>)
+cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7f4942f29d30>, {'id': '03b5d496d5fc499ab87d0960f588084...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7f494338dd10>, 'a1fb6278666a42ebb7e958af80a90b95')
+tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-n00sizmh/pytest/test_imported_start_requires_a0')
+
+    def test_imported_start_requires_auth_before_admission(client, training_env, cohort, tmp_path):
+        runtime, sessions, root, process = training_env
+        # A valid legacy decoy proves imported selection cannot silently fall back.
+        register(sessions, "AvesChilenas")
+        partitions(root, "AvesChilenas")
+        preparations = service(cohort, tmp_path)
+>       prepared = create(preparations, cohort)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_imported_training_admission.py:16: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_imported_dataset_preparation.py:39: in create
+    return preparations.create(1, snapshot["id"], mapping=mapping,
+training/imported_dataset_preparation.py:290: in create
+    with _root_directory(self.root) as root_fd:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.14/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-n00sizmh/pytest/test_imported_start_requires_a0/prepared')
+
+    @contextmanager
+    def _root_directory(path):
+        """Create/open a trusted root without following any ancestor symlink."""
+        fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            for part in _parts(str(path).lstrip("/")):
+                try:
+                    try:
+                        nxt = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+                    except FileNotFoundError:
+                        try:
+                            os.mkdir(part, mode=0o700, dir_fd=fd)
+                        except FileExistsError:
+                            # Another creator may have won. Reopen without following
+                            # links; the final root must still pass the privacy check.
+                            pass
+                        os.fsync(fd)
+                        nxt = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+                except OSError as error:
+                    raise SnapshotIntegrityError("Unsafe snapshot root") from error
+                os.close(fd)
+                fd = nxt
+            if os.fstat(fd).st_mode & 0o077:
+>               raise SnapshotIntegrityError("Snapshot root must be private")
+E               app.services.training_snapshots.SnapshotIntegrityError: Snapshot root must be private
+
+app/services/training_snapshots.py:76: SnapshotIntegrityError
+=========================== short test summary info ============================
+FAILED tests/test_imported_training_admission.py::test_imported_start_requires_auth_before_admission
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed in 1.44s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": [], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_imported_training_admission.py::test_imported_start_requires_auth_before_admission", "phase": "call", "outcome": "failed", "duration_seconds": 0.041}], "nonpassing_reports": [{"nodeid": "tests/test_imported_training_admission.py::test_imported_start_requires_auth_before_admission", "phase": "call", "outcome": "failed", "duration_seconds": 0.041}], "sqlite_memory_connection_count": 2, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

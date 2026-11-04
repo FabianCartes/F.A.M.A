@@ -1,0 +1,21 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-f3_l1gew
+F
+=================================== FAILURES ===================================
+_____________ test_source_pins_classes_and_consumes_verified_audio _____________
+
+cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7fceabf5b230>, {'id': '862b1d6d59b24c56b1d899f5269f30d...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7fceabf58d70>, '550e87f4eb0d4e97a022423b163a99dd')
+tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-f3_l1gew/pytest/test_source_pins_classes_and_c0')
+
+    def test_source_pins_classes_and_consumes_verified_audio(cohort, tmp_path):
+        import pickle
+        import torch
+        from training.imported_dataset_preparation import ImportedDatasetPreparation
+>       from app.services.imported_training_source import ImportedTrainingSource, ImportedAudioDataset
+E       ImportError: cannot import name 'ImportedAudioDataset' from 'app.services.imported_training_source' (/home/kevin/Work/fama/backend/app/services/imported_training_source.py)
+
+tests/test_imported_training_source.py:24: ImportError
+=========================== short test summary info ============================
+FAILED tests/test_imported_training_source.py::test_source_pins_classes_and_consumes_verified_audio
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed in 0.68s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": [], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_imported_training_source.py::test_source_pins_classes_and_consumes_verified_audio", "phase": "call", "outcome": "failed", "duration_seconds": 0.005}], "nonpassing_reports": [{"nodeid": "tests/test_imported_training_source.py::test_source_pins_classes_and_consumes_verified_audio", "phase": "call", "outcome": "failed", "duration_seconds": 0.005}], "sqlite_memory_connection_count": 1, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

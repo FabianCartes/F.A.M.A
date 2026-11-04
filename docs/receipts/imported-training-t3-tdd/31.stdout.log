@@ -1,0 +1,69 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-yhhwcsuc
+[Database] Tablas sincronizadas exitosamente en PostgreSQL.
+...F
+=================================== FAILURES ===================================
+_ test_real_cpu_worker_persists_source_pending_evaluation[audio_after_admission] _
+
+cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7f3b34385220>, {'id': '403fd3697b864cdb93205d40f568526...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7f3b34417890>, 'c68b4def0b3f42e7be0be3a12d2fb1a0')
+training_env = (<app.services.training.TrainingService object at 0x7f3b34ee8b90>, sessionmaker(class_='Session', bind=Engine(sqlite:/...ining-consumer-suite-yhhwcsuc/pytest/test_real_cpu_worker_persists_2'), <MagicMock name='Thread' id='139892267396000'>)
+tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-yhhwcsuc/pytest/test_real_cpu_worker_persists_2')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f3b36286cf0>
+client = <starlette.testclient.TestClient object at 0x7f3b343bf530>
+fault = 'audio_after_admission'
+request = <FixtureRequest for <Function test_real_cpu_worker_persists_source_pending_evaluation[audio_after_admission]>>
+
+    @pytest.mark.parametrize("fault", [None, "association", "audio_after_admission"])
+    def test_real_cpu_worker_persists_source_pending_evaluation(cohort, training_env, tmp_path, monkeypatch, client, fault, request):
+        import torch
+        from app.services import training
+        from app.services.imported_training_source import ImportedTrainingSource
+        from training.imported_dataset_preparation import ImportedDatasetPreparation
+        from scripts.migrate_imported_training_source import migrate_imported_sources
+        runtime, _, _, process = training_env
+        sessions = cohort[0].sessions
+        migrate_imported_sources(sessions.kw["bind"], writers_stopped=True)
+        preparations = ImportedDatasetPreparation(cohort[0], tmp_path / "imported-prepared")
+        prepared = create(preparations, cohort)
+        runtime.imported_sources = ImportedTrainingSource(preparations)
+        monkeypatch.setattr(training, "SessionLocal", sessions)
+        monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+        # Execute the actual worker and loaders. Only the external process boundary is inline.
+        class Inline:
+            def __init__(self, target, args, **kwargs):
+                self.target, self.args = target, args
+            def start(self):
+                if fault == "audio_after_admission":
+                    member = next(cohort[0].iter_verified(1, cohort[1]["id"]))[0]
+                    path = cohort[0].root / cohort[1]["id"] / member["member_id"]
+                    path.chmod(0o600)
+                    path.write_bytes(b"changed after admission")
+                self.target(*self.args)
+        process.side_effect = Inline
+        if fault == "association":
+            from sqlalchemy import event
+            from app.models.imported_training_source import ImportedModelSource
+            def fail_association(*args):
+                raise RuntimeError("Synthetic source registration failure")
+            event.listen(ImportedModelSource, "before_insert", fail_association)
+            # Remove the fault hook even if a public assertion fails.
+            request.addfinalizer(lambda: event.remove(ImportedModelSource, "before_insert", fail_association))
+    
+        result = runtime.start_training("", imported_dataset_id=cohort[5], snapshot_id=cohort[1]["id"],
+            imported_prepared_version=prepared["version_id"], owner_id=1,
+            architecture="AudioCNN", epochs=1, batch_size=2, early_stopping=False)
+        assert result["status"] == "started"
+        if fault:
+            progress = runtime.get_progress(owner_id=1)
+>           assert progress["status"] == "failed", progress
+E           AssertionError: {'status': 'checkpoint_persisted', 'job_id': 'fama_audiocnn_c5994dc93bb043de883d3ba3000f4bcb', 'seed': 42, 'is_tri_model': False, ...}
+E           assert 'checkpoint_persisted' == 'failed'
+E             
+E             - failed
+E             + checkpoint_persisted
+
+tests/test_imported_training_persistence.py:70: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_imported_training_persistence.py::test_real_cpu_worker_persists_source_pending_evaluation[audio_after_admission]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 3 passed in 2.52s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": [], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_imported_training_persistence.py::test_explicit_migration_from_absent_table", "phase": "call", "outcome": "passed", "duration_seconds": 0.009}, {"nodeid": "tests/test_imported_training_persistence.py::test_real_cpu_worker_persists_source_pending_evaluation[None]", "phase": "call", "outcome": "passed", "duration_seconds": 0.526}, {"nodeid": "tests/test_imported_training_persistence.py::test_real_cpu_worker_persists_source_pending_evaluation[association]", "phase": "call", "outcome": "passed", "duration_seconds": 0.098}, {"nodeid": "tests/test_imported_training_persistence.py::test_real_cpu_worker_persists_source_pending_evaluation[audio_after_admission]", "phase": "call", "outcome": "failed", "duration_seconds": 0.102}], "nonpassing_reports": [{"nodeid": "tests/test_imported_training_persistence.py::test_real_cpu_worker_persists_source_pending_evaluation[audio_after_admission]", "phase": "call", "outcome": "failed", "duration_seconds": 0.102}], "sqlite_memory_connection_count": 7, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

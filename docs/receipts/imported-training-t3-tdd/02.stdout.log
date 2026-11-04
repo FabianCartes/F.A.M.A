@@ -1,0 +1,36 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-brqftfvu
+[Database] Tablas sincronizadas exitosamente en PostgreSQL.
+F
+=================================== FAILURES ===================================
+______________ test_imported_start_requires_auth_before_admission ______________
+
+client = <starlette.testclient.TestClient object at 0x7f8f703182f0>
+training_env = (<app.services.training.TrainingService object at 0x7f8f6c1142d0>, sessionmaker(class_='Session', bind=Engine(sqlite:/...ining-consumer-suite-brqftfvu/pytest/test_imported_start_requires_a0'), <MagicMock name='Thread' id='140254039344192'>)
+cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7f8f6c4a2660>, {'id': '37e5e645f3e7428c887b89cbd490250...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7f8f6c115d10>, 'c63416fb94a243ed9cc272251fd4465e')
+tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-brqftfvu/pytest/test_imported_start_requires_a0')
+
+    def test_imported_start_requires_auth_before_admission(client, training_env, cohort, tmp_path):
+        runtime, sessions, root, process = training_env
+        # A valid legacy decoy proves imported selection cannot silently fall back.
+        register(sessions, "AvesChilenas")
+        partitions(root, "AvesChilenas")
+        from training.imported_dataset_preparation import ImportedDatasetPreparation
+        preparations = ImportedDatasetPreparation(cohort[0], tmp_path / "imported-prepared")
+        prepared = create(preparations, cohort)
+        before = client.get("/api/training/progress").json()
+        history = client.get("/api/training/history").json()
+        response = client.post("/api/training/start", json={
+            "imported_dataset_id": cohort[5], "snapshot_id": cohort[1]["id"],
+            "imported_prepared_version": prepared["version_id"],
+        })
+>       assert response.status_code == 401, response.text
+E       AssertionError: {"status":"started","job_id":"fama_efficientnet_b0_873c5c4ad234496ea30deb0c81025a24","message":"Entrenamiento de EfficientNet-B0 iniciado para 10 épocas.","preparation":{"version_id":"cbfc5ec408fb38868f23f3372f098a554af89e61df3d98aade5304b4c38fc4de","historical":false}}
+E       assert 200 == 401
+E        +  where 200 = <Response [200 OK]>.status_code
+
+tests/test_imported_training_admission.py:24: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_imported_training_admission.py::test_imported_start_requires_auth_before_admission
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed in 1.31s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": [], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_imported_training_admission.py::test_imported_start_requires_auth_before_admission", "phase": "call", "outcome": "failed", "duration_seconds": 0.1}], "nonpassing_reports": [{"nodeid": "tests/test_imported_training_admission.py::test_imported_start_requires_auth_before_admission", "phase": "call", "outcome": "failed", "duration_seconds": 0.1}], "sqlite_memory_connection_count": 2, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

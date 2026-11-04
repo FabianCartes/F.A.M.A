@@ -96,7 +96,12 @@ ENSEMBLE_WEIGHTS: List[float] = [0.55, 0.30, 0.15]
 # PERSISTENCIA: INICIALIZACIÓN DE TABLAS EN BASE DE DATOS
 # ============================================================================
 try:
-    Base.metadata.create_all(bind=engine)
+    # Imported provenance is migrated explicitly, even if a maintenance module
+    # registered its ORM table before this entrypoint. Keep legacy bootstrap intact.
+    Base.metadata.create_all(bind=engine, tables=[
+        table for table in Base.metadata.tables.values()
+        if table.name != "imported_model_source"
+    ])
     print("[Database] Tablas sincronizadas exitosamente en PostgreSQL.")
 except Exception as db_init_err:
     print(f"[Database] Advertencia al sincronizar tablas con PostgreSQL: {db_init_err}")
@@ -959,6 +964,8 @@ async def upload_ingestion_files(
 # ============================================================================
 # ENDPOINTS DE ENTRENAMIENTO Y MÉTRICAS (RF_04, CU_INV_03, CU_INV_04, CU_INV_05)
 from app.schemas.training import StartTrainingRequest
+from app.services.auth import get_current_user, security_bearer
+from app.services.imported_training_source import ImportedSourceError
 
 
 @app.get("/api/training/hardware")
@@ -970,20 +977,37 @@ def get_training_hardware():
 
 
 @app.get("/api/training/datasets")
-def get_training_datasets(db: Session = Depends(get_db)):
+def get_training_datasets(db: Session = Depends(get_db), include_imported: bool = False,
+                          credentials=Depends(security_bearer)):
     """
     Retorna la lista de datasets disponibles para entrenar (CU_INV_02).
+    include_imported=true exige usuario activo y añade solo sus fuentes preparadas.
+    Los motivos de elegibilidad no acreditan pesos, ejecución ni evaluación.
     """
+    user = get_current_user(credentials, db) if include_imported else None
     datasets = training_service.get_available_datasets(db=db)
+    if include_imported:
+        from app.services.imported_training_source import configured_sources
+        from app.database import SessionLocal
+        try:
+            sources = training_service.imported_sources or configured_sources(SessionLocal)
+            datasets += sources.catalog(user.id)
+        except ImportedSourceError as exc:
+            raise HTTPException(status_code=503, detail={"code": exc.code, "message": str(exc)})
     return {"datasets": datasets}
 
 
 @app.post("/api/training/start")
-def start_training_pipeline(req: StartTrainingRequest):
+def start_training_pipeline(req: StartTrainingRequest, credentials=Depends(security_bearer),
+                            db: Session = Depends(get_db)):
     """
     Inicia un entrenamiento en segundo plano utilizando PyTorch (CU_INV_03).
-    Soporta modelo individual, pipeline secuencial de la Tríada Completa o Ensamble Dinámico.
+    Legacy soporta modelo individual, Tríada Completa o Ensamble Dinámico.
+    Importados exigen Bearer activo y dataset/snapshot/versión propios explícitos;
+    usan una arquitectura/perfil preparado, sin rutas del cliente ni fallback legacy.
+    started solo acredita admisión; checkpoint_persisted queda pendiente de evaluación.
     """
+    owner = get_current_user(credentials, db) if req.imported_dataset_id is not None else None
     try:
         kwargs = {
             "dataset_name": req.dataset_name,
@@ -997,6 +1021,9 @@ def start_training_pipeline(req: StartTrainingRequest):
             "seed": req.seed,
             "early_stopping": req.early_stopping,
         }
+        if owner is not None:
+            kwargs.update(imported_dataset_id=req.imported_dataset_id, snapshot_id=req.snapshot_id,
+                          imported_prepared_version=req.imported_prepared_version, owner_id=owner.id)
         if getattr(req, "_explicit_models", False) and req.models is not None:
             kwargs["models"] = [m.model_dump() for m in req.models]
         if req.prepared_version is not None:
@@ -1012,41 +1039,71 @@ def start_training_pipeline(req: StartTrainingRequest):
 
         result = training_service.start_training(**kwargs)
         return result
+    except ImportedSourceError as exc:
+        raise HTTPException(status_code=404, detail={"code": exc.code, "message": str(exc)})
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
 
 
+def _training_resource_owner(credentials, db, *, required=False):
+    current_owner = training_service.current_source_owner
+    user = get_current_user(credentials, db) if required or current_owner is not None else None
+    if current_owner is not None and user.id != current_owner:
+        raise HTTPException(status_code=404, detail="Recurso de entrenamiento no disponible.")
+    return user.id if user else None
+
+
 @app.get("/api/training/progress")
-def get_training_progress():
+def get_training_progress(credentials=Depends(security_bearer), db: Session = Depends(get_db)):
     """
     Retorna el progreso en tiempo real, curvas de Loss/Accuracy y logs (IS_02).
     """
-    return training_service.get_progress()
+    owner = _training_resource_owner(credentials, db)
+    try:
+        return training_service.get_progress(owner_id=owner)
+    except ImportedSourceError:
+        raise HTTPException(status_code=404, detail="Recurso de entrenamiento no disponible.")
 
 
 @app.post("/api/training/stop")
-def stop_training_pipeline():
+def stop_training_pipeline(credentials=Depends(security_bearer), db: Session = Depends(get_db)):
     """
     Solicita la detención segura del entrenamiento en ejecución (CU_INV_03 Paso 2.a).
     """
-    return training_service.stop_training()
+    owner = _training_resource_owner(credentials, db)
+    try:
+        return training_service.stop_training(owner_id=owner)
+    except ImportedSourceError:
+        raise HTTPException(status_code=404, detail="Recurso de entrenamiento no disponible.")
 
 
 @app.get("/api/training/history")
-def get_training_history(db: Session = Depends(get_db)):
+def get_training_history(db: Session = Depends(get_db), include_imported: bool = False,
+                         credentials=Depends(security_bearer)):
     """
     Retorna el historial de modelos entrenados desde PostgreSQL (CU_INV_04).
+    Por defecto excluye importados; include_imported=true autentica y añade solo los propios.
     """
-    history = training_service.get_history(db=db)
+    user = get_current_user(credentials, db) if include_imported else None
+    history = training_service.get_history(db=db, owner_id=user.id if include_imported and user else None)
     return {"history": history}
 
 
 @app.post("/api/training/models/{model_id}/activate")
-def activate_model(model_id: int, db: Session = Depends(get_db)):
+def activate_model(model_id: int, db: Session = Depends(get_db), credentials=Depends(security_bearer)):
     """
     Activa un modelo para inferencias bioacústicas en tiempo real (CU_INV_05).
     """
+    from sqlalchemy import inspect
+    source_owner = None
+    if inspect(db.get_bind()).has_table("imported_model_source"):
+        from app.models.imported_training_source import ImportedModelSource
+        association = db.get(ImportedModelSource, model_id)
+        source_owner = association.owner_id if association else None
+    user = get_current_user(credentials, db) if source_owner is not None else None
+    if source_owner is not None and user.id != source_owner:
+        raise HTTPException(status_code=404, detail="Recurso de entrenamiento no disponible.")
     return training_service.set_active_model(model_id=model_id, db=db)
 
 
