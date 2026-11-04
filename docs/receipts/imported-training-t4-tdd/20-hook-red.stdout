@@ -1,0 +1,12 @@
+
+ RUN  v5.0.2 /home/kevin/Work/fama/frontend
+
+ ❯ hooks/__tests__/useTrainingLifecycle.test.ts (5 tests | 1 failed) 26ms
+   ❯ useTrainingLifecycle (ODD Lifecycle Hook Tests) (5)
+     × handles terminal checkpoint_persisted without continued progress polling 5ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed (5)
+   Start at  01:03:54
+   Duration  518ms (environment 65%, import 16%, transform 12%, tests 6%, worker 1%)
+

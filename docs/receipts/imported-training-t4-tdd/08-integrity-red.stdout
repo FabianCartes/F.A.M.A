@@ -1,0 +1,44 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-b_u3x2ha
+F
+=================================== FAILURES ===================================
+________ test_altered_snapshot_audio_never_reads_back_ready_preparation ________
+
+bridge = (<starlette.testclient.TestClient object at 0x7fbb70362c10>, <function bridge.<locals>.<lambda> at 0x7fbb700ebed0>, <training.imported_dataset_preparation.ImportedDatasetPreparation object at 0x7fbb70318ec0>)
+cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7fbb70d21fd0>, {'id': 'adf23a57046e4e72b8255fdfd91a026...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7fbb70e5a900>, '01037611f0d445ecaf2dc835d55e7854')
+
+    def test_altered_snapshot_audio_never_reads_back_ready_preparation(bridge, cohort):
+        client, headers, preparations = bridge
+        from tests.test_imported_dataset_preparation import create
+        manifest = create(preparations, cohort)
+        member, _ = next(cohort[0].iter_verified(1, cohort[1]['id']))
+        path = cohort[0].root / cohort[1]['id'] / member['member_id']
+>       path.write_bytes(b'altered')
+
+tests/test_imported_training_preparation_api.py:122: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/lib/python3.14/pathlib/__init__.py:796: in write_bytes
+    with self.open(mode='wb') as f:
+         ^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-b_u3x2ha/pytest/test_altered_snapshot_audio_ne0/snapshots/adf23a57046e4e72b8255fdfd91a0262/1649b507340442a9af1c442ac9b4692c')
+mode = 'wb', buffering = -1, encoding = None, errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed to by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+>       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       PermissionError: [Errno 13] Permission denied: '/home/kevin/Work/fama/backend/.training-consumer-suite-b_u3x2ha/pytest/test_altered_snapshot_audio_ne0/snapshots/adf23a57046e4e72b8255fdfd91a0262/1649b507340442a9af1c442ac9b4692c'
+
+/usr/lib/python3.14/pathlib/__init__.py:771: PermissionError
+=========================== short test summary info ============================
+FAILED tests/test_imported_training_preparation_api.py::test_altered_snapshot_audio_never_reads_back_ready_preparation
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 7 deselected in 0.76s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": ["tests/test_imported_training_preparation_api.py::test_completed_snapshot_members_preparation_roundtrip", "tests/test_imported_training_preparation_api.py::test_auth_foreign_and_invalid_mapping_do_not_publish", "tests/test_imported_training_preparation_api.py::test_non_real_or_inactive_principal_cannot_create_snapshot[inactive]", "tests/test_imported_training_preparation_api.py::test_non_real_or_inactive_principal_cannot_create_snapshot[negative]", "tests/test_imported_training_preparation_api.py::test_non_real_or_inactive_principal_cannot_create_snapshot[invalid]", "tests/test_imported_training_preparation_api.py::test_oversized_json_is_rejected_before_snapshot_publication", "tests/test_imported_training_preparation_api.py::test_schema_missing_is_read_only_before_snapshot_creation"], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_imported_training_preparation_api.py::test_altered_snapshot_audio_never_reads_back_ready_preparation", "phase": "call", "outcome": "failed", "duration_seconds": 0.012}], "nonpassing_reports": [{"nodeid": "tests/test_imported_training_preparation_api.py::test_altered_snapshot_audio_never_reads_back_ready_preparation", "phase": "call", "outcome": "failed", "duration_seconds": 0.012}], "sqlite_memory_connection_count": 1, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

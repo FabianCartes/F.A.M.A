@@ -1,0 +1,21 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-zprwlp48
+E
+==================================== ERRORS ====================================
+___ ERROR at setup of test_completed_snapshot_members_preparation_roundtrip ____
+
+cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7f24e8972510>, {'id': 'fa46ca378e0641bdb625435b5bcee46...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7f24e8ac2510>, 'b0eb5abe30284c28ac09dcfaef39eb6f')
+tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-zprwlp48/pytest/test_completed_snapshot_member0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f24e90b5e00>
+
+    @pytest.fixture
+    def bridge(cohort, tmp_path, monkeypatch):
+        from app.database import get_db
+>       from app.routes.imported_training import router, get_preparations
+E       ModuleNotFoundError: No module named 'app.routes.imported_training'
+
+tests/test_imported_training_preparation_api.py:13: ModuleNotFoundError
+=========================== short test summary info ============================
+ERROR tests/test_imported_training_preparation_api.py::test_completed_snapshot_members_preparation_roundtrip
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 error in 0.72s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": [], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [], "nonpassing_reports": [{"nodeid": "tests/test_imported_training_preparation_api.py::test_completed_snapshot_members_preparation_roundtrip", "phase": "setup", "outcome": "failed", "duration_seconds": 0.512}], "sqlite_memory_connection_count": 1, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

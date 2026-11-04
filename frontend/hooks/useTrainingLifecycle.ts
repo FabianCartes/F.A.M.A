@@ -37,6 +37,7 @@ export function useTrainingLifecycle() {
   const [history, setHistory] = useState<ModelHistoryItem[]>([]);
 
   // Training Execution Lifecycle State
+  const [terminalMessage, setTerminalMessage] = useState('');
   const [isTraining, setIsTraining] = useState<boolean>(false);
   const [isStopping, setIsStopping] = useState<boolean>(false);
   const [trainingJobId, setTrainingJobId] = useState<string | null>(null);
@@ -207,8 +208,9 @@ export function useTrainingLifecycle() {
           if (
             progress.status === "completed" ||
             progress.status === "failed" ||
-            progress.status === "stopped"
+            progress.status === "stopped" || progress.status === 'checkpoint_persisted'
           ) {
+            if(progress.status==='checkpoint_persisted') setTerminalMessage('Checkpoint persistido; evaluación pendiente. No confirma publicación ni activación.');
             setIsTraining(false);
             setIsStopping(false);
             refreshHistory();
@@ -245,6 +247,7 @@ export function useTrainingLifecycle() {
     async (params: StartTrainingInput): Promise<boolean> => {
       if (isTrainingRef.current) return false;
 
+      setTerminalMessage('');
       setIsTraining(true);
       setIsStopping(false);
       setMetricsHistory([]);
@@ -327,6 +330,7 @@ export function useTrainingLifecycle() {
   return {
     // State
     connectionStatus,
+    terminalMessage,
     lastError,
     hardware,
     datasets,

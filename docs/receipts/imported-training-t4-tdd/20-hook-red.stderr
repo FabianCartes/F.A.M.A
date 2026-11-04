@@ -1,0 +1,22 @@
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  hooks/__tests__/useTrainingLifecycle.test.ts > useTrainingLifecycle (ODD Lifecycle Hook Tests) > handles terminal checkpoint_persisted without continued progress polling
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ hooks/__tests__/useTrainingLifecycle.test.ts:194:39
+    192|     });
+    193|
+    194|     expect(result.current.isTraining).toBe(false);
+       |                                       ^
+    195|     if(status==='checkpoint_persisted') expect(result.current.terminal…
+    196|     expect(trainingApi.getHistory).toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

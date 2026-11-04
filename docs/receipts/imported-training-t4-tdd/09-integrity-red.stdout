@@ -1,0 +1,29 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-7qvfbo34
+F
+=================================== FAILURES ===================================
+________ test_altered_snapshot_audio_never_reads_back_ready_preparation ________
+
+bridge = (<starlette.testclient.TestClient object at 0x7fa0fb4a6c10>, <function bridge.<locals>.<lambda> at 0x7fa0faa33ed0>, <training.imported_dataset_preparation.ImportedDatasetPreparation object at 0x7fa0fb45cec0>)
+cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7fa0fc661fd0>, {'id': 'dd5d6404a072406e80a140f043e5ba5...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7fa0fc78e900>, 'b0f8f0c9c1734febbb760019ea940fbd')
+
+    def test_altered_snapshot_audio_never_reads_back_ready_preparation(bridge, cohort):
+        client, headers, preparations = bridge
+        from tests.test_imported_dataset_preparation import create
+        manifest = create(preparations, cohort)
+        member, _ = next(cohort[0].iter_verified(1, cohort[1]['id']))
+        path = cohort[0].root / cohort[1]['id'] / member['member_id']
+        path.chmod(0o600)  # Simulate privileged storage corruption of this private synthetic fixture.
+        path.write_bytes(b'altered')
+        response = client.get('/api/training/imported/snapshots/' + cohort[1]['id'] +
+            '/preparations/' + manifest['version_id'], headers=headers(1))
+>       assert response.status_code == 404, response.text
+E       AssertionError: {"version_id":"9565dd55bc4c9809508bae25bd767bb7928abdd249296cf66545d511deaf971d","snapshot_id":"dd5d6404a072406e80a140f043e5ba58","profile":{"architecture":"audio_cnn","audio":{"duration_seconds":1.0,"f_max":4000.0,"f_min":0.0,"hop_length":64,"n_fft":256,"n_mels":32,"target_sr":8000,"use_gpu_frontend":false},"channels":1,"preprocessing":"mono_mel","window_hop_seconds":0.5,"windowing":"energy_peak_pad"},"class_to_index":{"ants":0,"zebra":1},"warnings":[{"class_name":"ants","code":"low_independent_groups","groups":3,"recommended":10},{"class_name":"zebra","code":"low_independent_groups","groups":3,"recommended":10}],"seed":42,"state":"ready"}
+E       assert 200 == 404
+E        +  where 200 = <Response [200 OK]>.status_code
+
+tests/test_imported_training_preparation_api.py:126: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_imported_training_preparation_api.py::test_altered_snapshot_audio_never_reads_back_ready_preparation
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 7 deselected in 0.75s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": ["tests/test_imported_training_preparation_api.py::test_completed_snapshot_members_preparation_roundtrip", "tests/test_imported_training_preparation_api.py::test_auth_foreign_and_invalid_mapping_do_not_publish", "tests/test_imported_training_preparation_api.py::test_non_real_or_inactive_principal_cannot_create_snapshot[inactive]", "tests/test_imported_training_preparation_api.py::test_non_real_or_inactive_principal_cannot_create_snapshot[negative]", "tests/test_imported_training_preparation_api.py::test_non_real_or_inactive_principal_cannot_create_snapshot[invalid]", "tests/test_imported_training_preparation_api.py::test_oversized_json_is_rejected_before_snapshot_publication", "tests/test_imported_training_preparation_api.py::test_schema_missing_is_read_only_before_snapshot_creation"], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_imported_training_preparation_api.py::test_altered_snapshot_audio_never_reads_back_ready_preparation", "phase": "call", "outcome": "failed", "duration_seconds": 0.02}], "nonpassing_reports": [{"nodeid": "tests/test_imported_training_preparation_api.py::test_altered_snapshot_audio_never_reads_back_ready_preparation", "phase": "call", "outcome": "failed", "duration_seconds": 0.02}], "sqlite_memory_connection_count": 1, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

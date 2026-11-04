@@ -1,0 +1,31 @@
+
+> frontend@0.1.0 build
+> next build
+
+▲ Next.js 16.3.4 (Turbopack)
+- Environments: .env.local
+✓ Running next.config.ts took 33ms
+- Experiments (use with caution):
+  · proxyClientMaxBodySize: 115343360
+  · proxyTimeout: 300000
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 1301ms
+  Running TypeScript ...
+  Finished TypeScript in 3.3s ...
+  Collecting page data using 6 workers ...
+  Generating static pages using 6 workers (0/5) ...
+  Generating static pages using 6 workers (1/5) 
+  Generating static pages using 6 workers (2/5) 
+  Generating static pages using 6 workers (3/5) 
+✓ Generating static pages using 6 workers (5/5) in 891ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+└ ○ /login
+
+
+○  (Static)  prerendered as static content
+

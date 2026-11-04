@@ -1,0 +1,5 @@
+{
+  "command": "node_modules/.bin/vitest run lib/api/__tests__/trainingApi.test.ts lib/api/__tests__/trainingHistoryApi.test.ts",
+  "cwd": "/home/kevin/Work/fama/frontend",
+  "exitcode": 0
+}

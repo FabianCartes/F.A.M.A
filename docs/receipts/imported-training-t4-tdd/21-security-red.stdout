@@ -1,0 +1,33 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-f609qqfo
+......F
+=================================== FAILURES ===================================
+________ test_altered_snapshot_audio_never_reads_back_ready_preparation ________
+
+bridge = (<starlette.testclient.TestClient object at 0x7f96390916d0>, <function bridge.<locals>.<lambda> at 0x7f963905cbf0>, <training.imported_dataset_preparation.ImportedDatasetPreparation object at 0x7f96391689e0>)
+cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7f9639c039b0>, {'id': '6bd2eff3f62b4723924f6d15bca204e...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7f96391260f0>, 'fa11e4372a824b4292d8094100d92d7b')
+
+    def test_altered_snapshot_audio_never_reads_back_ready_preparation(bridge, cohort):
+        client, headers, preparations = bridge
+        from tests.test_imported_dataset_preparation import create
+        manifest = create(preparations, cohort)
+        member, _ = next(cohort[0].iter_verified(1, cohort[1]['id']))
+        path = cohort[0].root / cohort[1]['id'] / member['member_id']
+        path.chmod(0o600)  # Simulate privileged storage corruption of this private synthetic fixture.
+        path.write_bytes(b'altered')
+        response = client.get('/api/training/imported/snapshots/' + cohort[1]['id'] +
+            '/preparations/' + manifest['version_id'], headers=headers(1))
+        assert response.status_code == 404, response.text
+        assert 'altered' not in response.text
+>       assert client.get('/api/training/imported/snapshots/' + cohort[1]['id'], headers=headers(1)).status_code == 404
+E       AssertionError: assert 200 == 404
+E        +  where 200 = <Response [200 OK]>.status_code
+E        +    where <Response [200 OK]> = get(('/api/training/imported/snapshots/' + '6bd2eff3f62b4723924f6d15bca204e9'), headers={'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzkzNzkzODkxLCJpYXQiOjE3OTM3NjUwOTF9.TMuQzFYjUDAnNV3jULwQIA1k_qgZV7nUfiRZNjhjjnE'})
+E        +      where get = <starlette.testclient.TestClient object at 0x7f96390916d0>.get
+E        +      and   {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzkzNzkzODkxLCJpYXQiOjE3OTM3NjUwOTF9.TMuQzFYjUDAnNV3jULwQIA1k_qgZV7nUfiRZNjhjjnE'} = <function bridge.<locals>.<lambda> at 0x7f963905cbf0>(1)
+
+tests/test_imported_training_preparation_api.py:131: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_imported_training_preparation_api.py::test_altered_snapshot_audio_never_reads_back_ready_preparation
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 6 passed in 2.10s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": [], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_imported_training_preparation_api.py::test_completed_snapshot_members_preparation_roundtrip", "phase": "call", "outcome": "passed", "duration_seconds": 0.059}, {"nodeid": "tests/test_imported_training_preparation_api.py::test_auth_foreign_and_invalid_mapping_do_not_publish", "phase": "call", "outcome": "passed", "duration_seconds": 0.047}, {"nodeid": "tests/test_imported_training_preparation_api.py::test_non_real_or_inactive_principal_cannot_create_snapshot[inactive]", "phase": "call", "outcome": "passed", "duration_seconds": 0.009}, {"nodeid": "tests/test_imported_training_preparation_api.py::test_non_real_or_inactive_principal_cannot_create_snapshot[negative]", "phase": "call", "outcome": "passed", "duration_seconds": 0.007}, {"nodeid": "tests/test_imported_training_preparation_api.py::test_non_real_or_inactive_principal_cannot_create_snapshot[invalid]", "phase": "call", "outcome": "passed", "duration_seconds": 0.006}, {"nodeid": "tests/test_imported_training_preparation_api.py::test_oversized_json_is_rejected_before_snapshot_publication", "phase": "call", "outcome": "passed", "duration_seconds": 0.008}, {"nodeid": "tests/test_imported_training_preparation_api.py::test_altered_snapshot_audio_never_reads_back_ready_preparation", "phase": "call", "outcome": "failed", "duration_seconds": 0.027}], "nonpassing_reports": [{"nodeid": "tests/test_imported_training_preparation_api.py::test_altered_snapshot_audio_never_reads_back_ready_preparation", "phase": "call", "outcome": "failed", "duration_seconds": 0.027}], "sqlite_memory_connection_count": 7, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

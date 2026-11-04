@@ -1,0 +1,9 @@
+
+ RUN  v5.0.2 /home/kevin/Work/fama/frontend
+
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  00:52:16
+   Duration  431ms (environment 80%, import 9%, transform 9%, tests 2%, worker 1%)
+

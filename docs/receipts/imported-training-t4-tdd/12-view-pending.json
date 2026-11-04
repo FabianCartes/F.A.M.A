@@ -1,0 +1,5 @@
+{
+  "command": "node_modules/.bin/vitest run components/views/__tests__/ImportedTrainingView.test.tsx",
+  "cwd": "/home/kevin/Work/fama/frontend",
+  "exitcode": 1
+}

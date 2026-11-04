@@ -132,6 +132,55 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     global.fetch = originalFetch;
   });
 
+  it("sends visible individual AudioCNN parameters in both global and model config", async () => {
+    await act(async () => {
+      render(<TrainingView />);
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByRole("combobox", { name: /Arquitectura/i }), { target: { value: "AudioCNN" } });
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("Épocas de Entrenamiento"), { target: { value: "1" } });
+      fireEvent.change(screen.getByLabelText(/Batch Size \(Tamaño de Lote\)/), { target: { value: "2" } });
+      fireEvent.change(screen.getByLabelText(/Learning Rate \(Tasa de Aprendizaje\)/), { target: { value: "0.002" } });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText("Iniciar Entrenamiento Local (1 Modelo)"));
+    });
+    const postCall = vi.mocked(global.fetch).mock.calls.find(
+      (c) => c[0] === `${API_BASE_URL}/api/training/start`
+    );
+    expect(postCall).toBeDefined();
+    const payload = JSON.parse(String(postCall?.[1]?.body));
+    const expected = { architecture: "AudioCNN", epochs: 1, batch_size: 2, learning_rate: 0.002 };
+    expect(payload).toMatchObject(expected);
+    expect(payload.models).toEqual([{ ...expected, weight: 1 }]);
+  });
+
+  it.each([
+    ["Dúo", "2 Modelos (Dúo)", "Iniciar Pipeline Dúo Ensamble (2 Modelos)", 2],
+    ["Tríada", "3 Modelos (Tríada)", "Iniciar Pipeline Tri Ensamble (3 Modelos)", 3],
+  ] as const)("preserves custom per-model parameters and weights in %s requests", async (_name, topology, start, size) => {
+    await act(async () => { render(<TrainingView />); });
+    await act(async () => { fireEvent.click(screen.getByText(topology)); });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("Épocas del Modelo #1"), { target: { value: "7" } });
+      fireEvent.change(screen.getByLabelText("Learning Rate del Modelo #1"), { target: { value: "0.003" } });
+      fireEvent.change(screen.getByLabelText("Batch Size del Modelo #1"), { target: { value: "4" } });
+      fireEvent.change(screen.getByLabelText("Ponderación del Modelo #1"), { target: { value: size === 2 ? "75" : "50" } });
+      fireEvent.change(screen.getByLabelText("Ponderación del Modelo #2"), { target: { value: "25" } });
+      if (size === 3) fireEvent.change(screen.getByLabelText("Ponderación del Modelo #3"), { target: { value: "25" } });
+    });
+    await act(async () => { fireEvent.click(screen.getByText(size === 3 ? /Iniciar Pipeline.*Tri Ensamble \(3 Modelos\)/i : start)); });
+    const postCall = vi.mocked(global.fetch).mock.calls.find((c) => c[0] === `${API_BASE_URL}/api/training/start`);
+    expect(postCall).toBeDefined();
+    const payload = JSON.parse(String(postCall?.[1]?.body));
+    expect(payload.models).toHaveLength(size);
+    expect(payload.models[0]).toEqual({ architecture: "EfficientNet-B0", epochs: 7, learning_rate: 0.003, batch_size: 4, weight: size === 2 ? 0.75 : 0.5 });
+    expect(payload.models[1]).toMatchObject({ architecture: "ConvNeXt-Nano", epochs: 12, learning_rate: 0.0005, batch_size: 16, weight: 0.25 });
+    if (size === 3) expect(payload.models[2]).toMatchObject({ architecture: "ResNet-34d", epochs: 15, learning_rate: 0.0003, batch_size: 8, weight: 0.25 });
+  });
+
   it("renders the 1, 2, and 3 model topology options", async () => {
     await act(async () => {
       render(<TrainingView />);

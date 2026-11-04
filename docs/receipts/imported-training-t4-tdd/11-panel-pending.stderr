@@ -1,0 +1,6 @@
+No test files found, exiting with code 1
+
+filter: components/training/__tests__/ImportedTrainingPanel.test.tsx
+include: **/*.{test,spec}.?(c|m)[jt]s?(x)
+exclude:  **/node_modules/**, **/.git/**, tests/proxy-timeout.test.mjs
+

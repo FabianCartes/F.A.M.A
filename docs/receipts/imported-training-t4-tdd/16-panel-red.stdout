@@ -1,0 +1,10 @@
+
+ RUN  v5.0.2 /home/kevin/Work/fama/frontend
+
+ ❯ components/training/__tests__/ImportedTrainingPanel.test.tsx (0 test)
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  01:00:16
+   Duration  400ms (environment 99%, worker 1%)
+

@@ -1,0 +1,117 @@
+docs/receipts/imported-training-t4-browser-menu-build.stdout:13: trailing whitespace.
++  Generating static pages using 6 workers (1/5) 
+docs/receipts/imported-training-t4-browser-menu-build.stdout:14: trailing whitespace.
++  Generating static pages using 6 workers (2/5) 
+docs/receipts/imported-training-t4-browser-menu-build.stdout:15: trailing whitespace.
++  Generating static pages using 6 workers (3/5) 
+docs/receipts/imported-training-t4-browser-menu-build.stdout:26: new blank line at EOF.
+docs/receipts/imported-training-t4-browser-root-build.stdout:13: trailing whitespace.
++  Generating static pages using 6 workers (1/5) 
+docs/receipts/imported-training-t4-browser-root-build.stdout:14: trailing whitespace.
++  Generating static pages using 6 workers (2/5) 
+docs/receipts/imported-training-t4-browser-root-build.stdout:15: trailing whitespace.
++  Generating static pages using 6 workers (3/5) 
+docs/receipts/imported-training-t4-browser-root-build.stdout:26: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/03-client-red.stderr:22: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/03-client-red.stdout:10: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/04-client-green.stdout:9: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/08-integrity-red.stdout:17: trailing whitespace.
++tests/test_imported_training_preparation_api.py:122: 
+docs/receipts/imported-training-t4-tdd/08-integrity-red.stdout:18: trailing whitespace.
++_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+docs/receipts/imported-training-t4-tdd/08-integrity-red.stdout:22: trailing whitespace.
++_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+docs/receipts/imported-training-t4-tdd/11-panel-pending.stderr:6: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/11-panel-pending.stdout:3: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/12-view-pending.stderr:6: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/12-view-pending.stdout:3: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/13-legacy-view.stdout:9: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/14-legacy-lifecycle.stdout:9: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/15-legacy-clients.stdout:9: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/16-panel-red.stderr:23: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/16-panel-red.stdout:10: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/17-panel-green.stdout:9: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/18-view-red.stderr:169: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/18-view-red.stdout:11: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/19-view-green.stdout:9: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/20-hook-red.stderr:22: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/20-hook-red.stdout:12: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/24-panel-green.stdout:9: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/25-view-green.stdout:9: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/26-hook-green.stdout:9: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/27-client-green.stdout:9: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/28-legacy-view-green.stdout:9: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/29-panel-final.stdout:9: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/30-view-final.stdout:9: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/31-client-final.stdout:9: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/32-legacy-view-final.stdout:9: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/34-panel-final.stdout:9: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/35-frontend-suite.stdout:17: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/37-lint.stdout:10: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/38-build.stdout:18: trailing whitespace.
++  Generating static pages using 6 workers (1/5) 
+docs/receipts/imported-training-t4-tdd/38-build.stdout:19: trailing whitespace.
++  Generating static pages using 6 workers (2/5) 
+docs/receipts/imported-training-t4-tdd/38-build.stdout:20: trailing whitespace.
++  Generating static pages using 6 workers (3/5) 
+docs/receipts/imported-training-t4-tdd/38-build.stdout:31: new blank line at EOF.
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:8: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:9: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:17: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:18: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:26: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:27: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:35: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:36: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:44: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:45: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:53: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:54: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:62: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:63: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:71: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:72: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:80: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:81: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:89: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:90: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:98: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:99: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:107: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:108: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:116: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:117: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:125: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:126: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:134: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/imported-training-t4-tdd/39-backend-combined.stdout:135: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 

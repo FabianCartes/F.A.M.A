@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, apiSessionRevision, notifyUnauthorized } from "@/lib/api";
+import { useOptionalWebSession } from '@/components/auth/SessionBoundary';
+import ImportedTrainingPanel from '@/components/training/ImportedTrainingPanel';
+import type { ImportedSelection } from '@/lib/schemas/importedTraining';
 import type { ModelHistoryItem } from "@/lib/schemas/training";
 import { sumWeights, normalizeWeightsTo100 } from "@/lib/utils/ensembleWeights";
 import {
@@ -100,6 +103,14 @@ const ARCHITECTURE_PRESETS: Record<
 };
 
 export default function TrainingView() {
+  const privateStart = useRef<AbortController|null>(null);
+  const mounted = useRef(true);
+  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;privateStart.current?.abort();};},[]);
+  const session = useOptionalWebSession();
+  const [sourceType, setSourceType] = useState('legacy');
+  const [imported, setImported] = useState<ImportedSelection|null>(null);
+  const [terminalMessage, setTerminalMessage] = useState('');
+  const effectiveImported = sourceType === 'imported' && session ? imported : null;
   // 1. Estado de Configuración (IE_03)
   const [selectedDataset, setSelectedDataset] = useState<string>("AvesChilenas");
   const [learningRate, setLearningRate] = useState<string>("0.001");
@@ -794,11 +805,18 @@ export default function TrainingView() {
   // Sondeo de progreso en vivo mientras se entrena
   useEffect(() => {
     let timer: NodeJS.Timeout | null = null;
-
+    let cancelled = false;
+    const requestRevision = apiSessionRevision();
+    const controller = new AbortController();
     if (isTraining) {
       timer = setInterval(async () => {
         try {
-          const res = await fetch(`${API_BASE_URL}/api/training/progress`);
+          const res = await fetch(`${API_BASE_URL}/api/training/progress`, {credentials:'same-origin',signal:controller.signal});
+          if(cancelled || (sourceType==='imported' && requestRevision!==apiSessionRevision()))return;
+          if(sourceType==='imported' && !res.ok){
+            if(res.status===401)notifyUnauthorized(requestRevision);
+            setIsTraining(false);setIsStopping(false);setTerminalMessage('No se pudo consultar el recurso privado. Compruebe la sesión y vuelva a seleccionar la fuente.');return;
+          }
           if (res.ok) {
             const data = await res.json();
             setCurrentEpoch(data.epoch || 0);
@@ -820,7 +838,9 @@ export default function TrainingView() {
               });
             }
 
-            if (data.status === "completed" || data.status === "failed" || data.status === "stopped") {
+            if (data.status === "completed" || data.status === "failed" || data.status === "stopped" || data.status === 'checkpoint_persisted') {
+              if (data.status === 'checkpoint_persisted') setTerminalMessage('Checkpoint persistido; evaluación pendiente. No confirma publicación ni activación.');
+              if(timer)clearInterval(timer);
               setIsTraining(false);
               setIsStopping(false);
               fetchHistory();
@@ -834,12 +854,19 @@ export default function TrainingView() {
     }
 
     return () => {
+      cancelled=true;controller.abort();
       if (timer) clearInterval(timer);
     };
-  }, [isTraining, epochs, architecture, fetchHistory, fetchHardware]);
+  }, [isTraining, epochs, architecture, fetchHistory, fetchHardware, sourceType]);
 
   // Iniciar Entrenamiento (CU_INV_03)
   const handleStartTraining = async () => {
+    if (sourceType === 'imported' && (!effectiveImported || ensembleSize !== 1)) {
+      alert('Seleccione una preparación propia verificada; importados admite solo un modelo.'); return;
+    }
+    if(sourceType==='imported' && new URL(API_BASE_URL||'/',window.location.origin).origin!==window.location.origin){alert('Los recursos privados requieren API del mismo origen.');return;}
+    const requestRevision=apiSessionRevision();
+    setTerminalMessage('');
     const errors: Record<string, string> = {};
 
     // 1. Validar épocas (en modo individual)
@@ -1024,7 +1051,9 @@ export default function TrainingView() {
     setMetricsHistory([]);
     setCurrentEpoch(0);
 
-    const currentEnsemble = ensembleModels.slice(0, ensembleSize);
+    const currentEnsemble = ensembleSize === 1
+      ? [{ architecture, weight: 100, epochs, learning_rate: learningRate, batch_size: batchSize }]
+      : ensembleModels.slice(0, ensembleSize);
     const sumW = currentEnsemble.reduce((acc, m) => acc + (parseFloat(String(m.weight)) || 0), 0) || 100;
     const normalizedEnsemble = currentEnsemble.map((m) => ({
       architecture: m.architecture,
@@ -1062,8 +1091,11 @@ export default function TrainingView() {
     }
 
     try {
+      if(effectiveImported)privateStart.current=new AbortController();
       const res = await fetch(`${API_BASE_URL}/api/training/start`, {
+        ...(effectiveImported ? {signal:privateStart.current?.signal} : {}),
         method: "POST",
+        credentials: 'same-origin',
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           dataset_name: selectedDataset,
@@ -1092,6 +1124,14 @@ export default function TrainingView() {
             gem_p: typeof gemP === "number" ? gemP : parseFloat(String(gemP)) || 3.0,
             vad_threshold: typeof vadThreshold === "number" ? vadThreshold : parseFloat(String(vadThreshold)) || 0.0,
           },
+          ...(effectiveImported ? {
+            dataset_name: undefined, is_tri_model: undefined,
+            imported_dataset_id: effectiveImported.dataset_id,
+            snapshot_id: effectiveImported.snapshot_id,
+            imported_prepared_version: effectiveImported.prepared_version,
+            audio_config: effectiveImported.profile.audio,
+            windowing_config: {hop_seconds:effectiveImported.profile.window_hop_seconds,aggregation_mode:'max',gem_p:3.0,vad_threshold:0.0},
+          } : {}),
           regularization_config: {
             loss_type: lossType,
             focal_gamma: typeof focalGamma === "number" ? focalGamma : parseFloat(String(focalGamma)) || 2.0,
@@ -1103,15 +1143,18 @@ export default function TrainingView() {
       });
 
 
+      if(effectiveImported && requestRevision!==apiSessionRevision()){setIsTraining(false);return;}
       if (!res.ok) {
+        if(effectiveImported && res.status===401)notifyUnauthorized(requestRevision);
         const errData = await res.json();
-        throw new Error(errData.detail || `Error HTTP ${res.status}`);
+        throw new Error(effectiveImported ? (typeof errData.detail==='string' ? errData.detail : errData.detail?.message || 'Revise la preparación y los parámetros de entrenamiento.') : errData.detail || `Error HTTP ${res.status}`);
       }
 
       await res.json();
     } catch (err: unknown) {
+      if(!mounted.current || (effectiveImported && requestRevision!==apiSessionRevision()))return;
       setIsTraining(false);
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = effectiveImported && err instanceof TypeError ? 'Resultado incierto. Compruebe el estado del recurso antes de iniciar otra vez; no se reintentó.' : err instanceof Error ? err.message : String(err);
       alert(`No fue posible iniciar el entrenamiento: ${msg}`);
     }
   };
@@ -1172,6 +1215,20 @@ export default function TrainingView() {
       {/* ==================================================================== */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Tarjeta: Seleccionar Dataset */}
+        <div>
+          <label>Tipo de fuente<select value={sourceType} disabled={isTraining} onChange={e=>{setSourceType(e.target.value);setImported(null);}}><option value="legacy">Legacy</option><option value="imported" disabled={!session}>Importada (sesión requerida)</option></select></label>
+          {terminalMessage && <p role="status">{terminalMessage}</p>}
+          {sourceType==='imported' && session && <ImportedTrainingPanel key={session.id} disabled={isTraining} onSelect={selection=>{
+            setImported(selection);
+            if(!selection)return;
+            const p=selection.profile;const a=p.audio;
+            const aliases={audio_cnn:'AudioCNN',panns_cnn14:'PANNs-CNN14',efficientnet_b0:'EfficientNet-B0',convnext_nano:'ConvNeXt-Nano',resnet34d:'ResNet-34d'};
+            setArchitecture(aliases[p.architecture]);setEnsembleSize(1);setDomainPreset('custom');
+            setTargetSr(a.target_sr);setDurationSeconds(a.duration_seconds);setFMin(a.f_min);setFMax(a.f_max);
+            setNMels(a.n_mels);setNFft(a.n_fft);setHopLength(a.hop_length);setHopSeconds(p.window_hop_seconds);
+            setAggregationMode('max');setGemP(3);setVadThreshold(0);
+          }}/>}
+        </div>
         <div data-testid="dataset-selection-card" className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-3 shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs text-gray-300 font-semibold flex items-center gap-1.5">
@@ -1194,7 +1251,7 @@ export default function TrainingView() {
             <select
               value={selectedDataset}
               onChange={(e) => setSelectedDataset(e.target.value)}
-              disabled={isTraining}
+              disabled={isTraining || sourceType === 'imported'}
               className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-emerald-600 font-mono"
             >
               {datasets.length === 0 ? (
@@ -1268,7 +1325,7 @@ export default function TrainingView() {
       {/* ==================================================================== */}
       {/* 2.5. PANEL DE FÍSICA DE AUDIO Y ADAPTACIÓN AL DOMINIO */}
       {/* ==================================================================== */}
-      <div className="bg-[#16171b] border border-[#23252e] rounded-xl shadow-sm transition-all">
+      <fieldset disabled={Boolean(effectiveImported)} className="bg-[#16171b] border border-[#23252e] rounded-xl shadow-sm transition-all">
         {/* Encabezado colapsable */}
         <button
           type="button"
@@ -1729,7 +1786,7 @@ export default function TrainingView() {
             </div>
           </div>
         )}
-      </div>
+      </fieldset>
 
       {/* ==================================================================== */}
       {/* 3. CONFIGURACIÓN DE ENTRENAMIENTO */}
@@ -1779,7 +1836,7 @@ export default function TrainingView() {
             </button>
             <button
               type="button"
-              disabled={isTraining}
+              disabled={isTraining || sourceType === 'imported'}
               onClick={() => handleEnsembleSizeChange(2)}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
                 ensembleSize === 2
@@ -1791,7 +1848,7 @@ export default function TrainingView() {
             </button>
             <button
               type="button"
-              disabled={isTraining}
+              disabled={isTraining || sourceType === 'imported'}
               onClick={() => handleEnsembleSizeChange(3)}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
                 ensembleSize === 3
@@ -1987,7 +2044,7 @@ export default function TrainingView() {
                 id="architecture-select"
                 data-testid="architecture-select"
                 value={architecture}
-                disabled={isTraining}
+                disabled={isTraining || Boolean(effectiveImported)}
                 onChange={(e) => handleArchitectureChange(e.target.value)}
                 className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-blue-500 font-mono disabled:opacity-60"
               >

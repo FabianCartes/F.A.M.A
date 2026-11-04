@@ -147,7 +147,7 @@ describe("useTrainingLifecycle (ODD Lifecycle Hook Tests)", () => {
     expect(result.current.logs[0].message).toBe("Epoch 1 start");
   });
 
-  it("handles training completion gracefully and refreshes history", async () => {
+  it.each(['completed', 'checkpoint_persisted'])("handles terminal %s without continued progress polling", async (status) => {
     vi.mocked(trainingApi.startTraining).mockResolvedValue({
       status: "started",
       job_id: "test_job_2",
@@ -155,7 +155,7 @@ describe("useTrainingLifecycle (ODD Lifecycle Hook Tests)", () => {
     });
 
     vi.mocked(trainingApi.getProgress).mockResolvedValue({
-      status: "completed",
+      status,
       job_id: "test_job_2",
       is_tri_model: false,
       current_model_index: 1,
@@ -192,6 +192,7 @@ describe("useTrainingLifecycle (ODD Lifecycle Hook Tests)", () => {
     });
 
     expect(result.current.isTraining).toBe(false);
+    if(status==='checkpoint_persisted') expect(result.current.terminalMessage).toMatch(/evaluación pendiente/);
     expect(trainingApi.getHistory).toHaveBeenCalled();
   });
 });

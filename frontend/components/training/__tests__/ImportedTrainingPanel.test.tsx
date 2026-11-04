@@ -1,0 +1,61 @@
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { afterEach, expect, it, vi } from 'vitest';
+import ImportedTrainingPanel from '../ImportedTrainingPanel';
+const profile = {architecture:'audio_cnn',channels:1,preprocessing:'mono_mel',windowing:'energy_peak_pad',window_hop_seconds:0.5,audio:{target_sr:8000,duration_seconds:1,n_mels:32,n_fft:256,hop_length:64,f_min:0,f_max:4000,use_gpu_frontend:false}};
+afterEach(()=>{cleanup();vi.unstubAllGlobals();});
+it('selects an existing prepared identity without creating or starting anything', async()=>{
+ const transport=vi.fn().mockResolvedValue(new Response(JSON.stringify({datasets:[{source_type:'imported',id:'arbitrary',name:'Arbitrary WAV',eligible:true,reasons:[],preparations:[{snapshot_id:'snapshot',prepared_version:'version',eligible:true,reasons:[],warnings:[{code:'low_independent_groups'}],profile}]}]})));
+ vi.stubGlobal('fetch',transport); const select=vi.fn();
+ render(<ImportedTrainingPanel onSelect={select}/>);
+ await screen.findByText('Arbitrary WAV');
+ fireEvent.change(screen.getByLabelText('Colección importada'),{target:{value:'arbitrary'}});
+ fireEvent.change(screen.getByLabelText('Preparación existente'),{target:{value:'0'}});
+ await waitFor(()=>expect(select).toHaveBeenLastCalledWith(expect.objectContaining({dataset_id:'arbitrary',snapshot_id:'snapshot',prepared_version:'version'})));
+ expect(transport).toHaveBeenCalledTimes(1);
+ expect(screen.getByText(/low_independent_groups/)).toBeTruthy();
+});
+it('prepares only after explicit annotation and keeps pending distinct from ready',async()=>{
+ const requests:string[]=[];let finish!:(response:Response)=>void;
+ const transport=vi.fn(async(input:RequestInfo|URL)=>{
+ const url=String(input);requests.push(url);
+ let data:unknown={};
+ if(url.includes('include_imported'))data={datasets:[{source_type:'imported',id:'arbitrary',name:'Arbitrary WAV',eligible:false,reasons:['preparation_required'],preparations:[]}]};
+ else if(url.endsWith('/members'))data={snapshot_id:'snapshot',members:[{member_id:'member',class_name:'ants',original_path:'ants/a.wav',size_bytes:44,sha256:'hash'}]};
+ else if(url.endsWith('/preparations'))return new Promise<Response>(resolve=>{finish=resolve;});
+ else data={id:'snapshot',dataset_id:'arbitrary',state:'ready',name:'Arbitrary WAV',file_count:1};
+ return new Response(JSON.stringify(data));});vi.stubGlobal('fetch',transport);
+ const select=vi.fn();render(<ImportedTrainingPanel onSelect={select}/>);
+ await screen.findByText('Arbitrary WAV');fireEvent.change(screen.getByLabelText('Colección importada'),{target:{value:'arbitrary'}});
+ expect(requests).toHaveLength(1);fireEvent.click(screen.getByText('Crear snapshot y obtener plantilla'));
+ await waitFor(()=>expect((screen.getByLabelText('Mapa explícito JSON') as HTMLTextAreaElement).value).toContain('member'));
+ const template=JSON.parse((screen.getByLabelText('Mapa explícito JSON') as HTMLTextAreaElement).value);
+ expect(template).toEqual([{member_id:'member',recording_id:'',group_id:''}]);
+ fireEvent.change(screen.getByLabelText('Mapa explícito JSON'),{target:{value:JSON.stringify([{member_id:'member',recording_id:'recording',group_id:'group'}])}});
+ fireEvent.change(screen.getByLabelText('Procedencia JSON'),{target:{value:'{"source":"curated annotations"}'}});
+ fireEvent.change(screen.getByLabelText('Perfil explícito JSON'),{target:{value:JSON.stringify(profile)}});
+ fireEvent.click(screen.getByText('Preparar snapshot'));
+ await screen.findByText(/Solicitud en curso/);
+ expect(select).not.toHaveBeenCalledWith(expect.objectContaining({prepared_version:expect.any(String)}));
+ finish(new Response(JSON.stringify({snapshot_id:'snapshot',version_id:'version',state:'ready',profile,class_to_index:{ants:0},warnings:[{code:'low_independent_groups'}],seed:42})));
+ await screen.findByText(/Preparado para entrenar/);
+ expect(select).toHaveBeenLastCalledWith(expect.objectContaining({prepared_version:'version'}));
+ expect(requests.filter(p=>p.endsWith('/preparations'))).toHaveLength(1);
+ expect(requests.some(p=>p.endsWith('/start'))).toBe(false);
+});
+it('ignores a late snapshot response after changing source and aborts on unmount',async()=>{
+ let finish!:(response:Response)=>void;let signal:AbortSignal|undefined;
+ const rows=['first','second'].map(id=>({source_type:'imported',id,name:id,eligible:false,reasons:['preparation_required'],preparations:[]}));
+ vi.stubGlobal('fetch',vi.fn((input:RequestInfo|URL,options?:RequestInit)=>{
+ if(String(input).includes('include_imported'))return Promise.resolve(new Response(JSON.stringify({datasets:rows})));
+ signal=options?.signal as AbortSignal;return new Promise<Response>(resolve=>{finish=resolve;});
+ }));
+ const select=vi.fn();const view=render(<ImportedTrainingPanel onSelect={select}/>);
+ await screen.findByText('first');fireEvent.change(screen.getByLabelText('Colección importada'),{target:{value:'first'}});
+ fireEvent.click(screen.getByText('Crear snapshot y obtener plantilla'));
+ fireEvent.change(screen.getByLabelText('Colección importada'),{target:{value:'second'}});
+ expect(signal?.aborted).toBe(true);
+ finish(new Response(JSON.stringify({id:'old',dataset_id:'first',name:'first',file_count:1,state:'ready'})));
+ await waitFor(()=>expect(select).toHaveBeenLastCalledWith(null));
+ expect((screen.getByLabelText('Mapa explícito JSON') as HTMLTextAreaElement).value).toBe('');
+ view.unmount();expect(signal?.aborted).toBe(true);
+});

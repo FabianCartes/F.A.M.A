@@ -1,0 +1,25 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-klvzz800
+F
+=================================== FAILURES ===================================
+_________ test_oversized_json_is_rejected_before_snapshot_publication __________
+
+bridge = (<starlette.testclient.TestClient object at 0x7fa81950ec10>, <function bridge.<locals>.<lambda> at 0x7fa818a97320>, <training.imported_dataset_preparation.ImportedDatasetPreparation object at 0x7fa8194dcad0>)
+cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7fa81a6ea660>, {'id': 'eb7b888313e444af95e8460167ef885...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7fa81a83e660>, '8ff85cb27b3b49668b81e662a2694375')
+
+    def test_oversized_json_is_rejected_before_snapshot_publication(bridge, cohort):
+        client, headers, preparations = bridge
+        before = set(preparations.snapshots.root.iterdir())
+        response = client.post(
+            '/api/training/imported/snapshots', headers={**headers(1), 'Content-Type': 'application/json'},
+            content=b' ' * (8 * 1024 * 1024 + 1))
+>       assert response.status_code == 413, response.text
+E       AssertionError: {"detail":[{"type":"json_invalid","loc":["body",8388609],"msg":"JSON decode error","input":{},"ctx":{"error":"Expecting value"}}]}
+E       assert 422 == 413
+E        +  where 422 = <Response [422 Unprocessable Content]>.status_code
+
+tests/test_imported_training_preparation_api.py:92: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_imported_training_preparation_api.py::test_oversized_json_is_rejected_before_snapshot_publication
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 3 deselected in 0.73s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": ["tests/test_imported_training_preparation_api.py::test_completed_snapshot_members_preparation_roundtrip", "tests/test_imported_training_preparation_api.py::test_auth_foreign_and_invalid_mapping_do_not_publish", "tests/test_imported_training_preparation_api.py::test_schema_missing_is_read_only_before_snapshot_creation"], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_imported_training_preparation_api.py::test_oversized_json_is_rejected_before_snapshot_publication", "phase": "call", "outcome": "failed", "duration_seconds": 0.021}], "nonpassing_reports": [{"nodeid": "tests/test_imported_training_preparation_api.py::test_oversized_json_is_rejected_before_snapshot_publication", "phase": "call", "outcome": "failed", "duration_seconds": 0.021}], "sqlite_memory_connection_count": 1, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

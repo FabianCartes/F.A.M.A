@@ -1,0 +1,169 @@
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  components/views/__tests__/ImportedTrainingView.test.tsx > starts only the selected imported profile with visible individual parameters
+TestingLibraryElementError: Unable to find a label with the text of: Tipo de fuente
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"session-workspace"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33maria-label[39m=[32m"Sesión actual"[39m
+        [33mclass[39m=[32m"session-toolbar"[39m
+      [36m>[39m
+        [36m<span>[39m
+          [0mOwner[0m
+        [36m</span>[39m
+        [36m<button>[39m
+          [0mCerrar sesión[0m
+        [36m</button>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"session-content"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"space-y-5"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-col sm:flex-row sm:items-center justify-between gap-3"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-3"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-indigo-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400 shadow-inner"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33mclass[39m=[32m"w-5 h-5"[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"[39m
+                    [33mstroke-linecap[39m=[32m"round"[39m
+                    [33mstroke-linejoin[39m=[32m"round"[39m
+                    [33mstroke-width[39m=[32m"1.8"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+              [36m</div>[39m
+              [36m<div>[39m
+                [36m<h1[39m
+                  [33mclass[39m=[32m"text-xl font-bold text-white tracking-tight font-heading"[39m
+                [36m>[39m
+                  [0mEntrenamiento y Métricas[0m
+                [36m</h1>[39m
+                [36m<p[39m
+                  [33mclass[39m=[32m"text-xs text-gray-400"[39m
+                [36m>[39m
+                  [0mModelado acústico iterativo, ajuste de hiperparámetros y telemetría de cómputo[0m
+                [36m</p>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-950/70 border border-blue-700/60 text-blue-300 font-mono text-xs shadow-sm"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"w-2 h-2 rounded-full bg-blue-400"[39m
+                [36m/>[39m
+                [0mHost: [0m
+                [0mNodo de Cómputo CPU[0m
+              [36m</span>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"grid grid-cols-1 md:grid-cols-2 gap-4"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-3 shadow-sm"[39m
+              [33mdata-testid[39m=[32m"dataset-selection-card"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex items-center justify-between"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"text-xs text-gray-300 font-semibold flex items-center gap-1.5"[39m
+                [36m>[39m
+                  [36m<svg[39m
+                    [33mclass[39m=[32m"w-4 h-4 text-emerald-400"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [36m>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"[39m
+                      [33mstroke-linecap[39m=[32m"round"[39m
+                      [33mstroke-linejoin[39m=[32m"round"[39m
+                      [33mstroke-width[39m=[32m"2"[39m
+                    [36m/>[39m
+                  [36m</svg>[39m
+                  [0mSeleccionar Conjunto de Datos[0m
+                [36m</span>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"text-[10px] text-gray-400 font-mono px-2 py-0.5 rounded bg-[#111215] border border-[#23252e]"[39m
+                [36m>[39m
+                  [0m1,211[0m
+                  [0m audios [0m
+                  [0m· 340.5 MB[0m
+                [36m</span>[39m
+              [36m</div>[39m
+              [36m<div>[39m
+                [36m<label[39m
+                  [33mclass[39m=[32m"text-[11px] text-gray-400 block mb-1.5 font-medium"[39m
+                [36m>[39m
+                  [0mDataset para Entrenamiento[0m
+                [36m</label>[39m
+                [36m<select[39m
+                  [33mclass[39m=[32m"w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-emerald-600 font-mono"[39m
+                [36m>[39m
+                  [36m<option[39m
+                    [33mvalue[39m=[32m"AvesChilenas"[39m
+                  [36m>[39m
+                    [0mAvesChilenas (1211 audios)[0m
+                  [36m</option>[39m
+                [36m</select>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-gray-400 pt-1 border-t border-[#23252e]/60"[39m
+              [36m>[39m
+                [36m<span>[39m
+                  [0mClases objetivo: [0m
+                  [36m<strong[39m
+                    [33mclass[39m=[32m"text-gray-200"[39m
+                  [36m>[39m
+                    [0m15[0m
+                    [0m clases detectadas[0m
+                  [36m</strong>[39m
+                [36m</span>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"text-cyan-400 font-mono text-[10px] bg-cyan-950/40 border border-cyan-800/40 px-2 py-0.5 rounded inline-flex items-center gap-1 self-start sm:self-auto"[39m
+                [36m>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"text-gray-400"[39m
+                  [36m>[39m
+                    [0mArquitectura:[0m
+                  [36m</span>[39m
+                  [0m [0m
+                  [0mEfficientNet-B0[0m
+                [36m</span>[39m
+          ...
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ getAllByLabelText node_modules/@testing-library/dom/dist/queries/label-text.js:111:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ components/views/__tests__/ImportedTrainingView.test.tsx:18:26
+     16|  render(<SessionBoundary><TrainingView/></SessionBoundary>);
+     17|  await screen.findByText('Owner');
+     18|  fireEvent.change(screen.getByLabelText('Tipo de fuente'),{target:{val…
+       |                          ^
+     19|  await screen.findByText('Arbitrary WAV');fireEvent.change(screen.getB…
+     20|  fireEvent.change(screen.getByLabelText('Preparación existente'),{targ…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

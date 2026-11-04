@@ -1,0 +1,22 @@
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  lib/api/__tests__/importedTrainingApi.test.ts [ lib/api/__tests__/importedTrainingApi.test.ts ]
+Error: Failed to resolve import "../importedTrainingApi" from "lib/api/__tests__/importedTrainingApi.test.ts". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /home/kevin/Work/fama/frontend/lib/api/__tests__/importedTrainingApi.test.ts:2:36
+  1  |  import { afterEach, describe, expect, it, vi } from "vitest";
+  2  |  import { importedTrainingApi } from "../importedTrainingApi";
+     |                                       ^
+  3  |  afterEach(() => vi.unstubAllGlobals());
+  4  |  describe("imported training HTTP client", () => {
+ ❯ TransformPluginContext._formatLog node_modules/vite/dist/node/chunks/node.js:8736:39
+ ❯ TransformPluginContext.error node_modules/vite/dist/node/chunks/node.js:8733:14
+ ❯ normalizeUrl node_modules/vite/dist/node/chunks/node.js:26423:18
+ ❯ node_modules/vite/dist/node/chunks/node.js:26493:30
+ ❯ TransformPluginContext.transform node_modules/vite/dist/node/chunks/node.js:26459:4
+ ❯ EnvironmentPluginContainer.transform node_modules/vite/dist/node/chunks/node.js:8515:14
+ ❯ loadAndTransform node_modules/vite/dist/node/chunks/node.js:19998:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

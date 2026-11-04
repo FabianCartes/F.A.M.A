@@ -1,0 +1,30 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-vw85s0do
+F
+=================================== FAILURES ===================================
+____________ test_malformed_snapshot_foreign_key_fails_before_write ____________
+
+bridge = (<starlette.testclient.TestClient object at 0x7f5e993d1810>, <function bridge.<locals>.<lambda> at 0x7f5e4c5c43b0>, <training.imported_dataset_preparation.ImportedDatasetPreparation object at 0x7f5e4c7a5400>)
+cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7f5e4db05be0>, {'id': '13b82f6481984a5f851aec3cfbdbee5...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7f5e4db05fd0>, '737e30b6a9c94595abcea9a5b3d6a0c2')
+
+    def test_malformed_snapshot_foreign_key_fails_before_write(bridge, cohort):
+        from sqlalchemy import Table, Column, MetaData
+        from app.models.training_snapshot import SnapshotMember
+        client, headers, preparations=bridge
+        engine=cohort[0].sessions.kw['bind']
+        table=SnapshotMember.__table__
+        table.drop(engine)
+        malformed=Table(table.name,MetaData(),*[Column(c.name,c.type,primary_key=c.primary_key,nullable=c.nullable) for c in table.columns])
+        malformed.create(engine)
+        before=set(preparations.snapshots.root.iterdir())
+        response=client.post('/api/training/imported/snapshots',headers=headers(1),json={'dataset_id':cohort[5]})
+>       assert response.status_code == 503, response.text
+E       AssertionError: {"id":"cb61ad554bb64316868090817d894632","dataset_id":"737e30b6a9c94595abcea9a5b3d6a0c2","dataset_revision":1,"name":"Birds","description":"Synthetic","file_count":6,"total_size_bytes":1224,"manifest_sha256":"7b14a3e4d7c7eea0be8a856646316a272b60d7910c10b803f1fcbf010f163110","classes":["ants","zebra"],"state":"ready"}
+E       assert 201 == 503
+E        +  where 201 = <Response [201 Created]>.status_code
+
+tests/test_imported_training_preparation_api.py:169: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_imported_training_preparation_api.py::test_malformed_snapshot_foreign_key_fails_before_write
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 9 deselected in 0.75s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": ["tests/test_imported_training_preparation_api.py::test_completed_snapshot_members_preparation_roundtrip", "tests/test_imported_training_preparation_api.py::test_auth_foreign_and_invalid_mapping_do_not_publish", "tests/test_imported_training_preparation_api.py::test_non_real_or_inactive_principal_cannot_create_snapshot[inactive]", "tests/test_imported_training_preparation_api.py::test_non_real_or_inactive_principal_cannot_create_snapshot[negative]", "tests/test_imported_training_preparation_api.py::test_non_real_or_inactive_principal_cannot_create_snapshot[invalid]", "tests/test_imported_training_preparation_api.py::test_oversized_json_is_rejected_before_snapshot_publication", "tests/test_imported_training_preparation_api.py::test_altered_snapshot_audio_never_reads_back_ready_preparation", "tests/test_imported_training_preparation_api.py::test_cookie_origin_and_conflicting_bearer_on_preparation_routes", "tests/test_imported_training_preparation_api.py::test_schema_missing_is_read_only_before_snapshot_creation"], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_imported_training_preparation_api.py::test_malformed_snapshot_foreign_key_fails_before_write", "phase": "call", "outcome": "failed", "duration_seconds": 0.025}], "nonpassing_reports": [{"nodeid": "tests/test_imported_training_preparation_api.py::test_malformed_snapshot_foreign_key_fails_before_write", "phase": "call", "outcome": "failed", "duration_seconds": 0.025}], "sqlite_memory_connection_count": 1, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

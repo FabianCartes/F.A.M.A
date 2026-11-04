@@ -1,0 +1,17 @@
+
+> frontend@0.1.0 test
+> vitest run
+
+
+ RUN  v5.0.2 /home/kevin/Work/fama/frontend
+
+
+ Test Files  42 passed (42)
+      Tests  413 passed (413)
+   Start at  01:13:50
+   Duration  12.68s (tests 57%, environment 33%, import 6%, transform 4%)
+
+Environment  jsdom was created 42 times · 41.57s total, 33% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+

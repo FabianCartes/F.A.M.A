@@ -1,0 +1,23 @@
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  components/training/__tests__/ImportedTrainingPanel.test.tsx [ components/training/__tests__/ImportedTrainingPanel.test.tsx ]
+Error: Failed to resolve import "../ImportedTrainingPanel" from "components/training/__tests__/ImportedTrainingPanel.test.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /home/kevin/Work/fama/frontend/components/training/__tests__/ImportedTrainingPanel.test.tsx:3:34
+  1  |  import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
+  2  |  import { afterEach, expect, it, vi } from "vitest";
+  3  |  import ImportedTrainingPanel from "../ImportedTrainingPanel";
+     |                                     ^
+  4  |  var _jsxFileName = "/home/kevin/Work/fama/frontend/components/training/__tests__/ImportedTrainingPanel.test.tsx";
+  5  |  import { jsxDEV as _jsxDEV } from "react/jsx-dev-runtime";
+ ❯ TransformPluginContext._formatLog node_modules/vite/dist/node/chunks/node.js:8736:39
+ ❯ TransformPluginContext.error node_modules/vite/dist/node/chunks/node.js:8733:14
+ ❯ normalizeUrl node_modules/vite/dist/node/chunks/node.js:26423:18
+ ❯ node_modules/vite/dist/node/chunks/node.js:26493:30
+ ❯ TransformPluginContext.transform node_modules/vite/dist/node/chunks/node.js:26459:4
+ ❯ EnvironmentPluginContainer.transform node_modules/vite/dist/node/chunks/node.js:8515:14
+ ❯ loadAndTransform node_modules/vite/dist/node/chunks/node.js:19998:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

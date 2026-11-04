@@ -1,0 +1,1321 @@
+{
+  "base": "fd0d25f1ee8e44ef59ce5ef9c0a4d56481aa828e",
+  "scope": "20 legacy training HTTP operations plus Bearer authentication and import contracts",
+  "normalization": "volatile timestamps, elapsed time, generated identities and JWT only; compare public outputs including relevant headers, stderr and exit",
+  "runs": {
+    "base": {
+      "command": [
+        "/home/kevin/Work/fama/.venv/bin/python",
+        "tests/run_isolated_training_checks.py",
+        "tests/test_auth_differential_probe.py"
+      ],
+      "exit": 0,
+      "public_outputs": [
+        {
+          "responses": [
+            [
+              "get",
+              "datasets?include_imported=false",
+              200,
+              {
+                "datasets": [
+                  {
+                    "audio_count": 0,
+                    "class_count": 1,
+                    "classes": [
+                      "fixture"
+                    ],
+                    "db_id": 1,
+                    "estado": "sincronizado",
+                    "id": "AvesChilenas",
+                    "name": "AvesChilenas (0 audios)",
+                    "size_mb": 0.0
+                  }
+                ]
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "history?include_imported=false",
+              200,
+              {
+                "history": []
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "progress?include_imported=false",
+              200,
+              {
+                "current_architecture": "",
+                "current_model_index": 1,
+                "elapsed_seconds": "<volatile>",
+                "epoch": 0,
+                "error_message": null,
+                "is_tri_model": false,
+                "job_id": null,
+                "logs": [],
+                "metrics_history": [],
+                "models_config": [],
+                "seed": 42,
+                "status": "idle",
+                "total_epochs": 0,
+                "total_models": 1,
+                "train_acc": 0.0,
+                "train_loss": 0.0,
+                "val_acc": 0.0,
+                "val_loss": 0.0
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "post",
+              "stop",
+              200,
+              {
+                "message": "No hay ning\u00fan entrenamiento activo para detener.",
+                "status": "idle"
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "post",
+              "models/999/activate",
+              200,
+              {
+                "error": "Modelo inexistente",
+                "success": false
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "post",
+              "start",
+              200,
+              {
+                "job_id": "fama_efficientnet_b0_<identity>",
+                "message": "Entrenamiento de EfficientNet-B0 iniciado para 10 \u00e9pocas.",
+                "preparation": {
+                  "historical": false,
+                  "version_id": "<identity>"
+                },
+                "status": "started"
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "progress",
+              200,
+              {
+                "current_architecture": "EfficientNet-B0",
+                "current_model_index": 1,
+                "elapsed_seconds": "<volatile>",
+                "epoch": 0,
+                "error_message": null,
+                "is_tri_model": false,
+                "job_id": "fama_efficientnet_b0_<identity>",
+                "logs": [],
+                "metrics_history": [],
+                "models_config": [
+                  {
+                    "architecture": "EfficientNet-B0",
+                    "weight": 1.0
+                  }
+                ],
+                "seed": 42,
+                "status": "training",
+                "total_epochs": 10,
+                "total_models": 1,
+                "train_acc": 0.0,
+                "train_loss": 0.0,
+                "val_acc": 0.0,
+                "val_loss": 0.0
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "history?include_imported=false",
+              200,
+              {
+                "history": []
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "post",
+              "stop",
+              200,
+              {
+                "message": "Detenci\u00f3n solicitada. El proceso finalizar\u00e1 de forma segura.",
+                "status": "stopping"
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "progress",
+              200,
+              {
+                "current_architecture": "EfficientNet-B0",
+                "current_model_index": 1,
+                "elapsed_seconds": "<volatile>",
+                "epoch": 0,
+                "error_message": null,
+                "is_tri_model": false,
+                "job_id": "fama_efficientnet_b0_<identity>",
+                "logs": [],
+                "metrics_history": [],
+                "models_config": [
+                  {
+                    "architecture": "EfficientNet-B0",
+                    "weight": 1.0
+                  }
+                ],
+                "seed": 42,
+                "status": "training",
+                "total_epochs": 10,
+                "total_models": 1,
+                "train_acc": 0.0,
+                "train_loss": 0.0,
+                "val_acc": 0.0,
+                "val_loss": 0.0
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ]
+          ],
+          "scope": "AvesChilenas"
+        },
+        {
+          "responses": [
+            [
+              "get",
+              "datasets?include_imported=false",
+              200,
+              {
+                "datasets": [
+                  {
+                    "audio_count": 0,
+                    "class_count": 1,
+                    "classes": [
+                      "fixture"
+                    ],
+                    "db_id": 1,
+                    "estado": "sincronizado",
+                    "id": "engine_diagnostics",
+                    "name": "engine_diagnostics (0 audios)",
+                    "size_mb": 0.0
+                  }
+                ]
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "history?include_imported=false",
+              200,
+              {
+                "history": []
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "progress?include_imported=false",
+              200,
+              {
+                "current_architecture": "",
+                "current_model_index": 1,
+                "elapsed_seconds": "<volatile>",
+                "epoch": 0,
+                "error_message": null,
+                "is_tri_model": false,
+                "job_id": null,
+                "logs": [],
+                "metrics_history": [],
+                "models_config": [],
+                "seed": 42,
+                "status": "idle",
+                "total_epochs": 0,
+                "total_models": 1,
+                "train_acc": 0.0,
+                "train_loss": 0.0,
+                "val_acc": 0.0,
+                "val_loss": 0.0
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "post",
+              "stop",
+              200,
+              {
+                "message": "No hay ning\u00fan entrenamiento activo para detener.",
+                "status": "idle"
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "post",
+              "models/999/activate",
+              200,
+              {
+                "error": "Modelo inexistente",
+                "success": false
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "post",
+              "start",
+              200,
+              {
+                "job_id": "fama_efficientnet_b0_<identity>",
+                "message": "Entrenamiento de EfficientNet-B0 iniciado para 10 \u00e9pocas.",
+                "preparation": {
+                  "historical": false,
+                  "version_id": "<identity>"
+                },
+                "status": "started"
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "progress",
+              200,
+              {
+                "current_architecture": "EfficientNet-B0",
+                "current_model_index": 1,
+                "elapsed_seconds": "<volatile>",
+                "epoch": 0,
+                "error_message": null,
+                "is_tri_model": false,
+                "job_id": "fama_efficientnet_b0_<identity>",
+                "logs": [],
+                "metrics_history": [],
+                "models_config": [
+                  {
+                    "architecture": "EfficientNet-B0",
+                    "weight": 1.0
+                  }
+                ],
+                "seed": 42,
+                "status": "training",
+                "total_epochs": 10,
+                "total_models": 1,
+                "train_acc": 0.0,
+                "train_loss": 0.0,
+                "val_acc": 0.0,
+                "val_loss": 0.0
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "history?include_imported=false",
+              200,
+              {
+                "history": []
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "post",
+              "stop",
+              200,
+              {
+                "message": "Detenci\u00f3n solicitada. El proceso finalizar\u00e1 de forma segura.",
+                "status": "stopping"
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "progress",
+              200,
+              {
+                "current_architecture": "EfficientNet-B0",
+                "current_model_index": 1,
+                "elapsed_seconds": "<volatile>",
+                "epoch": 0,
+                "error_message": null,
+                "is_tri_model": false,
+                "job_id": "fama_efficientnet_b0_<identity>",
+                "logs": [],
+                "metrics_history": [],
+                "models_config": [
+                  {
+                    "architecture": "EfficientNet-B0",
+                    "weight": 1.0
+                  }
+                ],
+                "seed": 42,
+                "status": "training",
+                "total_epochs": 10,
+                "total_models": 1,
+                "train_acc": 0.0,
+                "train_loss": 0.0,
+                "val_acc": 0.0,
+                "val_loss": 0.0
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ]
+          ],
+          "scope": "engine_diagnostics"
+        },
+        {
+          "responses": [
+            [
+              "post",
+              "register",
+              201,
+              {
+                "activo": true,
+                "creado_en": "<volatile>",
+                "email": "differential@example.test",
+                "id": 1,
+                "nombre_completo": "Synthetic differential",
+                "rol": "investigador",
+                "ultimo_acceso": "<volatile>"
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "post",
+              "login",
+              200,
+              {
+                "access_token": "<volatile>",
+                "token_type": "bearer",
+                "user": {
+                  "activo": true,
+                  "creado_en": "<volatile>",
+                  "email": "differential@example.test",
+                  "id": 1,
+                  "nombre_completo": "Synthetic differential",
+                  "rol": "investigador",
+                  "ultimo_acceso": "<volatile>"
+                }
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "me",
+              200,
+              {
+                "activo": true,
+                "creado_en": "<volatile>",
+                "email": "differential@example.test",
+                "id": 1,
+                "nombre_completo": "Synthetic differential",
+                "rol": "investigador",
+                "ultimo_acceso": "<volatile>"
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "me-invalid",
+              401,
+              {
+                "detail": "Token inv\u00e1lido o expirado: Token inv\u00e1lido: formato no corresponde a JWT"
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": "Bearer"
+              }
+            ]
+          ],
+          "scope": "bearer-auth"
+        },
+        {
+          "responses": [
+            [
+              "post",
+              "create",
+              200,
+              {
+                "added_count": 0,
+                "dataset_id": null,
+                "details": {
+                  "classes": "/api/ingestion/imports/<identity>/classes",
+                  "files": "/api/ingestion/imports/<identity>/files",
+                  "issues": "/api/ingestion/imports/<identity>/issues"
+                },
+                "error": null,
+                "execution": null,
+                "id": "<identity>",
+                "issue_sample": [],
+                "preview": {
+                  "class_count": 0,
+                  "error_count": 0,
+                  "file_count": 0,
+                  "synced_count": 0,
+                  "total_size_bytes": 0,
+                  "warning_count": 0
+                },
+                "preview_token": null,
+                "status": "receiving",
+                "sync_status": "pending"
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "job",
+              200,
+              {
+                "added_count": 0,
+                "dataset_id": null,
+                "details": {
+                  "classes": "/api/ingestion/imports/<identity>/classes",
+                  "files": "/api/ingestion/imports/<identity>/files",
+                  "issues": "/api/ingestion/imports/<identity>/issues"
+                },
+                "error": null,
+                "execution": null,
+                "id": "<identity>",
+                "issue_sample": [],
+                "preview": {
+                  "class_count": 0,
+                  "error_count": 0,
+                  "file_count": 0,
+                  "synced_count": 0,
+                  "total_size_bytes": 0,
+                  "warning_count": 0
+                },
+                "preview_token": null,
+                "status": "receiving",
+                "sync_status": "pending"
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "datasets",
+              200,
+              {
+                "datasets": [],
+                "next_cursor": null,
+                "snapshot": "catalog",
+                "total": 0
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "datasets-invalid",
+              401,
+              {
+                "detail": "Token inv\u00e1lido o expirado: Token inv\u00e1lido: formato no corresponde a JWT"
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": "Bearer"
+              }
+            ]
+          ],
+          "scope": "bearer-import"
+        }
+      ],
+      "stderr": ""
+    },
+    "candidate": {
+      "command": [
+        "/home/kevin/Work/fama/.venv/bin/python",
+        "tests/run_isolated_training_checks.py",
+        "tests/test_auth_differential_probe.py"
+      ],
+      "exit": 0,
+      "public_outputs": [
+        {
+          "responses": [
+            [
+              "get",
+              "datasets?include_imported=false",
+              200,
+              {
+                "datasets": [
+                  {
+                    "audio_count": 0,
+                    "class_count": 1,
+                    "classes": [
+                      "fixture"
+                    ],
+                    "db_id": 1,
+                    "estado": "sincronizado",
+                    "id": "AvesChilenas",
+                    "name": "AvesChilenas (0 audios)",
+                    "size_mb": 0.0
+                  }
+                ]
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "history?include_imported=false",
+              200,
+              {
+                "history": []
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "progress?include_imported=false",
+              200,
+              {
+                "current_architecture": "",
+                "current_model_index": 1,
+                "elapsed_seconds": "<volatile>",
+                "epoch": 0,
+                "error_message": null,
+                "is_tri_model": false,
+                "job_id": null,
+                "logs": [],
+                "metrics_history": [],
+                "models_config": [],
+                "seed": 42,
+                "status": "idle",
+                "total_epochs": 0,
+                "total_models": 1,
+                "train_acc": 0.0,
+                "train_loss": 0.0,
+                "val_acc": 0.0,
+                "val_loss": 0.0
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "post",
+              "stop",
+              200,
+              {
+                "message": "No hay ning\u00fan entrenamiento activo para detener.",
+                "status": "idle"
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "post",
+              "models/999/activate",
+              200,
+              {
+                "error": "Modelo inexistente",
+                "success": false
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "post",
+              "start",
+              200,
+              {
+                "job_id": "fama_efficientnet_b0_<identity>",
+                "message": "Entrenamiento de EfficientNet-B0 iniciado para 10 \u00e9pocas.",
+                "preparation": {
+                  "historical": false,
+                  "version_id": "<identity>"
+                },
+                "status": "started"
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "progress",
+              200,
+              {
+                "current_architecture": "EfficientNet-B0",
+                "current_model_index": 1,
+                "elapsed_seconds": "<volatile>",
+                "epoch": 0,
+                "error_message": null,
+                "is_tri_model": false,
+                "job_id": "fama_efficientnet_b0_<identity>",
+                "logs": [],
+                "metrics_history": [],
+                "models_config": [
+                  {
+                    "architecture": "EfficientNet-B0",
+                    "weight": 1.0
+                  }
+                ],
+                "seed": 42,
+                "status": "training",
+                "total_epochs": 10,
+                "total_models": 1,
+                "train_acc": 0.0,
+                "train_loss": 0.0,
+                "val_acc": 0.0,
+                "val_loss": 0.0
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "history?include_imported=false",
+              200,
+              {
+                "history": []
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "post",
+              "stop",
+              200,
+              {
+                "message": "Detenci\u00f3n solicitada. El proceso finalizar\u00e1 de forma segura.",
+                "status": "stopping"
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "progress",
+              200,
+              {
+                "current_architecture": "EfficientNet-B0",
+                "current_model_index": 1,
+                "elapsed_seconds": "<volatile>",
+                "epoch": 0,
+                "error_message": null,
+                "is_tri_model": false,
+                "job_id": "fama_efficientnet_b0_<identity>",
+                "logs": [],
+                "metrics_history": [],
+                "models_config": [
+                  {
+                    "architecture": "EfficientNet-B0",
+                    "weight": 1.0
+                  }
+                ],
+                "seed": 42,
+                "status": "training",
+                "total_epochs": 10,
+                "total_models": 1,
+                "train_acc": 0.0,
+                "train_loss": 0.0,
+                "val_acc": 0.0,
+                "val_loss": 0.0
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ]
+          ],
+          "scope": "AvesChilenas"
+        },
+        {
+          "responses": [
+            [
+              "get",
+              "datasets?include_imported=false",
+              200,
+              {
+                "datasets": [
+                  {
+                    "audio_count": 0,
+                    "class_count": 1,
+                    "classes": [
+                      "fixture"
+                    ],
+                    "db_id": 1,
+                    "estado": "sincronizado",
+                    "id": "engine_diagnostics",
+                    "name": "engine_diagnostics (0 audios)",
+                    "size_mb": 0.0
+                  }
+                ]
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "history?include_imported=false",
+              200,
+              {
+                "history": []
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "progress?include_imported=false",
+              200,
+              {
+                "current_architecture": "",
+                "current_model_index": 1,
+                "elapsed_seconds": "<volatile>",
+                "epoch": 0,
+                "error_message": null,
+                "is_tri_model": false,
+                "job_id": null,
+                "logs": [],
+                "metrics_history": [],
+                "models_config": [],
+                "seed": 42,
+                "status": "idle",
+                "total_epochs": 0,
+                "total_models": 1,
+                "train_acc": 0.0,
+                "train_loss": 0.0,
+                "val_acc": 0.0,
+                "val_loss": 0.0
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "post",
+              "stop",
+              200,
+              {
+                "message": "No hay ning\u00fan entrenamiento activo para detener.",
+                "status": "idle"
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "post",
+              "models/999/activate",
+              200,
+              {
+                "error": "Modelo inexistente",
+                "success": false
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "post",
+              "start",
+              200,
+              {
+                "job_id": "fama_efficientnet_b0_<identity>",
+                "message": "Entrenamiento de EfficientNet-B0 iniciado para 10 \u00e9pocas.",
+                "preparation": {
+                  "historical": false,
+                  "version_id": "<identity>"
+                },
+                "status": "started"
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "progress",
+              200,
+              {
+                "current_architecture": "EfficientNet-B0",
+                "current_model_index": 1,
+                "elapsed_seconds": "<volatile>",
+                "epoch": 0,
+                "error_message": null,
+                "is_tri_model": false,
+                "job_id": "fama_efficientnet_b0_<identity>",
+                "logs": [],
+                "metrics_history": [],
+                "models_config": [
+                  {
+                    "architecture": "EfficientNet-B0",
+                    "weight": 1.0
+                  }
+                ],
+                "seed": 42,
+                "status": "training",
+                "total_epochs": 10,
+                "total_models": 1,
+                "train_acc": 0.0,
+                "train_loss": 0.0,
+                "val_acc": 0.0,
+                "val_loss": 0.0
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "history?include_imported=false",
+              200,
+              {
+                "history": []
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "post",
+              "stop",
+              200,
+              {
+                "message": "Detenci\u00f3n solicitada. El proceso finalizar\u00e1 de forma segura.",
+                "status": "stopping"
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "progress",
+              200,
+              {
+                "current_architecture": "EfficientNet-B0",
+                "current_model_index": 1,
+                "elapsed_seconds": "<volatile>",
+                "epoch": 0,
+                "error_message": null,
+                "is_tri_model": false,
+                "job_id": "fama_efficientnet_b0_<identity>",
+                "logs": [],
+                "metrics_history": [],
+                "models_config": [
+                  {
+                    "architecture": "EfficientNet-B0",
+                    "weight": 1.0
+                  }
+                ],
+                "seed": 42,
+                "status": "training",
+                "total_epochs": 10,
+                "total_models": 1,
+                "train_acc": 0.0,
+                "train_loss": 0.0,
+                "val_acc": 0.0,
+                "val_loss": 0.0
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ]
+          ],
+          "scope": "engine_diagnostics"
+        },
+        {
+          "responses": [
+            [
+              "post",
+              "register",
+              201,
+              {
+                "activo": true,
+                "creado_en": "<volatile>",
+                "email": "differential@example.test",
+                "id": 1,
+                "nombre_completo": "Synthetic differential",
+                "rol": "investigador",
+                "ultimo_acceso": "<volatile>"
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "post",
+              "login",
+              200,
+              {
+                "access_token": "<volatile>",
+                "token_type": "bearer",
+                "user": {
+                  "activo": true,
+                  "creado_en": "<volatile>",
+                  "email": "differential@example.test",
+                  "id": 1,
+                  "nombre_completo": "Synthetic differential",
+                  "rol": "investigador",
+                  "ultimo_acceso": "<volatile>"
+                }
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "me",
+              200,
+              {
+                "activo": true,
+                "creado_en": "<volatile>",
+                "email": "differential@example.test",
+                "id": 1,
+                "nombre_completo": "Synthetic differential",
+                "rol": "investigador",
+                "ultimo_acceso": "<volatile>"
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "me-invalid",
+              401,
+              {
+                "detail": "Token inv\u00e1lido o expirado: Token inv\u00e1lido: formato no corresponde a JWT"
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": "Bearer"
+              }
+            ]
+          ],
+          "scope": "bearer-auth"
+        },
+        {
+          "responses": [
+            [
+              "post",
+              "create",
+              200,
+              {
+                "added_count": 0,
+                "dataset_id": null,
+                "details": {
+                  "classes": "/api/ingestion/imports/<identity>/classes",
+                  "files": "/api/ingestion/imports/<identity>/files",
+                  "issues": "/api/ingestion/imports/<identity>/issues"
+                },
+                "error": null,
+                "execution": null,
+                "id": "<identity>",
+                "issue_sample": [],
+                "preview": {
+                  "class_count": 0,
+                  "error_count": 0,
+                  "file_count": 0,
+                  "synced_count": 0,
+                  "total_size_bytes": 0,
+                  "warning_count": 0
+                },
+                "preview_token": null,
+                "status": "receiving",
+                "sync_status": "pending"
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "job",
+              200,
+              {
+                "added_count": 0,
+                "dataset_id": null,
+                "details": {
+                  "classes": "/api/ingestion/imports/<identity>/classes",
+                  "files": "/api/ingestion/imports/<identity>/files",
+                  "issues": "/api/ingestion/imports/<identity>/issues"
+                },
+                "error": null,
+                "execution": null,
+                "id": "<identity>",
+                "issue_sample": [],
+                "preview": {
+                  "class_count": 0,
+                  "error_count": 0,
+                  "file_count": 0,
+                  "synced_count": 0,
+                  "total_size_bytes": 0,
+                  "warning_count": 0
+                },
+                "preview_token": null,
+                "status": "receiving",
+                "sync_status": "pending"
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "datasets",
+              200,
+              {
+                "datasets": [],
+                "next_cursor": null,
+                "snapshot": "catalog",
+                "total": 0
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": null
+              }
+            ],
+            [
+              "get",
+              "datasets-invalid",
+              401,
+              {
+                "detail": "Token inv\u00e1lido o expirado: Token inv\u00e1lido: formato no corresponde a JWT"
+              },
+              {
+                "cache-control": null,
+                "content-type": "application/json",
+                "set-cookie": null,
+                "www-authenticate": "Bearer"
+              }
+            ]
+          ],
+          "scope": "bearer-import"
+        }
+      ],
+      "stderr": ""
+    }
+  },
+  "status": "passed",
+  "scratch_removed": true
+}

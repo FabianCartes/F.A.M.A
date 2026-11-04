@@ -508,6 +508,8 @@ app.add_middleware(
 # Inclusión de enrutadores modulares
 app.include_router(auth_router)
 app.include_router(dataset_import_router)
+from app.routes.imported_training import router as imported_training_router
+app.include_router(imported_training_router)
 
 
 # ============================================================================

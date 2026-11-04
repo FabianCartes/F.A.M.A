@@ -1,0 +1,10 @@
+
+ RUN  v5.0.2 /home/kevin/Work/fama/frontend
+
+ ❯ lib/api/__tests__/importedTrainingApi.test.ts (0 test)
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  00:51:30
+   Duration  408ms (environment 99%, worker 1%)
+

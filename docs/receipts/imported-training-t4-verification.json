@@ -1,0 +1,164 @@
+{
+  "status": "functionally_verified_ready_for_authorized_local_commit",
+  "base": "fd0d25f1ee8e44ef59ce5ef9c0a4d56481aa828e",
+  "commit": null,
+  "scope": "T4 only. No T5\u2013T7, operational migration, real training, installations or publishing.",
+  "checks": {
+    "frontend": {
+      "exit": 0,
+      "tests": 413,
+      "files": 42,
+      "evidence": "imported-training-t4-tdd/35-frontend-suite"
+    },
+    "types": {
+      "exit": 0,
+      "evidence": "imported-training-t4-tdd/36-types"
+    },
+    "lint": {
+      "exit": 0,
+      "warnings": 1,
+      "location": "ImportedTrainingPanel.tsx react-hooks/exhaustive-deps",
+      "evidence": "imported-training-t4-tdd/37-lint"
+    },
+    "build": {
+      "exit": 0,
+      "evidence": "imported-training-t4-tdd/38-build"
+    },
+    "backend": {
+      "exit": 0,
+      "tests": 389,
+      "warnings": 2,
+      "evidence": "imported-training-t4-tdd/39-backend-combined"
+    },
+    "parent_functional_dom_spotcheck": {
+      "exit": 0,
+      "tests": 2,
+      "duration_seconds": 3.12,
+      "command": "cd frontend && node_modules/.bin/vitest run components/views/__tests__/ImportedTrainingView.test.tsx",
+      "raw_evidence": "parent tool transcript"
+    },
+    "differential": {
+      "status": "passed",
+      "base_exit": 0,
+      "candidate_exit": 0,
+      "evidence": "imported-training-t4-differential.json"
+    }
+  },
+  "browser": {
+    "status": "passed_synthetic_api",
+    "attempt": "Isolated preview of built app; real browser rejected cross-origin compiled API as required.",
+    "single_recovery": "Clean source copy without .env and explicit same-origin API; build exit1: Turbopack rejected node_modules symlink outside filesystem root.",
+    "evidence": [
+      "imported-training-t4-preview-build.stdout",
+      "imported-training-t4-preview-build.stderr",
+      "imported-training-t4-preview-build.exit"
+    ],
+    "cleanup": "Preview jobs stopped; browser tab closed; owned preview scratch removed; clean-copy scratch removed by trap.",
+    "no_further_retry": true,
+    "authorized_root_correction": {
+      "build_exit": 0,
+      "build_seconds": 8.36,
+      "temporary_config_only": true,
+      "api_same_origin": true,
+      "session_loaded": true,
+      "flow_status": "failed_timeout",
+      "cause": "Responsive navigation was closed; Entrenamiento button x=-212 outside viewport, visible Abrir men\u00fa was not clicked by test script.",
+      "timeout_ms": 30000,
+      "retry_performed": false,
+      "evidence": [
+        "imported-training-t4-browser-root-build.json",
+        "imported-training-t4-browser-root-flow.js",
+        "imported-training-t4-browser-root-flow-result.json"
+      ],
+      "cleanup": "Preview stopped, isolated browser tab closed, owned scratch removed."
+    },
+    "authorized_menu_execution": {
+      "status": "passed",
+      "api_requests_intercepted": 29,
+      "existing_preparation": true,
+      "new_preparation": true,
+      "blank_annotations": true,
+      "architecture_and_topology_locked": true,
+      "exact_start_payloads": true,
+      "no_automatic_start": true,
+      "checkpoint_evaluation_pending": true,
+      "logout_clears_private_state": true,
+      "evidence": [
+        "imported-training-t4-browser-menu-build.json",
+        "imported-training-t4-browser-menu-flow.js",
+        "imported-training-t4-browser-menu-flow-result.json"
+      ],
+      "cleanup": "preview stopped; isolated tab closed; owned scratch removed"
+    }
+  },
+  "independent": {
+    "status": "bounded_pass",
+    "task_id": "mw1mcvps-k-c2k5",
+    "backend_tests_passed": 11,
+    "frontend_tests_passed": 13,
+    "scratch_removed": true,
+    "severe_findings": [],
+    "evidence": "imported-training-t4-independent.json",
+    "approval_scope": "T4 synthetic functional and security verification; not native or production approval"
+  },
+  "native": {
+    "nativeRisk": "unassessable",
+    "reason": "Untracked files require explicit declaration",
+    "escalate_item": 2,
+    "independent_required": true,
+    "start_performed": false,
+    "approval": false,
+    "final_assessment": "unassessable: untracked files require explicit declaration",
+    "review_due_supplied": false,
+    "continuation_supplied": false,
+    "independent_requirement_satisfied": "bounded PASS 11 backend/13 frontend; no new independent run"
+  },
+  "preservation": {
+    "frontend/components/views/__tests__/TrainingView.test.tsx": true,
+    "docs/manuales/p5-manual-review-slices-historical.md": true,
+    "docs/manuales/prueba-manual-local-sin-gcs.md": true,
+    "docs/manuales/prueba-manual-principal-importacion.md": true,
+    "backend/tests/run_isolated_training_checks.py": true,
+    "backend/tests/training_host_guard.py": true,
+    "docs/receipts/training-checks-inventory.json": true
+  },
+  "limits": [
+    "Independent bounded PASS, no native approval",
+    "No PostgreSQL, Docker Python3.12, production concurrency, GPU, real training or deployment validation",
+    "Browser used intercepted synthetic HTTP only; no real backend, cookie transport or deployment proven."
+  ],
+  "next_decision": null,
+  "commit_scope_dependency": {
+    "path": "frontend/components/views/TrainingView.tsx",
+    "preexisting_change": "currentEnsemble single-model uses visible architecture/epochs/lr/batch parameters instead of stale ensembleModels",
+    "preexisting_tests_path": "frontend/components/views/__tests__/TrainingView.test.tsx",
+    "preexisting_test_lines": 49,
+    "preserved_unchanged": true,
+    "candidate_verified_with_dependency": true,
+    "must_not_silently_commit_or_exclude": true,
+    "inclusion_authorized": true,
+    "authorization": "User Autorizo, plan L49",
+    "authorship": "Pre-existing local correction and tests, preserved unchanged; explicitly authorized prerequisite, not newly authored T4 work."
+  },
+  "verified_candidate_source_sha256": {
+    "backend/app/main.py": "7edd9a9ff847565920b62cf4f36f6f45a561b5e784067a858bed48928c93d7d6",
+    "backend/app/routes/imported_training.py": "e89cdff3a84a3c96fb3a3e6de261b621c2248a5dafc9187b7593f77f196d7f35",
+    "backend/tests/test_imported_training_preparation_api.py": "924f235bb581ae81f30e8122b627f8fe5a46a9a3c76758e9b599bb491f923ec0",
+    "frontend/components/training/ImportedTrainingPanel.tsx": "c73248105c38858d9373e4158d9c21b4180c48b73cee0111ee98da0177446c97",
+    "frontend/components/training/__tests__/ImportedTrainingPanel.test.tsx": "0baa5d9b4e4bb3e0bd13a9b41145c9c4c7c4c5a32e0b81a8832b090d201da5b7",
+    "frontend/components/views/TrainingView.tsx": "c203ad3445697ef5b6e7893d9866562bf1290e4c3cd33facba612759a36c18dc",
+    "frontend/components/views/__tests__/ImportedTrainingView.test.tsx": "c569be957376225990b7f9cd358d4b269434ac3f822db65c00150d5dd3f85c1d",
+    "frontend/hooks/useTrainingLifecycle.ts": "3f9f86bf9e4858d39f4e748c881759d4e67d8f87a50b862ed09844502d278105",
+    "frontend/hooks/__tests__/useTrainingLifecycle.test.ts": "2daa03b2033bcf8f3dde9ad1a40b3e89fc64b09d5ecc645089b1993f5f8af609",
+    "frontend/lib/api/importedTrainingApi.ts": "cf6f14d288aa9e7dbca3767e5f0546c5c4293d93dfbe830ef179f99fbe6f7021",
+    "frontend/lib/api/__tests__/importedTrainingApi.test.ts": "ab031801e22de3b49a75827a7dc75c5a5a9d5b5f95749485b25a6fc7140d3d3c",
+    "frontend/lib/schemas/importedTraining.ts": "f298c15dc974ea46f43a42af24e2d6b86c78d83e2fc458a100356454e1afe051",
+    "frontend/components/views/__tests__/TrainingView.test.tsx": "0507870d3ecee28cb6007156cb190d90624a0c8dc4921ff66e4a70ce37b1be90"
+  },
+  "whitespace": {
+    "global_staged_exit": 2,
+    "authored_staged_exit": 0,
+    "reason": "Original raw evidence whitespace retained; not a code/documentation whitespace failure.",
+    "evidence": "imported-training-t4-whitespace.log"
+  }
+}

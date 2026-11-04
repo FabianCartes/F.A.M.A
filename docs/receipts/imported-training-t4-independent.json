@@ -1,0 +1,33 @@
+{
+  "status": "bounded_pass",
+  "task_id": "mw1mcvps-k-c2k5",
+  "backend_tests_passed": 11,
+  "frontend_tests_passed": 13,
+  "scratch_removed": true,
+  "severe_candidate_findings": [],
+  "preservation_warning": {
+    "path": "docs/KANBAN.md",
+    "resolved": true,
+    "provenance": "Parent documentation edit during verifier run; exact diff reconciled, no verifier writes and no rerun."
+  },
+  "verdict": "## Veredicto final: PASS acotado para T4\n\nCon la procedencia de `docs/KANBAN.md` confirmada por el padre, queda resuelto el único bloqueo de preservación que informé. No repetí pruebas ni realicé otra auditoría.\n\n| Spec | Veredicto dentro de T4 |\n|---|---|\n| S1 | **PASS**: selección y preparación explícitas, inicio separado y checkpoint presentado con evaluación pendiente. |\n| S2 | **PASS acotado**: importador ZIP sin cambios en el diff; diferencial legacy aprobado por el padre, no repetido por mí. |\n| S3–S4 | **PASS**: motivos estructurales accionables; cantidad baja como advertencia, no bloqueo por sí sola. |\n| S6–S7 | **PASS**: plantilla sin inferencia de grupos; mapa inválido y splits imposibles rechazados. No certifica la verdad de las anotaciones. |\n| S8 | **PASS acotado**: flujo local sintético para WAV supervisado; no acredita entrenamiento operacional. |\n| S9 | **PASS**: perfil explícito, fijado a la preparación y reflejado en la solicitud de inicio. |\n| S10 | **PASS acotado**: pruebas públicas de propietario, cuenta inactiva/−1 y no divulgación; legacy conserva el alcance comprobado por el diferencial del padre. |\n| S12 | **PASS acotado**: pruebas HTTP de cookie, Origin y conflicto cookie/Bearer; navegador del padre con transporte interceptado, no cookies contra backend real. |\n\n**Findings:** ningún defecto severo del candidato confirmado en la verificación realizada. No se identificó una alteración inesperada pendiente tras la aclaración del padre.\n\nLa evidencia independiente permanece en **11 tests backend y 13 frontend aprobados**, con scratch eliminado. Es un veredicto funcional y de seguridad **limitado al alcance y entorno sintético comprobados**, no aprobación nativa ni garantía de producción, PostgreSQL, multiproceso, despliegue o entrenamiento real. T5–T7 siguen fuera de alcance.",
+  "raw_streams": "No separate durable stdout/stderr supplied in final handoff; counts and verdict are attributed to verifier, not fabricated as parent execution.",
+  "limits": [
+    "Synthetic environment only",
+    "S2 differential evidence from parent, not rerun independently",
+    "Browser API intercepted; no actual cookie transport to real backend",
+    "No native approval, production guarantee, PostgreSQL, multiprocess, deployment or operational training"
+  ],
+  "specs": [
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "S6",
+    "S7",
+    "S8",
+    "S9",
+    "S10",
+    "S12"
+  ]
+}
