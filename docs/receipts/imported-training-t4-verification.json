@@ -1,7 +1,7 @@
 {
-  "status": "functionally_verified_ready_for_authorized_local_commit",
+  "status": "closed_functional_t4_with_explicit_verification_limits",
   "base": "fd0d25f1ee8e44ef59ce5ef9c0a4d56481aa828e",
-  "commit": null,
+  "commit": "e6ccade11d62868067de17fff2dc9f1db833b80c",
   "scope": "T4 only. No T5\u2013T7, operational migration, real training, installations or publishing.",
   "checks": {
     "frontend": {
@@ -138,7 +138,8 @@
     "must_not_silently_commit_or_exclude": true,
     "inclusion_authorized": true,
     "authorization": "User Autorizo, plan L49",
-    "authorship": "Pre-existing local correction and tests, preserved unchanged; explicitly authorized prerequisite, not newly authored T4 work."
+    "authorship": "Pre-existing local correction and tests, preserved unchanged; explicitly authorized prerequisite, not newly authored T4 work.",
+    "included_in_commit": "e6ccade11d62868067de17fff2dc9f1db833b80c"
   },
   "verified_candidate_source_sha256": {
     "backend/app/main.py": "7edd9a9ff847565920b62cf4f36f6f45a561b5e784067a858bed48928c93d7d6",
@@ -160,5 +161,6 @@
     "authored_staged_exit": 0,
     "reason": "Original raw evidence whitespace retained; not a code/documentation whitespace failure.",
     "evidence": "imported-training-t4-whitespace.log"
-  }
+  },
+  "next_milestone": "T5 evaluation/publication/predictor integration is not implemented by T4 and requires separate continuation authorization."
 }
