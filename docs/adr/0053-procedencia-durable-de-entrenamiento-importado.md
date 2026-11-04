@@ -1,6 +1,6 @@
 # ADR 0053: Procedencia durable de entrenamiento importado sin identidad legacy ficticia
 
-**Estado:** Decisión aceptada para T3 (S10/S11); candidato local en verificación. No acredita despliegue, migración de datos existentes, evaluación ni publicación. Seguimiento y evidencia vigente: [plan](../arquitectura/entrenamiento-datasets-importados-plan.md), no este ADR.
+**Estado:** Decisión aceptada para T3 (S10/S11); implementación funcional en `381d09a`, con límites de evidencia en el plan. No acredita despliegue, migración de datos existentes, evaluación ni publicación. Seguimiento y evidencia vigente: [plan](../arquitectura/entrenamiento-datasets-importados-plan.md), no este ADR.
 
 ## Contexto y decisión
 

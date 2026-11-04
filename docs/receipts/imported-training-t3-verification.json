@@ -1,5 +1,5 @@
 {
-  "status": "functionally_verified_pending_local_commit",
+  "status": "closed_functional_t3_with_explicit_verification_limits",
   "scope": "T3 only; authenticated imported catalog/admission/worker/checkpoint/source association; not T4 UI or T5 evaluation/publication/predictor",
   "base_commit": "957f9ec41e20f702b42c0c0e2ef62423bfb695b9",
   "candidate_sha256": {
@@ -357,7 +357,7 @@
     "T5evaluation/publication/predictor imported",
     "T7operational"
   ],
-  "work_unit_commit": null,
+  "work_unit_commit": "381d09a6922657d6a304b5d7d2d129ee2981376f",
   "closure_basis": "Independent38PASS/verdict inconclusive before startup correction; user authorized parent isolated S11 probe and fix. RED36/GREEN37-38 and final39 resolve the specific missing proof; no independent post-fix or native approval claimed.",
   "guarded_suite_before_startup_fix": {
     "exit": 0,
@@ -437,5 +437,6 @@
     },
     "reason": "one coherent T3 admission/worker/durability behavior plus TDD/raw/machine evidence, within 1500–2200 forecast; not artificially split",
     "strategy": "auto-chain/feature-branch-chain"
-  }
+  },
+  "delivery": "local feature-branch commit only; no push/PR/merge/release/operational migration/training"
 }
