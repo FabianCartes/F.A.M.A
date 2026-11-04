@@ -1,0 +1,46 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-hypu6u17
+F
+=================================== FAILURES ===================================
+___ test_profile_is_explicit_finite_and_architecture_compatible[audio-None] ____
+
+cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7facf8aff0e0>, {'id': '44f88bf0772c4f99933467ebf13a7c3...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7facf8afd7f0>, 'b955abb8c9d043658302380dbc7b9376')
+tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-hypu6u17/pytest/test_profile_is_explicit_finit0')
+field = 'audio', value = None
+
+    @pytest.mark.parametrize("field,value", [
+        ("audio", None), ("channels", 2), ("architecture", "unrecognized"),
+        ("preprocessing", "hpss"), ("windowing", "random"),
+        ("window_hop_seconds", float("nan")), ("window_hop_seconds", 0),
+        ("audio.target_sr", 0), ("audio.target_sr", True),
+        ("audio.duration_seconds", float("inf")), ("audio.duration_seconds", 0.001),
+        ("audio.f_min", -1), ("audio.f_min", float("nan")),
+        ("audio.f_max", 4001), ("audio.f_max", None),
+        ("audio.n_fft", 257), ("audio.hop_length", 512),
+        ("audio.n_mels", 16), ("audio.use_gpu_frontend", "false"),
+        ("architecture", "panns_cnn14"),
+    ])
+    def test_profile_is_explicit_finite_and_architecture_compatible(cohort, tmp_path, field, value):
+        from copy import deepcopy
+        from training.imported_dataset_preparation import PreparationError
+        preparations = service(cohort, tmp_path)
+        prior = create(preparations, cohort)
+        profile = deepcopy(cohort[3])
+        parent = profile
+        if "." in field:
+            section, field = field.split(".")
+            parent = profile[section]
+        if value is None:
+            parent.pop(field)
+        else:
+            parent[field] = value
+        before = set(preparations.root.iterdir())
+>       with pytest.raises(PreparationError) as failure:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE PreparationError
+
+tests/test_imported_dataset_preparation.py:105: Failed
+=========================== short test summary info ============================
+FAILED tests/test_imported_dataset_preparation.py::test_profile_is_explicit_finite_and_architecture_compatible[audio-None]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed in 0.55s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": [], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_imported_dataset_preparation.py::test_profile_is_explicit_finite_and_architecture_compatible[audio-None]", "phase": "call", "outcome": "failed", "duration_seconds": 0.022}], "nonpassing_reports": [{"nodeid": "tests/test_imported_dataset_preparation.py::test_profile_is_explicit_finite_and_architecture_compatible[audio-None]", "phase": "call", "outcome": "failed", "duration_seconds": 0.022}], "sqlite_memory_connection_count": 1, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

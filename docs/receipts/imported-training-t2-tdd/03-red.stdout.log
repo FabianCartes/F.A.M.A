@@ -1,0 +1,66 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-jnoqac7h
+F
+=================================== FAILURES ===================================
+______ test_mapping_must_cover_exact_membership_without_mutation[missing] ______
+
+cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7fc7748570e0>, {'id': '8e27943f86b5454bbfb8393e4867c79...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7fc7748557f0>, '5dad0277b19b40009ebf93598eb95553')
+tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-jnoqac7h/pytest/test_mapping_must_cover_exact_0')
+damage = 'missing'
+
+    @pytest.mark.parametrize("damage", ["missing", "extra", "duplicate", "empty_group", "recording_conflict", "provenance"])
+    def test_mapping_must_cover_exact_membership_without_mutation(cohort, tmp_path, damage):
+        from copy import deepcopy
+        from training.imported_dataset_preparation import PreparationError
+        preparations = service(cohort, tmp_path)
+        prior = create(preparations, cohort)
+        mapping = deepcopy(cohort[2])
+        provenance = {"source": "synthetic annotations v1"}
+        if damage == "missing":
+            mapping.pop()
+        elif damage == "extra":
+            mapping.append(dict(member_id="unknown", recording_id="other", group_id="other"))
+        elif damage == "duplicate":
+            mapping.append(dict(mapping[0]))
+        elif damage == "empty_group":
+            mapping[0]["group_id"] = " "
+        elif damage == "recording_conflict":
+            mapping[0]["recording_id"] = mapping[1]["recording_id"]
+            mapping[0]["group_id"] = "conflicting-group"
+        else:
+            provenance = {}
+        catalog = cohort[4].get("/api/ingestion/imports/datasets").json()
+        before = set(preparations.root.iterdir())
+        with pytest.raises(PreparationError) as failure:
+>           preparations.create(1, cohort[1]["id"], mapping=mapping, provenance=provenance,
+                                seed=42, profile=cohort[3])
+
+tests/test_imported_dataset_preparation.py:68: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <training.imported_dataset_preparation.ImportedDatasetPreparation object at 0x7fc773e64590>
+owner = 1, snapshot_id = '8e27943f86b5454bbfb8393e4867c790'
+mapping = [{'member_id': '1734e5ee247f4c16b794c23c68c3faad', 'recording_id': 'zebra/0.wav', 'group_id': '0.wav'}, {'member_id': ...up_id': '2.wav'}, {'member_id': 'c81e3e241bb94b6ab41cf169dc02b4c7', 'recording_id': 'ants/1.wav', 'group_id': '1.wav'}]
+provenance = {'source': 'synthetic annotations v1'}, seed = 42
+profile = {'architecture': 'audio_cnn', 'channels': 1, 'preprocessing': 'mono_mel', 'windowing': 'energy_peak_pad', ...}
+
+    def create(self, owner, snapshot_id, *, mapping, provenance, seed, profile):
+        snapshot = self.snapshots.get(owner, snapshot_id)
+        annotations = {r["member_id"]: r for r in mapping}
+        members = {}
+        for member, chunk in self.snapshots.iter_verified(owner, snapshot_id):
+            members[member["member_id"]] = member
+        classes = {c: i for i, c in enumerate(sorted({m["class_name"] for m in members.values()}))}
+        rows = []
+        for key, member in sorted(members.items()):
+            row = {f: member[f] for f in FIELDS if f in member}
+            row.update(snapshot_id=snapshot_id, class_index=classes[member["class_name"]],
+>                      recording_id=annotations[key]["recording_id"], group_id=annotations[key]["group_id"])
+                                    ^^^^^^^^^^^^^^^^
+E           KeyError: 'c8ce52fd984c46f0b9c349bdc50ae609'
+
+training/imported_dataset_preparation.py:125: KeyError
+=========================== short test summary info ============================
+FAILED tests/test_imported_dataset_preparation.py::test_mapping_must_cover_exact_membership_without_mutation[missing]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed in 0.58s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": [], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_imported_dataset_preparation.py::test_mapping_must_cover_exact_membership_without_mutation[missing]", "phase": "call", "outcome": "failed", "duration_seconds": 0.025}], "nonpassing_reports": [{"nodeid": "tests/test_imported_dataset_preparation.py::test_mapping_must_cover_exact_membership_without_mutation[missing]", "phase": "call", "outcome": "failed", "duration_seconds": 0.025}], "sqlite_memory_connection_count": 1, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

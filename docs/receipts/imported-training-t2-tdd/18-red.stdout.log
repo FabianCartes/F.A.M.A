@@ -1,0 +1,126 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-7f77ieoh
+F
+=================================== FAILURES ===================================
+___________ test_concurrent_absent_root_creators_reopen_safe_winner ____________
+
+path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-7f77ieoh/pytest/test_concurrent_absent_root_cr0/prepared')
+
+    @contextmanager
+    def _root_directory(path):
+        """Create/open a trusted root without following any ancestor symlink."""
+        fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            for part in _parts(str(path).lstrip("/")):
+                try:
+                    try:
+>                       nxt = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+app/services/training_snapshots.py:61: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+path = 'prepared', flags = 196608, mode = 511, dir_fd = 6
+
+    def descriptor_open(path,flags,mode=0o777,*,dir_fd=None):
+        decoded=os.fsdecode(os.fspath(path))
+        if not decoded or dir_fd is None or Path(decoded).is_absolute() or not flags & write_flags:
+>           return original(path,flags,mode,dir_fd=dir_fd)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           FileNotFoundError: [Errno 2] No such file or directory: 'prepared'
+
+tests/run_isolated_training_checks.py:20: FileNotFoundError
+
+During handling of the above exception, another exception occurred:
+
+path = 'prepared', mode = 448, dir_fd = 6
+
+    def simultaneous_root_mkdir(path, mode=0o777, *, dir_fd=None):
+        if path == "prepared" and dir_fd is not None:
+            mkdir_barrier.wait(timeout=5)
+>       return original_mkdir(path, mode, dir_fd=dir_fd)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileExistsError: [Errno 17] File exists: 'prepared'
+
+tests/test_imported_dataset_preparation.py:392: FileExistsError
+
+The above exception was the direct cause of the following exception:
+
+cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7efe9391f620>, {'id': '205bdc44f75c4dec9a7b4914a132dbb...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7efe9391dfd0>, 'ed09e206ddf243108e16028ac1940897')
+tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-7f77ieoh/pytest/test_concurrent_absent_root_cr0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7efe93e52d70>
+
+    def test_concurrent_absent_root_creators_reopen_safe_winner(cohort, tmp_path, monkeypatch):
+        import os
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+        from training.imported_dataset_preparation import PreparationError
+        preparations = service(cohort, tmp_path)
+        mkdir_barrier = Barrier(2)
+        original_mkdir = os.mkdir
+        def simultaneous_root_mkdir(path, mode=0o777, *, dir_fd=None):
+            if path == "prepared" and dir_fd is not None:
+                mkdir_barrier.wait(timeout=5)
+            return original_mkdir(path, mode, dir_fd=dir_fd)
+        monkeypatch.setattr(os, "mkdir", simultaneous_root_mkdir)
+        def work():
+            try:
+                return create(service(cohort, tmp_path), cohort)
+            except PreparationError as error:
+                assert error.code == "publication_busy"
+                return None
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(work) for _ in range(2)]
+>           results = [future.result(timeout=8) for future in futures]
+                       ^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_imported_dataset_preparation.py:402: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/lib/python3.14/concurrent/futures/_base.py:447: in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.14/concurrent/futures/_base.py:396: in __get_result
+    raise self._exception
+/usr/lib/python3.14/concurrent/futures/thread.py:86: in run
+    result = ctx.run(self.task)
+             ^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.14/concurrent/futures/thread.py:73: in run
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+tests/test_imported_dataset_preparation.py:396: in work
+    return create(service(cohort, tmp_path), cohort)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_imported_dataset_preparation.py:39: in create
+    return preparations.create(1, snapshot["id"], mapping=mapping,
+training/imported_dataset_preparation.py:290: in create
+    with _root_directory(self.root) as root_fd:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.14/contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-7f77ieoh/pytest/test_concurrent_absent_root_cr0/prepared')
+
+    @contextmanager
+    def _root_directory(path):
+        """Create/open a trusted root without following any ancestor symlink."""
+        fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            for part in _parts(str(path).lstrip("/")):
+                try:
+                    try:
+                        nxt = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+                    except FileNotFoundError:
+                        os.mkdir(part, mode=0o700, dir_fd=fd)
+                        os.fsync(fd)
+                        nxt = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+                except OSError as error:
+>                   raise SnapshotIntegrityError("Unsafe snapshot root") from error
+E                   app.services.training_snapshots.SnapshotIntegrityError: Unsafe snapshot root
+
+app/services/training_snapshots.py:67: SnapshotIntegrityError
+=========================== short test summary info ============================
+FAILED tests/test_imported_dataset_preparation.py::test_concurrent_absent_root_creators_reopen_safe_winner
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed in 0.76s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": [], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_imported_dataset_preparation.py::test_concurrent_absent_root_creators_reopen_safe_winner", "phase": "call", "outcome": "failed", "duration_seconds": 0.017}], "nonpassing_reports": [{"nodeid": "tests/test_imported_dataset_preparation.py::test_concurrent_absent_root_creators_reopen_safe_winner", "phase": "call", "outcome": "failed", "duration_seconds": 0.017}], "sqlite_memory_connection_count": 1, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

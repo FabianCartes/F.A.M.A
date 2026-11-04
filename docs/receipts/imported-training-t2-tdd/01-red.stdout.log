@@ -1,0 +1,28 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-wzhtt3q3
+F
+=================================== FAILURES ===================================
+_________ test_exact_reselect_and_mixed_class_groups_are_reproducible __________
+
+cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7f7a63e170e0>, {'id': 'f90ff50500434db19ccea0fc0de015b...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7f7a63e14980>, 'a1338e0404fc49d4bfbb116c2e1e35dc')
+tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-wzhtt3q3/pytest/test_exact_reselect_and_mixed_0')
+
+    def test_exact_reselect_and_mixed_class_groups_are_reproducible(cohort, tmp_path):
+>       preparations = service(cohort, tmp_path)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_imported_dataset_preparation.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7f7a63e170e0>, {'id': 'f90ff50500434db19ccea0fc0de015b...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7f7a63e14980>, 'a1338e0404fc49d4bfbb116c2e1e35dc')
+tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-wzhtt3q3/pytest/test_exact_reselect_and_mixed_0')
+
+    def service(cohort, tmp_path):
+>       from training.imported_dataset_preparation import ImportedDatasetPreparation
+E       ModuleNotFoundError: No module named 'training.imported_dataset_preparation'
+
+tests/test_imported_dataset_preparation.py:33: ModuleNotFoundError
+=========================== short test summary info ============================
+FAILED tests/test_imported_dataset_preparation.py::test_exact_reselect_and_mixed_class_groups_are_reproducible
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed in 0.53s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": [], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_imported_dataset_preparation.py::test_exact_reselect_and_mixed_class_groups_are_reproducible", "phase": "call", "outcome": "failed", "duration_seconds": 0.0}], "nonpassing_reports": [{"nodeid": "tests/test_imported_dataset_preparation.py::test_exact_reselect_and_mixed_class_groups_are_reproducible", "phase": "call", "outcome": "failed", "duration_seconds": 0.0}], "sqlite_memory_connection_count": 1, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

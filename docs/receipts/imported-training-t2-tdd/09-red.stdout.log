@@ -1,0 +1,23 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-op4iep23
+F
+=================================== FAILURES ===================================
+___________________ test_invalid_seed_does_not_publish[True] ___________________
+
+cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7f55c120af90>, {'id': '1bf0bc709d2f44acbf6b9b8256e35f5...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7f55c12096a0>, 'ccf45e73144f4a50852a28f2b4b9b86d')
+tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-op4iep23/pytest/test_invalid_seed_does_not_pub0')
+seed = True
+
+    @pytest.mark.parametrize("seed", [True, -1, 2**32, 1.2, "42"])
+    def test_invalid_seed_does_not_publish(cohort, tmp_path, seed):
+        from training.imported_dataset_preparation import PreparationError
+        preparations = service(cohort, tmp_path)
+>       with pytest.raises(PreparationError) as failure:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE PreparationError
+
+tests/test_imported_dataset_preparation.py:181: Failed
+=========================== short test summary info ============================
+FAILED tests/test_imported_dataset_preparation.py::test_invalid_seed_does_not_publish[True]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed in 0.67s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": [], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_imported_dataset_preparation.py::test_invalid_seed_does_not_publish[True]", "phase": "call", "outcome": "failed", "duration_seconds": 0.015}], "nonpassing_reports": [{"nodeid": "tests/test_imported_dataset_preparation.py::test_invalid_seed_does_not_publish[True]", "phase": "call", "outcome": "failed", "duration_seconds": 0.015}], "sqlite_memory_connection_count": 1, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

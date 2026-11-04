@@ -1,0 +1,65 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-1fufjk9e
+F
+=================================== FAILURES ===================================
+___________ test_publication_failure_cleans_only_owned_staging[open] ___________
+
+cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7f7ac46dde80>, {'id': 'ef8a0c041ae8402db3d60ad74c77e90...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7f7ac47ddd30>, 'acf5514118fe4317958255a0993fe07a')
+tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-1fufjk9e/pytest/test_publication_failure_clean0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f7ac4cfac40>
+fault = 'open'
+
+    @pytest.mark.parametrize("fault", ["space", "rename", "busy", "open"])
+    def test_publication_failure_cleans_only_owned_staging(cohort, tmp_path, monkeypatch, fault):
+        import fcntl
+        import os
+        from types import SimpleNamespace
+        from training import imported_dataset_preparation as module
+        preparations = service(cohort, tmp_path)
+        prior = create(preparations, cohort)
+        unrelated = preparations.root / ".staging-unrelated"
+        unrelated.mkdir(mode=0o700)
+        (unrelated / "preserve").write_bytes(b"unrelated")
+        before = set(preparations.root.iterdir())
+        profile = dict(cohort[3], window_hop_seconds=0.25)
+        root_fd = None
+        if fault == "space":
+            monkeypatch.setattr(module.shutil, "disk_usage", lambda _: SimpleNamespace(free=0))
+        elif fault == "rename":
+            original = module.os.rename
+            def fail_publication(src, dst, **kwargs):
+                if str(src).startswith(".staging-"):
+                    raise OSError("synthetic rename failure")
+                return original(src, dst, **kwargs)
+            monkeypatch.setattr(module.os, "rename", fail_publication)
+        elif fault == "open":
+            original_open = module.os.open
+            def fail_staging_open(path, flags, *args, **kwargs):
+                if str(path).startswith(".staging-"):
+                    raise OSError("synthetic staging open failure")
+                return original_open(path, flags, *args, **kwargs)
+            monkeypatch.setattr(module.os, "open", fail_staging_open)
+        else:
+            root_fd = os.open(preparations.root, os.O_RDONLY | os.O_DIRECTORY)
+            fcntl.flock(root_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            with pytest.raises((module.PreparationError, OSError)) as failure:
+                preparations.create(1, cohort[1]["id"], mapping=cohort[2], provenance={"source": "test"},
+                                    seed=42, profile=profile)
+            if fault not in ("rename", "open"):
+                assert failure.value.code == ("budget_exceeded" if fault == "space" else "publication_busy")
+        finally:
+            if root_fd is not None:
+                os.close(root_fd)
+>       assert set(preparations.root.iterdir()) == before
+E       AssertionError: assert {PosixPath('/...4187b5fd8ad')} == {PosixPath('/...4187b5fd8ad')}
+E         
+E         Extra items in the left set:
+E         PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-1fufjk9e/pytest/test_publication_failure_clean0/prepared/.staging-6b3c7a14e41045f6ac3f95087309f615')
+E         Use -v to get more diff
+
+tests/test_imported_dataset_preparation.py:375: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_imported_dataset_preparation.py::test_publication_failure_cleans_only_owned_staging[open]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed in 0.70s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": [], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_imported_dataset_preparation.py::test_publication_failure_cleans_only_owned_staging[open]", "phase": "call", "outcome": "failed", "duration_seconds": 0.015}], "nonpassing_reports": [{"nodeid": "tests/test_imported_dataset_preparation.py::test_publication_failure_cleans_only_owned_staging[open]", "phase": "call", "outcome": "failed", "duration_seconds": 0.015}], "sqlite_memory_connection_count": 1, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

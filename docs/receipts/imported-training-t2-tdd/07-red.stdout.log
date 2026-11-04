@@ -1,0 +1,44 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-6e6265y7
+F
+=================================== FAILURES ===================================
+___________ test_unreadable_wav_aborts_without_publication[not_wav] ____________
+
+cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7ff6ace3af90>, {'id': 'a17ee1db750241dc8dcf5aa3e9d36f4...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7ff6ace396a0>, '5acfbc999a6f4d748949bfb429d31343')
+tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-6e6265y7/pytest/test_unreadable_wav_aborts_wit0')
+damage = 'not_wav'
+
+    @pytest.mark.parametrize("damage", ["not_wav", "truncated", "stereo_header"])
+    def test_unreadable_wav_aborts_without_publication(cohort, tmp_path, damage):
+        import hashlib
+        from app.models.dataset_import_metadata import DatasetMember
+        from training.imported_dataset_preparation import PreparationError
+        preparations = service(cohort, tmp_path)
+        prior = create(preparations, cohort)
+        snapshots = cohort[0]
+        # Synthetic import storage/catalog only: build a real, hash-valid T1 snapshot
+        # whose bytes cannot be consumed as the supported PCM WAV format.
+        with snapshots.sessions.begin() as db:
+            member = db.query(DatasetMember).order_by(DatasetMember.id).first()
+            path = snapshots.source.root / "objects" / member.source_import_id / member.stored_name
+            raw = path.read_bytes()
+            if damage == "not_wav":
+                raw = b"not wave data"
+            elif damage == "truncated":
+                raw = raw[:-1]
+            else:
+                raw = raw[:22] + b"\xff\x7f" + raw[24:]
+            path.write_bytes(raw)
+            member.sha256, member.size_bytes = hashlib.sha256(raw).hexdigest(), len(raw)
+        invalid = snapshots.create(1, cohort[5])
+        before = set(preparations.root.iterdir())
+        catalog = cohort[4].get("/api/ingestion/imports/datasets").json()
+>       with pytest.raises(PreparationError) as failure:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE PreparationError
+
+tests/test_imported_dataset_preparation.py:138: Failed
+=========================== short test summary info ============================
+FAILED tests/test_imported_dataset_preparation.py::test_unreadable_wav_aborts_without_publication[not_wav]
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed in 0.73s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": [], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_imported_dataset_preparation.py::test_unreadable_wav_aborts_without_publication[not_wav]", "phase": "call", "outcome": "failed", "duration_seconds": 0.057}], "nonpassing_reports": [{"nodeid": "tests/test_imported_dataset_preparation.py::test_unreadable_wav_aborts_without_publication[not_wav]", "phase": "call", "outcome": "failed", "duration_seconds": 0.057}], "sqlite_memory_connection_count": 1, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

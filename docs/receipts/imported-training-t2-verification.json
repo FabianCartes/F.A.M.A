@@ -1,0 +1,74 @@
+{
+  "scope": "T2 callable imported preparation only; no T3–T7",
+  "base_commit": "e1f3a31c0b216f300fd9fbb9f83cbc84832d264e",
+  "candidate_sha256": {
+    "backend/training/imported_dataset_preparation.py": "ef91362f5cfe81990ecbbf56eb8f01cc78fda3428fe526096040e6d33dca43bb",
+    "backend/tests/test_imported_dataset_preparation.py": "d8d508ff4a263df976d6d27b95462f1ec8c0fff62ce550e308ad005ac47d3311",
+    "backend/app/services/training_snapshots.py": "13dfcb1aeca389f5a494f22098826a78440412d40d1dd0fccd86addfffc5e4eb"
+  },
+  "final_suite": {
+    "exit": 0,
+    "passed": 141,
+    "deselected": [
+      "tests/test_dataset_preparation.py::test_engine_cli_explicit_fixture"
+    ],
+    "pytest_seconds": 24.69,
+    "log": "docs/receipts/imported-training-t2-final-combined.log",
+    "summary": {
+      "phase": "isolated_training_fixture_consumer_suite",
+      "process_exit_code": 0,
+      "pytest_exit_code": 0,
+      "deselected_cases": [
+        "tests/test_dataset_preparation.py::test_engine_cli_explicit_fixture"
+      ],
+      "status": "passed",
+      "guard_before_collection_fixtures_and_body": true,
+      "phase_deadline_seconds": 30,
+      "nonpassing_reports": [],
+      "sqlite_memory_connection_count": 99,
+      "excluded_completed_cases": [],
+      "private_scratch_cleanup": true,
+      "code_guard_and_documentation_preserved": true,
+      "only_sqlite_synthetic_cpu": true,
+      "network_live_db_forbidden": true,
+      "no_further_environment_recovery": true,
+      "protected_paths_unchanged": true,
+      "protected_path_count": 30,
+      "inventory": "docs/receipts/training-checks-inventory.json",
+      "call_report_count": 141
+    }
+  },
+  "focused_after_correction": {
+    "exit": 0,
+    "passed": 6,
+    "pytest_seconds": 1.73,
+    "evidence": "docs/receipts/imported-training-t2-tdd/21-focused.json"
+  },
+  "tdd": {
+    "triplets": 21,
+    "directory": "docs/receipts/imported-training-t2-tdd/",
+    "history": "Includes original RED/GREEN, concurrency RED18/GREEN19, failed barrier fixture20, corrected focal21; no outcomes removed."
+  },
+  "independent": {
+    "initial_task": "mw1ejmqx-8-94v6",
+    "exit": 1,
+    "passed": 7,
+    "failed": 1,
+    "finding": "Initial root mkdir race before publication flock; availability, no observed corruption",
+    "limited_recheck_task": "mw1euouo-a-9bvm",
+    "recheck": "unavailable: assistant reported an error",
+    "post_fix_independent_approval": false,
+    "human_disposition": "Acepto",
+    "meaning": "Accept documented evidence limit and continue local closure/commit, not independent/native approval"
+  },
+  "native_review": "pending exact committed-range assessment",
+  "not_exercised": [
+    "excluded CLI subprocess case",
+    "PostgreSQL",
+    "Docker Python3.12",
+    "GPU/model execution",
+    "multiprocess/hard-crash persistence",
+    "real datasets/training/GCS/services/migration"
+  ],
+  "preservation": "Eight selected unrelated/protected paths matched parent baseline before correction; final check recorded at closure."
+}

@@ -60,7 +60,12 @@ def _root_directory(path):
                 try:
                     nxt = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
                 except FileNotFoundError:
-                    os.mkdir(part, mode=0o700, dir_fd=fd)
+                    try:
+                        os.mkdir(part, mode=0o700, dir_fd=fd)
+                    except FileExistsError:
+                        # Another creator may have won. Reopen without following
+                        # links; the final root must still pass the privacy check.
+                        pass
                     os.fsync(fd)
                     nxt = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
             except OSError as error:

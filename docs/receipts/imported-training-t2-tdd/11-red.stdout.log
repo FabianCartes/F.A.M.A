@@ -1,0 +1,26 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-kim5p5r3
+F
+=================================== FAILURES ===================================
+_____________ test_existing_version_directory_is_never_overwritten _____________
+
+cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7f14f93fb0e0>, {'id': '829e0d88d90a4bed9d70086bbf32cff...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7f14f93f9940>, '17e8acc815044d8e9e19b419dde84c4f')
+tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-kim5p5r3/pytest/test_existing_version_director0')
+
+    def test_existing_version_directory_is_never_overwritten(cohort, tmp_path):
+        from training.imported_dataset_preparation import ImportedDatasetPreparation, PreparationError
+        first = create(service(cohort, tmp_path), cohort)
+        root = tmp_path / "other-prepared"
+        root.mkdir(mode=0o700)
+        collision = root / first["version_id"]
+        collision.mkdir(mode=0o700)
+        preparations = ImportedDatasetPreparation(cohort[0], root)
+>       with pytest.raises(PreparationError) as failure:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE PreparationError
+
+tests/test_imported_dataset_preparation.py:196: Failed
+=========================== short test summary info ============================
+FAILED tests/test_imported_dataset_preparation.py::test_existing_version_directory_is_never_overwritten
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed in 0.67s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": [], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_imported_dataset_preparation.py::test_existing_version_directory_is_never_overwritten", "phase": "call", "outcome": "failed", "duration_seconds": 0.023}], "nonpassing_reports": [{"nodeid": "tests/test_imported_dataset_preparation.py::test_existing_version_directory_is_never_overwritten", "phase": "call", "outcome": "failed", "duration_seconds": 0.023}], "sqlite_memory_connection_count": 1, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}
