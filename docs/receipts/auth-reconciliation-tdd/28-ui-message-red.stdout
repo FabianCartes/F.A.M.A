@@ -1,0 +1,17 @@
+
+> frontend@0.1.0 test
+> vitest run components/views/__tests__/DatasetImportPanel.test.tsx
+
+
+ RUN  v5.0.2 /home/kevin/Work/fama/frontend
+
+ ❯ components/views/__tests__/DatasetImportPanel.test.tsx (9 tests | 2 failed) 2475ms
+   ❯ private dataset import (9)
+     × explains format in a modal without an embedded login before exposing a file picker 1015ms
+     × contains keyboard focus and restores background interactivity after closing 1010ms
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 7 passed (9)
+   Start at  00:20:38
+   Duration  3.10s (tests 82%, environment 10%, transform 4%, import 4%)
+

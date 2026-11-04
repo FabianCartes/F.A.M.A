@@ -1,0 +1,71 @@
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  components/auth/__tests__/workspace.test.tsx > ignores a stale unauthorized response after confirming a different cookie identity
+TestingLibraryElementError: Unable to find an element with the text: New confirmed identity. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"session-workspace"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33maria-label[39m=[32m"Sesión actual"[39m
+        [33mclass[39m=[32m"session-toolbar"[39m
+      [36m>[39m
+        [36m<span>[39m
+          [0mAcceso legacy disponible[0m
+        [36m</span>[39m
+        [36m<a[39m
+          [33mhref[39m=[32m"/login"[39m
+        [36m>[39m
+          [0mIniciar sesión[0m
+        [36m</a>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"session-content"[39m
+      [36m>[39m
+        [36m<p>[39m
+          [0mLegacy stays available[0m
+        [36m</p>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ components/auth/__tests__/workspace.test.tsx:79:17
+     77|   await screen.findByText(identity.nombre_completo);
+     78|   await act(async () => { rejectOld(Response.json({}, { status: 401 })…
+     79|   expect(screen.getByText(identity.nombre_completo)).toBeDefined();
+       |                 ^
+     80|   expect(screen.getByLabelText("Private draft")).toBeDefined();
+     81| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  components/auth/__tests__/workspace.test.tsx > closes private state when imported training polling reports unauthorized
+AssertionError: expected <input …(2)></input> to be null
+
+- Expected:
+null
+
++ Received:
+<input
+  aria-label="Private draft"
+  value=""
+/>
+
+ ❯ components/auth/__tests__/workspace.test.tsx:89:52
+     87|   await screen.findByText(user.nombre_completo);
+     88|   await act(async () => { await getProgress().catch(() => undefined); …
+     89|   expect(screen.queryByLabelText("Private draft")).toBeNull();
+       |                                                    ^
+     90|   expect(screen.getByText("Legacy stays available")).toBeDefined();
+     91| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+

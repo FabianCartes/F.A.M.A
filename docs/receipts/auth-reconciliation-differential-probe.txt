@@ -1,0 +1,86 @@
+import json, re
+import pytest
+from tests.test_api_training import client
+from tests.test_training_flow import training_env, register, partitions
+from tests.test_dataset_import_api import imports
+
+
+def normalize(value):
+    if isinstance(value, dict):
+        return {key: ("<volatile>" if key in ("timestamp", "elapsed_seconds", "access_token", "creado_en", "ultimo_acceso") else normalize(item)) for key, item in value.items()}
+    if isinstance(value, list):
+        return [normalize(item) for item in value]
+    if isinstance(value, str):
+        return re.sub(r"[0-9a-f]{64}|[0-9a-f]{32}", "<identity>", value)
+    return value
+
+
+def record(responses, method, path, response):
+    responses.append([method, path, response.status_code, normalize(response.json()),
+                      {key: response.headers.get(key) for key in ("content-type", "cache-control", "www-authenticate", "set-cookie")}])
+
+
+@pytest.mark.parametrize("name", ["AvesChilenas", "engine_diagnostics"])
+def test_legacy_cookie_input(name, client, training_env, monkeypatch):
+    from app.services import training
+    monkeypatch.setattr(training.time, "time", lambda: 2000.0)
+    register(training_env[1], name)
+    partitions(training_env[2], name)
+    responses = []
+    headers = {"Authorization": "Bearer invalid", "Cookie": "fama_session_dev=invalid", "Origin": "https://foreign.example.test"}
+    def query(method, path, **kwargs):
+        record(responses, method, path, getattr(client, method)("/api/training/" + path, headers=headers, **kwargs))
+    for path in ("datasets", "history", "progress"):
+        query("get", path + "?include_imported=false")
+    query("post", "stop")
+    query("post", "models/999/activate")
+    query("post", "start", json={"dataset_name": name, "imported_dataset_id": None, "snapshot_id": None, "imported_prepared_version": None})
+    query("get", "progress")
+    query("get", "history?include_imported=false")
+    query("post", "stop")
+    query("get", "progress")
+    print("AUTH_DIFF_JSON " + json.dumps({"scope": name, "responses": responses}, sort_keys=True))
+
+
+def test_bearer_routes_keep_contract_with_browser_cookie(client, training_env, monkeypatch):
+    from app.services import auth
+    monkeypatch.setattr(auth, "SECRET_KEY", "synthetic-differential-signing-key-only-2026")
+    responses = []
+    headers = {"Cookie": "fama_session_dev=invalid", "Origin": "https://foreign.example.test"}
+    body = {"email": "differential@example.test", "password": "SyntheticPassword2026!", "nombre_completo": "Synthetic differential", "rol": "investigador"}
+    r = client.post("/api/auth/register", json=body, headers=headers)
+    record(responses, "post", "register", r)
+    assert r.status_code == 201, r.text
+    r = client.post("/api/auth/login", json={"email": body["email"], "password": body["password"]}, headers=headers)
+    record(responses, "post", "login", r)
+    assert r.status_code == 200, r.text
+    headers["Authorization"] = "Bearer " + r.json()["access_token"]
+    r = client.get("/api/auth/me", headers=headers)
+    record(responses, "get", "me", r)
+    assert r.status_code == 200
+    headers["Authorization"] = "Bearer invalid"
+    record(responses, "get", "me-invalid", client.get("/api/auth/me", headers=headers))
+    print("AUTH_DIFF_JSON " + json.dumps({"scope": "bearer-auth", "responses": responses}, sort_keys=True))
+
+
+def test_existing_import_bearer_contract(imports, monkeypatch):
+    from app.models.user import Usuario
+    from app.routes.dataset_imports import get_import_user
+    from app.services import auth
+    monkeypatch.setattr(auth, "SECRET_KEY", "synthetic-differential-signing-key-only-2026")
+    monkeypatch.delenv("FAMA_IMPORT_DEV_MODE", raising=False)
+    client, service, app, sessions = imports
+    app.dependency_overrides.pop(get_import_user)
+    with sessions() as db:
+        db.add(Usuario(id=1, email="import@example.test", password_hash="unused", nombre_completo="Synthetic", rol="investigador", activo=True))
+        db.commit()
+    headers = {"Authorization": "Bearer " + auth.create_access_token({"sub": "1"})}
+    responses = []
+    body = {"request_key": "compatibility", "name": "Synthetic imports"}
+    r = client.post("/api/ingestion/imports", json=body, headers=headers)
+    assert r.status_code == 200, r.text
+    record(responses, "post", "create", r)
+    record(responses, "get", "job", client.get("/api/ingestion/imports/" + r.json()["id"], headers=headers))
+    record(responses, "get", "datasets", client.get("/api/ingestion/imports/datasets", headers=headers))
+    record(responses, "get", "datasets-invalid", client.get("/api/ingestion/imports/datasets", headers={"Authorization": "Bearer invalid"}))
+    print("AUTH_DIFF_JSON " + json.dumps({"scope": "bearer-import", "responses": responses}, sort_keys=True))

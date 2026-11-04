@@ -18,7 +18,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.database import get_db
-from app.services.auth import get_current_user, security_bearer
+from app.services.auth import security_bearer
+from app.services.imported_identity import imported_user, has_web_credential
 from app.services.dataset_imports import DatasetImports, reject, _durable_directory
 
 router = APIRouter(prefix="/api/ingestion/imports", tags=["dataset-imports"])
@@ -47,16 +48,16 @@ def development_imports_enabled(request: Request) -> bool:
     return True
 
 
-def get_import_user(request: Request,
+def get_import_user(request: Request, response: Response,
                     credentials: HTTPAuthorizationCredentials | None = Depends(security_bearer),
                     db: Session = Depends(get_db)):
     development = development_imports_enabled(request)
-    if development and not request.headers.get("authorization"):
+    if development and not request.headers.get("authorization") and not has_web_credential(request):
         # Reserved non-account identity; never borrow a real user's datasets.
         return ImportPrincipal(id=-1)
-    # TODO: The dedicated session view will supply Bearer credentials. Role-based
-    # import policy stays deferred; normal authentication is not disabled globally.
-    user = get_current_user(credentials, db)
+    # A browser credential takes priority over the reserved local exception.
+    # Role policy remains unchanged; real users retain exact ownership.
+    user = imported_user(request, response, credentials, db)
     if user.id <= 0:
         reject(401, "La identidad local de desarrollo no es una cuenta de usuario.")
     return user

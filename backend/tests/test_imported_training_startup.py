@@ -24,6 +24,7 @@ def test_startup_requires_explicit_imported_source_migration(monkeypatch, order)
         # A maintenance module can register the complete ORM dependency closure
         # before another entrypoint imports the application. Do not run migration.
         importlib.import_module("scripts.migrate_imported_training_source")
+        importlib.import_module("scripts.migrate_web_sessions")
     statements = []
     event.listen(engine, "before_cursor_execute",
                  lambda connection, cursor, statement, parameters, context, executemany:
@@ -37,6 +38,7 @@ def test_startup_requires_explicit_imported_source_migration(monkeypatch, order)
         assert "modelo" in created
         assert "usuario" in created
         assert "conjunto_datos" in created
+        assert not {"sesion_web", "cuota_acceso", "evento_seguridad"}.intersection(created)
         assert "imported_model_source" not in created
         assert not any("CREATE TABLE imported_model_source" in statement for statement in statements)
     finally:

@@ -100,7 +100,7 @@ try:
     # registered its ORM table before this entrypoint. Keep legacy bootstrap intact.
     Base.metadata.create_all(bind=engine, tables=[
         table for table in Base.metadata.tables.values()
-        if table.name != "imported_model_source"
+        if table.name not in {"imported_model_source", "sesion_web", "cuota_acceso", "evento_seguridad"}
     ])
     print("[Database] Tablas sincronizadas exitosamente en PostgreSQL.")
 except Exception as db_init_err:
@@ -966,6 +966,8 @@ async def upload_ingestion_files(
 from app.schemas.training import StartTrainingRequest
 from app.services.auth import get_current_user, security_bearer
 from app.services.imported_training_source import ImportedSourceError
+from app.services.imported_identity import imported_user
+from fastapi import Response
 
 
 @app.get("/api/training/hardware")
@@ -977,14 +979,14 @@ def get_training_hardware():
 
 
 @app.get("/api/training/datasets")
-def get_training_datasets(db: Session = Depends(get_db), include_imported: bool = False,
+def get_training_datasets(request: Request, response: Response, db: Session = Depends(get_db), include_imported: bool = False,
                           credentials=Depends(security_bearer)):
     """
     Retorna la lista de datasets disponibles para entrenar (CU_INV_02).
     include_imported=true exige usuario activo y añade solo sus fuentes preparadas.
     Los motivos de elegibilidad no acreditan pesos, ejecución ni evaluación.
     """
-    user = get_current_user(credentials, db) if include_imported else None
+    user = imported_user(request, response, credentials, db) if include_imported else None
     datasets = training_service.get_available_datasets(db=db)
     if include_imported:
         from app.services.imported_training_source import configured_sources
@@ -998,7 +1000,7 @@ def get_training_datasets(db: Session = Depends(get_db), include_imported: bool 
 
 
 @app.post("/api/training/start")
-def start_training_pipeline(req: StartTrainingRequest, credentials=Depends(security_bearer),
+def start_training_pipeline(req: StartTrainingRequest, request: Request, response: Response, credentials=Depends(security_bearer),
                             db: Session = Depends(get_db)):
     """
     Inicia un entrenamiento en segundo plano utilizando PyTorch (CU_INV_03).
@@ -1007,7 +1009,7 @@ def start_training_pipeline(req: StartTrainingRequest, credentials=Depends(secur
     usan una arquitectura/perfil preparado, sin rutas del cliente ni fallback legacy.
     started solo acredita admisión; checkpoint_persisted queda pendiente de evaluación.
     """
-    owner = get_current_user(credentials, db) if req.imported_dataset_id is not None else None
+    owner = imported_user(request, response, credentials, db) if req.imported_dataset_id is not None else None
     try:
         kwargs = {
             "dataset_name": req.dataset_name,
@@ -1046,20 +1048,20 @@ def start_training_pipeline(req: StartTrainingRequest, credentials=Depends(secur
 
 
 
-def _training_resource_owner(credentials, db, *, required=False):
+def _training_resource_owner(request, response, credentials, db, *, required=False):
     current_owner = training_service.current_source_owner
-    user = get_current_user(credentials, db) if required or current_owner is not None else None
+    user = imported_user(request, response, credentials, db) if required or current_owner is not None else None
     if current_owner is not None and user.id != current_owner:
         raise HTTPException(status_code=404, detail="Recurso de entrenamiento no disponible.")
     return user.id if user else None
 
 
 @app.get("/api/training/progress")
-def get_training_progress(credentials=Depends(security_bearer), db: Session = Depends(get_db)):
+def get_training_progress(request: Request, response: Response, credentials=Depends(security_bearer), db: Session = Depends(get_db)):
     """
     Retorna el progreso en tiempo real, curvas de Loss/Accuracy y logs (IS_02).
     """
-    owner = _training_resource_owner(credentials, db)
+    owner = _training_resource_owner(request, response, credentials, db)
     try:
         return training_service.get_progress(owner_id=owner)
     except ImportedSourceError:
@@ -1067,11 +1069,11 @@ def get_training_progress(credentials=Depends(security_bearer), db: Session = De
 
 
 @app.post("/api/training/stop")
-def stop_training_pipeline(credentials=Depends(security_bearer), db: Session = Depends(get_db)):
+def stop_training_pipeline(request: Request, response: Response, credentials=Depends(security_bearer), db: Session = Depends(get_db)):
     """
     Solicita la detención segura del entrenamiento en ejecución (CU_INV_03 Paso 2.a).
     """
-    owner = _training_resource_owner(credentials, db)
+    owner = _training_resource_owner(request, response, credentials, db)
     try:
         return training_service.stop_training(owner_id=owner)
     except ImportedSourceError:
@@ -1079,19 +1081,19 @@ def stop_training_pipeline(credentials=Depends(security_bearer), db: Session = D
 
 
 @app.get("/api/training/history")
-def get_training_history(db: Session = Depends(get_db), include_imported: bool = False,
+def get_training_history(request: Request, response: Response, db: Session = Depends(get_db), include_imported: bool = False,
                          credentials=Depends(security_bearer)):
     """
     Retorna el historial de modelos entrenados desde PostgreSQL (CU_INV_04).
     Por defecto excluye importados; include_imported=true autentica y añade solo los propios.
     """
-    user = get_current_user(credentials, db) if include_imported else None
+    user = imported_user(request, response, credentials, db) if include_imported else None
     history = training_service.get_history(db=db, owner_id=user.id if include_imported and user else None)
     return {"history": history}
 
 
 @app.post("/api/training/models/{model_id}/activate")
-def activate_model(model_id: int, db: Session = Depends(get_db), credentials=Depends(security_bearer)):
+def activate_model(model_id: int, request: Request, response: Response, db: Session = Depends(get_db), credentials=Depends(security_bearer)):
     """
     Activa un modelo para inferencias bioacústicas en tiempo real (CU_INV_05).
     """
@@ -1101,7 +1103,7 @@ def activate_model(model_id: int, db: Session = Depends(get_db), credentials=Dep
         from app.models.imported_training_source import ImportedModelSource
         association = db.get(ImportedModelSource, model_id)
         source_owner = association.owner_id if association else None
-    user = get_current_user(credentials, db) if source_owner is not None else None
+    user = imported_user(request, response, credentials, db) if source_owner is not None else None
     if source_owner is not None and user.id != source_owner:
         raise HTTPException(status_code=404, detail="Recurso de entrenamiento no disponible.")
     return training_service.set_active_model(model_id=model_id, db=db)

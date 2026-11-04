@@ -1,0 +1,37 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-_z92o5sx
+[Database] Tablas sincronizadas exitosamente en PostgreSQL.
+[SuperEnsemble] Checkpoint cargado: efficientnet_gpu_pipeline_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: convnext_nano_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: resnet34d_35e_best.pt
+[SuperEnsemble] Super-Ensamble listo en cpu con 3 modelo(s).
+[Startup Warning] Excepción al realizar seeding inicial: (sqlite3.OperationalError) no such table: usuario
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+FROM usuario) AS anon_1]
+(Background on this error at: https://sqlalche.me/e/21/e3q8)
+F
+=================================== FAILURES ===================================
+__________ test_session_schema_requires_explicit_idempotent_migration __________
+
+client = <starlette.testclient.TestClient object at 0x7fe4c2d24440>, web = None
+test_db = <sqlalchemy.orm.session.Session object at 0x7fe4bf071a90>
+
+    def test_session_schema_requires_explicit_idempotent_migration(client, web, test_db):
+        from app.models.web_session import SesionWeb
+        from app.models.access_quota import CuotaAcceso
+        from app.models.security_audit import EventoSeguridad
+        engine = test_db.get_bind()
+        for table in (SesionWeb.__table__, CuotaAcceso.__table__, EventoSeguridad.__table__):
+            table.drop(engine)
+        assert login(client).status_code == 503
+>       from scripts.migrate_web_sessions import migrate_web_sessions
+E       ModuleNotFoundError: No module named 'scripts.migrate_web_sessions'
+
+tests/test_web_session_integration.py:136: ModuleNotFoundError
+------------------------------ Captured log setup ------------------------------
+WARNING  app.services.feedback_sync_worker:feedback_sync_worker.py:159 Feedback synchronization pass failed: database_or_local_unavailable
+=========================== short test summary info ============================
+FAILED tests/test_web_session_integration.py::test_session_schema_requires_explicit_idempotent_migration
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed in 1.55s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": [], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_web_session_integration.py::test_session_schema_requires_explicit_idempotent_migration", "phase": "call", "outcome": "failed", "duration_seconds": 0.007}], "nonpassing_reports": [{"nodeid": "tests/test_web_session_integration.py::test_session_schema_requires_explicit_idempotent_migration", "phase": "call", "outcome": "failed", "duration_seconds": 0.007}], "sqlite_memory_connection_count": 4, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

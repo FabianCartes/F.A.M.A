@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, notifyUnauthorized, apiSessionRevision } from "@/lib/api";
 import { z } from "zod";
 
 export const audioSchema = z.object({
@@ -60,10 +60,12 @@ export type ImportDataset = z.infer<typeof datasetSchema>;
 export type ImportLimits = z.infer<typeof limitsSchema>;
 
 export async function importRequest(token: string, path: string, options: RequestInit = {}): Promise<Response> {
+  const revision = apiSessionRevision();
   const headers = new Headers(options.headers);
   if (token) headers.set("Authorization", `Bearer ${token}`);
   const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers, cache: "no-store" });
   if (!response.ok) {
+    if (response.status === 401) notifyUnauthorized(revision);
     const data: unknown = await response.json().catch(() => null);
     const detail = typeof data === "object" && data !== null && "detail" in data && typeof data.detail === "string"
       ? data.detail : "No se completó la solicitud. Consulta su estado antes de reintentar.";

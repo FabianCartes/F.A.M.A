@@ -1,0 +1,16 @@
+
+> frontend@0.1.0 test
+> vitest run components/auth/__tests__/workspace.test.tsx
+
+
+ RUN  v5.0.2 /home/kevin/Work/fama/frontend
+
+ ❯ components/auth/__tests__/workspace.test.tsx (5 tests | 2 failed) 156ms
+   × ignores a stale unauthorized response after confirming a different cookie identity 10ms
+   × closes private state when imported training polling reports unauthorized 21ms
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 3 passed (5)
+   Start at  00:19:38
+   Duration  692ms (environment 48%, tests 25%, import 14%, transform 12%, worker 1%)
+

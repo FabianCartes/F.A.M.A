@@ -2,6 +2,8 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import Link from "next/link";
+import { useOptionalWebSession } from "@/components/auth/SessionBoundary";
 import { z } from "zod";
 import { datasetsPageSchema, importBase, importRequest, type ImportDataset } from "@/lib/api/datasetImports";
 import DatasetExportPanel from "./DatasetExportPanel";
@@ -9,10 +11,11 @@ import DatasetExportPanel from "./DatasetExportPanel";
 const buttonClass = "rounded-lg border border-emerald-800/60 bg-emerald-950/40 px-3 py-2 text-xs font-semibold text-emerald-400 hover:bg-emerald-900/50 transition-colors focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed";
 
 export default function DatasetExportDialog({ sessionToken = "" }: { sessionToken?: string } = {}) {
-  return <ExportDialog key={sessionToken} token={sessionToken} />;
+  const webUser = useOptionalWebSession();
+  return <ExportDialog key={sessionToken || webUser?.id || "anonymous"} token={sessionToken} hasWebSession={!!webUser} />;
 }
 
-function ExportDialog({ token }: { token: string }) {
+function ExportDialog({ token, hasWebSession }: { token: string; hasWebSession: boolean }) {
   const [open, setOpen] = useState(false);
   const [activated, setActivated] = useState(false);
   const [datasets, setDatasets] = useState<ImportDataset[] | null>(null);
@@ -34,7 +37,7 @@ function ExportDialog({ token }: { token: string }) {
         const response = await importRequest(token, `${importBase}/access`, { signal: controller.signal });
         const access = z.object({ development_mode: z.boolean() }).parse(await response.json());
         if (controller.signal.aborted) return;
-        const required = !access.development_mode && !token;
+        const required = !access.development_mode && !token && !hasWebSession;
         setSessionRequired(required);
         if (required) return;
         const catalog = await importRequest(token, `${importBase}/datasets${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { signal: controller.signal });
@@ -50,7 +53,7 @@ function ExportDialog({ token }: { token: string }) {
     }
     void load();
     return () => controller.abort();
-  }, [open, token, reload, cursor]);
+  }, [open, token, hasWebSession, reload, cursor]);
 
   useEffect(() => {
     if (!open) return;
@@ -105,7 +108,7 @@ function ExportDialog({ token }: { token: string }) {
         <div className="p-5 space-y-4">
           <p>Descarga una versión sincronizada a tu equipo. Cerrar esta ventana no cancela la exportación.</p>
           {loading && <p role="status">Consultando datasets…</p>}
-          {sessionRequired && <p role="status">La vista de acceso está pendiente de integración. Para probar sin sesión, habilita el modo de desarrollo local siguiendo la guía de importación.</p>}
+          {sessionRequired && <p role="status">Inicia sesión para acceder a tus importaciones. <Link href="/login" className="underline">Abrir acceso</Link>. El modo de desarrollo local conserva su alcance separado según la guía de importación.</p>}
           {error && <p role="alert">{error}</p>}
           {error && <button type="button" className={buttonClass} disabled={loading} onClick={() => {
             setError(""); setLoading(true); setReload(value => value + 1);

@@ -1,0 +1,40 @@
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  app/__tests__/session.test.tsx > keeps legacy available without a session when /me returns 401
+ FAIL  app/__tests__/session.test.tsx > keeps legacy available without a session when /me returns 503
+TestingLibraryElementError: Unable to find role="link" and name "Iniciar sesión"
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<main>[39m
+      [36m<p>[39m
+        [0mLegacy prediction available[0m
+      [36m</p>[39m
+    [36m</main>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<main>[39m
+      [36m<p>[39m
+        [0mLegacy prediction available[0m
+      [36m</p>[39m
+    [36m</main>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ waitForWrapper node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ app/__tests__/session.test.tsx:19:23
+     17|   render(<Home />);
+     18|   expect(screen.getByText("Legacy prediction available")).toBeDefined(…
+     19|   expect(await screen.findByRole("link", { name: "Iniciar sesión" })).…
+       |                       ^
+     20|   expect(screen.getByText("Legacy prediction available")).toBeDefined(…
+     21| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+

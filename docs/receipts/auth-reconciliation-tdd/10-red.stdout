@@ -1,0 +1,49 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-1jbn0qbo
+[Database] Tablas sincronizadas exitosamente en PostgreSQL.
+F
+=================================== FAILURES ===================================
+________ test_import_cookie_keeps_exact_owner_even_in_local_development ________
+
+imports = (<starlette.testclient.TestClient object at 0x7f6041c4a510>, <app.services.dataset_imports.DatasetImports object at 0x...ject at 0x7f6041c4a3c0>, sessionmaker(class_='Session', bind=Engine(sqlite://), autoflush=True, expire_on_commit=True))
+web = None
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f6041df63f0>
+
+    def test_import_cookie_keeps_exact_owner_even_in_local_development(imports, web, monkeypatch):
+        from app.routes.auth import router
+        from app.routes.dataset_imports import get_import_user
+        from app.models.user import Usuario
+        from app.services.auth import hash_password
+        http, service, application, sessions = imports
+        application.include_router(router)
+        application.dependency_overrides.pop(get_import_user)
+        monkeypatch.setenv("FAMA_ENV", "development")
+        monkeypatch.setenv("FAMA_IMPORT_DEV_MODE", "1")
+        monkeypatch.setenv("FAMA_IMPORT_DEV_FRONTEND_IP", "127.0.0.1")
+        # Use a verified local transport peer, never a forwarded header.
+        from fastapi.testclient import TestClient
+        local = TestClient(application, client=("127.0.0.1", 50000))
+        with sessions() as db:
+            for index in (1, 2):
+                db.add(Usuario(id=index, email=f"user{index}@example.test", password_hash=hash_password(PASSWORD),
+                               nombre_completo=f"User {index}", rol="administrador", activo=True))
+            db.commit()
+        try:
+            assert login(local).status_code == 200
+            result = local.post("/api/ingestion/imports", headers={"Origin": ORIGIN},
+                                json={"request_key": "cookie-owner", "name": "Private collection"})
+            assert result.status_code == 200, result.text
+            job = result.json()
+            assert local.get(f"/api/ingestion/imports/{job['id']}").status_code == 200
+            assert login(local, 2).status_code == 200
+            denied = local.get(f"/api/ingestion/imports/{job['id']}")
+>           assert denied.status_code == 404, denied.text
+E           AssertionError: {"id":"e6aa2d62c3f047e7945cd3f610012fef","status":"receiving","sync_status":"pending","dataset_id":null,"added_count":0,"preview_token":null,"preview":{"file_count":0,"class_count":0,"error_count":0,"warning_count":0,"total_size_bytes":0,"synced_count":0},"error":null,"execution":null,"details":{"files":"/api/ingestion/imports/e6aa2d62c3f047e7945cd3f610012fef/files","classes":"/api/ingestion/imports/e6aa2d62c3f047e7945cd3f610012fef/classes","issues":"/api/ingestion/imports/e6aa2d62c3f047e7945cd3f610012fef/issues"},"issue_sample":[]}
+E           assert 200 == 404
+E            +  where 200 = <Response [200 OK]>.status_code
+
+tests/test_web_session_integration.py:120: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_web_session_integration.py::test_import_cookie_keeps_exact_owner_even_in_local_development
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed in 1.36s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": [], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_web_session_integration.py::test_import_cookie_keeps_exact_owner_even_in_local_development", "phase": "call", "outcome": "failed", "duration_seconds": 0.352}], "nonpassing_reports": [{"nodeid": "tests/test_web_session_integration.py::test_import_cookie_keeps_exact_owner_even_in_local_development", "phase": "call", "outcome": "failed", "duration_seconds": 0.352}], "sqlite_memory_connection_count": 3, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

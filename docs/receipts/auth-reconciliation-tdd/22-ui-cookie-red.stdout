@@ -1,0 +1,15 @@
+
+> frontend@0.1.0 test
+> vitest run components/auth/__tests__/session-imports.test.tsx
+
+
+ RUN  v5.0.2 /home/kevin/Work/fama/frontend
+
+ ❯ components/auth/__tests__/session-imports.test.tsx (1 test | 1 failed) 1129ms
+   × enables private import with a confirmed cookie and no Bearer in non-development mode 1127ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  00:17:31
+   Duration  1.69s (tests 69%, environment 19%, transform 6%, import 5%)
+

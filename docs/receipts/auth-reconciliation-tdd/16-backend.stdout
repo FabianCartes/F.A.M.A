@@ -1,0 +1,213 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-02baet9p
+[Database] Tablas sincronizadas exitosamente en PostgreSQL.
+[SuperEnsemble] Checkpoint cargado: efficientnet_gpu_pipeline_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: convnext_nano_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: resnet34d_35e_best.pt
+[SuperEnsemble] Super-Ensamble listo en cpu con 3 modelo(s).
+[Startup Warning] Excepción al realizar seeding inicial: (sqlite3.OperationalError) no such table: usuario
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+FROM usuario) AS anon_1]
+(Background on this error at: https://sqlalche.me/e/21/e3q8)
+.[SuperEnsemble] Checkpoint cargado: efficientnet_gpu_pipeline_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: convnext_nano_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: resnet34d_35e_best.pt
+[SuperEnsemble] Super-Ensamble listo en cpu con 3 modelo(s).
+[Startup Warning] Excepción al realizar seeding inicial: (sqlite3.OperationalError) no such table: usuario
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+FROM usuario) AS anon_1]
+(Background on this error at: https://sqlalche.me/e/21/e3q8)
+.[SuperEnsemble] Checkpoint cargado: efficientnet_gpu_pipeline_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: convnext_nano_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: resnet34d_35e_best.pt
+[SuperEnsemble] Super-Ensamble listo en cpu con 3 modelo(s).
+[Startup Warning] Excepción al realizar seeding inicial: (sqlite3.OperationalError) no such table: usuario
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+FROM usuario) AS anon_1]
+(Background on this error at: https://sqlalche.me/e/21/e3q8)
+.[SuperEnsemble] Checkpoint cargado: efficientnet_gpu_pipeline_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: convnext_nano_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: resnet34d_35e_best.pt
+[SuperEnsemble] Super-Ensamble listo en cpu con 3 modelo(s).
+[Startup Warning] Excepción al realizar seeding inicial: (sqlite3.OperationalError) no such table: usuario
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+FROM usuario) AS anon_1]
+(Background on this error at: https://sqlalche.me/e/21/e3q8)
+.[SuperEnsemble] Checkpoint cargado: efficientnet_gpu_pipeline_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: convnext_nano_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: resnet34d_35e_best.pt
+[SuperEnsemble] Super-Ensamble listo en cpu con 3 modelo(s).
+[Startup Warning] Excepción al realizar seeding inicial: (sqlite3.OperationalError) no such table: usuario
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+FROM usuario) AS anon_1]
+(Background on this error at: https://sqlalche.me/e/21/e3q8)
+.[SuperEnsemble] Checkpoint cargado: efficientnet_gpu_pipeline_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: convnext_nano_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: resnet34d_35e_best.pt
+[SuperEnsemble] Super-Ensamble listo en cpu con 3 modelo(s).
+[Startup Warning] Excepción al realizar seeding inicial: (sqlite3.OperationalError) no such table: usuario
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+FROM usuario) AS anon_1]
+(Background on this error at: https://sqlalche.me/e/21/e3q8)
+.[SuperEnsemble] Checkpoint cargado: efficientnet_gpu_pipeline_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: convnext_nano_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: resnet34d_35e_best.pt
+[SuperEnsemble] Super-Ensamble listo en cpu con 3 modelo(s).
+[Startup Warning] Excepción al realizar seeding inicial: (sqlite3.OperationalError) no such table: usuario
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+FROM usuario) AS anon_1]
+(Background on this error at: https://sqlalche.me/e/21/e3q8)
+..[SuperEnsemble] Checkpoint cargado: efficientnet_gpu_pipeline_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: convnext_nano_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: resnet34d_35e_best.pt
+[SuperEnsemble] Super-Ensamble listo en cpu con 3 modelo(s).
+[Startup Warning] Excepción al realizar seeding inicial: (sqlite3.OperationalError) no such table: usuario
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+FROM usuario) AS anon_1]
+(Background on this error at: https://sqlalche.me/e/21/e3q8)
+.[SuperEnsemble] Checkpoint cargado: efficientnet_gpu_pipeline_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: convnext_nano_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: resnet34d_35e_best.pt
+[SuperEnsemble] Super-Ensamble listo en cpu con 3 modelo(s).
+[Startup Warning] Excepción al realizar seeding inicial: (sqlite3.OperationalError) no such table: usuario
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+FROM usuario) AS anon_1]
+(Background on this error at: https://sqlalche.me/e/21/e3q8)
+.[SuperEnsemble] Checkpoint cargado: efficientnet_gpu_pipeline_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: convnext_nano_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: resnet34d_35e_best.pt
+[SuperEnsemble] Super-Ensamble listo en cpu con 3 modelo(s).
+[Startup Warning] Excepción al realizar seeding inicial: (sqlite3.OperationalError) no such table: usuario
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+FROM usuario) AS anon_1]
+(Background on this error at: https://sqlalche.me/e/21/e3q8)
+.[SuperEnsemble] Checkpoint cargado: efficientnet_gpu_pipeline_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: convnext_nano_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: resnet34d_35e_best.pt
+[SuperEnsemble] Super-Ensamble listo en cpu con 3 modelo(s).
+[Startup Warning] Excepción al realizar seeding inicial: (sqlite3.OperationalError) no such table: usuario
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+FROM usuario) AS anon_1]
+(Background on this error at: https://sqlalche.me/e/21/e3q8)
+.[SuperEnsemble] Checkpoint cargado: efficientnet_gpu_pipeline_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: convnext_nano_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: resnet34d_35e_best.pt
+[SuperEnsemble] Super-Ensamble listo en cpu con 3 modelo(s).
+[Startup Warning] Excepción al realizar seeding inicial: (sqlite3.OperationalError) no such table: usuario
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+FROM usuario) AS anon_1]
+(Background on this error at: https://sqlalche.me/e/21/e3q8)
+.[SuperEnsemble] Checkpoint cargado: efficientnet_gpu_pipeline_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: convnext_nano_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: resnet34d_35e_best.pt
+[SuperEnsemble] Super-Ensamble listo en cpu con 3 modelo(s).
+[Startup Warning] Excepción al realizar seeding inicial: (sqlite3.OperationalError) no such table: usuario
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+FROM usuario) AS anon_1]
+(Background on this error at: https://sqlalche.me/e/21/e3q8)
+.[SuperEnsemble] Checkpoint cargado: efficientnet_gpu_pipeline_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: convnext_nano_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: resnet34d_35e_best.pt
+[SuperEnsemble] Super-Ensamble listo en cpu con 3 modelo(s).
+[Startup Warning] Excepción al realizar seeding inicial: (sqlite3.OperationalError) no such table: usuario
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+FROM usuario) AS anon_1]
+(Background on this error at: https://sqlalche.me/e/21/e3q8)
+.[SuperEnsemble] Checkpoint cargado: efficientnet_gpu_pipeline_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: convnext_nano_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: resnet34d_35e_best.pt
+[SuperEnsemble] Super-Ensamble listo en cpu con 3 modelo(s).
+[Startup Warning] Excepción al realizar seeding inicial: (sqlite3.OperationalError) no such table: usuario
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+FROM usuario) AS anon_1]
+(Background on this error at: https://sqlalche.me/e/21/e3q8)
+.F
+=================================== FAILURES ===================================
+_______ test_browser_identity_guards_real_imported_source_and_lifecycle ________
+
+client = <starlette.testclient.TestClient object at 0x7f397e189bf0>
+training_env = (<app.services.training.TrainingService object at 0x7f39ce9bb9d0>, sessionmaker(class_='Session', bind=Engine(sqlite:/...ining-consumer-suite-02baet9p/pytest/test_browser_identity_guards_r0'), <MagicMock name='Thread' id='139884920478016'>)
+cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7f397efe8980>, {'id': '33ce4ceb76dd409295ff1fae6b4f3f3...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7f397e13dbf0>, '2d8f62cf98e643c48daae3f0f37a51cb')
+tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-02baet9p/pytest/test_browser_identity_guards_r0')
+authenticated = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwiZXhwIjoxNzkzNzkwNzUwLCJpYXQiOjE3OTM3NjE5NTB9.S53uGL3zb3VJtpVKfTbvjh9OHY_wneRA6MPPJvUg7xE'}
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f397ef4a8f0>
+
+    def test_browser_identity_guards_real_imported_source_and_lifecycle(
+            client, training_env, cohort, tmp_path, authenticated, monkeypatch):
+        from app.models.user import Usuario
+        from app.services import auth, training
+        from app.services.imported_training_source import ImportedTrainingSource
+        from training.imported_dataset_preparation import ImportedDatasetPreparation
+        from scripts.migrate_imported_training_source import migrate_imported_sources
+        from tests.test_web_session_integration import login, ORIGIN, PASSWORD
+        monkeypatch.setenv("FAMA_WEB_ORIGIN", ORIGIN)
+        monkeypatch.setenv("FAMA_ALLOW_INSECURE_LOOPBACK", "1")
+        monkeypatch.setenv("FAMA_RATE_LIMIT_KEY", "synthetic-web-training-rate-key-for-isolated-tests")
+        runtime, sessions, _, process = training_env
+        with sessions() as db:
+            for index in (1, 2):
+                user = db.get(Usuario, index)
+                user.email = f"user{index}@example.test"
+                user.password_hash = auth.hash_password(PASSWORD)
+            db.get(Usuario, 2).rol = "administrador"
+            db.commit()
+        monkeypatch.setattr(training, "SessionLocal", cohort[0].sessions)
+        migrate_imported_sources(cohort[0].sessions.kw["bind"], writers_stopped=True)
+        preparations = ImportedDatasetPreparation(cohort[0], tmp_path / "web-prepared")
+        prepared = create(preparations, cohort)
+        runtime.imported_sources = ImportedTrainingSource(preparations)
+        body = {"imported_dataset_id": cohort[5], "snapshot_id": cohort[1]["id"],
+                "imported_prepared_version": prepared["version_id"], "architecture": "AudioCNN"}
+        legacy = client.get("/api/training/datasets").json()
+        before = client.get("/api/training/progress").json()
+        assert login(client, 2).status_code == 200
+        assert client.get("/api/training/datasets?include_imported=true").json() == legacy
+        denied = client.post("/api/training/start", json=body, headers={"Origin": ORIGIN})
+        assert denied.status_code == 404, denied.text
+        assert client.get("/api/training/progress").json() == before
+        process.assert_not_called()
+        assert login(client).status_code == 200
+        catalog = client.get("/api/training/datasets?include_imported=true")
+        assert catalog.status_code == 200, catalog.text
+        assert [row["id"] for row in catalog.json()["datasets"] if row.get("source_type") == "imported"] == [cohort[5]]
+        # Invalid Bearer cannot use an otherwise valid browser session.
+        rejected = client.post("/api/training/start", json=body,
+                               headers={"Origin": ORIGIN, "Authorization": "Bearer invalid"})
+        assert rejected.status_code == 401
+        assert client.get("/api/training/progress").json() == before
+        process.assert_not_called()
+        admitted = client.post("/api/training/start", json=body, headers={"Origin": ORIGIN})
+        assert admitted.status_code == 200, admitted.text
+        state = client.get("/api/training/progress").json()
+        assert login(client, 2).status_code == 200
+        for method, path in (("get", "/api/training/progress"), ("post", "/api/training/stop")):
+            result = getattr(client, method)(path, headers={"Origin": ORIGIN})
+            assert result.status_code == 404, result.text
+>           assert runtime.get_progress() == state
+E           AssertionError: assert {'status': 't...': False, ...} == {'status': 't...': False, ...}
+E             
+E             Omitting 17 identical items, use -vv to show
+E             Differing items:
+E             {'elapsed_seconds': 0.1} != {'elapsed_seconds': 0.0}
+E             Use -v to get more diff
+
+tests/test_web_imported_training.py:60: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_web_imported_training.py::test_browser_identity_guards_real_imported_source_and_lifecycle
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 16 passed in 14.24s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 1, "pytest_exit_code": 1, "deselected_cases": [], "status": "failed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_web_session_integration.py::test_web_login_confirms_cookie_identity_without_replacing_bearer", "phase": "call", "outcome": "passed", "duration_seconds": 0.163}, {"nodeid": "tests/test_web_session_integration.py::test_logout_revokes_server_session_not_just_browser_cookie", "phase": "call", "outcome": "passed", "duration_seconds": 0.081}, {"nodeid": "tests/test_web_session_integration.py::test_cookie_authenticates_imported_history_but_legacy_stays_public", "phase": "call", "outcome": "passed", "duration_seconds": 0.103}, {"nodeid": "tests/test_web_session_integration.py::test_dual_credentials_never_fall_back_or_switch_identity[valid-foreign]", "phase": "call", "outcome": "passed", "duration_seconds": 0.087}, {"nodeid": "tests/test_web_session_integration.py::test_dual_credentials_never_fall_back_or_switch_identity[invalid-valid]", "phase": "call", "outcome": "passed", "duration_seconds": 0.085}, {"nodeid": "tests/test_web_session_integration.py::test_dual_credentials_never_fall_back_or_switch_identity[valid-invalid]", "phase": "call", "outcome": "passed", "duration_seconds": 0.085}, {"nodeid": "tests/test_web_session_integration.py::test_matching_credentials_require_trusted_cookie_origin", "phase": "call", "outcome": "passed", "duration_seconds": 0.085}, {"nodeid": "tests/test_web_session_integration.py::test_import_cookie_keeps_exact_owner_even_in_local_development", "phase": "call", "outcome": "passed", "duration_seconds": 0.45}, {"nodeid": "tests/test_web_session_integration.py::test_session_schema_requires_explicit_idempotent_migration", "phase": "call", "outcome": "passed", "duration_seconds": 0.095}, {"nodeid": "tests/test_web_session_integration.py::test_incompatible_session_schema_fails_before_creating_cookie", "phase": "call", "outcome": "passed", "duration_seconds": 0.007}, {"nodeid": "tests/test_web_session_integration.py::test_session_expiration_boundaries_are_enforced[idle]", "phase": "call", "outcome": "passed", "duration_seconds": 0.105}, {"nodeid": "tests/test_web_session_integration.py::test_session_expiration_boundaries_are_enforced[absolute]", "phase": "call", "outcome": "passed", "duration_seconds": 0.117}, {"nodeid": "tests/test_web_session_integration.py::test_suspended_user_cannot_login_or_use_existing_session", "phase": "call", "outcome": "passed", "duration_seconds": 0.098}, {"nodeid": "tests/test_web_session_integration.py::test_cross_origin_writes_do_not_revoke_or_replace_session", "phase": "call", "outcome": "passed", "duration_seconds": 0.113}, {"nodeid": "tests/test_web_session_integration.py::test_login_rotation_revokes_previous_browser_session", "phase": "call", "outcome": "passed", "duration_seconds": 0.189}, {"nodeid": "tests/test_web_session_integration.py::test_web_login_limits_and_no_store_errors", "phase": "call", "outcome": "passed", "duration_seconds": 0.416}, {"nodeid": "tests/test_web_imported_training.py::test_browser_identity_guards_real_imported_source_and_lifecycle", "phase": "call", "outcome": "failed", "duration_seconds": 0.536}], "nonpassing_reports": [{"nodeid": "tests/test_web_imported_training.py::test_browser_identity_guards_real_imported_source_and_lifecycle", "phase": "call", "outcome": "failed", "duration_seconds": 0.536}], "sqlite_memory_connection_count": 50, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

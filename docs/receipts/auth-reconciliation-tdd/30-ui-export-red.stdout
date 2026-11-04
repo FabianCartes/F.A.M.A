@@ -1,0 +1,15 @@
+
+> frontend@0.1.0 test
+> vitest run components/auth/__tests__/session-imports.test.tsx
+
+
+ RUN  v5.0.2 /home/kevin/Work/fama/frontend
+
+ ❯ components/auth/__tests__/session-imports.test.tsx (2 tests | 1 failed) 1138ms
+   × loads export collections using the same confirmed cookie outside development mode 1018ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  00:21:32
+   Duration  1.71s (tests 69%, environment 18%, transform 6%, import 6%)
+

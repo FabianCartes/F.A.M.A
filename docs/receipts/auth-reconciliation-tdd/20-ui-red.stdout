@@ -1,0 +1,16 @@
+
+> frontend@0.1.0 test
+> vitest run app/__tests__/session.test.tsx
+
+
+ RUN  v5.0.2 /home/kevin/Work/fama/frontend
+
+ ❯ app/__tests__/session.test.tsx (2 tests | 2 failed) 2032ms
+   × keeps legacy available without a session when /me returns 401 1024ms
+   × keeps legacy available without a session when /me returns 503 1006ms
+
+ Test Files  1 failed (1)
+      Tests  2 failed (2)
+   Start at  00:15:04
+   Duration  2.51s (tests 84%, environment 13%, import 2%, transform 1%)
+

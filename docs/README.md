@@ -93,6 +93,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`22_propuesta_vista_ayuda_y_centro_de_conocimiento.md`](./arquitectura/22_propuesta_vista_ayuda_y_centro_de_conocimiento.md): Diseño y especificación del centro de conocimiento e interactividad en frontend.
 
 ### 4. [`docs/manuales/`](./manuales/) — Manuales y Guías Operativas
+* [`sesion-web-importados.md`](./manuales/sesion-web-importados.md): Sesión web revocable compatible con Bearer, propiedad exacta para importados y migración explícita; decisión en [ADR 0054](./adr/0054-sesion-web-compatible-con-bearer-importados.md), sin barrera global legacy ni operación real.
 * [`entrenamiento-datasets-importados.md`](./manuales/entrenamiento-datasets-importados.md): Contrato T3 de catálogo/start por propietario y snapshot/preparación, perfil explícito, migración separada y estados; evidencia y límites, sin operación real ni UI/evaluación/publicación.
 * [`preparacion-datasets-importados.md`](./manuales/preparacion-datasets-importados.md): T2, preparación inmutable por snapshot con grupos/perfil explícitos, cobertura y advertencias; [evidencia T2](./receipts/imported-training-t2-verification.json), límites y exclusiones, sin admisión ni entrenamiento.
 * [`snapshots-locales-entrenamiento.md`](./manuales/snapshots-locales-entrenamiento.md): Servicio local T1 por propietario/ID, esquema aditivo explícito, integridad y persistencia; [evidencia sintética T1](./receipts/imported-training-t1-verification.json) y límites, sin endpoint ni entrenamiento real.

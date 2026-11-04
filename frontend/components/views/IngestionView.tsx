@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { API_BASE_URL } from "@/lib/api";
+import { useOptionalWebSession } from "@/components/auth/SessionBoundary";
 import {
   getPendingFeedback,
   approveFeedback,
@@ -92,6 +93,9 @@ function uploadDateLabel(value?: string | null): string {
 }
 
 export default function IngestionView({ onNavigate, sessionToken = "" }: IngestionViewProps = {}) {
+  const webUser = useOptionalWebSession();
+  const webUserId = webUser?.id;
+  const sessionIdentity = sessionToken || (webUserId ? `web:${webUserId}` : "");
   // Estado de almacenamiento GCS
   const [storageStatus, setStorageStatus] = useState<StorageStatus | null>(null);
   const [isLoadingStatus, setIsLoadingStatus] = useState<boolean>(true);
@@ -100,13 +104,13 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
   const [datasets, setDatasets] = useState<DatasetItem[]>([]);
   const [isLoadingDatasets, setIsLoadingDatasets] = useState<boolean>(true);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [privateCatalog, setPrivateCatalog] = useState<{ token: string; datasets: CatalogDataset[]; next: string | null; total: number | null }>({ token: sessionToken, datasets: [], next: null, total: null });
+  const [privateCatalog, setPrivateCatalog] = useState<{ token: string; datasets: CatalogDataset[]; next: string | null; total: number | null }>({ token: sessionIdentity, datasets: [], next: null, total: null });
   const [privateLoading, setCatalogLoading] = useState(true);
   const [privateError, setCatalogError] = useState("");
   const [privateDetail, setPrivateDetail] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState("");
   const catalogRequest = useRef<AbortController | null>(null);
-  const catalogMatchesSession = privateCatalog.token === sessionToken;
+  const catalogMatchesSession = privateCatalog.token === sessionIdentity;
   const importedDatasets = catalogMatchesSession ? privateCatalog.datasets : [];
   const catalogLoading = privateLoading || !catalogMatchesSession;
   const catalogError = catalogMatchesSession ? privateError : "";
@@ -121,7 +125,7 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
       .then(response => response.json())
       .then(access => {
         if (controller.signal.aborted) return;
-        if (access.development_mode !== true && !sessionToken) {
+        if (access.development_mode !== true && !sessionToken && !webUserId) {
           throw new Error("Inicia sesión para consultar el catálogo privado de importaciones.");
         }
         return importRequest(sessionToken, `${importBase}/datasets${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { signal: controller.signal })
@@ -129,7 +133,7 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
           .then(raw => {
             const page = catalogPageSchema.parse(raw);
             if (controller.signal.aborted) return;
-            setPrivateCatalog({ token: sessionToken, datasets: page.datasets, next: page.next_cursor, total: page.total });
+            setPrivateCatalog({ token: sessionIdentity, datasets: page.datasets, next: page.next_cursor, total: page.total });
             setCatalogError("");
             setPrivateDetail(null);
             setDownloadError("");
@@ -137,7 +141,7 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
       })
       .catch(reason => {
         if (controller.signal.aborted) return;
-        setPrivateCatalog({ token: sessionToken, datasets: [], next: null, total: null });
+        setPrivateCatalog({ token: sessionIdentity, datasets: [], next: null, total: null });
         setPrivateDetail(null);
         setDownloadError("");
         setCatalogError(reason instanceof Error ? reason.message : "No se pudo consultar el catálogo privado.");
@@ -145,17 +149,17 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
       .finally(() => {
         if (!controller.signal.aborted) setCatalogLoading(false);
       });
-  }, [sessionToken]);
+  }, [sessionToken, sessionIdentity, webUserId]);
 
   // User events clear the previous page immediately; effects need no synchronous reset.
   const fetchPrivateCatalog = useCallback((cursor: string | null = null) => {
     setCatalogLoading(true);
     setCatalogError("");
-    setPrivateCatalog({ token: sessionToken, datasets: [], next: null, total: null });
+    setPrivateCatalog({ token: sessionIdentity, datasets: [], next: null, total: null });
     setPrivateDetail(null);
     setDownloadError("");
     return loadPrivateCatalog(cursor);
-  }, [sessionToken, loadPrivateCatalog]);
+  }, [sessionIdentity, loadPrivateCatalog]);
 
   useEffect(() => {
     void loadPrivateCatalog();

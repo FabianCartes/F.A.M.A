@@ -1,0 +1,217 @@
+backend/app/web_settings.py:41: new blank line at EOF.
+docs/receipts/auth-reconciliation-tdd/01-red.stdout:8: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/01-red.stdout:9: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/02-green.stdout:8: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/02-green.stdout:9: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/03-green.stdout:8: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/03-green.stdout:9: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/04-red.stdout:8: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/04-red.stdout:9: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/05-green.stdout:8: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/05-green.stdout:9: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/06-red.stdout:8: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/06-red.stdout:9: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/07-green.stdout:8: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/07-green.stdout:9: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/08-red.stdout:8: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/08-red.stdout:9: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/09-green.stdout:8: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/09-green.stdout:9: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/09-green.stdout:17: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/09-green.stdout:18: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/09-green.stdout:26: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/09-green.stdout:27: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/09-green.stdout:35: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/09-green.stdout:36: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/12-red.stdout:8: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/12-red.stdout:9: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/13-green.stdout:8: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/13-green.stdout:9: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/14-red.stdout:8: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/14-red.stdout:9: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/15-green.stdout:8: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/15-green.stdout:9: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:8: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:9: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:17: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:18: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:26: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:27: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:35: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:36: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:44: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:45: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:53: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:54: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:62: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:63: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:71: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:72: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:80: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:81: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:89: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:90: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:98: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:99: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:107: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:108: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:116: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:117: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:125: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:126: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:134: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:135: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/16-backend.stdout:202: trailing whitespace.
++E             
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:8: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:9: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:17: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:18: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:26: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:27: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:35: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:36: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:44: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:45: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:53: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:54: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:62: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:63: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:71: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:72: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:80: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:81: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:89: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:90: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:98: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:99: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:107: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:108: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:116: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:117: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:125: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:126: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:134: trailing whitespace.
++[SQL: SELECT count(*) AS count_1 
+docs/receipts/auth-reconciliation-tdd/18-backend.stdout:135: trailing whitespace.
++FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+docs/receipts/auth-reconciliation-tdd/20-ui-red.stderr:40: new blank line at EOF.
+docs/receipts/auth-reconciliation-tdd/20-ui-red.stdout:16: new blank line at EOF.
+docs/receipts/auth-reconciliation-tdd/21-ui-green.stdout:13: new blank line at EOF.
+docs/receipts/auth-reconciliation-tdd/22-ui-cookie-red.stderr:172: new blank line at EOF.
+docs/receipts/auth-reconciliation-tdd/22-ui-cookie-red.stdout:15: new blank line at EOF.
+docs/receipts/auth-reconciliation-tdd/23-ui-cookie-green.stdout:13: new blank line at EOF.
+docs/receipts/auth-reconciliation-tdd/24-ui-401-red.stderr:25: new blank line at EOF.
+docs/receipts/auth-reconciliation-tdd/24-ui-401-red.stdout:15: new blank line at EOF.
+docs/receipts/auth-reconciliation-tdd/25-ui-401-green.stdout:13: new blank line at EOF.
+docs/receipts/auth-reconciliation-tdd/26-ui-stale-red.stderr:71: new blank line at EOF.
+docs/receipts/auth-reconciliation-tdd/26-ui-stale-red.stdout:16: new blank line at EOF.
+docs/receipts/auth-reconciliation-tdd/27-ui-stale-green.stdout:13: new blank line at EOF.
+docs/receipts/auth-reconciliation-tdd/28-ui-message-red.stderr:537: new blank line at EOF.
+docs/receipts/auth-reconciliation-tdd/28-ui-message-red.stdout:17: new blank line at EOF.
+docs/receipts/auth-reconciliation-tdd/29-ui-message-green.stderr:177: new blank line at EOF.
+docs/receipts/auth-reconciliation-tdd/29-ui-message-green.stdout:18: new blank line at EOF.
+docs/receipts/auth-reconciliation-tdd/30-ui-export-red.stderr:173: new blank line at EOF.
+docs/receipts/auth-reconciliation-tdd/30-ui-export-red.stdout:15: new blank line at EOF.
+docs/receipts/auth-reconciliation-tdd/31-ui-export-green.stdout:13: new blank line at EOF.
+docs/receipts/auth-reconciliation-tdd/32-frontend-suite.stderr:211: new blank line at EOF.
+docs/receipts/auth-reconciliation-tdd/32-frontend-suite.stdout:20: new blank line at EOF.
+docs/receipts/auth-reconciliation-tdd/34-lint.stdout:4: new blank line at EOF.
+docs/receipts/auth-reconciliation-tdd/35-build.stdout:18: trailing whitespace.
++  Generating static pages using 6 workers (1/5) 
+docs/receipts/auth-reconciliation-tdd/35-build.stdout:19: trailing whitespace.
++  Generating static pages using 6 workers (2/5) 
+docs/receipts/auth-reconciliation-tdd/35-build.stdout:20: trailing whitespace.
++  Generating static pages using 6 workers (3/5) 
+docs/receipts/auth-reconciliation-tdd/35-build.stdout:31: new blank line at EOF.
+docs/receipts/auth-reconciliation-tdd/36-frontend-suite.stdout:17: new blank line at EOF.

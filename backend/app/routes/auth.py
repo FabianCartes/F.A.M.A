@@ -17,6 +17,10 @@ from app.services.auth import (
 
 router = APIRouter(prefix="/api/auth", tags=["Autenticación y Sesión"])
 
+# Browser sessions have their own routes; login/me Bearer responses stay intact.
+from app.routes.web_auth import router as web_auth_router
+router.include_router(web_auth_router)
+
 
 # ============================================================================
 # ESQUEMAS PYDANTIC (CONTRATOS DE ENTRADA Y SALIDA)

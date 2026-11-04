@@ -94,7 +94,7 @@ describe("private dataset import", () => {
     expect(screen.queryByLabelText("Correo")).toBeNull();
     expect(screen.queryByLabelText("Contraseña")).toBeNull();
     expect(screen.queryByRole("button", { name: /Iniciar sesión|Cerrar sesión/ })).toBeNull();
-    await screen.findByText(/La vista de acceso está pendiente/);
+    await screen.findByText(/Inicia sesión para acceder a tus importaciones/);
     expect((within(screen.getByRole("dialog")).getByRole("button", { name: "Importar dataset" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -251,11 +251,12 @@ describe("private dataset import", () => {
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({ development_mode: false })));
     const { container } = render(<><button>Background action</button><DatasetImportPanel /></>);
     fireEvent.click(screen.getByRole("button", { name: "Importar dataset" }));
-    await screen.findByText(/La vista de acceso está pendiente/);
+    await screen.findByText(/Inicia sesión para acceder a tus importaciones/);
     const close = screen.getByRole("button", { name: "Cerrar importación" });
     expect(container.hasAttribute("inert")).toBe(true);
+    close.focus();
     fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
-    expect(document.activeElement).toBe(close);
+    expect(document.activeElement).toBe(screen.getByRole("link", { name: "Abrir acceso" }));
     fireEvent.keyDown(document, { key: "Tab" });
     expect(document.activeElement).toBe(close);
     screen.getByRole("button", { name: "Background action" }).focus();

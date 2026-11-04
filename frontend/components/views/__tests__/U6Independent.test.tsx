@@ -54,11 +54,11 @@ describe("S1/S4 preserved shared consumer seams", () => {
   render(<IngestionView />); await screen.findByText("AvesChilenas");
   fireEvent.click(screen.getByRole("button", { name: "Importar dataset" }));
   let dialog = await screen.findByRole("dialog");
-  await within(dialog).findByText(/vista de acceso está pendiente/i);
+  await within(dialog).findByText(/Inicia sesión para acceder a tus importaciones/i);
   fireEvent.click(within(dialog).getByRole("button", { name: /Cerrar importación/ }));
   fireEvent.click(screen.getByRole("button", { name: "Descargar versión como ZIP" }));
   dialog = await screen.findByRole("dialog");
-  await within(dialog).findByText(/vista de acceso está pendiente/i);
+  await within(dialog).findByText(/Inicia sesión para acceder a tus importaciones/i);
   fireEvent.click(within(dialog).getByRole("button", { name: "Cerrar exportación" }));
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(calls.filter(c => c.method !== "GET")).toEqual([]);

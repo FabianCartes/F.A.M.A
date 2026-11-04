@@ -2,6 +2,8 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import Link from "next/link";
+import { useOptionalWebSession } from "@/components/auth/SessionBoundary";
 import { z } from "zod";
 import { importBase, importRequest, jsonRequest, saveDownload, jobSchema, limitsSchema,
   audioSchema, issueSchema, jobsPageSchema, executionSchema,
@@ -26,8 +28,8 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange 
   const [started, setStarted] = useState(false);
   const [developmentMode, setDevelopmentMode] = useState(false);
   const [sessionRequired, setSessionRequired] = useState(false);
-  // TODO: Receive the session from the dedicated access view; role policy is
-  // deferred until that module exists. Never keep a second login in this modal.
+  // Reuse the confirmed opaque session; never embed another login here.
+  const webUser = useOptionalWebSession();
   const token = sessionToken;
   const titleId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -157,8 +159,8 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange 
     const response = await importRequest(token, `${importBase}/access`);
     const access = z.object({ development_mode: z.boolean() }).parse(await response.json());
     setDevelopmentMode(access.development_mode);
-    setSessionRequired(!access.development_mode && !token);
-    if (!access.development_mode && !token) return;
+    setSessionRequired(!access.development_mode && !token && !webUser);
+    if (!access.development_mode && !token && !webUser) return;
     const configured = await importRequest(token, `${importBase}/limits`);
     const parsed = limitsSchema.parse(await configured.json());
     await refresh();
@@ -237,7 +239,7 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange 
       <p>Importar no inicia preparación ni entrenamiento. La copia local se conserva aunque falle GCS.</p>
       <p className="text-gray-400">Las colecciones importadas se conservan fuera del catálogo compartido.</p>
       {developmentMode && <p role="status" className="rounded-lg border border-amber-800/60 bg-amber-950/40 p-3 text-amber-300">Modo de desarrollo local: identidad de pruebas compartida en este equipo, sin acceso a colecciones de otros usuarios. No exponer este modo públicamente.</p>}
-      {sessionRequired && <p role="status" className="rounded-lg border border-amber-800/60 bg-amber-950/40 p-3 text-amber-300">La vista de acceso está pendiente de integración. Para probar sin sesión, habilita el modo de desarrollo local siguiendo la guía de importación.</p>}
+      {sessionRequired && <p role="status" className="rounded-lg border border-amber-800/60 bg-amber-950/40 p-3 text-amber-300">Inicia sesión para acceder a tus importaciones. <Link href="/login" className="underline">Abrir acceso</Link>. El modo de desarrollo local conserva su alcance separado según la guía de importación.</p>}
       {!limits && error && <button className={buttonClass} disabled={!!busy} onClick={() => void act("Consultando configuración…", initialize)}>Reintentar conexión</button>}
         {limits && <>
           <p>Límites del servidor: ZIP {limits.received_bytes} bytes; expansión {limits.expanded_bytes} bytes; {limits.entries} entradas; profundidad {limits.depth}; rutas {limits.path_bytes} bytes; WAV {limits.audio_bytes} bytes / {limits.audio_seconds} s; validación {limits.validation_seconds} s. Hasta {limits.concurrent_imports} importaciones activas y una operación de almacenamiento simultánea. Temporales: {limits.ttl_seconds} s; reserva libre: {limits.free_bytes} bytes.</p>

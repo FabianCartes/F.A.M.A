@@ -7,8 +7,13 @@ import PredictionView from "@/components/views/PredictionView";
 import DashboardView from "@/components/views/DashboardView";
 import IngestionView from "@/components/views/IngestionView";
 import TrainingView from "@/components/views/TrainingView";
+import SessionBoundary from "@/components/auth/SessionBoundary";
 
 export default function Home() {
+  return <SessionBoundary><Workspace /></SessionBoundary>;
+}
+
+function Workspace() {
   const [activeTab, setActiveTab] = useState<TabType>("prediccion");
 
   return (

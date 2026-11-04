@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, apiSessionRevision, notifyUnauthorized } from "@/lib/api";
 import {
   HardwareStatus,
   HardwareStatusSchema,
@@ -59,6 +59,7 @@ async function request<T>(
   options?: RequestInit,
   schemaParser?: (data: unknown) => T
 ): Promise<T> {
+  const revision = apiSessionRevision();
   let res: Response;
   try {
     res = await fetch(url, options);
@@ -75,6 +76,7 @@ async function request<T>(
   }
 
   if (!res.ok) {
+    if (res.status === 401) notifyUnauthorized(revision);
     const errDetail =
       (typeof data === "object" && data !== null && "detail" in data)
         ? String((data as { detail: unknown }).detail)

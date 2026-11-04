@@ -1,0 +1,14 @@
+PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-mvt6g4og
+[Database] Tablas sincronizadas exitosamente en PostgreSQL.
+[SuperEnsemble] Checkpoint cargado: efficientnet_gpu_pipeline_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: convnext_nano_35e_best.pt
+[SuperEnsemble] Checkpoint cargado: resnet34d_35e_best.pt
+[SuperEnsemble] Super-Ensamble listo en cpu con 3 modelo(s).
+[Startup Warning] Excepción al realizar seeding inicial: (sqlite3.OperationalError) no such table: usuario
+[SQL: SELECT count(*) AS count_1 
+FROM (SELECT usuario.id_usuario AS usuario_id_usuario, usuario.correo_electronico AS usuario_correo_electronico, usuario.hash_contrasena AS usuario_hash_contrasena, usuario.rol AS usuario_rol, usuario.nombre_completo AS usuario_nombre_completo, usuario.activo AS usuario_activo, usuario.fecha_creacion AS usuario_fecha_creacion, usuario.ultimo_acceso AS usuario_ultimo_acceso 
+FROM usuario) AS anon_1]
+(Background on this error at: https://sqlalche.me/e/21/e3q8)
+.
+1 passed in 1.63s
+CHECK_SUMMARY {"phase": "isolated_training_fixture_consumer_suite", "process_exit_code": 0, "pytest_exit_code": 0, "deselected_cases": [], "status": "passed", "guard_before_collection_fixtures_and_body": true, "phase_deadline_seconds": 30, "call_reports": [{"nodeid": "tests/test_web_session_integration.py::test_session_schema_requires_explicit_idempotent_migration", "phase": "call", "outcome": "passed", "duration_seconds": 0.094}], "nonpassing_reports": [], "sqlite_memory_connection_count": 4, "excluded_completed_cases": [], "private_scratch_cleanup": true, "code_guard_and_documentation_preserved": true, "only_sqlite_synthetic_cpu": true, "network_live_db_forbidden": true, "no_further_environment_recovery": true, "protected_paths_unchanged": true, "protected_path_count": 30, "inventory": "docs/receipts/training-checks-inventory.json"}

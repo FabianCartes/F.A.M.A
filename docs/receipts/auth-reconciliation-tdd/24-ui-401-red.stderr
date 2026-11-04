@@ -1,0 +1,25 @@
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  components/auth/__tests__/workspace.test.tsx > clears private state on imported HTTP 401 without blocking legacy
+AssertionError: expected <input …(2)></input> to be null
+
+- Expected:
+null
+
++ Received:
+<input
+  aria-label="Private draft"
+  value="private cached data"
+/>
+
+ ❯ components/auth/__tests__/workspace.test.tsx:23:52
+     21|   fireEvent.change(screen.getByLabelText("Private draft"), { target: {…
+     22|   await act(async () => { await importRequest("", "/api/ingestion/impo…
+     23|   expect(screen.queryByLabelText("Private draft")).toBeNull();
+       |                                                    ^
+     24|   expect(screen.getByText("Legacy stays available")).toBeDefined();
+     25|   expect(screen.getByRole("link", { name: "Iniciar sesión" })).toBeDef…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+

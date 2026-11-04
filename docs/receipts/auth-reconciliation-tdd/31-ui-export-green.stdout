@@ -1,0 +1,13 @@
+
+> frontend@0.1.0 test
+> vitest run components/views/__tests__/DatasetImportPanel.test.tsx components/views/__tests__/DatasetExport.test.tsx components/auth app/__tests__/session.test.tsx
+
+
+ RUN  v5.0.2 /home/kevin/Work/fama/frontend
+
+
+ Test Files  6 passed (6)
+      Tests  31 passed (31)
+   Start at  00:21:51
+   Duration  1.62s (environment 46%, tests 34%, import 14%, transform 6%, worker 1%)
+

@@ -1,0 +1,20 @@
+
+> frontend@0.1.0 test
+> vitest run
+
+
+ RUN  v5.0.2 /home/kevin/Work/fama/frontend
+
+ ❯ components/views/__tests__/U6Independent.test.tsx (14 tests | 1 failed) 3988ms
+   ❯ S1/S4 preserved shared consumer seams (4)
+     × keeps ZIP controls operable and session-gated without submitting data 1240ms
+
+ Test Files  1 failed | 38 passed (39)
+      Tests  1 failed | 403 passed (404)
+   Start at  00:22:02
+   Duration  10.78s (tests 57%, environment 32%, import 6%, transform 4%)
+
+Environment  jsdom was created 39 times · 34.90s total, 32% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+

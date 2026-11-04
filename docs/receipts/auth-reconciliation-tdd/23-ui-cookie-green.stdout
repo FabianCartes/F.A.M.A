@@ -1,0 +1,13 @@
+
+> frontend@0.1.0 test
+> vitest run components/auth/__tests__/session-imports.test.tsx
+
+
+ RUN  v5.0.2 /home/kevin/Work/fama/frontend
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  00:18:10
+   Duration  779ms (environment 47%, tests 20%, transform 17%, import 16%, worker 1%)
+

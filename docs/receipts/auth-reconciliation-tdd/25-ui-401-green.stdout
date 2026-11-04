@@ -1,0 +1,13 @@
+
+> frontend@0.1.0 test
+> vitest run components/auth/__tests__/workspace.test.tsx components/auth/__tests__/login.test.tsx
+
+
+ RUN  v5.0.2 /home/kevin/Work/fama/frontend
+
+
+ Test Files  2 passed (2)
+      Tests  12 passed (12)
+   Start at  00:19:06
+   Duration  910ms (environment 47%, tests 31%, import 14%, transform 8%, worker 1%)
+

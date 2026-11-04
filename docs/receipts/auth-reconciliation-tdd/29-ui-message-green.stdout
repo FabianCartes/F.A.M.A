@@ -1,0 +1,18 @@
+
+> frontend@0.1.0 test
+> vitest run components/views/__tests__/DatasetImportPanel.test.tsx components/views/__tests__/DatasetExport.test.tsx components/auth app/__tests__/session.test.tsx
+
+
+ RUN  v5.0.2 /home/kevin/Work/fama/frontend
+
+ ❯ components/views/__tests__/DatasetImportPanel.test.tsx (9 tests | 1 failed) 639ms
+   ❯ private dataset import (9)
+     × contains keyboard focus and restores background interactivity after closing 15ms
+ ❯ components/views/__tests__/DatasetExport.test.tsx (4 tests | 1 failed) 1473ms
+   × keeps session requirements and retries catalogue failures without starting imports 1011ms
+
+ Test Files  2 failed | 4 passed (6)
+      Tests  2 failed | 28 passed (30)
+   Start at  00:20:54
+   Duration  2.39s (tests 41%, environment 41%, import 12%, transform 6%, worker 1%)
+

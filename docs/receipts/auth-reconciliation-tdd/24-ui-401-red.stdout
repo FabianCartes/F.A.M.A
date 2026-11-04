@@ -1,0 +1,15 @@
+
+> frontend@0.1.0 test
+> vitest run components/auth/__tests__/workspace.test.tsx
+
+
+ RUN  v5.0.2 /home/kevin/Work/fama/frontend
+
+ ❯ components/auth/__tests__/workspace.test.tsx (3 tests | 1 failed) 125ms
+   × clears private state on imported HTTP 401 without blocking legacy 39ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed (3)
+   Start at  00:18:55
+   Duration  663ms (environment 50%, tests 21%, import 14%, transform 14%, worker 1%)
+
