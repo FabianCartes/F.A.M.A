@@ -19,7 +19,7 @@ docs/
 ├── arquitectura/                # Diseño de sistemas, pipelines, MLOps y despliegue
 ├── limites/                     # Límites matemáticos, físicos y problemas conocidos
 ├── manuales/                    # Manual de usuario, revisión, despliegue e índices canónicos
-├── adr/                         # Architectural Decision Records (ADR 0001 a 0051)
+├── adr/                         # Architectural Decision Records (ADR 0001 a 0052)
 ├── receipts/                    # Recibos técnicos reproducibles en formato JSON (RDD)
 ├── duplicados-exactos/           # Tarea acotada: admisión de feedback sin duplicados SHA-256
 └── images/                      # Diagramas, matrices de confusión y gráficos vectoriales
@@ -67,6 +67,8 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`benchmark_local_cpu_20261016.md`](./modelos/benchmark_local_cpu_20261016.md): Mediciones reales CPU autorizadas de un audio/checkpoint; fallos de compatibilidad conservados, preprocesamiento medido y predictor detenido por filtro de ruido, sin acreditar forward, latencia hasta pantalla ni 50 GB.
 
 ### 3. [`docs/arquitectura/`](./arquitectura/) — Arquitectura de Software y MLOps
+* [`0052-preparacion-local-de-datasets-importados.md`](./adr/0052-preparacion-local-de-datasets-importados.md): Contrato de T0 para preparación local con mapa de grupos explícito y cobertura de clases; snapshot local separado del manifiesto remoto, sin alterar ZIP, legacy ni GCS de predicción. Implementación pendiente.
+* [`entrenamiento-datasets-importados-plan.md`](./arquitectura/entrenamiento-datasets-importados-plan.md): Plan para una nueva sesión: puente local de importación a preparación y entrenamiento, preservación del ZIP, snapshots, distribución y pruebas. T0 cerrada como investigación y contrato (grupos explícitos, cobertura train/val/test, WAV single-label local); T1–T7 sin iniciar. 10 grabaciones independientes por clase como referencia de advertencia, no rechazo numérico ni autorización de entrenamiento real.
 * [`large-zip-gcs-plan.md`](./arquitectura/large-zip-gcs-plan.md): Texto íntegro del plan original de 17 secciones; su estado inicial es histórico y prevalece el seguimiento de implementación.
 * [`large-zip-gcs.md`](./arquitectura/large-zip-gcs.md): Plan y seguimiento activo por cortes para ZIP grandes, metadatos normalizados y reconstrucción desde GCS; no acredita ampliación de límites ni despliegue.
 * [`0035-contained-zip-validation.md`](./adr/0035-contained-zip-validation.md): Contención Linux de interpretación ZIP/ZIP64 y decoder WAV, presupuestos de proceso, rechazo seguro y separación de publicación. Procedimiento T4 en [trabajos de importación](./manuales/trabajos-importacion-datasets.md#t4-validacion-zip64-contenida); verificación/cierre vigente en el seguimiento.
@@ -90,6 +92,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`22_propuesta_vista_ayuda_y_centro_de_conocimiento.md`](./arquitectura/22_propuesta_vista_ayuda_y_centro_de_conocimiento.md): Diseño y especificación del centro de conocimiento e interactividad en frontend.
 
 ### 4. [`docs/manuales/`](./manuales/) — Manuales y Guías Operativas
+* [`snapshots-locales-entrenamiento.md`](./manuales/snapshots-locales-entrenamiento.md): Servicio local T1 por propietario/ID, esquema aditivo explícito, integridad y persistencia; [evidencia sintética T1](./receipts/imported-training-t1-verification.json) y límites, sin endpoint ni entrenamiento real.
 * [`presupuesto-fisico-importacion-dev.md`](./manuales/presupuesto-fisico-importacion-dev.md): Política física T6.1, ciclo opt-in T6.2 y builder compartido T6.3; perfil numérico candidato, activación explícita solo de laboratorio vacío y obligaciones SSD/procesos pendientes (sin activación operativa ni prueba grande).
 * [`integracion-importacion-datasets.md`](./manuales/integracion-importacion-datasets.md): Recorrido T8 de recepción a descarga, matriz de aceptación, presupuestos de páginas/DOM, mediciones sintéticas y guía consolidada de almacenamiento, manifiestos y recuperación; no certifica despliegue ni escala máxima.
 * [`trabajos-importacion-datasets.md`](./manuales/trabajos-importacion-datasets.md): Migración, admisión durable, ejecución, HTTP202/panel, publicación fenced, limpieza protegida y CLI de un trabajo; pruebas sintéticas entre procesos y límites operacionales. T3a añade reservas; T3b añade fragmentos durables; T3c conecta el panel y verifica todo el prefijo; T3d añade cuotas por dataset y liberación atómica de reservas. T3a–T3d cerrados localmente dentro del alcance sintético, sin habilitar10GiB ni certificar operación real. [ADR 0030](./adr/0030-admision-durable-importaciones.md), [ADR 0031](./adr/0031-fenced-import-publication.md), [ADR 0032](./adr/0032-durable-receipt-reservations.md), [ADR 0033](./adr/0033-durable-import-chunks.md) y [ADR 0034](./adr/0034-dataset-import-quotas.md).

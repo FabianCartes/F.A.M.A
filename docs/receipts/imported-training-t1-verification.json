@@ -1,0 +1,93 @@
+{
+  "scope": "T1 local imported-dataset snapshots only",
+  "baseline": "dd929cd45c894368c69f6fde3d4606c4381ce222",
+  "source_verification": "synthetic SQLite-memory, guarded original runner; no operational proof",
+  "candidate_sha256": {
+    "backend/app/models/training_snapshot.py": "f6a490a6af9478b8ee84bf926120500427cc5076866b9040687da945ce31a308",
+    "backend/app/services/training_snapshots.py": "a7161ab5a99e344c27598fd4593aeabf3f55942cfa867fdb3e98267a72101dfb",
+    "backend/scripts/migrate_training_snapshots.py": "fcc64a0524072038e6f1b504d667ef8d2e1287f921a6ce0b90be80f12e3c0ae2",
+    "backend/tests/test_training_snapshot_migration.py": "096c4eefe4bd24fcd7896ecf7f5591a4c40a46ec1798923e7a5f4260bf6c9435",
+    "backend/tests/test_training_snapshots.py": "2e780a38c206e27f441cbdda68d46e3912acd54222da17112a990e94c141e840"
+  },
+  "combined_suite": {
+    "command": "cd backend && PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /home/kevin/Work/fama/.venv/bin/python tests/run_isolated_training_checks.py tests/test_training_snapshots.py tests/test_training_snapshot_migration.py tests/test_dataset_import_api.py tests/test_dataset_import_execution.py tests/test_dataset_import_manifests.py",
+    "exit": 0,
+    "passed": 66,
+    "pytest_seconds": 16.3,
+    "log": "/tmp/gp81Qz9r/gentle-jobs-uc8bz8/job-1.log",
+    "timing_scope": "before test-only migration fixture corrections; production unchanged",
+    "summary": {
+      "phase": "isolated_training_fixture_consumer_suite",
+      "process_exit_code": 0,
+      "pytest_exit_code": 0,
+      "deselected_cases": [],
+      "status": "passed",
+      "guard_before_collection_fixtures_and_body": true,
+      "phase_deadline_seconds": 30,
+      "nonpassing_reports": [],
+      "sqlite_memory_connection_count": 66,
+      "excluded_completed_cases": [],
+      "private_scratch_cleanup": true,
+      "code_guard_and_documentation_preserved": true,
+      "only_sqlite_synthetic_cpu": true,
+      "network_live_db_forbidden": true,
+      "no_further_environment_recovery": true,
+      "protected_paths_unchanged": true,
+      "protected_path_count": 30,
+      "inventory": "docs/receipts/training-checks-inventory.json",
+      "call_report_count": 66
+    }
+  },
+  "independent": {
+    "task": "mw1dc302-4-5q8f",
+    "exit": 0,
+    "passed": 4,
+    "pytest_seconds": 1.36,
+    "result": "No severe deterministic code blocker identified; absent-table fixture proof gap reported. No new global independent verdict after correction."
+  },
+  "migration_correction": {
+    "initial_parent_module": {
+      "exit": 0,
+      "passed": 3,
+      "pytest_seconds": 0.54
+    },
+    "independent_targeted_recheck": {
+      "task": "mw1dedld-5-z603",
+      "exit": 1,
+      "failed": 1,
+      "pytest_seconds": 0.67,
+      "error": "DROP training_snapshot_member: table already absent, fixture setup failed"
+    },
+    "final_parent_selector": {
+      "selector": "tests/test_training_snapshot_migration.py::test_migration_is_idempotent_and_result_is_publicly_usable",
+      "exit": 0,
+      "passed": 1,
+      "pytest_seconds": 0.47,
+      "result": "Fixture DROP checkfirst=True, asserts both tables absent; public create rejects before migrate; migrate twice; public create/get/verified class and WAV bytes succeed",
+      "deselected": [],
+      "sqlite_memory_connections": 1,
+      "protected_paths_unchanged": 30,
+      "private_scratch_cleanup": true
+    }
+  },
+  "preservation": {
+    "eight_selected_paths_match_baseline": true
+  },
+  "evidence_limitation": {
+    "raw_worker_red_green_log_files_retained": false,
+    "available": "worker tool transcript; exact commands/exits/extracts and chronology in docs/manuales/snapshots-locales-entrenamiento.md",
+    "human_disposition": "Accept the documented evidence limitation",
+    "answer_token": "accept-transcript-limitation"
+  },
+  "not_exercised": [
+    "PostgreSQL",
+    "Docker Python 3.12",
+    "multiprocess contention",
+    "hard crash/power loss",
+    "GPU",
+    "real training",
+    "GCS",
+    "operational migration"
+  ],
+  "native_review": "not yet assessed on committed candidate; review result is separate from functional evidence"
+}

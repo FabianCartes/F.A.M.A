@@ -2,6 +2,12 @@
 kanban-plugin: basic
 ---
 
+## Entrenamiento de datasets importados — plan para nueva sesión
+
+- [x] **TRAIN-IMPORT-T0 — investigación y contrato de diseño cerrados:** [resultado T0](arquitectura/entrenamiento-datasets-importados-plan.md#resultado-técnico-de-t0) y [ADR 0052](adr/0052-preparacion-local-de-datasets-importados.md). Contratos de snapshot local y registry→predictor trazados; usuario confirma mapa explícito de grupos, cobertura de clases en train/val/test y WAV single-label local. Predicción HTTP conserva GCS. Sin implementación ni pruebas funcionales.
+- [ ] **TRAIN-IMPORT-T1 — implementación autorizada en curso:** snapshot local propio, completo y estable por propietario/ID; rama `feat/imported-training-snapshots`, TDD sintético y verificación independiente de ownership/concurrencia antes del cierre. Cortes locales en rama de integración, sin publicación. No exponer endpoints/admisión todavía. [Seguimiento T1](arquitectura/entrenamiento-datasets-importados-plan.md).
+- [ ] **TRAIN-IMPORT-T2–T7 — sin iniciar:** preparación reproducible, UI/admisión y trazabilidad posteriores. Conservar ZIP, legacy y cambios locales; diez grabaciones independientes por clase solo como advertencia. T7 requiere autorización operacional separada. Sin entrenamiento real, servicios, GCS ni migraciones existentes por este plan.
+
 ## ZIP grandes y reconstrucción GCS — implementación en curso
 
 - [x] **ZIP-DEV-WORKER — entregado exclusivamente a dev local:** fuente `5a7c79f` + cierre `c70540f`, avance rápido sin conflictos y sin nuevo backend; [registro de entrega](receipts/dev-worker-local-delivery.json) y [alcance](manuales/integracion-dev-worker-plazo.md).85PASS/diferencial5casos/independiente source-only son evidencia previa con bytes probados iguales, no nuevas ejecuciones. Sin push/PR/servicios/auth/esquema/pool/perfil grande. [Verificación histórica](receipts/dev-worker-execution-bound.json).
