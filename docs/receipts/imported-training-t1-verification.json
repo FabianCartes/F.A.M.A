@@ -89,5 +89,23 @@
     "GCS",
     "operational migration"
   ],
-  "native_review": "not yet assessed on committed candidate; review result is separate from functional evidence"
+  "native_review": {
+    "assessment": "unavailable",
+    "committedOnly": true,
+    "baseRef": "dd929cd45c894368c69f6fde3d4606c4381ce222",
+    "error": "untracked files require an explicit declaration",
+    "nativeRisk": "unassessable",
+    "agentEscalation": {
+      "item": 2,
+      "risk": "high"
+    },
+    "independentVerifier_required": true,
+    "independent_requirement_satisfied": "Independent source review/focused checks; sole fixture proof gap corrected and public selector verified by parent.",
+    "reviewDue": "not supplied by provider",
+    "lineage_created": false,
+    "review_started": false,
+    "approved": false,
+    "delivery_authority": "none; local work-unit commit authorized by ODD, no push/PR/merge"
+  },
+  "work_unit_commit": "36bf33806d4678246c76331b7abede7c2a81e8df"
 }

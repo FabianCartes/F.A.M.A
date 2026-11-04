@@ -37,6 +37,8 @@ La resolución exige igualdad exacta de propietario tanto para dataset como para
 
 No se deducen grupos/grabaciones ni independencia; son T2. No se verifican aquí GPU, PostgreSQL operacional, calidad ML ni entrenamiento real.
 
+Unidad local: commit `36bf33806d4678246c76331b7abede7c2a81e8df`. ASSESS nativo del rango exacto comprometido contra `dd929cd45c894368c69f6fde3d4606c4381ce222` quedó **unavailable** porque el proveedor exige declaración de archivos no rastreados ajenos; devolvió nativeRisk unassessable y, por escalación de seguridad, independiente requerida. No devolvió `reviewDue` ni continuación de revisión. No se inició lineage, no hubo consentimiento de review ni aprobación nativa; no se modificó autoridad ni se limpiaron archivos ajenos para forzarla. La verificación funcional e independiente anterior no se presenta como review nativa.
+
 ## Persistencia y migración explícita
 
 Tablas nuevas: `training_snapshot` y `training_snapshot_member`. Importar el módulo no ejecuta DDL. El runtime no migra implícitamente ni repara un esquema ausente/incompatible.
