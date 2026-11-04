@@ -61,7 +61,21 @@
     "human_disposition": "Acepto",
     "meaning": "Accept documented evidence limit and continue local closure/commit, not independent/native approval"
   },
-  "native_review": "pending exact committed-range assessment",
+  "native_review": {
+    "assessment": "unavailable",
+    "baseRef": "e1f3a31c0b216f300fd9fbb9f83cbc84832d264e",
+    "committedOnly": true,
+    "error": "untracked files require an explicit declaration",
+    "nativeRisk": "unassessable",
+    "agentEscalation": {
+      "item": 2,
+      "risk": "high"
+    },
+    "reviewDue": "not supplied",
+    "review_started": false,
+    "approval": false,
+    "independent_recheck_limit": "Explicitly accepted by human; no claim of independent post-fix approval."
+  },
   "not_exercised": [
     "excluded CLI subprocess case",
     "PostgreSQL",
@@ -70,5 +84,11 @@
     "multiprocess/hard-crash persistence",
     "real datasets/training/GCS/services/migration"
   ],
-  "preservation": "Eight selected unrelated/protected paths matched parent baseline before correction; final check recorded at closure."
+  "preservation": "Final eight selected unrelated/protected paths match parent baseline; unrelated frontend and three historical manuals excluded from commit.",
+  "work_unit_commit": "73526d6f4ab0c52bc9bc7a16d43994155692794a",
+  "whitespace": {
+    "full_staged_check_exit": 2,
+    "reason": "Unmodified raw pytest stdout logs contain trailing whitespace; preserved as evidence.",
+    "code_documentation_check_excluding_raw_logs_exit": 0
+  }
 }
