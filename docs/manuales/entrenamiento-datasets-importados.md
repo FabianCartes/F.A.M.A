@@ -18,7 +18,9 @@ La implementación local incorpora el puente de preparación, cliente privado ti
 
 ### Uso de la interfaz
 
-1. Con una sesión web real, cambie **Tipo de fuente** a **Importada**. El catálogo privado se carga por separado del catálogo/hardware/historial legacy; un fallo privado no se presenta como catálogo vacío exitoso.
+Con sesión activa, Entrenamiento abre por defecto la fuente importada: al volver tras confirmar una importación, consulte su colección y los requisitos pendientes sin cambiar la fuente. Legacy permanece como opción secundaria y una selección manual se conserva al refrescar la misma sesión. Sin una preparación propia válida seleccionada, el inicio permanece deshabilitado; importar no prepara ni entrena automáticamente.
+
+1. Con una sesión web real, compruebe que **Tipo de fuente** muestra **Importada**. El catálogo privado se carga por separado del catálogo/hardware/historial legacy; un fallo privado no se presenta como catálogo vacío exitoso.
 2. Seleccione su colección por ID estable. Para reutilizar una preparación, elija explícitamente su par snapshot/versión en **Preparación existente**: no crea una nueva copia ni inicia entrenamiento.
 3. Para preparar una cohorte nueva, pulse **Crear snapshot y obtener plantilla**. Espere el recurso completo; consulte los miembros verificados como JSON (ID, clase y ruta original de anotación, no una ruta del servidor). La plantilla deja recording_id/group_id vacíos deliberadamente.
 4. Complete el mapa exacto, la procedencia JSON y el perfil completo compatible, además de la semilla. No se infieren grupos ni políticas por el nombre de la colección. Pulse **Preparar snapshot** y espere el resultado. Corrija los requisitos indicados si falla; las advertencias por cantidad reducida no deshabilitan una versión preparada válida.
@@ -45,8 +47,16 @@ Evidencia focal del candidato: `docs/receipts/imported-training-t4-tdd/`; consul
 
 ## Catálogo y selección HTTP
 
-Los ejemplos describen contratos; no son instrucciones para iniciar trabajos sobre una instancia real sin la autorización operacional correspondiente.
+Los modelos importados permanecen privados e inactivos: el propietario puede consultar su catálogo, pero `POST /api/training/models/{id}/activate` devuelve HTTP 200 con `{"success": false, "error": "Los modelos importados no pueden activarse globalmente."}` sin cambiar activos ni el default global. El acceso anónimo conserva 401 y el propietario ajeno 404; esto no cambia la activación legacy ni acredita todavía predicción HTTP importada.
 
+Los ejemplos describen contratos; no son instrucciones para iniciar trabajos sobre una instancia real sin la autorización operacional correspondiente.
+Un predictor público ya registrado conserva la selección legacy sin un preflight DB adicional; esto no promete éxito offline: un fallo posterior al guardar la predicción sigue respondiendo 500 después de la subida confirmada y la inferencia.
+Por decisión explícita, un registro frío cuya identidad no pueda verificarse no enumera ID, aliases ni rutas en errores del catálogo; si era activo, bloquea el default con un error genérico. Esto estrecha el diagnóstico legacy de identidades desconocidas, no sus permisos: los rechazos identificables se conservan cuando la identidad legacy está acreditada.
+
+En la integración local T5, `POST /api/predict?model_id=<ID o alias exacto>` resuelve un importado desde su asociación persistida y exige su propietario activo mediante cookie/Bearer, incluso con registro frío. Admite ID canónico, ID numérico, nombre y stem del checkpoint persistido; un recurso ajeno responde 404 sin enumerarlo y uno propio sin identidad exige autenticación. La publicación valida procedencia, informes y pesos antes de usarlo, no cambia el default y conserva la confirmación GCS obligatoria antes de inferir. Omitir el ID o usar `default` conserva la selección pública legacy. La prueba HTTP focal está pendiente: este contrato no acredita operación real ni cierre de T5.
+
+- `GET /api/models`: conserva el catálogo público legacy, sin modelos importados ni autenticación global nueva.
+- `GET /api/models?include_imported=true`: en la integración local T5 añade solo los modelos importados del usuario real activo, autenticado mediante el mismo contrato cookie/Bearer de los recursos importados. No acepta un propietario elegido por el cliente ni cambia el default global. La aparición en este catálogo no acredita predicción HTTP ni el cierre de T5. La comprobación focal del catálogo con Bearer está registrada en `docs/receipts/imported-training-t5-tdd/19-green-private-http-catalogue.json`; no valida cookies ni el startup de la aplicación.
 - `GET /api/training/datasets`: conserva el catálogo legacy y su acceso anterior.
 - `GET /api/training/datasets?include_imported=true`: exige identidad real existente y activa mediante cookie web o Bearer, según el [contrato de sesión](sesion-web-importados.md); añade solo las colecciones del propietario. Cada entrada importada tiene `source_type: "imported"`, `id`, `name`, `eligible`, `reasons` y `preparations`.
 - Una opción preparada contiene `snapshot_id`, `prepared_version`, `eligible`, `reasons`, `profile` y `warnings`. Este `prepared_version` se envía como **`imported_prepared_version`** al iniciar, no como la opción homónima de preparados legacy.

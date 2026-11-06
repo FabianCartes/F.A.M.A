@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { API_BASE_URL, apiSessionRevision, notifyUnauthorized } from "@/lib/api";
 import { useOptionalWebSession } from '@/components/auth/SessionBoundary';
 import ImportedTrainingPanel from '@/components/training/ImportedTrainingPanel';
-import type { ImportedSelection } from '@/lib/schemas/importedTraining';
+import type { ImportedSelection, ImportedProfile } from '@/lib/schemas/importedTraining';
 import type { ModelHistoryItem } from "@/lib/schemas/training";
 import { sumWeights, normalizeWeightsTo100 } from "@/lib/utils/ensembleWeights";
 import {
@@ -107,7 +107,7 @@ export default function TrainingView() {
   const mounted = useRef(true);
   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;privateStart.current?.abort();};},[]);
   const session = useOptionalWebSession();
-  const [sourceType, setSourceType] = useState('legacy');
+  const [sourceType, setSourceType] = useState(() => session ? 'imported' : 'legacy');
   const [imported, setImported] = useState<ImportedSelection|null>(null);
   const [terminalMessage, setTerminalMessage] = useState('');
   const effectiveImported = sourceType === 'imported' && session ? imported : null;
@@ -171,6 +171,11 @@ export default function TrainingView() {
 
   // Ventaneo Denso y Captura de Eventos Breves
   const [hopSeconds, setHopSeconds] = useState<number | string>(1.0);
+  const importedProfile = useMemo<ImportedProfile>(() => ({
+    architecture: ({'EfficientNet-B0':'efficientnet_b0','ConvNeXt-Nano':'convnext_nano','ResNet-34d':'resnet34d','PANNs-CNN14':'panns_cnn14','AudioCNN':'audio_cnn'} as Record<string,ImportedProfile['architecture']>)[architecture],
+    channels:1, preprocessing:'mono_mel', windowing:'energy_peak_pad', window_hop_seconds:Number(hopSeconds),
+    audio:{target_sr:Number(targetSr),duration_seconds:Number(durationSeconds),n_mels:Number(nMels),n_fft:Number(nFft),hop_length:Number(hopLength),f_min:Number(fMin),f_max:Math.min(Number(fMax),Number(targetSr)/2),use_gpu_frontend:false},
+  }),[architecture,hopSeconds,targetSr,durationSeconds,nMels,nFft,hopLength,fMin,fMax]);
   const [aggregationMode, setAggregationMode] = useState<"max" | "mean">("max");
   const [gemP, setGemP] = useState<number | string>(3.0);
   const [vadThreshold, setVadThreshold] = useState<number | string>(0.0);
@@ -570,6 +575,19 @@ export default function TrainingView() {
   // 3. Ciclo de Vida del Entrenamiento (RF_04 / CU_INV_03)
   const [isTraining, setIsTraining] = useState<boolean>(false);
   const [isStopping, setIsStopping] = useState<boolean>(false);
+  const sessionRevision = apiSessionRevision();
+  const [progressRevision, setProgressRevision] = useState<number | null>(null);
+  const progressKnown = progressRevision === sessionRevision;
+  const [startingRevision, setStartingRevision] = useState<number | null>(null);
+  const isStarting = startingRevision === sessionRevision;
+  const startInFlight = useRef<AbortController | null>(null);
+  useEffect(() => () => {
+    startInFlight.current?.abort();
+    startInFlight.current = null;
+  }, [sessionRevision]);
+  const progressScope = useRef<number | null>(null);
+  const [progressError, setProgressError] = useState('');
+  const [progressRetry, setProgressRetry] = useState(0);
   const [currentEpoch, setCurrentEpoch] = useState<number>(0);
   const [totalEpochs, setTotalEpochs] = useState<number>(10);
   const [currentTrainLoss, setCurrentTrainLoss] = useState<number>(0.0);
@@ -747,7 +765,7 @@ export default function TrainingView() {
   // Cargar historial de modelos desde PostgreSQL
   const fetchHistory = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/training/history`);
+      const res = await fetch(`${API_BASE_URL}/api/training/history?include_imported=true`);
       if (res.ok) {
         const data = await res.json();
         setHistory(data.history || []);
@@ -766,7 +784,7 @@ export default function TrainingView() {
         const [resHw, resDs, resHist] = await Promise.all([
           fetch(`${API_BASE_URL}/api/training/hardware`).catch(() => null),
           fetch(`${API_BASE_URL}/api/training/datasets`).catch(() => null),
-          fetch(`${API_BASE_URL}/api/training/history`).catch(() => null),
+          fetch(`${API_BASE_URL}/api/training/history?include_imported=true`).catch(() => null),
         ]);
 
         if (isCancelled) return;
@@ -808,17 +826,25 @@ export default function TrainingView() {
     let cancelled = false;
     const requestRevision = apiSessionRevision();
     const controller = new AbortController();
-    if (isTraining) {
-      timer = setInterval(async () => {
+    const readProgress = async () => {
         try {
           const res = await fetch(`${API_BASE_URL}/api/training/progress`, {credentials:'same-origin',signal:controller.signal});
-          if(cancelled || (sourceType==='imported' && requestRevision!==apiSessionRevision()))return;
-          if(sourceType==='imported' && !res.ok){
+          if(cancelled || requestRevision!==apiSessionRevision())return;
+          if(!res.ok){
             if(res.status===401)notifyUnauthorized(requestRevision);
-            setIsTraining(false);setIsStopping(false);setTerminalMessage('No se pudo consultar el recurso privado. Compruebe la sesión y vuelva a seleccionar la fuente.');return;
+            throw new Error(`No se pudo consultar el progreso (HTTP ${res.status}).`);
           }
           if (res.ok) {
             const data = await res.json();
+            if(cancelled || requestRevision!==apiSessionRevision())return;
+            if (!['idle','training','evaluating','stopping','completed','failed','stopped','checkpoint_persisted'].includes(data.status) || data.error) throw new Error('Respuesta de progreso no válida.');
+            progressScope.current = requestRevision;
+            setProgressRevision(requestRevision);
+            setProgressError('');
+            // Evaluation still owns the backend job and blocks a new start.
+            setIsTraining(data.status === 'training' || data.status === 'evaluating' || data.status === 'stopping');
+            if (data.status === 'stopping') setIsStopping(true);
+            else if (data.status !== 'training') setIsStopping(false);
             setCurrentEpoch(data.epoch || 0);
             setTotalEpochs(data.total_epochs || parseInt(epochs) || 10);
             setCurrentTrainLoss(data.train_loss || 0.0);
@@ -839,7 +865,10 @@ export default function TrainingView() {
             }
 
             if (data.status === "completed" || data.status === "failed" || data.status === "stopped" || data.status === 'checkpoint_persisted') {
-              if (data.status === 'checkpoint_persisted') setTerminalMessage('Checkpoint persistido; evaluación pendiente. No confirma publicación ni activación.');
+              setTerminalMessage(data.status === 'checkpoint_persisted'
+                ? 'Checkpoint persistido; evaluación pendiente. No confirma publicación ni activación.'
+                : data.status === 'stopped' ? 'Entrenamiento detenido.'
+                : data.status === 'failed' ? 'El entrenamiento falló.' : 'Entrenamiento completado.');
               if(timer)clearInterval(timer);
               setIsTraining(false);
               setIsStopping(false);
@@ -847,20 +876,24 @@ export default function TrainingView() {
               fetchHardware();
             }
           }
-        } catch {
-          // Reintento en próximo ciclo
+        } catch (error) {
+          if(cancelled || requestRevision!==apiSessionRevision())return;
+          setProgressError(error instanceof Error ? error.message : 'No se pudo consultar el progreso.');
+          setProgressRevision(null);
         }
-      }, 1000);
-    }
+    };
+    if (progressScope.current !== requestRevision || !isTraining) void readProgress();
+    if (isTraining) timer = setInterval(readProgress, 1000);
 
     return () => {
       cancelled=true;controller.abort();
       if (timer) clearInterval(timer);
     };
-  }, [isTraining, epochs, architecture, fetchHistory, fetchHardware, sourceType]);
+  }, [isTraining, epochs, architecture, fetchHistory, fetchHardware, sourceType, session?.id, sessionRevision, progressRetry]);
 
   // Iniciar Entrenamiento (CU_INV_03)
   const handleStartTraining = async () => {
+    if (!progressKnown || isTraining || isStarting || startInFlight.current) return;
     if (sourceType === 'imported' && (!effectiveImported || ensembleSize !== 1)) {
       alert('Seleccione una preparación propia verificada; importados admite solo un modelo.'); return;
     }
@@ -1045,8 +1078,10 @@ export default function TrainingView() {
 
     setFieldErrors({});
 
-    if (isTraining) return;
-    setIsTraining(true);
+    if (isTraining || startInFlight.current) return;
+    const startController = new AbortController();
+    startInFlight.current = startController;
+    setStartingRevision(requestRevision);
     setIsStopping(false);
     setMetricsHistory([]);
     setCurrentEpoch(0);
@@ -1091,9 +1126,9 @@ export default function TrainingView() {
     }
 
     try {
-      if(effectiveImported)privateStart.current=new AbortController();
+      if(effectiveImported)privateStart.current=startController;
       const res = await fetch(`${API_BASE_URL}/api/training/start`, {
-        ...(effectiveImported ? {signal:privateStart.current?.signal} : {}),
+        signal: startController.signal,
         method: "POST",
         credentials: 'same-origin',
         headers: { "Content-Type": "application/json" },
@@ -1143,7 +1178,7 @@ export default function TrainingView() {
       });
 
 
-      if(effectiveImported && requestRevision!==apiSessionRevision()){setIsTraining(false);return;}
+      if(!mounted.current || requestRevision!==apiSessionRevision() || startInFlight.current!==startController)return;
       if (!res.ok) {
         if(effectiveImported && res.status===401)notifyUnauthorized(requestRevision);
         const errData = await res.json();
@@ -1151,22 +1186,41 @@ export default function TrainingView() {
       }
 
       await res.json();
+      if(!mounted.current || requestRevision!==apiSessionRevision() || startInFlight.current!==startController)return;
+      setIsTraining(true);
     } catch (err: unknown) {
-      if(!mounted.current || (effectiveImported && requestRevision!==apiSessionRevision()))return;
-      setIsTraining(false);
-      const msg = effectiveImported && err instanceof TypeError ? 'Resultado incierto. Compruebe el estado del recurso antes de iniciar otra vez; no se reintentó.' : err instanceof Error ? err.message : String(err);
+      if(!mounted.current || requestRevision!==apiSessionRevision() || startInFlight.current!==startController)return;
+      const msg = err instanceof TypeError ? 'Resultado incierto. Compruebe el estado del recurso antes de iniciar otra vez; no se reintentó.' : err instanceof Error ? err.message : String(err);
       alert(`No fue posible iniciar el entrenamiento: ${msg}`);
+    } finally {
+      if(startInFlight.current===startController) {
+        startInFlight.current=null;
+        if(mounted.current && requestRevision===apiSessionRevision())setStartingRevision(null);
+      }
     }
   };
 
   // Detener Entrenamiento (CU_INV_03 Paso 2.a)
   const handleStopTraining = async () => {
     if (!isTraining || isStopping) return;
+    const requestRevision = apiSessionRevision();
     setIsStopping(true);
+    setTerminalMessage('');
     try {
-      await fetch(`${API_BASE_URL}/api/training/stop`, { method: "POST" });
-    } catch {
+      const res = await fetch(`${API_BASE_URL}/api/training/stop`, { method: "POST", credentials:'same-origin' });
+      if(!mounted.current || requestRevision!==apiSessionRevision())return;
+      if(res.status===401)notifyUnauthorized(requestRevision);
+      const data = await res.json();
+      if(!mounted.current || requestRevision!==apiSessionRevision())return;
+      if(!res.ok || data.error || data.detail) throw new Error(typeof (data.error || data.detail) === 'string' ? (data.error || data.detail) : `No se pudo detener (HTTP ${res.status}).`);
+      if(data.status !== 'stopping') {
+        setIsStopping(false);
+        setTerminalMessage(data.message || 'El servidor no confirmó una detención activa; se comprobará el progreso.');
+      } else setTerminalMessage('Detención solicitada; esperando el estado final.');
+    } catch (error) {
+      if(!mounted.current || requestRevision!==apiSessionRevision())return;
       setIsStopping(false);
+      setTerminalMessage(`No se pudo confirmar la detención: ${error instanceof Error ? error.message : 'Error de conexión'}`);
     }
   };
 
@@ -1218,18 +1272,10 @@ export default function TrainingView() {
         <div>
           <label>Tipo de fuente<select value={sourceType} disabled={isTraining} onChange={e=>{setSourceType(e.target.value);setImported(null);}}><option value="legacy">Legacy</option><option value="imported" disabled={!session}>Importada (sesión requerida)</option></select></label>
           {terminalMessage && <p role="status">{terminalMessage}</p>}
-          {sourceType==='imported' && session && <ImportedTrainingPanel key={session.id} disabled={isTraining} onSelect={selection=>{
-            setImported(selection);
-            if(!selection)return;
-            const p=selection.profile;const a=p.audio;
-            const aliases={audio_cnn:'AudioCNN',panns_cnn14:'PANNs-CNN14',efficientnet_b0:'EfficientNet-B0',convnext_nano:'ConvNeXt-Nano',resnet34d:'ResNet-34d'};
-            setArchitecture(aliases[p.architecture]);setEnsembleSize(1);setDomainPreset('custom');
-            setTargetSr(a.target_sr);setDurationSeconds(a.duration_seconds);setFMin(a.f_min);setFMax(a.f_max);
-            setNMels(a.n_mels);setNFft(a.n_fft);setHopLength(a.hop_length);setHopSeconds(p.window_hop_seconds);
-            setAggregationMode('max');setGemP(3);setVadThreshold(0);
-          }}/>}
+          {progressError && <p role="alert">{progressError} <button type="button" onClick={()=>setProgressRetry(n=>n+1)}>Reintentar consulta de progreso</button></p>}
+          {sourceType==='imported' && session && <ImportedTrainingPanel key={session.id} disabled={isTraining} profile={importedProfile} seed={Number(seed)} onSelect={setImported}/>}
         </div>
-        <div data-testid="dataset-selection-card" className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-3 shadow-sm">
+        {sourceType==='legacy' && <div data-testid="dataset-selection-card" className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-3 shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs text-gray-300 font-semibold flex items-center gap-1.5">
               <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1251,7 +1297,7 @@ export default function TrainingView() {
             <select
               value={selectedDataset}
               onChange={(e) => setSelectedDataset(e.target.value)}
-              disabled={isTraining || sourceType === 'imported'}
+              disabled={isTraining}
               className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-emerald-600 font-mono"
             >
               {datasets.length === 0 ? (
@@ -1274,6 +1320,7 @@ export default function TrainingView() {
           </div>
         </div>
 
+        }
         {/* Tarjeta: Monitor de Hardware / Cómputo */}
         <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-3 shadow-sm">
           <div className="flex items-center justify-between">
@@ -1325,7 +1372,7 @@ export default function TrainingView() {
       {/* ==================================================================== */}
       {/* 2.5. PANEL DE FÍSICA DE AUDIO Y ADAPTACIÓN AL DOMINIO */}
       {/* ==================================================================== */}
-      <fieldset disabled={Boolean(effectiveImported)} className="bg-[#16171b] border border-[#23252e] rounded-xl shadow-sm transition-all">
+      <fieldset disabled={isTraining} className="bg-[#16171b] border border-[#23252e] rounded-xl shadow-sm transition-all">
         {/* Encabezado colapsable */}
         <button
           type="button"
@@ -2044,7 +2091,7 @@ export default function TrainingView() {
                 id="architecture-select"
                 data-testid="architecture-select"
                 value={architecture}
-                disabled={isTraining || Boolean(effectiveImported)}
+                disabled={isTraining}
                 onChange={(e) => handleArchitectureChange(e.target.value)}
                 className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-blue-500 font-mono disabled:opacity-60"
               >
@@ -2325,7 +2372,7 @@ export default function TrainingView() {
           <button
             type="button"
             onClick={handleStartTraining}
-            disabled={isTraining}
+            disabled={!progressKnown || isTraining || isStarting || (sourceType === 'imported' && (!effectiveImported || ensembleSize !== 1))}
             className={`flex-1 py-2.5 rounded-lg text-white font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-40 disabled:cursor-not-allowed ${
               ensembleSize === 3
                 ? "bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 shadow-emerald-950/40"
@@ -2334,7 +2381,7 @@ export default function TrainingView() {
                 : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-blue-950/40"
             }`}
           >
-            {isTraining ? (
+            {isStarting ? <span>Preparando inicio…</span> : isTraining ? (
               <>
                 <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -2377,6 +2424,9 @@ export default function TrainingView() {
             </button>
           )}
         </div>
+        {isStarting && <p role="status" className="text-xs text-gray-400">{sourceType === 'imported'
+          ? 'Verificando la integridad y compatibilidad del dataset. Puede tardar unos segundos.'
+          : 'Preparando la solicitud de inicio. Puede tardar unos segundos.'}</p>}
       </div>
 
       {/* ==================================================================== */}

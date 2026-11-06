@@ -480,7 +480,7 @@ describe("trainingApi (TDD Contract Tests)", () => {
       const history = await getHistory();
 
       expect(global.fetch).toHaveBeenCalledWith(
-        `${API_BASE_URL}/api/training/history`,
+        `${API_BASE_URL}/api/training/history?include_imported=true`,
         expect.objectContaining({ method: "GET" })
       );
       expect(history).toHaveLength(1);

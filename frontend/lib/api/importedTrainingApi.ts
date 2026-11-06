@@ -36,7 +36,7 @@ export const importedTrainingApi = {
       .map(row => importedDatasetSchema.parse(row));
   },
   async snapshot(dataset_id: string, signal?: AbortSignal) {
-    return snapshotSchema.parse(await request('/api/training/imported/snapshots', {dataset_id}, signal));
+    return snapshotSchema.parse(await request('/api/training/imported/snapshots', {dataset_id, reuse_current: true}, signal));
   },
   async members(snapshot: string, signal?: AbortSignal) {
     return membersSchema.parse(await request(`/api/training/imported/snapshots/${encodeURIComponent(snapshot)}/members`, undefined, signal));

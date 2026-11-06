@@ -180,11 +180,11 @@ export async function stopTraining(): Promise<StopTrainingResponse> {
 }
 
 /**
- * Consulta el historial de modelos entrenados y registrados en PostgreSQL.
+ * Consulta el historial público y los modelos importados del propietario autenticado.
  */
 export async function getHistory(): Promise<ModelHistoryItem[]> {
   const result = await request(
-    `${API_BASE_URL}/api/training/history`,
+    `${API_BASE_URL}/api/training/history?include_imported=true`,
     { method: "GET" },
     (data) => HistoryResponseSchema.parse(data)
   );

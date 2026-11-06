@@ -9,6 +9,9 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     global.fetch = vi.fn().mockImplementation(async (url: string) => {
+      if (url.includes("/api/training/progress")) {
+        return {ok: true, json: async () => ({status: 'idle', logs: []})};
+      }
       if (url.includes("/api/training/hardware")) {
         return {
           ok: true,
@@ -130,6 +133,14 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
 
   afterEach(() => {
     global.fetch = originalFetch;
+  });
+
+  it("includes owned imported models in the view history request", async () => {
+    await act(async () => { render(<TrainingView />); });
+    const urls = vi.mocked(global.fetch).mock.calls.map(([url]) => String(url));
+    const historyUrls = urls.filter(url => url.includes('/api/training/history'));
+    expect(historyUrls.length).toBeGreaterThan(0);
+    expect(historyUrls.every(url => url.includes('include_imported=true'))).toBe(true);
   });
 
   it("sends visible individual AudioCNN parameters in both global and model config", async () => {

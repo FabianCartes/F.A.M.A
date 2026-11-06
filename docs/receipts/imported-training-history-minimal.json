@@ -1,0 +1,36 @@
+{
+  "base_container_id": "caf99c24e24e957b06912bb44646816d95e1640feb2e2ea76019de8ae5f2f313",
+  "training_sha256": "358f223f23e7bf2872807283f402b4242dac693eb96bc77992968c8a973f027f",
+  "frontend_sha256": "822a34a464e614a411b4b65cd79b54199923e9b37170ac37a0bc80b67b48f975",
+  "deployed": true,
+  "api_container_id": "5b6a1f4f6ae44a14f036b80482e5a7cc8462c4b84b922ef74d72887b031c9592",
+  "image": "sha256:57cd8224918cfc0695a7a7dd85b4d9e62dab3abaa7490eb33c80f78ad57ccf40",
+  "rollback_container": "fama-manual-dev-44938bc83ad0184c-api-before-history-minimal-6935",
+  "backup_sha256": "53e193b02bbacb04e5ce3a876051068f493ee5c8b3862401412e16b74dcf686d",
+  "backup_catalog_verified": true,
+  "protected_data_and_checkpoints_unchanged": true,
+  "private_history_ids": [
+    4,
+    3,
+    2,
+    1
+  ],
+  "dataset_name": "aves",
+  "anonymous_imported_history_http": 401,
+  "public_history_empty": true,
+  "served_history_query": true,
+  "training_view_sha256": "9f1b3a2b89a443bf8a7e99814e8674396666ef01b02133a0a5366bdf59f95356",
+  "api_health": 200,
+  "ui_http": 200,
+  "native_approval": false,
+  "parent_backend_passed": 26,
+  "parent_frontend_passed": 460,
+  "parent_focused_frontend_passed": 60,
+  "types_exit_code": 0,
+  "human_visual_acceptance": "pending",
+  "no_training_activation_or_gcs": true,
+  "prior_failures_preserved": [
+    "job27 exit1 after API update: marker absent because actual view bypassed API helper; no successful delivery claimed",
+    "Actual TrainingView public request test RED then fixed both direct fetches; frontend-only completion, no second API deployment"
+  ]
+}

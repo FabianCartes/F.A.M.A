@@ -11,6 +11,9 @@ export const importedProfileSchema = z.object({
 export const importedPreparationSchema = z.object({
   snapshot_id: z.string(), prepared_version: z.string(), eligible: z.boolean(),
   reasons: z.array(z.string()), profile: importedProfileSchema, warnings: z.array(z.unknown()),
+  seed: z.number().int().min(0).max(2**32-1).optional(),
+  policy: z.object({name:z.string(),target:z.array(z.number())}).optional(),
+  provenance: z.record(z.string(),z.unknown()).optional(),
 });
 export const importedDatasetSchema = z.object({
   source_type: z.literal('imported'), id: z.string(), name: z.string(),
