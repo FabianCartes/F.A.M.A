@@ -1,0 +1,51 @@
+{
+  "actual_owner_private_models": [
+    "fama_trained_model_3"
+  ],
+  "has_weights": true,
+  "private_default_empty": true,
+  "private_publication_diagnostics_empty": true,
+  "anonymous_rejected": true,
+  "public_default_contract_unchanged": true,
+  "model_state_and_checkpoint_unchanged": true,
+  "read_only_database": true,
+  "no_prediction_or_activation": true,
+  "state_directory": ".private-model-catalog-6ed4b5b4832fd4c7",
+  "candidate_image": "sha256:1cd56d78f20ac0ef7199ee7a49206308badc1ec80b1ce79d2b78d04c55cae205",
+  "previous_image": "sha256:6be564aa7da827c2374a8f89cf1a104d0dc3589d15c2bcae2cd38ce9835ebb61",
+  "source_hashes": {
+    "app/main.py": "594fea80b49adbd9908fc303e36917c31c492518f9b5cf9ecdfb6fcd055fb96e",
+    "app/services/registry.py": "078dd3bb3e3b2e6929fbda31c7bc33c228cabef6afe2167ce0a5d07400609f0f"
+  },
+  "only_catalogue_production_deltas": true,
+  "deployed": true,
+  "status": "private_catalog_deployed_verified",
+  "api_container_id": "6b17972f236ecd303bc054e64421c54a09671cfefa7bcb26c5555bab1d349ca3",
+  "rollback_container": "fama-manual-dev-44938bc83ad0184c-api-before-private-catalog-832fd4c7",
+  "frontend_source_sha256": "62ea8b597081ca6ab9ab38175bc3f50048985c873b722de6429f76de76c1dfcf",
+  "served_private_view_verified": true,
+  "owner_private_http": 200,
+  "anonymous_private_http": 401,
+  "public_catalog_unchanged": true,
+  "model3_still_evaluated_private_inactive": true,
+  "model2_still_pending_inactive": true,
+  "api_health": 200,
+  "ui_http": 200,
+  "db_backup_sha256": "9edeee9b240d07fe230a4d4facb1f24a4facd839c522ec25304b423f0cfff416",
+  "backup_catalog_verified": true,
+  "writer_backend_passed": 74,
+  "writer_frontend_passed": 451,
+  "writer_types_exit_code": 0,
+  "independent_backend_passed": 74,
+  "independent_frontend_passed": 101,
+  "lint_exit_code": 1,
+  "lint_remaining": "Unchanged ImportedTrainingPanel:3errors1warning; no changed-file findings",
+  "no_prediction_activation_retraining_gcs": true,
+  "human_visual_acceptance": "pending",
+  "native_approval": false,
+  "intermediate_failures": [
+    "independent wrongcwdexit2 zero tests; human authorized74PASS",
+    "first HMR marker inspection oldbundle; next boundedinspectionmarkersPASS withoutredeploy",
+    "postdeploy state probe SyntaxError SQLquoting; next ORMprobe AttributeError model_id; FK-derived final check PASS; both failed checks retained"
+  ]
+}

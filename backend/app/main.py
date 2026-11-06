@@ -585,29 +585,43 @@ def get_dashboard_stats(
     summary="Catálogo de modelos bioacústicos registrados",
 )
 def list_models(
+    request: Request,
+    response: Response,
     only_available: bool = Query(False, description="Si es True, retorna solo modelos con pesos físicos verificados en disco"),
     registry: ModelRegistry = Depends(get_model_registry),
     db: Session = Depends(get_db),
+    include_imported: bool = Query(False, description="Añade solo modelos importados del usuario activo autenticado; no cambia el default global"),
+    private_only: bool = Query(False, description="Solo modelos privados propios; exige autenticación y no cambia el default global"),
+    credentials=Depends(security_bearer),
 ):
     """
     Retorna la lista de todos los modelos bioacústicos disponibles en el catálogo,
     sus especificaciones técnicas, clases soportadas, disponibilidad de pesos y el modelo por defecto.
+    Por defecto conserva el catálogo público legacy. include_imported=true exige
+    identidad activa cookie/Bearer y añade solo los importados de ese propietario.
     """
+    user = imported_user(request, response, credentials, db) if include_imported or private_only else None
+    owner_scope = {"owner_id": user.id} if user is not None else {}
     admitted_pair_ids = {}
     publication_errors = registry.publish_from_db(
         db, checkpoints_root=training_service.checkpoints_dir,
         admitted_pair_ids=admitted_pair_ids,
+        **owner_scope,
     )
     if any(error["code"] == "database_unavailable" for error in publication_errors):
         raise HTTPException(status_code=503, detail={
             "message": "Model catalogue publication incomplete",
-            "errors": publication_errors,
+            "errors": [{"code": "database_unavailable"}] if private_only else publication_errors,
         })
-    models = registry.list_models(only_with_weights=only_available)
+    models = registry.list_models(only_with_weights=only_available, private_only=private_only, **owner_scope)
+    if private_only:
+        # Publication also checks public rows; none of their diagnostics belong
+        # to this private catalogue (including unpublished/unknown identities).
+        publication_errors = []
     evaluations = read_model_evaluations(db, models, admitted_pair_ids)
     for model in models:
         model.evaluations = evaluations.by_model_id.get(model.id)
-    default_id = registry.get_default_model_id() or ""
+    default_id = "" if private_only else registry.get_default_model_id() or ""
     return ModelListResponse(
         models=models,
         total=len(models),

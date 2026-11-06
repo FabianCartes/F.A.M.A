@@ -977,9 +977,15 @@ def test_publication_errors_are_visible_and_sanitized(catalogue, monkeypatch, fa
         monkeypatch.setattr(Path, "open", guarded_open)
     response = client.get("/api/models")
     assert response.status_code == 200
-    assert response.json()["publication_errors"] == [
-        {"model_id": "fama_trained_model_11", "code": code},
-    ]
+    # Cold, unreadable identity has neither verified legacy provenance nor an
+    # imported association. Do not enumerate it, regardless of optional schema.
+    assert response.json()["publication_errors"] == []
+    for alias in ("fama_trained_model_11", "trained_11.pt", "trained_11"):
+        assert alias not in response.text
+    from app.services.predictors.base import ModelWeightsError
+    with pytest.raises(ModelWeightsError) as blocked:
+        registry.get()
+    assert str(blocked.value) == "Modelo persistido no disponible."
     assert [m["id"] for m in response.json()["models"]] == ["selected"]
     assert response.json()["default_model_id"] == "selected"
     assert str(checkpoint.parent) not in response.text
@@ -1009,22 +1015,67 @@ def test_database_failure_preserves_existing_catalogue_and_recovers(catalogue):
     assert client.get("/api/models").json() == original
 
 
+def test_verified_legacy_missing_hash_is_identifiable_without_imported_schema(catalogue):
+    from sqlalchemy import inspect, text
+    from app.models.dataset import ConjuntoDatos
+    from app.services.predictors.base import ModelWeightsError
+
+    client, registry, persist, engine = catalogue
+    dataset = ConjuntoDatos(nombre="engine_diagnostics", ruta_gcp="datasets/engine_diagnostics")
+    checkpoint = persist(dataset=dataset, active=True)
+    with Session(engine) as db:
+        model = db.get(Modelo, 11)
+        assert type(model.id_conjunto_datos) is int and model.id_conjunto_datos > 0
+        assert model.conjunto_datos.id_conjunto_datos == model.id_conjunto_datos
+        model.hash_binario = None
+        db.commit()
+    # Only this disposable fixture database loses the optional association table.
+    # Do not import its ORM just to inspect absence and mutate global metadata.
+    if inspect(engine).has_table("imported_model_source"):
+        with engine.begin() as connection:
+            connection.execute(text("DROP TABLE imported_model_source"))
+    assert not inspect(engine).has_table("imported_model_source")
+    response = client.get("/api/models")
+    assert response.status_code == 200, response.text
+    assert response.json()["publication_errors"] == [{
+        "model_id": "fama_trained_model_11", "code": "checkpoint_hash_missing",
+    }]
+    assert [model["id"] for model in response.json()["models"]] == ["selected"]
+    assert response.json()["default_model_id"] == "selected"
+    assert str(checkpoint) not in response.text
+    assert registry.get("selected").model_id == "selected"
+    with pytest.raises(ModelWeightsError) as blocked:
+        registry.get()
+    assert str(blocked.value) == (
+        "El modelo persistido 'fama_trained_model_11' está bloqueado: "
+        "falta el hash SHA-256 registrado del checkpoint."
+    )
+
+
 def test_one_failed_checkpoint_does_not_prevent_other_publications(catalogue):
-    client, registry, persist, _ = catalogue
+    import hashlib
+    client, registry, persist, engine = catalogue
     damaged = persist(12, contents="tiny")
     persist(11)
     response = client.get("/api/models?only_available=true")
     assert response.status_code == 200
     payload = response.json()
-    assert payload["publication_errors"] == [
-        {"model_id": "fama_trained_model_12", "code": "checkpoint_too_small"},
-    ]
+    assert payload["publication_errors"] == []
+    for alias in ("fama_trained_model_12", "trained_12.pt", "trained_12"):
+        assert alias not in response.text
     assert [m["id"] for m in payload["models"]] == ["selected", "fama_trained_model_11"]
     assert payload["models"][1]["classes"] == ["Motor sano", "Falla"]
     assert payload["default_model_id"] == "selected"
     # Repairing storage makes the complete catalogue observable on the next GET.
     published = registry.get("11")
     damaged.write_text(json.dumps({"classes": ["Repaired"], "padding": "x" * 11000}))
+    mismatched = client.get("/api/models").json()
+    assert mismatched["total"] == 2
+    assert all(model["id"] != "fama_trained_model_12" for model in mismatched["models"])
+    assert mismatched["publication_errors"] == []
+    with Session(engine) as db:
+        db.get(Modelo, 12).hash_binario = hashlib.sha256(damaged.read_bytes()).hexdigest()
+        db.commit()
     payload = client.get("/api/models").json()
     assert payload["total"] == 3
     assert payload["default_model_id"] == "selected"
@@ -1049,9 +1100,9 @@ def test_real_lazy_adapter_reads_only_synthetic_checkpoint(catalogue, monkeypatc
     response = client.get("/api/models")
     if malformed:
         assert response.status_code == 200
-        assert response.json()["publication_errors"] == [
-            {"model_id": "fama_trained_model_11", "code": "checkpoint_invalid"},
-        ]
+        assert response.json()["publication_errors"] == []
+        for alias in ("fama_trained_model_11", "trained_11.pt", "trained_11"):
+            assert alias not in response.text
         assert [m["id"] for m in response.json()["models"]] == ["selected"]
         assert str(checkpoint) not in response.text
     else:
@@ -1071,9 +1122,9 @@ def test_external_db_path_cannot_publish_checkpoint_outside_root(catalogue, tmp_
     persist(route=external.as_uri() if route_kind == "file_uri" else str(external))
     response = client.get("/api/models")
     assert response.status_code == 200
-    assert response.json()["publication_errors"] == [
-        {"model_id": "fama_trained_model_11", "code": "checkpoint_missing"},
-    ]
+    assert response.json()["publication_errors"] == []
+    for alias in ("fama_trained_model_11", "external.pt", "external"):
+        assert alias not in response.text
     assert [m["id"] for m in response.json()["models"]] == ["selected"]
     assert str(external) not in response.text
 
@@ -1086,9 +1137,9 @@ def test_symlink_checkpoint_cannot_escape_configured_root(catalogue, tmp_path):
     (checkpoint.parent / "link.pt").symlink_to(external)
     response = client.get("/api/models")
     assert response.status_code == 200
-    assert response.json()["publication_errors"] == [
-        {"model_id": "fama_trained_model_11", "code": "checkpoint_outside_root"},
-    ]
+    assert response.json()["publication_errors"] == []
+    for alias in ("fama_trained_model_11", "link.pt", "link"):
+        assert alias not in response.text
     assert [m["id"] for m in response.json()["models"]] == ["selected"]
     assert str(external) not in response.text
 

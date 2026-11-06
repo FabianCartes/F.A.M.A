@@ -47,6 +47,11 @@ from app.services.predictors.base import (
 
 
 def _standard_frontend_contract(checkpoint):
+    from app.services.imported_training_source import validate_imported_checkpoint, ImportedSourceError
+    try:
+        validate_imported_checkpoint(checkpoint)
+    except ImportedSourceError as error:
+        raise ModelWeightsError(str(error)) from error
     if "job_id" not in checkpoint:
         return None
     try:
@@ -163,6 +168,7 @@ class TrainedModelPredictor(AudioPredictor):
         snapshot, _ = self._read_checkpoint_snapshot()
         checkpoint = self._deserialize_checkpoint(snapshot, map_location="cpu")
         contract = _standard_frontend_contract(checkpoint)
+        self.imported_source = checkpoint.get("imported_source")
         architecture_name = checkpoint.get("architecture", checkpoint.get("model_type", "EfficientNet-B0"))
         classes = checkpoint.get("classes", list(DEFAULT_CHILEAN_BIRD_CLASSES))
         best_val_acc = checkpoint.get("best_val_acc")
@@ -201,6 +207,14 @@ class TrainedModelPredictor(AudioPredictor):
             self.audio_config = AudioConfigSchema.model_validate(configuration, strict=True).model_dump()
         except (ValueError, TypeError) as error:
             raise ModelWeightsError("Checkpoint con configuración acústica inválida o incompleta") from error
+
+    def load_weights(self) -> None:
+        """Load and validate weights once; repeated calls retain the loaded model.
+
+        Uses the same locked, hash-verified load as eager construction, including
+        metadata publication only after the complete load succeeds.
+        """
+        self._load_model()
 
     def _load_model(self) -> None:
         """Carga y valida los pesos binarios en memoria desde una instantánea única."""
@@ -288,6 +302,7 @@ class TrainedModelPredictor(AudioPredictor):
             if contract is None:
                 self._configure_audio(checkpoint)
             self.preprocessing_contract = contract
+            self.imported_source = checkpoint.get("imported_source")
             self.architecture_name = architecture_name
             self.classes = classes
             self.best_val_acc = best_val_acc

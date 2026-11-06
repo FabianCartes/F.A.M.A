@@ -64,6 +64,95 @@ class ModelRegistry:
         self._blocked_default_error: Optional[str] = None
         self._db_checkpoint_names: set[str] = set()
         self._publication_lock = RLock()
+        self._imported_owners: Dict[str, int] = {}
+        self._private_aliases: set[str] = set()
+
+    def _hide_model_aliases(self, model):
+        route = urlparse(model.ruta_binario_gcp)
+        basename = Path(unquote(route.path) if route.scheme else model.ruta_binario_gcp).name
+        self._private_aliases.update({f"fama_trained_model_{model.id_modelo}",
+                                     str(model.id_modelo), basename, Path(basename).stem})
+
+    def _visible(self, predictor, owner_id=None):
+        owner = self._imported_owners.get(predictor.model_id)
+        return owner is None or (type(owner_id) is int and owner_id > 0 and owner_id == owner)
+
+    def _source_owner(self, db, model):
+        from sqlalchemy import inspect
+        has_sources = inspect(db.get_bind()).has_table("imported_model_source")
+        if not has_sources:
+            return None, False
+        from app.models.imported_training_source import ImportedModelSource
+        source = db.get(ImportedModelSource, model.id_modelo)
+        if source is None:
+            return None, has_sources
+        identity = source.identity
+        if (type(source.owner_id) is not int or source.owner_id <= 0 or
+                not isinstance(identity, dict) or identity.get("owner_id") != source.owner_id or
+                identity.get("dataset_id") != source.dataset_id or
+                identity.get("snapshot_id") != source.snapshot_id):
+            raise ValueError("Invalid imported association")
+        return source.owner_id, has_sources
+
+    def _legacy_rejection_identity(self, model, root, expected_hash, source_owner):
+        """Prove a public legacy identity for rejection only, never publication."""
+        key = f"fama_trained_model_{model.id_modelo}"
+        cached = self._db_predictors.get(key)
+        if (source_owner is not None or key in self._imported_owners or
+                getattr(cached, "imported_source", None) is not None):
+            return False
+        dataset_id = getattr(model, "id_conjunto_datos", None)
+        dataset = model.conjunto_datos
+        if (type(dataset_id) is int and dataset_id > 0 and dataset is not None and
+                dataset.id_conjunto_datos == dataset_id):
+            return True
+        if str(model.estado or "").startswith("standard_"):
+            from app.services.standard_evaluation_guard import inspect_checkpoint
+            route = urlparse(model.ruta_binario_gcp)
+            basename = Path(unquote(route.path) if route.scheme else model.ruta_binario_gcp).name
+            try:
+                inspection = inspect_checkpoint(root, Path(root) / basename, expected_hash)
+            except Exception:
+                return False
+            return inspection.payload.get("imported_source") is None
+        return False
+
+    def _metadata_candidate(self, model, root, display, expected_hash):
+        """Classify through the ML adapter only after root/hash verification.
+
+        A checkpoint marker can deny publication, never authorize an owner.
+        Reuse validated cached metadata or the fresh lazy candidate at publication.
+        """
+        import hashlib
+        from app.services.predictors.trained_predictor import TrainedModelPredictor
+        route = urlparse(model.ruta_binario_gcp)
+        basename = Path(unquote(route.path) if route.scheme else model.ruta_binario_gcp).name
+        physical_root = Path(root).resolve()
+        checkpoint = (physical_root / basename).resolve()
+        if not checkpoint.is_relative_to(physical_root):
+            raise ModelWeightsError("checkpoint_outside_root")
+        if not checkpoint.is_file():
+            raise ModelWeightsError("checkpoint_missing")
+        if checkpoint.stat().st_size <= 10000:
+            raise ModelWeightsError("checkpoint_too_small")
+        if hashlib.sha256(checkpoint.read_bytes()).hexdigest() != expected_hash:
+            raise ModelWeightsError("checkpoint_hash_mismatch")
+        key = f"fama_trained_model_{model.id_modelo}"
+        cached = self._db_predictors.get(key)
+        if cached is not None and cached.expected_checkpoint_sha256 == expected_hash:
+            return cached
+        return TrainedModelPredictor(
+            checkpoint_path=checkpoint, model_id=key, name=display["name"],
+            is_default=False, lazy_load=True,
+            dataset_name=_verified_dataset_name(model.conjunto_datos, self._raw_data_root),
+            expected_checkpoint_sha256=expected_hash,
+        )
+
+    def _hide_unknown_identity(self, model):
+        self._hide_model_aliases(model)
+        self._discard_invalid_standard_predictor(f"fama_trained_model_{model.id_modelo}")
+        if bool(model.activo):
+            self._blocked_default_error = "Modelo persistido no disponible."
 
     def register(self, predictor: AudioPredictor, is_default: bool = False) -> None:
         """
@@ -74,12 +163,16 @@ class ModelRegistry:
             is_default: Si es True, designa a este modelo como el fallback por defecto.
         """
         model_id = predictor.model_id
+        if model_id in self._imported_owners or getattr(predictor, "imported_source", None) is not None:
+            raise ValueError("Imported predictors require owner-scoped publication")
         self._predictors[model_id] = predictor
         if is_default or self._default_model_id is None:
             self.set_default_model(model_id)
 
     def set_default_model(self, model_id: str) -> None:
         """Establece un modelo registrado como el modelo por defecto y actualiza metadatos."""
+        if model_id in self._predictors and self._predictors[model_id].model_id in self._imported_owners:
+            raise ValueError("Imported models cannot be global defaults")
         if model_id not in self._predictors:
             raise ModelNotFoundError(
                 f"No se puede establecer como default: modelo '{model_id}' no registrado."
@@ -97,7 +190,7 @@ class ModelRegistry:
         """Retorna el predictor activo actual (modelo por defecto)."""
         return self.get()
 
-    def get(self, model_id: Optional[str] = None) -> AudioPredictor:
+    def get(self, model_id: Optional[str] = None, *, owner_id=None) -> AudioPredictor:
         """
         Recupera una estrategia predictora según su ID.
         Si model_id es None o 'default', retorna el modelo por defecto.
@@ -107,6 +200,10 @@ class ModelRegistry:
             raise ModelWeightsError(self._blocked_default_error)
 
         target_id = self._default_model_id if is_default_request else model_id
+        if target_id in self._private_aliases and target_id not in self._predictors:
+            raise ModelNotFoundError("Modelo no disponible.")
+        if target_id in self._predictors and not self._visible(self._predictors[target_id], owner_id):
+            raise ModelNotFoundError("Modelo no disponible.")
         if target_id:
             blocked_error = self._blocked_db_aliases.get(target_id)
             if blocked_error:
@@ -115,18 +212,24 @@ class ModelRegistry:
             raise ModelNotFoundError("El catálogo de modelos está vacío.")
 
         if not target_id or target_id not in self._predictors:
-            disponibles = list(self._predictors.keys())
+            disponibles = [alias for alias, pred in self._predictors.items()
+                           if self._visible(pred)]
             raise ModelNotFoundError(
                 f"Modelo '{model_id}' no encontrado en el catálogo. Modelos disponibles: {disponibles}"
             )
 
         return self._predictors[target_id]
 
-    def list_models(self, only_with_weights: bool = False) -> List[ModelMetadata]:
+    def list_models(self, only_with_weights: bool = False, *, owner_id=None, private_only: bool = False) -> List[ModelMetadata]:
         """Retorna la lista de metadatos de todos los modelos registrados de forma única."""
         models = []
         seen_ids = set()
         for predictor in self._predictors.values():
+            if private_only and (type(owner_id) is not int or owner_id <= 0 or
+                                 self._imported_owners.get(predictor.model_id) != owner_id):
+                continue
+            if not self._visible(predictor, owner_id):
+                continue
             if predictor.model_id in seen_ids:
                 continue
             seen_ids.add(predictor.model_id)
@@ -147,7 +250,9 @@ class ModelRegistry:
             removed = True
 
         if self._default_model_id == model_id:
-            self._default_model_id = next(iter(self._predictors.keys()), None)
+            self._default_model_id = next(
+                (key for key, pred in self._predictors.items() if self._visible(pred)), None
+            )
 
         return removed
 
@@ -220,6 +325,7 @@ class ModelRegistry:
     def publish_from_db(
         self, db: Any, checkpoints_root: Optional[Path] = None,
         admitted_pair_ids: Optional[Dict[str, tuple[int, int]]] = None,
+        *, owner_id=None,
     ) -> List[Dict[str, Any]]:
         """Reconcile and publish persisted predictors without activation or DB writes.
 
@@ -228,7 +334,6 @@ class ModelRegistry:
         Concurrent catalogue requests cannot replace an already published predictor.
         """
         from app.models.training import Modelo
-        from app.services.predictors.trained_predictor import TrainedModelPredictor
 
         root = Path(checkpoints_root) if checkpoints_root is not None else Path(__file__).resolve().parents[2] / "checkpoints"
         errors = []
@@ -245,15 +350,97 @@ class ModelRegistry:
             self._reset_db_identity_errors(models)
             for model in models:
                 key = f"fama_trained_model_{model.id_modelo}"
+                try:
+                    source_owner, has_sources = self._source_owner(db, model)
+                except Exception:
+                    self._hide_unknown_identity(model)
+                    continue
+                if source_owner is not None:
+                    self._hide_model_aliases(model)
+                    self._imported_owners[key] = source_owner
+                    if type(owner_id) is not int or owner_id <= 0 or owner_id != source_owner:
+                        continue
+                    # Imported provenance is separate from the legacy dataset FK.
+                    # Resolve presentation only after association/owner admission;
+                    # never infer an imported name from labels or checkpoint data.
+                    from app.models.imported_training_source import ImportedModelSource
+                    from app.models.dataset_import import ImportedDataset
+                    source = db.get(ImportedModelSource, model.id_modelo)
+                    dataset = db.query(ImportedDataset).filter(
+                        ImportedDataset.id == source.dataset_id,
+                        ImportedDataset.owner_id == source_owner,
+                    ).one_or_none()
+                    if dataset is not None and dataset.name:
+                        display = names[model.id_modelo]
+                        names[model.id_modelo] = {**display, "dataset": dataset.name,
+                            "name": f"{dataset.name} · {display['architecture']} (v{display['version']})"}
                 uri = urlparse(model.ruta_binario_gcp)
                 basename = Path(unquote(uri.path) if uri.scheme else model.ruta_binario_gcp).name
                 expected_hash, hash_error = _persisted_checkpoint_hash(model)
                 if hash_error:
+                    if (source_owner is None and not self._legacy_rejection_identity(
+                            model, root, expected_hash, source_owner)):
+                        self._hide_unknown_identity(model)
+                        continue
                     self._block_db_model(model, key, basename, hash_error)
                     errors.append({"model_id": key, "code": hash_error})
                     continue
+                cached = self._db_predictors.get(key)
+                if (cached is not None and source_owner is None and
+                        not str(model.estado or "").startswith("standard_") and
+                        key not in self._imported_owners and
+                        getattr(cached, "imported_source", None) is None and
+                        cached.expected_checkpoint_sha256 == expected_hash and
+                        not any(alias in self._private_aliases for alias, predictor
+                                in self._predictors.items() if predictor is cached)):
+                    # Previously published public legacy metadata is observational:
+                    # expose current digest/availability without loading weights.
+                    self._apply_display_name(cached, names[model.id_modelo])
+                    continue
+                try:
+                    pred = self._metadata_candidate(model, root, names[model.id_modelo], expected_hash)
+                except Exception as err:
+                    verified_legacy = self._legacy_rejection_identity(model, root, expected_hash, source_owner)
+                    self._discard_invalid_standard_predictor(key)
+                    if source_owner is None and not verified_legacy:
+                        self._hide_unknown_identity(model)
+                        continue
+                    code = str(err) if str(err) in {
+                        "checkpoint_outside_root", "checkpoint_missing", "checkpoint_too_small",
+                        "checkpoint_hash_mismatch",
+                    } else ("checkpoint_unreadable" if isinstance(err, PermissionError) else "checkpoint_invalid")
+                    if bool(model.activo):
+                        self._blocked_default_error = "Modelo persistido no disponible."
+                    if verified_legacy and str(model.estado or "").startswith("standard_"):
+                        # Preserve rejection precedence, never guard success as
+                        # permission to publish a predictor the adapter rejected.
+                        publication_error = {"model_id": key, "code": "standard_evaluation_invalid"}
+                        try:
+                            from app.services.standard_evaluation_guard import (
+                                StandardEvaluationError, select_admitted_standard_pair,
+                            )
+                        except Exception:
+                            errors.append(publication_error)
+                            continue
+                        try:
+                            select_admitted_standard_pair(model, db, root)
+                        except StandardEvaluationError as guard_error:
+                            if guard_error.reason is not None:
+                                publication_error["reason"] = guard_error.reason.value
+                            errors.append(publication_error)
+                            continue
+                        except Exception:
+                            errors.append(publication_error)
+                            continue
+                    if code == "checkpoint_hash_mismatch":
+                        self._block_db_model(model, key, basename, code)
+                    errors.append({"model_id": key, "code": code})
+                    continue
+                if getattr(pred, "imported_source", None) is not None and source_owner is None:
+                    self._hide_unknown_identity(model)
+                    continue
                 admitted_pair = None
-                if str(model.estado or "").startswith("standard_"):
+                if source_owner is not None or str(model.estado or "").startswith("standard_"):
                     try:
                         from app.services.standard_evaluation_guard import (
                             StandardEvaluationError, select_admitted_standard_pair,
@@ -287,32 +474,8 @@ class ModelRegistry:
                     self._discard_invalid_standard_predictor(key)
                 elif self.has_model(key):
                     continue
-                code = "checkpoint_unreadable"
+                code = "checkpoint_invalid"
                 try:
-                    physical_root = root.resolve()
-                    checkpoint = (physical_root / basename).resolve()
-                    if not checkpoint.is_relative_to(physical_root):
-                        code = "checkpoint_outside_root"
-                        raise ModelWeightsError(code)
-                    if not checkpoint.is_file():
-                        code = "checkpoint_missing"
-                        raise ModelWeightsError(code)
-                    if checkpoint.stat().st_size <= 10000:
-                        code = "checkpoint_too_small"
-                        raise ModelWeightsError(code)
-                    # Verify readable storage before asking the ML adapter for metadata.
-                    with checkpoint.open("rb") as stream:
-                        stream.read(1)
-                    code = "checkpoint_invalid"
-                    pred = TrainedModelPredictor(
-                        checkpoint_path=checkpoint,
-                        model_id=key,
-                        name=names[model.id_modelo]["name"],
-                        is_default=False,
-                        lazy_load=True,
-                        dataset_name=_verified_dataset_name(model.conjunto_datos, self._raw_data_root),
-                        expected_checkpoint_sha256=expected_hash,
-                    )
                     self._apply_display_name(pred, names[model.id_modelo])
                     # register() selects a default on an empty catalogue. Publication
                     # deliberately preserves even an unset default instead.
@@ -352,7 +515,6 @@ class ModelRegistry:
             checkpoints_root = Path(checkpoints_root)
 
         from app.models.training import Modelo
-        from app.services.predictors.trained_predictor import TrainedModelPredictor
 
         with self._publication_lock:
             db_models = db.query(Modelo).order_by(Modelo.id_modelo.desc()).all()
@@ -364,10 +526,22 @@ class ModelRegistry:
 
             for m in db_models:
                 model_key = f"fama_trained_model_{m.id_modelo}"
+                try:
+                    source_owner, has_sources = self._source_owner(db, m)
+                except Exception:
+                    self._hide_unknown_identity(m)
+                    continue
+                if source_owner is not None:
+                    self._hide_model_aliases(m)
+                    self._imported_owners[model_key] = source_owner
+                    continue
                 uri = urlparse(m.ruta_binario_gcp)
                 ckpt_name = Path(unquote(uri.path) if uri.scheme else m.ruta_binario_gcp).name
                 expected_hash, hash_error = _persisted_checkpoint_hash(m)
                 if hash_error:
+                    if not has_sources:
+                        self._hide_unknown_identity(m)
+                        continue
                     self._block_db_model(m, model_key, ckpt_name, hash_error)
                     continue
 
@@ -376,6 +550,19 @@ class ModelRegistry:
                     checkpoints_root.parent / "checkpoints" / ckpt_name,
                 ]
                 ckpt_file = next((path for path in candidate_paths if path.exists()), None)
+                try:
+                    pred = self._metadata_candidate(m, ckpt_file.parent if ckpt_file else checkpoints_root,
+                                                    names[m.id_modelo], expected_hash)
+                except Exception as err:
+                    self._discard_invalid_standard_predictor(model_key)
+                    if not has_sources:
+                        self._hide_unknown_identity(m)
+                    elif str(err) == "checkpoint_hash_mismatch":
+                        self._block_db_model(m, model_key, ckpt_name, "checkpoint_hash_mismatch")
+                    continue
+                if getattr(pred, "imported_source", None) is not None:
+                    self._hide_unknown_identity(m)
+                    continue
                 is_standard = str(getattr(m, "estado", "") or "").startswith("standard_")
                 if is_standard:
                     try:
@@ -399,15 +586,8 @@ class ModelRegistry:
                 # Solo registrar si el archivo existe físicamente y contiene pesos reales (> 10KB).
                 if ckpt_file and ckpt_file.stat().st_size > 10000:
                     try:
-                        pred = TrainedModelPredictor(
-                            checkpoint_path=ckpt_file,
-                            model_id=model_key,
-                            name=names[m.id_modelo]["name"],
-                            is_default=is_active,
-                            lazy_load=not is_active,
-                            dataset_name=_verified_dataset_name(m.conjunto_datos, self._raw_data_root),
-                            expected_checkpoint_sha256=expected_hash,
-                        )
+                        if is_active:
+                            pred.load_weights()
                         self._apply_display_name(pred, names[m.id_modelo])
                         self._predictors[model_key] = pred
                         self._db_predictors[model_key] = pred
