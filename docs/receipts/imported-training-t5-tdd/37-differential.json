@@ -1,0 +1,227 @@
+{
+  "base": "1470f7e0c37ad30ebc80339f744511b1a45ed4f9",
+  "overlay": [
+    "backend/app/main.py",
+    "backend/app/services/imported_training_source.py",
+    "backend/app/services/predictors/trained_predictor.py",
+    "backend/app/services/registry.py",
+    "backend/app/services/standard_evaluation_guard.py",
+    "backend/app/services/training.py",
+    "backend/app/services/imported_evaluation.py"
+  ],
+  "runs": {
+    "base": {
+      "command": [
+        "/home/kevin/Work/fama/.venv/bin/python",
+        "tests/run_isolated_training_checks.py",
+        "tests/test_t5_differential_probe.py",
+        "-q",
+        "-s"
+      ],
+      "exit": 0,
+      "public_outputs": [
+        {
+          "output": {
+            "aliases": [
+              "fama_trained_model_11",
+              "11",
+              "trained_11.pt",
+              "trained_11"
+            ],
+            "body": {
+              "default_model_id": "selected",
+              "evaluation_catalogue_error": null,
+              "evaluation_catalogue_status": "available",
+              "models": [
+                {
+                  "architecture": null,
+                  "checkpoint_sha256": null,
+                  "classes": [
+                    "Especie A",
+                    "Especie B"
+                  ],
+                  "dataset": null,
+                  "dataset_name": null,
+                  "description": "Fake predictor for unit tests",
+                  "duration_seconds": 5.0,
+                  "evaluations": null,
+                  "has_weights": true,
+                  "id": "selected",
+                  "is_default": true,
+                  "loaded_checkpoint_sha256": null,
+                  "metrics": null,
+                  "name": "Selected",
+                  "target_sr": 22050,
+                  "version": null
+                },
+                {
+                  "architecture": "EfficientNet-B0",
+                  "checkpoint_sha256": null,
+                  "classes": [
+                    "Motor sano",
+                    "Falla"
+                  ],
+                  "dataset": "Dataset no verificado",
+                  "dataset_name": null,
+                  "description": "Fake predictor for unit tests",
+                  "duration_seconds": 5.0,
+                  "evaluations": null,
+                  "has_weights": true,
+                  "id": "fama_trained_model_11",
+                  "is_default": false,
+                  "loaded_checkpoint_sha256": null,
+                  "metrics": null,
+                  "name": "Dataset no verificado \u00b7 EfficientNet-B0 (v1)",
+                  "target_sr": 22050,
+                  "version": 1
+                }
+              ],
+              "publication_errors": [],
+              "total": 2
+            },
+            "status": 200,
+            "unknown": "Modelo 'unknown' no encontrado en el cat\u00e1logo. Modelos disponibles: ['selected', 'fama_trained_model_11', 'trained_11.pt', 'trained_11', '11']"
+          },
+          "probe": "catalogue"
+        },
+        {
+          "output": {
+            "body": {
+              "detail": "El cat\u00e1logo de modelos est\u00e1 vac\u00edo."
+            },
+            "status": 404
+          },
+          "probe": "empty"
+        },
+        {
+          "output": {
+            "body": {
+              "detail": "Fallo al registrar la predicci\u00f3n en PostgreSQL: synthetic-db-unavailable"
+            },
+            "classes": [
+              "ants",
+              "zebra"
+            ],
+            "digest": "a2c261edb11a82da671835f6fea0d8a894180e2768216a3c82bb10c6d1e5acad",
+            "effects": [
+              "upload",
+              "predict",
+              "database"
+            ],
+            "status": 500
+          },
+          "probe": "cached-db-failure"
+        }
+      ],
+      "stderr": ""
+    },
+    "candidate": {
+      "command": [
+        "/home/kevin/Work/fama/.venv/bin/python",
+        "tests/run_isolated_training_checks.py",
+        "tests/test_t5_differential_probe.py",
+        "-q",
+        "-s"
+      ],
+      "exit": 0,
+      "public_outputs": [
+        {
+          "output": {
+            "aliases": [
+              "fama_trained_model_11",
+              "11",
+              "trained_11.pt",
+              "trained_11"
+            ],
+            "body": {
+              "default_model_id": "selected",
+              "evaluation_catalogue_error": null,
+              "evaluation_catalogue_status": "available",
+              "models": [
+                {
+                  "architecture": null,
+                  "checkpoint_sha256": null,
+                  "classes": [
+                    "Especie A",
+                    "Especie B"
+                  ],
+                  "dataset": null,
+                  "dataset_name": null,
+                  "description": "Fake predictor for unit tests",
+                  "duration_seconds": 5.0,
+                  "evaluations": null,
+                  "has_weights": true,
+                  "id": "selected",
+                  "is_default": true,
+                  "loaded_checkpoint_sha256": null,
+                  "metrics": null,
+                  "name": "Selected",
+                  "target_sr": 22050,
+                  "version": null
+                },
+                {
+                  "architecture": "EfficientNet-B0",
+                  "checkpoint_sha256": null,
+                  "classes": [
+                    "Motor sano",
+                    "Falla"
+                  ],
+                  "dataset": "Dataset no verificado",
+                  "dataset_name": null,
+                  "description": "Fake predictor for unit tests",
+                  "duration_seconds": 5.0,
+                  "evaluations": null,
+                  "has_weights": true,
+                  "id": "fama_trained_model_11",
+                  "is_default": false,
+                  "loaded_checkpoint_sha256": null,
+                  "metrics": null,
+                  "name": "Dataset no verificado \u00b7 EfficientNet-B0 (v1)",
+                  "target_sr": 22050,
+                  "version": 1
+                }
+              ],
+              "publication_errors": [],
+              "total": 2
+            },
+            "status": 200,
+            "unknown": "Modelo 'unknown' no encontrado en el cat\u00e1logo. Modelos disponibles: ['selected', 'fama_trained_model_11', 'trained_11.pt', 'trained_11', '11']"
+          },
+          "probe": "catalogue"
+        },
+        {
+          "output": {
+            "body": {
+              "detail": "El cat\u00e1logo de modelos est\u00e1 vac\u00edo."
+            },
+            "status": 404
+          },
+          "probe": "empty"
+        },
+        {
+          "output": {
+            "body": {
+              "detail": "Fallo al registrar la predicci\u00f3n en PostgreSQL: synthetic-db-unavailable"
+            },
+            "classes": [
+              "ants",
+              "zebra"
+            ],
+            "digest": "a2c261edb11a82da671835f6fea0d8a894180e2768216a3c82bb10c6d1e5acad",
+            "effects": [
+              "upload",
+              "predict",
+              "database"
+            ],
+            "status": 500
+          },
+          "probe": "cached-db-failure"
+        }
+      ],
+      "stderr": ""
+    }
+  },
+  "comparison": "Exact public JSON markers, stderr and exit. Raw pytest stdout retained but not compared (scratch paths/durations). No public-value normalization.",
+  "scratch_removed": true,
+  "status": "passed"
+}

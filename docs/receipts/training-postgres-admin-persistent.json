@@ -1,0 +1,96 @@
+{
+  "application_started": false,
+  "check_id": "a90ee1a4a1cb66999a6a1c6f173c29f1749298b8552e6250955077d2aa240089",
+  "connection_observation": {
+    "cause_proven": false,
+    "client_sqlstate_present": false,
+    "control_authenticated": true,
+    "target_connection_failed": true
+  },
+  "connections_disabled": true,
+  "container_id": "1a58b860be0ea3687dc42fb0978360438cac755239e415aaf0188c2db8c6ec31",
+  "database": "fama_training_dev_20261105153618",
+  "database_oid": "16388",
+  "db": "fama-admin-persistent-9c4b15c847a23b49-db",
+  "disabled_target_connection_failed": true,
+  "final_administrative_facts": {
+    "app_connect": false,
+    "app_login": false,
+    "server_version": "16.15",
+    "target_sessions": 0,
+    "writer_connect": false
+  },
+  "image_id": "sha256:ccb3748446a33cdc6f049431f150d49c82a58b12b387354b487104ad07715309",
+  "independent_review": {
+    "causal_connection_rejection_proven": false,
+    "result": "scoped_pass",
+    "scope": "documented controls and evidence coherence; PostgreSQL execution by parent, not independently reproduced"
+  },
+  "initialization": {
+    "prepared": true,
+    "stages": [
+      "application",
+      "imports",
+      "metadata",
+      "jobs",
+      "receipts",
+      "chunks",
+      "snapshots",
+      "imported_sources",
+      "web_sessions"
+    ]
+  },
+  "initialize_id": "8cc5fbcdac8bbbb113f91ecbf36f521cff8f74453bac325b032a73e44576edc2",
+  "inventory_before_check": "9298a32b0cc6fd3ac714f66a63c8e361f9a36c187e1c80c9946e11827a78a159",
+  "inventory_unchanged": true,
+  "kind": "persistent",
+  "missing-schema_id": "2aeff2bcb989dc96f0a4a0d264ca0170c1ab892ac8f1bd9d672e72a6885f01bd",
+  "missing_schema_database": "fama_training_dev_20261105153619",
+  "missing_schema_database_oid": "16389",
+  "missing_schema_inventory_sha256": "3939f34d1c06e5ab5be0b9f40346da371c4eee5ae1c3224698499b59f017395c",
+  "missing_schema_inventory_unchanged": true,
+  "missing_schema_rejected": true,
+  "network": "fama-admin-persistent-9c4b15c847a23b49-net",
+  "network_id": "15fff1ff02778c4bd6fee802fc7f67018a26a0660de9cad0d714f4166b95f80f",
+  "permission_catalog": {
+    "writer_connect": false,
+    "writer_control_connect": true,
+    "writer_login": true,
+    "writer_memberships": 0,
+    "writer_superuser": false
+  },
+  "permissions_id": "289853d8c6e236329d693e8928c94ddfb83107138fae819f3dd224d6e78a7013",
+  "persistence_after_restart_verified": true,
+  "postgres_image": "postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea",
+  "procedural_deviation": {
+    "automatic_retry": false,
+    "description": "Immediate readiness query failed after one controlled start; stage stopped, read-only inspection confirmed running/ready, one continuation without second start or initialize.",
+    "reinitialization": false,
+    "resolution": "Documented bounded recovery within original authorized preparation; not a clean uninterrupted run.",
+    "second_start": false
+  },
+  "project": "fama-admin-persistent-9c4b15c847a23b49",
+  "resources_preserved": true,
+  "restart_check_id": "9a38f23627a2ac6cb853b38780828822f4c58cda7bfbe881734efc85e498ece7",
+  "restart_check_interruption": {
+    "later_readiness_exit_code": 0,
+    "runner_created": false,
+    "server_restarted_again": false,
+    "stage": "immediate_readiness"
+  },
+  "restart_inventory_unchanged": true,
+  "run": "9c4b15c847a23b49",
+  "server_stopped": true,
+  "source_sha256": "8effdc288b9cf2661dd89010d48451caa56b556b42e7853694b154569aee55f6",
+  "status": "prepared_not_activated",
+  "system_id": "7704711354167582754",
+  "template": "template0",
+  "verification": {
+    "prepared": true,
+    "verification": "training_schema_and_markers"
+  },
+  "volume": "fama-admin-persistent-9c4b15c847a23b49-data",
+  "volume_verified": true,
+  "wrong-identity_id": "21ee7208a7ff3f856f36cc445e8a39973e310caf255a4c0fc0d6df00074dff91",
+  "wrong_identity_rejected": true
+}

@@ -1,0 +1,84 @@
+{
+  "allow_connections": true,
+  "app_connect": false,
+  "app_login": false,
+  "application_started": false,
+  "check_id": "59d5108622195dff8dc0bd6fae18a618679b34f5c1e7f5be4989a3db33ba6339",
+  "connection_observation": {
+    "cause_proven": false,
+    "client_sqlstate_present": false,
+    "control_authenticated": true,
+    "target_connection_failed": true
+  },
+  "connections_disabled": true,
+  "container_id": "d8d3cc8010fc1914ff1fbda79957810cb947344c8fde8f6b0b73dd44c9b31e4e",
+  "database": "fama_training_dev_20261105152653",
+  "database_oid": "16384",
+  "db": "fama-admin-test-0e455ad8824199b6-db",
+  "disabled_target_connection_failed": true,
+  "final_administrative_facts": {
+    "app_connect": false,
+    "app_login": false,
+    "server_version": "16.15",
+    "target_sessions": 0,
+    "writer_connect": false
+  },
+  "image_id": "sha256:8cb9549893d3167a693d76de3bdd44cbca436c7adc1f0ff537f8bfac970cc9b5",
+  "independent_review": {
+    "causal_connection_rejection_proven": false,
+    "result": "scoped_pass",
+    "scope": "documented controls and evidence coherence; PostgreSQL execution by parent, not independently reproduced"
+  },
+  "initialization": {
+    "prepared": true,
+    "stages": [
+      "application",
+      "imports",
+      "metadata",
+      "jobs",
+      "receipts",
+      "chunks",
+      "snapshots",
+      "imported_sources",
+      "web_sessions"
+    ]
+  },
+  "initializer_id": "d56628892a7559423c58bd588e8ec7936cfd55774f7e14a82ca864c6ff6e97b9",
+  "inventory_before_check": "9298a32b0cc6fd3ac714f66a63c8e361f9a36c187e1c80c9946e11827a78a159",
+  "inventory_unchanged": true,
+  "missing_schema_check_id": "ec99208f883d495ff6acadd1ed7e6131ce2ae1a482c7c14ae321e50618ba0e52",
+  "missing_schema_database": "fama_training_dev_20261105153218",
+  "missing_schema_database_oid": "16813",
+  "missing_schema_inventory_sha256": "3939f34d1c06e5ab5be0b9f40346da371c4eee5ae1c3224698499b59f017395c",
+  "missing_schema_inventory_unchanged": true,
+  "missing_schema_rejected": true,
+  "network": "fama-admin-test-0e455ad8824199b6-net",
+  "network_id": "b8dd19e29809b2d4468f1aa63993591ec204290775bd5d8fca176c1724201a10",
+  "other_sessions": 0,
+  "owner": "fama_training_bootstrap",
+  "permission_catalog": {
+    "writer_connect": false,
+    "writer_control_connect": true,
+    "writer_login": true,
+    "writer_memberships": 0,
+    "writer_superuser": false
+  },
+  "permissions_id": "52a227c1249d124dfdae6b775c1d4b531b6436145ee71df1e8664091ae3323a9",
+  "postgres_image": "postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea",
+  "project": "fama-admin-test-0e455ad8824199b6",
+  "resources_preserved": true,
+  "run": "0e455ad8824199b6",
+  "server_stopped": true,
+  "source_sha256": "8effdc288b9cf2661dd89010d48451caa56b556b42e7853694b154569aee55f6",
+  "status": "disposable_validated",
+  "system_id": "7704709145097756706",
+  "template": "template0",
+  "verification": {
+    "prepared": true,
+    "verification": "training_schema_and_markers"
+  },
+  "volume": "fama-admin-test-0e455ad8824199b6-data",
+  "volume_verified": true,
+  "wrong-identity_id": "c7f1bc9bcb030a58a4b3a37af465cc89acc13079feb5dbe8f5c35a5ca7997103",
+  "wrong_identity_rejected": true
+}

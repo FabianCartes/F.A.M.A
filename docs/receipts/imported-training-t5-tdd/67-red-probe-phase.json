@@ -1,0 +1,19 @@
+{
+  "command": [
+    "/home/kevin/Work/fama/.venv/bin/python",
+    "tests/run_isolated_training_checks.py",
+    "tests/test_training_postgres_probe_diagnostics.py::test_main_reports_permission_rejection_failure_from_prove"
+  ],
+  "cwd": "/home/kevin/Work/fama/backend",
+  "environment": {
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTHON_DOTENV_DISABLED": "1",
+    "DATABASE_URL": "sqlite://",
+    "CUDA_VISIBLE_DEVICES": "",
+    "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1"
+  },
+  "exit_code": 1,
+  "wall_seconds": 3.4264298410053016
+}

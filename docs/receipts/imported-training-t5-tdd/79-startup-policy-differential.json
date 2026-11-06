@@ -1,0 +1,34 @@
+{
+  "candidate": {
+    "exit_code": 1,
+    "http": [
+      {
+        "authentication_configuration_error": true,
+        "status": 503
+      }
+    ],
+    "streams": {
+      "stdout_bytes": 3505,
+      "stderr_bytes": 0
+    }
+  },
+  "pre_policy": {
+    "exit_code": 1,
+    "http": [
+      {
+        "authentication_configuration_error": true,
+        "status": 503
+      }
+    ],
+    "streams": {
+      "stdout_bytes": 3503,
+      "stderr_bytes": 0
+    }
+  },
+  "raw_stream_equality": {
+    "stdout": false,
+    "stderr": true
+  },
+  "same_public_failure": true,
+  "limits": "Pre-policy source reconstructed by removing only the startup policy; raw pytest streams include run paths/timings and are compared separately, not normalized. No live PostgreSQL/session-runtime proof."
+}

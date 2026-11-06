@@ -1,0 +1,24 @@
+{
+  "command": [
+    "/home/kevin/Work/fama/.venv/bin/python",
+    "tests/run_isolated_training_checks.py",
+    "tests/test_api_model_catalogue.py::test_verified_legacy_missing_hash_is_identifiable_without_imported_schema",
+    "tests/test_api_model_catalogue.py::test_catalogue_exposes_sha256_of_registered_checkpoint_bytes",
+    "tests/test_api_model_catalogue.py::test_catalogue_returns_null_checkpoint_hash_when_file_is_unavailable",
+    "tests/test_api_model_catalogue.py::test_catalogue_evicts_cached_standard_predictor_when_checkpoint_identity_changes",
+    "tests/test_imported_training_evaluation.py::test_imported_registry_missing_association_schema_is_private",
+    "-q"
+  ],
+  "cwd": "/home/kevin/Work/fama/backend",
+  "environment": {
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTHON_DOTENV_DISABLED": "1",
+    "DATABASE_URL": "sqlite://",
+    "CUDA_VISIBLE_DEVICES": "",
+    "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1"
+  },
+  "exit_code": 0,
+  "wall_seconds": 11.898327016999247
+}

@@ -1,0 +1,21 @@
+{
+  "command": [
+    "/home/kevin/Work/fama/.venv/bin/python",
+    "tests/run_isolated_training_checks.py",
+    "tests/test_api_model_catalogue.py::test_trained_names_match_history_in_both_registry_paths",
+    "tests/test_api_model_catalogue.py::test_names_refresh_without_reloading_weights_and_keep_explicit_versions",
+    "-q"
+  ],
+  "cwd": "/home/kevin/Work/fama/backend",
+  "environment": {
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTHON_DOTENV_DISABLED": "1",
+    "DATABASE_URL": "sqlite://",
+    "CUDA_VISIBLE_DEVICES": "",
+    "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1"
+  },
+  "exit_code": 1,
+  "wall_seconds": 9.786535787000048
+}

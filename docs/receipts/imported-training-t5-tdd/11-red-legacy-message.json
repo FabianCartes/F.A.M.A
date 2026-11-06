@@ -1,0 +1,20 @@
+{
+  "command": [
+    "/home/kevin/Work/fama/.venv/bin/python",
+    "tests/run_isolated_training_checks.py",
+    "tests/test_imported_training_evaluation.py::test_registry_unknown_id_preserves_public_legacy_message",
+    "-q"
+  ],
+  "cwd": "/home/kevin/Work/fama/backend",
+  "environment": {
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTHON_DOTENV_DISABLED": "1",
+    "DATABASE_URL": "sqlite://",
+    "CUDA_VISIBLE_DEVICES": "",
+    "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1"
+  },
+  "exit_code": 1,
+  "wall_seconds": 7.395729501000005
+}
