@@ -1,0 +1,132 @@
+{
+  "production_registration_only": true,
+  "hashes": {
+    "backend/app/main.py": "1da27c8a53b802bd7e7ca2c572258b3e6a1c4f0098444e08646dbbfa8397350e",
+    "backend/app/routes/prediction_history.py": "f14409c036426e2f5ddafa26abf00b599bff458e7554dc1e1105337372a76b7e",
+    "backend/tests/test_private_prediction_history.py": "34103649069f5f9168585c9e307083cce994fade8dba9b59bc00af4565420a7a",
+    "frontend/components/views/PredictionView.tsx": "2ca733de2a6df2ff072a31d5f96de43bd56fc2d5a8195f2e3069751a9c0e1b62",
+    "frontend/lib/api/predictionHistory.ts": "ffc9e6e6c6e76db96b57c252f6e99e19bffa72efcbb603a7f8f218c58bc35c22",
+    "frontend/components/views/__tests__/PredictionHistory.test.tsx": "93ac230e7d26630c93f6b76acedbeb31b7575a15bc81e0da78b0f17a4ccdb05f",
+    "frontend/lib/api/__tests__/predictionHistoryApi.test.ts": "189ff644ebc06f330fa5da6dfdc907ec64a66082a377acd72983ec337c9be547"
+  },
+  "deployment": {
+    "deployed": true,
+    "api_container_id": "c79b6101afd2e11bb72f5a71915e2d5046042379caaded7b0c0fe33d763d9dc6",
+    "image": "sha256:2f20b3ab9dd98b2987c617e2b7587f7529b60b70b163956cbfa0a7dec743fb4f",
+    "rollback_containers": [
+      "fama-manual-dev-44938bc83ad0184c-api-before-cookie-history-6953",
+      "fama-manual-dev-44938bc83ad0184c-api-before-private-history-6944"
+    ],
+    "backup_sha256": "301967cbcf418e30089e7a431b4767dc16b4d28bacadc977e89e8415b320fe6a",
+    "backup_catalog_verified": true,
+    "same_database_network_ip_env_security_mounts": true,
+    "protected_readable_business_tables_checkpoints_private_audio_unchanged": true,
+    "user_table_only_expected_login_drift": {
+      "1": [
+        "ultimo_acceso"
+      ]
+    },
+    "private_history": {
+      "fama_trained_model_4": {
+        "http": 200,
+        "records": 0,
+        "repeat_equal": true,
+        "no_store": true
+      },
+      "fama_trained_model_3": {
+        "http": 200,
+        "records": 1,
+        "repeat_equal": true,
+        "no_store": true
+      }
+    },
+    "total_existing_attributable_records": 1,
+    "web_cookie_auth_http": 200,
+    "anonymous_http": 401,
+    "unknown_model_http": 404,
+    "served_view_and_helper_hashes_verified": true,
+    "served_javascript_route_verified": true,
+    "api_health_http": 200,
+    "ui_http": 200,
+    "new_prediction_training_gcs_or_activation": false,
+    "human_visual_acceptance": "pending",
+    "native_approval": false,
+    "parent_cookie_related_tests": 101,
+    "independent_cookie_tests": 29,
+    "parent_spot_cookie_tests": 13,
+    "prior_failures_preserved": [
+      "job44 isolated image probe used default UID instead actual runtime UID; corrected probe only",
+      "job46 initial deployment HTTP401; route used Bearer-only instead established cookie/Bearer resolver; corrected via observed RED/GREEN and scoped independent verification"
+    ]
+  },
+  "database_migration": false,
+  "live_data_mutation": false,
+  "risk_item": 2,
+  "native_review": "unassessable_untracked_scope_no_approval",
+  "parent_backend": {
+    "passed": 80,
+    "command_log": "job-35.log"
+  },
+  "parent_frontend": {
+    "full_passed": 469,
+    "test_files": 51,
+    "types_exit_code": 0,
+    "command_log": "job-42.log"
+  },
+  "independent_verification": {
+    "initial_task": "mw5b1z21-j-mtfs",
+    "backend_passed": 80,
+    "frontend_focused_passed": 101,
+    "types_exit_code": 0,
+    "initial_status": "S2 blocker: optimistic inference history insert",
+    "recheck_task": "mw5b8kh7-k-6r74",
+    "recheck_status": "S2 and S3 gap closed",
+    "recheck_frontend_tests": 9,
+    "recheck_files": 2,
+    "recheck_exit_code": 0,
+    "recheck_types_exit_code": 0
+  },
+  "failed_checks_preserved": [
+    "job30 RED missing route404",
+    "job32 RED no persisted history UI",
+    "job33 URL prefix matched existing inference mocks",
+    "job34 old history/alert expectations",
+    "job36 session-only empty-state expectation",
+    "job37 new fixture missed predict query",
+    "post401guard TypeScript missing revision argument; corrected, final focused5/types0",
+    "job40 legacy display fixture lacked executed ID; corrected fixture",
+    "job41 canonical catalogue test expected optimistic row; now supplies authoritative HTTP history"
+  ],
+  "correction": {
+    "red": "Wrong-model inference record99 shown in private history; reproduced 15:27:24",
+    "change": "Imported canonical model history only from authenticated persisted GET; no optimistic insertion",
+    "cases": [
+      "wrong model and local_audio_saved=false",
+      "matching model without confirmed persistence",
+      "matching model with refresh HTTP503",
+      "refresh deduplicates persisted row",
+      "late401 does not invalidate newer session"
+    ]
+  },
+  "excluded_checks": [
+    "Implementation tests used synthetic SQLite only; deployment later verified business state read-only and used existing web login/logout. No real inference, training, GCS or browser automation.",
+    "No full backend suite; isolated related API suites cover the new route",
+    "Frontend lint/production build not executed; reviewed source-only Docker images were built offline. Old panel lint failures are not approved.",
+    "Native assessment unassessable: undeclared untracked scope; no native approval"
+  ],
+  "commits": "Not created: pre-existing staged/untracked implementation dependencies and unrelated changes preserved; no blanket staging",
+  "status": "deployed_http_verified",
+  "parent_spot_check": {
+    "frontend_tests": 9,
+    "types_exit_code": 0,
+    "diff_check_exit_code": 0
+  },
+  "cookie_correction": {
+    "parent_related_passed": 101,
+    "independent_passed": 29,
+    "parent_spot_passed": 13,
+    "red": "web-cookie login then GET history401",
+    "green": "cookie200/logout401/conflicts401/untrustedOrigin403",
+    "independent_task": "mw5d1nan-m-x2lk"
+  }
+}

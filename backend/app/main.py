@@ -526,6 +526,8 @@ app.include_router(auth_router)
 app.include_router(dataset_import_router)
 from app.routes.imported_training import router as imported_training_router
 app.include_router(imported_training_router)
+from app.routes.prediction_history import router as prediction_history_router
+app.include_router(prediction_history_router)
 
 
 # ============================================================================
