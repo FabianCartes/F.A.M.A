@@ -482,7 +482,7 @@ class TrainingService:
                 raise ImportedSourceError("profile_conflict", "El perfil preparado exige una arquitectura única.")
             architecture = selected_models[0]["architecture"]
             sources = self.imported_sources or configured_sources(SessionLocal)
-            imported_source = sources.resolve(owner_id, imported_dataset_id, snapshot_id,
+            imported_source = sources.resolve_for_training(owner_id, imported_dataset_id, snapshot_id,
                 imported_prepared_version, architecture=architecture,
                 audio_config=_json_config(audio_config), windowing_config=_json_config(windowing_config))
             from scripts.migrate_imported_training_source import validate_imported_sources
@@ -746,11 +746,13 @@ class TrainingService:
                 raise ValueError('Clases restauradas distintas de la fuente admitida')
             if self._checkpoint_hash(checkpoint_path) != checkpoint_hash:
                 raise ValueError('Checkpoint cambió durante restauración')
-            for split in ('val', 'test'):
-                for record in config['source']['recordings'][split]:
-                    resolved = resolve_reference(record.reference, record.stage, config['source']['roots'])
-                    if resolved != record.path:
-                        raise ValueError('Referencia admitida cambió antes de evaluación')
+            imported = config['source'].get('kind') == 'imported'
+            if not imported:
+                for split in ('val', 'test'):
+                    for record in config['source']['recordings'][split]:
+                        resolved = resolve_reference(record.reference, record.stage, config['source']['roots'])
+                        if resolved != record.path:
+                            raise ValueError('Referencia admitida cambió antes de evaluación')
             settings = self._evaluation_config(
                 {**config, 'architecture': architecture}, training_audio, preprocessing_contract)
             evaluators = [RecordingEvaluator(config['source']['recordings'][split], predictor,
@@ -783,7 +785,10 @@ class TrainingService:
                 target = publication_db.get(Modelo, model_id)
                 target.estado = 'standard_eval_completed'
                 self._require_standard_reports(target, publication_db)
-                if is_ensemble:
+                if imported:
+                    # Imported models remain private and never replace the global default.
+                    target.activo = False
+                elif is_ensemble:
                     target.estado = 'standard_component_evaluated'
                 else:
                     previous_active_ids = [row.id_modelo for row in publication_db.query(Modelo)
@@ -1261,6 +1266,9 @@ class TrainingService:
                 }
                 if imported:
                     checkpoint_payload["imported_source"] = source["identity"]
+                    checkpoint_payload["audio_config"]["use_gpu_frontend"] = (
+                        source["identity"]["profile"]["audio"]["use_gpu_frontend"]
+                    )
                 if self._is_stop_requested():
                     with self._lock:
                         self.status = 'stopped'
@@ -1366,13 +1374,16 @@ class TrainingService:
                         self.status = 'stopped'
                     return
                 if imported:
-                    with self._lock:
-                        self.status = "checkpoint_persisted"
-                    self._add_log("INFO", "Checkpoint y fuente persistidos; evaluación y publicación pendientes (T5).")
-                    return
-                self._evaluate_registered_checkpoint(
-                    model_id, checkpoint_path, file_hash, config, classes, training_audio,
-                    preprocessing_contract, is_ensemble, arch)
+                    from app.services.imported_evaluation import evaluation_recordings
+                    with evaluation_recordings(source) as recordings:
+                        evaluation_config = {**config, "source": {**source, "recordings": recordings}}
+                        self._evaluate_registered_checkpoint(
+                            model_id, checkpoint_path, file_hash, evaluation_config, classes, training_audio,
+                            preprocessing_contract, is_ensemble, arch)
+                else:
+                    self._evaluate_registered_checkpoint(
+                        model_id, checkpoint_path, file_hash, config, classes, training_audio,
+                        preprocessing_contract, is_ensemble, arch)
 
                 # Limpieza de memoria RAM y VRAM antes del siguiente modelo
                 if torch.cuda.is_available():
@@ -1460,6 +1471,15 @@ class TrainingService:
                         dataset_display = m.clase_objetivo or "Personalizado"
 
                     display = names[m.id_modelo]
+                    dataset_name = m.conjunto_datos.nombre if m.conjunto_datos else None
+                    if association is not None:
+                        from app.models.dataset_import import ImportedDataset
+                        imported_dataset = db.query(ImportedDataset).filter_by(
+                            id=association.dataset_id, owner_id=owner_id).first()
+                        if imported_dataset is not None:
+                            dataset_name = imported_dataset.name
+                            display = dict(display, dataset=dataset_name,
+                                name=f"{dataset_name} · {m.arquitectura} (v{display['version']})")
 
                     lr_val = float(m.tasa_aprendizaje) if m.tasa_aprendizaje is not None else None
                     batch_val = int(m.tamano_lote) if m.tamano_lote is not None else None
@@ -1508,7 +1528,7 @@ class TrainingService:
                         "version": display["version"],
                         "dataset": display["dataset"],
                         "dataset_id": m.id_conjunto_datos,
-                        "dataset_name": m.conjunto_datos.nombre if m.conjunto_datos else None,
+                        "dataset_name": dataset_name,
                         **({"imported_source": association.identity} if association is not None else {}),
                         "sha256": m.hash_binario,
                         "metrics": [{"epoca": metric.epoca, "precision": metric.precision,
@@ -1536,12 +1556,20 @@ class TrainingService:
     def set_active_model(self, model_id: int, db: Optional[Session] = None) -> Dict[str, Any]:
         """
         Marca un modelo como el modelo activo para predicciones en tiempo real (CU_INV_05).
+        Una asociación importada rechaza activación global con success=False y
+        «Los modelos importados no pueden activarse globalmente.», sin cambiar activos.
         """
         if db is not None:
             try:
                 target = db.query(Modelo).filter_by(id_modelo=model_id).with_for_update().first()
                 if target is None:
                     return {"success": False, "error": "Modelo inexistente"}
+                from sqlalchemy import inspect
+                if inspect(db.get_bind()).has_table("imported_model_source"):
+                    from app.models.imported_training_source import ImportedModelSource
+                    if db.get(ImportedModelSource, model_id) is not None:
+                        return {"success": False,
+                                "error": "Los modelos importados no pueden activarse globalmente."}
                 self._require_standard_reports(target, db)
                 if target:
                     db.query(Modelo).update({Modelo.activo: False})

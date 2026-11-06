@@ -100,7 +100,7 @@ def test_imported_progress_stop_and_history_require_owner(client, training_env, 
     assert client.post("/api/training/stop", headers=owner).status_code == 200
 
 
-def test_imported_catalog_requires_auth_and_preserves_legacy_catalog(client, training_env, cohort, tmp_path, authenticated):
+def test_imported_catalog_requires_auth_and_preserves_legacy_catalog(client, training_env, cohort, tmp_path, authenticated, monkeypatch):
     from app.services import auth
     from app.services.imported_training_source import ImportedTrainingSource
     from training.imported_dataset_preparation import ImportedDatasetPreparation
@@ -110,6 +110,10 @@ def test_imported_catalog_requires_auth_and_preserves_legacy_catalog(client, tra
     preparations = ImportedDatasetPreparation(cohort[0], tmp_path / "imported-prepared")
     prepared = create(preparations, cohort)
     runtime.imported_sources = ImportedTrainingSource(preparations)
+    def no_audio_reads(*args, **kwargs):
+        pytest.fail("Catalog must not iterate snapshot audio")
+
+    monkeypatch.setattr(cohort[0], "iter_verified", no_audio_reads)
     legacy = client.get("/api/training/datasets").json()
     assert client.get("/api/training/datasets?include_imported=true").status_code == 401
     foreign = client.get("/api/training/datasets?include_imported=true", headers=authenticated)
@@ -125,6 +129,10 @@ def test_imported_catalog_requires_auth_and_preserves_legacy_catalog(client, tra
     assert choice["prepared_version"] == prepared["version_id"]
     assert choice["eligible"] is True
     assert choice["reasons"] == []
+    assert choice["seed"] == 42
+    assert choice["policy"]["name"] == "group-cover-v1"
+    assert choice["policy"]["target"] == [0.8, 0.1, 0.1]
+    assert choice["provenance"] == {"source": "synthetic annotations v1"}
     assert client.get("/api/training/datasets").json() == legacy
 
 

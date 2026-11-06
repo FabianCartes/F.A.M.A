@@ -122,20 +122,27 @@ def inspect_checkpoint(checkpoints_root, checkpoint_path, expected_sha256, *, ex
         if type(payload) is not dict:
             _invalid(StandardEvaluationReason.CHECKPOINT_INVALID,
                      "Checkpoint sin metadata de evaluación MAIN.")
+        from app.services.imported_training_source import validate_imported_checkpoint, ImportedSourceError
+        try:
+            imported_identity = validate_imported_checkpoint(payload)
+        except ImportedSourceError:
+            _invalid(StandardEvaluationReason.CHECKPOINT_INVALID,
+                     "Checkpoint importado sin identidad válida.")
         job_id, classes = payload.get("job_id"), payload.get("classes")
         dataset_name, dataset_id = payload.get("dataset_name"), payload.get("dataset_id")
         architecture = payload.get("architecture")
         if (type(job_id) is not str or not job_id.strip() or type(classes) is not list or not classes or
                 any(type(label) is not str or not label.strip() for label in classes) or
                 len(set(classes)) != len(classes) or type(dataset_name) is not str or not dataset_name.strip() or
-                type(dataset_id) is not int or dataset_id <= 0 or
+                (imported_identity is None and (type(dataset_id) is not int or dataset_id <= 0)) or
                 type(architecture) is not str or not architecture.strip() or
                 "audio_config" not in payload or "windowing_config" not in payload or
                 (payload["audio_config"] is not None and type(payload["audio_config"]) is not dict) or
                 (payload["windowing_config"] is not None and type(payload["windowing_config"]) is not dict)):
             _invalid(StandardEvaluationReason.CHECKPOINT_INVALID,
                      "Checkpoint sin identidad estándar válida.")
-        training_audio = resolve_training_audio(dataset_name, payload["audio_config"])
+        training_audio = (dict(imported_identity["profile"]["audio"]) if imported_identity is not None
+                          else resolve_training_audio(dataset_name, payload["audio_config"]))
         try:
             preprocessing_contract = validate_gpu_audio_frontend_contract(
                 payload.get("preprocessing_contract"))
@@ -162,7 +169,7 @@ def inspect_checkpoint(checkpoints_root, checkpoint_path, expected_sha256, *, ex
                      "Checkpoint frontend contract differs from its effective training audio settings.")
         configurations = build_evaluation_configuration(
             {"job_id": job_id, "architecture": architecture,
-             "windowing_config": payload["windowing_config"]},
+             "windowing_config": payload["windowing_config"], "imported_source": imported_identity},
             training_audio, preprocessing_contract)
         return CheckpointInspection(path, digest, before[2], before, payload, configurations)
     except StandardEvaluationError:
@@ -284,6 +291,11 @@ def build_evaluation_configuration(config: dict, training_audio: dict,
                            if key not in {"y", "S"}})
     aggregation = dict(unit="recording", predictions_per_recording=1, windowing="fixed-center-crop",
                        decision="softmax-argmax", rejection_statuses=["silence", "noise"])
+    imported_identity = config.get("imported_source")
+    if imported_identity is None and config.get("source", {}).get("kind") == "imported":
+        imported_identity = config["source"]["identity"]
+    if imported_identity is not None:
+        predictor_config["imported_source"] = imported_identity
     return predictor_config, preprocessing, aggregation
 
 
@@ -344,7 +356,23 @@ def select_admitted_standard_pair(
     job_id, classes = payload["job_id"], payload["classes"]
     dataset_name, dataset_id = payload["dataset_name"], payload["dataset_id"]
     architecture = payload["architecture"]
-    if (target.conjunto_datos is None or target.conjunto_datos.nombre != dataset_name or
+    from sqlalchemy import inspect as inspect_schema
+    association = None
+    if inspect_schema(db.get_bind()).has_table("imported_model_source"):
+        from app.models.imported_training_source import ImportedModelSource
+        association = db.get(ImportedModelSource, target.id_modelo)
+    imported_identity = payload.get("imported_source")
+    if imported_identity is not None or association is not None:
+        if (association is None or imported_identity is None or
+                target.id_conjunto_datos is not None or target.id_usuario != association.owner_id or
+                association.owner_id != imported_identity["owner_id"] or
+                association.dataset_id != imported_identity["dataset_id"] or
+                association.snapshot_id != imported_identity["snapshot_id"] or
+                not _json_matches(association.identity, imported_identity) or
+                target.arquitectura != architecture):
+            _invalid(StandardEvaluationReason.CHECKPOINT_INVALID,
+                     "Fuente importada del checkpoint no coincide con el modelo.")
+    elif (target.conjunto_datos is None or target.conjunto_datos.nombre != dataset_name or
             target.id_conjunto_datos != dataset_id or target.arquitectura != architecture):
         _invalid(StandardEvaluationReason.CHECKPOINT_INVALID,
                  "Dataset o arquitectura del checkpoint no coincide con el modelo.")

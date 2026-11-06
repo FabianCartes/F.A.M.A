@@ -26,7 +26,7 @@ def test_explicit_migration_from_absent_table(cohort):
 
 
 @pytest.mark.parametrize("fault", [None, "association", "audio_after_admission"])
-def test_real_cpu_worker_persists_source_pending_evaluation(cohort, training_env, tmp_path, monkeypatch, client, fault, request):
+def test_real_cpu_worker_persists_source_and_completes_evaluation(cohort, training_env, tmp_path, monkeypatch, client, fault, request):
     import torch
     from app.services import training
     from app.services.imported_training_source import ImportedTrainingSource
@@ -76,10 +76,10 @@ def test_real_cpu_worker_persists_source_pending_evaluation(cohort, training_env
             assert runtime.get_history(db) == []
         assert list(runtime.checkpoints_dir.iterdir()) == []
         return
-    assert runtime.get_progress()["status"] == "checkpoint_persisted", runtime.get_progress()
+    assert runtime.get_progress()["status"] == "completed", runtime.get_progress()
     with sessions() as db:
         entry, = runtime.get_history(db, owner_id=1)
-    assert entry["status"] == "standard_eval_pending"
+    assert entry["status"] == "standard_eval_completed"
     assert entry["active"] is False
     association = runtime.imported_sources.model_source(1, entry["id"])
     assert association["dataset_id"] == cohort[5]
@@ -130,7 +130,7 @@ def test_real_cpu_worker_persists_source_pending_evaluation(cohort, training_env
         response = client.post(activation_url, headers=owner)
         assert response.status_code == 200, response.text
         assert response.json()["success"] is False
-        assert client.get("/api/training/progress", headers=owner).json()["status"] == "checkpoint_persisted"
+        assert client.get("/api/training/progress", headers=owner).json()["status"] == "completed"
     finally:
         main.app.dependency_overrides[get_db] = previous
 
