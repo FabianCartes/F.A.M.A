@@ -1,0 +1,12 @@
+{
+  "command": [
+    "npm",
+    "test",
+    "--",
+    "components/views/__tests__/ImportedTrainingBridge.test.tsx"
+  ],
+  "cwd": "/home/kevin/Work/fama/frontend",
+  "exit_code": 1,
+  "wall_seconds": 4.095217689000492,
+  "scope": "RTL real Home/import/training components; HTTP synthetic; no production change or real import/backend authorization proof"
+}

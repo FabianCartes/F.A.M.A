@@ -1,0 +1,10 @@
+{
+  "command": [
+    "npm",
+    "run",
+    "lint"
+  ],
+  "cwd": "/home/kevin/Work/fama/frontend",
+  "exit_code": 0,
+  "wall_seconds": 11.565500739998242
+}

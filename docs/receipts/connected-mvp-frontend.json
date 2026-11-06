@@ -1,0 +1,8 @@
+{
+  "path": "components/training/ImportedTrainingPanel.tsx",
+  "previous_sha256": "c73248105c38858d9373e4158d9c21b4180c48b73cee0111ee98da0177446c97",
+  "deployed_sha256": "07fd5a615bfd3ef660978894431852b3ea1249e4358eeab8513f94c6a3595ec6",
+  "only_expected_stale_explanation_added": true,
+  "dependency_changes": false,
+  "dev_server_hot_reload": true
+}

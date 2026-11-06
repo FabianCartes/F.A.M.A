@@ -1,0 +1,10 @@
+{
+  "command": [
+    "npm",
+    "run",
+    "build"
+  ],
+  "cwd": "/home/kevin/Work/fama/frontend",
+  "exit_code": 0,
+  "wall_seconds": 7.00255691199709
+}

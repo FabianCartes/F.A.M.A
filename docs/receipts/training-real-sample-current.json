@@ -1,0 +1,410 @@
+{
+  "schema": "fama.real-wav-sample/v1",
+  "run": "46f2a0d77585871f",
+  "state_directory": ".training-sample-46f2a0d77585871f",
+  "source_archive": "/run/media/kevin/FAMA_P2/fama-p2/datasets/aves-chilenas/aves-chilenas-wav-import-871a8d559b/AvesChilenas-WAV-max10min.zip",
+  "source_archive_size": 5620955136,
+  "source_stat_unchanged": true,
+  "source_full_archive_hash_computed": false,
+  "source_members_crc_verified_by_zipfile": true,
+  "sample_sha256": "0c2d5ee1ba60db246f1c00e17d4f4f5d5c9853df637c0dbcf2ccb8163bc8f59f",
+  "sample_zip_bytes": 2600267,
+  "expanded_bytes": 3802316,
+  "members": [
+    {
+      "source_member": "canastero/381500.wav",
+      "sample_member": "canastero/381500.wav",
+      "sha256": "a3a1db8d7336f8dd63e9ff3f58ebc8bd9f514ce1df9952993933579714f88429",
+      "bytes": 268668,
+      "frames": 67032,
+      "sample_rate": 44100,
+      "channels": 2,
+      "sample_width_bytes": 2,
+      "duration_seconds": 1.52
+    },
+    {
+      "source_member": "canastero/381501.wav",
+      "sample_member": "canastero/381501.wav",
+      "sha256": "d0a0802c7c32d67f8e4d1935297850647bdf5ec4b1583fcc34ce135aff8569d7",
+      "bytes": 477702,
+      "frames": 119291,
+      "sample_rate": 44100,
+      "channels": 2,
+      "sample_width_bytes": 2,
+      "duration_seconds": 2.7050113378684806
+    },
+    {
+      "source_member": "canastero/50707.wav",
+      "sample_member": "canastero/50707.wav",
+      "sha256": "41ff28bce9ab986e9341f0b6bc86267f3e1924b50d21d99b7e2dd977b9621b9c",
+      "bytes": 873746,
+      "frames": 436608,
+      "sample_rate": 44100,
+      "channels": 1,
+      "sample_width_bytes": 2,
+      "duration_seconds": 9.900408163265306
+    },
+    {
+      "source_member": "chercán/386600.wav",
+      "sample_member": "chercán/386600.wav",
+      "sha256": "e201533c521853ff0a29a54b1cd085c6022d8ef019807b5dc80b06982bf79ea4",
+      "bytes": 486454,
+      "frames": 121496,
+      "sample_rate": 44100,
+      "channels": 2,
+      "sample_width_bytes": 2,
+      "duration_seconds": 2.755011337868481
+    },
+    {
+      "source_member": "chercán/156028.wav",
+      "sample_member": "chercán/156028.wav",
+      "sha256": "dedeb6d755a6928669639c8584f4125e10cd126268b3fdec92233d5185080bfc",
+      "bytes": 558034,
+      "frames": 139392,
+      "sample_rate": 44100,
+      "channels": 2,
+      "sample_width_bytes": 2,
+      "duration_seconds": 3.1608163265306124
+    },
+    {
+      "source_member": "chercán/585688.wav",
+      "sample_member": "chercán/585688.wav",
+      "sha256": "249c48364a9fa4132ac76f222a87d71b362ac254fb61338d61546b1e1b97974a",
+      "bytes": 590304,
+      "frames": 147456,
+      "sample_rate": 44100,
+      "channels": 2,
+      "sample_width_bytes": 2,
+      "duration_seconds": 3.3436734693877552
+    },
+    {
+      "source_member": "chincol/374371.wav",
+      "sample_member": "chincol/374371.wav",
+      "sha256": "b47974767940d45ba7abff4d78b9a6ea417546478448dedbff15311ff8f914a5",
+      "bytes": 59914,
+      "frames": 14862,
+      "sample_rate": 44100,
+      "channels": 2,
+      "sample_width_bytes": 2,
+      "duration_seconds": 0.33700680272108846
+    },
+    {
+      "source_member": "chincol/494441.wav",
+      "sample_member": "chincol/494441.wav",
+      "sha256": "2d962ceaf899fd7d0a59af3e41d031cb0fd8b7b136c09745ea6c53cc72a6dfe2",
+      "bytes": 193500,
+      "frames": 96528,
+      "sample_rate": 48000,
+      "channels": 1,
+      "sample_width_bytes": 2,
+      "duration_seconds": 2.011
+    },
+    {
+      "source_member": "chincol/374370.wav",
+      "sample_member": "chincol/374370.wav",
+      "sha256": "695ef8d4aab73efec6ab2b914d2849ad48c64036f45eb71c58195fad93e898d2",
+      "bytes": 293994,
+      "frames": 73382,
+      "sample_rate": 44100,
+      "channels": 2,
+      "sample_width_bytes": 2,
+      "duration_seconds": 1.6639909297052153
+    }
+  ],
+  "wav_pcm_header_and_frame_read": true,
+  "model_quality_or_recording_independence_proven": false,
+  "groups_inferred": false,
+  "import_executed": false,
+  "training_executed": false,
+  "status": "blocked_namespace_permission_after_bubblewrap_install",
+  "preview_executed": true,
+  "publication_completed": false,
+  "import_id": "0226562ca0c944638616e22db4c967f3",
+  "runtime": {
+    "db_container": "22159a2f5b0e04db29896289462ed3a389a5be240cffed772e8407fb20abc9de",
+    "database": "fama_training_dev_20261105163201",
+    "network_id": "6d410e77106e37898c2ad8c66f452fafbdbbf8de133ccbd960935ede203ea24e",
+    "app_container": "b7ef2a3f415faa184d4e8a1c63c606eb89e4ebbff85d85f2f12f33f75d1d9465",
+    "image": "sha256:4b1b9bc2694960d85937358bc08e678fb62cf16cfa0bdfd71ab8c315e31ac015",
+    "granted_import_operations": {
+      "SELECT, INSERT, UPDATE": [
+        "dataset_import",
+        "dataset_import_summary",
+        "dataset_import_receipt",
+        "dataset_import_chunk_activity",
+        "dataset_import_job",
+        "imported_dataset",
+        "imported_dataset_summary"
+      ],
+      "SELECT, UPDATE": [
+        "dataset_import_job_gate"
+      ],
+      "SELECT, INSERT": [
+        "dataset_import_chunk",
+        "imported_dataset_member"
+      ],
+      "SELECT, INSERT, DELETE": [
+        "dataset_import_file",
+        "dataset_import_class",
+        "dataset_import_issue"
+      ],
+      "SELECT": [
+        "dataset_import_receipt_schema",
+        "dataset_import_chunk_schema",
+        "usuario",
+        "training_snapshot",
+        "conjunto_datos",
+        "audio"
+      ]
+    },
+    "physical_marker_table_exists": false,
+    "marker_preflight_incident": "Initial count query failed on absent optional marker table; readonly to_regclass confirmed absent; physical_storage supports absence without profile; no schema created",
+    "create_or_temp": {
+      "create_schema": false,
+      "create_database": false,
+      "temporary": false
+    },
+    "liveness": 200,
+    "http_stages": {
+      "prepare": {
+        "exit_code": 0,
+        "result": {
+          "ok": true,
+          "result": {
+            "stage": "prepare",
+            "import_id": "0226562ca0c944638616e22db4c967f3",
+            "queued": true
+          },
+          "steps": [
+            {
+              "method": "POST",
+              "endpoint": "/api/auth/login",
+              "status": 200
+            },
+            {
+              "method": "GET",
+              "endpoint": "/api/ingestion/imports/limits",
+              "status": 200
+            },
+            {
+              "method": "POST",
+              "endpoint": "/api/ingestion/imports",
+              "status": 200
+            },
+            {
+              "method": "POST",
+              "endpoint": "/api/ingestion/imports/0226562ca0c944638616e22db4c967f3/receipt",
+              "status": 200
+            },
+            {
+              "method": "PUT",
+              "endpoint": "/api/ingestion/imports/0226562ca0c944638616e22db4c967f3/receipt/chunks/0",
+              "status": 200
+            },
+            {
+              "method": "POST",
+              "endpoint": "/api/ingestion/imports/0226562ca0c944638616e22db4c967f3/receipt/finalize",
+              "status": 200
+            },
+            {
+              "method": "POST",
+              "endpoint": "/api/ingestion/imports/0226562ca0c944638616e22db4c967f3/preview",
+              "status": 202
+            }
+          ]
+        }
+      },
+      "preview-result": {
+        "exit_code": 1,
+        "result": {
+          "ok": false,
+          "category": "sample_probe_failed",
+          "steps": [
+            {
+              "method": "POST",
+              "endpoint": "/api/auth/login",
+              "status": 200
+            },
+            {
+              "method": "GET",
+              "endpoint": "/api/ingestion/imports/0226562ca0c944638616e22db4c967f3/jobs/95feb6c7437f4268a64abec0fd27cbd4",
+              "status": 200
+            },
+            {
+              "method": "GET",
+              "endpoint": "/api/ingestion/imports/0226562ca0c944638616e22db4c967f3",
+              "status": 200
+            }
+          ]
+        }
+      }
+    },
+    "workers": {
+      "preview": {
+        "container": "7690b3ddfa5a801f000e32d83ab8b76828ad34d37a106d0d671fd3cc0d3f4feb",
+        "exit_code": 0,
+        "claim": {
+          "claimed": true
+        }
+      }
+    }
+  },
+  "validation_observation": {
+    "execution_status": "succeeded",
+    "import_status": "needs_correction",
+    "file_count": 0,
+    "class_count": 0,
+    "error_count": 1,
+    "issue_code": "sandbox_invalid_result"
+  },
+  "confirm_executed": false,
+  "gcs_used": false,
+  "browser_verified": false,
+  "source_wav_invalidity_proven": false,
+  "sandbox_existing_evidence": {
+    "manifest": {
+      "required_paths": {
+        "/usr/bin/prlimit": true,
+        "/usr/bin/bwrap": false,
+        "/app/app/services/dataset_zip_child.py": true,
+        "/app/app/services/dataset_zip.py": true
+      },
+      "python": "/usr/local/bin/python3.12",
+      "libseccomp": "libseccomp.so.2",
+      "dependency_patterns": {
+        "soundfile.py": true,
+        "_soundfile.py": true,
+        "typing_extensions.py": true,
+        "cffi": true,
+        "_cffi_backend*.so": true,
+        "numpy": true,
+        "numpy.libs": true,
+        "_soundfile_data": true
+      }
+    },
+    "worker": {
+      "exit_code": 0,
+      "oom": false,
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "userns_mode": "",
+      "memory_bytes": 2147483648,
+      "pids_limit": 128
+    },
+    "attempt_metadata": {
+      "directories": 2,
+      "files": 0,
+      "total_bytes": 0
+    }
+  },
+  "final_state": {
+    "app_running": false,
+    "postgres_running": false,
+    "database_allow_connections": false,
+    "app_login": false,
+    "app_connect": false,
+    "sessions_before_stop": 0,
+    "persistent_storage_preserved": true
+  },
+  "missing_prerequisite": "/usr/bin/bwrap",
+  "overall_pass": false,
+  "independent_runtime_reproduction": false,
+  "next_decision": "Select a compatible isolated environment or authorize scoped environment investigation; do not disable sandbox, use privileged containers, relax security policy or retry unavailable isolation here.",
+  "bubblewrap_recovery": {
+    "authorized": true,
+    "base_image": "sha256:4b1b9bc2694960d85937358bc08e678fb62cf16cfa0bdfd71ab8c315e31ac015",
+    "status": "build_prepared",
+    "production_dockerfile_modified": false,
+    "security_settings_changed": false,
+    "first_build_exit_code": 1,
+    "first_build_failure": "Bare sha256 FROM interpreted as registry repository; no dependency installation ran",
+    "local_base_tag": "fama-sample-source:46f2a0d77585871f",
+    "local_base_id": "sha256:4b1b9bc2694960d85937358bc08e678fb62cf16cfa0bdfd71ab8c315e31ac015",
+    "image": "sha256:5b750b6c28798b84ca6db766385eeafc6652dfef0d9abb007bb512e15b7be8cb",
+    "build_exit_code": 0,
+    "preflight_container": "c999f911b3e1feea31bd6b0a8b31203a6345d528109068464b4688db6c5e2911",
+    "preflight_exit_code": 1,
+    "preflight": {
+      "bubblewrap_present": true,
+      "sandbox_exit_code": 1,
+      "sandbox_stdout_ok": false,
+      "sandbox_stderr": "bwrap: No permissions to create a new namespace, likely because the kernel does not allow non-privileged user namespaces. See <https://deb.li/bubblewrap> or <file:///usr/share/doc/bubblewrap/README.Debian.gz>.\n",
+      "security_relaxed": false
+    }
+  },
+  "current_container_observations": {
+    "app": {
+      "running": false,
+      "exit_code": 0,
+      "oom": false
+    },
+    "postgres": {
+      "running": false,
+      "exit_code": 0,
+      "oom": false
+    },
+    "bubblewrap_preflight": {
+      "running": false,
+      "exit_code": 1,
+      "oom": false
+    }
+  },
+  "validation_repeated_after_install": false,
+  "host_packages_installed": false,
+  "production_dockerfile_modified": false,
+  "security_relaxed": false,
+  "namespace_denial_layer_proven": false,
+  "namespace_readonly_investigation": {
+    "authorization": "User Autorizo scoped read-only investigation, no services or preflight restarted",
+    "container_observed": {
+      "seccomp": "Docker builtin",
+      "apparmor_profile": "",
+      "runtime": "runc",
+      "user": "1000:1000",
+      "cap_drop": [
+        "ALL"
+      ],
+      "cap_add": null,
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "privileged": false,
+      "userns_mode": "",
+      "running": false,
+      "network": "none"
+    },
+    "host_sysctl_observed": {
+      "user.max_user_namespaces": {
+        "exit_code": 0,
+        "value": 61774
+      },
+      "kernel.unprivileged_userns_clone": {
+        "exit_code": 0,
+        "value": 1
+      },
+      "kernel.apparmor_restrict_unprivileged_userns": {
+        "exit_code": 1,
+        "status": "key_not_present"
+      }
+    },
+    "upstream_profile_evidence": {
+      "url": "https://raw.githubusercontent.com/moby/profiles/main/seccomp/default.json",
+      "unshare_allow_condition": "CAP_SYS_ADMIN",
+      "is_exact_deployed_filter_proven": false
+    },
+    "interpretation": "A blanket disabling of unprivileged user namespaces is not supported by the observed host sysctls. Default outer Docker seccomp is the leading hypothesis, consistent with upstream unshare gating and cap-drop ALL, not a confirmed syscall attribution.",
+    "unavailable_proof": "No effective per-process seccomp filter or denied-syscall trace was obtained; no replay or policy changes authorized or performed.",
+    "host_configuration_changed": false,
+    "container_configuration_changed": false,
+    "services_started": false,
+    "sandbox_retried": false,
+    "bounded_kernel_journal_observation": {
+      "command_exit_code": 1,
+      "bounded_window": "last one hour, kernel only, maximum 100 matching entries",
+      "bwrap_denial_events": [],
+      "journal_permission_warning": false,
+      "attribution_proven": false
+    }
+  }
+}

@@ -8,6 +8,25 @@ La documentación está organizada temáticamente en subdirectorios especializad
 
 ---
 
+## Consolidación Git del MVP local
+
+- [Plan y commits locales](./arquitectura/local-mvp-consolidation-plan.md): rama `feat/local-mvp`, preservación del índice y las fuentes, unidades funcionales y exclusiones.
+- [Recibo de consolidación](./receipts/local-mvp-consolidation.json): comprobaciones nuevas, fallos conservados y límites. Los resultados backend son fragmentados; no representan una suite completa en verde.
+- El respaldo privado de fuentes/índice no es un respaldo consistente de datos operativos ni una restauración comprobada. Logs crudos, scripts operativos locales y metadatos históricos excluidos no forman parte de un checkout limpio; sus referencias en recibos son históricas.
+- Esta consolidación no cambia el despliegue ni acredita producción. GCS, aceptación visual y pendientes operacionales mantienen su alcance separado; no hay push, PR ni merge.
+
+## Bootstrap de entrenamiento importado
+
+- [PostgreSQL separado](./manuales/postgresql-entrenamiento-separado.md): procedimiento administrativo validado en desechable y persistente, preparado sin activar la aplicación; [recibo desechable](./receipts/training-postgres-admin-disposable.json), [recibo persistente](./receipts/training-postgres-admin-persistent.json) y [recibo estructural histórico](./receipts/training-bootstrap-layout.json). Los recibos incluyen alcance e incidencias; los experimentos anteriores no son la ruta operativa.
+- [Feedback y crecimiento de datasets — plan](./arquitectura/feedback-crecimiento-datasets-plan.md): especificación del flujo de revisión, incorporación local y preparación de la siguiente cohorte; estados y evidencia, no aprobación operativa. [Estado parcial y pruebas faltantes](./receipts/feedback-growth-current.json).
+- [Incorporación revisada de feedback importado](./manuales/feedback-datasets-importados.md): contrato de aceptación local, origen no-archivo, idempotencia y sincronización diferida; no equivale a despliegue aprobado.
+- [Worker local de importación ZIP](./manuales/worker-importacion-zip-local.md): proceso separado, sandbox intacto, operación y límites en la BD principal conectada. [Plan y evidencia de reparación](./arquitectura/zip-worker-repair-plan.md).
+- [Preparar el siguiente entrenamiento tras aceptar audios](./manuales/feedback-preparacion-siguiente-entrenamiento.md): revisión actual, procedencia de grabación/grupo y nuevas particiones sin reentrenamiento automático.
+- [Entorno manual de entrenamiento](./manuales/entorno-manual-entrenamiento.md): acceso local a la UI y administración por `psql` de la base persistente separada; credenciales privadas, arranque/parada y bloqueo del worker. [Estado actual](./receipts/training-manual-development-current.json), con verificación final independiente inconclusa.
+- [Muestra WAV real](./receipts/training-real-sample-current.json): selección pequeña, hashes y lecturas PCM verificadas desde originales SSD de solo lectura; el recibo distingue preparación, importación y entrenamiento.
+- [Prueba de sesión desechable](./receipts/training-session-current.json): estado y límites del runtime aislado nuevo; el probe HTTP local no versionado (`docs/receipts/check_disposable_application_session.py`) verifica usuario sintético, sesión, Origin, Bearer, revocación y cuotas. Un estado de preparación o build no acredita disponibilidad ni prueba funcional completada.
+- [ADR 0055](./adr/0055-postgresql-separado-para-bootstrap-de-entrenamiento.md): separación del clúster y sus límites frente a reutilizar el anterior.
+
 ## Estructura del Repositorio Documental
 
 ```text
@@ -19,7 +38,7 @@ docs/
 ├── arquitectura/                # Diseño de sistemas, pipelines, MLOps y despliegue
 ├── limites/                     # Límites matemáticos, físicos y problemas conocidos
 ├── manuales/                    # Manual de usuario, revisión, despliegue e índices canónicos
-├── adr/                         # Architectural Decision Records (ADR 0001 a 0053)
+├── adr/                         # Architectural Decision Records (ADR 0001 a 0056)
 ├── receipts/                    # Recibos técnicos reproducibles en formato JSON (RDD)
 ├── duplicados-exactos/           # Tarea acotada: admisión de feedback sin duplicados SHA-256
 └── images/                      # Diagramas, matrices de confusión y gráficos vectoriales
@@ -67,6 +86,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`benchmark_local_cpu_20261016.md`](./modelos/benchmark_local_cpu_20261016.md): Mediciones reales CPU autorizadas de un audio/checkpoint; fallos de compatibilidad conservados, preprocesamiento medido y predictor detenido por filtro de ruido, sin acreditar forward, latencia hasta pantalla ni 50 GB.
 
 ### 3. [`docs/arquitectura/`](./arquitectura/) — Arquitectura de Software y MLOps
+* [`0056-audio-local-privado-de-inferencia.md`](./adr/0056-audio-local-privado-de-inferencia.md): Audio privado local para inferencia importada, identidad relativa verificada, aprobación explícita y conservación ante commit o cancelación inciertos; GCS legacy separado. [Recibo de despliegue local](./receipts/local-inference-no-gcs.json), sin inferencia real ejecutada por el agente.
 * [`0053-procedencia-durable-de-entrenamiento-importado.md`](./adr/0053-procedencia-durable-de-entrenamiento-importado.md): Asociación durable mínima adelantada a T3, autenticación solo de recursos importados y checkpoint pendiente sin publicación; exclusión explícita del bootstrap, evidencia funcional y límites en el plan, sin migraciones reales.
 * [`0052-preparacion-local-de-datasets-importados.md`](./adr/0052-preparacion-local-de-datasets-importados.md): Contrato de T0 para preparación local con mapa de grupos explícito y cobertura de clases; snapshot local separado del manifiesto remoto, sin alterar ZIP, legacy ni GCS de predicción. Implementación pendiente.
 * [`entrenamiento-datasets-importados-plan.md`](./arquitectura/entrenamiento-datasets-importados-plan.md): Plan para una nueva sesión: puente local de importación a preparación y entrenamiento, preservación del ZIP, snapshots, distribución y pruebas. T0 cerrada como investigación y contrato (grupos explícitos, cobertura train/val/test, WAV single-label local); T1 base de snapshots locales implementada en `36bf338`, T2 preparación callable implementada con límite independiente aceptado; T3 catálogo/admisión y asociación durable con comprobación funcional (suite263PASS, spawn11PASS, startup2órdenes), cierre local según Log; T4 interfaz/preparación explícita cerrada en `e6ccade`, navegador con API sintética e independiente acotado aprobados; T5–T7 sin iniciar. 10 grabaciones independientes por clase como referencia de advertencia, no rechazo numérico ni autorización de entrenamiento real.
@@ -97,6 +117,9 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`entrenamiento-datasets-importados.md`](./manuales/entrenamiento-datasets-importados.md): Contratos T3 y T4: catálogo/start por propietario, snapshot/preparación y UI explícita con perfil fijado y estados veraces; [evidencia T4](./receipts/imported-training-t4-verification.json), cierre funcional `e6ccade`, navegador sintético e independiente acotado aprobados, prerrequisito individual previo incluido con autorización. Sin operación real ni evaluación/publicación T5.
 * [`preparacion-datasets-importados.md`](./manuales/preparacion-datasets-importados.md): T2, preparación inmutable por snapshot con grupos/perfil explícitos, cobertura y advertencias; [evidencia T2](./receipts/imported-training-t2-verification.json), límites y exclusiones, sin admisión ni entrenamiento.
 * [`snapshots-locales-entrenamiento.md`](./manuales/snapshots-locales-entrenamiento.md): Servicio local T1 por propietario/ID, esquema aditivo explícito, integridad y persistencia; [evidencia sintética T1](./receipts/imported-training-t1-verification.json) y límites, sin endpoint ni entrenamiento real.
+* [`prueba-manual-principal-importacion.md`](./manuales/prueba-manual-principal-importacion.md): Preparación de la instancia principal y ZIP real ESC-10 para ejecución manual del usuario; sin entrenamiento, GCS ni inferencia.
+* [`prueba-manual-local-sin-gcs.md`](./manuales/prueba-manual-local-sin-gcs.md): Alcance y evidencia de la prueba local parcial en copia privada FAMA_P2; excluye predicción y operaciones GCS.
+* [`p5-manual-review-slices-historical.md`](./manuales/p5-manual-review-slices-historical.md): Archivo histórico de procedencia de revisiones P5, preservado al retirar sus worktrees; no acredita autoridad ni preparación operacional vigente.
 * [`presupuesto-fisico-importacion-dev.md`](./manuales/presupuesto-fisico-importacion-dev.md): Política física T6.1, ciclo opt-in T6.2 y builder compartido T6.3; perfil numérico candidato, activación explícita solo de laboratorio vacío y obligaciones SSD/procesos pendientes (sin activación operativa ni prueba grande).
 * [`integracion-importacion-datasets.md`](./manuales/integracion-importacion-datasets.md): Recorrido T8 de recepción a descarga, matriz de aceptación, presupuestos de páginas/DOM, mediciones sintéticas y guía consolidada de almacenamiento, manifiestos y recuperación; no certifica despliegue ni escala máxima.
 * [`trabajos-importacion-datasets.md`](./manuales/trabajos-importacion-datasets.md): Migración, admisión durable, ejecución, HTTP202/panel, publicación fenced, limpieza protegida y CLI de un trabajo; pruebas sintéticas entre procesos y límites operacionales. T3a añade reservas; T3b añade fragmentos durables; T3c conecta el panel y verifica todo el prefijo; T3d añade cuotas por dataset y liberación atómica de reservas. T3a–T3d cerrados localmente dentro del alcance sintético, sin habilitar10GiB ni certificar operación real. [ADR 0030](./adr/0030-admision-durable-importaciones.md), [ADR 0031](./adr/0031-fenced-import-publication.md), [ADR 0032](./adr/0032-durable-receipt-reservations.md), [ADR 0033](./adr/0033-durable-import-chunks.md) y [ADR 0034](./adr/0034-dataset-import-quotas.md).
@@ -196,3 +219,10 @@ Registro de decisiones de arquitectura; los ADR de afinamiento se renumeran como
 * [`ADR 0049`](./adr/0049-dashboard-con-observaciones-y-origen-explicito.md): Dashboard sin métricas/eventos ficticios, origen en último modelo registrado, desconocidos explícitos y referencias históricas separadas; GET sin cargar checkpoints ni alterar activación.
 * [`ADR 0050`](./adr/0050-compatibilidad-explicita-de-checkpoints-poc.md): Predictor respeta pooling declarado, formato PoC model_type/avg y bandas Mel explícitas, preservando carga estricta y default del formato actual; sin reescribir artefactos.
 * [`ADR 0051`](./adr/0051-estado-legacy-pasivo-y-ejecucion-atribuida.md): GET model-info observa registro/archivo/carga sin deserializar; ámbitos legacy diferenciados, métricas con origen y predicción atribuida al predictor invocado, sin activar ni fabricar componentes.
+
+- [Límites grandes predeterminados de importación](./arquitectura/large-zip-defaults-plan.md): especificación, pruebas y despliegue coordinado API/worker para el ZIP de5,6GB; sin afirmar entrenamiento real.
+- [Preparación automática del dataset](./manuales/preparacion-automatica-dataset.md): botón único, reparto70/15/15 y suposición explícita de independencia por WAV. [Plan de implementación](./arquitectura/automatic-preparation-mvp-plan.md), sin selector histórico ni entrenamiento automático.
+
+### Historial privado de predicciones
+
+- [Plan y comprobaciones del historial persistente](arquitectura/private-prediction-history-plan.md): consulta por modelo importado privado, atribución verificable y límites.

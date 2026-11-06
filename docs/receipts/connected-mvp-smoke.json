@@ -1,0 +1,79 @@
+{
+  "status": "deployment_parent_smoke_passed",
+  "database": "fama_training_dev_20261105153618",
+  "frontend_url": "http://127.0.0.1:3000",
+  "api_image": "sha256:96b2a8db680417418e251cacf16a37b92b455b214d8fc9b94cbc6cee42c26507",
+  "checks": [
+    {
+      "deployed_source_identity": {
+        "verified_source_files": 119,
+        "mismatches": []
+      }
+    },
+    {
+      "path": "/",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "path": "/api/auth/web/me",
+      "status": 401,
+      "expected": 401
+    },
+    {
+      "path": "/api/auth/web/login",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "path": "/api/auth/web/me",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "path": "/api/feedback/pending?limit=1",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "path": "/api/feedback/stats",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "path": "/api/feedback/sync?limit=1",
+      "status": 200,
+      "expected": 200
+    },
+    {
+      "path": "/api/auth/web/logout",
+      "status": 204,
+      "expected": 204
+    },
+    {
+      "path": "/api/auth/web/me",
+      "status": 401,
+      "expected": 401
+    }
+  ],
+  "secret_values_logged": false,
+  "domain_data_mutated": false,
+  "session_created_and_closed": true,
+  "worker_started": false,
+  "training_started": false,
+  "gcs_started": false,
+  "initial_smoke_failure": {
+    "job": 58,
+    "exit_code": 1,
+    "reason": "Probe incorrectly used Bearer-only /api/auth/me after cookie login; corrected to existing /api/auth/web/me; no application change"
+  },
+  "independent_verification": "previously_inconclusive_not_retried",
+  "full_mvp_end_to_end_verified": false,
+  "browser": {
+    "url": "http://127.0.0.1:3000/",
+    "title": "F.A.M.A. | Clasificaci\u00f3n Bioac\u00fastica",
+    "body_visible": true,
+    "login_link_count": 1,
+    "scope": "Unauthenticated landing only; no browser login/training/inference/cloud claim"
+  }
+}

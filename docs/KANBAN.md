@@ -2,6 +2,10 @@
 kanban-plugin: basic
 ---
 
+## Consolidación del MVP local — Git y evidencia
+
+- [x] **MVP-GIT:** rama `feat/local-mvp`, respaldo validado de fuentes/índice y commits funcionales locales; fuentes conservadas, salvo dos correcciones de fixtures verificadas. [Plan y unidades](arquitectura/local-mvp-consolidation-plan.md), [recibo y exclusiones](receipts/local-mvp-consolidation.json). Frontend469PASS/tipos0; backend333 casos distintos con resultados aprobados en ejecuciones fragmentadas, no suite completa verde. Fallos, comprobaciones incompatibles con el runner y artefactos retirados se conservan sin aprobarlos. Sin push, PR, merge, nuevo despliegue, GCS o datos reales modificados; no acredita producción ni aceptación visual.
+
 ## Entrenamiento de datasets importados — plan para nueva sesión
 
 - [x] **TRAIN-IMPORT-T0 — investigación y contrato de diseño cerrados:** [resultado T0](arquitectura/entrenamiento-datasets-importados-plan.md#resultado-técnico-de-t0) y [ADR 0052](adr/0052-preparacion-local-de-datasets-importados.md). Contratos de snapshot local y registry→predictor trazados; usuario confirma mapa explícito de grupos, cobertura de clases en train/val/test y WAV single-label local. Predicción HTTP conserva GCS. Sin implementación ni pruebas funcionales.

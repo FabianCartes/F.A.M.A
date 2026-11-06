@@ -1,0 +1,9 @@
+{
+  "command": [
+    "./node_modules/.bin/tsc",
+    "--noEmit"
+  ],
+  "cwd": "/home/kevin/Work/fama/frontend",
+  "exit_code": 0,
+  "wall_seconds": 3.0521794660016894
+}

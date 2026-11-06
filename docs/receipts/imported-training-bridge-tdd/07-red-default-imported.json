@@ -1,0 +1,11 @@
+{
+  "command": [
+    "npm",
+    "test",
+    "--",
+    "components/views/__tests__/ImportedTrainingBridge.test.tsx"
+  ],
+  "cwd": "/home/kevin/Work/fama/frontend",
+  "exit_code": 1,
+  "wall_seconds": 3.5340409349992115
+}

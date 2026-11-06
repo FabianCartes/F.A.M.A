@@ -1,0 +1,324 @@
+{
+  "schema": "fama.local-mvp-consolidation/v1",
+  "branch": "feat/local-mvp",
+  "base_commit": "1470f7e0c37ad30ebc80339f744511b1a45ed4f9",
+  "source_head_before_documentation_closure": "50ad53dd0ab655b6ca4223f950e00c522e7eb72c",
+  "closure_commit_resolution": "git log -1 --format=%H -- docs/receipts/local-mvp-consolidation.json",
+  "scope": "Git-only consolidation of existing local MVP; no deployment or real data changes",
+  "backend_check_environment": {
+    "interpreter": ".venv/bin/python",
+    "python_version": "3.14.8",
+    "docker_python_3_12_qualified": false,
+    "scope": "Guarded synthetic SQLite/CPU checks, not the production image"
+  },
+  "backup": {
+    "archive": ".local-mvp-consolidation/worktree-before.tar.gz",
+    "files": 548,
+    "archive_sha256": "ea68f7aabf14ef2973ce0e2e7dcc4abb807c4f2291bd2eeb80deb2682701db70",
+    "original_index_sha256": "0d9384a0d4432a34a6144cf5d3e23f3df3da27c6b4acda77f6279500ab3b387b",
+    "verified_byte_for_byte": true,
+    "hashes_rechecked_after_functional_commits": true,
+    "not_an_operational_data_backup_or_restore_test": true
+  },
+  "concurrency_fix_commit": "d465e7492be52ebd6586bd4e857f9d64ff262a44",
+  "units": [
+    {
+      "key": "startup",
+      "commit": "9774262b8096caee0fb53e9421d91a4752c96703",
+      "authored_non_json_diff_lines": 163,
+      "all_diff_lines": 163,
+      "changed_paths": 2
+    },
+    {
+      "key": "session-schema",
+      "commit": "ac23f9cf585b86af73193f56e89433afa9c6b251",
+      "authored_non_json_diff_lines": 326,
+      "all_diff_lines": 326,
+      "changed_paths": 2
+    },
+    {
+      "key": "auth",
+      "commit": "aa40a46c2f4f70fa79b29e74f1d5e57732794e50",
+      "authored_non_json_diff_lines": 391,
+      "all_diff_lines": 980,
+      "changed_paths": 9
+    },
+    {
+      "key": "zip",
+      "commit": "3dcd4bd07622b36424da3160a2407de99c1ad2d2",
+      "authored_non_json_diff_lines": 539,
+      "all_diff_lines": 813,
+      "changed_paths": 15
+    },
+    {
+      "key": "snapshot",
+      "commit": "f10f0c9f74a55d0beeb4aaaa4de809455133fa5a",
+      "authored_non_json_diff_lines": 163,
+      "all_diff_lines": 302,
+      "changed_paths": 6
+    },
+    {
+      "key": "automatic",
+      "commit": "4100fddaf5642dfd77ff03f113f726020d9fdc39",
+      "authored_non_json_diff_lines": 687,
+      "all_diff_lines": 892,
+      "changed_paths": 15
+    },
+    {
+      "key": "evaluation-storage",
+      "commit": "3956fcc862bbe212caff5ff2c66c49c9328fc6a4",
+      "authored_non_json_diff_lines": 119,
+      "all_diff_lines": 153,
+      "changed_paths": 3
+    },
+    {
+      "key": "evaluation",
+      "commit": "6ffd2b9a4eb8915792969cc7729431be811ce6ed",
+      "authored_non_json_diff_lines": 559,
+      "all_diff_lines": 559,
+      "changed_paths": 5
+    },
+    {
+      "key": "local-storage",
+      "commit": "4d0e4fe32af4b64b6805f6922564e428bce251ab",
+      "authored_non_json_diff_lines": 369,
+      "all_diff_lines": 369,
+      "changed_paths": 4
+    },
+    {
+      "key": "catalog",
+      "commit": "7f79accdc84e1ec852f5de5214a784a10b0c6ce3",
+      "authored_non_json_diff_lines": 380,
+      "all_diff_lines": 477,
+      "changed_paths": 6
+    },
+    {
+      "key": "inference",
+      "commit": "e528a7ac5cddac42fe370b82e27be69bc3c319bf",
+      "authored_non_json_diff_lines": 779,
+      "all_diff_lines": 855,
+      "changed_paths": 4
+    },
+    {
+      "key": "feedback",
+      "commit": "9eca1452a3e70e123c513dbc5dcfb34fe904dff0",
+      "authored_non_json_diff_lines": 722,
+      "all_diff_lines": 852,
+      "changed_paths": 12
+    },
+    {
+      "key": "feedback-preparation",
+      "commit": "1fdb5c34861f95216fbfbb80e82683c4119a28df",
+      "authored_non_json_diff_lines": 152,
+      "all_diff_lines": 167,
+      "changed_paths": 4
+    },
+    {
+      "key": "history",
+      "commit": "d3f9b8d1789ac201c5924a6f8879b3de9f8a7d6d",
+      "authored_non_json_diff_lines": 324,
+      "all_diff_lines": 456,
+      "changed_paths": 7
+    },
+    {
+      "key": "history-ui",
+      "commit": "8308d1af70a74e5f64888d9d4cea806ad355ce77",
+      "authored_non_json_diff_lines": 434,
+      "all_diff_lines": 434,
+      "changed_paths": 6
+    },
+    {
+      "key": "training-ui",
+      "commit": "cc2976ac65559a124b187859a39a795f819bc991",
+      "authored_non_json_diff_lines": 763,
+      "all_diff_lines": 908,
+      "changed_paths": 20
+    },
+    {
+      "key": "training-record",
+      "commit": "a147b643c23c061c5ca9724cc504d03809b674ec",
+      "authored_non_json_diff_lines": 305,
+      "all_diff_lines": 305,
+      "changed_paths": 1
+    },
+    {
+      "key": "preflight",
+      "commit": "e4a851ec5089711fe56722d8537705f844c182d8",
+      "authored_non_json_diff_lines": 163,
+      "all_diff_lines": 163,
+      "changed_paths": 2
+    },
+    {
+      "key": "probe",
+      "commit": "3b51724cf767d204ab72d95a2f1f51b42f04e60e",
+      "authored_non_json_diff_lines": 395,
+      "all_diff_lines": 395,
+      "changed_paths": 2
+    },
+    {
+      "key": "probe-permissions",
+      "commit": "c764582906db8d715b5cd88b4f2e6ed9dc3760be",
+      "authored_non_json_diff_lines": 476,
+      "all_diff_lines": 476,
+      "changed_paths": 2
+    },
+    {
+      "key": "provision",
+      "commit": "b0b044ae91d02b748cdc569ab82b2633e7150a32",
+      "authored_non_json_diff_lines": 524,
+      "all_diff_lines": 2778,
+      "changed_paths": 85
+    },
+    {
+      "key": "postgres-manual",
+      "commit": "3987fa04af34472a6c2895656fb8b900e043245d",
+      "authored_non_json_diff_lines": 197,
+      "all_diff_lines": 197,
+      "changed_paths": 1
+    },
+    {
+      "key": "manual-db",
+      "commit": "7ed9f3887d900326e4cba023fe41a3f1bc43833a",
+      "authored_non_json_diff_lines": 568,
+      "all_diff_lines": 568,
+      "changed_paths": 4
+    },
+    {
+      "key": "runtime-manual",
+      "commit": "2df8edcbda22421b1c02c82d5ad2b46f3765070a",
+      "authored_non_json_diff_lines": 255,
+      "all_diff_lines": 472,
+      "changed_paths": 3
+    },
+    {
+      "key": "layout",
+      "commit": "50ad53dd0ab655b6ca4223f950e00c522e7eb72c",
+      "authored_non_json_diff_lines": 468,
+      "all_diff_lines": 546,
+      "changed_paths": 7
+    }
+  ],
+  "new_verification": {
+    "runs": [
+      {
+        "job": 57,
+        "exit_code": 1,
+        "passed_cases": 303,
+        "nonpassing": [
+          "tests/test_large_zip_defaults.py::test_default_large_archive_policy_admits_reference_and_enforces_boundary"
+        ],
+        "protected_paths_unchanged": true,
+        "protected_path_count": 30,
+        "log": "/tmp/gpyxvfL5/gentle-jobs-iBLmaA/job-57.log"
+      },
+      {
+        "job": 58,
+        "exit_code": 1,
+        "passed_cases": 75,
+        "nonpassing": [
+          "tests/test_dataset_import_receipts.py::test_receipt_reservation_is_durable_idempotent_and_owner_only"
+        ],
+        "protected_paths_unchanged": true,
+        "protected_path_count": 30,
+        "log": "/tmp/gpyxvfL5/gentle-jobs-iBLmaA/job-58.log"
+      },
+      {
+        "job": 59,
+        "exit_code": 1,
+        "passed_cases": 1,
+        "nonpassing": [
+          "tests/test_local_collection_runtime.py::test_incomplete_copy_refused_before_runtime_creation"
+        ],
+        "protected_paths_unchanged": true,
+        "protected_path_count": 30,
+        "log": "/tmp/gpyxvfL5/gentle-jobs-iBLmaA/job-59.log"
+      },
+      {
+        "job": 61,
+        "exit_code": 0,
+        "passed_cases": 26,
+        "nonpassing": [],
+        "protected_paths_unchanged": true,
+        "protected_path_count": 30,
+        "log": "/tmp/gpyxvfL5/gentle-jobs-iBLmaA/job-61.log"
+      }
+    ],
+    "unique_passing_application_nodeids": 333,
+    "fragmented_runs_not_single_green_backend_suite": true,
+    "frontend": {
+      "job": 53,
+      "files_passed": 51,
+      "tests_passed": 469,
+      "typescript_exit_code": 0
+    },
+    "parent_final_focused_check": {
+      "tests_passed": 5,
+      "exit_code": 0
+    },
+    "independent_concurrency_verifier": {
+      "task": "mw5ed9we-q-le2q",
+      "tests_passed": 1,
+      "exit_code": 0
+    },
+    "historical_failures_preserved": true,
+    "native_review_approved": false,
+    "operational_or_retired_checks_not_rerun": true
+  },
+  "post_commit_source_proof": {
+    "branch": "feat/local-mvp",
+    "head_before_closure": "50ad53dd0ab655b6ca4223f950e00c522e7eb72c",
+    "commits_before_closure": 26,
+    "core_functional_units": 25,
+    "source_index_and_worktree_clean": true,
+    "source_changed_paths_equal_committed_blobs": 89,
+    "backup_archive_and_index_hashes_still_match": true,
+    "changed_archived_worktree_paths": [
+      "backend/tests/test_large_zip_defaults.py",
+      "docs/README.md",
+      "docs/arquitectura/local-mvp-consolidation-plan.md",
+      "docs/manuales/postgresql-entrenamiento-separado.md"
+    ],
+    "all_other_archived_paths_unchanged": true,
+    "raw_and_unclassified_receipt_preserved_untracked": true,
+    "not_a_restore_or_operational_data_backup_test": true
+  },
+  "git_scope_audit": {
+    "task": "mw5evumd-r-xd9e",
+    "scope": "bounded pre-commit Git/secret/dependency selection, not product execution",
+    "severe_source_blocker_identified": false,
+    "post_commit_parent_source_equality_checked": true,
+    "exhaustive_secret_audit": false,
+    "native_approved": false
+  },
+  "exclusions": {
+    "raw_or_executable_historical_evidence_files": 304,
+    "historical_decision_receipt": "docs/receipts/imported-training-t5-verification.json",
+    "historical_receipt_reason": "non-runtime decision metadata with unclassified decision_token; no claim it is a secret; original kept intact",
+    "total_explicit_source_evidence_exclusions": 305,
+    "excluded_paths_verified_present_and_untracked": true,
+    "operational_folders_data_models_dumps_caches_and_root_diagnostic": "preserved in place outside Git selections",
+    "raw_backup_and_local_helpers": "private and not versioned"
+  },
+  "causality_limits": [
+    "Shared StaticPool sessions reproduced a read failure; DB-only serialization passed the controlled counterpart. This does not prove the sole cause of the historical manifest mismatch.",
+    "Concurrency test retains file work outside the DB lock, strict publication_busy handling, one version and verified source equality; no guarantee of contention in every run."
+  ],
+  "failed_or_unavailable_checks": {
+    "job52": "183 passed then concurrency failure; preserved",
+    "job55": "diagnostic with shared SQLite sessions failed snapshot404; preserved privately",
+    "job57": "303 passed then large ZIP admission507 from physical disk capacity; fixed only the synthetic test prerequisite",
+    "job58": "75 passed then optional added receipt case507 from physical disk capacity; module not approved or further repaired",
+    "job59": "controlled quota/free-space case passed; local_collection_runtime subprocess denied by runner; not bypassed",
+    "bootstrap_and_admin_modules": "not rerun after guard denial; retired provision/probe artifacts are not executed as recovery",
+    "native_assess": "unassessable due undeclared untracked files, no reviewDue or approval inferred",
+    "lint": "not rerun; historical ImportedTrainingPanel 3 errors/1 warning remains unapproved",
+    "production_build": "not run",
+    "browser_visual_acceptance": "human acceptance pending; no Playwright"
+  },
+  "delivery_limits": [
+    "No push, PR, merge, release or deployment.",
+    "No real inference, training, GCS, model activation or operational data cleanup.",
+    "Git source snapshot matches the preserved working version apart from two test-fixture fixes and documentation clarification. This is not fresh validation of served copies.",
+    "GCS and production readiness remain separate, as do historical GPU/disk and operational blockers."
+  ]
+}

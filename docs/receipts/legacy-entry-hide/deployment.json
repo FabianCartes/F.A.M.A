@@ -1,0 +1,8 @@
+{
+  "source": "frontend/components/auth/SessionBoundary.tsx",
+  "runtime_copy": ".training-manual-44938bc83ad0184c/frontend/components/auth/SessionBoundary.tsx",
+  "baseline_verified": true,
+  "changed_only_own_file": true,
+  "source_sha256": "63334da19aa8dc3ee9e4b43ea5912a2779a04c7da17fbbc0cae74e9411610a59",
+  "runtime_sha256": "63334da19aa8dc3ee9e4b43ea5912a2779a04c7da17fbbc0cae74e9411610a59"
+}
