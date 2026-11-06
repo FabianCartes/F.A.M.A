@@ -1,3 +1,11 @@
+import os
+
+# Read process configuration before importing services with runtime side effects.
+# Deliberately do not load dotenv here or normalize an invalid operator value.
+_APP_STARTUP_POLICY = os.environ.get("FAMA_APP_STARTUP_POLICY", "normal")
+if _APP_STARTUP_POLICY not in {"normal", "isolated"}:
+    raise ValueError("FAMA_APP_STARTUP_POLICY must be normal or isolated")
+
 import sys
 import asyncio
 from functools import partial
@@ -95,16 +103,17 @@ ENSEMBLE_WEIGHTS: List[float] = [0.55, 0.30, 0.15]
 # ============================================================================
 # PERSISTENCIA: INICIALIZACIÓN DE TABLAS EN BASE DE DATOS
 # ============================================================================
-try:
-    # Imported provenance is migrated explicitly, even if a maintenance module
-    # registered its ORM table before this entrypoint. Keep legacy bootstrap intact.
-    Base.metadata.create_all(bind=engine, tables=[
-        table for table in Base.metadata.tables.values()
-        if table.name not in {"imported_model_source", "sesion_web", "cuota_acceso", "evento_seguridad"}
-    ])
-    print("[Database] Tablas sincronizadas exitosamente en PostgreSQL.")
-except Exception as db_init_err:
-    print(f"[Database] Advertencia al sincronizar tablas con PostgreSQL: {db_init_err}")
+if _APP_STARTUP_POLICY == "normal":
+    try:
+        # Imported provenance is migrated explicitly, even if a maintenance module
+        # registered its ORM table before this entrypoint. Keep legacy bootstrap intact.
+        Base.metadata.create_all(bind=engine, tables=[
+            table for table in Base.metadata.tables.values()
+            if table.name not in {"imported_model_source", "sesion_web", "cuota_acceso", "evento_seguridad"}
+        ])
+        print("[Database] Tablas sincronizadas exitosamente en PostgreSQL.")
+    except Exception as db_init_err:
+        print(f"[Database] Advertencia al sincronizar tablas con PostgreSQL: {db_init_err}")
 
 
 # ============================================================================
@@ -461,7 +470,12 @@ async def lifespan(app_instance: FastAPI):
     """
     Carga el Super-Ensamble Tri-Modelo en memoria una única vez al iniciar
     el servidor FastAPI, evitando recargas redundantes en peticiones HTTP.
+    La política isolated omite únicamente los efectos de startup de este módulo.
     """
+    if _APP_STARTUP_POLICY == "isolated":
+        yield
+        return
+
     try:
         ensemble_service.load_models()
     except Exception as init_err:
