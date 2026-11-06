@@ -1,0 +1,58 @@
+{
+  "status": "deployed_public_concurrent_catalog_passed",
+  "readers": [
+    {
+      "reader": 0,
+      "status": "passed",
+      "classes": 15,
+      "members": 1194
+    },
+    {
+      "reader": 1,
+      "status": "passed",
+      "classes": 15,
+      "members": 1194
+    }
+  ],
+  "global_tmp_bytes": 134217728,
+  "artifact_inventory_unchanged": true,
+  "no_training_or_preparation": true,
+  "source_sha256": "a2ad7d2f298de69b3359622853b76bd301e0ac470ec22ce1459789beac87dce6",
+  "state_directory": ".snapshot-concurrent-spool-dcf0865ef6a97e05",
+  "candidate_image": "sha256:fa454f0cde452e32066a79cdce5521898d5c2ad8c258da6b8f253357bd09ebd2",
+  "previous_image": "sha256:93767ac9b4043022e3211a7041c1a8ba7da997991cd79ff75939bf8e43a3f005",
+  "baseline_exact_delta_verified": true,
+  "deployed": true,
+  "new_api_container_id": "ccd3ff98bf623cf67679d6a65c2797c14a0c51e6264b1f8cee7b3459ad1a540a",
+  "rollback_container": "fama-manual-dev-44938bc83ad0184c-api-before-concurrent-f6a97e05",
+  "database": "fama_training_dev_20261105153618",
+  "backup_sha256": "e0e27f90f7a39347d23479b1af57577de40702aaaccc95108a1eda17ae5d3aa5",
+  "backup_catalog_verified": true,
+  "api_health": 200,
+  "ui_http": 200,
+  "source_verified_live": true,
+  "parent_related_passed": 37,
+  "independent_focused_passed": 2,
+  "native_approval": false,
+  "no_frontend_or_eligibility_rule_change": true,
+  "no_schema_or_privileges_change": true,
+  "no_new_preparation_or_training": true,
+  "public_concurrent_catalog_pending": false,
+  "public_concurrent_requests": [
+    {
+      "request": 0,
+      "http": 200,
+      "dataset_eligible": true,
+      "preparation_eligible": true,
+      "reasons": []
+    },
+    {
+      "request": 1,
+      "http": 200,
+      "dataset_eligible": true,
+      "preparation_eligible": true,
+      "reasons": []
+    }
+  ],
+  "human_ui_acceptance_pending": true
+}

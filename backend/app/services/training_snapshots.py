@@ -113,6 +113,15 @@ class TrainingSnapshots:
             yield from batch
             cursor = batch[-1]["member_id"]
 
+    def current(self, owner, dataset_id):
+        """Find an owned ready snapshot of the current revision; never reinterpret history."""
+        with self.sessions() as db:
+            dataset = self.source.dataset(db, owner, dataset_id)
+            row = db.query(TrainingSnapshot).filter_by(owner_id=owner, dataset_id=dataset.id,
+                dataset_revision=dataset.revision, state="ready").order_by(TrainingSnapshot.id).first()
+            identity = row.id if row is not None else None
+        return self.get(owner, identity) if identity is not None else None
+
     def create(self, owner, dataset_id):
         snapshot_id = uuid.uuid4().hex
         # Capture exactly one complete cohort using confirm's database gate.
@@ -252,7 +261,9 @@ class TrainingSnapshots:
             digest, length = hashlib.sha256(), 0
             # Spill large files to private temporary storage, rather than yield
             # unverified bytes or race a second read of mutable local storage.
-            with tempfile.SpooledTemporaryFile(max_size=1024 * 1024) as verified:
+            with _root_directory(self.root) as root_fd, tempfile.SpooledTemporaryFile(
+                max_size=1024 * 1024, dir=f"/proc/self/fd/{root_fd}"
+            ) as verified:
                 with _open(self.root, snapshot_id + "/" + member["member_id"]) as stream:
                     while chunk := stream.read(1024 * 1024):
                         length += len(chunk)

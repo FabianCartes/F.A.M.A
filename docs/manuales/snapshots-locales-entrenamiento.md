@@ -33,7 +33,8 @@ La resolución exige igualdad exacta de propietario tanto para dataset como para
 - Cada archivo es una copia privada, no un hardlink. SHA256/tamaño se comprueban durante la copia. Archivos y manifiesto quedan con modo 0400; staging/raíz con 0700. Estos permisos no protegen frente a un administrador que los cambie: las lecturas vuelven a comprobar integridad.
 - El manifiesto canónico JSON Lines usa claves ordenadas y codificación ASCII estable. Su hash se persiste en DB. Las etiquetas verificadas se leen del manifiesto, no del catálogo mutable ni de las filas auxiliares de captura.
 - Se sincronizan archivos, manifiesto y directorios con `fsync`; el directorio privado se renombra antes de confirmar `ready` en DB. Solo `ready` permite consultar/consumir.
-- Una lectura verifica el manifiesto y copia cada archivo a un spool privado antes de entregar sus chunks. Hasta 1 MiB permanece en memoria; los archivos mayores usan un temporal del sistema. Configurar `TMPDIR` privado con espacio suficiente para al menos un archivo y el manifiesto. Esa capacidad temporal es adicional al preflight de creación.
+- Una lectura verifica el manifiesto y copia cada archivo a un spool privado antes de entregar sus chunks. Hasta 1 MiB permanece en memoria; los archivos mayores derraman en la raíz privada durable de snapshots, anclada al descriptor verificado mediante `/proc/self/fd/<fd>` (Linux). El spool y descriptor permanecen abiertos durante la entrega y se cierran al agotar o cerrar el generador. Cada lector simultáneo necesita espacio privado para un archivo de trabajo; no duplica ese archivo en el tmpfs global. El tamaño y SHA256 se comprueban completos antes de entregar bytes. El manifiesto usa su spool separado y también necesita capacidad temporal adicional al preflight de creación.
+- La preparación valida además el WAV completo y necesita su propio spool mientras T1 conserva el archivo verificado. Ese segundo spool también derrama en el almacenamiento durable privado de snapshots, no en `TMPDIR`: ambos spools de audio y las lecturas concurrentes evitan agotar el volumen temporal global. Se ancla al descriptor verificado por `_root_directory` mediante `/proc/self/fd/<fd>` (runtime Linux), conserva los límites de memoria/hash/WAV y se cierra antes del descriptor. No modifica los audios inmutables ni deja índices/temporales persistentes en la raíz. Debe haber espacio adicional en ese almacenamiento privado para un WAV de trabajo. No aumentar arbitrariamente tmpfs ni omitir la verificación para preparar archivos grandes.
 
 No se deducen grupos/grabaciones ni independencia; son T2. No se verifican aquí GPU, PostgreSQL operacional, calidad ML ni entrenamiento real.
 
@@ -51,6 +52,21 @@ migrate_snapshots(engine, writers_stopped=True)
 ```
 
 El migrador valida las tablas de importación/compuerta requeridas y los tipos/columnas del esquema existente; para tablas de snapshot comprueba también PK y nullabilidad. Solo agrega las dos tablas ausentes; no modifica datos/tablas previos. Requiere SQLite o PostgreSQL. La bandera es una declaración del operador, no un mecanismo para detener procesos. En esta tarea se ejecutó únicamente contra SQLite sintético en memoria, nunca sobre la DB real.
+
+### Permisos de PostgreSQL para finalizar cualquier dataset
+
+La migración de esquema no concede permisos a la cuenta de aplicación. Además de sus permisos existentes de captura y lectura, `fama_training_app` necesita `UPDATE` exclusivamente sobre `state`, `file_count`, `total_size_bytes`, `classes` y `manifest_sha256` de `public.training_snapshot`. Sin ese permiso, la copia puede publicarse en disco y fallar la confirmación `ready`; el endpoint devuelve el error genérico de fuente no disponible. La salud de la API y la lectura del catálogo no verifican esta capacidad.
+
+El operador debe verificar explícitamente la identidad de la base de desarrollo seleccionada, conservar un respaldo y detener los escritores de API antes de aplicar el script versionado, con la cuenta propietaria de la tabla:
+
+```bash
+psql --dbname="$VERIFIED_TRAINING_DATABASE" --set=ON_ERROR_STOP=1 \
+  --file=backend/scripts/grant_training_snapshot_updates.sql
+```
+
+La variable debe seleccionar la base mediante la configuración privada del operador; no incluir credenciales en argumentos, documentación o logs. El script admite bases `fama_training_dev_<14 dígitos>`, exige una cuenta de aplicación sin atributos administrativos y rechaza permisos preexistentes para cambiar la identidad/propietario/revisión. No crea roles, no concede `DELETE`, no cambia la identidad del snapshot y no concede `UPDATE` de tabla completa. Se puede aplicar de nuevo: la concesión es idempotente y queda persistida en PostgreSQL para **todos los datasets presentes y futuros**. No depende de la sesión de UI ni de un contenedor de API; debe incluirse al aprovisionar o restaurar otro entorno con esta cuenta limitada.
+
+Verificar después con la identidad real de la aplicación los cinco `has_column_privilege(..., 'UPDATE')`, la ausencia de permisos para modificar identidad/propietario/revisión y un `EXPLAIN UPDATE` sobre los cinco campos con `WHERE false`. No usar `EXPLAIN ANALYZE`: este último sí ejecuta la consulta. Un test SQLite no valida concesiones PostgreSQL. El recibo de la corrección conectada es [snapshot-permissions-repair.json](../receipts/snapshot-permissions-repair.json).
 
 Retener conjuntamente DB y raíz durable. Un snapshot `ready` se recupera por su ID con identidad y clases originales. No hay GC ni borrado de fuentes. Ante fallo antes del rename se limpia únicamente el staging creado por esa llamada. Ante fallo/crash después del rename y antes del commit queda un directorio retenido y una fila no consumible; T1 no lo promueve automáticamente ni sustituye su cohorte. Requiere diagnóstico operacional autorizado, no volver a crear silenciosamente la cohorte bajo la misma identidad. Las filas `building` y los directorios huérfanos no tienen recolector automático.
 

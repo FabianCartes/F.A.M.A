@@ -1,0 +1,81 @@
+{
+  "ids": [
+    "f719ac84a75c4099bf7227c83f087bfa",
+    "42253e397b154f858e64d219a2d3e09f"
+  ],
+  "snapshots": [
+    {
+      "id": "f719ac84a75c4099bf7227c83f087bfa",
+      "owner_id": 1,
+      "dataset_id": "86d8390d942c4ffdad4781cad69b92db",
+      "revision": 1,
+      "state": "building",
+      "members": 1194,
+      "size_bytes": 8523910642,
+      "manifest_sha256": "c037328df156f0711294c07aaf9b72f12bc8e7499a73f4e55ec99b8e9c89606b"
+    },
+    {
+      "id": "42253e397b154f858e64d219a2d3e09f",
+      "owner_id": 1,
+      "dataset_id": "86d8390d942c4ffdad4781cad69b92db",
+      "revision": 1,
+      "state": "building",
+      "members": 1194,
+      "size_bytes": 8523910642,
+      "manifest_sha256": "c037328df156f0711294c07aaf9b72f12bc8e7499a73f4e55ec99b8e9c89606b"
+    }
+  ],
+  "source_members_verified": 1194,
+  "source_members_count": 1194,
+  "recoverable_originals_verified": true,
+  "state_directory": ".snapshot-permissions-repair-9109f470819b1495",
+  "backup_sha256": "a38998d386f2664f0939a4919c4ab8d04eab202fe2b836fba47c1bd0ba6009f6",
+  "backup_catalog_verified": true,
+  "status": "permanent_minimal_grant_applied_and_exact_incomplete_snapshots_removed",
+  "snapshot_directories_deleted": [
+    "f719ac84a75c4099bf7227c83f087bfa",
+    "42253e397b154f858e64d219a2d3e09f"
+  ],
+  "original_dataset_members_preserved": 1194,
+  "free_bytes_after": 18472873984,
+  "all_five_columns_update_allowed": true,
+  "protected_identity_updates_denied": true,
+  "actual_application_updates": 2,
+  "all_test_updates_rolled_back": true,
+  "snapshot_rows_deleted": 2,
+  "captured_member_rows_deleted": 2388,
+  "grant_source": "backend/scripts/grant_training_snapshot_updates.sql",
+  "grant_source_sha256": "876e1dbf632c3649c61efc8aef3014954348e0605aa44dbc7c6189946e904821",
+  "table_wide_update_granted": false,
+  "application_delete_granted": false,
+  "admin_privileges_granted": false,
+  "new_database_created": false,
+  "new_real_preparation_executed": false,
+  "human_ui_test_pending": true,
+  "api_health_after": 200,
+  "public_ui_after": 200,
+  "same_api_container_restored": true,
+  "red_boundary": "EXPLAIN UPDATE training_snapshot SET state=state WHERE false -> psycopg2.errors.InsufficientPrivilege: permission denied for table training_snapshot",
+  "green_boundary": "Actual application-role five-field UPDATE on both existing rows accepted and rolled back before exact cleanup",
+  "permission_persists_across_api_restarts": true,
+  "applies_to_all_datasets_in_selected_database": true,
+  "new_database_or_recreated_table_requires_documented_grant": true,
+  "independent_runtime_verification": "PASS",
+  "native_approval": false,
+  "native_assessment": "unassessable_untracked_scope",
+  "real_training_or_gcs_started": false,
+  "independent_task": "mw44fes1-1y-0aun",
+  "independent_transaction_read_only": true,
+  "independent_required_column_privileges_verified": 5,
+  "independent_protected_identity_privileges_denied": 6,
+  "independent_table_wide_update_denied": true,
+  "independent_nonadministrative_attributes_verified": 5,
+  "independent_explain_no_execution_passed": true,
+  "independent_exact_cleanup_verified": true,
+  "independent_source_dataset_preserved": {
+    "owner_id": 1,
+    "revision": 1,
+    "members": 1194
+  },
+  "independent_free_bytes_observed": 18857353216
+}
