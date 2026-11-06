@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.routing import APIRoute
-from pydantic import BaseModel, ConfigDict, Field, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictBool
 from sqlalchemy import inspect
 
 from app.database import get_db
@@ -39,6 +39,7 @@ security = HTTPBearer(auto_error=False)
 class SnapshotRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     dataset_id: str = Field(min_length=1, max_length=64)
+    reuse_current: StrictBool = False
 
 
 class PreparationRequest(BaseModel):
@@ -116,6 +117,10 @@ def public_preparation(manifest):
 def create_snapshot(body: SnapshotRequest, user=Depends(get_user), preparations=Depends(get_preparations)):
     preflight(preparations)
     try:
+        if body.reuse_current:
+            current = preparations.snapshots.current(user.id, body.dataset_id)
+            if current is not None:
+                return descriptor(current)
         return descriptor(preparations.snapshots.create(user.id, body.dataset_id))
     except Exception:
         raise unavailable() from None

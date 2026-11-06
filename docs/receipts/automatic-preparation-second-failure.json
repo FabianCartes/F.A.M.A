@@ -1,0 +1,15 @@
+{
+  "checks": [
+    {
+      "path": "/api/auth/web/login",
+      "status": 200,
+      "detail": null
+    },
+    {
+      "path": "/api/training/imported/snapshots/44b42ed6f5d740eaa52dee47d889848c/members",
+      "status": 200,
+      "detail": null
+    }
+  ],
+  "members": 1194
+}

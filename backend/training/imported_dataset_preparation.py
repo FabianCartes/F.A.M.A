@@ -23,6 +23,8 @@ from app.services.training_snapshots import _json, _open, _parts, _root_director
 SPLITS = ("train", "val", "test")
 POLICY = {"name": "group-cover-v1", "target": [0.8, 0.1, 0.1],
           "search_nodes": 250000, "group_limit": 200}
+INDEPENDENT_PROVENANCE = {"source": "per-wav-independent-assumption-v1"}
+INDEPENDENT_POLICY = {"name": "per-wav-stratified-70-15-15-v1", "target": [0.7, 0.15, 0.15]}
 FIELDS = ("snapshot_id", "member_id", "class_name", "class_index", "recording_id",
           "group_id", "source_import_id", "stored_name", "original_path",
           "relative_path", "sha256", "size_bytes")
@@ -54,6 +56,9 @@ def _mapping(mapping, provenance):
             if (not isinstance(row, dict) or set(row) != {"member_id", "recording_id", "group_id"}
                     or not all(_text(v) for v in row.values()) or row["member_id"] in annotations):
                 raise ValueError("invalid or duplicate annotation")
+            if provenance == INDEPENDENT_PROVENANCE and not (
+                    row["member_id"] == row["recording_id"] == row["group_id"]):
+                raise ValueError("assumed independence requires one recording/group per member")
             if recordings.setdefault(row["recording_id"], row["group_id"]) != row["group_id"]:
                 raise ValueError("recording assigned to multiple groups")
             annotations[row["member_id"]] = dict(row)
@@ -136,7 +141,11 @@ def _members(snapshots, owner, snapshot_id, snapshot):
     members, total = {}, 0
     current, length = None, 0
     try:
-        with tempfile.SpooledTemporaryFile(max_size=1024 * 1024) as audio:
+        # T1 already retains a verified member in the global temporary volume.
+        # Spill this second copy on private snapshot storage, anchored to the
+        # verified directory descriptor rather than following a mutable path.
+        with _root_directory(snapshots.root) as root_fd, tempfile.SpooledTemporaryFile(
+                max_size=1024 * 1024, dir=f"/proc/self/fd/{root_fd}") as audio:
             def finish():
                 if current is not None:
                     if length != current["size_bytes"]:
@@ -239,6 +248,35 @@ def _split(rows, seed):
             for i, name in enumerate(SPLITS)}, warnings
 
 
+def _independent_split(rows, seed):
+    """Class-stratified allocation, O(n log n), only for per-member groups.
+
+    Reserve coverage first, then fill the largest target deficit. Tiny classes
+    necessarily deviate from the target; their independence remains an assumption.
+    """
+    classes = {}
+    for row in rows:
+        classes.setdefault(row["class_name"], []).append(row)
+    partitions = {name: [] for name in SPLITS}
+    warnings = []
+    for label, entries in sorted(classes.items()):
+        count = len(entries)
+        if count < 3:
+            raise PreparationError("split_impossible", "Cada clase necesita al menos tres WAV independientes asumidos.")
+        ordered = sorted(entries, key=lambda row: _hash(_json([seed, row["member_id"]])))
+        sizes = [1, 1, 1]
+        for _ in range(count - 3):
+            split = max(range(3), key=lambda i: INDEPENDENT_POLICY["target"][i] * count - sizes[i])
+            sizes[split] += 1
+        start = 0
+        for name, size in zip(SPLITS, sizes):
+            partitions[name].extend(ordered[start:start + size])
+            start += size
+        if count < 10:
+            warnings.append(dict(code="low_independent_groups", class_name=label, groups=count, recommended=10))
+    return partitions, warnings
+
+
 class ImportedDatasetPreparation:
     """create/get/read_split by owner, snapshot ID and exact version ID.
 
@@ -266,7 +304,9 @@ class ImportedDatasetPreparation:
             row.update(snapshot_id=snapshot_id, class_index=classes[member["class_name"]],
                        recording_id=annotations[key]["recording_id"], group_id=annotations[key]["group_id"])
             rows.append(row)
-        partitions, warnings = _split(rows, seed)
+        independent = provenance == INDEPENDENT_PROVENANCE
+        policy = INDEPENDENT_POLICY if independent else POLICY
+        partitions, warnings = (_independent_split if independent else _split)(rows, seed)
         payloads = {}
         for name, entries in partitions.items():
             stream = io.StringIO(newline="")
@@ -279,7 +319,7 @@ class ImportedDatasetPreparation:
                         snapshot_manifest_sha256=snapshot["manifest_sha256"],
                         seed=seed, profile=profile, provenance=provenance,
                         mapping=sorted(mapping, key=lambda r: r["member_id"]),
-                        class_to_index=classes, policy=POLICY, warnings=warnings,
+                        class_to_index=classes, policy=policy, warnings=warnings,
                         file_count=len(rows), files={n: _hash(b) for n, b in payloads.items()})
         version = _hash(_json(manifest))
         manifest["version_id"] = version
@@ -346,6 +386,12 @@ class ImportedDatasetPreparation:
                     or manifest["format"] != "imported-preparation"
                     or set(manifest["files"]) != {s + ".csv" for s in SPLITS}):
                 raise ValueError("identity mismatch")
+            if manifest["policy"] == INDEPENDENT_POLICY:
+                if manifest["provenance"] != INDEPENDENT_PROVENANCE:
+                    raise ValueError("independence assumption missing")
+                _mapping(manifest["mapping"], manifest["provenance"])
+            elif manifest["policy"] != POLICY:
+                raise ValueError("unsupported preparation policy")
             for name, digest in manifest["files"].items():
                 with _open(self.root, version_id + "/" + name) as stream:
                     data = stream.read(32 * 1024 * 1024 + 1)

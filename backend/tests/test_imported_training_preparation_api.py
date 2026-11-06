@@ -196,3 +196,26 @@ def test_schema_missing_is_read_only_before_snapshot_creation(bridge, cohort):
         assert not any(s.lstrip().upper().startswith(('CREATE ', 'INSERT ', 'UPDATE ', 'DELETE ', 'ALTER ')) for s in statements)
     finally:
         event.remove(engine, 'before_cursor_execute', record)
+
+
+def test_automatic_snapshot_reuses_only_current_owned_revision(bridge, cohort):
+    client, headers, _ = bridge
+    body = {'dataset_id': cohort[5], 'reuse_current': True}
+    first = client.post('/api/training/imported/snapshots', headers=headers(1), json=body)
+    assert first.status_code == 201, first.text
+    repeated = client.post('/api/training/imported/snapshots', headers=headers(1), json=body)
+    assert repeated.status_code == 201, repeated.text
+    assert repeated.json() == first.json()
+    foreign = client.post('/api/training/imported/snapshots', headers=headers(2), json=body)
+    assert foreign.status_code == 404
+    legacy = client.post('/api/training/imported/snapshots', headers=headers(1), json={'dataset_id': cohort[5]})
+    assert legacy.status_code == 201, legacy.text
+    assert legacy.json()['id'] != first.json()['id']
+    from app.models.dataset_import import ImportedDataset
+    with cohort[0].sessions.begin() as db:
+        db.get(ImportedDataset, cohort[5]).revision += 1
+    changed = client.post('/api/training/imported/snapshots', headers=headers(1), json=body)
+    assert changed.status_code == 201, changed.text
+    assert changed.json()['id'] != first.json()['id']
+    assert changed.json()['dataset_revision'] == first.json()['dataset_revision'] + 1
+    assert client.get('/api/training/imported/snapshots/' + first.json()['id'], headers=headers(1)).json() == first.json()

@@ -1,0 +1,56 @@
+{
+  "status": "deployed_real_prepared_catalog_metadata_verified",
+  "state_directory": ".prepared-recognition-aecb00bb9ae7d4ee",
+  "database": "fama_training_dev_20261105153618",
+  "new_api_image": "sha256:93767ac9b4043022e3211a7041c1a8ba7da997991cd79ff75939bf8e43a3f005",
+  "new_api_container_id": "5c1fd49c905923b8b3667e685885be566fd4ccf7f722839c7051c20b2c1980ca",
+  "rollback_container": "fama-manual-dev-44938bc83ad0184c-api-before-recognition-9ae7d4ee",
+  "baseline_exact_delta_verified": true,
+  "backend_file": {
+    "path": "app/services/imported_training_source.py",
+    "sha256": "3285b2727004591138a53500fb8436bfbb0125eb42d63ddbe1cb8bdad3947492"
+  },
+  "frontend_files": [
+    {
+      "path": "components/training/ImportedTrainingPanel.tsx",
+      "sha256": "6c84b9903c72ba19db373d0bab24dde701f7faa2058ee51368c217eba97a61f9"
+    },
+    {
+      "path": "lib/schemas/importedTraining.ts",
+      "sha256": "1801425591595ab51953982b22f360f98bec3afe6edc77a4de1d3ed55298013d"
+    }
+  ],
+  "backup_sha256": "b42bd2e2885ccda5c857e7291b455edc43a507a495817ae3ea02190eb15fc225",
+  "backup_catalog_verified": true,
+  "api_health": 200,
+  "ui_http": 200,
+  "parent_frontend_passed": 430,
+  "parent_backend_passed": 33,
+  "independent_focused_passed": 8,
+  "typecheck_exit_code": 0,
+  "native_approval": false,
+  "no_snapshot_or_preparation_creation": true,
+  "no_training": true,
+  "no_schema_or_permissions_change": true,
+  "no_playwright": true,
+  "real_catalog_metadata_smoke_pending": false,
+  "human_ui_acceptance_pending": true,
+  "public_checks": [
+    {
+      "path": "/api/auth/web/login",
+      "status": 200
+    },
+    {
+      "path": "/api/training/datasets?include_imported=true",
+      "status": 200
+    },
+    {
+      "path": "/api/auth/web/logout",
+      "status": 204
+    }
+  ],
+  "compatible_preparations_visible": 1,
+  "snapshot_and_preparation_inventory_unchanged": true,
+  "snapshots_before_after": 1,
+  "versions_before_after": 1
+}

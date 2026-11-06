@@ -1,0 +1,70 @@
+{
+  "status": "deployed_health_and_source_identity_verified",
+  "state_directory": ".automatic-preparation-cafa6458e69c3439",
+  "database": "fama_training_dev_20261105153618",
+  "new_image": "sha256:6417d4ad305d8f51262c839608cf3f13692a8e9ca1784b76fc945f0bc6721009",
+  "new_container_id": "ec8d9d5baa8b8b0349e373602e97b3535ae3ced1d64edd2fa706b4b930fa65af",
+  "previous_container": "fama-manual-dev-44938bc83ad0184c-api-before-auto-prep-e69c3439",
+  "backend_files": [
+    {
+      "path": "training/imported_dataset_preparation.py",
+      "sha256": "ecdf19f8b731b27ca65017745a41456ba7b84e35696262e1b37cdde10064df78"
+    },
+    {
+      "path": "app/services/training_snapshots.py",
+      "sha256": "8dc9f01c808fb86a4480d1facf8c9abc0e248755c0fd847dbf81b41b9d38bbad"
+    },
+    {
+      "path": "app/routes/imported_training.py",
+      "sha256": "2613c18a067a10e71f98e602d3a97c5e9dbcee78b60988f6f4597129140e694a"
+    }
+  ],
+  "frontend_files": [
+    {
+      "path": "components/training/ImportedTrainingPanel.tsx",
+      "sha256": "c3f99dfbd3d5cb9ad741011a39e6b7cecec6f6406add265bcb57f16aa1531924"
+    },
+    {
+      "path": "components/views/TrainingView.tsx",
+      "sha256": "466da37ef3fe5eef66f7c9f4faff6e2e3300fb6e2420ab2c30cb82d56b0d1850"
+    },
+    {
+      "path": "lib/api/importedTrainingApi.ts",
+      "sha256": "7b1e202629f6abf5a31769f0c262ac40a44a8d6b9f81507d7b1ffe019990a9ba"
+    }
+  ],
+  "backup_sha256": "4e59f794f4dfd1a21efb02011021727b2284bd5e0350ac162973af3bccebe49a",
+  "backup_catalog_verified": true,
+  "api_health": 200,
+  "frontend_hot_reload": true,
+  "human_ui_acceptance_pending": true,
+  "playwright_used": false,
+  "training_started": false,
+  "real_preparation_started": false,
+  "gcs_started": false,
+  "db_schema_or_grants_changed": false,
+  "backend_independent_passed": 77,
+  "integration_parent_passed": 38,
+  "frontend_parent_passed": 422,
+  "native_approval": false,
+  "public_http_checks": [
+    {
+      "path": "/",
+      "status": 200
+    },
+    {
+      "path": "/api/auth/web/login",
+      "status": 200
+    },
+    {
+      "path": "/api/training/datasets?include_imported=true",
+      "status": 200
+    },
+    {
+      "path": "/api/auth/web/logout",
+      "status": 204
+    }
+  ],
+  "owned_imported_datasets_visible": 1,
+  "actual_preparation_or_training_executed": false
+}

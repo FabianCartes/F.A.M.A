@@ -6,6 +6,50 @@ class ImportedSourceError(ValueError):
         super().__init__(message)
 
 
+def validate_imported_checkpoint(payload):
+    """Validate the explicit imported identity; never apply legacy name defaults.
+
+    This checks checkpoint self-consistency. Publication must additionally match
+    the durable model/source association in its database transaction.
+    """
+    import re
+    from training.imported_dataset_preparation import _profile
+    name = payload.get("dataset_name")
+    if "imported_source" not in payload and not str(name).startswith("imported:"):
+        return None
+    try:
+        identity = payload["imported_source"]
+        if type(identity) is not dict or type(identity.get("owner_id")) is not int or identity["owner_id"] <= 0:
+            raise ValueError()
+        for key, length in (("dataset_id", 32), ("snapshot_id", 32),
+                            ("snapshot_manifest_sha256", 64), ("preparation_version", 64)):
+            if type(identity.get(key)) is not str or not re.fullmatch("[0-9a-f]{%d}" % length, identity[key]):
+                raise ValueError()
+        classes = identity["classes"]
+        if (type(classes) is not list or not classes or
+                any(type(c) is not str or not c.strip() for c in classes) or
+                len(set(classes)) != len(classes) or
+                payload.get("classes") != classes or
+                identity["class_to_index"] != {c: i for i, c in enumerate(classes)} or
+                any(type(v) is not int for v in identity["class_to_index"].values()) or
+                type(identity.get("provenance")) is not dict or not identity["provenance"]):
+            raise ValueError()
+        profile = identity["profile"]
+        aliases = {"AudioCNN": "audio_cnn", "PANNs-CNN14": "panns_cnn14",
+                   "EfficientNet-B0": "efficientnet_b0", "ConvNeXt-Nano": "convnext_nano",
+                   "ResNet-34d": "resnet34d"}
+        if (_profile(profile) != profile or payload.get("dataset_id") is not None or
+                name != "imported:" + identity["dataset_id"] or
+                aliases.get(payload.get("architecture")) != profile["architecture"] or
+                payload.get("audio_config") != profile["audio"] or
+                payload.get("windowing_config") != {"hop_seconds": profile["window_hop_seconds"],
+                    "aggregation_mode": "max", "gem_p": 3.0, "vad_threshold": 0.0}):
+            raise ValueError()
+        return identity
+    except Exception as error:
+        raise ImportedSourceError("checkpoint_identity", "Identidad del checkpoint importado inválida.") from error
+
+
 def configured_sources(sessions):
     """Resolve only explicit server roots, lazily on imported-resource access."""
     import os
@@ -62,20 +106,31 @@ class ImportedTrainingSource:
                             manifest = self.preparations.get(owner, snapshot_id, version)
                         except Exception:
                             continue  # Never disclose another owner's preparation.
-                        aliases = {"audio_cnn": "AudioCNN", "panns_cnn14": "PANNs-CNN14",
-                                   "efficientnet_b0": "EfficientNet-B0", "convnext_nano": "ConvNeXt-Nano",
-                                   "resnet34d": "ResNet-34d"}
                         reasons = []
                         try:
-                            self.resolve(owner, dataset_id, snapshot_id, version,
-                                         architecture=aliases[manifest["profile"]["architecture"]])
+                            # Catalog eligibility covers metadata only. Training admission
+                            # still exhausts verified audio and validates split semantics.
+                            from training.imported_dataset_preparation import _profile
+                            snapshot = self.preparations.snapshots.get(owner, snapshot_id)
+                            with self.preparations.snapshots.sessions() as db:
+                                dataset = db.get(ImportedDataset, dataset_id)
+                                if (dataset is None or dataset.owner_id != owner
+                                        or snapshot["dataset_id"] != dataset.id):
+                                    raise ImportedSourceError()
+                                if snapshot["dataset_revision"] != dataset.revision:
+                                    raise ImportedSourceError("preparation_stale")
+                            if _profile(manifest["profile"]) != manifest["profile"]:
+                                raise ImportedSourceError()
                             if not migrated:
                                 reasons.append("source_migration_required")
                         except ImportedSourceError as error:
                             reasons.append(error.code)
+                        except Exception:
+                            reasons.append("source_unavailable")
                         entry["preparations"].append({"snapshot_id": snapshot_id, "prepared_version": version,
                             "eligible": not reasons, "reasons": reasons, "profile": manifest["profile"],
-                            "warnings": manifest["warnings"]})
+                            "warnings": manifest["warnings"], "seed": manifest["seed"],
+                            "policy": manifest["policy"], "provenance": manifest["provenance"]})
                 entry["eligible"] = any(p["eligible"] for p in entry["preparations"])
                 if entry["preparations"]:
                     entry["reasons"] = [] if entry["eligible"] else sorted({r for p in entry["preparations"] for r in p["reasons"]})
@@ -95,6 +150,28 @@ class ImportedTrainingSource:
                 if row is None or row.owner_id != owner:
                     raise ImportedSourceError()
                 return dict(row.identity)
+        except Exception as error:
+            raise ImportedSourceError() from error
+
+    def resolve_for_training(self, owner, dataset_id, snapshot_id, version, **options):
+        """Admit only the owner's current dataset revision; resolve stays historical."""
+        from app.models.dataset_import import ImportedDataset
+        if type(owner) is not int or owner <= 0:
+            raise ImportedSourceError()
+        try:
+            snapshot = self.preparations.snapshots.get(owner, snapshot_id)
+            with self.preparations.snapshots.sessions() as db:
+                dataset = db.get(ImportedDataset, dataset_id)
+                if (dataset is None or dataset.owner_id != owner
+                        or snapshot["dataset_id"] != dataset.id):
+                    raise ImportedSourceError()
+                if snapshot["dataset_revision"] != dataset.revision:
+                    raise ImportedSourceError("preparation_stale",
+                        "La preparación corresponde a una revisión anterior del dataset. Cree un nuevo "
+                        "snapshot, complete la procedencia de todos los audios y vuelva a preparar las particiones.")
+            return self.resolve(owner, dataset_id, snapshot_id, version, **options)
+        except ImportedSourceError:
+            raise
         except Exception as error:
             raise ImportedSourceError() from error
 

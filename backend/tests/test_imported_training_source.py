@@ -66,3 +66,38 @@ def test_source_rejects_incompatible_or_damaged_selection(cohort, tmp_path, dama
     with pytest.raises(ImportedSourceError) as failure:
         ImportedTrainingSource(preparations).resolve(1, cohort[5], cohort[1]["id"], prepared["version_id"], **kwargs)
     assert failure.value.code in {"source_unavailable", "profile_conflict"}
+
+
+@pytest.mark.parametrize("damage", ["revision", "manifest", "index", "migration"])
+def test_catalog_retains_metadata_guards_without_audio(cohort, tmp_path, monkeypatch, damage):
+    from app.models.dataset_import import ImportedDataset
+    from app.services.imported_training_source import ImportedTrainingSource
+    from training.imported_dataset_preparation import ImportedDatasetPreparation
+    from scripts.migrate_imported_training_source import migrate_imported_sources
+    preparations = ImportedDatasetPreparation(cohort[0], tmp_path / "imported-prepared")
+    prepared = create(preparations, cohort)
+    if damage == "migration":
+        from app.models.imported_training_source import ImportedModelSource
+        ImportedModelSource.__table__.drop(cohort[0].sessions.kw["bind"], checkfirst=True)
+    else:
+        migrate_imported_sources(cohort[0].sessions.kw["bind"], writers_stopped=True)
+    if damage == "revision":
+        with cohort[0].sessions() as db:
+            db.get(ImportedDataset, cohort[5]).revision += 1
+            db.commit()
+    elif damage in {"manifest", "index"}:
+        path = preparations.root / prepared["version_id"] / ("manifest.json" if damage == "manifest" else "train.csv")
+        path.chmod(0o600)
+        path.write_bytes(b"altered metadata")
+
+    def no_audio_reads(*args, **kwargs):
+        pytest.fail("Catalog must not iterate snapshot audio")
+
+    monkeypatch.setattr(cohort[0], "iter_verified", no_audio_reads)
+    entry, = ImportedTrainingSource(preparations).catalog(1)
+    assert entry["eligible"] is False
+    if damage in {"manifest", "index"}:
+        assert entry["preparations"] == []
+    else:
+        assert entry["reasons"] == ["preparation_stale" if damage == "revision" else "source_migration_required"]
+    assert ImportedTrainingSource(preparations).catalog(2) == []
