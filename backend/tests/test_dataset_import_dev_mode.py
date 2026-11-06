@@ -60,16 +60,31 @@ def enable_local(monkeypatch):
     monkeypatch.setenv("FAMA_IMPORT_DEV_MODE", "1")
 
 
-def test_docker_frontend_imports_and_returns_to_normal(local_imports, tmp_path, monkeypatch):
+def test_development_flags_cannot_admit_anonymous_imports(local_imports, monkeypatch):
+    client, _ = local_imports
+    enable_local(monkeypatch)
+    response = client.post(BASE, json={"request_key": "anonymous", "name": "Denied"})
+    assert response.status_code == 401, response.text
+    assert client.get(BASE + "/access").json() == {"development_mode": False}
+    assert client.get(BASE + "/datasets").status_code == 401
+    registration = client.post("/api/auth/register", json={"email": "check@example.test",
+        "password": "synthetic-password", "nombre_completo": "Check"})
+    assert registration.status_code == 201, registration.text
+    login = client.post("/api/auth/login", json={"email": "check@example.test", "password": "synthetic-password"})
+    assert login.status_code == 200, login.text
+    headers = {"Authorization": "Bearer " + login.json()["access_token"]}
+    assert client.get(BASE, headers=headers).json()["imports"] == []
+    assert client.get(BASE + "/datasets", headers=headers).json()["datasets"] == []
+
+
+def test_docker_frontend_cannot_enable_anonymous_imports(local_imports, monkeypatch):
     _, app = local_imports
     enable_local(monkeypatch)
     monkeypatch.setenv("FAMA_IMPORT_DEV_FRONTEND_IP", "172.30.253.10")
     with TestClient(app, client=("172.30.253.10", 50000)) as frontend:
-        assert frontend.get(BASE + "/access").json() == {"development_mode": True}
-        job = prepare(frontend, tmp_path)
-        result = confirm(frontend, job)
-        assert result.status_code == 200, result.text
-        assert len(frontend.get(BASE + "/datasets").json()["datasets"]) == 1
+        assert frontend.get(BASE + "/access").json() == {"development_mode": False}
+        assert frontend.post(BASE, json={"request_key": "denied", "name": "Denied"}).status_code == 401
+        assert frontend.get(BASE + "/datasets").status_code == 401
         assert frontend.get(BASE, headers={"Authorization": "Bearer invalid"}).status_code == 401
         monkeypatch.delenv("FAMA_IMPORT_DEV_MODE")
         assert frontend.get(BASE + "/access").json() == {"development_mode": False}
@@ -77,14 +92,14 @@ def test_docker_frontend_imports_and_returns_to_normal(local_imports, tmp_path, 
 
 
 @pytest.mark.parametrize("peer", ["172.30.253.11", "172.30.253.1", "192.168.1.10"])
-def test_only_exact_frontend_peer_is_admitted(local_imports, monkeypatch, peer):
+def test_no_frontend_peer_grants_anonymous_identity(local_imports, monkeypatch, peer):
     _, app = local_imports
     enable_local(monkeypatch)
     monkeypatch.setenv("FAMA_IMPORT_DEV_FRONTEND_IP", "172.30.253.10")
     with TestClient(app, client=(peer, 50000)) as other:
         headers = {"X-Forwarded-For": "172.30.253.10", "Forwarded": "for=172.30.253.10"}
-        assert other.get(BASE, headers=headers).status_code == 403
-        assert other.post(BASE, json={"request_key": "denied", "name": "Denied"}, headers=headers).status_code == 403
+        assert other.get(BASE, headers=headers).status_code == 401
+        assert other.post(BASE, json={"request_key": "denied", "name": "Denied"}, headers=headers).status_code == 401
 
 
 @pytest.mark.parametrize("configured", ["172.30.253.0/24", "frontend", "", "invalid"])
@@ -93,21 +108,16 @@ def test_frontend_configuration_never_accepts_ranges_or_names(local_imports, mon
     enable_local(monkeypatch)
     monkeypatch.setenv("FAMA_IMPORT_DEV_FRONTEND_IP", configured)
     with TestClient(app, client=("172.30.253.10", 50000)) as other:
-        assert other.get(BASE).status_code == 403
+        assert other.get(BASE).status_code == 401
 
 
-def test_explicit_local_mode_imports_without_login_and_preserves_auth_routes(local_imports, tmp_path, monkeypatch):
+def test_local_mode_requires_login_for_all_import_operations(local_imports, monkeypatch):
     client, _ = local_imports
     enable_local(monkeypatch)
-    assert client.get(BASE + "/access").json() == {"development_mode": True}
-    assert client.get(BASE + "/limits").status_code == 200
-    assert client.get(BASE + "/example.zip").status_code == 200
-    job = prepare(client, tmp_path)
-    imported = confirm(client, job)
-    assert imported.status_code == 200, imported.text
-    dataset = imported.json()["dataset_id"]
-    files = client.get(f"{BASE}/datasets/{dataset}/files").json()["files"]
-    assert client.get(f"{BASE}/datasets/{dataset}/files/{files[0]['sha256']}").status_code == 200
+    assert client.get(BASE + "/access").json() == {"development_mode": False}
+    for suffix in ("", "/limits", "/example.zip", "/datasets", "/datasets/" + "a" * 32 + "/files"):
+        assert client.get(BASE + suffix).status_code == 401
+    assert client.post(BASE, json={"request_key": "denied", "name": "Denied"}).status_code == 401
     assert client.get("/api/auth/me").status_code == 401
     monkeypatch.delenv("FAMA_IMPORT_DEV_MODE")
     assert client.get(BASE).status_code == 401
@@ -130,9 +140,9 @@ def test_opt_in_outside_development_fails_closed(local_imports, monkeypatch, env
     monkeypatch.setenv("FAMA_IMPORT_DEV_MODE", "1")
     if environment:
         monkeypatch.setenv("FAMA_ENV", environment)
-    assert client.get(BASE + "/access").status_code == 503
-    assert client.get(BASE + "/limits").status_code == 503
-    assert client.post(BASE, json={"request_key": "denied", "name": "No dataset"}).status_code == 503
+    assert client.get(BASE + "/access").json() == {"development_mode": False}
+    assert client.get(BASE + "/limits").status_code == 401
+    assert client.post(BASE, json={"request_key": "denied", "name": "No dataset"}).status_code == 401
 
 
 def test_remote_peers_cannot_use_local_exception_or_spoof_forwarding(local_imports, monkeypatch):
@@ -140,8 +150,8 @@ def test_remote_peers_cannot_use_local_exception_or_spoof_forwarding(local_impor
     enable_local(monkeypatch)
     with TestClient(app, client=("192.0.2.10", 50000)) as remote:
         headers = {"X-Forwarded-For": "127.0.0.1", "Forwarded": "for=127.0.0.1", "Host": "localhost"}
-        assert remote.get(BASE + "/access", headers=headers).status_code == 403
-        assert remote.get(BASE, headers=headers).status_code == 403
+        assert remote.get(BASE + "/access", headers=headers).json() == {"development_mode": False}
+        assert remote.get(BASE, headers=headers).status_code == 401
 
 
 @pytest.mark.parametrize("docker_peer", [False, True])
@@ -161,11 +171,11 @@ def test_local_and_authenticated_owners_remain_isolated(local_imports, tmp_path,
     private_dataset = confirm(client, private_job).json()["dataset_id"]
     private_files = client.get(f"{BASE}/datasets/{private_dataset}/files").json()
     enable_local(monkeypatch)
-    # An actual Bearer session retains its owner even while local mode is enabled.
+    # An actual Bearer session retains its owner despite obsolete local flags.
     assert len(client.get(BASE + "/datasets").json()["datasets"]) == 1
     del client.headers["Authorization"]
-    assert client.get(BASE).json()["imports"] == []
-    assert client.get(BASE + "/datasets").json()["datasets"] == []
+    assert client.get(BASE).status_code == 401
+    assert client.get(BASE + "/datasets").status_code == 401
     for method, suffix, payload in [
         ("GET", f"/{private_job['id']}", None),
         ("PUT", f"/{private_job['id']}/archive", None),
@@ -177,12 +187,9 @@ def test_local_and_authenticated_owners_remain_isolated(local_imports, tmp_path,
         ("POST", "", {"request_key": "foreign", "name": "Foreign", "target_id": private_dataset}),
     ]:
         headers = {"Content-Type": "application/zip"} if method == "PUT" else {}
-        assert client.request(method, BASE + suffix, json=payload, headers=headers).status_code == 404
-    local_job = prepare(client, tmp_path, key="local", sample=2)
-    local_dataset = confirm(client, local_job).json()["dataset_id"]
+        assert client.request(method, BASE + suffix, json=payload, headers=headers).status_code == 401
     # Invalid credentials must not silently fall back to the anonymous identity.
     assert client.get(BASE, headers={"Authorization": "Bearer invalid"}).status_code == 401
     monkeypatch.delenv("FAMA_IMPORT_DEV_MODE")
     client.headers["Authorization"] = "Bearer " + login.json()["access_token"]
-    assert client.get(f"{BASE}/datasets/{local_dataset}/files").status_code == 404
     assert client.get(f"{BASE}/datasets/{private_dataset}/files").json() == private_files

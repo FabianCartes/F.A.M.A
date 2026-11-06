@@ -1,4 +1,4 @@
-"""Owner-scoped imports with an explicit loopback-only development exception."""
+"""Authenticated owner-scoped imports; local transport never grants identity."""
 import asyncio
 import hashlib
 import io
@@ -6,8 +6,6 @@ import os
 import time
 import wave
 import zipfile
-from dataclasses import dataclass
-from ipaddress import ip_address
 from pathlib import Path
 from typing import Literal
 
@@ -19,44 +17,20 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.database import get_db
 from app.services.auth import security_bearer
-from app.services.imported_identity import imported_user, has_web_credential
+from app.services.imported_identity import imported_user
 from app.services.dataset_imports import DatasetImports, reject, _durable_directory
 
 router = APIRouter(prefix="/api/ingestion/imports", tags=["dataset-imports"])
 
 
-@dataclass(frozen=True)
-class ImportPrincipal:
-    id: int
-
-
 def development_imports_enabled(request: Request) -> bool:
-    if os.environ.get("FAMA_IMPORT_DEV_MODE") != "1":
-        return False
-    if os.environ.get("FAMA_ENV") != "development":
-        reject(503, "El modo local de importación requiere FAMA_ENV=development.")
-    try:
-        peer = ip_address(request.client.host) if request.client is not None else None
-        frontend = os.environ.get("FAMA_IMPORT_DEV_FRONTEND_IP")
-        # An exact transport peer, never a subnet or a forwarded HTTP header.
-        local_peer = peer is not None and (peer.is_loopback or (
-            frontend is not None and peer == ip_address(frontend)))
-    except ValueError:
-        local_peer = False
-    if not local_peer:
-        reject(403, "El modo de desarrollo de importación solo admite loopback o el frontend local autorizado.")
-    return True
+    """Compatibility capability: anonymous imports are permanently disabled."""
+    return False
 
 
 def get_import_user(request: Request, response: Response,
                     credentials: HTTPAuthorizationCredentials | None = Depends(security_bearer),
                     db: Session = Depends(get_db)):
-    development = development_imports_enabled(request)
-    if development and not request.headers.get("authorization") and not has_web_credential(request):
-        # Reserved non-account identity; never borrow a real user's datasets.
-        return ImportPrincipal(id=-1)
-    # A browser credential takes priority over the reserved local exception.
-    # Role policy remains unchanged; real users retain exact ownership.
     user = imported_user(request, response, credentials, db)
     if user.id <= 0:
         reject(401, "La identidad local de desarrollo no es una cuenta de usuario.")
@@ -65,7 +39,7 @@ def get_import_user(request: Request, response: Response,
 
 @router.get("/access")
 def access(request: Request):
-    """Reveal only local-mode availability, never owner or dataset information."""
+    """Keep the capability response stable without enabling anonymous access."""
     return {"development_mode": development_imports_enabled(request)}
 
 

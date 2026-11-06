@@ -15,7 +15,9 @@ from typing import Optional, Tuple, List
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Form, Query, Request, status
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Form, Query, Request, Response, status
+from app.services.auth import get_current_user, security_bearer
+from app.services.imported_identity import imported_user
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
@@ -980,10 +982,7 @@ async def upload_ingestion_files(
 # ============================================================================
 # ENDPOINTS DE ENTRENAMIENTO Y MÉTRICAS (RF_04, CU_INV_03, CU_INV_04, CU_INV_05)
 from app.schemas.training import StartTrainingRequest
-from app.services.auth import get_current_user, security_bearer
 from app.services.imported_training_source import ImportedSourceError
-from app.services.imported_identity import imported_user
-from fastapi import Response
 
 
 @app.get("/api/training/hardware")

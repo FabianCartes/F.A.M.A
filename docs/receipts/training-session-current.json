@@ -1,0 +1,589 @@
+{
+  "run": "bac3bca235baa731",
+  "project": "fama-session-bac3bca235baa731",
+  "status": "functional_session_verified_after_authorized_permission_correction_resources_stopped",
+  "database": "fama_training_dev_20261105163201",
+  "database_oid": "16388",
+  "system_id": "7704727080045891625",
+  "image": "sha256:7f1bdbfa7154cf04e7c053336ec4678ad81f1738b1bbc3572839fa4088a61d7f",
+  "source_file_count": 146,
+  "preflight": {
+    "python": "3.12.15",
+    "fastapi": "0.161.0",
+    "torch": "2.14.1",
+    "startup_policy": "isolated",
+    "app_imported": true
+  },
+  "preflight_history": [
+    {
+      "container": "31c5389faa4a5ec2e7696432fb57981fa0be0bc6ecf6265d636289a256f6ec7d",
+      "image": "sha256:3c87551d1b0851914d63d4aaa77e4a08c4b5fb31eab6eea11b0a0b94f3569d2c",
+      "exit_code": 1
+    },
+    {
+      "container": "3974edb279f854386e07085fd23f1986acd5645bfd7b56ea521e37547341c0cd",
+      "image": "sha256:8a0baedbe9b2503e73ea19ab2e2530a41c634b080ae853557f93257bcc31d138",
+      "exit_code": 1,
+      "failure": "ModuleNotFoundError dataset_references"
+    }
+  ],
+  "db_container": "22159a2f5b0e04db29896289462ed3a389a5be240cffed772e8407fb20abc9de",
+  "network_id": "6d410e77106e37898c2ad8c66f452fafbdbbf8de133ccbd960935ede203ea24e",
+  "volume": "fama-session-bac3bca235baa731-data",
+  "app_container": "c447a0a9f8f2f0b91d0f4d316abb23bb23fa8680de5ecbd249827cf608ec8e3f",
+  "initialize_exit_code": 0,
+  "initialize_result": {
+    "prepared": true,
+    "stages": [
+      "application",
+      "imports",
+      "metadata",
+      "jobs",
+      "receipts",
+      "chunks",
+      "snapshots",
+      "imported_sources",
+      "web_sessions"
+    ]
+  },
+  "check_exit_code": 0,
+  "check_result": {
+    "prepared": true,
+    "verification": "training_schema_and_markers"
+  },
+  "app_table_grants": [
+    {
+      "table": "usuario",
+      "privilege": "INSERT"
+    },
+    {
+      "table": "usuario",
+      "privilege": "SELECT"
+    },
+    {
+      "table": "usuario",
+      "privilege": "UPDATE"
+    },
+    {
+      "table": "sesion_web",
+      "privilege": "INSERT"
+    },
+    {
+      "table": "sesion_web",
+      "privilege": "SELECT"
+    },
+    {
+      "table": "sesion_web",
+      "privilege": "UPDATE"
+    },
+    {
+      "table": "cuota_acceso",
+      "privilege": "INSERT"
+    },
+    {
+      "table": "cuota_acceso",
+      "privilege": "SELECT"
+    },
+    {
+      "table": "cuota_acceso",
+      "privilege": "UPDATE"
+    },
+    {
+      "table": "evento_seguridad",
+      "privilege": "INSERT"
+    },
+    {
+      "table": "evento_seguridad",
+      "privilege": "SELECT"
+    },
+    {
+      "table": "evento_seguridad",
+      "privilege": "UPDATE"
+    },
+    {
+      "table": "sesion_web",
+      "privilege": "DELETE"
+    }
+  ],
+  "runtime_controls": {
+    "internal_network": true,
+    "published_ports": false,
+    "readonly_rootfs": true,
+    "nonroot_user": "1000:1000",
+    "cap_drop_all": true,
+    "no_new_privileges": true,
+    "mount_destinations": [
+      "/run/secrets/app-pgpass",
+      "/run/secrets/check-session.py",
+      "/run/secrets/test-user"
+    ],
+    "private_tmpfs_paths": [
+      "/app/checkpoints",
+      "/app/data",
+      "/home/fama",
+      "/tmp"
+    ]
+  },
+  "liveness": {
+    "status": 200,
+    "body": {
+      "status": "ok"
+    }
+  },
+  "readiness_incident": {
+    "wait_exit_code": 1,
+    "reason": "Exact readlink /proc/1/exe predicate produced no path; final server was observed running",
+    "diagnosis": "Docker top matched State.Pid to postgres; TCP pg_isready exit0",
+    "continuation": "Once from observed running final server; no restart/recreation/reinitialization",
+    "timeouts_preserved_as_failure": true
+  },
+  "session_probe_exit_code": 1,
+  "session_probe": {
+    "ok": false,
+    "steps": [
+      {
+        "step": "health",
+        "status": 200,
+        "checks": {
+          "status": true,
+          "contract": true,
+          "bounded_body": true,
+          "health_body": true
+        }
+      },
+      {
+        "step": "unauthenticated",
+        "status": 401,
+        "checks": {
+          "status": true,
+          "contract": true,
+          "bounded_body": true,
+          "error_shape": true
+        }
+      },
+      {
+        "step": "register",
+        "status": 201,
+        "checks": {
+          "status": true,
+          "contract": true,
+          "bounded_body": true,
+          "user_id": true,
+          "identity": true
+        }
+      },
+      {
+        "step": "web_login",
+        "status": 200,
+        "checks": {
+          "status": true,
+          "contract": true,
+          "bounded_body": true,
+          "no_store": true,
+          "identity": true,
+          "cookie_name": true,
+          "cookie_attributes": true,
+          "cookie_stored": true
+        }
+      },
+      {
+        "step": "web_me",
+        "status": 200,
+        "checks": {
+          "status": true,
+          "contract": true,
+          "bounded_body": true,
+          "no_store": true,
+          "identity": true
+        }
+      },
+      {
+        "step": "foreign_login",
+        "status": 403,
+        "checks": {
+          "status": true,
+          "contract": true,
+          "bounded_body": true,
+          "error_shape": true,
+          "no_store": true
+        }
+      },
+      {
+        "step": "foreign_logout",
+        "status": 403,
+        "checks": {
+          "status": true,
+          "contract": true,
+          "bounded_body": true,
+          "error_shape": true,
+          "no_store": true
+        }
+      },
+      {
+        "step": "session_survives_foreign",
+        "status": 200,
+        "checks": {
+          "status": true,
+          "contract": true,
+          "bounded_body": true,
+          "identity": true
+        }
+      },
+      {
+        "step": "bearer_login",
+        "status": 200,
+        "checks": {
+          "status": true,
+          "contract": true,
+          "bounded_body": true,
+          "bearer": true
+        }
+      },
+      {
+        "step": "bearer_me",
+        "status": 200,
+        "checks": {
+          "status": true,
+          "contract": true,
+          "bounded_body": true,
+          "identity": true
+        }
+      },
+      {
+        "step": "logout",
+        "status": 503,
+        "checks": {
+          "status": false,
+          "contract": false
+        }
+      }
+    ],
+    "failure": {
+      "step": "logout",
+      "status": 503,
+      "category": "probe_failed"
+    }
+  },
+  "logout_diagnosis": {
+    "server_permission_events": [
+      {
+        "permission_denied_for_session_table": true,
+        "matching_pid_delete_statement": true
+      }
+    ],
+    "source_required_privilege": "DELETE on public.sesion_web",
+    "privilege_was_not_granted": true,
+    "causal_limit": "Server permission event and adjacent DELETE are correlated with the one-shot HTTP sequence; verifier inspected source only, not these logs. No SQLSTATE claimed."
+  },
+  "final_state": {
+    "app_running": false,
+    "postgres_running": false,
+    "database_allow_connections": false,
+    "app_login": false,
+    "app_connect": false,
+    "database_sessions_before_stop": 0,
+    "resources_preserved": true,
+    "no_deletion": true
+  },
+  "schema": "fama.disposable-application-session/v1",
+  "state_directory": ".training-session-bac3bca235baa731",
+  "build_history": [
+    {
+      "job": 14,
+      "exit_code": 1,
+      "network": "none",
+      "failure": "Package cache layer unavailable offline"
+    },
+    {
+      "recovery": "Inherited-image derivation",
+      "status": "safety_policy_blocked_before_execution"
+    },
+    {
+      "job": 15,
+      "exit_code": 0,
+      "network": "build_only_authorized",
+      "dependencies": "cached",
+      "source_files": 132
+    },
+    {
+      "job": 17,
+      "exit_code": 0,
+      "source_files": 145
+    },
+    {
+      "job": 19,
+      "exit_code": 0,
+      "source_files": 146,
+      "preflight": "passed"
+    }
+  ],
+  "verification": {
+    "parent_real_postgresql_http": true,
+    "independent_source_review": "No static probe mismatch found; source diagnosis identified DELETE requirement",
+    "independent_runtime_reproduction": false,
+    "native_review": "No native approval; previous assessment unassessable because untracked scope was not selected",
+    "browser_test": false,
+    "overall_pass": true,
+    "not_completed": [],
+    "scope": "Health and synthetic account/session HTTP checks across original and explicitly authorized recovery; not uninterrupted success",
+    "fresh_quota_bucket_count_proven": false
+  },
+  "excluded": [
+    "principal_database",
+    "prepared_persistent_database",
+    "GCS",
+    "dataset_import",
+    "training",
+    "inference"
+  ],
+  "next_decision": "Further dataset import/training/inference remains outside this verification; resources preserved stopped.",
+  "first_session_probe": {
+    "ok": false,
+    "steps": [
+      {
+        "step": "health",
+        "status": 200,
+        "checks": {
+          "status": true,
+          "contract": true,
+          "bounded_body": true,
+          "health_body": true
+        }
+      },
+      {
+        "step": "unauthenticated",
+        "status": 401,
+        "checks": {
+          "status": true,
+          "contract": true,
+          "bounded_body": true,
+          "error_shape": true
+        }
+      },
+      {
+        "step": "register",
+        "status": 201,
+        "checks": {
+          "status": true,
+          "contract": true,
+          "bounded_body": true,
+          "user_id": true,
+          "identity": true
+        }
+      },
+      {
+        "step": "web_login",
+        "status": 200,
+        "checks": {
+          "status": true,
+          "contract": true,
+          "bounded_body": true,
+          "no_store": true,
+          "identity": true,
+          "cookie_name": true,
+          "cookie_attributes": true,
+          "cookie_stored": true
+        }
+      },
+      {
+        "step": "web_me",
+        "status": 200,
+        "checks": {
+          "status": true,
+          "contract": true,
+          "bounded_body": true,
+          "no_store": true,
+          "identity": true
+        }
+      },
+      {
+        "step": "foreign_login",
+        "status": 403,
+        "checks": {
+          "status": true,
+          "contract": true,
+          "bounded_body": true,
+          "error_shape": true,
+          "no_store": true
+        }
+      },
+      {
+        "step": "foreign_logout",
+        "status": 403,
+        "checks": {
+          "status": true,
+          "contract": true,
+          "bounded_body": true,
+          "error_shape": true,
+          "no_store": true
+        }
+      },
+      {
+        "step": "session_survives_foreign",
+        "status": 200,
+        "checks": {
+          "status": true,
+          "contract": true,
+          "bounded_body": true,
+          "identity": true
+        }
+      },
+      {
+        "step": "bearer_login",
+        "status": 200,
+        "checks": {
+          "status": true,
+          "contract": true,
+          "bounded_body": true,
+          "bearer": true
+        }
+      },
+      {
+        "step": "bearer_me",
+        "status": 200,
+        "checks": {
+          "status": true,
+          "contract": true,
+          "bounded_body": true,
+          "identity": true
+        }
+      },
+      {
+        "step": "logout",
+        "status": 503,
+        "checks": {
+          "status": false,
+          "contract": false
+        }
+      }
+    ],
+    "failure": {
+      "step": "logout",
+      "status": 503,
+      "category": "probe_failed"
+    }
+  },
+  "first_session_probe_exit_code": 1,
+  "authorized_recovery": {
+    "permission": "DELETE on public.sesion_web only",
+    "role_verification": [
+      {
+        "delete_tables": [
+          "sesion_web"
+        ]
+      },
+      {
+        "create_schema": false,
+        "create_db": false,
+        "temporary": false
+      }
+    ],
+    "exit_code": 0,
+    "result": {
+      "ok": true,
+      "steps": [
+        {
+          "step": "recovery_login",
+          "status": 200,
+          "checks": {
+            "status": true,
+            "contract": true,
+            "bounded_body": true,
+            "no_store": true,
+            "cookie_present": true
+          }
+        },
+        {
+          "step": "recovery_logout",
+          "status": 204,
+          "checks": {
+            "status": true,
+            "contract": true,
+            "bounded_body": true,
+            "no_store": true,
+            "empty_body": true
+          }
+        },
+        {
+          "step": "recovery_logged_out",
+          "status": 401,
+          "checks": {
+            "status": true,
+            "contract": true,
+            "bounded_body": true,
+            "error_shape": true
+          }
+        },
+        {
+          "step": "recovery_stale_cookie",
+          "status": 401,
+          "checks": {
+            "status": true,
+            "contract": true,
+            "bounded_body": true,
+            "error_shape": true
+          }
+        },
+        {
+          "step": "recovery_quota_1",
+          "status": 401,
+          "checks": {
+            "expected_denial": true
+          }
+        },
+        {
+          "step": "recovery_quota_2",
+          "status": 401,
+          "checks": {
+            "expected_denial": true
+          }
+        },
+        {
+          "step": "recovery_quota_3",
+          "status": 401,
+          "checks": {
+            "expected_denial": true
+          }
+        },
+        {
+          "step": "recovery_quota_4",
+          "status": 401,
+          "checks": {
+            "expected_denial": true
+          }
+        },
+        {
+          "step": "recovery_quota_5",
+          "status": 429,
+          "checks": {
+            "expected_denial": true,
+            "retry_after": true
+          }
+        }
+      ],
+      "quota_state_preserved": true,
+      "fresh_bucket_count_asserted": false
+    },
+    "probe_sha256": "8a1a12a83fe416c7a7c5e77cd14f2d905e2c5addbf96afeefb8b129aec8a3261",
+    "independent_static_review": "No concrete blocker found; no runtime reproduction",
+    "original_probe_mount_sha256": "45c2493b577ac1ef8e6549c3f3fb7a4a9874b742e4be84373f4c34bd6d927eda"
+  },
+  "initial_app_role_flags": {
+    "login": true,
+    "superuser": false,
+    "createdb": false,
+    "createrole": false,
+    "replication": false,
+    "bypassrls": false,
+    "create_database_objects": false,
+    "temporary": false,
+    "create_public_objects": false
+  },
+  "current_role_state": {
+    "login": false,
+    "connect": false,
+    "delete_tables": [
+      "sesion_web"
+    ]
+  }
+}

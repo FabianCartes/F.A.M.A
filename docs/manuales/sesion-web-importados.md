@@ -31,7 +31,7 @@ Las tablas `sesion_web`, `cuota_acceso` y `evento_seguridad` se excluyen del boo
 
 El navegador usa la API del mismo origen mediante el rewrite `/api/:path*` ya existente. `API_URL` selecciona el backend del proxy; una URL pública de API de otro origen no es válida para la sesión web. No guardar credenciales en `localStorage` ni convertir la cookie en Bearer.
 
-La pantalla de acceso y los componentes se adaptan de la implementación existente, sin su instalador, recuperación de contraseñas ni política global de asignaciones. Los errores de configuración no redirigen a un instalador ausente. La interfaz legacy permanece disponible aunque no se pueda comprobar una sesión.
+La pantalla de acceso y los componentes se adaptan de la implementación existente, sin su instalador, recuperación de contraseñas ni política global de asignaciones. Los errores de configuración no redirigen a un instalador ausente. Para el MVP se ocultan el aviso «Acceso legacy disponible» y el enlace «Continuar con recursos legacy», sin eliminar su implementación. El inicio de sesión y sus comprobaciones se conservan. Este cambio es solo visual: no bloquea el acceso directo al workspace ni cambia los permisos de las rutas legacy; la política global de acceso queda como trabajo futuro.
 
 ## Verificación y límites
 

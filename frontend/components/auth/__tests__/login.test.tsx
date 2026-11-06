@@ -22,6 +22,24 @@ describe("login web", () => {
     expect(screen.queryByRole("link", { name: /registr/i })).toBeNull();
   });
 
+  it.each([
+    { mode: "workspace" as const, status: 401, text: "Acceso legacy disponible" },
+    { mode: "login" as const, status: 503, text: "Continuar con recursos legacy" },
+  ])("hides the legacy entry in $mode without removing its implementation", async ({ mode, status, text }) => {
+    vi.stubGlobal("fetch", vi.fn(async () => json({}, status)));
+    render(<SessionBoundary mode={mode}><p>Existing workspace</p></SessionBoundary>);
+    const legacyEntry = await screen.findByText(text);
+    expect(window.getComputedStyle(legacyEntry).display).toBe("none");
+    expect(screen.queryByRole("link", { name: "Continuar con recursos legacy" })).toBeNull();
+    if (mode === "workspace") {
+      expect(screen.getByRole("link", { name: "Iniciar sesión" })).toBeDefined();
+      expect(screen.getByText("Existing workspace")).toBeDefined();
+    } else {
+      expect(screen.getByRole("button", { name: "Reintentar comprobación" })).toBeDefined();
+      expect(legacyEntry.getAttribute("href")).toBe("/");
+    }
+  });
+
   it("confirms the cookie after login and only then navigates home", async () => {
     let signedIn = false;
     const request = vi.fn<(url: string, options?: RequestInit) => Promise<Response>>(async (url) => {

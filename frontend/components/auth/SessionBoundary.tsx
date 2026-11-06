@@ -23,10 +23,12 @@ export default function SessionBoundary({ children, mode = "workspace" }: {
   const generation = useRef(0);
   const controller = useRef<AbortController | null>(null);
   const logoutPending = useRef(false);
+  const confirmedOwner = useRef<number | null>(null);
 
   const invalidate = useCallback(() => {
     generation.current += 1;
     controller.current?.abort();
+    confirmedOwner.current = null;
     setSession({ user: null, message: "", busy: false });
   }, []);
 
@@ -38,12 +40,19 @@ export default function SessionBoundary({ children, mode = "workspace" }: {
     try {
       const user = await currentUser(request.signal);
       if (!request.signal.aborted && version === generation.current) {
-        confirmApiSession();
+        // Revalidating the same owner is not a new session generation: private
+        // views must retain their state while their catalogue refreshes.
+        const owner = user?.id ?? null;
+        if (confirmedOwner.current !== owner) confirmApiSession();
+        confirmedOwner.current = owner;
         setSession({ user, message: "", busy: false });
       }
     } catch (reason) {
-      if (!request.signal.aborted && version === generation.current) setSession({ user: null, busy: false,
-        message: reason instanceof AuthError ? reason.message : "No se pudo comprobar la sesión. Revisa la conexión e inténtalo de nuevo." });
+      if (!request.signal.aborted && version === generation.current) {
+        confirmedOwner.current = null;
+        setSession({ user: null, busy: false,
+          message: reason instanceof AuthError ? reason.message : "No se pudo comprobar la sesión. Revisa la conexión e inténtalo de nuevo." });
+      }
     }
   }, []);
 
@@ -75,6 +84,7 @@ export default function SessionBoundary({ children, mode = "workspace" }: {
     if (!user) throw new AuthError("No se pudo confirmar la cookie de sesión. Revisa HTTPS y la configuración del servidor.");
     if (user.id !== expected.id) throw new AuthError("La sesión cambió durante el acceso. Vuelve a iniciar sesión para confirmar tu cuenta.");
     confirmApiSession();
+    confirmedOwner.current = user.id;
     setSession({ user, message: "", busy: false });
   }
 
@@ -84,6 +94,7 @@ export default function SessionBoundary({ children, mode = "workspace" }: {
     const request = new AbortController(); controller.current = request;
     logoutPending.current = true;
     // Unmount private state immediately, even if server revocation fails.
+    confirmedOwner.current = null;
     setSession({ user: null, message: "", busy: true });
     try {
       await signOut(request.signal);
@@ -99,7 +110,8 @@ export default function SessionBoundary({ children, mode = "workspace" }: {
   if (mode === "login") {
     if (session.message) return <AuthSurface><h1>Acceso a F.A.M.A.</h1><p role="alert">{session.message}</p>
       <button className="auth-submit" onClick={() => void check()}>Reintentar comprobación</button>
-      <Link href="/">Continuar con recursos legacy</Link></AuthSurface>;
+      {/* Keep legacy navigation for future access-policy work, but hide the entry for the MVP. */}
+      <Link href="/" hidden>Continuar con recursos legacy</Link></AuthSurface>;
     if (!session.busy && !session.user) return <LoginForm onLogin={login} />;
     return <AuthSurface><p role="status">{session.user ? "Abriendo aplicación…" : "Comprobando sesión…"}</p></AuthSurface>;
   }
@@ -107,7 +119,7 @@ export default function SessionBoundary({ children, mode = "workspace" }: {
   return <WebSession.Provider value={session.user}><div className="session-workspace">
     <div className="session-toolbar" aria-label="Sesión actual">
       {session.user ? <><span>{session.user.nombre_completo}</span><button onClick={() => void logout()}>Cerrar sesión</button></> :
-        <><span>{session.busy ? "Comprobando sesión…" : "Acceso legacy disponible"}</span><Link href="/login">Iniciar sesión</Link></>}
+        <><span hidden={!session.busy}>{session.busy ? "Comprobando sesión…" : "Acceso legacy disponible"}</span><Link href="/login">Iniciar sesión</Link></>}
       {session.message && <><span role="alert">{session.message}</span><button onClick={() => {
         if (session.logoutFailed) void logout(); else void check();
       }}>{session.logoutFailed ? "Reintentar cierre de sesión" : "Reintentar comprobación"}</button></>}
