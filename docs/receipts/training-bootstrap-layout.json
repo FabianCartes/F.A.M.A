@@ -1,0 +1,78 @@
+{
+  "schema": "fama.training-bootstrap-layout/v1",
+  "status": "partial",
+  "structural": "passed",
+  "operational": "unavailable",
+  "command": "PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 .venv/bin/python backend/tests/check_training_bootstrap_layout.py",
+  "environment": {
+    "python": "3.14.8",
+    "compose": "5.6.0"
+  },
+  "observed": {
+    "source_imports": 30,
+    "context_files": 32,
+    "compose_services": 2,
+    "cloud_ml_runtime_loaded": false,
+    "daemon_required": false,
+    "postgres_tested": false,
+    "resources_created": false
+  },
+  "independent_verification": {
+    "structural": "passed",
+    "operational": "unavailable",
+    "exit_code": 0,
+    "fresh_source_copy": true
+  },
+  "blocker": "Local unix:///var/run/docker.sock absent on subsequent execution attempts, including escalated requests; no alternate endpoint attempted.",
+  "pending": [
+    "independent review of assisted executor then user-side real execution with exact local Unix Docker",
+    "Python 3.12 image build and dependency installation",
+    "disposable PostgreSQL CLI initialization/checks and connection exclusion",
+    "persistent cluster creation and initialization"
+  ],
+  "not_authorized_in_this_operation": [
+    "main connection cutover",
+    "application startup",
+    "real dataset import",
+    "training",
+    "GCS"
+  ],
+  "limits": [
+    "Compose render and imports are structural evidence, not deployment or PostgreSQL proof.",
+    "Internal network does not exclude trusted host/Docker administrators.",
+    "No native review approval for the new preliminary operational configuration."
+  ],
+  "preflight_cli": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 .venv/bin/python backend/scripts/check_training_postgres_target.py",
+    "observed_exit_code": 1,
+    "observed_reason": "docker_unavailable",
+    "synthetic_focused_tests": 15,
+    "combined_schema_cli_tests": 54,
+    "combined_exit_code": 0,
+    "deselected": 0,
+    "limits": "Docker subprocess boundary emulated; no actual resource enumeration or provisioning proof.",
+    "independent_tests": 15,
+    "independent_exit_code": 0,
+    "parent_scratch_spot_tests": 15,
+    "parent_scratch_spot_exit_code": 0
+  },
+  "assisted_executor": {
+    "status": "synthetic_checks_passed_real_execution_pending",
+    "host_command": "PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 .venv/bin/python -B backend/scripts/provision_training_postgres.py --state-dir <NEW_PRIVATE_ABSOLUTE_DIRECTORY> --create-persistent",
+    "synthetic_suite_cases": 63,
+    "synthetic_exit_code": 0,
+    "standalone_help_exit_code": 0,
+    "docker_executed_by_agent": false,
+    "real_probe_pending": [
+      "new PostgreSQL initialization and writer/identity rejection",
+      "application inventory unchanged under read-only CLI check",
+      "quarantine connection rejection",
+      "Python3.12 image and credential-file permissions"
+    ],
+    "independent_verification": "passed_synthetic_only",
+    "limits": "Docker boundary emulation is not a successful PostgreSQL test or persistent creation.",
+    "independent_cases": 63,
+    "independent_exit_code": 0,
+    "parent_independent_probe_exit_code": 0
+  }
+}

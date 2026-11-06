@@ -1,0 +1,57 @@
+# Standalone project. NEVER merge with the application's Compose files.
+# Preflight must reject existing resources before the first creation.
+name: fama-training-dev
+services:
+  db:
+    image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+    restart: "no"
+    environment:
+      POSTGRES_USER: fama_training_bootstrap
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_admin_password
+    secrets:
+      - pg_admin_password
+    volumes:
+      - training_pgdata:/var/lib/postgresql/data
+    networks:
+      - bootstrap
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "fama_training_bootstrap", "-d", "postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  bootstrap:
+    profiles: ["bootstrap"]
+    build:
+      context: ${FAMA_TRAINING_BUILD_CONTEXT:?A new source-only build context is required}
+      dockerfile: Dockerfile
+    image: ${COMPOSE_PROJECT_NAME}-bootstrap:local
+    restart: "no"
+    user: "${FAMA_TRAINING_UID:?A non-root host UID is required}:${FAMA_TRAINING_GID:?A host GID is required}"
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,mode=1777
+    environment:
+      PYTHON_DOTENV_DISABLED: "1"
+      PGPASSFILE: /run/secrets/pg_client_passfile
+      HOME: /tmp
+    secrets:
+      - pg_client_passfile
+    networks:
+      - bootstrap
+
+volumes:
+  training_pgdata:
+
+networks:
+  bootstrap:
+    internal: true
+
+secrets:
+  pg_admin_password:
+    file: ${FAMA_TRAINING_PASSWORD_FILE:?A new private PostgreSQL password file is required}
+  pg_client_passfile:
+    file: ${FAMA_TRAINING_PGPASS_FILE:?A new private client passfile is required}
