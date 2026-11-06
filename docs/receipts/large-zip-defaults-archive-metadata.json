@@ -1,0 +1,18 @@
+{
+  "state_directory": ".large-zip-defaults-c61e47fd02eb59b5",
+  "archive_bytes": 5620955136,
+  "archive_metadata_read_only": true,
+  "extracted": false,
+  "inside_bubblewrap_seccomp_prlimit": true,
+  "exit_code": 0,
+  "metadata": {
+    "entries": 1197,
+    "files": 1197,
+    "expanded_bytes": 8576175072,
+    "largest_member_bytes": 80337370,
+    "wav_files": 1197,
+    "root_class_count": 15,
+    "all_files_direct_class_folders": true
+  },
+  "stderr": ""
+}

@@ -1,0 +1,34 @@
+{
+  "target_import": "da4fdcb920db4a9d88c68a96269cbebd",
+  "before": "receiving",
+  "after": "cancelled",
+  "operation": "owner_authenticated_supported_cancel_endpoint",
+  "database": "fama_training_dev_20261105153618",
+  "rate_limit_changed": false,
+  "rate_limit_reset": false,
+  "other_imports_mutated": false,
+  "dataset_deleted": false,
+  "session_closed": true,
+  "steps": [
+    {
+      "path": "/api/auth/web/login",
+      "status": 200
+    },
+    {
+      "path": "/api/ingestion/imports/da4fdcb920db4a9d88c68a96269cbebd",
+      "status": 200
+    },
+    {
+      "path": "/api/ingestion/imports/da4fdcb920db4a9d88c68a96269cbebd/cancel",
+      "status": 200
+    },
+    {
+      "path": "/api/ingestion/imports/da4fdcb920db4a9d88c68a96269cbebd",
+      "status": 200
+    },
+    {
+      "path": "/api/auth/web/logout",
+      "status": 204
+    }
+  ]
+}

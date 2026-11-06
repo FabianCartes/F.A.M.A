@@ -1,0 +1,37 @@
+{
+  "base_commit": "1470f7e0c37ad30ebc80339f744511b1a45ed4f9",
+  "exit_code": 0,
+  "modes": [
+    [],
+    [
+      "--local-only"
+    ],
+    [
+      "--cleanup-only"
+    ],
+    [
+      "--local-only",
+      "--execution-seconds",
+      "900"
+    ],
+    [
+      "--local-only",
+      "--watch",
+      "--poll-seconds",
+      "1"
+    ],
+    [
+      "--watch"
+    ],
+    [
+      "--cleanup-only",
+      "--execution-seconds",
+      "900"
+    ]
+  ],
+  "exact_exit_stdout_stderr_compared": true,
+  "sqlite_memory_only": true,
+  "committed_tests_read_git": false,
+  "scratch_removed_on_exit": true,
+  "help_default_change_is_requested_and_covered_separately": true
+}

@@ -66,18 +66,16 @@ para los seis roles, activación explícita y requisitos SSD/TMPDIR/cachés.
 `backend/config/local-large-zip.sh` es solo un perfil numérico candidato, nunca se
 carga automáticamente: requiere >=48 GiB libres, pool calificado 26 GiB más piso
 y worker con `--execution-seconds 900` explícito. No habilita exports ni acredita
-prueba con ZIP grande. El default del worker sigue siendo 300 s.
+prueba con ZIP grande. El default del worker es ahora 1800 s; `--execution-seconds 900` sigue siendo una selección explícita válida, no el valor predeterminado.
 
 ## Uso
 
 1. En **Gestión de audios**, pulsa **Importar dataset**, junto a **Descargar desde GCS
    para entrenamiento local**. Lee las instrucciones y límites en la ventana modal y pulsa
    **Importar dataset** dentro de ella para mostrar el formulario. No hay formulario
-   de login en el importador: la vista de acceso y la política de roles están
-   pendientes de integración. Para probar sin sesión, el operador debe habilitar
-   explícitamente el modo local descrito más abajo. Fuera de ese modo, el backend
-   conserva la autenticación; el panel puede recibir una sesión de la futura vista
-   de acceso, pero todavía no está conectado a ella.
+   de login en el importador: usa la sesión web del proyecto o Bearer para la API.
+   La admisión anónima está deshabilitada, incluso con flags locales antiguos.
+   Importa y entrena con la misma cuenta real para conservar la propiedad del dataset.
 2. Introduce el nombre del nuevo dataset privado y, opcionalmente, su descripción.
    El formulario no ofrece añadir audios a un dataset existente: esa función queda
    pospuesta en la interfaz, sin retirar el soporte del backend. La recuperación de
@@ -168,15 +166,25 @@ El worker manual `--local-only` no ejecuta exportaciones.
 
 ## Configuración del operador
 
-### Excepción de desarrollo local
+### Desarrollo local autenticado
 
-El modo sin login está **desactivado por defecto**. Requiere estas dos variables
-en el proceso del backend:
+La importación anónima está **deshabilitada**. `/api/ingestion/imports/access`
+conserva su formato y devuelve `development_mode: false`. Ni loopback ni
+`FAMA_IMPORT_DEV_MODE=1` ni `FAMA_IMPORT_DEV_FRONTEND_IP` conceden identidad.
+Las operaciones privadas de importación y exportación exigen una cuenta real
+mediante sesión web o Bearer. Los datasets antiguos del propietario reservado
+`-1` se conservan, sin reasignarlos ni exponerlos a otras cuentas.
 
-```bash
-FAMA_ENV=development
-FAMA_IMPORT_DEV_MODE=1
-```
+El almacenamiento local y el worker `--local-only` siguen siendo independientes
+de la autenticación. El flag antiguo puede seguir siendo requerido por el
+checker del launcher de desarrollo; ya no habilita solicitudes anónimas.
+
+**Recetas históricas:** los procedimientos siguientes que indican «sin sesión»
+o usan el launcher de colección anónima ya no son un recorrido operativo vigente.
+No ejecutarlos para preparar el nuevo entorno principal. El launcher antiguo
+puede esperar una capacidad que ya está deshabilitada; su adaptación queda fuera
+de este cambio. Para la nueva base, usar el procedimiento autenticado y acordar
+los efectos antes de ejecutar DDL o cambiar conexiones.
 
 #### Prueba manual aislada con worker externo
 
@@ -252,6 +260,70 @@ configuración, sin ampliar la guarda del frontend ni alterar redes ajenas.
 La prueba nativa del sandbox ya ejecutada solo acredita su alcance sintético local.
 La comprobación completa con `TestClient` requiere `httpx`, ausente en el entorno
 inspeccionado; no se instala automáticamente ni se presenta como aprobada.
+
+#### Base nueva para desarrollo de entrenamiento
+
+`prepare_zip_manual_database.py` también admite, solo mediante
+`--training-development`, una base PostgreSQL nueva cuyo nombre siga exactamente
+`fama_training_dev_` y catorce dígitos. Requiere `--expected-system-id` y
+`--expected-database-oid`: enteros decimales positivos sin ceros iniciales,
+obtenidos y comprobados previamente por el operador. Antes de inicializar o
+comprobar, consulta el nombre y OID conectados y el identificador del clúster;
+si no coinciden, falla sin inicializar. La cuenta debe poder consultar
+`pg_control_system()`. Los destinos permitidos son `db:5432`,
+`172.30.252.30:5432` y, solo en este modo, `172.30.253.30:5432`; no se admiten
+parámetros en la URL. Sin opt-in se conserva exclusivamente el destino manual
+anterior y su guarda original.
+
+Ejemplo esquemático: proporcionar `--database-url <URL_SIN_CREDENCIALES_REALES>`
+`--training-development --expected-system-id <ID_VERIFICADO>`
+`--expected-database-oid <OID_VERIFICADO>` y `--check`, o bien
+`--initialize --writers-stopped` únicamente para una base vacía autorizada y con
+los escritores detenidos. Los marcadores no son valores ejecutables. No repetir
+una inicialización para reparar datos ni interpretar esta opción como autorización
+para modificar la base anterior o acceder a GCS.
+
+En este modo, `--initialize` añade después de ZIP los esquemas de snapshots,
+procedencia del modelo importado y sesiones/cuotas/auditoría, reutilizando sus
+migradores explícitos. `--check` los verifica sin repararlos y devuelve
+`training_schema_and_markers`; sin opt-in conserva `schema_and_markers` del ZIP.
+No crea cuentas, preparados ni datos de ejemplo. `--writers-stopped` sigue siendo
+una declaración del operador, no una exclusión de conexiones. Un fallo intermedio
+puede dejar etapas ya creadas: conservar el estado y no repetir la inicialización.
+
+#### Pendientes antes de convertir la base en principal
+
+1. Acordar el clúster destino y los efectos. Una base creada desde `template0`
+   comienza sin objetos de usuario, pero eso no impide escritores posteriores.
+   En el clúster compartido, permisos/advisory locks/CONNECTION LIMIT no excluyen
+   administradores privilegiados; no presentarlos como garantía absoluta.
+2. Definir una ventana exclusiva verificable: API y workers detenidos, admisión
+   de conexiones restringida al bootstrap y ausencia de sesiones ajenas; mantener
+   esa restricción durante todas las etapas. Las sesiones observadas en un instante
+   no acreditan por sí solas exclusividad continua. Si no se pueden controlar los
+   clientes privilegiados, considerar un clúster de desarrollo separado, con su
+   coste adicional de servicio/volumen y configuración; aún no está seleccionado.
+3. Ejecutar creación e inicialización solo después de autorizar los recursos
+   concretos. Mantener la base anterior, su backup y la base ya creada sin cambios.
+   Registrar nombre/OID/system identifier del destino y usar el CLI protegido.
+4. Verificar tablas y marcadores, cuenta/sesión real, directorios absolutos durables
+   de importación/snapshots/preparados y permisos para API y workers. Inicializar
+   esquemas no crea audios, cuenta, grupos ni preparados.
+5. Acordar el reinicio de procesos y el cambio común de DATABASE_URL. Antes del
+   arranque, controlar seeding y el worker de feedback con capacidad GCS. Un arranque
+   normal no cumple por sí solo el requisito de no tocar GCS. Ante error, detener
+   procesos nuevos y conservar estado; no arrancar automáticamente el runtime
+   anterior, que puede reactivar efectos cloud.
+6. Comprobar con la misma identidad importación confirmada → visible/bloqueos →
+   preparación explícita → admisión → entrenamiento → métricas/checkpoint. Ninguna
+   respuesta de inicio prueba las etapas posteriores. Inferencia UI y su requisito
+   GCS permanecen como trabajo posterior separado.
+
+Fuentes de las restricciones: [CREATE DATABASE](https://www.postgresql.org/docs/16/sql-createdatabase.html),
+[atributos de roles](https://www.postgresql.org/docs/16/role-attributes.html) y
+[admisión de conexiones](https://www.postgresql.org/docs/16/auth-pg-hba-conf.html).
+Este checklist es diseño pendiente de prueba operacional, no un procedimiento
+ya ejecutado ni una autorización para modificar el servidor.
 
 #### Desarrollo habitual con worker en segunda terminal
 
@@ -394,33 +466,12 @@ Los datos de prueba permanecen separados y no se borran ni transfieren a cuentas
 
 #### Desarrollo directo sin Docker
 
-Usa una base y un directorio persistente de pruebas. Arranca el backend enlazado
-solo a `127.0.0.1` o `::1`, con ambas variables y `--no-proxy-headers`, sin proxy
-ni túnel. No definas `FAMA_IMPORT_DEV_FRONTEND_IP` en ese modo.
-La guarda usa el peer ASGI real: no publicar esta facilidad en servidores compartidos.
-Quien controla Docker o la máquina, o puede acceder al frontend de desarrollo,
-no queda aislado por esta excepción. No es autenticación entre contenedores.
-
-- `FAMA_IMPORT_DEV_MODE=1` sin `FAMA_ENV=development` rechaza las rutas del importador
-  con 503. Un cliente fuera de loopback y del peer exacto configurado recibe 403; las rutas no confían
-  en `Host`, `Forwarded` ni `X-Forwarded-For` para admitirlo.
-- Solo se sustituye la identidad de las solicitudes de importación sin credenciales.
-  Se reserva el propietario `-1`, sin crear cuentas ni reutilizar usuarios reales.
-  Todas las sesiones locales sin login comparten esa identidad: **no hay aislamiento
-  entre navegadores o personas que accedan a ese mismo backend local**.
-- Los filtros por propietario se conservan en consulta, ampliación, confirmación,
-  cancelación, descarga y sincronización. No se da acceso a colecciones de cuentas
-  reales ni al catálogo legacy como destino. Un Bearer presente se valida normalmente;
-  si es inválido, no se convierte en una solicitud anónima local.
-- `GET /api/ingestion/imports/access` solo informa `development_mode`; no lista
-  usuarios, datasets ni límites. El frontend consulta esa capacidad antes de habilitar
-  el formulario. No existe un interruptor de bypass controlado por el navegador.
-- Quita `FAMA_IMPORT_DEV_MODE` o usa `0` y reinicia el backend para volver al acceso
-  autenticado. Los objetos locales de desarrollo permanecen con propietario `-1`;
-  no se transfieren automáticamente a ninguna cuenta.
-
-Esta excepción no desactiva `/api/auth/me` ni la autenticación de otras rutas,
-no prepara entrenamiento y no concede autorización para operaciones reales en GCS.
+Usa una cuenta real y almacenamiento persistente privado. No habilites el acceso
+anónimo: los flags históricos no lo restablecen. Credenciales inválidas no
+conceden acceso ni permiten volver a una identidad de desarrollo. Iniciar el
+backend habitual puede ejecutar seeding y sincronización de feedback; no equivale
+a un entorno aislado sin GCS. No arrancarlo durante un bootstrap con escritores
+detenidos.
 
 ### Almacenamiento y límites
 
@@ -436,14 +487,14 @@ configuran como enteros positivos mediante `FAMA_IMPORT_<CAMPO_EN_MAYÚSCULAS>`:
 
 | Campo | Valor por defecto |
 |---|---:|
-| `RECEIVED_BYTES` | 67.108.864 |
-| `EXPANDED_BYTES` | 268.435.456 |
+| `RECEIVED_BYTES` | 6.442.450.944 (6 GiB) |
+| `EXPANDED_BYTES` | 10.737.418.240 (10 GiB) |
 | `ENTRIES` | 2.000 |
 | `DEPTH` | 12 |
 | `PATH_BYTES` | 240 bytes UTF-8 |
-| `AUDIO_BYTES` | 33.554.432 |
+| `AUDIO_BYTES` | 100.663.296 (96 MiB) |
 | `AUDIO_SECONDS` | 600 |
-| `VALIDATION_SECONDS` | 60 |
+| `VALIDATION_SECONDS` | 900 |
 | `FREE_BYTES` | 536.870.912 |
 | `TTL_SECONDS` | 86.400 |
 | `CONCURRENT_IMPORTS` | 4 solicitudes activas globales |
@@ -463,8 +514,9 @@ fallback. El presupuesto cooperativo del motor interno no es por sí solo un san
 La sincronización conserva sus límites cooperativos y no queda contenida por T4.
 Consulte [prerrequisitos, límites y comprobación T4](trabajos-importacion-datasets.md#t4-validacion-zip64-contenida)
 antes de operar; esta entrega local no acredita el entorno desplegado.
-El proxy actual admite 110 MiB; aumentar el límite recibido sobre ese valor requiere
-revisar el proxy por separado. No se modifica su configuración en esta entrega.
+El proxy admite 110 MiB por petición. La recepción fragmentada usa bloques de16MiB, no una petición de6GiB, y la validación se admite como trabajo asíncrono. El endpoint legacy de archivo completo no permite eludir el límite por petición del proxy; para ZIP grandes usar la recepción fragmentada de la interfaz. No se aumenta el body del proxy ni se elimina su timeout.
+
+El worker dispone de1800s cooperativos por intento por defecto, frente a900s de validación; el margen también cubre hash y publicación, pero no garantiza rendimiento ni finalización de un archivo concreto. Lease60s y heartbeat20s no cambian. Los valores explícitos menores y las guardas de cuotas/espacio siguen aplicándose. El archivo de5.620.955.136bytes cabe numéricamente; su admisión no acredita integridad, calidad, importación completa ni entrenamiento.
 
 ## Persistencia y recuperación
 

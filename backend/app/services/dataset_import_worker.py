@@ -28,7 +28,7 @@ class ImportJobWorker:
     """
 
     def __init__(self, queue, staging_root, execute, *, lease_seconds=60,
-                 execution_seconds=300, heartbeat_wait=None):
+                 execution_seconds=1800, heartbeat_wait=None):
         self.queue, self.root, self.execute = queue, _private_root(staging_root), execute
         self.lease_seconds = lease_duration(lease_seconds)
         self.execution_seconds = lease_duration(execution_seconds)

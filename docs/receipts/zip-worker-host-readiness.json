@@ -1,0 +1,40 @@
+{
+  "state_directory": ".zip-worker-repair-1bdd65240872a605",
+  "status": "passed",
+  "runtime": "unprivileged_existing_host_project_venv",
+  "uid": 1000,
+  "production_validator_unchanged": true,
+  "sandbox_bypassed": false,
+  "docker_policy_changed": false,
+  "database_connected": false,
+  "queued_job_claimed": false,
+  "synthetic_only": true,
+  "sandbox_result": {
+    "files": [
+      {
+        "original_path": "synthetic_class/one.wav",
+        "class_name": "synthetic_class",
+        "sha256": "643f8a8dc8bd9c19225afffad2becfec5426180b3749cb208abdf1a6c8354efc",
+        "stored_name": "643f8a8dc8bd9c19225afffad2becfec5426180b3749cb208abdf1a6c8354efc.wav",
+        "size_bytes": 32044,
+        "duration_seconds": 1.0,
+        "sample_rate": 16000,
+        "duplicate": false
+      }
+    ],
+    "errors": [],
+    "warnings": [
+      {
+        "path": "synthetic_class",
+        "code": "small_class"
+      }
+    ],
+    "classes": [
+      "synthetic_class"
+    ],
+    "unique_count": 1,
+    "duplicate_count": 0,
+    "fingerprint": "v1:e8cc88177a05a7a8f2431aa52dd544e9a9e6e06d58ba2e04c163099e975a5758"
+  },
+  "scratch_cleanup_on_exit": true
+}

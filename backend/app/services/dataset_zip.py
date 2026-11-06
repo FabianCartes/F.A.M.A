@@ -17,14 +17,14 @@ import soundfile as sf
 
 @dataclass(frozen=True)
 class ImportLimits:
-    received_bytes: int = 64 * 1024**2
-    expanded_bytes: int = 256 * 1024**2
+    received_bytes: int = 6 * 1024**3
+    expanded_bytes: int = 10 * 1024**3
     entries: int = 2000
     depth: int = 12
     path_bytes: int = 240
-    audio_bytes: int = 32 * 1024**2
+    audio_bytes: int = 96 * 1024**2
     audio_seconds: int = 600
-    validation_seconds: int = 60
+    validation_seconds: int = 900
     free_bytes: int = 512 * 1024**2
     ttl_seconds: int = 86400
     concurrent_imports: int = 4

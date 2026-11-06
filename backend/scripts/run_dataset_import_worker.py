@@ -21,7 +21,7 @@ def main(argv=None):
     parser.add_argument("--poll-seconds", type=float,
                         help="Wait between watch attempts, including idle polls (finite 1–3600 seconds; default 2).")
     parser.add_argument("--execution-seconds", type=float,
-                        help="Per-attempt cooperative execution bound in seconds (finite >0 and <=3600; default 300). Does not change the lease, validator or HTTP timeout.")
+                        help="Per-attempt cooperative execution bound in seconds (finite >0 and <=3600; default 1800). Does not change the lease, validator or HTTP timeout.")
     args = parser.parse_args(argv)
     if args.watch and not args.local_only:
         parser.error("--watch requires --local-only")

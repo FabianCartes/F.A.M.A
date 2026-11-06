@@ -1,0 +1,81 @@
+{
+  "status": "deployed_and_public_limits_verified",
+  "database": "fama_training_dev_20261105153618",
+  "api_image": "sha256:4f03fe061654a2e35d536a6c4d08a0d8dc4461adcdd1a572e72feff67b36a086",
+  "api_container_id": "cb1be90e4ff18dc0e87c5da7a652b3883901458c35704c0345c9c3a5b0489e1f",
+  "previous_container": "fama-manual-dev-44938bc83ad0184c-api-before-large-zip-c61e47fd",
+  "source_manifest": [
+    {
+      "path": "app/services/dataset_zip.py",
+      "sha256": "7c3c99bac7dc3711be6a027cfa14a8583f6d41db368605dc56472775ab3a4726"
+    },
+    {
+      "path": "app/services/dataset_import_worker.py",
+      "sha256": "f30ec41195bb3d35fdf9a57d6d48c63972237f0006c9b1f6bb9800d089b2a1f7"
+    },
+    {
+      "path": "scripts/run_dataset_import_worker.py",
+      "sha256": "c59c07a31494faa77737cd5731c21e816932ce14e112dee9eb5de4b2b1511251"
+    }
+  ],
+  "public_limits": {
+    "received_bytes": 6442450944,
+    "expanded_bytes": 10737418240,
+    "entries": 2000,
+    "depth": 12,
+    "path_bytes": 240,
+    "audio_bytes": 100663296,
+    "audio_seconds": 600,
+    "validation_seconds": 900,
+    "free_bytes": 536870912,
+    "ttl_seconds": 86400,
+    "concurrent_imports": 4,
+    "dataset_bytes": 16106127360,
+    "dataset_entries": 50000
+  },
+  "worker_unit": "fama-zip-worker-connected-large",
+  "worker_service": {
+    "ActiveState": "active",
+    "SubState": "running",
+    "TimeoutStopUSec": "30min 30s",
+    "MainPID": "285534",
+    "NoNewPrivileges": "yes"
+  },
+  "previous_worker_unit_stopped": "fama-zip-worker-connected",
+  "worker_preflight_passed": true,
+  "worker_execution_seconds_default": 1800,
+  "public_http_checks": [
+    {
+      "path": "/api/auth/web/login",
+      "status": 200
+    },
+    {
+      "path": "/api/ingestion/imports/limits",
+      "status": 200
+    },
+    {
+      "path": "/api/auth/web/logout",
+      "status": 204
+    }
+  ],
+  "initial_deploy_exit_code": 1,
+  "initial_failure": "Transient unit rejected live TimeoutStopSec set-property; API had already cut over; replaced worker unit once preserving preflight/security",
+  "bounded_recovery_attempts": 1,
+  "independent_tests": {
+    "passed": 22,
+    "exit_code": 0
+  },
+  "related_suite": {
+    "passed": 148,
+    "errors": 1,
+    "overall_pass": false,
+    "reason": "Untouched optional physical storage topology fixture not qualified"
+  },
+  "differential_existing_cli_modes_passed": 7,
+  "archive_uploaded": false,
+  "training_started": false,
+  "gcs_started": false,
+  "database_schema_or_grants_changed": false,
+  "sandbox_unchanged": true,
+  "backup_sha256": "46e7e1be45cb5ce1081e09dfb0d4d921b6d737ad66bb51b5078404eebaee22f7"
+}
