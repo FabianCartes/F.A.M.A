@@ -1,0 +1,76 @@
+{
+  "base_container_id": "b8b221691728cb98dae20f10f5eb48f0cdb9a26187a54e8925328a422d54c8d3",
+  "base_image": "sha256:48bdb637e8400506a2851f863310d13d7f3db0870987cd9895616bf273707fb9",
+  "private_storage": {
+    "root": "/runtime/imports",
+    "owner_uid": 1000,
+    "permissions": "0o700",
+    "free_bytes": 16547057664
+  },
+  "hashes": {
+    "backend/app/main.py": "945f99d983b60769185314103705bdfe3456424077c38bb56b8e33233651e6fc",
+    "backend/app/services/imported_feedback.py": "27f5caaee9a1dcdb1793dfc42c6fa53b9d9e3cb156b550f14849a9216b94d98e",
+    "backend/app/services/local_prediction_audio.py": "6c535edbbda18e3c58d6fc8588fe125cfee53043d2f5bb7b3f3f5b87907594b8",
+    "frontend/components/views/PredictionView.tsx": "e7a808c6cd9f07d7e932171ac12a966605c2e2975d95af6827e077b53406ba44"
+  },
+  "parent_backend_passed": 93,
+  "parent_frontend_passed": 457,
+  "parent_types_exit_code": 0,
+  "lint_exit_code": 1,
+  "candidate_not_deployed": false,
+  "candidate_image": "sha256:dd76085ca6dd4d0bfc141b6ae8741ed9c95e8b1c33f142e036443bb4e5af5f05",
+  "candidate_source_import_verified": true,
+  "deployed": true,
+  "api_container_id": "caf99c24e24e957b06912bb44646816d95e1640feb2e2ea76019de8ae5f2f313",
+  "rollback_container": "fama-manual-dev-44938bc83ad0184c-api-before-local-inference-s16-6922",
+  "api_health": 200,
+  "ui_http": 200,
+  "owner_private_http": 200,
+  "anonymous_private_http": 401,
+  "public_models_empty": true,
+  "served_local_status": true,
+  "protected_business_state_unchanged": true,
+  "backup_catalog_verified": true,
+  "backup_sha256": "7f748d5290b6babdee30e979e74b5b0713309abc9d99bc34dd14abda900aa0a0",
+  "independent": {
+    "backend_task": "mw54retj-9-bqir",
+    "backend_passed": 64,
+    "backend_exit_code": 0,
+    "additional_authorized_task": "mw554gkm-a-l5q2",
+    "additional_passed": 11,
+    "additional_exit_code": 0,
+    "named_gaps_closed": true,
+    "protected_paths_unchanged": 30,
+    "no_deselections": true,
+    "limits": [
+      "Synthetic CPU and SQLite only",
+      "Deterministic OS/SQL boundary interleavings, not arbitrary machine crash",
+      "Combined output does not establish separate empty stderr",
+      "Frontend and baseline differential are parent evidence, not independently rerun"
+    ],
+    "native_approval": false
+  },
+  "parent_additional_passed": 11,
+  "native_approval": false,
+  "lint_remaining": "Known unchanged ImportedTrainingPanel: 3 errors, 1 warning",
+  "no_real_prediction_training_activation_or_gcs": true,
+  "human_ui_and_real_inference_acceptance": "pending",
+  "gate_generation_observation": {
+    "backup": 17804,
+    "later_read_only": 17864,
+    "id_unchanged": 1,
+    "version_unchanged": 1,
+    "classification": "Expected volatile fencing generation: queue claim/current/heartbeat advances only generation; all other protected table and audio digests equal",
+    "source_evidence": [
+      "backend/app/models/dataset_import_job.py:12-19",
+      "backend/app/services/dataset_import_jobs.py:64-74,112,127,171-177",
+      "backend/app/services/dataset_import_worker.py:54-65"
+    ],
+    "explorer_task": "mw55xlk5-b-pnhy"
+  },
+  "prior_failures_preserved": [
+    "job17 exit1 pre-restart: overbroad probe denied administrative dataset_import_metadata_backfill SELECT; no grants changed",
+    "job18 exit1 after successful source/API/UI smoke: exact-all-state comparison included volatile import gate generation; classified from backup/current columns and source, no redeploy or data reset"
+  ],
+  "finalization": "Offline evidence reconciliation; no second deployment/restart, no check outcome hidden"
+}

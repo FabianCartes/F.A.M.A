@@ -647,21 +647,23 @@ async def predict_audio(
     file: UploadFile = File(...),
     model_id: Optional[str] = Query(
         None,
-        description="Identificador del modelo a utilizar. Si no se especifica, usa el modelo por defecto.",
+        description="ID o alias exacto del modelo; los importados requieren su propietario autenticado. Omitirlo conserva el default público.",
     ),
     dataset_name: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     registry: ModelRegistry = Depends(get_model_registry),
     request: Request = None,
+    response: Response = None,
+    credentials=Depends(security_bearer),
 ):
     """
     Recibe un archivo de audio por HTTP multipart/form-data.
     1. Valida que la extensión sea estrictamente .wav.
     2. Resuelve y valida el modelo solicitado en el ModelRegistry (falla rápido 404 si no existe).
-    3. Sube el archivo a Google Cloud Storage mediante upload_audio_to_gcp (RNF_03).
+    3. Para modelos importados conserva audio local privado; el flujo legacy conserva GCS.
     4. Ejecuta la inferencia bioacústica a través del AudioPredictor correspondiente.
     5. Inserta el registro histórico en la tabla 'prediccion' de PostgreSQL (incluyendo modelo_id).
-    6. Retorna el contrato JSON con la predicción, confirmación de GCS y trazabilidad.
+    6. Retorna persistencia local/cloud veraz; no sincroniza GCS para modelos importados.
     """
     fecha_carga = datetime.now(timezone.utc)
     # Browser names may contain POSIX or Windows paths; retain only bounded metadata.
@@ -676,9 +678,42 @@ async def predict_audio(
             detail="Formato no válido. Solo se permiten archivos de audio con extensión .wav",
         )
 
-    # 2. Validación y resolución temprana del modelo (evita subir a GCS si el modelo no existe)
+    # Public cached models retain legacy selection without a new DB preflight.
+    # Both initial and owner-scoped resolution share the HTTP error mapping.
     try:
-        predictor = registry.get(model_id)
+        try:
+            predictor = registry.get(model_id)
+        except ModelNotFoundError:
+            if not model_id or model_id == "default":
+                raise
+            from sqlalchemy import inspect
+            from sqlalchemy.exc import SQLAlchemyError
+            from urllib.parse import urlparse, unquote
+            owner_id, private_key = None, None
+            try:
+                if inspect(db.get_bind()).has_table("imported_model_source"):
+                    from app.models.imported_training_source import ImportedModelSource
+                    matches = []
+                    for model, source in db.query(Modelo, ImportedModelSource).join(
+                            ImportedModelSource, ImportedModelSource.model_id == Modelo.id_modelo).all():
+                        route = urlparse(model.ruta_binario_gcp)
+                        basename = Path(unquote(route.path) if route.scheme else model.ruta_binario_gcp).name
+                        key = f"fama_trained_model_{model.id_modelo}"
+                        if model_id in (key, str(model.id_modelo), basename, Path(basename).stem):
+                            matches.append((key, source.owner_id))
+                    if matches:
+                        user = imported_user(request, response, credentials, db)
+                        if len(matches) != 1 or user.id != matches[0][1]:
+                            raise HTTPException(status_code=404, detail="Modelo no disponible.")
+                        private_key, owner_id = matches[0][0], user.id
+                        registry.publish_from_db(db, checkpoints_root=training_service.checkpoints_dir,
+                                                 owner_id=owner_id)
+            except SQLAlchemyError:
+                db.rollback()
+                raise HTTPException(status_code=503, detail="Catálogo de modelos temporalmente no disponible.") from None
+            if private_key is None:
+                raise
+            predictor = registry.get(private_key, owner_id=owner_id)
     except ModelNotFoundError as err:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -689,6 +724,18 @@ async def predict_audio(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Modelo no disponible para inferencia: {weights_err}",
         )
+    local_store, local_owner, local_key = None, None, None
+    imported_identity = getattr(predictor, "imported_source", None)
+    if imported_identity is not None:
+        user = imported_user(request, response, credentials, db)
+        if not isinstance(imported_identity, dict) or imported_identity.get("owner_id") != user.id:
+            raise HTTPException(status_code=404, detail="Modelo no disponible.")
+        import os
+        from app.services.local_prediction_audio import LocalPredictionAudio
+        root = feedback_service.import_root or os.environ.get("FAMA_IMPORT_ROOT")
+        if not root:
+            raise HTTPException(status_code=503, detail="Almacenamiento local de inferencia no disponible.")
+        local_store, local_owner = LocalPredictionAudio(root), user.id
     lease = getattr(request.state, "inference_lease", None) if request is not None else None
     owns_lease = lease is None
     if owns_lease:
@@ -727,23 +774,27 @@ async def predict_audio(
         from uuid import uuid4
         source_filename = f"{uuid4().hex}.wav"
 
-        # 3. Persistencia en la nube: Subida a Google Cloud Storage (RNF_03)
-        try:
-            gcp_success = await upload_audio_to_gcp(
-                audio_bytes, filename=source_filename, timeout=60,
-                thread_runner=partial(lease.run, stage="upload"),
-            )
-        except Exception:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Fallo en la persistencia en Google Cloud Storage.",
-            ) from None
+        # Imported private inference is local-first. Legacy uploads retain their
+        # existing contract; no cloud attempt is made for imported predictions.
+        gcp_success = False
+        if local_store is None:
+            # 3. Persistencia en la nube: Subida a Google Cloud Storage (RNF_03)
+            try:
+                gcp_success = await upload_audio_to_gcp(
+                    audio_bytes, filename=source_filename, timeout=60,
+                    thread_runner=partial(lease.run, stage="upload"),
+                )
+            except Exception:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Fallo en la persistencia en Google Cloud Storage.",
+                ) from None
 
-        if not gcp_success:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No fue posible confirmar la subida a Google Cloud Storage.",
-            )
+            if not gcp_success:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="No fue posible confirmar la subida a Google Cloud Storage.",
+                )
 
         # 4. Keep synchronous inference off the event loop; never pass db to its thread.
         try:
@@ -761,15 +812,22 @@ async def predict_audio(
                 detail=f"Modelo '{predictor.model_id}' no disponible para inferencia: {weights_err}",
             )
 
+        if local_store is not None:
+            try:
+                local_key = await lease.run(local_store.save, local_owner, audio_bytes, stage="persist")
+            except Exception:
+                raise HTTPException(status_code=503, detail="No fue posible guardar el audio local de la predicción.") from None
+
         # 5. Persistencia relacional en PostgreSQL (Tabla 'prediccion')
         try:
             with lease.stage("persist"):
                 registro_prediccion = Prediccion(
-                    ruta_audio_prueba=f"raw_audios/{source_filename}",
+                    ruta_audio_prueba=local_key or f"raw_audios/{source_filename}",
                     etiqueta_predicha=clase,
                     confianza=confianza,
                     modelo_id=predictor.model_id,
-                    dataset_name=predictor.dataset_name,
+                    dataset_name=("imported:" + imported_identity["dataset_id"]
+                                  if local_store is not None else predictor.dataset_name),
                     nombre_original=nombre_original,
                     fecha_carga=fecha_carga,
                 )
@@ -779,9 +837,20 @@ async def predict_audio(
                 db_id = registro_prediccion.id_prediccion
         except Exception as db_save_err:
             db.rollback()
+            if local_key is not None:
+                # A failed response/refresh is not proof of a failed commit.
+                # Remove only our new file after proving no persisted reference.
+                try:
+                    referenced = db.query(Prediccion).filter_by(ruta_audio_prueba=local_key).first()
+                    if referenced is None:
+                        await lease.run(local_store.discard, local_owner, local_key, stage="persist")
+                except Exception:
+                    # Retain an uncertain source rather than delete referenced data.
+                    pass
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Fallo al registrar la predicción en PostgreSQL: {db_save_err}",
+                detail=("No fue posible registrar la predicción local." if local_store is not None
+                        else f"Fallo al registrar la predicción en PostgreSQL: {db_save_err}"),
             )
 
         # 6. Retorno del formato JSON enriquecido
@@ -810,7 +879,8 @@ async def predict_audio(
 
         return {
             "filename": filename,
-            "gcp_upload": True,
+            "gcp_upload": bool(gcp_success),
+            **({"local_audio_saved": True, "cloud_status": "deferred"} if local_key is not None else {}),
             "db_id": db_id,
             "clase": clase,
             "confianza": confianza,

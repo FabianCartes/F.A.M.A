@@ -176,15 +176,12 @@ def test_predict_corrupt_wav_returns_safe_400_without_persistence(
 
     assert response.status_code == 400, response.json()
     assert response.json() == {
-        "detail": "Audio inválido o no soportado. Proporcione un archivo WAV válido."
+        "detail": "Audio inválido. Proporcione un archivo WAV válido."
     }
-    assert isinstance(predictor.decode_error, MalformedAudioError)
-    assert isinstance(predictor.decode_error.__cause__, sf.LibsndfileError)
-    assert str(predictor.audio_path) in str(predictor.decode_error)
-    assert str(predictor.audio_path) not in response.text
-    assert not predictor.audio_path.exists()
-    assert mock_upload.await_args.args[0] == corrupt_wav
-    assert mock_upload.await_args.kwargs["filename"].endswith(".wav")
+    # The public WAV admission guard rejects malformed input before cloud or ML.
+    assert not hasattr(predictor, "audio_path")
+    assert not hasattr(predictor, "decode_error")
+    mock_upload.assert_not_awaited()
     mock_db.add.assert_not_called()
     mock_db.commit.assert_not_called()
     mock_db.refresh.assert_not_called()
@@ -227,7 +224,7 @@ def test_predict_inference_failure_never_persists_or_fabricates_success(
 
 
 @patch("app.main.upload_audio_to_gcp", new_callable=AsyncMock)
-def test_predict_unnormalized_decoder_error_stays_500_without_persistence(
+def test_predict_truncated_wav_is_rejected_before_cloud_or_inference(
     mock_upload, client, mock_registry, mock_db,
 ):
     mock_upload.return_value = True
@@ -241,9 +238,10 @@ def test_predict_unnormalized_decoder_error_stays_500_without_persistence(
         )},
     )
 
-    assert response.status_code == 500
-    assert set(response.json()) == {"detail"}
-    assert not predictor.audio_path.exists()
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Audio inválido. Proporcione un archivo WAV válido."}
+    assert not hasattr(predictor, "audio_path")
+    mock_upload.assert_not_awaited()
     mock_db.add.assert_not_called()
     mock_db.commit.assert_not_called()
     mock_db.refresh.assert_not_called()
@@ -393,8 +391,9 @@ def test_predict_rejects_persisted_model_without_hash_before_persistence(
     )
     safe_client.close()
 
-    assert response.status_code == 503
-    assert "hash SHA-256 registrado" in response.json()["detail"]
+    # Unverified database provenance is concealed before checkpoint admission.
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Modelo no disponible."}
     mock_upload.assert_not_awaited()
     mock_db.add.assert_not_called()
     mock_db.commit.assert_not_called()
@@ -437,10 +436,9 @@ def test_predict_rejects_replaced_persisted_checkpoint_without_saving_prediction
             files={"file": ("canto.wav", create_dummy_wav_bytes(), "audio/wav")},
         )
 
-    assert response.status_code == 503
-    assert "no coincide con el hash SHA-256 registrado" in response.json()["detail"]
-    assert set(response.json()) == {"detail"}
-    upload.assert_awaited_once()
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Modelo no disponible."}
+    upload.assert_not_awaited()
     mock_db.add.assert_not_called()
     mock_db.commit.assert_not_called()
     mock_db.refresh.assert_not_called()
