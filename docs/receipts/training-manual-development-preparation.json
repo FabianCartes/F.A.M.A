@@ -1,0 +1,12 @@
+{
+  "run": "44938bc83ad0184c",
+  "state_directory": ".training-manual-44938bc83ad0184c",
+  "frontend_source_copy_files": 111,
+  "frontend_dotenv_copied": false,
+  "frontend_dependency_installation": false,
+  "frontend_url": "http://127.0.0.1:3000",
+  "backend_url": "http://127.0.0.1:8000",
+  "credentials_file": ".training-manual-44938bc83ad0184c/login.json",
+  "api_started": false,
+  "frontend_started": false
+}
