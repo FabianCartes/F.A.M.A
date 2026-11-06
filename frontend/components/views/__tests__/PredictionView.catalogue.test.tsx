@@ -2,9 +2,11 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import PredictionView, { type RegisteredModel } from "../PredictionView";
 
-const bird: RegisteredModel = { id: "bird-cnn", name: "Aves CNN", description: "Aves", target_sr: 22050, duration_seconds: 5, classes: ["Chucao", "Rayadito"], is_default: true, has_weights: true };
-const engine: RegisteredModel = { id: "engine-v2", name: "Motor v2", description: "Motor", target_sr: 32000, duration_seconds: 2, classes: ["bad_ignition", "low_oil"], is_default: false, has_weights: true };
-const model11: RegisteredModel = { id: "fama_trained_model_11", name: "Modelo 11", description: "Aves nuevas", target_sr: 22050, duration_seconds: 5, classes: ["Chucao", "Rayadito", "Chincol"], is_default: false, has_weights: true };
+vi.mock('@/components/auth/SessionBoundary', () => ({ useOptionalWebSession: () => ({ id: 1 }) }));
+
+const bird: RegisteredModel = { dataset_name: 'AvesChilenas', id: "bird-cnn", name: "Aves CNN", description: "Aves", target_sr: 22050, duration_seconds: 5, classes: ["Chucao", "Rayadito"], is_default: true, has_weights: true };
+const engine: RegisteredModel = { dataset_name: 'engine_diagnostics', id: "engine-v2", name: "Motor v2", description: "Motor", target_sr: 32000, duration_seconds: 2, classes: ["bad_ignition", "low_oil"], is_default: false, has_weights: true };
+const model11: RegisteredModel = { dataset_name: 'AvesChilenas', id: "fama_trained_model_11", name: "Modelo 11", description: "Aves nuevas", target_sr: 22050, duration_seconds: 5, classes: ["Chucao", "Rayadito", "Chincol"], is_default: false, has_weights: true };
 const response = (models: RegisteredModel[], defaultId = bird.id, publication_errors: { model_id?: string; code: string; reason?: string }[] = [], catalogueFields: Record<string, unknown> = {}) => new Response(JSON.stringify({ models, total: models.length, default_model_id: defaultId, publication_errors, ...catalogueFields }), { status: 200 });
 function deferred() {
   let resolve!: (response: Response) => void;
@@ -111,6 +113,15 @@ describe("Catálogo público de Predicción", () => {
     const trained = { ...model11, name: "Aves Chilenas · EfficientNet-B0 (v2)", version: 2,
       architecture: "EfficientNet-B0", dataset: "Aves Chilenas" };
     catalogue = async () => response([trained], trained.id);
+    let persisted = false;
+    const original = global.fetch;
+    global.fetch = vi.fn(async (input, options) => {
+      if (String(input).includes('/api/inference/history')) return Response.json({
+        items: persisted ? [{ id: 201, filename: 'audio.wav', timestamp: '2026-01-01T12:00:00Z',
+          clase: 'Chucao', confianza: .9, modelo_id: trained.id }] : [], next_cursor: null,
+      });
+      return original(input, options);
+    });
     const view = await show();
     expect(selection().value).toBe("fama_trained_model_11");
     expect(selection().selectedOptions[0].textContent).toContain(trained.name);
@@ -119,8 +130,11 @@ describe("Catálogo público de Predicción", () => {
     expect(screen.queryByText("Versión no publicada")).toBeNull();
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:test");
     vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
-    predict = async () => new Response(JSON.stringify({ filename: "audio.wav", db_id: 201,
-      clase: "Chucao", confianza: 0.9, modelo: trained.name, modelo_id: trained.id, gcp_upload: true }));
+    predict = async () => {
+      persisted = true;
+      return Response.json({ filename: "audio.wav", db_id: 201,
+        clase: "Chucao", confianza: 0.9, modelo: trained.name, modelo_id: trained.id, gcp_upload: true });
+    };
     await act(async () => { fireEvent.change(view.container.querySelector('input[type="file"]')!, { target: { files: [new File(["audio"], "audio.wav")] } }); });
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Ejecutar inferencia/ })); });
     expect(screen.getByText("Modelo ejecutado:").parentElement?.textContent).toContain(trained.name);
@@ -480,10 +494,13 @@ describe("Catálogo público de Predicción", () => {
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("/api/evaluations") || String(url).includes("/api/predict"))).toBe(false);
   });
 
-  it("inicia el historial de sesión vacío, sin grabaciones demostrativas", async () => {
+  it("muestra el historial persistido vacío, sin grabaciones demostrativas", async () => {
+    const original = global.fetch;
+    global.fetch = vi.fn(async (input, options) => String(input).includes('/api/inference/history')
+      ? Response.json({ items: [], next_cursor: null }) : original(input, options));
     await show();
     expect(screen.queryByText("eugralla_paradoxa_mocha_03.wav")).toBeNull();
-    expect(screen.getByText("Sin predicciones en esta sesión.")).toBeDefined();
+    expect(screen.getByText("Sin predicciones guardadas para este modelo.")).toBeDefined();
   });
   it("no selecciona un predeterminado sin pesos y lo muestra deshabilitado", async () => {
     const unavailable = { ...bird, id: "missing-bird", name: "Modelo sin pesos", has_weights: false };

@@ -2,6 +2,8 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import PredictionView, { type RegisteredModel } from "../PredictionView";
 
+vi.mock('@/components/auth/SessionBoundary', () => ({ useOptionalWebSession: () => ({ id: 1 }) }));
+
 const registeredA = "a".repeat(64);
 const loadedB = "b".repeat(64);
 const reportC = "c".repeat(64);

@@ -1,7 +1,10 @@
 "use client";
 
+import { getPredictionHistory } from "@/lib/api/predictionHistory";
+
 import { useState, useEffect, useMemo, useRef, useCallback, ChangeEvent, FormEvent } from "react";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, apiSessionRevision, notifyUnauthorized } from "@/lib/api";
+import { useOptionalWebSession } from '@/components/auth/SessionBoundary';
 import { ApiConnectionError, sendFeedback } from "@/lib/api/feedbackApi";
 
 interface AudioWaveformStats {
@@ -57,6 +60,8 @@ interface PredictionResponse {
   detalles?: { dataset_name?: string | null; loaded_checkpoint_sha256?: unknown; device?: string | null } | null;
   filename: string;
   gcp_upload: boolean;
+  local_audio_saved?: boolean;
+  cloud_status?: "deferred";
   db_id?: number | null;
   clase: string;
   confianza: number;
@@ -142,6 +147,7 @@ export interface RegisteredModel {
   name: string;
   architecture?: string | null;
   dataset?: string | null;
+  dataset_name?: string | null;
   version?: number | null;
   description: string;
   target_sr: number;
@@ -499,6 +505,26 @@ function PredictionFeedback({ prediction }: { prediction: CurrentPrediction }) {
 }
 
 export default function PredictionView() {
+  const user = useOptionalWebSession();
+  const revision = apiSessionRevision();
+  // Reset all private state, including evaluation, feedback and history, before paint.
+  return <PrivatePredictionView key={`${user?.id ?? 'anonymous'}:${revision}`} authenticated={!!user} revision={revision} />;
+}
+
+function privateApiSameOrigin() {
+  return new URL(API_BASE_URL || '/', window.location.origin).origin === window.location.origin;
+}
+
+function PrivatePredictionView({ authenticated, revision }: { authenticated: boolean; revision: number }) {
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+  const sessionCurrent = useCallback(
+    () => mounted.current && authenticated && revision === apiSessionRevision(),
+    [authenticated, revision]
+  );
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [result, setResult] = useState<CurrentPrediction | null>(null);
@@ -510,6 +536,8 @@ export default function PredictionView() {
   const [availableModels, setAvailableModels] = useState<RegisteredModel[]>([]);
   const [selectionState, setSelectionState] = useState({ modelId: "", evaluationDialogOpen: false, evaluationDialogModelId: null as string | null });
   const selectedModelId = selectionState.modelId;
+  const historySelectedModel = useRef(selectedModelId);
+  historySelectedModel.current = selectedModelId;
   const [catalogueError, setCatalogueError] = useState<string | null>(null);
   const [catalogueLoaded, setCatalogueLoaded] = useState(false);
   const [evaluationCatalogueStatus, setEvaluationCatalogueStatus] = useState<"available" | "unavailable" | "legacy">("legacy");
@@ -537,8 +565,10 @@ export default function PredictionView() {
   const hasUnavailableModels = availableModels.some((model) => model.has_weights !== true);
 
   const selectedDomain = useMemo(() => {
-    return resolveModelDomain(selectedModel, selectedModelId);
-  }, [selectedModel, selectedModelId]);
+    // Only the published canonical destination may enter the payload.
+    // Private labels/IDs are arbitrary and cannot establish a dataset identity.
+    return selectedModel?.dataset_name || '';
+  }, [selectedModel]);
 
   const evaluationDialogVisible = selectionState.evaluationDialogOpen && selectionState.evaluationDialogModelId === selectedModelId;
   useEffect(() => {
@@ -606,14 +636,6 @@ export default function PredictionView() {
   const formattedSr = targetSr != null && targetSr > 0 ? `${targetSr / 1000} kHz` : "frecuencia no publicada";
   const formattedSrHz = targetSr != null && targetSr > 0 ? `${targetSr.toLocaleString("es-CL")} Hz` : "frecuencia no publicada";
 
-  const bioModels = useMemo(() => {
-    return availableModels.filter((m) => resolveModelDomain(m, m.id) === "AvesChilenas");
-  }, [availableModels]);
-
-  const engineModels = useMemo(() => {
-    return availableModels.filter((m) => resolveModelDomain(m, m.id) === "engine_diagnostics");
-  }, [availableModels]);
-
   // Telemetría de selección; no modifica la activación del catálogo.
   useEffect(() => {
     if (selectedModel) {
@@ -626,6 +648,7 @@ export default function PredictionView() {
 
   // Cada entrada o regreso consulta el catálogo; la última solicitud prevalece.
   useEffect(() => {
+    if (!authenticated) return;
     let generation = 0;
     let controller: AbortController | undefined;
     let previousModels: RegisteredModel[] = [];
@@ -634,7 +657,11 @@ export default function PredictionView() {
       controller?.abort();
       controller = new AbortController();
       try {
-        const res = await fetch(`${API_BASE_URL}/api/models`, { signal: controller.signal });
+        if (!sessionCurrent()) return;
+        if (!privateApiSameOrigin()) throw new Error('Los recursos privados requieren API del mismo origen.');
+        const res = await fetch(`${API_BASE_URL}/api/models?private_only=true`, { credentials: 'same-origin', signal: controller.signal });
+        if (request !== generation || !sessionCurrent()) return;
+        if (res.status === 401) notifyUnauthorized(revision);
         if (!res.ok) {
           let databaseUnavailable = false;
           try {
@@ -647,7 +674,7 @@ export default function PredictionView() {
           throw new Error(`HTTP ${res.status}${databaseUnavailable ? " database_unavailable" : ""}`);
         }
         const data = await res.json();
-        if (request !== generation) return;
+        if (request !== generation || !sessionCurrent()) return;
         if (!Array.isArray(data.models)) throw new Error("invalid_catalogue");
         setCatalogueError(null);
         setCatalogueLoaded(true);
@@ -684,7 +711,7 @@ export default function PredictionView() {
           };
         });
       } catch (err) {
-        if (request !== generation) return;
+        if (request !== generation || !sessionCurrent()) return;
         const errorMessage = err instanceof Error ? err.message : "";
         const statusMatch = errorMessage.match(/^HTTP (\d{3})(?: database_unavailable)?$/);
         const status = statusMatch ? ` (HTTP ${statusMatch[1]})` : "";
@@ -702,9 +729,10 @@ export default function PredictionView() {
       window.removeEventListener("focus", fetchModels);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, []);
+  }, [authenticated, revision, sessionCurrent]);
 
   useEffect(() => {
+    if (!authenticated || !selectedDomain || !privateApiSameOrigin()) return;
     let cancelled = false;
     async function fetchModelStatus() {
       try {
@@ -725,7 +753,7 @@ export default function PredictionView() {
     }
     fetchModelStatus();
     return () => { cancelled = true; };
-  }, [selectedDomain]);
+  }, [authenticated, selectedDomain]);
 
   useEffect(() => {
     return () => {
@@ -908,6 +936,51 @@ export default function PredictionView() {
   }, [currentTime, audioStats]);
 
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [historyModel, setHistoryModel] = useState('');
+  const [historyCursor, setHistoryCursor] = useState<number | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const historyRequest = useRef<{ sequence: number; controller: AbortController | null }>({ sequence: 0, controller: null });
+  const loadHistory = useCallback(async (cursor: number | null = null) => {
+    if (!sessionCurrent() || !selectedModelId || !privateApiSameOrigin()) return;
+    historyRequest.current.controller?.abort();
+    const controller = new AbortController();
+    const sequence = ++historyRequest.current.sequence;
+    historyRequest.current.controller = controller;
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const page = await getPredictionHistory(selectedModelId, controller.signal, cursor);
+      if (!sessionCurrent() || controller.signal.aborted || sequence !== historyRequest.current.sequence) return;
+      const records: HistoryItem[] = page.items.map(item => ({
+        id: item.id, filename: item.filename, timestamp: new Date(item.timestamp).toLocaleString(),
+        clase: item.clase, confianza: item.confianza, modelo: selectedModel?.name || item.modelo_id,
+      }));
+      setHistory(previous => cursor === null ? records : [...previous,
+        ...records.filter(item => !previous.some(existing => existing.id === item.id))]);
+      setHistoryModel(selectedModelId);
+      setHistoryCursor(page.next_cursor);
+    } catch (error) {
+      if (sessionCurrent() && !controller.signal.aborted && sequence === historyRequest.current.sequence)
+        setHistoryError(error instanceof Error ? error.message : 'No se pudo cargar el historial.');
+    } finally {
+      if (sessionCurrent() && !controller.signal.aborted && sequence === historyRequest.current.sequence)
+        setHistoryLoading(false);
+    }
+  }, [selectedModelId, selectedModel?.name, sessionCurrent]);
+
+  useEffect(() => {
+    setHistory([]);
+    setHistoryModel(selectedModelId);
+    setHistoryCursor(null);
+    setHistoryError(null);
+    setHistoryLoading(false);
+    setSearchTerm('');
+    setClassFilter('all');
+    void loadHistory();
+    return () => { historyRequest.current.controller?.abort(); historyRequest.current.sequence++; };
+  }, [loadHistory, selectedModelId]);
+
 
   const handleFileSelection = useCallback(
     (selectedFile: File | null) => {
@@ -958,6 +1031,7 @@ export default function PredictionView() {
 
   const handleExecuteInference = async (e: FormEvent) => {
     e.preventDefault();
+    if (!sessionCurrent() || !privateApiSameOrigin()) return;
     if (!file) {
       setError("Carga un archivo de audio .wav antes de ejecutar la inferencia.");
       return;
@@ -998,9 +1072,12 @@ export default function PredictionView() {
       const queryParam = selectedModelId ? `?model_id=${encodeURIComponent(selectedModelId)}` : "";
       const response = await fetch(`${API_BASE_URL}/api/predict${queryParam}`, {
         method: "POST",
+        credentials: 'same-origin',
         body: formData,
       });
 
+      if (!sessionCurrent()) return;
+      if (response.status === 401) notifyUnauthorized(revision);
       let data;
       try {
         data = await response.json();
@@ -1009,6 +1086,7 @@ export default function PredictionView() {
         data = null;
       }
 
+      if (!sessionCurrent() || sequence !== inferenceSequence.current) return;
       if (!response.ok) {
         const detail = data?.detail;
         const messages = (Array.isArray(detail) ? detail : [detail]).map((item) => {
@@ -1050,11 +1128,22 @@ export default function PredictionView() {
 
         confianza: predData.confianza,
         modelo: predData.modelo || "No informado por la API",
-        domain: isEngine ? "engine_diagnostics" : "AvesChilenas",
+        domain: isEngine ? "engine_diagnostics" : selectedDomain,
       };
 
-      setHistory((prev) => [newItem, ...prev]);
+      if (historySelectedModel.current === inferenceModelId) {
+        if (/^fama_trained_model_[1-9][0-9]*$/.test(inferenceModelId)) {
+          // Imported history is authoritative server metadata, never an optimistic
+          // inference response (which may be unpersisted or identify another model).
+          void loadHistory();
+        } else if (!modelMismatch) {
+          // Preserve the existing ephemeral legacy view outside imported history.
+          setHistory((prev) => [newItem, ...prev.filter(item => newItem.id === null || item.id !== newItem.id)]);
+          setHistoryModel(inferenceModelId);
+        }
+      }
     } catch (err: unknown) {
+      if (!sessionCurrent() || sequence !== inferenceSequence.current) return;
       if (err instanceof Error) {
         setError(
           err.message.includes("Failed to fetch")
@@ -1065,11 +1154,12 @@ export default function PredictionView() {
         setError("Error inesperado en el servidor durante la inferencia.");
       }
     } finally {
-      setLoading(false);
+      if (sessionCurrent() && sequence === inferenceSequence.current) setLoading(false);
     }
   };
 
-  const filteredHistory = history.filter((item) => {
+  const visibleHistory = historyModel === selectedModelId ? history : [];
+  const filteredHistory = visibleHistory.filter((item) => {
     const matchesSearch = item.filename.toLowerCase().includes(searchTerm.toLowerCase());
     const translatedName = ENGINE_FAULT_LABELS[item.clase] || "";
     const matchesClass =
@@ -1112,24 +1202,13 @@ export default function PredictionView() {
               {availableModels.length > 0 ? (
                 <>
                   {!hasSelectableModels && <option value="" disabled>Sin modelos con pesos disponibles</option>}
-                  {bioModels.length > 0 && (
-                    <optgroup label="Bioacústica (Aves Chilenas)">
-                      {bioModels.map((m) => (
-                        <option key={m.id} value={m.id} disabled={m.has_weights !== true} className="bg-[#16171b] text-white">
-                          {m.name || m.id}{m.has_weights === true ? "" : " (no disponible)"}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                  {engineModels.length > 0 && (
-                    <optgroup label="Diagnóstico Industrial (Motores)">
-                      {engineModels.map((m) => (
-                        <option key={m.id} value={m.id} disabled={m.has_weights !== true} className="bg-[#16171b] text-white">
-                          {m.name || m.id}{m.has_weights === true ? "" : " (no disponible)"}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
+                  <optgroup label="Mis modelos">
+                    {availableModels.map((m) => (
+                      <option key={m.id} value={m.id} disabled={m.has_weights !== true} className="bg-[#16171b] text-white">
+                        {m.name || m.id}{m.has_weights === true ? "" : " (no disponible)"}
+                      </option>
+                    ))}
+                  </optgroup>
                 </>
               ) : (
                 <option value="">Sin modelos disponibles</option>
@@ -1222,7 +1301,7 @@ export default function PredictionView() {
               <span className="font-bold text-white">
                 {isEngineModel
                   ? "Grupo seleccionado: Diagnóstico Acústico de Motores"
-                  : "Grupo seleccionado: Bioacústica de Aves Chilenas"}
+                  : selectedDomain === 'AvesChilenas' ? "Grupo seleccionado: Bioacústica de Aves Chilenas" : "Grupo seleccionado: Mis modelos"}
               </span>
               <span
                 className={`text-[10px] font-mono px-2 py-0.5 rounded font-semibold border ${
@@ -1953,6 +2032,11 @@ export default function PredictionView() {
               {/* Metadatos de persistencia y trazabilidad */}
               <div className="pt-2 border-t border-[#23252e] flex items-center justify-between text-[11px] text-gray-400">
                 <span className="font-mono">{result.db_id ? `Predicción #${result.db_id}` : "Predicción sin ID registrado"}</span>
+                {result.local_audio_saved === true && result.cloud_status === "deferred" && (
+                  <span className="text-green-400 text-[10px]">
+                    Guardado local · GCS diferido
+                  </span>
+                )}
                 {result.gcp_upload && (
                   <span className="text-blue-400 flex items-center gap-1 text-[10px]">
                     ● Google Cloud Storage
@@ -1984,7 +2068,7 @@ export default function PredictionView() {
 
       {/* Fila 3: Historial de Predicciones */}
       <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4">
-        <span className="text-xs text-gray-300 font-semibold block">Historial de predicciones de esta sesión</span>
+        <span className="text-xs text-gray-300 font-semibold block">Historial de predicciones del modelo seleccionado</span>
 
         {/* Filtros de Búsqueda y Clases */}
         <div className="flex flex-col sm:flex-row gap-2.5">
@@ -2027,7 +2111,12 @@ export default function PredictionView() {
 
         {/* Lista de Registros */}
         <div className="space-y-2">
-          {history.length === 0 && <p className="text-xs text-gray-400">Sin predicciones en esta sesión.</p>}
+          {historyLoading && <p role="status" className="text-xs text-gray-400">Cargando historial…</p>}
+          {historyError && <p role="status" className="text-xs text-amber-400">{historyError}</p>}
+          {!historyLoading && !historyError && visibleHistory.length === 0 && <p className="text-xs text-gray-400">Sin predicciones guardadas para este modelo.</p>}
+          {historyCursor !== null && historyModel === selectedModelId && <button type="button"
+            className="text-xs text-blue-400 disabled:opacity-50" disabled={historyLoading}
+            onClick={() => void loadHistory(historyCursor)}>Cargar más predicciones</button>}
           {filteredHistory.map((item) => (
             <div
               key={`${item.timestamp}-${item.filename}-${history.indexOf(item)}`}

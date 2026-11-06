@@ -2,10 +2,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen, act, within } from "@testing-library/react";
 import PredictionView from "../PredictionView";
 
+vi.mock('@/components/auth/SessionBoundary', () => ({ useOptionalWebSession: () => ({ id: 1 }) }));
+
 const mockModels = [
-  { id: 'chilean-birds-ensemble', name: 'Aves Chilenas · Super-Ensamble', description: 'Bioacústico', target_sr: 22050, duration_seconds: 5, classes: ['Chucao', 'Rayadito'], is_default: true, has_weights: true },
+  { dataset_name: 'AvesChilenas', id: 'chilean-birds-ensemble', name: 'Aves Chilenas · Super-Ensamble', description: 'Bioacústico', target_sr: 22050, duration_seconds: 5, classes: ['Chucao', 'Rayadito'], is_default: true, has_weights: true },
   { id: 'machine-model', name: 'Clasificador de maquinaria', description: 'Individual', target_sr: 22050, duration_seconds: 5, classes: ['alarm', 'normal'], is_default: false, has_weights: true },
-  { id: 'car-engine-diagnostics-resnet34d-v2', name: 'ResNet-34d Industrial v2', description: 'Industrial', target_sr: 32000, duration_seconds: 1.5, classes: ['bad_ignition', 'low_oil'], is_default: false, has_weights: true },
+  { dataset_name: 'engine_diagnostics', id: 'car-engine-diagnostics-resnet34d-v2', name: 'ResNet-34d Industrial v2', description: 'Industrial', target_sr: 32000, duration_seconds: 1.5, classes: ['bad_ignition', 'low_oil'], is_default: false, has_weights: true },
 ];
 const panel = () => within(screen.getByRole('region', { name: 'Validar resultado' }));
 const choice = (name: string) => panel().getByRole('button', { name });
@@ -40,7 +42,7 @@ describe('PredictionView validation and responsive controls', () => {
 
   it('shows response identity, uncalibrated score and real history IDs without synthetic badges', async () => {
     const api = await preparePrediction();
-    api.setPrediction(async () => Response.json({ filename: 'actual.wav', db_id: 305, modelo: 'Executed CNN', clase: 'alarm', confianza: 0.8, gcp_upload: false }));
+    api.setPrediction(async () => Response.json({ filename: 'actual.wav', db_id: 305, modelo_id: 'machine-model', modelo: 'Executed CNN', clase: 'alarm', confianza: 0.8, gcp_upload: false }));
     await api.infer();
     expect(screen.getByText('Modelo ejecutado:').parentElement?.textContent).toContain('Executed CNN');
     expect(screen.getByText('Puntuación del modelo (sin calibración acreditada):')).toBeDefined();
@@ -311,8 +313,8 @@ describe('PredictionView validation and responsive controls', () => {
     const latency = screen.getByText('Tiempo total de solicitud: no disponible').closest('div');
     expect(latency?.className).toContain('shrink-0');
     expect(latency?.className).toContain('whitespace-nowrap');
-    expect(select.querySelector('optgroup[label="Bioacústica (Aves Chilenas)"]')).not.toBeNull();
-    expect(select.querySelector('optgroup[label="Diagnóstico Industrial (Motores)"]')).not.toBeNull();
+    expect(select.querySelector('optgroup[label="Mis modelos"]')).not.toBeNull();
+    expect(select.querySelectorAll('optgroup')).toHaveLength(1);
     expect(screen.getByText(/Audios de 5\.0s a 22\.050 Hz/)).toBeDefined();
     await act(async () => { fireEvent.change(select, { target: { value: mockModels[2].id } }); });
     expect(screen.getByText(/Grupo seleccionado: Diagnóstico Acústico de Motores/)).toBeDefined();
@@ -459,7 +461,8 @@ describe("U7IndependentStable", () => {
     expect(screen.getByRole("region", { name: "Identidad del checkpoint del resultado" }).textContent).toBe(checkpoint);
     expect(checkpoint).toContain("d".repeat(64));
     expect(screen.getByText("Modelo ejecutado:").parentElement?.textContent).toBe("Modelo ejecutado:Stable predictor (machine-model)");
-    expect(screen.getByText("ID de predicción: 902")).toBeDefined();
+    // History follows the newly selected model; the original result/review stays intact.
+    expect(screen.queryByText("ID de predicción: 902")).toBeNull();
     if (failed) expect(screen.getByRole("alert").textContent).toBe("No se pudo actualizar el catálogo de modelos (HTTP 503). Se conserva el último catálogo disponible; vuelve a esta ventana para reintentar.");
     fireEvent.click(choice("Incorrecta"));
     expect(within(panel().getByLabelText("Clase correcta")).getAllByRole("option").map(option => option.getAttribute("value"))).toEqual(["", "alarm", "normal"]);
