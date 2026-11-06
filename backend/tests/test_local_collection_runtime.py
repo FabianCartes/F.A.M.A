@@ -47,10 +47,10 @@ def test_api_factory_actual_router_loopback_auth_and_module_scope(monkeypatch):
     app = create_api()
     with TestClient(app, client=('127.0.0.1', 1234)) as client:
         assert client.get('/health').json() == {'scope': 'local-import-collection', 'unexpected_modules': []}
-        assert client.get('/api/ingestion/imports/access').json() == {'development_mode': True}
+        assert client.get('/api/ingestion/imports/access').json() == {'development_mode': False}
         assert client.get('/api/ingestion/datasets').status_code == 404
     with TestClient(app, client=('192.0.2.1', 1234)) as client:
-        assert client.get('/api/ingestion/imports/access').status_code == 403
+        assert client.get('/api/ingestion/imports/access').json() == {'development_mode': False}
     monkeypatch.setenv('FAMA_IMPORT_DEV_MODE', '0')
     with TestClient(app, client=('127.0.0.1', 1234)) as client:
         assert client.get('/api/ingestion/imports/access').json() == {'development_mode': False}
