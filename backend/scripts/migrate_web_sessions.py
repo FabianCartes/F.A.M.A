@@ -3,7 +3,7 @@
 The operator must stop writers and authorize a real migration separately.
 Only the synthetic in-memory invocation is part of development verification.
 """
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 
 from app.models.user import Usuario
 from app.models.web_session import SesionWeb
@@ -43,6 +43,34 @@ def _validate(connection, *, require_all):
         if not expected_indexes <= actual_indexes:
             raise RuntimeError("Incompatible web-session indexes")
         actual_checks = {" ".join(c["sqltext"].split()) for c in inspector.get_check_constraints(table.name)}
+        if connection.dialect.name == "postgresql":
+            # NOT VALID checks do not establish the invariant for existing rows.
+            # Require the reflected table to be in the current schema and reject
+            # every unvalidated check, including additional checks.
+            checks_valid = connection.execute(text("""
+                SELECT NOT EXISTS (
+                    SELECT 1 FROM pg_catalog.pg_constraint AS c
+                    WHERE c.conrelid = t.oid AND c.contype = 'c' AND NOT c.convalidated
+                )
+                FROM pg_catalog.pg_class AS t
+                JOIN pg_catalog.pg_namespace AS n ON n.oid = t.relnamespace
+                WHERE n.nspname = pg_catalog.current_schema()
+                  AND t.relname = :table_name
+                  AND t.relkind IN ('r', 'p')
+                  AND pg_catalog.pg_table_is_visible(t.oid)
+            """), {"table_name": table.name}).scalar_one_or_none()
+            if checks_valid is not True:
+                raise RuntimeError("Incompatible web-session checks")
+            # Accept only the exact PostgreSQL renderings of these two checks;
+            # general SQL rewriting can accidentally erase meaningful semantics.
+            reflected_checks = {
+                "(intentos > 0)": "intentos > 0",
+                "outcome::text = ANY (ARRAY['success'::character varying, 'denied'::character varying]::text[])":
+                    "outcome IN ('success', 'denied')",
+                "((outcome)::text = ANY ((ARRAY['success'::character varying, 'denied'::character varying])::text[]))":
+                    "outcome IN ('success', 'denied')",
+            }
+            actual_checks = {reflected_checks.get(check, check) for check in actual_checks}
         expected_checks = {" ".join(str(c.sqltext).split()) for c in table.constraints if hasattr(c, "sqltext")}
         if not expected_checks <= actual_checks:
             raise RuntimeError("Incompatible web-session checks")
