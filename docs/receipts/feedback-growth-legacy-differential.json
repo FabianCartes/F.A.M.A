@@ -1,0 +1,7 @@
+{
+  "base_commit": "1470f7e0c37ad30ebc80339f744511b1a45ed4f9",
+  "scope": "Seven legacy HTTP routes; baseline endpoint code from base commit in exclusive temporary directory, public TestClient, invalid Bearer input; exact status/body/headers/stdout/stderr comparison; no lifespan",
+  "exit_code": 2,
+  "committed_tests_read_git": false,
+  "scratch_removed_on_exit": true
+}

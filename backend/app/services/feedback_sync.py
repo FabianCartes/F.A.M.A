@@ -90,14 +90,16 @@ class FeedbackSyncQueue:
         db.flush()
         return _snapshot(row)
 
-    def recent(self, db, limit=50):
+    def recent(self, db, limit=50, *, prediction_ids=None):
         """Read-only accepted milestones, newest feedback first; no file/cloud IO."""
         if type(limit) is not int or not 1 <= limit <= 500:
             raise ValueError("Limit must be between 1 and 500")
-        rows = (db.query(FeedbackSync, Retroalimentacion.id_prediccion)
-                .join(Retroalimentacion, FeedbackSync.id_retroalimentacion ==
-                      Retroalimentacion.id_retroalimentacion)
-                .filter(Retroalimentacion.procesado.is_(True))
+        query = (db.query(FeedbackSync, Retroalimentacion.id_prediccion)
+                 .join(Retroalimentacion, FeedbackSync.id_retroalimentacion ==
+                       Retroalimentacion.id_retroalimentacion))
+        if prediction_ids is not None:
+            query = query.filter(Retroalimentacion.id_prediccion.in_(prediction_ids))
+        rows = (query.filter(Retroalimentacion.procesado.is_(True))
                 .order_by(FeedbackSync.id_retroalimentacion.desc()).limit(limit).all())
         return [dict(id_retroalimentacion=row.id_retroalimentacion,
                      id_prediccion=prediction_id, dataset_name=row.dataset_name,

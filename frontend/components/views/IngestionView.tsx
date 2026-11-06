@@ -510,7 +510,7 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
       );
       setPendingFeedbacks(previous => previous.filter(pending => pending.id_retroalimentacion !== item.id_retroalimentacion));
       setSyncRefreshKey(previous => previous + 1);
-      await Promise.all([fetchDatasets(), fetchPendingFeedbacks()]);
+      await Promise.all([fetchDatasets(), fetchPrivateCatalog(), fetchPendingFeedbacks()]);
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       reportFeedbackError(err);

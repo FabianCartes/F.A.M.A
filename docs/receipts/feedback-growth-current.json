@@ -1,0 +1,98 @@
+{
+  "schema": "fama.feedback-dataset-growth/v1",
+  "status": "partial_needs_human_decision",
+  "overall_pass": false,
+  "specification": "docs/arquitectura/feedback-crecimiento-datasets-plan.md",
+  "requirements": {
+    "review_before_local_admission": true,
+    "recording_group_annotations_at_next_preparation": true,
+    "automatic_retraining": false,
+    "new_database_created": false
+  },
+  "observed_parent_checks": {
+    "http_identity_and_legacy": {
+      "exit_code": 0,
+      "passed": 19,
+      "receipt": "feedback-growth-http-owner.stdout"
+    },
+    "admission_preparation_seam": {
+      "exit_code": 0,
+      "passed": 33,
+      "receipt": "feedback-growth-seam-green.stdout"
+    },
+    "privacy_corrections_and_related": {
+      "exit_code": 1,
+      "passed": 35,
+      "errors": 1,
+      "reason": "Existing sync API fixture requires file-backed SQLite forbidden by guard",
+      "receipt": "feedback-growth-privacy-green.stdout"
+    },
+    "frontend": {
+      "exit_code": 0,
+      "passed": 418,
+      "files": 44,
+      "receipt": "feedback-growth-ui-suite.stdout"
+    },
+    "legacy_differential": {
+      "exit_code": 2,
+      "passed": 0,
+      "reason": "Temporary test outside tests/ omitted existing collection isolation; guard blocked checkpoint mkdir",
+      "receipt": "feedback-growth-legacy-differential.stdout"
+    }
+  },
+  "reported_writer_checks": {
+    "t1_focused": {
+      "exit_code": 0,
+      "passed": 12
+    },
+    "t1_related": {
+      "exit_code": 1,
+      "passed": 104,
+      "deselected": 2,
+      "errors": 1,
+      "reason": "Existing worker fixture requires file-backed SQLite forbidden by guard"
+    },
+    "t2_related": {
+      "exit_code": 0,
+      "passed": 131,
+      "skipped": 0,
+      "deselected": 0
+    }
+  },
+  "independent_verification": {
+    "status": "inconclusive",
+    "execution_exit_code": 2,
+    "executed_tests": 0,
+    "reason": "Verifier used repository root instead of backend cwd; runner not found",
+    "retried": false,
+    "findings": [
+      "Private aggregate label/count disclosure",
+      "Visibility filter after global pending limit"
+    ],
+    "findings_corrected_in_candidate": true,
+    "post_correction_independent_verdict": null
+  },
+  "native_review": {
+    "assessment": "unassessable_undeclared_untracked",
+    "agent_escalation_item": 2,
+    "approval": false
+  },
+  "missing_proof": [
+    "Independent functional verification",
+    "File-backed SQLite worker/sync API fixture tests under compatible authorized isolation",
+    "Successful legacy differential",
+    "Real GCS synchronization and training",
+    "Deployed browser workflow and imported-feedback provenance rendering"
+  ],
+  "not_deployed": false,
+  "real_database_changed": true,
+  "real_gcs_changed": false,
+  "real_training_started": false,
+  "committed": false,
+  "pushed": false,
+  "preexisting_index_tree": "a304d6e96a10b55ac456c0be751977ae6af693f3",
+  "counts_are_separate_overlapping_runs_not_additive": true,
+  "deployment": "docs/receipts/connected-mvp-deployment.json",
+  "deployment_smoke": "docs/receipts/connected-mvp-smoke.json",
+  "real_database_change_scope": "Scoped grants for application flow only; no domain data/schema changes; login/logout smoke sessions created and closed"
+}

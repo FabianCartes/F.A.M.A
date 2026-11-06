@@ -49,8 +49,9 @@ def _filesystem_lock(path: Path):
 class FeedbackService:
     """Módulo profundo para la gestión del ciclo de retroalimentación de inferencias bioacústicas."""
 
-    def __init__(self, raw_data_dir: Optional[Path] = None):
+    def __init__(self, raw_data_dir: Optional[Path] = None, *, import_root: Optional[Path] = None):
         self.raw_data_dir = raw_data_dir or (_BACKEND_ROOT / "data" / "raw")
+        self.import_root = import_root
 
     def _intent_path(self, feedback_id: int) -> Path:
         return self.raw_data_dir / f".feedback_{feedback_id}.json"
@@ -125,14 +126,16 @@ class FeedbackService:
             Retroalimentacion.id_prediccion == id_prediccion
         ).first()
 
-    def get_pending_feedback(self, db: Session, limit: int = 50) -> List[Dict[str, Any]]:
+    def get_pending_feedback(self, db: Session, limit: int = 50, *, prediction_ids=None) -> List[Dict[str, Any]]:
         """
         Retrieve uncurated feedback records (procesado == False) with original prediction metadata.
         """
+        query = db.query(Retroalimentacion, Prediccion).outerjoin(
+            Prediccion, Retroalimentacion.id_prediccion == Prediccion.id_prediccion)
+        if prediction_ids is not None:
+            query = query.filter(Retroalimentacion.id_prediccion.in_(prediction_ids))
         results = (
-            db.query(Retroalimentacion, Prediccion)
-            .outerjoin(Prediccion, Retroalimentacion.id_prediccion == Prediccion.id_prediccion)
-            .filter(Retroalimentacion.procesado == False)
+            query.filter(Retroalimentacion.procesado == False)
             .order_by(Retroalimentacion.fecha_retroalimentacion.desc())
             .limit(limit)
             .all()
@@ -345,7 +348,8 @@ class FeedbackService:
 
     def approve_feedback(self, db: Session, id_retroalimentacion: int,
                          dataset_name: Optional[str] = None,
-                         curation_source_id: Optional[str] = None) -> Dict[str, Any]:
+                         curation_source_id: Optional[str] = None, *,
+                         owner_id: Optional[int] = None) -> Dict[str, Any]:
         """Verify durable local audio/CSV, then commit processed + sync intent together.
 
         The filesystem intent survives rollback/crash and pins source, destination
@@ -360,10 +364,14 @@ class FeedbackService:
             if curation_source_id is not None and (type(curation_source_id) is not str
                     or not curation_source_id.strip() or len(curation_source_id) > 200):
                 raise ValueError("curation_source_id must name an original canonical recording")
+            pred = feedback.prediccion
+            from app.services.imported_feedback import source_for_prediction, approve
+            if source_for_prediction(db, pred) is not None:
+                return approve(self, db, feedback, owner_id=owner_id,
+                               dataset_name=dataset_name, curation_source_id=curation_source_id)
             existing = queue.get(db, id_retroalimentacion)
             if feedback.procesado and existing is None:
                 raise HTTPException(status_code=409, detail="La retroalimentación ya fue finalizada.")
-            pred = feedback.prediccion
             stored_dataset = pred.dataset_name if pred else None
             if not stored_dataset:
                 raise HTTPException(status_code=409, detail="Predicción sin dataset de almacenamiento verificable; permanece pendiente.")
@@ -521,7 +529,7 @@ class FeedbackService:
             "id_retroalimentacion": feedback.id_retroalimentacion,
         }
 
-    def get_feedback_stats(self, db: Session) -> Dict[str, Any]:
+    def get_feedback_stats(self, db: Session, *, prediction_ids=None) -> Dict[str, Any]:
         """
         Calcula la telemetría consolidada de retroalimentación de campo:
         - total_validated: número total de predicciones con feedback registrado.
@@ -531,8 +539,11 @@ class FeedbackService:
         - pending_curation_count: retroalimentaciones pendientes de curación humana.
         - corrections_breakdown: especies corregidas más frecuentes.
         """
-        total_validated = db.query(Retroalimentacion).count()
-        pending_curation_count = db.query(Retroalimentacion).filter(
+        query = db.query(Retroalimentacion)
+        if prediction_ids is not None:
+            query = query.filter(Retroalimentacion.id_prediccion.in_(prediction_ids))
+        total_validated = query.count()
+        pending_curation_count = query.filter(
             Retroalimentacion.procesado == False
         ).count()
 
@@ -546,7 +557,7 @@ class FeedbackService:
                 "corrections_breakdown": [],
             }
 
-        correct_count = db.query(Retroalimentacion).filter(
+        correct_count = query.filter(
             Retroalimentacion.fue_correcta == True
         ).count()
 
@@ -555,7 +566,7 @@ class FeedbackService:
 
         # Conteo agrupado de correcciones por especie
         breakdown_query = (
-            db.query(
+            query.with_entities(
                 Retroalimentacion.etiqueta_corregida,
                 func.count(Retroalimentacion.id_retroalimentacion).label("total"),
             )

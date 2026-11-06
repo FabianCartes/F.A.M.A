@@ -68,6 +68,38 @@ describe('IngestionView persisted inference dataset and curation', () => {
     expect(importedCells[cloudIndex].textContent?.trim()).toBe('1');
   });
 
+  it('refreshes the private dataset audio count after explicit feedback incorporation', async () => {
+    const imported = { id: 'owned-aves', name: 'aves', description: '', revision: 1,
+      file_count: 1194, class_count: 15, total_size_bytes: 8523910642, synced_file_count: 0 };
+    let incorporated = false;
+    vi.mocked(feedbackApi.getPendingFeedback).mockResolvedValueOnce([
+      { ...item, dataset_name: 'imported:owned-aves' },
+    ]).mockResolvedValue([]);
+    vi.mocked(feedbackApi.approveFeedback).mockImplementation(async () => {
+      incorporated = true;
+      return { status: 'approved', local_status: 'incorporated', sync_status: 'pending',
+        id_retroalimentacion: 42, destination_path: 'canastero/feedback_42.wav',
+        clase: 'canastero', filename: 'feedback_42.wav' };
+    });
+    global.fetch = vi.fn(async input => {
+      const path = new URL(String(input), 'http://localhost').pathname;
+      const body = path === '/api/ingestion/imports/access' ? { development_mode: true }
+        : path === '/api/ingestion/imports/datasets' ? {
+          datasets: [{ ...imported, revision: incorporated ? 2 : 1, file_count: incorporated ? 1195 : 1194 }],
+          next_cursor: null, total: 1, snapshot: 'catalog',
+        } : path === '/api/ingestion/datasets' ? { datasets: mockDatasets } : mockStatus;
+      return { ok: true, status: 200, json: async () => body } as Response;
+    });
+    await open();
+    const row = () => screen.getByText('aves').closest('tr')!;
+    expect(within(row()).getByText('1194')).toBeDefined();
+    await act(async () => { fireEvent.click(incorporate()); });
+    await waitFor(() => expect(within(row()).getByText('1195')).toBeDefined());
+    expect(within(row()).queryByText('1194')).toBeNull();
+    expect(feedbackApi.approveFeedback).toHaveBeenCalledTimes(1);
+    expect(within(row()).getByText('Importado ZIP')).toBeDefined();
+  });
+
   it('places import next to download without changing the existing download action', async () => {
     await open();
     const download = screen.getByRole('button', { name: 'Descargar desde GCS para entrenamiento local' });

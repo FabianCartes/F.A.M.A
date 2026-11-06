@@ -1211,18 +1211,79 @@ def activate_model(model_id: int, request: Request, response: Response, db: Sess
 # ============================================================================
 # ENDPOINTS DE RETROALIMENTACIÓN ACTIVA Y CURACIÓN SEMI-MANUAL (RF_06)
 # ============================================================================
+def _feedback_imported_user(db, prediction_id, request, response, credentials):
+    """Authenticate imported feedback by its persisted model association, never a client owner."""
+    from sqlalchemy import inspect
+    from app.models.prediction import Prediccion
+    if prediction_id is None:
+        return None
+    prediction = db.get(Prediccion, prediction_id)
+    if prediction is None:
+        return None
+    from app.services.imported_feedback import imported_model_id
+    model_id = imported_model_id(prediction.modelo_id)
+    association = None
+    if model_id is not None and inspect(db.get_bind()).has_table("imported_model_source"):
+        from app.models.imported_training_source import ImportedModelSource
+        association = db.get(ImportedModelSource, model_id)
+    private = str(prediction.dataset_name or "").startswith("imported:")
+    if association is None and not private:
+        return None
+    user = imported_user(request, response, credentials, db)
+    if (association is None or user.id != association.owner_id
+            or prediction.dataset_name != "imported:" + association.dataset_id):
+        raise HTTPException(status_code=404, detail="Retroalimentación no disponible.")
+    return user
+
+
+def _feedback_prediction_id(db, feedback_id):
+    from app.models.feedback import Retroalimentacion
+    feedback = db.get(Retroalimentacion, feedback_id)
+    return feedback.id_prediccion if feedback is not None else None
+
+
+def _feedback_visible_prediction_ids(db, request, response, credentials):
+    """Scope SQL before aggregation or pagination; anonymous callers see legacy only."""
+    from sqlalchemy import String, and_, cast, inspect, or_
+    from app.models.prediction import Prediccion
+    user = None
+    if credentials is not None or request.cookies:
+        try:
+            user = imported_user(request, response, credentials, db)
+        except HTTPException as error:
+            if error.status_code not in (401, 404):
+                raise
+    legacy = or_(Prediccion.dataset_name.is_(None),
+                 ~Prediccion.dataset_name.startswith("imported:"))
+    visible = legacy
+    if inspect(db.get_bind()).has_table("imported_model_source"):
+        from app.models.imported_training_source import ImportedModelSource
+        stored_id = cast(ImportedModelSource.model_id, String)
+        association = db.query(ImportedModelSource).filter(or_(
+            Prediccion.modelo_id == stored_id,
+            Prediccion.modelo_id == "fama_trained_model_" + stored_id))
+        visible = and_(legacy, ~association.exists())
+        if user is not None:
+            owned = association.filter(ImportedModelSource.owner_id == user.id,
+                Prediccion.dataset_name == "imported:" + ImportedModelSource.dataset_id).exists()
+            visible = or_(visible, owned)
+    return db.query(Prediccion.id_prediccion).filter(visible)
+
+
 @app.post("/api/feedback", status_code=status.HTTP_201_CREATED)
-def record_feedback(req: FeedbackCreateRequest, db: Session = Depends(get_db)):
+def record_feedback(req: FeedbackCreateRequest, request: Request, response: Response,
+                    db: Session = Depends(get_db), credentials=Depends(security_bearer)):
     """
     Registra retroalimentación de usuario/experto sobre una inferencia (RF_06, CU_INV_07).
     Si la predicción fue errónea, valida la etiqueta corregida y respalda en GCS.
     """
+    user = _feedback_imported_user(db, req.id_prediccion, request, response, credentials)
     feedback_rec = feedback_service.record_feedback(
         db=db,
         id_prediccion=req.id_prediccion,
         fue_correcta=req.fue_correcta,
         etiqueta_corregida=req.etiqueta_corregida,
-        id_usuario=req.id_usuario or 1,
+        id_usuario=user.id if user is not None else req.id_usuario or 1,
     )
     return {
         "id_retroalimentacion": feedback_rec.id_retroalimentacion,
@@ -1241,30 +1302,36 @@ def record_feedback(req: FeedbackCreateRequest, db: Session = Depends(get_db)):
 
 @app.get("/api/feedback/sync", response_model=List[FeedbackSyncState])
 def get_feedback_sync_states(
+    request: Request, response: Response,
     limit: int = Query(50, ge=1, le=500),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db), credentials=Depends(security_bearer),
 ):
     """Read recent accepted local milestones; never upload or change outcomes."""
     try:
-        return FeedbackSyncQueue().recent(db, limit=limit)
+        visible = _feedback_visible_prediction_ids(db, request, response, credentials)
+        return FeedbackSyncQueue().recent(db, limit=limit, prediction_ids=visible)
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(status_code=503, detail="Synchronization states unavailable")
 
 
 @app.get("/api/feedback/pending")
 def get_pending_feedback(
+    request: Request, response: Response,
     limit: int = Query(50, ge=1, le=500),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db), credentials=Depends(security_bearer),
 ):
     """
     Retorna la lista de retroalimentaciones pendientes de curación semi-manual (procesado == False).
     """
-    return feedback_service.get_pending_feedback(db=db, limit=limit)
+    visible = _feedback_visible_prediction_ids(db, request, response, credentials)
+    return feedback_service.get_pending_feedback(db=db, limit=limit, prediction_ids=visible)
 
 
 @app.post("/api/feedback/{id_retroalimentacion}/approve", response_model=ApproveFeedbackResponse)
 def approve_feedback(
-    id_retroalimentacion: int,
+    id_retroalimentacion: int, request: Request, response: Response,
     curation_source_id: Optional[str] = Query(
         None, min_length=1, max_length=200,
         description="Human-reviewed original canonical xc_id; catalog reference validation is not acoustic verification.",
@@ -1273,13 +1340,17 @@ def approve_feedback(
         None, min_length=1, max_length=100,
         description="Compatibilidad legacy: debe coincidir con el destino persistido; no permite cambiarlo.",
     ),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db), credentials=Depends(security_bearer),
 ):
     """
     Aprueba e incorpora el audio en el destino congelado durante la inferencia,
     actualiza metadata.csv y marca el registro como procesado.
     """
+    user = _feedback_imported_user(db, _feedback_prediction_id(db, id_retroalimentacion),
+                                   request, response, credentials)
     kwargs = {"db": db, "id_retroalimentacion": id_retroalimentacion, "dataset_name": dataset_name}
+    if user is not None:
+        kwargs["owner_id"] = user.id
     if curation_source_id is not None:
         kwargs["curation_source_id"] = curation_source_id
     return feedback_service.approve_feedback(**kwargs)
@@ -1287,20 +1358,24 @@ def approve_feedback(
 
 @app.post("/api/feedback/{id_retroalimentacion}/reject")
 def reject_feedback(
-    id_retroalimentacion: int,
-    db: Session = Depends(get_db),
+    id_retroalimentacion: int, request: Request, response: Response,
+    db: Session = Depends(get_db), credentials=Depends(security_bearer),
 ):
     """
     Descarta la retroalimentación sin alterar los datasets de entrenamiento,
     marcando el registro como procesado.
     """
+    _feedback_imported_user(db, _feedback_prediction_id(db, id_retroalimentacion),
+                            request, response, credentials)
     return feedback_service.reject_feedback(db=db, id_retroalimentacion=id_retroalimentacion)
 
 
 @app.get("/api/feedback/stats")
-def get_feedback_stats(db: Session = Depends(get_db)):
+def get_feedback_stats(request: Request, response: Response, db: Session = Depends(get_db),
+                       credentials=Depends(security_bearer)):
     """
     Retorna la telemetría consolidada del bucle de retroalimentación activa (RF_06)
     incluyendo conteo de audios pendientes de curación.
     """
-    return feedback_service.get_feedback_stats(db=db)
+    visible = _feedback_visible_prediction_ids(db, request, response, credentials)
+    return feedback_service.get_feedback_stats(db=db, prediction_ids=visible)

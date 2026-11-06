@@ -1,0 +1,25 @@
+{
+  "before_sha256": "baf9c5c7a6b6a8c949f29d1b841c3be69a5843b22f8d464e852da74efa57ff8b",
+  "after_sha256": "268bfe604971780bfb7492e8d5824d7b807cc8f7ab88c38091e578e75418f727",
+  "live_api_container_id": "caf99c24e24e957b06912bb44646816d95e1640feb2e2ea76019de8ae5f2f313",
+  "actual_catalog_file_count": 1195,
+  "actual_dataset_revision": 2,
+  "actual_feedback_id": 1,
+  "actual_prediction_id": 1,
+  "deployed": true,
+  "frontend_http": 200,
+  "served_refresh_marker": true,
+  "api_not_restarted": true,
+  "parent_focused_passed": 37,
+  "parent_full_frontend_passed": 458,
+  "parent_types_exit_code": 0,
+  "native_approval": false,
+  "human_visual_acceptance": "pending",
+  "prior_deployment_check": {
+    "job": "job-20",
+    "exit_code": 1,
+    "reason": "Literal one-line marker did not account for webpack line formatting; source copy succeeded",
+    "resolution": "Single read-only bounded diagnosis verified formatted served Promise.all call; no redeploy or restart"
+  },
+  "scope": "One approval callback re-fetches private catalogue; no DB/data/count manipulation"
+}
