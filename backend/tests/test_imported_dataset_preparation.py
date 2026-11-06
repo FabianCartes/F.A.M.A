@@ -431,23 +431,42 @@ def test_concurrent_unsafe_root_winner_is_rejected(cohort, tmp_path, monkeypatch
 
 def test_concurrent_identical_creators_reselect_without_overwrite(cohort, tmp_path):
     from concurrent.futures import ThreadPoolExecutor
-    from threading import Barrier
+    from contextlib import contextmanager
+    from threading import Barrier, Lock
     from training.imported_dataset_preparation import PreparationError
+    # StaticPool shares one SQLite connection, not independent transactions.
+    # Serialize only that fixture's DB sessions; filesystem preparation and
+    # publication still run concurrently through separate service instances.
+    snapshots, descriptor, *_ = cohort
+    original_sessions = snapshots.sessions
+    database_lock = Lock()
+
+    @contextmanager
+    def sessions():
+        with database_lock, original_sessions() as db:
+            yield db
+
+    snapshots.sessions = sessions
+    source_before = list(snapshots.iter_verified(1, descriptor["id"]))
     preparations = service(cohort, tmp_path)
     barrier = Barrier(2)
     def work(_):
         barrier.wait(timeout=5)
+        assert snapshots.get(1, descriptor["id"]) == descriptor
+        assert list(snapshots.iter_verified(1, descriptor["id"])) == source_before
         try:
             return create(service(cohort, tmp_path), cohort)
         except PreparationError as error:
             assert error.code == "publication_busy"
             return None
     with ThreadPoolExecutor(max_workers=2) as pool:
-        results = list(pool.map(work, range(2)))
+        results = list(pool.map(work, range(16)))
     ready = [r for r in results if r is not None]
     assert ready and all(r == ready[0] for r in ready)
     assert [p.name for p in preparations.root.iterdir()] == [ready[0]["version_id"]]
     assert create(preparations, cohort) == ready[0]
+    assert snapshots.get(1, descriptor["id"]) == descriptor
+    assert list(snapshots.iter_verified(1, descriptor["id"])) == source_before
 
 
 @pytest.mark.parametrize("cohort", [[(c, g) for c in ("ants", "zebra") for g in range(10)]], indirect=True)
