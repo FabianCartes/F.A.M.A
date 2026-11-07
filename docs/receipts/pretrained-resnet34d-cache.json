@@ -1,0 +1,67 @@
+{
+  "architecture": "resnet34d",
+  "repository": "timm/resnet34d.ra2_in1k",
+  "revision": "a5413743ca8b64733faaab21d68820b410c66acb",
+  "filename": "model.safetensors",
+  "size_bytes": 87356926,
+  "sha256": "9caa44ee097e5648e75166ff0286278f55715aa68c6b4f83b788bd7a13362ce7",
+  "cache_directory": "/home/kevin/Work/fama/.pretrained-cache-0bda6d69b0d7a77c/huggingface",
+  "repository_directory": "/home/kevin/Work/fama/.pretrained-cache-0bda6d69b0d7a77c/huggingface/models--timm--resnet34d.ra2_in1k",
+  "source": "Pinned official timm Hugging Face repository; SHA and size matched LFS metadata",
+  "b0_unchanged": true,
+  "atomic_no_overwrite_publication": true,
+  "training_started": false,
+  "offline_constructor_verification": {
+    "scope": "actual running API, constructor only, no training",
+    "passed": true,
+    "input_channels": 1,
+    "classes": 13,
+    "parameters": 21309998,
+    "job": 12
+  },
+  "schema": "fama.pretrained-resnet34d-cache/v1",
+  "status": "available_in_existing_api_and_independently_verified_offline",
+  "independent_verification": {
+    "status": "passed",
+    "task": "mw5iog0n-7-u5ex",
+    "artifact_hash_size_modes": "passed",
+    "b0_recorded_entries": "passed",
+    "isolated_constructor": {
+      "exit_code": 0,
+      "network": "none",
+      "root_filesystem": "read_only",
+      "cache_mount": "read_only",
+      "user": "1000:1000",
+      "input_channels": 1,
+      "classes": 13,
+      "parameters": 21309998,
+      "stdout": "input_channels: 1 classifier_outputs: 13 parameters: 21309998",
+      "stderr": "",
+      "training_executed": false
+    }
+  },
+  "api_restarted": false,
+  "offline_flags_preserved": true,
+  "cache_mounted_read_only": true,
+  "native_review_approved": false,
+  "limitations": [
+    "No training or real dataset inference was executed.",
+    "No GPU or model quality claim.",
+    "Other architectures are not newly qualified by this check.",
+    "Changing architecture requires a compatible preparation profile."
+  ],
+  "final_parent_spot_check": {
+    "pinned_sha256_and_size": "passed",
+    "b0_full_recorded_manifest": "unchanged",
+    "same_api_container_and_image": true,
+    "api_health": 200,
+    "ui_http": 200
+  },
+  "native_assessment": {
+    "risk": "high",
+    "nativeRisk": "unassessable",
+    "agent_escalation_item": 5,
+    "independent_verifier": "passed",
+    "native_approved": false
+  }
+}

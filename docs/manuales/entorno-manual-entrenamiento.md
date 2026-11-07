@@ -118,6 +118,14 @@ Artefacto: `model.safetensors`, revisión `1b5383e5f79cc0f7fc067e372f8f26a5fa73f
 
 La validación construye el modelo preentrenado para un canal y15clases sin conexión, sin iniciar épocas, crear preparaciones o publicar checkpoints. Otras arquitecturas o variantes pueden requerir otros artefactos y no quedan habilitadas por esta caché. Evidencia y ubicación exacta: `docs/receipts/pretrained-b0-cache.json`; consultar su campo `deployed` antes de asumir integración terminada.
 
+## Pesos preentrenados de ResNet-34d
+
+La caché persistente también incorpora `timm/resnet34d.ra2_in1k`, que es la variante resuelta por `resnet34d` en timm1.0.30 de la API actual. Se descargó únicamente `model.safetensors` de la revisión `a5413743ca8b64733faaab21d68820b410c66acb`:87356926bytes, SHA256 `9caa44ee097e5648e75166ff0286278f55715aa68c6b4f83b788bd7a13362ce7`, cotejados con los metadatos LFS del repositorio oficial. No se descargaron archivos pickle ni código remoto.
+
+Se añadió un repositorio nuevo al mismo montaje de solo lectura, sin sobrescribir EfficientNet-B0, reiniciar la API ni habilitarle red. Se mantienen `HF_HOME`, `HF_HUB_CACHE` y las dos opciones offline descritas arriba. El constructor real cargó los pesos con un canal de entrada y13clases en CPU, sin ejecutar entrenamiento. La comprobación independiente también pasó en la misma imagen, con red deshabilitada y caché de solo lectura: un canal,13clases y21309998parámetros. La evidencia y sus límites están en [el recibo ResNet-34d](../receipts/pretrained-resnet34d-cache.json); no confundir disponibilidad de pesos con entrenamiento terminado o mejor rendimiento.
+
+Para usarla, selecciona **ResNet-34d** en el entrenamiento individual. La preparación debe ser compatible con esa arquitectura: el perfil incluye la arquitectura, por lo que una preparación de EfficientNet-B0 no se reutiliza sin verificar compatibilidad. Conserva los modelos, preparaciones y checkpoints anteriores. Esta comprobación no habilita ensambles, no certifica GPU ni acredita las otras arquitecturas.
+
 ## Recuperar el entrenamiento después de recargar
 
 El proceso de entrenamiento vive en el backend: cerrar o recargar la pantalla no lo cancela. La interfaz debe consultar el progreso al abrirse, recuperar el estado y los registros existentes y mantener deshabilitado el inicio mientras no conozca el estado real. Si esa lectura falla, debe mostrar el error y permitir reintentar únicamente la consulta, no iniciar automáticamente otro entrenamiento.

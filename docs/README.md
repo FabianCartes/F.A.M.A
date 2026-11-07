@@ -20,6 +20,11 @@ La documentación está organizada temáticamente en subdirectorios especializad
 - [Uso, CPU y recuperación](./manuales/gpu-opcional-entrenamiento.md): configuración GPU opcional, restricciones de memoria y límites del fallback CPU.
 - [Plan de integración](./arquitectura/optional-gpu-environment-plan.md) y [recibo de verificación](./receipts/optional-gpu-environment.json): comprobaciones del entorno local, no certificación de producción.
 
+## Pesos preentrenados locales
+
+- [EfficientNet-B0](./receipts/pretrained-b0-cache.json) y [ResNet-34d](./receipts/pretrained-resnet34d-cache.json): procedencia, hashes y alcance de las comprobaciones de carga offline; no son métricas de modelos entrenados.
+- [Uso de la caché persistente](./manuales/entorno-manual-entrenamiento.md#pesos-preentrenados-de-resnet-34d): configuración conservada y preparación compatible por arquitectura.
+
 ## Bootstrap de entrenamiento importado
 
 - [PostgreSQL separado](./manuales/postgresql-entrenamiento-separado.md): procedimiento administrativo validado en desechable y persistente, preparado sin activar la aplicación; [recibo desechable](./receipts/training-postgres-admin-disposable.json), [recibo persistente](./receipts/training-postgres-admin-persistent.json) y [recibo estructural histórico](./receipts/training-bootstrap-layout.json). Los recibos incluyen alcance e incidencias; los experimentos anteriores no son la ruta operativa.
