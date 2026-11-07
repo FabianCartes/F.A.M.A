@@ -1,4 +1,4 @@
-"""Execute one durable attempt, or explicitly watch local-only jobs with bounded polling."""
+"""Execute one durable attempt, or watch explicitly local-only or sync-only jobs."""
 import argparse
 import json
 import math
@@ -16,15 +16,17 @@ def main(argv=None):
                       help="Reclaim eligible staging only; no execution jobs, HTTP work or cloud operations.")
     mode.add_argument("--local-only", action="store_true",
                       help="Claim preview/confirm only, leaving queued and expired sync jobs unchanged; no cloud storage.")
+    mode.add_argument("--sync-only", action="store_true",
+                      help="Claim sync only, leaving queued and expired preview/confirm jobs unchanged; requires explicit GCS configuration.")
     parser.add_argument("--watch", action="store_true",
-                        help="Supervise local-only attempts in this foreground process; SIGINT/SIGTERM stop after the current attempt.")
+                        help="Supervise local-only or sync-only attempts in this foreground process; SIGINT/SIGTERM stop after the current attempt.")
     parser.add_argument("--poll-seconds", type=float,
                         help="Wait between watch attempts, including idle polls (finite 1–3600 seconds; default 2).")
     parser.add_argument("--execution-seconds", type=float,
                         help="Per-attempt cooperative execution bound in seconds (finite >0 and <=3600; default 1800). Does not change the lease, validator or HTTP timeout.")
     args = parser.parse_args(argv)
-    if args.watch and not args.local_only:
-        parser.error("--watch requires --local-only")
+    if args.watch and not (args.local_only or args.sync_only):
+        parser.error("--watch requires --local-only or --sync-only")
     if args.poll_seconds is not None and (not args.watch or not math.isfinite(args.poll_seconds)
                                           or not 1 <= args.poll_seconds <= 3600):
         parser.error("--poll-seconds requires --watch and a finite value between 1 and 3600")
@@ -50,8 +52,8 @@ def main(argv=None):
             raise ValueError("Publication requires the same filesystem")
         service = runtime_import_service(root, attempt_root=staging)
         engine = create_engine(normalize_database_url(args.database_url))
-        queue = ImportJobQueue(sessionmaker(bind=engine),
-                               allowed_kinds=("preview", "confirm") if args.local_only else None)
+        allowed_kinds = ("preview", "confirm") if args.local_only else ("sync",) if args.sync_only else None
+        queue = ImportJobQueue(sessionmaker(bind=engine), allowed_kinds=allowed_kinds)
         if args.cleanup_only:
             with queue.sessions() as db:
                 result = service.cleanup(db, attempt_root=staging)

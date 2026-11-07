@@ -1,0 +1,169 @@
+{
+  "schema_version": 1,
+  "scope": "Separate sync-only consumer, authorized additive local PostgreSQL migration, one synthetic public end-to-end flow",
+  "base_commit": "979276e",
+  "status": "verified",
+  "cli_checks": {
+    "red": "job36: unrecognized --sync-only",
+    "first_green": "job38:65 passed",
+    "differential": "job39:1 passed",
+    "latest": "job42:68 passed,46 SQLite-memory connections,30 protected paths unchanged",
+    "global_backend_suite_run": false
+  },
+  "backup": {
+    "format": "PostgreSQL custom",
+    "bytes": 948368,
+    "sha256": "de0500cd005fcf0f52de484c8b323b39c9c5db46ca21bb9173f948d12a97be17",
+    "restore_tables": 31,
+    "row_counts_equal": true,
+    "scratch_owner_acl_applied": false,
+    "original_dump_retains_owner_acl": true,
+    "backup_private_not_committed": true
+  },
+  "migration": {
+    "tables_created": 2,
+    "tables_initially_empty": true,
+    "existing_tables_content_sha256_equal": 31,
+    "writers_stopped": true,
+    "api_sigterm_exit": 0,
+    "same_api_db_containers_config": true,
+    "app_admin_privileges": false,
+    "grants": "SELECT/INSERT new revision tables; column-scoped UPDATE only; see manual",
+    "cloud_iam_changed": false
+  },
+  "consumer": {
+    "mode": "--sync-only --watch",
+    "cpu_only": true,
+    "uid": 1000,
+    "root_readonly": true,
+    "capabilities_dropped": "ALL",
+    "no_new_privileges": true,
+    "host_ports": 0,
+    "credentials_readonly": true,
+    "outbound_network": "separate general-Internet bridge, not Google-only",
+    "initial_old_sync_queued_running": 0,
+    "restart_policy": "unless-stopped after functional proof",
+    "zip_sandbox_mode_unchanged": true
+  },
+  "public_proof": {
+    "request_prefix": "gcs-smoke-a7c3e291",
+    "synthetic_only": true,
+    "cloud_delete": false,
+    "old_datasets_used": false,
+    "import_id": "dca4637299c146d7836a8509e8c86533",
+    "wav_sha256": "2aa6a6116a821a62d0a9303f65a4e735f2a08751024106d9503ec45f64e912bb",
+    "wav_bytes": 32044,
+    "archive_bytes": 22629,
+    "status": "public_queue_sync_gcs_verified",
+    "dataset_id": "22abb78f98d6457286e81b71e89f20a1",
+    "dataset_revision": 1,
+    "sync_job_id": "781d8b6a1c834e76a5bcfcbfdb0ff134",
+    "admission_http": 202,
+    "terminal_status": "succeeded",
+    "file_count": 1,
+    "verified_bytes": 32044,
+    "same_request_replayed_same_job": true,
+    "cloud_original_and_manifest_verified": true
+  },
+  "cloud": {
+    "verified_objects_including_manifest": 2,
+    "conditional_generation_reads": true,
+    "manifest": {
+      "object_generation": "1794020827292646",
+      "sha256": "4b4e9201859dd0795bbaac870e91473226d2080e3d7b48f6bb12bcbd3350e9aa",
+      "size_bytes": 728
+    },
+    "original": {
+      "object_generation": "1794020824364624",
+      "sha256": "2aa6a6116a821a62d0a9303f65a4e735f2a08751024106d9503ec45f64e912bb",
+      "size_bytes": 32044
+    },
+    "old_datasets_used": false,
+    "deletes": 0,
+    "synthetic_artifacts_retained": true
+  },
+  "preservation": {
+    "status": "runtime_readback_pass",
+    "backup_hash_matches": true,
+    "existing_31_tables_ddl_fingerprints_equal": true,
+    "same_api_db_config": true,
+    "zip_original_guards_args": true,
+    "consumer_sync_only_cpu_ro_minimal_mounts": true,
+    "minimum_privileges_no_admin": true,
+    "active_jobs": 0,
+    "synthetic_successful_jobs": 3,
+    "old_private_catalog_history_equal": true,
+    "cuda_available": true,
+    "cloud_generation_sha256_size_verified": 2,
+    "cloud_writes": 0,
+    "login_logout_only_auth_side_effects": true
+  },
+  "failures_and_recoveries": [
+    {
+      "job": 37,
+      "failure": "test stub omitted lease_seconds",
+      "recovery": "test stub corrected, production queue unchanged"
+    },
+    {
+      "job": 41,
+      "failure": "administrative revision migration script not packaged in API image; no DDL executed",
+      "recovery": "one bounded RO mount in temporary maintenance process; job43 passed"
+    },
+    {
+      "job": 47,
+      "failure": "parent runtime-vector assumed a bare catalog list; actual public response is paginated",
+      "recovery": "assert datasets plus total+1 and unchanged cursor/schema; job48 passed; no production change"
+    }
+  ],
+  "native_review": {
+    "assessment": "unassessable: undeclared unrelated untracked paths",
+    "agent_escalation_item": 1,
+    "plan_independent_verifier": true,
+    "approved": false
+  },
+  "independent": {
+    "status": "PASS",
+    "task": "mw5txsgq-s-rr5g",
+    "specs": {
+      "S1": "PASS",
+      "S2": "PASS",
+      "S3": "PASS",
+      "S4": "PASS with limits"
+    },
+    "command": "PYTHONDONTWRITEBYTECODE=1 python3 -B .gcs-sync-maintenance-a7c3e291/verify-runtime.py",
+    "exit_code": 0,
+    "stderr": "",
+    "readback": {
+      "status": "runtime_readback_pass",
+      "backup_hash_matches": true,
+      "existing_31_tables_ddl_fingerprints_equal": true,
+      "same_api_db_config": true,
+      "zip_original_guards_args": true,
+      "consumer_sync_only_cpu_ro_minimal_mounts": true,
+      "minimum_privileges_no_admin": true,
+      "active_jobs": 0,
+      "synthetic_successful_jobs": 3,
+      "old_private_catalog_history_equal": true,
+      "cuda_available": true,
+      "cloud_generation_sha256_size_verified": 2,
+      "cloud_writes": 0,
+      "login_logout_only_auth_side_effects": true
+    },
+    "candidate_defects_found": 0,
+    "limits": [
+      "Restore, migration, original public creation/replay/401 and 68 tests are parent evidence, not independently repeated",
+      "Privilege readback checks requested grants and selected negatives, not every effective privilege",
+      "No secret or backup content inspected; backup hash checked",
+      "Native assessment remains unassessable, not approved"
+    ]
+  },
+  "limits": [
+    "No global backend suite",
+    "No real training/inference or model-quality proof",
+    "No large-dataset/failure-injection/load test",
+    "No production owner/ACL restore qualification",
+    "No browser visual acceptance",
+    "No university infrastructure qualification",
+    "No push/PR/merge"
+  ]
+}
