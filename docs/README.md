@@ -15,6 +15,11 @@ La documentación está organizada temáticamente en subdirectorios especializad
 - El respaldo privado de fuentes/índice no es un respaldo consistente de datos operativos ni una restauración comprobada. Logs crudos, scripts operativos locales y metadatos históricos excluidos no forman parte de un checkout limpio; sus referencias en recibos son históricas.
 - Esta consolidación no cambia el despliegue ni acredita producción. GCS, aceptación visual y pendientes operacionales mantienen su alcance separado; no hay push, PR ni merge.
 
+## GPU opcional local
+
+- [Uso, CPU y recuperación](./manuales/gpu-opcional-entrenamiento.md): configuración GPU opcional, restricciones de memoria y límites del fallback CPU.
+- [Plan de integración](./arquitectura/optional-gpu-environment-plan.md) y [recibo de verificación](./receipts/optional-gpu-environment.json): comprobaciones del entorno local, no certificación de producción.
+
 ## Bootstrap de entrenamiento importado
 
 - [PostgreSQL separado](./manuales/postgresql-entrenamiento-separado.md): procedimiento administrativo validado en desechable y persistente, preparado sin activar la aplicación; [recibo desechable](./receipts/training-postgres-admin-disposable.json), [recibo persistente](./receipts/training-postgres-admin-persistent.json) y [recibo estructural histórico](./receipts/training-bootstrap-layout.json). Los recibos incluyen alcance e incidencias; los experimentos anteriores no son la ruta operativa.

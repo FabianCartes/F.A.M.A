@@ -1,0 +1,98 @@
+{
+  "status": "deployed_and_independently_verified_with_limits",
+  "risk_item": 5,
+  "image": "sha256:2f20b3ab9dd98b2987c617e2b7587f7529b60b70b163956cbfa0a7dec743fb4f",
+  "api_id": "70ee0198e2a744faa63f091b1d4b37e63bc291e456c2e16cb5d952781f2397b3",
+  "hardware": "NVIDIA GeForce RTX 2050",
+  "vram_gib": 4,
+  "previous_training": {
+    "model_id": 5,
+    "status": "standard_eval_completed",
+    "active": false,
+    "checkpoint_sha256": "900ef081f736d337a13855750be865d01435de7adb331aa53b8d494f9fe28bc8",
+    "checkpoint_bytes": 319088572
+  },
+  "checks": {
+    "isolated_gpu_panns_adam_step": {
+      "exit_code": 0,
+      "stderr": "",
+      "shape": [
+        1,
+        1,
+        128,
+        94
+      ],
+      "peak_allocated_bytes": 1615343104,
+      "peak_reserved_bytes": 1646264320,
+      "real_data": false
+    },
+    "isolated_cpu_fallback": {
+      "exit_code": 0,
+      "status": "passed"
+    },
+    "deployed_cuda": {
+      "exit_code": 0,
+      "status": "passed"
+    },
+    "persistent_inventory": {
+      "differences": 0,
+      "large_wav_verification": "size/mtime/mode only",
+      "checkpoints": "all five SHA256 checked"
+    },
+    "history": "exact before/after equality",
+    "private_catalog": "core entries unchanged",
+    "api_health": 200,
+    "ui_http": 200,
+    "anonymous_private_catalog": 401,
+    "worker": "active",
+    "guards_mounts_image_ip": "preserved except scoped GPU visibility/runtime",
+    "cpu_previous_container": "retained stopped/disconnected"
+  },
+  "independent_verification": {
+    "task": "mw5nkmvy-c-u2tf",
+    "status": "passed_with_limits",
+    "commands": 3,
+    "exit_codes": [
+      0,
+      0,
+      0
+    ],
+    "stderr": "",
+    "persistent_entries_checked": 8981,
+    "cuda": "13.0",
+    "gpu": "NVIDIA GeForce RTX 2050",
+    "ui_http": 200,
+    "api_health": 200,
+    "anonymous_private_catalog": 401,
+    "limits": [
+      "Large WAV metadata, not full hashes",
+      "Recorded history equality, not independent DB consistency",
+      "CPU configuration retained; no actual rollback/hot fallback",
+      "Local tiny CUDA operation, not full GPU training",
+      "ID compared with deployment record; image with CPU snapshot",
+      "Inventory traversal limited to inventoried destinations present in actual mounts"
+    ]
+  },
+  "limitations": [
+    "No real GPU training or throughput benchmark",
+    "Only batch1 synthetic PANNs tested",
+    "No actual CPU rollback exercised",
+    "No production qualification",
+    "No new application suite executed: deployment only",
+    "Native assessment unassessable due undeclared untracked files; not approval"
+  ],
+  "private_evidence": ".optional-gpu-environment-qpk2clbr/",
+  "jobs": {
+    "15": 0,
+    "16": 0,
+    "17": 0,
+    "18": 0
+  },
+  "previous_independent_verification": {
+    "task": "mw5nhd6b-b-9lhw",
+    "status": "incomplete_unavailable",
+    "shell_commands_executed": 0,
+    "reason": "Verifier required exact parent-approved shell commands; documentary reads only.",
+    "retries": 0
+  }
+}
