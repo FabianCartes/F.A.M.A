@@ -22,10 +22,10 @@ La documentación está organizada temáticamente en subdirectorios especializad
 
 ## Integración GCS del MVP local
 
-- [Consumidor exclusivo sync](./manuales/gcs-sync-consumer.md) y [plan](./arquitectura/gcs-sync-consumer-plan.md): CLI implementado, servicio pendiente de migración local y permisos explícitos; no sustituye al worker ZIP.
+- [Consumidor exclusivo sync](./manuales/gcs-sync-consumer.md) y [plan](./arquitectura/gcs-sync-consumer-plan.md): consumidor separado y migración local verificados con un dataset sintético; no sustituye al worker ZIP.
 - [Interfaz de transferencias](./manuales/transferencias-datasets.md) y [plan](./arquitectura/dataset-transfer-ui-plan.md) y [recibo](./receipts/dataset-transfer-ui.json): importaciones privadas, descarga selectiva y actualización sin transferencias; preprocesamiento oculto y desactivado.
 
-- [Uso y límites de GCS en el MVP local](./manuales/gcs-mvp-local.md): conexión directa aplicada, catálogo remoto y prueba de integridad; la sincronización de importaciones en cola sigue deshabilitada.
+- [Uso y límites de GCS en el MVP local](./manuales/gcs-mvp-local.md): conexión directa aplicada, catálogo remoto y prueba de integridad; el consumidor separado de importaciones se documenta arriba.
 - [Plan y antecedentes de integración GCS](./arquitectura/gcs-mvp-integration-plan.md) y [recibo](./receipts/gcs-mvp-integration.json): comprobaciones, fallos y preservación del entorno manual; no incluye migración de PostgreSQL a GCP.
 
 ## Pesos preentrenados locales

@@ -77,9 +77,10 @@ La red es interna. Aunque se solicitó un binding de API a `127.0.0.1:8000`, Doc
 
 ```bash
 API_IP="$(docker --host unix:///var/run/docker.sock inspect \
-  --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' \
+  --format '{{(index .NetworkSettings.Networks "fama-admin-persistent-9c4b15c847a23b49-net").IPAddress}}' \
   fama-manual-dev-44938bc83ad0184c-api)"
-# Debe devolver una única dirección privada del contenedor identificado.
+# Seleccionar la red interna de DB: la API también tiene una red de salida GCS.
+# No concatenar las direcciones de todas las redes.
 cd .training-manual-44938bc83ad0184c/frontend
 env -i PATH="$PATH" HOME="$PWD/../runtime" \
   API_URL="http://$API_IP:8000" NEXT_PUBLIC_API_URL= NEXT_TELEMETRY_DISABLED=1 \
