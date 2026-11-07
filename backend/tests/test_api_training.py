@@ -341,6 +341,106 @@ def test_get_training_datasets(client):
     assert data["datasets"] == []
 
 
+@pytest.mark.parametrize("interface", ["service", "api"])
+def test_catalog_unsupported_names_never_access_folders(client, training_env, monkeypatch, interface):
+    from pathlib import Path
+    service, sessions, root, _ = training_env
+    raw = root / "raw"
+    outside = root / "outside-registry"
+    (outside / "PrivateClassSentinel").mkdir(parents=True)
+    raw.mkdir()
+    (raw / "linked").symlink_to(outside, target_is_directory=True)
+    names = ["../outside-registry", str(outside), "linked", "medical_cough", "engine_diagnostics"]
+    for name in names:
+        register(sessions, name)
+    (raw / "engine_diagnostics/Motor").mkdir(parents=True)
+    real_is_dir, real_iterdir = Path.is_dir, Path.iterdir
+    forbidden = {raw / name for name in names[:-1]}
+
+    def checked_is_dir(path):
+        if path in forbidden:
+            pytest.fail("Unsupported registered name reached filesystem stat")
+        return real_is_dir(path)
+
+    def checked_iterdir(path):
+        if path in forbidden:
+            pytest.fail("Unsupported registered name reached filesystem enumeration")
+        return real_iterdir(path)
+
+    monkeypatch.setattr(Path, "is_dir", checked_is_dir)
+    monkeypatch.setattr(Path, "iterdir", checked_iterdir)
+    with sessions() as db:
+        default = service.get_available_datasets(db)
+        if interface == "service":
+            entries = service.get_available_datasets(db, include_unavailable=True)
+        else:
+            response = client.get("/api/training/datasets?include_unavailable=true")
+            assert response.status_code == 200, response.text
+            entries = response.json()["datasets"]
+        assert service.get_available_datasets(db, include_unavailable=False) == default
+    assert [entry["id"] for entry in entries] == names
+    for entry in entries[:-1]:
+        assert entry["classes"] == []
+        assert entry["class_count"] is None
+        assert entry["reasons"] == ["incompatible_configuration"]
+    supported = entries[-1]
+    assert supported["classes"] == default[0]["classes"] == ["Motor"]
+    assert supported["class_count"] == default[0]["class_count"] == 1
+    assert client.get("/api/training/datasets").json() == {"datasets": default}
+
+
+def test_catalog_opt_in_preserves_defaults_and_start_rejection(client, training_env):
+    _, sessions, _, thread = training_env
+    registered_id = register(sessions, "medical_cough")
+    assert client.get("/api/training/datasets").json() == {"datasets": []}
+    response = client.get("/api/training/datasets?include_unavailable=true")
+    assert response.status_code == 200
+    entry, = response.json()["datasets"]
+    assert entry["record_id"] == f"legacy:{registered_id}"
+    assert entry["source_type"] == "legacy"
+    assert entry["reasons"] == ["incompatible_configuration"]
+    assert entry["class_count"] is None
+    assert client.get("/api/training/datasets?include_unavailable=false").json() == {"datasets": []}
+    assert client.post("/api/training/start", json={"dataset_name": entry["id"]}).status_code == 400
+    thread.assert_not_called()
+
+
+def test_catalog_opt_in_keeps_imported_auth_and_owner_isolation(client, training_env, monkeypatch):
+    from types import SimpleNamespace
+    from app.models.dataset_import import ImportedDataset
+    from app.models.user import Usuario
+    from app.services import auth
+    from app.services.imported_training_source import ImportedTrainingSource
+    service, sessions, root, _ = training_env
+    monkeypatch.setattr(auth, "SECRET_KEY", "synthetic-catalog-signing-key-not-production-2026")
+    with sessions() as db:
+        for owner in (1, 2):
+            db.add(Usuario(id=owner, email=f"catalog{owner}@example.test", password_hash="unused",
+                           nombre_completo="Synthetic", rol="investigador", activo=True))
+            db.add(ImportedDataset(id=str(owner) * 32, owner_id=owner, name=f"Private {owner}"))
+        db.commit()
+    prepared_root = root / "imported-prepared"
+    prepared_root.mkdir(mode=0o700)
+    # No snapshots/preparations: real catalog query must retain preparation_required.
+    service.imported_sources = ImportedTrainingSource(SimpleNamespace(
+        root=prepared_root, snapshots=SimpleNamespace(sessions=sessions)))
+    register(sessions, "medical_cough")
+    path = "/api/training/datasets?include_imported=true"
+    assert client.get(path + "&include_unavailable=true").status_code == 401
+    for owner in (1, 2):
+        headers = {"Authorization": "Bearer " + auth.create_access_token({"sub": str(owner)})}
+        previous = client.get(path, headers=headers)
+        assert previous.status_code == 200, previous.text
+        response = client.get(path + "&include_unavailable=true", headers=headers)
+        assert response.status_code == 200, response.text
+        legacy, imported = response.json()["datasets"]
+        assert legacy["source_type"] == "legacy"
+        assert imported == previous.json()["datasets"][0]
+        assert imported == {"source_type": "imported", "id": str(owner) * 32,
+                            "name": f"Private {owner}", "eligible": False,
+                            "reasons": ["preparation_required"], "preparations": []}
+
+
 def test_catalog_excludes_unsupported_registered_dataset(client, training_env):
     _, sessions, root, _ = training_env
     register(sessions, "medical_cough")

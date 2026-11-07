@@ -269,10 +269,13 @@ class TrainingService:
             "status": "ready" if self.status != "training" else "busy",
         }
 
-    def get_available_datasets(self, db: Optional[Session] = None) -> List[Dict[str, Any]]:
+    def get_available_datasets(self, db: Optional[Session] = None, *, include_unavailable: bool = False) -> List[Dict[str, Any]]:
         """
         Lista los datasets disponibles para seleccionar como origen de entrenamiento (CU_INV_02).
-        Only registered, supported identities are offered; start still validates local data.
+        Default: registered, supported identities only, with historical metadata defaults.
+        Opt-in: all registered legacy identities, with evidence-only class metadata.
+        Compatibility is not readiness: start may prepare and always revalidates audio.
+        No audio is scanned and registration does not verify local bytes.
         """
         raw_dir = get_raw_data_dir()
         datasets = []
@@ -282,7 +285,8 @@ class TrainingService:
             try:
                 db_datasets = db.query(ConjuntoDatos).all()
                 for ds in db_datasets:
-                    if ds.nombre not in SUPPORTED_DATASETS:
+                    compatible = ds.nombre in SUPPORTED_DATASETS
+                    if not compatible and not include_unavailable:
                         continue
                     classes = []
                     try:
@@ -291,12 +295,13 @@ class TrainingService:
                     except Exception:
                         pass
 
-                    if not classes:
+                    # Unsupported registry names are metadata only, never filesystem paths.
+                    if not classes and compatible:
                         ds_raw_folder = raw_dir / ds.nombre
                         if ds_raw_folder.is_dir():
                             classes = [p.name for p in ds_raw_folder.iterdir() if p.is_dir()]
 
-                    if not classes and ds.nombre == "AvesChilenas":
+                    if not include_unavailable and not classes and ds.nombre == "AvesChilenas":
                         classes = ["Canastero", "Chercán", "Chincol", "Chucao", "Churrín de la Mocha",
                                    "Churrín del sur", "Colilarga", "Fío-fío", "Picaflor chico", "Rayadito",
                                    "Tapaculo", "Tijeral", "Tordo", "Turca", "Zorzal patagónico"]
@@ -305,12 +310,21 @@ class TrainingService:
                         "id": ds.nombre,
                         "name": f"{ds.nombre} ({ds.cantidad_audios} audios)",
                         "audio_count": ds.cantidad_audios,
-                        "class_count": len(classes) or 15,
+                        "class_count": (len(classes) or None) if include_unavailable else (len(classes) or 15),
                         "classes": classes,
                         "size_mb": round((ds.tamano_total_bytes or 0) / (1024 * 1024), 1),
                         "estado": ds.estado,
                         "db_id": ds.id_conjunto_datos,
                     })
+                    if include_unavailable:
+                        datasets[-1].update({
+                            "source_type": "legacy",
+                            "record_id": f"legacy:{ds.id_conjunto_datos}",
+                            "eligible": compatible,
+                            "eligibility_state": "current_flow_compatible" if compatible else "blocked",
+                            "reasons": [] if compatible else ["incompatible_configuration"],
+                            "requires_admission_check": True,
+                        })
             except Exception:
                 pass
 

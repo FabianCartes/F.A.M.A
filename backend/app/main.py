@@ -1081,14 +1081,16 @@ def get_training_hardware():
 
 @app.get("/api/training/datasets")
 def get_training_datasets(request: Request, response: Response, db: Session = Depends(get_db), include_imported: bool = False,
-                          credentials=Depends(security_bearer)):
+                          include_unavailable: bool = False, credentials=Depends(security_bearer)):
     """
     Retorna la lista de datasets disponibles para entrenar (CU_INV_02).
     include_imported=true exige usuario activo y añade solo sus fuentes preparadas.
     Los motivos de elegibilidad no acreditan pesos, ejecución ni evaluación.
     """
     user = imported_user(request, response, credentials, db) if include_imported else None
-    datasets = training_service.get_available_datasets(db=db)
+    # Opt-in projection only; preserve the historical call and response by default.
+    datasets = (training_service.get_available_datasets(db=db, include_unavailable=True)
+                if include_unavailable else training_service.get_available_datasets(db=db))
     if include_imported:
         from app.services.imported_training_source import configured_sources
         from app.database import SessionLocal

@@ -79,6 +79,37 @@ def training_env(tmp_path, monkeypatch):
     engine.dispose()
 
 
+def test_catalog_opt_in_lists_registered_legacy_without_claiming_audio_readiness(training_env):
+    service, sessions, root, thread = training_env
+    supported_id = register(sessions, "AvesChilenas")
+    blocked_id = register(sessions, "medical_cough")
+    # Unsupported sources cannot use raw-folder names as class evidence.
+    (root / "raw/medical_cough/Cough").mkdir(parents=True)
+    with sessions() as db:
+        default = service.get_available_datasets(db)
+        entries = service.get_available_datasets(db, include_unavailable=True)
+        assert service.get_available_datasets(db, include_unavailable=False) == default
+    assert [d["id"] for d in default] == ["AvesChilenas"]
+    assert default[0]["class_count"] == 15
+    supported, blocked = entries
+    assert supported["record_id"] == f"legacy:{supported_id}"
+    assert supported["source_type"] == blocked["source_type"] == "legacy"
+    assert supported["eligibility_state"] == "current_flow_compatible"
+    assert supported["class_count"] is None
+    assert supported["classes"] == []
+    assert supported["requires_admission_check"] is True
+    assert blocked["record_id"] == f"legacy:{blocked_id}"
+    assert blocked["id"] == "medical_cough"
+    assert blocked["eligible"] is False
+    assert blocked["eligibility_state"] == "blocked"
+    assert blocked["reasons"] == ["incompatible_configuration"]
+    assert blocked["classes"] == []
+    assert blocked["class_count"] is None
+    with pytest.raises(ValueError):
+        service.start_training(blocked["id"])
+    thread.assert_not_called()
+
+
 def register(sessions, name):
     with sessions() as db:
         dataset = ConjuntoDatos(nombre=name, ruta_gcp=f"datasets/{name}/")
