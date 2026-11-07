@@ -271,7 +271,7 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange 
           </>}
         </>}
         {job && <div className="space-y-3">
-          {job.execution && <p role="status">{executionStatus === "queued" ? "Trabajo admitido; pendiente de ejecución" : executionStatus === "running" ? "Trabajo en ejecución" : executionStatus === "succeeded" ? (job.status === "needs_correction" ? "Validación rechazada" : "Trabajo completado") : executionStatus === "cancelled" ? "Trabajo cancelado" : "Trabajo fallido"}: {job.execution.stage} · {job.execution.progress}%</p>}
+          {job.execution && <p role="status">{executionStatus === "queued" ? "Trabajo admitido; pendiente de ejecución" : executionStatus === "running" ? "Trabajo en ejecución" : executionStatus === "succeeded" ? (job.status === "needs_correction" ? "Validación rechazada" : "Trabajo completado") : executionStatus === "cancelled" ? "Trabajo cancelado" : "Trabajo fallido"}: {job.execution.stage}{job.status !== "validating" && <> · {job.execution.progress}%</>}</p>}
           {job.execution?.error && <p role="alert">No se completó el trabajo ({job.execution.error.code}). Consulta el estado antes de reintentar.</p>}
           {job.execution?.status === "queued" && <button className={buttonClass} disabled={!!busy} onClick={() => void act("Cancelando trabajo…", async () => {
             const response = await importRequest(token, `${importBase}/${job.id}/jobs/${job.execution!.id}/cancel`, jsonRequest({}));

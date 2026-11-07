@@ -516,6 +516,8 @@ Consulte [prerrequisitos, límites y comprobación T4](trabajos-importacion-data
 antes de operar; esta entrega local no acredita el entorno desplegado.
 El proxy admite 110 MiB por petición. La recepción fragmentada usa bloques de16MiB, no una petición de6GiB, y la validación se admite como trabajo asíncrono. El endpoint legacy de archivo completo no permite eludir el límite por petición del proxy; para ZIP grandes usar la recepción fragmentada de la interfaz. No se aumenta el body del proxy ni se elimina su timeout.
 
+Durante la validación, la interfaz muestra el estado del trabajo sin porcentaje de avance. La recepción del ZIP conserva su indicador de bytes reconocidos por el servidor; no se estima el tiempo restante de validación.
+
 El worker dispone de1800s cooperativos por intento por defecto, frente a900s de validación; el margen también cubre hash y publicación, pero no garantiza rendimiento ni finalización de un archivo concreto. Lease60s y heartbeat20s no cambian. Los valores explícitos menores y las guardas de cuotas/espacio siguen aplicándose. El archivo de5.620.955.136bytes cabe numéricamente; su admisión no acredita integridad, calidad, importación completa ni entrenamiento.
 
 ## Persistencia y recuperación

@@ -67,6 +67,8 @@ it("authorizes automatic import once and polls the same job through hidden publi
   expect(screen.getByText(/se importará automáticamente solo si supera la validación/)).toBeDefined();
   expect(screen.getByRole("button", { name: "Importar ZIP" })).toBeDefined();
   expect(screen.queryByText(/Importada localmente/)).toBeNull();
+  expect(screen.getByText(/Trabajo en ejecución:/).textContent).toBe("Trabajo en ejecución: verifying");
+  expect(screen.getByText("Importación source: validando")).toBeDefined();
   expect(screen.queryByRole("button", { name: "Confirmar importación local" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Cerrar importación" }));
   await act(async () => { published = true; complete(Response.json(finished)); });
