@@ -20,6 +20,11 @@ La documentación está organizada temáticamente en subdirectorios especializad
 - [Uso, CPU y recuperación](./manuales/gpu-opcional-entrenamiento.md): configuración GPU opcional, restricciones de memoria y límites del fallback CPU.
 - [Plan de integración](./arquitectura/optional-gpu-environment-plan.md) y [recibo de verificación](./receipts/optional-gpu-environment.json): comprobaciones del entorno local, no certificación de producción.
 
+## Integración GCS del MVP local
+
+- [Uso y límites de GCS en el MVP local](./manuales/gcs-mvp-local.md): conexión directa aplicada, catálogo remoto y prueba de integridad; la sincronización de importaciones en cola sigue deshabilitada.
+- [Plan y antecedentes de integración GCS](./arquitectura/gcs-mvp-integration-plan.md) y [recibo](./receipts/gcs-mvp-integration.json): comprobaciones, fallos y preservación del entorno manual; no incluye migración de PostgreSQL a GCP.
+
 ## Pesos preentrenados locales
 
 - [EfficientNet-B0](./receipts/pretrained-b0-cache.json) y [ResNet-34d](./receipts/pretrained-resnet34d-cache.json): procedencia, hashes y alcance de las comprobaciones de carga offline; no son métricas de modelos entrenados.

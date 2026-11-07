@@ -1,0 +1,192 @@
+{
+  "schema": "fama.gcs-mvp-integration/v1",
+  "status": "api_gcs_direct_connected_verified_queue_sync_not_enabled",
+  "baseline_commit": "8e5fd4e",
+  "bucket": "fama-audio-records-2026",
+  "read_only_probe": {
+    "job": 26,
+    "exit_code": 0,
+    "credential_scope": "https://www.googleapis.com/auth/devstorage.read_only",
+    "credential_values_printed": false,
+    "cloud_writes": 0,
+    "objects_examined": 2607,
+    "truncated": false,
+    "datasets": [
+      {
+        "name": "AvesChilenas",
+        "objects": 1220,
+        "bytes": 5478671962
+      },
+      {
+        "name": "MaquinariaMinas",
+        "objects": 1,
+        "bytes": 220544
+      },
+      {
+        "name": "engine_diagnostics",
+        "objects": 1386,
+        "bytes": 185674284
+      }
+    ]
+  },
+  "runtime": {
+    "api_id": "05e7928241764a81a7a92d2f9ab28ea7d36ede737a1d784984029303e880736c",
+    "image_id": "sha256:ebe214a7265bed075f0380a3e9c69adafd56dc266a98ecb9df1184ba2bc75af8",
+    "same_image": true,
+    "internal_api_ip": "172.23.0.3",
+    "internal_network_preserved": true,
+    "dedicated_api_outbound_network": "fama-gcs-direct-outbound-7b263a10",
+    "outbound_gateway_priority": 10,
+    "outbound_scope": "general_Internet_explicitly_authorized",
+    "new_host_ports": 0,
+    "startup_policy": "isolated",
+    "feedback_worker_started_by_api_lifespan": false,
+    "credential_mount": "read_only",
+    "credential_copy_mode": "0600",
+    "credential_values_printed": false,
+    "frontend": "existing_development_server",
+    "database": "existing_local_PostgreSQL",
+    "original_api_retained_stopped": true,
+    "original_graceful_exit": 0,
+    "rollback_executed": false
+  },
+  "limits": [
+    "Imported queued sync and feedback sync are not enabled/qualified; API connectivity is not worker connectivity.",
+    "Existing cloud datasets unchanged; no mass download/upload or pending queue drain.",
+    "CUDA availability is not training, throughput or model quality evidence.",
+    "Large audio files checked by metadata, not full hash; no complete DB audit/restore test.",
+    "Existing credential write permission observed, not least-privilege IAM certification.",
+    "Storage status total_objects is capped at2000; per-dataset counts verified independently of that status cap.",
+    "Native risk assessment unavailable/unassessable is not approval; independent runtime verification has explicit boundaries.",
+    "Previous proxy code gate remains blocked and unused; no source cleanup/deletion authorized."
+  ],
+  "cloud_writes_total": {
+    "objects_created": 1,
+    "existing_objects_overwritten": 0,
+    "objects_deleted": 0
+  },
+  "proxy_deployed": false,
+  "api_restarted": true,
+  "deployment_checks": {
+    "prepare_job31": {
+      "exit_code": 0,
+      "inventory_entries": 10383
+    },
+    "stage_job32": {
+      "exit_code": 1,
+      "reason": "Docker nullable OomKillDisable default compared literally",
+      "original_api_changed": false
+    },
+    "bounded_recovery_job33": {
+      "exit_code": 0,
+      "same_candidate_reused": true
+    },
+    "initial_independent_direct_preflight": {
+      "task": "mw5ru5jb-m-wxvv",
+      "exit_code": 1,
+      "reason": "comparator normalized expected only; Docker default changes representation after start"
+    },
+    "corrected_independent_direct_preflight": {
+      "task": "mw5rwtof-n-e02h",
+      "exit_code": 0,
+      "stderr": "",
+      "result": "PREFLIGHT_VECTOR_PASS",
+      "correction": "normalize only None/False on both sides; True remains distinct; verify current original configuration against baseline"
+    },
+    "apply_job34": {
+      "exit_code": 0,
+      "parent_private_catalog_and_history": "exact equality",
+      "persistent_entries": 10383,
+      "small_file_hashes": "preserved",
+      "large_files": "metadata preserved; no full byte hash",
+      "ui_http": 200,
+      "api_health_http": 200,
+      "private_anonymous_http": 401,
+      "cuda_available": true,
+      "zip_worker_active": true
+    },
+    "independent_applied_runtime": {
+      "task": "mw5s1m4o-p-1vil",
+      "exit_code": 0,
+      "stderr": "",
+      "result": "APPLIED_RUNTIME_VECTOR_PASS",
+      "live_checks": [
+        "API identity/configuration/guards",
+        "same image",
+        "internal IP/net and dedicated API egress",
+        "API/UI HTTP200",
+        "GCS connection and dataset counts",
+        "private anonymous401",
+        "CUDA availability",
+        "ZIP service active"
+      ],
+      "parent_record_only": [
+        "authenticated private catalog/history equality",
+        "persistent inventory",
+        "new cloud object proof"
+      ]
+    }
+  },
+  "cloud_object_probe": {
+    "job": 35,
+    "exit_code": 0,
+    "key": "mvp-integration-tests/7b263a10/63970019e1c14623b8eb393d7ed79df2/probe.wav",
+    "existing_datasets_modified": false,
+    "cloud_deletes": 0,
+    "status": "new_object_integrity_repeat_conflict_pass",
+    "size_bytes": 556,
+    "sha256": "1fafb1978bc4cede7d3064311ae7e7399a80bdecbea493ce9065e973abee1bd6",
+    "generation": "1794018014923046",
+    "repeat_same_generation": true,
+    "conflict_rejected": true,
+    "original_bytes_preserved": true,
+    "objects_created": 1,
+    "real_training": false
+  },
+  "scope": {
+    "remote_catalog": true,
+    "actual_api_adapter_write_read_repeat_conflict": true,
+    "real_import_sync_queue_qualified": false,
+    "host_zip_worker": "unchanged --local-only --watch; GCS environment not added",
+    "feedback_sync_worker": "not activated",
+    "new_training_or_inference": false,
+    "production_frontend": false,
+    "cloud_database_migration": false
+  },
+  "native_assessment": {
+    "nativeRisk": "unassessable",
+    "reason": "untracked files require explicit scope",
+    "agent_escalation_item": 5,
+    "independent_preflight": "passed after comparator correction; prior failure retained",
+    "independent_runtime": "passed",
+    "native_review_approved": false
+  },
+  "prior_proxy_attempt_checks": {
+    "baseline_job27": {
+      "exit_code": 0,
+      "passed": 62
+    },
+    "proxy_red_job28": {
+      "exit_code": 2,
+      "reason": "new module absent"
+    },
+    "proxy_green_job29": {
+      "exit_code": 0,
+      "passed": 81,
+      "modules": 6,
+      "protected_paths_unchanged": 30
+    },
+    "independent": {
+      "task": "mw5r2e97-j-gq2t",
+      "passed_tests": 19,
+      "code_gate": "BLOCKED",
+      "live_deployment_verified": false
+    },
+    "private_preparation_job30": {
+      "exit_code": 1,
+      "reason": "historical recipe environment differs from current API",
+      "credential_copy_performed": false,
+      "containers_or_networks_created": false
+    }
+  }
+}
