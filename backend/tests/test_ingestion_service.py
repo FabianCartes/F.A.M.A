@@ -51,6 +51,41 @@ def test_catalog_explicit_gcs_count_never_uses_local_fallback(tmp_path, online):
     assert shared_row["gcs_file_count"] == (1 if online else None)
 
 
+@pytest.mark.parametrize("online", [False, True])
+def test_dataset_catalog_excludes_imported_feedback_storage_without_deleting_audio(tmp_path, online):
+    from app.services.ingestion import IngestionService
+
+    names = ["imported:66bae2589b09476eb78861f5ce694b3b", "imported:86d8390d942c4ffdfad4781cad69b92db",
+             "AvesChilenas", "engine_diagnostics", "imported-recordings", "my-imported:collection"]
+    paths = []
+    blobs = []
+    for name in names:
+        path = tmp_path / "raw" / name / "class_one" / "feedback_1.wav"
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b"preserved audio fixture")
+        paths.append(path)
+        blob = MagicMock(size=23, updated=None)
+        blob.name = f"datasets/{name}/class_one/feedback_1.wav"
+        blobs.append(blob)
+    service = IngestionService(bucket_name="test", local_base_dir=tmp_path / "raw",
+                               local_processed_dir=tmp_path / "processed")
+    before = {str(path): path.read_bytes() for path in paths}
+    with patch("google.cloud.storage.Client") as client:
+        if online:
+            client.return_value.list_blobs.return_value = blobs
+        else:
+            client.return_value.list_blobs.side_effect = OSError("offline")
+        rows = service.list_datasets()
+    assert sorted(row["name"] for row in rows) == sorted(names[2:])
+    for row in rows:
+        assert row["file_count"] == row["local_file_count"] == 1
+        assert row["classes"] == ["class_one"]
+        assert row["gcs_file_count"] == (1 if online else None)
+        assert row["source"] == ("gcs" if online else "local")
+    assert {str(path): path.read_bytes() for path in paths} == before
+    assert sorted(str(path) for path in (tmp_path / "raw").rglob("*.wav")) == sorted(before)
+
+
 def test_get_storage_status_connected(tmp_path):
     """Verifica que el servicio retorne el estado de conexión al bucket GCS."""
     from app.services.ingestion import IngestionService

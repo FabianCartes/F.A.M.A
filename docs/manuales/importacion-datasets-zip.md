@@ -18,6 +18,18 @@ catálogo privado; las filas del catálogo legado conservan sus acciones anterio
 Los catálogos mantienen identidades separadas por origen e ID, incluso si coinciden
 sus nombres e IDs. No se unen por nombre.
 
+El catálogo legado excluye el prefijo interno reservado `imported:` tanto al descubrir
+carpetas locales como al agrupar objetos GCS. Esas rutas conservan copias auxiliares
+de retroalimentación para persistencia y sincronización, no datasets independientes.
+No se borran ni mueven sus archivos. Los audios aceptados e incorporados se consultan
+en **Consultar audios** del dataset importado de destino, mediante sus miembros
+publicados; esta exclusión no cambia revisiones, contadores ni pertenencia.
+El filtro está desplegado en el entorno manual: la comprobación autenticada mostró
+la desaparición de las dos filas auxiliares y conservó catálogo privado, historial
+y consulta de miembros. La verificación independiente comprobó código, configuración
+GPU, CUDA y disponibilidad; contrastó los resultados autenticados mediante registros,
+sin un segundo login. [Evidencia y límites](../receipts/feedback-catalog-filter-deployment.json).
+
 El catálogo privado conserva la autenticación y el modo de acceso del importador.
 Si falta sesión o falla la consulta, se muestra un error específico; no se presenta
 como catálogo vacío ni se convierte el fallo en contadores cero. El catálogo legado

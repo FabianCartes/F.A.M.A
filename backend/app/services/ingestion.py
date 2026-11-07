@@ -132,6 +132,9 @@ class IngestionService:
                 continue
 
             ds_name = entry.name
+            # Imported feedback copies belong to the private member catalog, not legacy datasets.
+            if ds_name.startswith("imported:"):
+                continue
             classes_set = set()
             file_count = 0
             total_size_bytes = 0
@@ -214,6 +217,9 @@ class IngestionService:
             else:
                 continue
 
+            # The reserved identity is auxiliary feedback storage, not a legacy collection.
+            if ds_name.startswith("imported:"):
+                continue
             if ds_name not in datasets_map:
                 datasets_map[ds_name] = {
                     "id": ds_name,

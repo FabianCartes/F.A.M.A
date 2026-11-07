@@ -1,0 +1,75 @@
+{
+  "status": "deployed_and_independently_verified_with_limits",
+  "change": "Exclude reserved imported: auxiliary feedback storage from legacy local/GCS dataset discovery",
+  "tests": {
+    "red_job": 19,
+    "red_exit": 1,
+    "green_job": 20,
+    "green_exit": 0,
+    "passed": 62,
+    "modules": 3
+  },
+  "deployment": {
+    "preflight_job": 21,
+    "preflight_exit": 0,
+    "initial_build_job": 22,
+    "initial_build_exit": 1,
+    "recovery_build_job": 23,
+    "recovery_build_exit": 0,
+    "recovery": "Tag exact local base image; initial digest-only FROM resolved as registry repository",
+    "apply_job": 24,
+    "apply_exit": 0,
+    "source_file": "backend/app/services/ingestion.py",
+    "old_api_retained": true,
+    "gpu": "NVIDIA GeForce RTX 2050",
+    "legacy_rows_before": 2,
+    "legacy_rows_after": 0,
+    "private_catalog": "exact equality",
+    "history": "exact equality",
+    "persistent_inventory": "preserved; large WAV metadata only",
+    "consult_audio": {
+      "motores": {
+        "pages": 28,
+        "feedback_named_files": 1
+      },
+      "aves": {
+        "pages": 24,
+        "feedback_named_files": 6
+      }
+    },
+    "no_training_started": true
+  },
+  "independent": {
+    "task": "mw5oul2x-e-5oee",
+    "status": "passed_with_limits",
+    "commands": 3,
+    "exit_codes": [
+      0,
+      0,
+      0
+    ],
+    "stderr": "",
+    "live_checks": [
+      "container/image identity",
+      "exact source",
+      "GPU/CUDA",
+      "guards/mounts/IP",
+      "old API stopped/disconnected",
+      "HTTP200",
+      "private anonymous401"
+    ],
+    "record_only_checks": [
+      "legacy2->0",
+      "private catalog/history equality",
+      "member pagination"
+    ],
+    "authenticated_live_requests": false
+  },
+  "private_evidence": ".feedback-catalog-deploy-84ytngqs/",
+  "limits": [
+    "Private membership checked by parent through authenticated API; filenames matching feedback_ are not independently asserted provenance",
+    "GCS discovery covered synthetically, not live cloud",
+    "No full hash scan of large WAVs",
+    "Native assessment unassessable; independent environment verification required"
+  ]
+}
