@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react';
 import { it, expect, vi, afterEach } from 'vitest';
 import TrainingView from '../TrainingView';
 import SessionBoundary from '@/components/auth/SessionBoundary';
@@ -22,6 +22,13 @@ it('keeps an explicit legacy choice across rerender and same-owner session refre
  await waitFor(() => expect((screen.getByLabelText('Tipo de fuente') as HTMLSelectElement).value).toBe('imported'));
  fireEvent.change(screen.getByLabelText('Tipo de fuente'), {target:{value:'legacy'}});
  expect((screen.getByLabelText('Tipo de fuente') as HTMLSelectElement).value).toBe('legacy');
+ expect(screen.queryByRole('region', {name:'Preparación importada'})).toBeNull();
+ const legacyArchitecture = screen.getByRole('combobox', {name:'Arquitectura de Red Neuronal'});
+ expect(screen.getAllByRole('combobox', {name:'Arquitectura de Red Neuronal'})).toHaveLength(1);
+ expect(within(legacyArchitecture).getByRole('option', {name:'PANNs-CNN14 (Audio Industrial & Pre-trained CNN)'})).toBeTruthy();
+ fireEvent.change(legacyArchitecture, {target:{value:'ResNet-34d'}});
+ expect((screen.getByLabelText('Épocas de Entrenamiento') as HTMLInputElement).value).toBe('15');
+ expect((screen.getByLabelText(/Batch Size \(Tamaño de Lote\)/) as HTMLInputElement).value).toBe('8');
  view.rerender(<SessionBoundary><TrainingView/></SessionBoundary>);
  fireEvent(window, new Event('focus'));
  await waitFor(() => expect(identityReads).toBe(2));
@@ -29,8 +36,11 @@ it('keeps an explicit legacy choice across rerender and same-owner session refre
  expect((screen.getByLabelText('Tipo de fuente') as HTMLSelectElement).value).toBe('legacy');
  expect(screen.queryByLabelText('Colección importada')).toBeNull();
 });
-it('starts only the automatically prepared identity with current visible parameters',async()=>{
- const profile={architecture:'efficientnet_b0',channels:1,preprocessing:'mono_mel',windowing:'energy_peak_pad',window_hop_seconds:1,audio:{target_sr:22050,duration_seconds:5,n_mels:128,n_fft:2048,hop_length:512,f_min:800,f_max:10000,use_gpu_frontend:false}};
+it.each([
+ {selectedArchitecture:'EfficientNet-B0',profileArchitecture:'efficientnet_b0',learningRate:0.001},
+ {selectedArchitecture:'ResNet-34d',profileArchitecture:'resnet34d',learningRate:0.0003},
+])('prepares and starts $selectedArchitecture with the same selected profile',async({selectedArchitecture,profileArchitecture,learningRate})=>{
+ const profile={architecture:profileArchitecture,channels:1,preprocessing:'mono_mel',windowing:'energy_peak_pad',window_hop_seconds:1,audio:{target_sr:22050,duration_seconds:5,n_mels:128,n_fft:2048,hop_length:512,f_min:800,f_max:10000,use_gpu_frontend:false}};
  let acceptStart!:(r:Response)=>void;
  const transport=vi.fn(async(input:RequestInfo|URL)=>{
  const url=String(input);let data:unknown={};
@@ -49,11 +59,26 @@ it('starts only the automatically prepared identity with current visible paramet
  fireEvent.change(screen.getByLabelText('Tipo de fuente'),{target:{value:'imported'}});
  await screen.findByText('Arbitrary WAV');fireEvent.change(screen.getByLabelText('Dataset para entrenamiento'),{target:{value:'arbitrary'}});
  expect(screen.queryByTestId('dataset-selection-card')).toBeNull();
+ const preparation = screen.getByRole('region', {name:'Preparación importada'});
+ const architecture = within(preparation).getByRole('combobox', {name:'Arquitectura de Red Neuronal'});
+ expect(screen.getAllByRole('combobox', {name:'Arquitectura de Red Neuronal'})).toHaveLength(1);
+ expect(within(architecture).getAllByRole('option').map(option => (option as HTMLOptionElement).value)).toEqual(['EfficientNet-B0','ConvNeXt-Nano','ResNet-34d','PANNs-CNN14','AudioCNN']);
+ expect(architecture.compareDocumentPosition(within(preparation).getByRole('button', {name:'Preparar dataset'})) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+ fireEvent.change(architecture, {target:{value:'PANNs-CNN14'}});
+ expect(within(architecture).getByRole('option', {name:'PANNs-CNN14 (Audio industrial)'})).toBeTruthy();
+ expect(within(preparation).getByText('En este flujo, PANNs-CNN14 se inicializa sin pesos preentrenados. Requiere al menos 64 bandas mel.')).toBeTruthy();
+ fireEvent.change(architecture, {target:{value:selectedArchitecture}});
+ expect(within(preparation).queryByText(/PANNs-CNN14 se inicializa/)).toBeNull();
  fireEvent.click(screen.getByText('Preparar dataset'));
  await screen.findByText(/Preparado para entrenar/);
  expect((screen.getByTestId('architecture-select') as HTMLSelectElement).disabled).toBe(false);
  const initialPreparation=transport.mock.calls.find(c=>String(c[0]).endsWith('/preparations'))!;
  expect(JSON.parse(String((initialPreparation as unknown as [string,RequestInit])[1].body))).toMatchObject({profile,seed:42,provenance:{source:'per-wav-independent-assumption-v1'}});
+ expect(transport.mock.calls.some(c=>String(c[0]).endsWith('/start'))).toBe(false);
+ fireEvent.change(architecture, {target:{value:'AudioCNN'}});
+ await waitFor(()=>expect(screen.queryByText(/Preparado para entrenar/)).toBeNull());
+ expect((screen.getByRole('button',{name:'Iniciar Entrenamiento Local (1 Modelo)'}) as HTMLButtonElement).disabled).toBe(true);
+ fireEvent.change(architecture, {target:{value:selectedArchitecture}});
  fireEvent.change(screen.getByLabelText('Semilla aleatoria'),{target:{value:'73'}});
  await waitFor(()=>expect(screen.queryByText(/Preparado para entrenar/)).toBeNull());
  expect((screen.getByRole('button',{name:'Iniciar Entrenamiento Local (1 Modelo)'}) as HTMLButtonElement).disabled).toBe(true);
@@ -70,10 +95,10 @@ it('starts only the automatically prepared identity with current visible paramet
  acceptStart(Response.json({status:'started'}));
  const call=transport.mock.calls.find(c=>String(c[0]).includes('/start'))!;
  const body=JSON.parse(String((call as unknown as [string,RequestInit])[1].body));
- expect(body).toMatchObject({imported_dataset_id:'arbitrary',snapshot_id:'snapshot',imported_prepared_version:'version',architecture:'EfficientNet-B0',seed:73,epochs:1,batch_size:2,audio_config:profile.audio});
+ expect(body).toMatchObject({imported_dataset_id:'arbitrary',snapshot_id:'snapshot',imported_prepared_version:'version',architecture:selectedArchitecture,seed:73,epochs:1,batch_size:2,audio_config:profile.audio});
  expect(body).not.toHaveProperty('dataset_name');expect(body).not.toHaveProperty('is_tri_model');
  await screen.findByText(/Checkpoint persistido; evaluación pendiente/,{}, {timeout:2500});
- expect(body.models).toEqual([{architecture:'EfficientNet-B0',weight:1,epochs:1,learning_rate:0.001,batch_size:2}]);
+ expect(body.models).toEqual([{architecture:selectedArchitecture,weight:1,epochs:1,learning_rate:learningRate,batch_size:2}]);
  fireEvent.click(screen.getByText('Cerrar sesión'));
  await waitFor(()=>expect(screen.queryByLabelText('Colección importada')).toBeNull());
  expect((screen.getByLabelText('Tipo de fuente') as HTMLSelectElement).value).toBe('legacy');

@@ -1,10 +1,10 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { importedTrainingApi as api, ImportedTrainingError } from '@/lib/api/importedTrainingApi';
 import { importedProfileSchema, type ImportedDataset, type ImportedSelection, type ImportedProfile } from '@/lib/schemas/importedTraining';
 
-export default function ImportedTrainingPanel({onSelect, profile, seed, disabled=false}: {
- onSelect:(selection:ImportedSelection|null)=>void; profile:ImportedProfile; seed:number; disabled?:boolean;
+export default function ImportedTrainingPanel({onSelect, profile, seed, architectureControl, disabled=false}: {
+ onSelect:(selection:ImportedSelection|null)=>void; profile:ImportedProfile; seed:number; architectureControl?:ReactNode; disabled?:boolean;
 }) {
  const [catalog,setCatalog]=useState<ImportedDataset[]>([]);
  const [dataset,setDataset]=useState('');
@@ -62,6 +62,8 @@ export default function ImportedTrainingPanel({onSelect, profile, seed, disabled
  }
  return <section aria-label="Preparación importada" className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-3 shadow-sm">
  <label className="text-[11px] text-gray-400 block font-medium">Dataset para entrenamiento<select className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-2 text-xs text-gray-200 mt-1.5" disabled={disabled} value={dataset} onChange={e=>reset(e.target.value)}><option value="">Seleccione una colección propia</option>{catalog.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
+ {architectureControl}
+ {profile.architecture==='panns_cnn14'&&<p className="text-xs text-amber-400">En este flujo, PANNs-CNN14 se inicializa sin pesos preentrenados. Requiere al menos 64 bandas mel.</p>}
  <button className="bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg px-3 py-2 text-xs disabled:opacity-40" type="button" disabled={disabled||pending||!selected||Boolean(ready)} onClick={()=>void prepare()}>Preparar dataset</button>
  <p className="text-xs text-gray-400">70% entrenamiento · 15% validación · 15% test.</p>
  <p className="text-xs text-amber-400">Se asume que cada WAV es una grabación independiente; esta independencia no está verificada.</p>

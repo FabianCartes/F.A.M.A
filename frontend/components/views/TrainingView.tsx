@@ -1226,6 +1226,38 @@ export default function TrainingView() {
 
 
 
+  const architectureControl = (
+  <div>
+    <div className="flex items-center justify-between gap-3 mb-1">
+      <div className="flex items-center gap-2 shrink-0">
+        <label htmlFor="architecture-select" className="text-[11px] text-gray-400 font-medium">
+          Arquitectura de Red Neuronal
+        </label>
+        <InfoTooltip id="architecture" {...PARAMETER_EXPLANATIONS.architecture} />
+      </div>
+      <span className="text-[10px] text-emerald-400 font-normal text-right break-words leading-tight">
+        {sourceType === 'imported' && architecture === 'PANNs-CNN14'
+          ? "Red convolucional para acústica industrial y patrones armónicos"
+          : ARCHITECTURE_PRESETS[architecture]?.desc || "Calibrado"}
+      </span>
+    </div>
+    <select
+      id="architecture-select"
+      data-testid="architecture-select"
+      value={architecture}
+      disabled={isTraining}
+      onChange={(e) => handleArchitectureChange(e.target.value)}
+      className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-blue-500 font-mono disabled:opacity-60"
+    >
+      <option value="EfficientNet-B0">EfficientNet-B0 (Transfer Learning · Pitch Shift)</option>
+      <option value="ConvNeXt-Nano">ConvNeXt-Nano (Arquitectura Moderna)</option>
+      <option value="ResNet-34d">ResNet-34d (ResNet Profunda)</option>
+      <option value="PANNs-CNN14">{sourceType === 'imported' ? 'PANNs-CNN14 (Audio industrial)' : 'PANNs-CNN14 (Audio Industrial & Pre-trained CNN)'}</option>
+      <option value="AudioCNN">AudioCNN (Baseline Convolucional FAMA)</option>
+    </select>
+  </div>
+  );
+
   return (
     <div className="space-y-5">
       {/* ==================================================================== */}
@@ -1273,7 +1305,7 @@ export default function TrainingView() {
           <label>Tipo de fuente<select value={sourceType} disabled={isTraining} onChange={e=>{setSourceType(e.target.value);setImported(null);}}><option value="legacy">Legacy</option><option value="imported" disabled={!session}>Importada (sesión requerida)</option></select></label>
           {terminalMessage && <p role="status">{terminalMessage}</p>}
           {progressError && <p role="alert">{progressError} <button type="button" onClick={()=>setProgressRetry(n=>n+1)}>Reintentar consulta de progreso</button></p>}
-          {sourceType==='imported' && session && <ImportedTrainingPanel key={session.id} disabled={isTraining} profile={importedProfile} seed={Number(seed)} onSelect={setImported}/>}
+          {sourceType==='imported' && session && <ImportedTrainingPanel key={session.id} architectureControl={architectureControl} disabled={isTraining} profile={importedProfile} seed={Number(seed)} onSelect={setImported}/>}
         </div>
         {sourceType==='legacy' && <div data-testid="dataset-selection-card" className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-3 shadow-sm">
           <div className="flex items-center justify-between">
@@ -2074,35 +2106,7 @@ export default function TrainingView() {
             </select>
           </div>
 
-          {ensembleSize === 1 && (
-            <div>
-              <div className="flex items-center justify-between gap-3 mb-1">
-                <div className="flex items-center gap-2 shrink-0">
-                  <label htmlFor="architecture-select" className="text-[11px] text-gray-400 font-medium">
-                    Arquitectura de Red Neuronal
-                  </label>
-                  <InfoTooltip id="architecture" {...PARAMETER_EXPLANATIONS.architecture} />
-                </div>
-                <span className="text-[10px] text-emerald-400 font-normal text-right break-words leading-tight">
-                  {ARCHITECTURE_PRESETS[architecture]?.desc || "Calibrado"}
-                </span>
-              </div>
-              <select
-                id="architecture-select"
-                data-testid="architecture-select"
-                value={architecture}
-                disabled={isTraining}
-                onChange={(e) => handleArchitectureChange(e.target.value)}
-                className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-blue-500 font-mono disabled:opacity-60"
-              >
-                <option value="EfficientNet-B0">EfficientNet-B0 (Transfer Learning · Pitch Shift)</option>
-                <option value="ConvNeXt-Nano">ConvNeXt-Nano (Arquitectura Moderna)</option>
-                <option value="ResNet-34d">ResNet-34d (ResNet Profunda)</option>
-                <option value="PANNs-CNN14">PANNs-CNN14 (Audio Industrial & Pre-trained CNN)</option>
-                <option value="AudioCNN">AudioCNN (Baseline Convolucional FAMA)</option>
-              </select>
-            </div>
-          )}
+          {sourceType === 'legacy' && ensembleSize === 1 && architectureControl}
         </div>
 
         {/* Detención Temprana Inteligente (Early Stopping) */}

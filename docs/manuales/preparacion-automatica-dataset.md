@@ -2,9 +2,11 @@
 
 ## Flujo previsto
 
-En Entrenamiento, seleccionar el dataset importado y pulsar **Preparar dataset**. El reparto objetivo es70% entrenamiento,15% validación y15% prueba. La preparación no inicia entrenamiento; **Iniciar entrenamiento** continúa siendo una acción independiente.
+En Entrenamiento, seleccionar el dataset importado y la **Arquitectura de Red Neuronal** dentro del bloque de preparación; después pulsar **Preparar dataset**. El reparto objetivo es70% entrenamiento,15% validación y15% prueba. La preparación no inicia entrenamiento; **Iniciar entrenamiento** continúa siendo una acción independiente.
 
-Se reutilizan los controles existentes de arquitectura, física de audio y semilla. La aplicación genera internamente el mapa de miembros y el perfil completo; no se solicita escribir JSON ni seleccionar snapshots/versiones antiguas.
+Hay un único selector de arquitectura para preparar y entrenar. Conserva EfficientNet-B0, ConvNeXt-Nano, ResNet-34d, PANNs-CNN14 y AudioCNN. En la fuente Legacy, el selector mantiene su ubicación y comportamiento anteriores. Los controles de física de audio y semilla no cambian de ubicación; siguen formando parte del perfil de preparación. La aplicación genera internamente el mapa de miembros y el perfil completo; no se solicita escribir JSON ni seleccionar snapshots/versiones antiguas.
+
+Preparar solo procesa el perfil seleccionado: no prepara todas las arquitecturas ni descarga pesos. PANNs-CNN14 permanece disponible, pero en este flujo se inicializa sin pesos preentrenados y requiere al menos64bandas mel. Al cambiar arquitectura, audio o semilla, la interfaz deja de utilizar una preparación incompatible y bloquea el inicio hasta contar con una compatible; una respuesta antigua no debe restaurar la selección descartada. No hace falta volver a importar el ZIP y las preparaciones anteriores se conservan.
 
 ## Suposición de procedencia aprobada
 
@@ -26,7 +28,7 @@ La retroalimentación pendiente o rechazada no incorpora audios. Una aceptación
 
 El usuario comprobará la interfaz sobre el entorno principal conectado; no se usa Playwright. Verificar una sola selección visible para el dataset importado, botón asociado a esa selección, mensajes de preparación/éxito/error y que preparar no inicia entrenamiento. Si se cambia de dataset durante una operación, una respuesta antigua no debe seleccionar la preparación anterior como si perteneciera al nuevo dataset.
 
-**Estado de entrega:** desplegado en la aplicación conectada; salud y catálogo comprobados, prueba UI del usuario pendiente. [Recibo de despliegue](../receipts/automatic-preparation-deployment.json). Consultar el plan y su evidencia: [automatic-preparation-mvp-plan.md](../arquitectura/automatic-preparation-mvp-plan.md). Este manual describe el contrato, no prueba por sí mismo que la versión esté desplegada ni que un entrenamiento real haya finalizado.
+**Estado de entrega de la preparación automática original:** desplegado en la aplicación conectada; salud y catálogo comprobados, prueba UI del usuario pendiente. La reorganización del selector también está desplegada en la copia del entorno manual de http://127.0.0.1:3000: los dos componentes coinciden con el checkout, hay respaldos verificados y la API conserva contenedor, imagen y hora de arranque. La comprobación del contenido servido pasó; una verificación independiente confirmó archivos, respaldos, preservación del panel de importación y respuestas HTTP200 de UI/API, sin inspeccionar los scripts servidos. La aceptación visual sigue pendiente del usuario; no se inició entrenamiento. [Recibo de despliegue](../receipts/automatic-preparation-deployment.json). Consultar el plan y su evidencia: [automatic-preparation-mvp-plan.md](../arquitectura/automatic-preparation-mvp-plan.md). Este manual describe el contrato, no prueba por sí mismo que la versión esté desplegada ni que un entrenamiento real haya finalizado.
 
 ## Archivos grandes y almacenamiento temporal
 
