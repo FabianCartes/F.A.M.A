@@ -11,6 +11,27 @@ it('explains dataset growth and accepted feedback without automatic preparation 
  expect(screen.getByText(/El dataset tiene una revisión nueva/).textContent).toContain('aceptados en retroalimentación');
  expect(screen.queryByLabelText('Preparación existente')).toBeNull();expect(transport).toHaveBeenCalledTimes(1);
 });
+it('hides the stale revision warning after preparation and restores it when the profile changes',async()=>{
+ vi.stubGlobal('fetch',vi.fn(async(input:RequestInfo|URL)=>{
+  const url=String(input);
+  if(url.includes('include_imported'))return Response.json({datasets:[{source_type:'imported',id:'owned',name:'Growing dataset',eligible:false,reasons:['preparation_stale'],preparations:[]}]});
+  if(url.endsWith('/members'))return Response.json({snapshot_id:'snap',members:[]});
+  if(url.endsWith('/preparations'))return Response.json({snapshot_id:'snap',version_id:'version',state:'ready',profile,class_to_index:{},warnings:[],seed:42});
+  return Response.json({id:'snap',dataset_id:'owned',state:'ready',name:'Growing dataset',file_count:0});
+ }));
+ const select=vi.fn();const view=render(<ImportedTrainingPanel profile={profile} seed={42} onSelect={select}/>);
+ await screen.findByText('Growing dataset');
+ fireEvent.change(screen.getByLabelText('Dataset para entrenamiento'),{target:{value:'owned'}});
+ expect(screen.getByText(/El dataset tiene una revisión nueva/)).toBeTruthy();
+ fireEvent.click(screen.getByRole('button',{name:'Preparar dataset'}));
+ await screen.findByText(/Preparado para entrenar/);
+ expect(screen.queryByText(/El dataset tiene una revisión nueva/)).toBeNull();
+ expect(select).toHaveBeenLastCalledWith(expect.objectContaining({eligible:true,prepared_version:'version'}));
+ view.rerender(<ImportedTrainingPanel profile={profile} seed={73} onSelect={select}/>);
+ await waitFor(()=>expect(screen.queryByText(/Preparado para entrenar/)).toBeNull());
+ expect(screen.getByText(/El dataset tiene una revisión nueva/)).toBeTruthy();
+ expect(select).toHaveBeenLastCalledWith(null);
+});
 it.each(['audio','architecture','seed'])('invalidates readiness when %s controls change',async(field)=>{
  vi.stubGlobal('fetch',vi.fn(async(input:RequestInfo|URL)=>{
  const url=String(input);if(url.includes('include_imported'))return Response.json({datasets:[{source_type:'imported',id:'owned',name:'Dataset',eligible:false,reasons:[],preparations:[]}]});

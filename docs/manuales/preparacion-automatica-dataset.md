@@ -22,6 +22,8 @@ El catálogo comprueba propietario, revisión vigente, perfil y los manifiestos/
 
 Solicitar la misma preparación puede reutilizar la versión determinista existente. Cambios de revisión, perfil o semilla requieren una preparación compatible. Las preparaciones históricas con el reparto80/10/10 y grupos explícitos conservan su política; no deben presentarse como70/15/15 por cambiar una etiqueta.
 
+El aviso de revisión nueva se oculta cuando hay una preparación compatible lista, tanto recién creada como recuperada del catálogo. Si cambia el perfil o la semilla y deja de existir una selección compatible, el aviso puede mostrarse de nuevo mientras el catálogo indique `preparation_stale`. Este ajuste de mensajes no modifica revisiones ni preparaciones del servidor.
+
 La retroalimentación pendiente o rechazada no incorpora audios. Una aceptación que sí cambia el dataset puede dejar obsoleta una preparación: preparar otra vez antes de iniciar un entrenamiento nuevo. Los modelos anteriores conservan su fuente histórica para inferencia.
 
 ## Aceptación manual

@@ -67,7 +67,7 @@ export default function ImportedTrainingPanel({onSelect, profile, seed, architec
  <button className="bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg px-3 py-2 text-xs disabled:opacity-40" type="button" disabled={disabled||pending||!selected||Boolean(ready)} onClick={()=>void prepare()}>Preparar dataset</button>
  <p className="text-xs text-gray-400">70% entrenamiento · 15% validación · 15% test.</p>
  <p className="text-xs text-amber-400">Se asume que cada WAV es una grabación independiente; esta independencia no está verificada.</p>
- {selected?.reasons.includes('preparation_stale')&&<p role="status" className="text-xs text-amber-400">El dataset tiene una revisión nueva, que puede incluir audios aceptados en retroalimentación. Prepare de nuevo antes del siguiente entrenamiento. Las preparaciones anteriores se conservan.</p>}
+ {!ready&&selected?.reasons.includes('preparation_stale')&&<p role="status" className="text-xs text-amber-400">El dataset tiene una revisión nueva, que puede incluir audios aceptados en retroalimentación. Prepare de nuevo antes del siguiente entrenamiento. Las preparaciones anteriores se conservan.</p>}
  {selected&&!ready&&!pending&&!error&&<p className="text-xs text-gray-400">Necesita preparación con la configuración actual.</p>}
  {pending&&<p role="status">Preparando dataset. No se iniciará entrenamiento automáticamente.</p>}
  {error&&<p role="alert">{error}</p>}
