@@ -166,16 +166,16 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
     return () => catalogRequest.current?.abort();
   }, [loadPrivateCatalog]);
 
-  // Sincronización masiva (RF_02 GCS -> Local) y Preprocesamiento Tensorial (RF_03)
+  // Descarga bloqueante GCS → Local; la preparación por modelo es independiente.
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
-  const [autoPreprocess, setAutoPreprocess] = useState<boolean>(true);
+  const [transferStatus, setTransferStatus] = useState<{ message: string; error: boolean } | null>(null);
+
   const [syncProgress, setSyncProgress] = useState<{
     downloaded: number;
     skipped: number;
     failed: number;
-    preprocessed: number;
     total: number;
-  }>({ downloaded: 0, skipped: 0, failed: 0, preprocessed: 0, total: 0 });
+  }>({ downloaded: 0, skipped: 0, failed: 0, total: 0 });
 
   // Curación Supervisada Human-in-the-Loop (RF_06 / ADR 0013)
   const [pendingFeedbacks, setPendingFeedbacks] = useState<PendingFeedbackItem[]>([]);
@@ -399,29 +399,29 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
     }
   };
 
-  // Sincronización Masiva Bidireccional (RF_02) y Preprocesamiento Tensorial (RF_03)
+  // Confirmar la selección antes de iniciar la descarga existente.
   const handleSync = async () => {
     if (selectedIds.length === 0 || isSyncing) return;
+    const targets = datasets.filter(dataset => selectedIds.includes(dataset.id));
+    if (targets.length === 0) return;
+    const hasEstimate = targets.every(dataset => Number.isFinite(dataset.total_size_bytes) && dataset.total_size_bytes >= 0);
+    const estimatedSize = hasEstimate ? formatBytes(targets.reduce((total, dataset) => total + dataset.total_size_bytes, 0)) : "no disponible";
+    if (!window.confirm(`Descargar de GCS al entorno local: ${targets.map(dataset => `${dataset.name} (${dataset.id})`).join(", ")}. Tamaño estimado: ${estimatedSize}; los archivos ya presentes pueden omitirse. No inicia entrenamiento. ¿Continuar?`)) return;
     setIsSyncing(true);
-    addLog(
-      "INFO",
-      `Iniciando sincronización masiva de ${selectedIds.length} dataset(s) [GCS → Local]${
-        autoPreprocess ? " con preprocesamiento tensorial (Librosa)" : ""
-      }...`
-    );
+    setTransferStatus({ message: `Descarga en curso · GCS → Local: ${targets.map(dataset => dataset.name).join(", ")}. Esperando respuesta del servidor.`, error: false });
+    addLog("INFO", `Descargando [GCS → Local]: ${targets.map(dataset => dataset.name).join(", ")}.`);
 
     let totalDownload = 0;
     let totalSkip = 0;
     let totalFail = 0;
-    let totalPrep = 0;
 
     try {
       const res = await fetch(`${API_BASE_URL}/api/ingestion/sync`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          datasets: selectedIds,
-          preprocess: autoPreprocess,
+          datasets: targets.map(dataset => dataset.id),
+          preprocess: false,
         }),
       });
 
@@ -433,13 +433,11 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
       totalDownload = data.total_downloaded || 0;
       totalSkip = data.total_skipped || 0;
       totalFail = data.total_failed || 0;
-      totalPrep = data.total_preprocessed || 0;
 
       setSyncProgress({
         downloaded: totalDownload,
         skipped: totalSkip,
         failed: totalFail,
-        preprocessed: totalPrep,
         total: totalDownload + totalSkip + totalFail,
       });
 
@@ -452,12 +450,6 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
           "INFO",
           `Dataset '${item.dataset}': ${item.downloaded} descargados nuevos, ${item.skipped} omitidos (ya actualizados localmente).`
         );
-        if (autoPreprocess && item.preprocessed > 0) {
-          addLog(
-            "SUCCESS",
-            `Dataset '${item.dataset}': ${item.preprocessed} espectrograma(s) Mel generados en backend/data/processed/.`
-          );
-        }
         if ((item.preprocess_info?.failed || 0) > 0) {
           addLog("ERROR", `Dataset '${item.dataset}': ${item.preprocess_info?.failed} error(es) en preprocesamiento.`);
         }
@@ -480,12 +472,14 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
       const complete = data.status === "completed" && !hasStageErrors;
       const failed = data.status === "failed";
       addLog(failed ? "ERROR" : complete ? "SUCCESS" : "WARN",
-        `Sincronización ${failed ? "fallida" : complete ? "completada" : "parcial"}: ${totalDownload} archivo(s) descargados, ${totalSkip} omitidos, ${totalPrep} tensores procesados, ${totalFail} errores de descarga.`
+        `Sincronización ${failed ? "fallida" : complete ? "completada" : "parcial"}: ${totalDownload} archivo(s) descargados, ${totalSkip} omitidos, ${totalFail} errores de descarga.`
       );
 
+      setTransferStatus({ message: `Descarga ${failed ? "fallida" : complete ? "completada" : "parcial"} · GCS → Local: ${targets.map(dataset => dataset.name).join(", ")}. ${totalDownload} descargados, ${totalSkip} omitidos, ${totalFail} errores. Consulta el detalle en la consola.`, error: !complete });
       await fetchDatasets();
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
+      setTransferStatus({ message: `No se confirmó la descarga · GCS → Local: ${targets.map(dataset => dataset.name).join(", ")}. ${errMsg}`, error: true });
       addLog("ERROR", `Fallo en el proceso de sincronización: ${errMsg}`);
     } finally {
       setIsSyncing(false);
@@ -580,7 +574,7 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
               Gestión de audios
             </h1>
             <p className="text-xs text-gray-400">
-              Gestión multi-dataset y sincronización selectiva nube ↔ GPU local
+              Importaciones privadas, catálogo compartido y transferencias explícitas
             </p>
           </div>
         </div>
@@ -657,41 +651,87 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
       )}
 
       {/* ==================================================================== */}
-      {/* 2. TABLA DE DATASETS REALES EN GCS (RF_02) */}
-      {/* ==================================================================== */}
-      <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-200 font-semibold block">
-              Datasets disponibles (local y GCS)
-            </span>
+      {/* Importaciones privadas: identidades independientes del catálogo compartido. */}
+      <section aria-label="Importaciones privadas · Local → GCS" className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-sm font-bold text-white">Importaciones privadas · Local → GCS</h2>
+          <DatasetImportPanel sessionToken={sessionToken} onCatalogChange={fetchPrivateCatalog} triggerLabel="Importar ZIP" datasetNames={Object.fromEntries(importedDatasets.map(dataset => [dataset.id, dataset.name]))} />
+        </div>
+        <p className="text-xs text-gray-400">Importa un ZIP al entorno local. Para guardar una copia privada en GCS, abre su importación en el historial. No se publica en el catálogo compartido.</p>
+        <p className="text-[11px] text-gray-400">{collectionTotal === null ? "Catálogo privado pendiente de consulta" : `${collectionTotal} importaciones privadas`}</p>
+        <button type="button" className="text-xs text-gray-300 hover:text-white focus-visible:outline-2 focus-visible:outline-emerald-300" disabled={catalogLoading} onClick={() => void fetchPrivateCatalog()}>Actualizar estados</button>
+        <div className="overflow-x-auto">
+          <table aria-label="Importaciones privadas" className="w-full min-w-[760px] text-left text-xs [&_th]:pr-4 [&_td]:pr-4">
+            <thead><tr className="border-b border-[#23252e] text-gray-400">
+              <th className="pb-3 font-medium">Dataset</th><th className="pb-3 font-medium">Clases</th><th className="pb-3 font-medium">Archivos en GCS</th><th className="pb-3 font-medium">Archivos Locales</th><th className="pb-3 font-medium">Tamaño</th><th className="pb-3 font-medium">Estado</th><th className="pb-3 font-medium">Acción</th>
+            </tr></thead>
+            <tbody className="divide-y divide-[#23252e]/60">{importedDatasets.map(dataset => (
+              <tr key={`import:${dataset.id}`} className="hover:bg-[#1c1e24]/40 transition-colors">
+                <td className="py-2.5 font-medium text-gray-200"><span className="font-semibold">{dataset.name}</span> <span className="text-[10px] text-slate-300">Importado ZIP</span></td>
+                <td className="py-2.5 text-gray-300">{dataset.class_count} clase(s)</td>
+                <td className="py-2.5 font-mono text-gray-300" title="Acuses durables históricos de subida; no verifica la existencia actual en GCS.">{dataset.synced_file_count}</td>
+                <td className="py-2.5 font-mono text-gray-300">{dataset.file_count}</td>
+                <td className="py-2.5 text-gray-400">{formatBytes(dataset.total_size_bytes)}</td>
+                <td className="py-2.5 text-gray-400">Publicada localmente</td>
+                <td className="py-2.5"><button type="button" className="text-[11px] text-gray-300 underline" onClick={() => { setPrivateDetail(dataset.id); setDownloadError(""); }}>Consultar audios</button></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+        <div className="space-y-2 text-xs text-gray-400">
+          {catalogLoading && <p role="status">Consultando catálogo privado…</p>}
+          {catalogError && <p role="alert">Catálogo privado no disponible: {catalogError}</p>}
+          {!catalogLoading && !catalogError && importedDatasets.length === 0 && <p>No hay importaciones privadas en esta página.</p>}
+          <p>Importado ZIP: el conteo GCS corresponde a acuses durables históricos de subida, no a una verificación actual del bucket.</p>
+          <div className="flex flex-wrap gap-3">
+            <button type="button" disabled={catalogLoading} onClick={() => void fetchPrivateCatalog()}>Primera página de importaciones</button>
+            <button type="button" disabled={catalogLoading || !catalogMatchesSession || !privateCatalog.next} onClick={() => void fetchPrivateCatalog(privateCatalog.next)}>Siguiente página de importaciones</button>
+          </div>
+          {privateDetail && importedDatasets.some(dataset => dataset.id === privateDetail) && <div>
+            <button type="button" onClick={() => setPrivateDetail(null)}>Cerrar consulta de audios</button>
+            <ImportDetailPage key={`${sessionToken}:${privateDetail}`} token={sessionToken}
+              endpoint={`${importBase}/datasets/${encodeURIComponent(privateDetail)}/files`} collection="files" label="audios importados" schema={audioSchema}
+              renderItem={file => <button type="button" className="underline" onClick={() => {
+                setDownloadError("");
+                void importRequest(sessionToken, `${importBase}/datasets/${encodeURIComponent(privateDetail)}/files/${file.sha256}`)
+                  .then(response => saveDownload(response, file.original_path.split("/").pop() || "audio.wav"))
+                  .catch(reason => setDownloadError(reason instanceof Error ? reason.message : "No se pudo descargar el audio."));
+              }}>{file.original_path} ({file.class_name})</button>} />
+            {downloadError && <p role="alert">{downloadError}</p>}
+          </div>}
+        </div>
+      </section>
+
+      <section aria-label="Catálogo compartido · GCS → Local" className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-sm text-gray-200 font-semibold">Catálogo compartido · GCS → Local</h2>
             <span className="text-[10px] px-2 py-0.5 rounded bg-[#1c1e24] text-gray-400 font-mono">
-              {collectionTotal === null
-                ? `${datasets.length} colecciones legadas · catálogo privado ${catalogError ? "no disponible" : "cargando…"}`
-                : `${datasets.length + collectionTotal} colecciones`}
+              {datasets.length} colecciones compartidas
             </span>
           </div>
 
           <button
             type="button"
-            onClick={() => { void fetchDatasets(); void fetchPrivateCatalog(); }}
+            onClick={() => { void fetchDatasets(); }}
             disabled={isLoadingDatasets}
             className="text-[11px] text-gray-400 hover:text-gray-200 transition-colors flex items-center gap-1"
           >
             <svg className={`w-3 h-3 ${isLoadingDatasets ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            <span>Actualizar</span>
+            <span>Actualizar catálogo</span>
           </button>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table aria-label="Catálogo compartido" className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-[#23252e] text-gray-400">
                 <th className="pb-3 w-8">
                   <input
                     type="checkbox"
+                    aria-label="Seleccionar todos los datasets compartidos"
                     checked={datasets.length > 0 && selectedIds.length === datasets.length}
                     onChange={toggleSelectAll}
                     disabled={datasets.length === 0}
@@ -721,7 +761,7 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
                     </div>
                   </td>
                 </tr>
-              ) : datasets.length === 0 && importedDatasets.length === 0 && !catalogLoading && !catalogError ? (
+              ) : datasets.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="py-8 text-center">
                     <div className="max-w-md mx-auto space-y-2">
@@ -757,6 +797,7 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
                     <td className="py-2.5">
                       <input
                         type="checkbox"
+                        aria-label={`Seleccionar ${d.name}`}
                         checked={selectedIds.includes(d.id)}
                         onChange={() => toggleSelect(d.id)}
                         className="rounded bg-[#121316] border-[#2d303b] text-emerald-600 focus:ring-0 cursor-pointer"
@@ -852,72 +893,19 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
                   </tr>
                 ))
               )}
-              {importedDatasets.map(dataset => (
-                <tr key={`import:${dataset.id}`} className="hover:bg-[#1c1e24]/40 transition-colors">
-                  <td />
-                  <td className="py-2.5 font-medium text-gray-200">
-                    <span className="font-semibold">{dataset.name}</span>{" "}
-                    <span className="text-[10px] text-slate-300">Importado ZIP</span>
-                  </td>
-                  <td className="py-2.5 text-gray-300">{dataset.class_count} clase(s)</td>
-                  <td className="py-2.5 font-mono text-gray-300" title="Acuses durables históricos de subida; no verifica la existencia actual en GCS.">{dataset.synced_file_count}</td>
-                  <td className="py-2.5 font-mono text-gray-300">{dataset.file_count}</td>
-                  <td className="py-2.5 text-gray-400">{formatBytes(dataset.total_size_bytes)}</td>
-                  <td className="py-2.5 text-gray-400">—</td>
-                  <td className="py-2.5 text-center text-gray-400">Publicada localmente</td>
-                  <td className="py-2.5 text-right pr-2">
-                    <button type="button" className="text-[11px] text-gray-300 underline" onClick={() => { setPrivateDetail(dataset.id); setDownloadError(""); }}>Consultar audios</button>
-                  </td>
-                </tr>
-              ))}
             </tbody>
           </table>
         </div>
 
-        <div className="space-y-2 text-xs text-gray-400">
-          {catalogLoading && <p role="status">Consultando catálogo privado…</p>}
-          {catalogError && <p role="alert">Catálogo privado no disponible: {catalogError}</p>}
-          <p>Importado ZIP: el conteo GCS corresponde a acuses durables históricos de subida, no a una verificación actual del bucket.</p>
-          <div className="flex gap-3">
-            <button type="button" disabled={catalogLoading} onClick={() => void fetchPrivateCatalog()}>Primera página de importaciones</button>
-            <button type="button" disabled={catalogLoading || privateCatalog.token !== sessionToken || !privateCatalog.next} onClick={() => void fetchPrivateCatalog(privateCatalog.next)}>Siguiente página de importaciones</button>
-          </div>
-          {privateDetail && importedDatasets.some(dataset => dataset.id === privateDetail) && <div>
-            <button type="button" onClick={() => setPrivateDetail(null)}>Cerrar consulta de audios</button>
-            <ImportDetailPage key={`${sessionToken}:${privateDetail}`} token={sessionToken}
-              endpoint={`${importBase}/datasets/${encodeURIComponent(privateDetail)}/files`} collection="files" label="audios importados" schema={audioSchema}
-              renderItem={file => <button type="button" className="underline" onClick={() => {
-                setDownloadError("");
-                void importRequest(sessionToken, `${importBase}/datasets/${encodeURIComponent(privateDetail)}/files/${file.sha256}`)
-                  .then(response => saveDownload(response, file.original_path.split("/").pop() || "audio.wav"))
-                  .catch(reason => setDownloadError(reason instanceof Error ? reason.message : "No se pudo descargar el audio."));
-              }}>{file.original_path} ({file.class_name})</button>} />
-            {downloadError && <p role="alert">{downloadError}</p>}
-          </div>}
-        </div>
-
-        {/* Footer de Tabla con Acción Principal de Sincronización RF_02 y Disparador RF_03 */}
+        {transferStatus && <p role={transferStatus.error ? "alert" : "status"} className={`text-xs break-words ${transferStatus.error ? "text-amber-300" : "text-gray-300"}`}>{transferStatus.message}</p>}
+        {/* Descarga explícita GCS → Local. */}
         <div className="flex flex-col lg:flex-row items-center justify-between gap-3 pt-3 border-t border-[#23252e]/70">
           <div className="flex items-center gap-3 flex-wrap w-full lg:w-auto justify-between sm:justify-start">
             <span className="text-xs text-gray-400">
               {selectedIds.length} dataset(s) seleccionado(s)
             </span>
 
-            {/* Disparador opcional de preprocesamiento */}
-            <label className="flex items-center gap-2 cursor-pointer select-none bg-[#111215] hover:bg-[#161820] px-3 py-1.5 rounded-lg border border-[#262833] hover:border-emerald-700/60 transition-colors">
-              <input
-                type="checkbox"
-                checked={autoPreprocess}
-                onChange={(e) => setAutoPreprocess(e.target.checked)}
-                className="rounded bg-[#1a1c24] border-[#2e323e] text-emerald-500 focus:ring-0 cursor-pointer w-4 h-4"
-              />
-              <span className="text-xs font-semibold text-gray-200 flex items-center gap-1.5">
-                <svg className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-                </svg>
-                Preprocesar a tensores (Librosa)
-              </span>
-            </label>
+            <span className="text-xs text-gray-400 break-words">GCS → Local: {datasets.filter(dataset => selectedIds.includes(dataset.id)).map(dataset => dataset.name).join(", ") || "Sin selección"}</span>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
@@ -934,7 +922,7 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                 </svg>
                 <span>
-                  {autoPreprocess ? "Sincronizando y extrayendo tensores..." : "Sincronizando desde GCS..."}
+                  Descargando desde GCS…
                 </span>
               </>
             ) : (
@@ -942,18 +930,18 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                 </svg>
-                <span>Descargar desde GCS para entrenamiento local</span>
+                <span>Descargar seleccionados</span>
               </>
             )}
           </button>
           <DatasetExportDialog />
-          <DatasetImportPanel sessionToken={sessionToken} onCatalogChange={fetchPrivateCatalog} />
+
           </div>
         </div>
         <p className="text-[11px] text-gray-400">
           Guarda los archivos en el entorno donde se ejecuta F.A.M.A.; no inicia el entrenamiento.
         </p>
-      </div>
+      </section>
 
       {/* ==================================================================== */}
       {/* 3. BANDEJA DE CURACIÓN E INCORPORACIÓN DE AUDIOS AL DATASET (RF_06 / ADR 0013) */}
@@ -1231,14 +1219,14 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
       <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
           <span className="text-xs text-gray-300 font-semibold block flex items-center gap-1.5">
-            Métricas de Sincronización y Preprocesamiento
+            Resultados de la última descarga GCS → Local
           </span>
           <span className="text-[11px] text-gray-500 font-mono">
-            Persistencia en PostgreSQL + Tensores Librosa
+            Conteos informados por el servidor
           </span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
           <div className="bg-[#111215] border border-[#1f2128] rounded-lg p-3">
             <span className="text-gray-400 text-[11px] block">Nuevos Descargados</span>
             <span className="text-lg font-bold text-emerald-400 font-mono">
@@ -1249,12 +1237,6 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
             <span className="text-gray-400 text-[11px] block">Omitidos (Ya al día)</span>
             <span className="text-lg font-bold text-blue-400 font-mono">
               {syncProgress.skipped}
-            </span>
-          </div>
-          <div className="bg-[#111215] border border-[#1f2128] rounded-lg p-3">
-            <span className="text-gray-400 text-[11px] block">Tensores Preprocesados</span>
-            <span className="text-lg font-bold text-amber-400 font-mono">
-              {syncProgress.preprocessed}
             </span>
           </div>
           <div className="bg-[#111215] border border-[#1f2128] rounded-lg p-3">

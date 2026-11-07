@@ -73,10 +73,11 @@ describe("private dataset import", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirmar importación local" }));
     await screen.findByText(/Importada localmente: 1 archivo/);
     expect(writes.map(w => w.path)).toEqual([base + "/independent/preview", base + "/independent/confirm"]);
-    fireEvent.click(screen.getByRole("button", { name: "Sincronizar con GCS" }));
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    fireEvent.click(screen.getByRole("button", { name: "Subir este dataset a GCS" }));
     await screen.findByText("Sincronización: error");
     expect(screen.getByText(/Importada localmente: 1 archivo/)).toBeDefined();
-    expect(screen.getByRole("button", { name: "Reanudar sincronización con GCS" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Subir este dataset a GCS" })).toBeDefined();
     expect(writes.filter(w => w.path.endsWith("/sync"))).toHaveLength(1);
   });
 
@@ -164,7 +165,8 @@ describe("private dataset import", () => {
     expect(screen.queryByRole("button", { name: "Confirmar importación local" })).toBeNull();
     await screen.findByText(/Importada localmente: 1 archivo/);
     expect(calls.some(call => call.includes("/sync"))).toBe(false);
-    fireEvent.click(screen.getByRole("button", { name: "Sincronizar con GCS" }));
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    fireEvent.click(screen.getByRole("button", { name: "Subir este dataset a GCS" }));
     await waitFor(() => expect(screen.getByText("Sincronización: sincronizada")).toBeDefined());
   });
 

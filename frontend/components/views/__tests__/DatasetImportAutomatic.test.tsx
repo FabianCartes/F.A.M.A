@@ -76,7 +76,7 @@ it("authorizes automatic import once and polls the same job through hidden publi
   fireEvent.click(screen.getByRole("button", { name: "Importar dataset" }));
   await screen.findByText(/Importada localmente: 1 archivo/);
   expect(screen.getByText(/Advertencias: 1/)).toBeDefined();
-  expect(screen.getByRole("button", { name: "Sincronizar con GCS" })).toBeDefined();
+  expect(screen.getByRole("button", { name: "Subir este dataset a GCS" })).toBeDefined();
   expect(writes.filter(write => write.path.endsWith("/preview"))).toHaveLength(1);
   expect(writes.filter(write => /\/(confirm|sync|cancel)$/.test(write.path))).toEqual([]);
 });

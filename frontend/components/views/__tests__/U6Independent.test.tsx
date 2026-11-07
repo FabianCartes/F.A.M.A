@@ -24,6 +24,7 @@ let syncStatus: number;
 let syncData: unknown;
 let calls: { url: string; method: string; body: unknown }[];
 beforeEach(() => {
+ vi.spyOn(window, "confirm").mockReturnValue(true);
  currentStats = stats(); datasets = [dataset]; failedRefresh = false; syncStatus = 200;
  syncData = {}; calls = [];
  vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
@@ -52,7 +53,7 @@ describe("S1/S4 preserved shared consumer seams", () => {
  });
  it("keeps ZIP controls operable and session-gated without submitting data", async () => {
   render(<IngestionView />); await screen.findByText("AvesChilenas");
-  fireEvent.click(screen.getByRole("button", { name: "Importar dataset" }));
+  fireEvent.click(screen.getByRole("button", { name: "Importar ZIP" }));
   let dialog = await screen.findByRole("dialog");
   await within(dialog).findByText(/Inicia sesión para acceder a tus importaciones/i);
   fireEvent.click(within(dialog).getByRole("button", { name: /Cerrar importación/ }));
@@ -115,18 +116,18 @@ describe("S1/S4 per-stage persistence completion", () => {
     db_persisted: persisted, preprocess_info: { failed: prepFailed } }] };
   render(<IngestionView />); await screen.findByText("AvesChilenas");
   fireEvent.click(screen.getAllByRole("checkbox")[0]);
-  fireEvent.click(screen.getByRole("button", { name: "Descargar desde GCS para entrenamiento local" }));
-  const exact = `Sincronización ${expected}: 1 archivo(s) descargados, 0 omitidos, 0 tensores procesados, ${downloadFailed} errores de descarga.`;
+  fireEvent.click(screen.getByRole("button", { name: "Descargar seleccionados" }));
+  const exact = `Sincronización ${expected}: 1 archivo(s) descargados, 0 omitidos, ${downloadFailed} errores de descarga.`;
   expect(await screen.findByText(exact)).toBeDefined();
   const request = calls.find(c => c.url.endsWith("/api/ingestion/sync"));
   expect(request?.method).toBe("POST");
-  expect(JSON.parse(String(request?.body))).toEqual({ datasets: [dataset.id], preprocess: true });
-  await waitFor(() => expect(screen.getByRole("button", { name: "Descargar desde GCS para entrenamiento local" }).hasAttribute("disabled")).toBe(true));
+  expect(JSON.parse(String(request?.body))).toEqual({ datasets: [dataset.id], preprocess: false });
+  await waitFor(() => expect(screen.getByRole("button", { name: "Descargar seleccionados" }).hasAttribute("disabled")).toBe(true));
  });
  it("preserves HTTP error text without a completed success", async () => {
   syncStatus = 503; render(<IngestionView />); await screen.findByText("AvesChilenas");
   fireEvent.click(screen.getAllByRole("checkbox")[0]);
-  fireEvent.click(screen.getByRole("button", { name: "Descargar desde GCS para entrenamiento local" }));
+  fireEvent.click(screen.getByRole("button", { name: "Descargar seleccionados" }));
   expect(await screen.findByText("Fallo en el proceso de sincronización: Error en el servidor: HTTP 503")).toBeDefined();
   expect(screen.queryByText(/^Sincronización completada:/)).toBeNull();
  });

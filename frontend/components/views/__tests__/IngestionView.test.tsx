@@ -22,6 +22,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
   const originalFetch = global.fetch;
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
     vi.mocked(feedbackApi.getPendingFeedback).mockResolvedValue([]);
     vi.mocked(feedbackApi.getFeedbackSync).mockResolvedValue([]);
     vi.mocked(feedbackApi.approveFeedback).mockResolvedValue({ status: 'approved', local_status: 'incorporated', sync_status: 'pending', id_retroalimentacion: 42, destination_path: 'datasets/AvesChilenas/Chucao/test.wav', clase: 'Chucao', filename: 'test.wav' });
@@ -30,7 +31,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
   });
   afterEach(() => { global.fetch = originalFetch; });
 
-  it('shows same-name legacy and private imported datasets in one table with separate local and GCS counts', async () => {
+  it('separates same-name shared and private datasets without merging identities or counts', async () => {
     const legacy = { ...mockDatasets[0], id: 'shared-id', name: 'Colección compartida',
       file_count: 5, local_file_count: 2, gcs_file_count: 5, is_synced: false };
     const imported = { id: 'shared-id', name: 'Colección compartida', description: 'Importación privada',
@@ -46,26 +47,24 @@ describe('IngestionView persisted inference dataset and curation', () => {
     });
 
     await open();
-    const table = within(screen.getByRole('table'));
-    await waitFor(() => expect(table.getAllByText('Colección compartida')).toHaveLength(2));
-    const names = table.getAllByText('Colección compartida');
+    await waitFor(() => expect(screen.getAllByText('Colección compartida')).toHaveLength(2));
+    const names = screen.getAllByText('Colección compartida');
     expect(names).toHaveLength(2);
-    expect(screen.getByText('2 colecciones')).toBeDefined();
+    expect(screen.getByText('1 colecciones compartidas')).toBeDefined();
+    expect(screen.getByText('1 importaciones privadas')).toBeDefined();
     const rows = names.map(name => name.closest('tr')!);
     expect(rows[0]).not.toBe(rows[1]);
     const legacyRow = rows.find(row => within(row).queryByText('Cloud GCS'));
     const importedRow = rows.find(row => within(row).queryByText('Importado ZIP'));
     expect(legacyRow).toBeDefined();
     expect(importedRow).toBeDefined();
-    const headers = table.getAllByRole('columnheader');
-    const localIndex = headers.indexOf(table.getByRole('columnheader', { name: /(?:audios|archivos).*local/i }));
-    const cloudIndex = headers.indexOf(table.getByRole('columnheader', { name: /(?:audios|archivos).*(?:GCS|nube)/i }));
-    const legacyCells = within(legacyRow!).getAllByRole('cell');
-    const importedCells = within(importedRow!).getAllByRole('cell');
-    expect(legacyCells[localIndex].textContent?.trim()).toBe('2');
-    expect(legacyCells[cloudIndex].textContent?.trim()).toBe('5');
-    expect(importedCells[localIndex].textContent?.trim()).toBe('3');
-    expect(importedCells[cloudIndex].textContent?.trim()).toBe('1');
+    for (const [row, localCount, cloudCount] of [[legacyRow!, '2', '5'], [importedRow!, '3', '1']] as const) {
+      const table = within(row.closest('table')!);
+      const headers = table.getAllByRole('columnheader');
+      const cells = within(row).getAllByRole('cell');
+      expect(cells[headers.indexOf(table.getByRole('columnheader', { name: /Archivos Locales/i }))].textContent?.trim()).toBe(localCount);
+      expect(cells[headers.indexOf(table.getByRole('columnheader', { name: /Archivos en GCS/i }))].textContent?.trim()).toBe(cloudCount);
+    }
   });
 
   it('refreshes the private dataset audio count after explicit feedback incorporation', async () => {
@@ -100,12 +99,12 @@ describe('IngestionView persisted inference dataset and curation', () => {
     expect(within(row()).getByText('Importado ZIP')).toBeDefined();
   });
 
-  it('places import next to download without changing the existing download action', async () => {
+  it('separates import from shared download while preserving export and explicit download', async () => {
     await open();
-    const download = screen.getByRole('button', { name: 'Descargar desde GCS para entrenamiento local' });
+    const download = screen.getByRole('button', { name: 'Descargar seleccionados' });
     expect(screen.getByText('Guarda los archivos en el entorno donde se ejecuta F.A.M.A.; no inicia el entrenamiento.')).toBeDefined();
-    const upload = screen.getByRole('button', { name: 'Importar dataset' });
-    expect(download.parentElement).toBe(upload.parentElement);
+    const upload = screen.getByRole('button', { name: 'Importar ZIP' });
+    expect(upload.closest('section')).not.toBe(download.closest('section'));
     const exportZip = screen.getByRole('button', { name: 'Descargar versión como ZIP' });
     expect(exportZip.parentElement).toBe(download.parentElement);
     expect(download.nextElementSibling).toBe(exportZip);
@@ -115,7 +114,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
     await act(async () => { fireEvent.click(download); });
     const sync = vi.mocked(global.fetch).mock.calls.find(([url, options]) => String(url).endsWith('/api/ingestion/sync') && options?.method === 'POST');
     expect(sync).toBeDefined();
-    expect(JSON.parse(String(sync?.[1]?.body))).toEqual({ datasets: ['AvesChilenas'], preprocess: true });
+    expect(JSON.parse(String(sync?.[1]?.body))).toEqual({ datasets: ['AvesChilenas'], preprocess: false });
   });
 
   it('keeps accepted local audio visible separately while cloud is pending after approval', async () => {
@@ -258,7 +257,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
     expect(document.querySelector('input[type="file"]')).toBeNull();
     expect(screen.queryByText(/Carga Jerárquica al Data Lake/)).toBeNull();
     expect(screen.queryByText(/Subir audios a GCS/)).toBeNull();
-    expect(screen.getByRole('table').compareDocumentPosition(screen.getByRole('region', { name: 'Revisar audios' }))).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(screen.getByRole('region', { name: 'Catálogo compartido · GCS → Local' }).compareDocumentPosition(screen.getByRole('region', { name: 'Revisar audios' }))).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it('explains empty queue and navigates to prediction', async () => {
@@ -411,8 +410,8 @@ describe('IngestionView persisted inference dataset and curation', () => {
     global.fetch = vi.fn(async input => ({ ok: true, json: async () => privateCatalogFixture(input) ?? (String(input).includes('/sync') ? partial
       : String(input).includes('/datasets') ? { datasets: mockDatasets } : mockStatus) }) as Response);
     await open();
-    await act(async () => { fireEvent.click(within(screen.getByRole('table')).getAllByRole('checkbox')[0]); });
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Descargar desde GCS para entrenamiento local' })); });
+    await act(async () => { fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar todos los datasets compartidos' })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Descargar seleccionados' })); });
 
     expect(screen.getByText(/Sincronización parcial:/)).toBeDefined();
     expect(screen.getByText(/persistencia en BD no confirmada/)).toBeDefined();
@@ -431,8 +430,8 @@ describe('IngestionView persisted inference dataset and curation', () => {
     global.fetch = vi.fn(async input => ({ ok: true, json: async () => privateCatalogFixture(input) ?? (String(input).includes('/sync') ? result
       : String(input).includes('/datasets') ? { datasets: mockDatasets } : mockStatus) }) as Response);
     await open();
-    await act(async () => { fireEvent.click(within(screen.getByRole('table')).getAllByRole('checkbox')[0]); });
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Descargar desde GCS para entrenamiento local' })); });
+    await act(async () => { fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar todos los datasets compartidos' })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Descargar seleccionados' })); });
 
     expect(screen.getByText(sample.summary)).toBeDefined();
     expect(screen.queryByText(/Sincronización completada:/)).toBeNull();
@@ -447,8 +446,8 @@ describe('IngestionView persisted inference dataset and curation', () => {
     global.fetch = vi.fn(async input => ({ ok: true, json: async () => privateCatalogFixture(input) ?? (String(input).includes('/sync') ? result
       : String(input).includes('/datasets') ? { datasets: mockDatasets } : mockStatus) }) as Response);
     await open();
-    await act(async () => { fireEvent.click(within(screen.getByRole('table')).getAllByRole('checkbox')[0]); });
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Descargar desde GCS para entrenamiento local' })); });
+    await act(async () => { fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar todos los datasets compartidos' })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Descargar seleccionados' })); });
 
     expect(screen.getByText(/limpieza de temporales pendiente/)).toBeDefined();
     expect(screen.getByText(/Sincronización parcial:/)).toBeDefined();
@@ -461,8 +460,8 @@ describe('IngestionView persisted inference dataset and curation', () => {
     global.fetch = vi.fn(async input => ({ ok: true, json: async () => privateCatalogFixture(input) ?? (String(input).includes('/sync') ? result
       : String(input).includes('/datasets') ? { datasets: mockDatasets } : mockStatus) }) as Response);
     await open();
-    await act(async () => { fireEvent.click(within(screen.getByRole('table')).getAllByRole('checkbox')[0]); });
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Descargar desde GCS para entrenamiento local' })); });
+    await act(async () => { fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar todos los datasets compartidos' })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Descargar seleccionados' })); });
 
     expect(screen.getByText(/Sincronización completada:/)).toBeDefined();
     expect(screen.getByText(/Registrado y actualizado en PostgreSQL/)).toBeDefined();

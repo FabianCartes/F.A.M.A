@@ -1,0 +1,166 @@
+{
+  "schema": "fama.dataset-transfer-ui/v1",
+  "base_commit": "d6c996a44ec35dc1c3acd4a9a36bbcfea5f05256",
+  "status": "verified_with_documented_limits",
+  "scope": "Frontend transfer controls only; existing backend contracts and model preparation unchanged.",
+  "deployed_sources": [
+    {
+      "file": "components/ingestion/DatasetImportPanel.tsx",
+      "sha256": "1e5321523794a9e0da7cabe0dfd22b50fcb10ee129ebdbe35db7fd5e104128ce"
+    },
+    {
+      "file": "components/views/IngestionView.tsx",
+      "sha256": "00a28ffebbfa0d97eeb851ede2c11f3230973f1648bd4391a92172c95df94dc6"
+    }
+  ],
+  "verification_before_reboot": {
+    "frontend_suite": {
+      "command": "cd frontend && npm test",
+      "files": 52,
+      "passed": 473,
+      "failed": 0
+    },
+    "build": {
+      "command": "cd frontend && npm run build",
+      "exit_code": 0,
+      "includes_typescript": true
+    },
+    "scoped_lint": {
+      "files": [
+        "components/views/IngestionView.tsx",
+        "components/ingestion/DatasetImportPanel.tsx",
+        "components/views/__tests__/DatasetTransfers.test.tsx"
+      ],
+      "exit_code": 0
+    },
+    "global_lint": {
+      "exit_code": 1,
+      "errors": 5,
+      "warnings": 4,
+      "files_unchanged_from_base": [
+        "ImportedTrainingPanel.tsx",
+        "PredictionView.tsx",
+        "trainingHistoryApi.test.ts"
+      ]
+    },
+    "native_assessment": {
+      "risk": "unassessable",
+      "reason": "Untracked scope not declared",
+      "independent_verifier_required": false,
+      "approved": false
+    },
+    "final_run": "job-8: exit 0, 21 seconds; tests/build/scoped lint. Not rerun after reboot."
+  },
+  "browser_before_reboot": {
+    "status": "passed",
+    "actual_served_frontend": true,
+    "all_api_intercepted": true,
+    "synthetic_data": true,
+    "real_transfers": false,
+    "checks": [
+      "Refresh and selection admit no transfer",
+      "Cancel submits no transfer",
+      "Confirmed download targets selected datasets and preprocess:false",
+      "Upload targets its private import; name/IDs confirmed",
+      "202 shown as admission, not completion",
+      "Modal keyboard containment and focus restoration"
+    ],
+    "desktop_viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "mobile_viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "page_horizontal_overflow": false,
+    "mobile_private_table": {
+      "tableWidth": 760,
+      "containerWidth": 301,
+      "minimumHeadingGap": 18.1015625
+    },
+    "visual_red": {
+      "minimum_heading_gap_px": 0,
+      "failure": "Mobile private table headings lack readable separation"
+    },
+    "visual_green": {
+      "minimum_heading_gap_px": 18.1015625
+    },
+    "local_artifacts": [
+      {
+        "path": ".dataset-transfer-ui-a1c6e9f2/before-desktop.png",
+        "sha256": "e4fba4ad23cd6be6dec482d5cd3c26b91fda26d199207ff4b198950161abfd1b"
+      },
+      {
+        "path": ".dataset-transfer-ui-a1c6e9f2/after-desktop.png",
+        "sha256": "0da22db0a9bdc4eeae667e06df8bfd9fcaa682386eaf5b50a3008bf4aacbb77e"
+      },
+      {
+        "path": ".dataset-transfer-ui-a1c6e9f2/after-mobile.png",
+        "sha256": "b44e9deeee69a9c13a59c2610d81a829fc41ee5c7b702749d0ba6e09dd857672"
+      },
+      {
+        "path": ".dataset-transfer-ui-a1c6e9f2/browser-mobile-red.json",
+        "sha256": "a218a6e79ce9e64f4ad41c28db8e52c1ec64e8b5782aef7397db6f2254abffa3"
+      },
+      {
+        "path": ".dataset-transfer-ui-a1c6e9f2/browser-after-final.json",
+        "sha256": "2ed9000255f5e1de7084019ccc9f20e5759209dff43b7901f8ba87fe011e82e3"
+      }
+    ],
+    "unmatched_gets_synthetic_404": [
+      "/api/feedback/stats",
+      "/api/feedback/sync",
+      "/api/training/hardware"
+    ],
+    "isolated_context_closed": true
+  },
+  "after_reboot": {
+    "http": {
+      "root_http": 200,
+      "same_origin_access_http": 200,
+      "development_mode": false,
+      "anonymous_private_catalog_http": 401,
+      "authenticated_transfers": false
+    },
+    "preservation": {
+      "read_only_verifier": "mw6lflkf-3-x3jl",
+      "container_ids_unchanged": true,
+      "db_raw_config_hash_equal": true,
+      "api_consumer_raw_config_hash_equal": false,
+      "only_config_difference": "HostConfig.Dns: null -> []",
+      "mounts_and_order_equal": true,
+      "api_gpu_request_equal": true,
+      "environment_and_network_names_equal": true,
+      "cause": "Compatible with daemon normalization; cause not independently established",
+      "failed_check_preserved": "Parent strict raw-hash assertion exit1, explained by independent comparison with baseline-matching private snapshots"
+    },
+    "services": {
+      "database": "original container running; pg_isready accepts connections",
+      "api": "original container healthy; GPU request and mounts retained",
+      "frontend": "existing copied source; live parent job-1 on127.0.0.1:3000",
+      "zip": "active/running; guarded preflight exit0, NoNewPrivileges=yes, UMask0077",
+      "gcs_consumer": "running and polling; Docker health unhealthy due inherited HTTP probe"
+    },
+    "gcs_dns_resolution": {
+      "fama-manual-dev-44938bc83ad0184c-api": {
+        "exit_code": 0,
+        "stdout": "GCS_DNS_RESOLVED",
+        "stderr": ""
+      },
+      "fama-gcs-sync-consumer-a7c3e291": {
+        "exit_code": 0,
+        "stdout": "GCS_DNS_RESOLVED",
+        "stderr": ""
+      }
+    },
+    "configuration_changes_made": false,
+    "suite_or_browser_rerun": false
+  },
+  "limits": [
+    "Browser evidence is synthetic, not authenticated backend/GCS end-to-end.",
+    "No real transfer, training, dataset rewrite, installation or publishing performed.",
+    "Global lint failures in unchanged files remain; native assessment is not approval.",
+    "Consumer polls its queue but Docker healthcheck wrongly probes an absent HTTP server and remains unhealthy."
+  ]
+}

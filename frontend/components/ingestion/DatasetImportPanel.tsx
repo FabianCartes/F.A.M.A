@@ -21,8 +21,8 @@ const statusLabels: Record<string, string> = {
 const inputClass = "mt-1 block w-full rounded-lg border border-[#2d303b] bg-[#111215] px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500";
 const buttonClass = "rounded-lg border border-emerald-800/60 bg-emerald-950/40 px-3 py-2 text-xs font-semibold text-emerald-400 hover:bg-emerald-900/50 transition-colors focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed";
 
-export default function DatasetImportPanel({ sessionToken = "", onCatalogChange }: {
-  sessionToken?: string; onCatalogChange?: () => void;
+export default function DatasetImportPanel({ sessionToken = "", onCatalogChange, triggerLabel = "Importar dataset", datasetNames = {} }: {
+  sessionToken?: string; onCatalogChange?: () => void; triggerLabel?: string; datasetNames?: Record<string, string>;
 } = {}) {
   const [open, setOpen] = useState(false);
   const [started, setStarted] = useState(false);
@@ -50,6 +50,7 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange 
   const requestKey = useRef("");
   const operationKey = useRef({ signature: "", key: "" });
   const publishedDataset = job?.status === "imported" ? job.dataset_id : null;
+  const publishedDatasetName = publishedDataset ? datasetNames[publishedDataset] : undefined;
   const publishedSyncCount = job?.preview.synced_count;
   useEffect(() => {
     if (publishedDataset) onCatalogChange?.();
@@ -217,7 +218,7 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange 
       if (!limits) void act("Consultando configuración…", initialize);
     }} aria-haspopup="dialog" aria-expanded={open}>
       <svg aria-hidden="true" className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M12 16V4m-4 4l4-4 4 4" /></svg>
-      Importar dataset
+      {triggerLabel}
     </button>
     {open && createPortal(<div data-testid="dataset-import-backdrop" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={event => {
       if (event.target === event.currentTarget) setOpen(false);
@@ -300,8 +301,12 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange 
           {job.status === "imported" && <>
             <p>Importada localmente: {job.added_count} archivo(s) nuevo(s).{job.added_count === 0 ? " No hay novedades; no se creó un dataset vacío." : ""}</p>
             {job.dataset_id && <>
-              <button className={buttonClass} disabled={!!busy || executing} onClick={() => void act("Admitiendo sincronización…", () => action("sync"))}>{job.sync_status === "running" || job.sync_status === "error" ? "Reanudar sincronización con GCS" : "Sincronizar con GCS"}</button>
-              <p className="text-xs">Acción remota explícita. Si queda en curso, reanuda el siguiente lote. Verificados: {job.preview.synced_count}.</p>
+              <p className="text-xs break-words">Destino privado en GCS: dataset {publishedDatasetName ? `${publishedDatasetName} (${job.dataset_id})` : job.dataset_id}, importación {job.id}. La copia local se conserva; no se publica en el catálogo compartido.</p>
+              <button className={buttonClass} disabled={!!busy || executing} onClick={() => {
+                if (!window.confirm(`Subir a GCS el dataset privado ${publishedDatasetName ? `«${publishedDatasetName}» (${job.dataset_id})` : job.dataset_id} de la importación ${job.id}. Se conserva la copia local y no se publica en el catálogo compartido. ¿Continuar?`)) return;
+                void act("Admitiendo subida a GCS…", () => action("sync"));
+              }}>Subir este dataset a GCS</button>
+              <p className="text-xs">{job.sync_status === "running" || job.sync_status === "error" ? "Puedes reanudar la subida pendiente con la misma acción. " : ""}Acuses históricos de subida: {job.preview.synced_count}. Un trabajo admitido todavía no acredita una copia completa.</p>
               <button className={buttonClass} disabled={!!busy} onClick={() => setLocalDataset(job.dataset_id)}>Consultar archivos locales</button>
               {localDataset === job.dataset_id && <ImportDetailPage key={`${token}:${job.dataset_id}`} token={token} endpoint={`${importBase}/datasets/${job.dataset_id}/files`} collection="files" label="archivos locales" schema={audioSchema}
                 renderItem={f => <button className="underline text-xs" disabled={!!busy} onClick={() => void act("Descargando audio…", async () => {

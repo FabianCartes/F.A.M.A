@@ -61,14 +61,14 @@ it('shows the confirmed owner import after navigating to training with blocking 
   await waitFor(() => expect((screen.getByLabelText('Tipo de fuente') as HTMLSelectElement).value).toBe('imported'));
   await waitFor(() => expect(screen.queryByRole('option', { name: 'Owner confirmed WAV' })).toBeNull());
   fireEvent.click(screen.getByRole('button', { name: 'Gestión de audios' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Importar dataset' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Importar ZIP' }));
   const dialog = screen.getByRole('dialog');
   const start = within(dialog).getByRole('button', { name: 'Importar dataset' });
   await waitFor(() => expect((start as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(start);
   fireEvent.change(screen.getByLabelText('Nombre del dataset'), { target: { value: 'Owner confirmed WAV' } });
   fireEvent.change(screen.getByLabelText('Archivo ZIP'), { target: { files: [new File(['zip'], 'birds.zip')] } });
-  fireEvent.click(screen.getByRole('button', { name: /^(Importar|Validar) ZIP$/ }));
+  fireEvent.click(within(dialog).getByRole('button', { name: /^(Importar|Validar) ZIP$/ }));
   await screen.findByText(/Importada localmente: 1 archivo/);
   fireEvent.click(screen.getByRole('button', { name: 'Cerrar importación' }));
   fireEvent.click(screen.getByRole('button', { name: 'Entrenamiento' }));
