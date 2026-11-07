@@ -22,22 +22,26 @@ describe("login web", () => {
     expect(screen.queryByRole("link", { name: /registr/i })).toBeNull();
   });
 
-  it.each([
-    { mode: "workspace" as const, status: 401, text: "Acceso legacy disponible" },
-    { mode: "login" as const, status: 503, text: "Continuar con recursos legacy" },
-  ])("hides the legacy entry in $mode without removing its implementation", async ({ mode, status, text }) => {
-    vi.stubGlobal("fetch", vi.fn(async () => json({}, status)));
-    render(<SessionBoundary mode={mode}><p>Existing workspace</p></SessionBoundary>);
-    const legacyEntry = await screen.findByText(text);
-    expect(window.getComputedStyle(legacyEntry).display).toBe("none");
-    expect(screen.queryByRole("link", { name: "Continuar con recursos legacy" })).toBeNull();
-    if (mode === "workspace") {
-      expect(screen.getByRole("link", { name: "Iniciar sesión" })).toBeDefined();
-      expect(screen.getByText("Existing workspace")).toBeDefined();
-    } else {
-      expect(screen.getByRole("button", { name: "Reintentar comprobación" })).toBeDefined();
-      expect(legacyEntry.getAttribute("href")).toBe("/");
-    }
+  it("does not mount workspace children while checking or after confirming anonymous access", async () => {
+    let finish!: (response: Response) => void;
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(resolve => { finish = resolve; })));
+    const mounted = vi.fn();
+    function Workspace() { mounted(); return <p>Existing workspace</p>; }
+    render(<SessionBoundary><Workspace /></SessionBoundary>);
+    expect(screen.queryByText("Existing workspace")).toBeNull();
+    expect(mounted).not.toHaveBeenCalled();
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { finish(json({}, 401)); });
+    await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith("/login"));
+    expect(mounted).not.toHaveBeenCalled();
+    expect(screen.queryByText(/legacy/i)).toBeNull();
+  });
+
+  it("returns an already authenticated login visitor to the workspace", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json(user)));
+    render(<SessionBoundary mode="login" />);
+    await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith("/"));
+    expect(screen.queryByLabelText("Contraseña")).toBeNull();
   });
 
   it("confirms the cookie after login and only then navigates home", async () => {

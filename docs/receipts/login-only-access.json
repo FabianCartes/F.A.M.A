@@ -1,0 +1,136 @@
+{
+  "schema": "fama.login-only-access/v1",
+  "base_commit": "6b37e18348265865c768e8fd1ec823b29794e089",
+  "status": "verified_with_documented_limits",
+  "risk_item": 2,
+  "scope": "Central frontend guard only; backend/API permissions and services unchanged.",
+  "production_file": "frontend/components/auth/SessionBoundary.tsx",
+  "deployed_sha256": "78d33e9394e3c0e9ffd54f77da38bba968ef559e3c827ad7c8bd235bc62a9569",
+  "writer_verification": {
+    "auth_and_integration_tests": {
+      "files": 6,
+      "passed": 32
+    },
+    "full_frontend_suite": {
+      "command": "cd frontend && npm test",
+      "files": 52,
+      "passed": 477,
+      "failed": 0
+    },
+    "typescript_exit_code": 0,
+    "build_exit_code": 0,
+    "scoped_eslint_exit_code": 0,
+    "diff_check_exit_code": 0,
+    "global_lint_prior_run": {
+      "exit_code": 1,
+      "errors": 5,
+      "warnings": 4,
+      "unchanged_files": [
+        "ImportedTrainingPanel.tsx",
+        "PredictionView.tsx",
+        "trainingHistoryApi.test.ts"
+      ]
+    }
+  },
+  "failures_preserved": [
+    "Initial public browser RED: workspace mounted while /me remained pending.",
+    "Initial suite:472PASS/4FAIL from obsolete anonymous and post-logout workspace expectations; adapted two test modules while retaining both training-profile contracts.",
+    "S3 race reproduced RED: deferred private401 after logout503 erased alert; fixed pending-logout invalidation guard.",
+    "First post-deploy browser run: ambiguous unfiltered alert locator in503 phase; two alerts present. One bounded helper correction selects exact existing503 message; no application change or removed assertion."
+  ],
+  "independent_verification": {
+    "initial_task": "mw6mqn71-8-lmup",
+    "isolated_focused_tests_passed": 31,
+    "scope": "S1/S2/S4 and documentation; S3 initially unresolved, not initially proven defective.",
+    "targeted_task": "mw6my0wl-a-xzqg",
+    "S3": "PASS after reproduction and bounded correction",
+    "targeted_tests": {
+      "passed": 1,
+      "skipped": 8
+    },
+    "not_independently_rerun": [
+      "writer RED",
+      "full suite",
+      "build",
+      "lint",
+      "TypeScript"
+    ]
+  },
+  "parent_spot_check": {
+    "command": "cd frontend && npm test -- components/auth/__tests__/workspace.test.tsx -t \"preserves failed logout recovery\"",
+    "passed": 1,
+    "skipped": 8,
+    "exit_code": 0
+  },
+  "native_assessment": {
+    "risk": "high via security item2",
+    "native_risk": "unassessable",
+    "reason": "Undeclared untracked scope",
+    "independent_verifier_required": true,
+    "native_approved": false
+  },
+  "deployment": {
+    "only_one_source_file_applied": true,
+    "backup_verified_against_base": true,
+    "api_db_consumer_configuration_and_ids_preserved": true,
+    "zip_active": true,
+    "services_restarted": false,
+    "http": {
+      "/": 200,
+      "/login": 200,
+      "/api/auth/web/me": 401,
+      "/api/ingestion/imports/datasets": 401
+    },
+    "redirect_note": "Anonymous / -> /login is a client-side replace, not an HTTP302."
+  },
+  "browser": {
+    "status": "passed",
+    "actual_served_frontend": true,
+    "all_api_intercepted": true,
+    "synthetic_identity_only": true,
+    "real_authenticated_actions": false,
+    "phases": [
+      "pending-initial-session",
+      "confirmed-anonymous",
+      "valid-login",
+      "logout-failure",
+      "logout-retry",
+      "expiry-on-focus",
+      "initial-session-error"
+    ],
+    "checks_passed": 23,
+    "unmatched_gets_synthetic_404": [
+      "/api/feedback/stats",
+      "/api/training/hardware"
+    ],
+    "context_closed": true,
+    "evidence": [
+      {
+        "path": ".login-only-access-6b37e18/browser-before.json",
+        "sha256": "0e40c6c46fcb0bf886a31c9b9c076b5126a30a0cfc8a686bb769002035e998e3"
+      },
+      {
+        "path": ".login-only-access-6b37e18/browser-after.json",
+        "sha256": "37e13f64ebda12d3960c5b708ea9317e2ea0f8dd7084108152c08994003661a8"
+      },
+      {
+        "path": ".login-only-access-6b37e18/browser-after-final.json",
+        "sha256": "d82dbf931bf2006dd632eb9a1b591d98269c05c7949cddc7137bcb281d402590"
+      },
+      {
+        "path": ".login-only-access-6b37e18/login-anonymous.png",
+        "sha256": "d268115b409a4f3735b5deb6d8304833ba6d2fe1ea9bc3ac06f83df7202b8b56"
+      },
+      {
+        "path": ".login-only-access-6b37e18/login-authenticated.png",
+        "sha256": "b80cfb541ff99559d69751334fb8f1f14e21f99d18eab25e42c014a410a3cc29"
+      }
+    ]
+  },
+  "limits": [
+    "Frontend guard does not replace endpoint authentication/authorization.",
+    "Browser login/logout are synthetic, not a real-account end-to-end test.",
+    "Unrelated hardware/feedback GET fixtures404 do not qualify those modules.",
+    "No backend change, installation, real transfer, training, cleanup, push or PR."
+  ]
+}

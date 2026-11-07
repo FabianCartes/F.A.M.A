@@ -15,6 +15,11 @@ La documentación está organizada temáticamente en subdirectorios especializad
 - El respaldo privado de fuentes/índice no es un respaldo consistente de datos operativos ni una restauración comprobada. Logs crudos, scripts operativos locales y metadatos históricos excluidos no forman parte de un checkout limpio; sus referencias en recibos son históricas.
 - Esta consolidación no cambia el despliegue ni acredita producción. GCS, aceptación visual y pendientes operacionales mantienen su alcance separado; no hay push, PR ni merge.
 
+## Acceso web
+
+- [Entrada y recuperación de sesión](./manuales/acceso-web.md) y [plan](./arquitectura/login-only-access-plan.md) y [recibo](./receipts/login-only-access.json): guardia central del workspace, login obligatorio y errores con reintento; no sustituye la autorización de las APIs.
+- [Contratos de sesión web](./manuales/sesion-web-importados.md): cookies, Bearer y configuración del backend conservados.
+
 ## GPU opcional local
 
 - [Uso, CPU y recuperación](./manuales/gpu-opcional-entrenamiento.md): configuración GPU opcional, restricciones de memoria y límites del fallback CPU.

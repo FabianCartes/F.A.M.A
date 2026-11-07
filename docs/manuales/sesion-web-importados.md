@@ -1,6 +1,6 @@
 # Sesión web para recursos importados
 
-Esta integración reutiliza la sesión opaca de `aa53e09a9b935f752b01fe464cbc1a5bd10556c0` sin sustituir el contrato Bearer ni exigir login a los recursos legacy. No instala la aplicación, no crea usuarios y no habilita automáticamente el esquema en una base existente.
+Esta integración reutiliza la sesión opaca de `aa53e09a9b935f752b01fe464cbc1a5bd10556c0` sin sustituir el contrato Bearer ni cambiar los permisos de los endpoints legacy. La interfaz del workspace sí exige una identidad confirmada; consulta [acceso web y recuperación](acceso-web.md). No instala la aplicación, no crea usuarios y no habilita automáticamente el esquema en una base existente.
 
 ## Contratos HTTP
 
@@ -31,7 +31,7 @@ Las tablas `sesion_web`, `cuota_acceso` y `evento_seguridad` se excluyen del boo
 
 El navegador usa la API del mismo origen mediante el rewrite `/api/:path*` ya existente. `API_URL` selecciona el backend del proxy; una URL pública de API de otro origen no es válida para la sesión web. No guardar credenciales en `localStorage` ni convertir la cookie en Bearer.
 
-La pantalla de acceso y los componentes se adaptan de la implementación existente, sin su instalador, recuperación de contraseñas ni política global de asignaciones. Los errores de configuración no redirigen a un instalador ausente. Para el MVP se ocultan el aviso «Acceso legacy disponible» y el enlace «Continuar con recursos legacy», sin eliminar su implementación. El inicio de sesión y sus comprobaciones se conservan. Este cambio es solo visual: no bloquea el acceso directo al workspace ni cambia los permisos de las rutas legacy; la política global de acceso queda como trabajo futuro.
+La pantalla de acceso y los componentes se adaptan de la implementación existente, sin su instalador, recuperación de contraseñas ni política global de asignaciones. Los errores de configuración no redirigen a un instalador ausente. `SessionBoundary` no monta el workspace mientras comprueba la sesión ni sin una identidad confirmada; el anónimo confirmado vuelve a `/login` mediante `replace`. Se elimina la excepción de navegación legacy anónima. Los errores de comprobación y revocación mantienen una pantalla de acceso bloqueada con advertencia y reintento, sin afirmar un cierre no confirmado. El inicio de sesión y la disciplina de generaciones se conservan. Esta guardia de interfaz no modifica ni sustituye los permisos de las APIs legacy.
 
 ## Verificación y límites
 

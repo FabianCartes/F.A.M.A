@@ -55,5 +55,6 @@ it.each(['other-owner', 'unauthorized', 'logout'])('clears the private selection
   expect(screen.queryByRole('option', { name: model.name })).toBeNull();
   await act(async () => { catalogues.forEach((resolve, index) => resolve(Response.json({ models: index === 0 ? [model] : [] }))); });
   expect(screen.queryByRole('option', { name: model.name })).toBeNull();
-  expect((screen.getByLabelText('Modelo:') as HTMLSelectElement).value).toBe('');
+  if (transition === 'other-owner') expect((screen.getByLabelText('Modelo:') as HTMLSelectElement).value).toBe('');
+  else expect(screen.queryByLabelText('Modelo:')).toBeNull();
 });

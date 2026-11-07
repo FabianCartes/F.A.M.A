@@ -101,5 +101,8 @@ it.each([
  expect(body.models).toEqual([{architecture:selectedArchitecture,weight:1,epochs:1,learning_rate:learningRate,batch_size:2}]);
  fireEvent.click(screen.getByText('Cerrar sesión'));
  await waitFor(()=>expect(screen.queryByLabelText('Colección importada')).toBeNull());
- expect((screen.getByLabelText('Tipo de fuente') as HTMLSelectElement).value).toBe('legacy');
+ expect(screen.queryByLabelText('Tipo de fuente')).toBeNull();
+ expect(screen.queryByRole('region', {name:'Preparación importada'})).toBeNull();
+ expect(screen.queryByText('Arbitrary WAV')).toBeNull();
+ expect(screen.getByRole('region', {name:'Acceso a F.A.M.A.'})).toBeDefined();
 });
