@@ -12,10 +12,10 @@ Verificación: TDD con runner aislado SQLite/CPU/sin red; preflight sin pendient
 
 ## Tasks
 
-- T1 | S1,S3 | inline | done | RED36→GREEN38:65PASS/5módulos, diferencial39:1PASS,30rutas protegidas intactas. CLI/help/manual actualizados; cambios locales sin commit por entrega parcial.
-- T2 | S1–S4 | inline, mantenimiento solo padre | done | jobs40/43: respaldo/restore31tablas y migración/permisos en copia; job44: DDL aditivo, hashes31tablas iguales, mismos API/DB/config/GPU/ZIP restaurados; job45: consumidor CPU separado iniciado con cero sync antiguos. Commit pendiente.
-- T3 | S1,S3,S4 | inline | done | job46 exit0/23s: ZIP22629B, WAV32044B; recepción fragmentada pública, preview/confirm/sync202→succeeded; revisión1 completa; original/manifiesto verificados por generación/SHA256/tamaño; replay misma clave/mismo trabajo; anónimo401. Solo dataset sintético nuevo. Commit pendiente.
-- T4 | S1–S4 | independiente | in_progress | Verificador mw5txsgq-s-rr5g PASS S1–S4 con límites; vector exit0/stderr vacío, ningún defecto atribuible. Recibo actualizado; cierre y commit acotado pendientes. Sin aprobación nativa ni publicación.
+- T1 | S1,S3 | inline | done | RED36→GREEN38:65PASS/5módulos, diferencial39:1PASS,30rutas protegidas intactas. CLI/help/manual actualizados; commit27903a5.
+- T2 | S1–S4 | inline, mantenimiento solo padre | done | jobs40/43: respaldo/restore31tablas y migración/permisos en copia; job44: DDL aditivo, hashes31tablas iguales, mismos API/DB/config/GPU/ZIP restaurados; job45: consumidor CPU separado iniciado con cero sync antiguos. Commit27903a5.
+- T3 | S1,S3,S4 | inline | done | job46 exit0/23s: ZIP22629B, WAV32044B; recepción fragmentada pública, preview/confirm/sync202→succeeded; revisión1 completa; original/manifiesto verificados por generación/SHA256/tamaño; replay misma clave/mismo trabajo; anónimo401. Solo dataset sintético nuevo. Commit27903a5.
+- T4 | S1–S4 | independiente | done | Verificador mw5txsgq-s-rr5g PASS S1–S4 con límites; vector exit0/stderr vacío, ningún defecto atribuible. Manual/recibo y evidencia en commit27903a5; cierre documental separado. Sin aprobación nativa ni publicación.
 
 ## Log
 
@@ -34,3 +34,5 @@ Verificación: TDD con runner aislado SQLite/CPU/sin red; preflight sin pendient
 - L12. ASSESS directo: nativeRisk unassessable por untracked no declarados; escalación item1 devuelve plan high con verificador independiente. No equivale a aprobación. Se prepara un vector de lectura con auth login/logout acotado; sin DDL, grants, uploads, cambios de configuración ni revisión de secretos por el verificador.
 
 - L13. Verificador mw5txsgq-s-rr5g: PASS S1/S2/S3 y S4 con límites; vector inspeccionado y ejecutado una vez, exit0/stderr vacío, sin defectos atribuibles. Confirmó configuración, cola sin activos, tres trabajos sintéticos terminados, catálogo/historial previo iguales, CUDA, permisos consultados y dos lecturas cloud condicionadas. Respaldo/restore/DDL/creación-replay-401 y68tests son evidencia del padre, no repetidos independientemente. Negativas de permisos seleccionadas, no auditoría exhaustiva de grants. Native unassessable, no aprobado.
+
+- L14. Unidad implementada y verificada: 979276e..27903a5, seis archivos,382adiciones/6bajas (388líneas authored). Esta es la frontera de revisión, no los195commits/89849líneas acumulados desde origin/main. Estrategia de entrega: preservar rama/locales, cierre documental separado, sin push/PR/merge; no presentar la rama completa como candidato de esta unidad. Todos T1–T4 completos; riesgos1/2/5 y límites en recibo.

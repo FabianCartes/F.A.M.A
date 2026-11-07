@@ -165,5 +165,7 @@
     "No browser visual acceptance",
     "No university infrastructure qualification",
     "No push/PR/merge"
-  ]
+  ],
+  "source_unit_commit": "27903a5",
+  "review_slice": "979276e..27903a5"
 }
