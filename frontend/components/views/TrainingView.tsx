@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { API_BASE_URL, apiSessionRevision, notifyUnauthorized } from "@/lib/api";
 import { useOptionalWebSession } from '@/components/auth/SessionBoundary';
 import ImportedTrainingPanel from '@/components/training/ImportedTrainingPanel';
+import TrainingDatasetSelector, { type CatalogSelection } from '@/components/training/TrainingDatasetSelector';
 import type { ImportedSelection, ImportedProfile } from '@/lib/schemas/importedTraining';
 import type { ModelHistoryItem } from "@/lib/schemas/training";
 import { sumWeights, normalizeWeightsTo100 } from "@/lib/utils/ensembleWeights";
@@ -107,12 +108,15 @@ export default function TrainingView() {
   const mounted = useRef(true);
   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;privateStart.current?.abort();};},[]);
   const session = useOptionalWebSession();
-  const [sourceType, setSourceType] = useState(() => session ? 'imported' : 'legacy');
   const [imported, setImported] = useState<ImportedSelection|null>(null);
+  const [catalogChoice, setCatalogChoice] = useState<{owner:number|undefined;row:CatalogSelection}|null>(null);
+  const catalogSelection = catalogChoice?.owner === session?.id ? catalogChoice?.row : null;
+  const sourceType = catalogSelection?.source_type ?? (session ? 'imported' : 'legacy');
+  const legacyBlocked = catalogSelection?.source_type === 'legacy' && !catalogSelection.eligible;
   const [terminalMessage, setTerminalMessage] = useState('');
-  const effectiveImported = sourceType === 'imported' && session ? imported : null;
+  const effectiveImported = sourceType === 'imported' && session && imported?.dataset_id === catalogSelection?.id ? imported : null;
   // 1. Estado de Configuración (IE_03)
-  const [selectedDataset, setSelectedDataset] = useState<string>("AvesChilenas");
+  const selectedDataset = catalogSelection?.source_type === 'legacy' ? catalogSelection.id : 'AvesChilenas';
   const [learningRate, setLearningRate] = useState<string>("0.001");
   const [weightDecay, setWeightDecay] = useState<string>("0.01");
   const [epochs, setEpochs] = useState<string>("10");
@@ -893,7 +897,7 @@ export default function TrainingView() {
 
   // Iniciar Entrenamiento (CU_INV_03)
   const handleStartTraining = async () => {
-    if (!progressKnown || isTraining || isStarting || startInFlight.current) return;
+    if (!progressKnown || isTraining || isStarting || startInFlight.current || legacyBlocked) return;
     if (sourceType === 'imported' && (!effectiveImported || ensembleSize !== 1)) {
       alert('Seleccione una preparación propia verificada; importados admite solo un modelo.'); return;
     }
@@ -1302,57 +1306,26 @@ export default function TrainingView() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Tarjeta: Seleccionar Dataset */}
         <div>
-          <label>Tipo de fuente<select value={sourceType} disabled={isTraining} onChange={e=>{setSourceType(e.target.value);setImported(null);}}><option value="legacy">Legacy</option><option value="imported" disabled={!session}>Importada (sesión requerida)</option></select></label>
+          <div data-testid={sourceType==='legacy'?'dataset-selection-card':undefined} className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-3 shadow-sm">
+            <TrainingDatasetSelector key={session?.id ?? 'legacy'} includeImported={Boolean(session)} defaultLegacyName={session ? undefined : 'AvesChilenas'} disabled={isTraining || isStarting} onSelect={row=>{
+              setCatalogChoice({owner:session?.id,row});setImported(null);
+            }}/>
+            {sourceType==='legacy'&&<p className="text-xs text-cyan-400">Arquitectura: {ensembleSize === 1 ? architecture : `${ensembleSize} Modelos Ensamble`}</p>}
+            {!catalogSelection&&sourceType==='legacy'&&<>
+              <p role="status" className="text-xs text-gray-400">Referencia legacy predeterminada. Al iniciar se verificará que AvesChilenas esté registrado y sea compatible; no es una preparación importada lista.</p>
+              <p className="text-xs text-amber-400">Cada grabación cuenta como un grupo independiente; la independencia no está verificada por el número de archivos.</p>
+            </>}
+            {catalogSelection?.source_type==='legacy'&&<>
+              <p role="status" className="text-xs text-gray-300">{legacyBlocked?'Configuración incompatible: este dataset no está admitido en el flujo actual.':'Compatible con el flujo actual. La preparación y validación se realizan al iniciar; no es una preparación importada lista.'}</p>
+              <p className="text-xs text-gray-400">{catalogSelection.class_count == null ? 'Clases desconocidas' : `${catalogSelection.class_count} clases`} · {catalogSelection.audio_count} audios</p>
+              <p className="text-xs text-amber-400">Cada grabación cuenta como un grupo independiente; la independencia no está verificada por el número de archivos.</p>
+            </>}
+          </div>
           {terminalMessage && <p role="status">{terminalMessage}</p>}
           {progressError && <p role="alert">{progressError} <button type="button" onClick={()=>setProgressRetry(n=>n+1)}>Reintentar consulta de progreso</button></p>}
-          {sourceType==='imported' && session && <ImportedTrainingPanel key={session.id} architectureControl={architectureControl} disabled={isTraining} profile={importedProfile} seed={Number(seed)} onSelect={setImported}/>}
-        </div>
-        {sourceType==='legacy' && <div data-testid="dataset-selection-card" className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-3 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-gray-300 font-semibold flex items-center gap-1.5">
-              <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
-              </svg>
-              Seleccionar Conjunto de Datos
-            </span>
-            {currentDataset ? (
-              <span className="text-[10px] text-gray-400 font-mono px-2 py-0.5 rounded bg-[#111215] border border-[#23252e]">
-                {currentDataset.audio_count ? currentDataset.audio_count.toLocaleString() : "0"} audios {currentDataset.size_mb ? `· ${currentDataset.size_mb} MB` : ""}
-              </span>
-            ) : null}
-          </div>
-
-          <div>
-            <label className="text-[11px] text-gray-400 block mb-1.5 font-medium">
-              Dataset para Entrenamiento
-            </label>
-            <select
-              value={selectedDataset}
-              onChange={(e) => setSelectedDataset(e.target.value)}
-              disabled={isTraining}
-              className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-emerald-600 font-mono"
-            >
-              {datasets.length === 0 ? (
-                <option value="AvesChilenas">AvesChilenas (1211 audios)</option>
-              ) : (
-                datasets.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
-
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-gray-400 pt-1 border-t border-[#23252e]/60">
-            <span>Clases objetivo: <strong className="text-gray-200">{currentDataset?.class_count || 15} clases detectadas</strong></span>
-            <span className="text-cyan-400 font-mono text-[10px] bg-cyan-950/40 border border-cyan-800/40 px-2 py-0.5 rounded inline-flex items-center gap-1 self-start sm:self-auto">
-              <span className="text-gray-400">Arquitectura:</span> {ensembleSize === 1 ? architecture : `${ensembleSize} Modelos Ensamble`}
-            </span>
-          </div>
+          {sourceType==='imported' && session && catalogSelection?.source_type==='imported' && <ImportedTrainingPanel key={`${session.id}:${catalogSelection.id}`} selectedDataset={catalogSelection} architectureControl={architectureControl} disabled={isTraining || isStarting} profile={importedProfile} seed={Number(seed)} onSelect={setImported}/>}
         </div>
 
-        }
         {/* Tarjeta: Monitor de Hardware / Cómputo */}
         <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-3 shadow-sm">
           <div className="flex items-center justify-between">
@@ -2376,7 +2349,7 @@ export default function TrainingView() {
           <button
             type="button"
             onClick={handleStartTraining}
-            disabled={!progressKnown || isTraining || isStarting || (sourceType === 'imported' && (!effectiveImported || ensembleSize !== 1))}
+            disabled={!progressKnown || isTraining || isStarting || legacyBlocked || (sourceType === 'imported' && (!effectiveImported || ensembleSize !== 1))}
             className={`flex-1 py-2.5 rounded-lg text-white font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-40 disabled:cursor-not-allowed ${
               ensembleSize === 3
                 ? "bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 shadow-emerald-950/40"

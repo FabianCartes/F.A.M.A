@@ -58,8 +58,8 @@ it('shows the confirmed owner import after navigating to training with blocking 
   render(<Home />);
   await screen.findByText('Owner');
   fireEvent.click(screen.getByRole('button', { name: 'Entrenamiento' }));
-  await waitFor(() => expect((screen.getByLabelText('Tipo de fuente') as HTMLSelectElement).value).toBe('imported'));
-  await waitFor(() => expect(screen.queryByRole('option', { name: 'Owner confirmed WAV' })).toBeNull());
+  await screen.findByLabelText('Buscar dataset por nombre');
+  await waitFor(() => expect(screen.queryByRole('option', { name: /Owner confirmed WAV/ })).toBeNull());
   fireEvent.click(screen.getByRole('button', { name: 'Gestión de audios' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Importar ZIP' }));
   const dialog = screen.getByRole('dialog');
@@ -72,9 +72,8 @@ it('shows the confirmed owner import after navigating to training with blocking 
   await screen.findByText(/Importada localmente: 1 archivo/);
   fireEvent.click(screen.getByRole('button', { name: 'Cerrar importación' }));
   fireEvent.click(screen.getByRole('button', { name: 'Entrenamiento' }));
-  await waitFor(() => expect((screen.getByLabelText('Tipo de fuente') as HTMLSelectElement).value).toBe('imported'));
-  await screen.findByRole('option', { name: 'Owner confirmed WAV' });
-  fireEvent.change(screen.getByLabelText('Dataset para entrenamiento'), { target: { value: 'owner-import' } });
+  await screen.findByRole('option', { name: /Owner confirmed WAV.*Importado propio/ });
+  fireEvent.change(screen.getByLabelText('Dataset para entrenamiento'), { target: { value: 'imported:owner-import' } });
   await screen.findByText(/Necesita preparación/);
   expect(screen.queryByRole('option', { name: /Foreign/ })).toBeNull();
   expect(screen.queryByLabelText('Preparación existente')).toBeNull();

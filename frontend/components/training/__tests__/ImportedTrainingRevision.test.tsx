@@ -4,6 +4,21 @@ import ImportedTrainingPanel from '../ImportedTrainingPanel';
 import type { ImportedProfile } from '@/lib/schemas/importedTraining';
 const profile:ImportedProfile={architecture:'audio_cnn',channels:1,preprocessing:'mono_mel',windowing:'energy_peak_pad',window_hop_seconds:0.5,audio:{target_sr:8000,duration_seconds:1,n_mels:32,n_fft:256,hop_length:64,f_min:0,f_max:4000,use_gpu_frontend:false}};
 afterEach(()=>{cleanup();vi.unstubAllGlobals();});
+it('restores only matching policy, provenance, profile and seed from a controlled catalog selection without writes',async()=>{
+ const transport=vi.fn();vi.stubGlobal('fetch',transport);
+ const selected={source_type:'imported' as const,id:'own',name:'Smoke',eligible:true,reasons:[],preparations:[{snapshot_id:'snap',prepared_version:'v1',eligible:true,reasons:[],profile,warnings:[],seed:42,policy:{name:'per-wav-stratified-70-15-15-v1',target:[0.7,0.15,0.15]},provenance:{source:'per-wav-independent-assumption-v1'}}]};
+ const select=vi.fn();const view=render(<ImportedTrainingPanel selectedDataset={selected} profile={profile} seed={42} onSelect={select}/>);
+ await screen.findByText(/Ya preparado para entrenar/);
+ expect(select).toHaveBeenLastCalledWith(expect.objectContaining({dataset_id:'own',prepared_version:'v1'}));
+ expect(transport).not.toHaveBeenCalled();
+ view.rerender(<ImportedTrainingPanel selectedDataset={selected} profile={profile} seed={73} onSelect={select}/>);
+ await waitFor(()=>expect(select).toHaveBeenLastCalledWith(null));
+ expect(screen.queryByText(/Ya preparado/)).toBeNull();
+ expect(screen.getByText(/Necesita preparación/)).toBeTruthy();
+ view.rerender(<ImportedTrainingPanel selectedDataset={{...selected,id:'another',preparations:[]}} profile={profile} seed={42} onSelect={select}/>);
+ await waitFor(()=>expect(select).toHaveBeenLastCalledWith(null));
+ expect(transport).not.toHaveBeenCalled();
+});
 it('explains dataset growth and accepted feedback without automatic preparation or historical selectors',async()=>{
  const transport=vi.fn(async()=>Response.json({datasets:[{source_type:'imported',id:'owned',name:'Growing dataset',eligible:false,reasons:['preparation_stale'],preparations:[]}]}));vi.stubGlobal('fetch',transport);
  render(<ImportedTrainingPanel profile={profile} seed={42} onSelect={vi.fn()}/>);

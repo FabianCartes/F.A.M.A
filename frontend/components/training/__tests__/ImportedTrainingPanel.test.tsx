@@ -25,9 +25,56 @@ it.each(['snapshot','members','preparation'])('ignores a late %s after switching
  expect(select).toHaveBeenLastCalledWith(null);expect(screen.queryByText(/Preparado para entrenar/)).toBeNull();
  view.unmount();expect(signal?.aborted).toBe(true);
 });
-it('reports an error without auto-retry or training start',async()=>{
- const transport=vi.fn(async(input:RequestInfo|URL)=>String(input).includes('include_imported')?Response.json({datasets:rows}):Response.json({detail:'No hay suficientes audios por clase.'},{status:422}));vi.stubGlobal('fetch',transport);
+it.each([
+ ['invalid_audio','Audio no utilizable'],
+ ['invalid_profile','Configuración incompatible'],
+ ['split_search_unavailable','Error de comprobación'],
+ ['unknown_server_code','Error de comprobación'],
+])('maps %s safely without treating an indeterminate check as insufficient groups',async(code,message)=>{
+ const transport=vi.fn(async(input:RequestInfo|URL)=>String(input).includes('include_imported')?Response.json({datasets:rows}):Response.json({detail:{code,message:'unsafe details'}},{status:422}));vi.stubGlobal('fetch',transport);
  render(<ImportedTrainingPanel profile={profile} seed={42} onSelect={vi.fn()}/>);
  await screen.findByText('first');fireEvent.change(screen.getByLabelText('Dataset para entrenamiento'),{target:{value:'first'}});fireEvent.click(screen.getByText('Preparar dataset'));
- expect(await screen.findByRole('alert')).toHaveProperty('textContent','No hay suficientes audios por clase.');expect(transport).toHaveBeenCalledTimes(2);
+ expect((await screen.findByRole('alert')).textContent).toContain(message);
+ expect(screen.queryByText(/unsafe details/)).toBeNull();
+ expect(transport).toHaveBeenCalledTimes(2);
+});
+it.each(['malformed-success','unexpected-error','network-rejection'])('keeps %s as a check error with cleared readiness and no extra requests',async(mode)=>{
+ const transport=vi.fn(async(input:RequestInfo|URL)=>{
+  if(String(input).includes('include_imported'))return Response.json({datasets:rows});
+  if(mode==='malformed-success')return Response.json({state:'ready'});
+  if(mode==='network-rejection')throw new TypeError('unsafe network details');
+  return {ok:true,json:async()=>{throw new Error('unsafe unexpected details');}} as unknown as Response;
+ });vi.stubGlobal('fetch',transport);
+ const select=vi.fn();render(<ImportedTrainingPanel profile={profile} seed={42} onSelect={select}/>);
+ await screen.findByText('first');fireEvent.change(screen.getByLabelText('Dataset para entrenamiento'),{target:{value:'first'}});
+ fireEvent.click(screen.getByRole('button',{name:'Preparar dataset'}));
+ const alert=await screen.findByRole('alert');
+ expect(alert.textContent).toContain('Error de comprobación: no se pudo verificar la preparación.');
+ expect(alert.textContent).not.toMatch(/Configuración incompatible|Grupos independientes insuficientes|unsafe/);
+ expect(screen.queryByText(/Preparado para entrenar/)).toBeNull();
+ expect(select).toHaveBeenLastCalledWith(null);
+ expect(select.mock.calls.some(([choice])=>choice?.eligible)).toBe(false);
+ expect(transport).toHaveBeenCalledTimes(2);
+ expect(transport.mock.calls.filter(call=>String(call[0]).endsWith('/snapshots'))).toHaveLength(1);
+});
+it.each(['constructor','toString','__proto__'])('treats inherited object key %s as an unknown protocol code',async(code)=>{
+ const transport=vi.fn(async(input:RequestInfo|URL)=>String(input).includes('include_imported')
+  ? Response.json({datasets:rows})
+  : Response.json({detail:{code,message:'unsafe raw details'}},{status:422}));vi.stubGlobal('fetch',transport);
+ const select=vi.fn();render(<ImportedTrainingPanel profile={profile} seed={42} onSelect={select}/>);
+ await screen.findByText('first');fireEvent.change(screen.getByLabelText('Dataset para entrenamiento'),{target:{value:'first'}});
+ fireEvent.click(screen.getByRole('button',{name:'Preparar dataset'}));
+ const alert=await screen.findByRole('alert');
+ expect(alert.textContent).toBe('Error de comprobación: no se pudo verificar la preparación. Vuelva a consultar el catálogo antes de solicitar otra preparación explícita. No se inició entrenamiento.');
+ expect(alert.textContent).not.toMatch(/function|native code|object Object|unsafe/);
+ expect(select).toHaveBeenLastCalledWith(null);
+ expect(select.mock.calls.some(([choice])=>choice?.eligible)).toBe(false);
+ expect(screen.queryByText(/Preparado para entrenar/)).toBeNull();
+ expect(transport).toHaveBeenCalledTimes(2);
+});
+it('reports an error without auto-retry or training start',async()=>{
+ const transport=vi.fn(async(input:RequestInfo|URL)=>String(input).includes('include_imported')?Response.json({datasets:rows}):Response.json({detail:{code:'split_impossible',message:'unsafe server path /private/data'}},{status:422}));vi.stubGlobal('fetch',transport);
+ render(<ImportedTrainingPanel profile={profile} seed={42} onSelect={vi.fn()}/>);
+ await screen.findByText('first');fireEvent.change(screen.getByLabelText('Dataset para entrenamiento'),{target:{value:'first'}});fireEvent.click(screen.getByText('Preparar dataset'));
+ expect(await screen.findByRole('alert')).toHaveProperty('textContent','Grupos independientes insuficientes: no se pudo formar una partición con cobertura por clase. Se requieren al menos tres grupos por clase; tres archivos no prueban independencia. No se inició entrenamiento.');expect(transport).toHaveBeenCalledTimes(2);
 });

@@ -35,6 +35,20 @@ Entrega local sin commits por instrucción explícita; runner aislado con intér
 - DATA-6 incorpora admisión por manifiesto schema2: detecta el desfase del índice y conserva la identidad de preparación en el checkpoint. Los preparados schema1 siguen siendo legibles para consumidores históricos, pero no acreditan procedencia para nuevos entrenamientos. Consulte [versiones preparadas](versiones-preparadas-dataset.md) para regeneración explícita, selección histórica y agrupación curada; la implementación local no regenera datos reales ni acredita despliegue.
 - Entrenamiento, guardado de pesos, evaluación y publicación se verifican por las interfaces públicas del servicio y API. Se conserva la política de activación existente del destino: su rediseño queda expresamente para después.
 
+### Seleccionar un dataset para entrenar
+
+Cuando TrainingView se usa sin contexto de sesión privada, conserva explícitamente la referencia legacy predeterminada `AvesChilenas`: aparece seleccionada y su nombre es el enviado al iniciar. Esta referencia no acredita registro, disponibilidad ni preparación; la admisión sigue validándose en el backend. Con sesión privada, el selector empieza sin selección y no habilita inicio hasta contar con una preparación propia coincidente.
+
+El selector permite buscar por nombre, sin distinguir mayúsculas, entre los datasets registrados y las importaciones del usuario actual. Muestra la fuente y su identidad estable para distinguir nombres repetidos. Filtrar no cambia la selección: si queda fuera de los resultados, se conserva como selección fuera del filtro.
+
+El catálogo legacy ampliado usa `GET /api/training/datasets?include_unavailable=true`; incluye registros bloqueados, como `MaquinariaMinas`, sin habilitar su entrenamiento ni inventar un número de clases desconocido. El endpoint sin el flag conserva su contrato anterior. `include_imported=true` incorpora las importaciones propias con su contrato de preparación; estar sincronizado o tener `eligible=true` sin una preparación coincidente no acredita que estén listas para iniciar.
+
+Debajo de la selección se muestra un estado principal: preparación requerida, grupos independientes insuficientes, audio no utilizable o configuración incompatible. Un error de comprobación es distinto: no demuestra que falten grupos. Solo se traducen códigos conocidos del protocolo; no se muestran detalles arbitrarios del servidor. Reintentar una consulta del catálogo solo repite lecturas, nunca una preparación ni una solicitud de inicio.
+
+Para importaciones, prepare explícitamente y luego inicie como una acción separada. Se restaura una preparación existente únicamente si coinciden perfil, semilla, política 70/15/15 y procedencia. Cambiar la configuración o la fuente invalida la selección preparada. Seleccionar no inspecciona audio ni prepara automáticamente. El reparto necesita al menos **tres grupos independientes por clase**; tres archivos no prueban independencia. En el adaptador actual se asume que cada WAV es una grabación independiente y se advierte que esta independencia no está verificada.
+
+Un legacy compatible conserva la preparación y revalidación al iniciar: no equivale a una importación ya preparada. Un legacy bloqueado permanece visible, sin botón de preparación ni despacho de inicio. La API vuelve a validar la admisión; la presencia en el catálogo no sustituye esa guarda.
+
 ### Reproducir comprobaciones aisladas
 
 Desde `/home/kevin/Work/fama/backend`, con el intérprete validado del checkout principal:

@@ -43,6 +43,18 @@ export const DatasetsResponseSchema = z.object({
 });
 export type DatasetsResponse = z.infer<typeof DatasetsResponseSchema>;
 
+// Opt-in catalog projection: unknown metadata must not inherit training defaults.
+export const TrainingCatalogDatasetSchema = TrainingDatasetSchema.extend({
+  source_type: z.literal('legacy'),
+  record_id: z.string(),
+  class_count: z.number().nullable().optional(),
+  eligible: z.boolean(),
+  eligibility_state: z.enum(['blocked', 'current_flow_compatible']),
+  reasons: z.array(z.string()),
+});
+export type TrainingCatalogDataset = z.infer<typeof TrainingCatalogDatasetSchema>;
+export const TrainingCatalogResponseSchema = z.object({datasets:z.array(TrainingCatalogDatasetSchema)});
+
 // ============================================================================
 // TRAINING LIFECYCLE SCHEMAS (CU_INV_03)
 // ============================================================================

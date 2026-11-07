@@ -2,7 +2,9 @@ import { z } from 'zod';
 import { API_BASE_URL, apiSessionRevision, notifyUnauthorized } from '@/lib/api';
 import { importedDatasetSchema, snapshotSchema, membersSchema, preparedResourceSchema } from '@/lib/schemas/importedTraining';
 
-export class ImportedTrainingError extends Error {}
+export class ImportedTrainingError extends Error {
+  constructor(message:string, public readonly code?:string) { super(message); }
+}
 
 async function request(path: string, body?: unknown, signal?: AbortSignal): Promise<unknown> {
   const revision = apiSessionRevision();
@@ -21,7 +23,7 @@ async function request(path: string, body?: unknown, signal?: AbortSignal): Prom
   if (!response.ok) {
     if (response.status === 401) notifyUnauthorized(revision);
     const detail = data?.detail;
-    throw new ImportedTrainingError(typeof detail === 'string' ? detail : detail?.message || `No se pudo consultar el recurso (${response.status}).`);
+    throw new ImportedTrainingError(typeof detail === 'string' ? detail : detail?.message || `No se pudo consultar el recurso (${response.status}).`, typeof detail?.code === 'string' ? detail.code : undefined);
   }
   if (revision !== apiSessionRevision()) throw new Error('La sesión cambió. Vuelva a seleccionar la fuente.');
   return data;

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   getHardwareStatus,
   getDatasets,
+  getDatasetCatalog,
   startTraining,
   getProgress,
   stopTraining,
@@ -23,6 +24,16 @@ describe("trainingApi (TDD Contract Tests)", () => {
 
   afterEach(() => {
     global.fetch = originalFetch;
+  });
+
+  it("opts into unavailable legacy records without inventing unknown class counts", async () => {
+    global.fetch = vi.fn().mockResolvedValue({ok:true,json:async()=>({datasets:[{
+      id:'MaquinariaMinas',name:'MaquinariaMinas',record_id:'legacy:23',source_type:'legacy',
+      audio_count:0,class_count:null,eligible:false,eligibility_state:'blocked',reasons:['incompatible_configuration'],
+    }]})});
+    const rows = await getDatasetCatalog();
+    expect(global.fetch).toHaveBeenCalledWith(`${API_BASE_URL}/api/training/datasets?include_unavailable=true`, {method:'GET'});
+    expect(rows[0]).toMatchObject({record_id:'legacy:23',class_count:null,eligible:false,reasons:['incompatible_configuration']});
   });
 
   describe("getHardwareStatus", () => {

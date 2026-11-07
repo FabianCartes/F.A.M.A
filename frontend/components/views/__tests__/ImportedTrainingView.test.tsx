@@ -12,16 +12,16 @@ it('keeps an explicit legacy choice across rerender and same-owner session refre
   if (url.includes('/auth/web/me')) {
    identityReads++;
    data = {id:1,email:'owner@example.test',nombre_completo:'Owner',rol:'investigador',activo:true};
-  } else if (url.includes('/datasets')) data = {datasets:[]};
+  } else if (url.includes('/datasets')) data = {datasets:[{source_type:'legacy',record_id:'legacy:1',id:'AvesChilenas',name:'AvesChilenas',audio_count:9,class_count:3,eligible:true,eligibility_state:'current_flow_compatible',reasons:[]}]};
   else if (url.includes('/history')) data = {history:[]};
   else if (url.includes('/progress')) data = {status:'idle',logs:[]};
   return Response.json(data);
  }));
  const view = render(<SessionBoundary><TrainingView/></SessionBoundary>);
  await screen.findByText('Owner');
- await waitFor(() => expect((screen.getByLabelText('Tipo de fuente') as HTMLSelectElement).value).toBe('imported'));
- fireEvent.change(screen.getByLabelText('Tipo de fuente'), {target:{value:'legacy'}});
- expect((screen.getByLabelText('Tipo de fuente') as HTMLSelectElement).value).toBe('legacy');
+ await screen.findByRole('option',{name:/AvesChilenas.*Registrado/});
+ fireEvent.change(screen.getByLabelText('Dataset para entrenamiento'), {target:{value:'legacy:1'}});
+ expect((screen.getByLabelText('Dataset para entrenamiento') as HTMLSelectElement).value).toBe('legacy:1');
  expect(screen.queryByRole('region', {name:'Preparación importada'})).toBeNull();
  const legacyArchitecture = screen.getByRole('combobox', {name:'Arquitectura de Red Neuronal'});
  expect(screen.getAllByRole('combobox', {name:'Arquitectura de Red Neuronal'})).toHaveLength(1);
@@ -33,7 +33,7 @@ it('keeps an explicit legacy choice across rerender and same-owner session refre
  fireEvent(window, new Event('focus'));
  await waitFor(() => expect(identityReads).toBe(2));
  await screen.findByText('Owner');
- expect((screen.getByLabelText('Tipo de fuente') as HTMLSelectElement).value).toBe('legacy');
+ expect((screen.getByLabelText('Dataset para entrenamiento') as HTMLSelectElement).value).toBe('legacy:1');
  expect(screen.queryByLabelText('Colección importada')).toBeNull();
 });
 it.each([
@@ -56,8 +56,7 @@ it.each([
  return new Response(JSON.stringify(data));});vi.stubGlobal('fetch',transport);vi.stubGlobal('alert',vi.fn());
  render(<SessionBoundary><TrainingView/></SessionBoundary>);
  await screen.findByText('Owner');
- fireEvent.change(screen.getByLabelText('Tipo de fuente'),{target:{value:'imported'}});
- await screen.findByText('Arbitrary WAV');fireEvent.change(screen.getByLabelText('Dataset para entrenamiento'),{target:{value:'arbitrary'}});
+ await screen.findByRole('option',{name:/Arbitrary WAV.*Importado propio/});fireEvent.change(screen.getByLabelText('Dataset para entrenamiento'),{target:{value:'imported:arbitrary'}});
  expect(screen.queryByTestId('dataset-selection-card')).toBeNull();
  const preparation = screen.getByRole('region', {name:'Preparación importada'});
  const architecture = within(preparation).getByRole('combobox', {name:'Arquitectura de Red Neuronal'});

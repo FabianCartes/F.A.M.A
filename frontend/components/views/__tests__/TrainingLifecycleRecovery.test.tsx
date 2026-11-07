@@ -8,7 +8,7 @@ function transport(progress: () => Promise<Response>, stop = async () => Respons
   const url=String(input);
   if(url.endsWith('/progress'))return progress();
   if(url.endsWith('/stop'))return stop();
-  if(url.endsWith('/datasets'))return Response.json({datasets:[]});
+  if(new URL(url,window.location.origin).pathname.endsWith('/datasets'))return Response.json({datasets:[]});
   if(url.endsWith('/history'))return Response.json({history:[]});
   return Response.json({});
  });

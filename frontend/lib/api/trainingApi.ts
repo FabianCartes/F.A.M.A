@@ -3,6 +3,8 @@ import {
   HardwareStatus,
   HardwareStatusSchema,
   TrainingDataset,
+  TrainingCatalogDataset,
+  TrainingCatalogResponseSchema,
   DatasetsResponseSchema,
   StartTrainingRequest,
   StartTrainingInput,
@@ -126,6 +128,16 @@ export async function getDatasets(): Promise<TrainingDataset[]> {
     `${API_BASE_URL}/api/training/datasets`,
     { method: "GET" },
     (data) => DatasetsResponseSchema.parse(data)
+  );
+  return result.datasets;
+}
+
+/** Lists registered legacy sources, including records blocked for this flow. */
+export async function getDatasetCatalog(): Promise<TrainingCatalogDataset[]> {
+  const result = await request(
+    `${API_BASE_URL}/api/training/datasets?include_unavailable=true`,
+    { method: 'GET' },
+    (data) => TrainingCatalogResponseSchema.parse(data)
   );
   return result.datasets;
 }
