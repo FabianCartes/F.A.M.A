@@ -54,8 +54,8 @@ describe('IngestionView persisted inference dataset and curation', () => {
     expect(screen.getByText('1 importaciones privadas')).toBeDefined();
     const rows = names.map(name => name.closest('tr')!);
     expect(rows[0]).not.toBe(rows[1]);
-    const legacyRow = rows.find(row => within(row).queryByText('Cloud GCS'));
-    const importedRow = rows.find(row => within(row).queryByText('Importado ZIP'));
+    const legacyRow = rows.find(row => within(row).queryByText('Compartido'));
+    const importedRow = rows.find(row => within(row).queryByText('Privado'));
     expect(legacyRow).toBeDefined();
     expect(importedRow).toBeDefined();
     for (const [row, localCount, cloudCount] of [[legacyRow!, '2', '5'], [importedRow!, '3', '1']] as const) {
@@ -63,7 +63,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
       const headers = table.getAllByRole('columnheader');
       const cells = within(row).getAllByRole('cell');
       expect(cells[headers.indexOf(table.getByRole('columnheader', { name: /Archivos Locales/i }))].textContent?.trim()).toBe(localCount);
-      expect(cells[headers.indexOf(table.getByRole('columnheader', { name: /Archivos en GCS/i }))].textContent?.trim()).toBe(cloudCount);
+      expect(cells[headers.indexOf(table.getByRole('columnheader', { name: row === importedRow ? 'Acuses de subida' : 'Archivos en GCS' }))].textContent?.trim()).toBe(cloudCount);
     }
   });
 
@@ -96,7 +96,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
     await waitFor(() => expect(within(row()).getByText('1195')).toBeDefined());
     expect(within(row()).queryByText('1194')).toBeNull();
     expect(feedbackApi.approveFeedback).toHaveBeenCalledTimes(1);
-    expect(within(row()).getByText('Importado ZIP')).toBeDefined();
+    expect(within(row()).getByText('Privado')).toBeDefined();
   });
 
   it('separates import from shared download while preserving export and explicit download', async () => {
@@ -104,7 +104,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
     const download = screen.getByRole('button', { name: 'Descargar seleccionados' });
     expect(screen.getByText('Guarda los archivos en el entorno donde se ejecuta F.A.M.A.; no inicia el entrenamiento.')).toBeDefined();
     const upload = screen.getByRole('button', { name: 'Importar ZIP' });
-    expect(upload.closest('section')).not.toBe(download.closest('section'));
+    expect(upload.closest('section')).toBe(download.closest('section'));
     const exportZip = screen.getByRole('button', { name: 'Descargar versión como ZIP' });
     expect(exportZip.parentElement).toBe(download.parentElement);
     expect(download.nextElementSibling).toBe(exportZip);
@@ -258,7 +258,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
     expect(document.querySelector('input[type="file"]')).toBeNull();
     expect(screen.queryByText(/Carga Jerárquica al Data Lake/)).toBeNull();
     expect(screen.queryByText(/Subir audios a GCS/)).toBeNull();
-    expect(screen.getByRole('region', { name: 'Catálogo compartido · GCS → Local' }).compareDocumentPosition(screen.getByRole('region', { name: 'Revisar audios' }))).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(screen.getByRole('region', { name: 'Catálogo' }).compareDocumentPosition(screen.getByRole('region', { name: 'Revisar audios' }))).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it('explains empty queue and navigates to prediction', async () => {
@@ -401,7 +401,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
     expect(screen.getByText(/GCP: Desconectado/)).toBeDefined();
     expect(screen.getByText(/Data Lake en modo local/)).toBeDefined();
     expect(screen.getByText('AvesChilenas')).toBeDefined();
-    expect(screen.getByText('Local')).toBeDefined();
+    expect(within(screen.getByText('AvesChilenas').closest('tr')!).getByText('Local · GCS desconocido')).toBeDefined();
   });
 
   it('does not announce complete synchronization when database persistence failed', async () => {
