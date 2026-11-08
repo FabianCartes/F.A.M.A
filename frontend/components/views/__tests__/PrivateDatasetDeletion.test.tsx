@@ -16,7 +16,7 @@ function mockHttp(options: { remove?: () => Promise<Response>; reload?: () => Re
     const path = new URL(String(input), 'http://localhost').pathname;
     if (init?.method === 'DELETE') { deletes.push(init); return options.remove ? options.remove() : new Response(null, { status: 204 }); }
     if (path.endsWith('/access')) return Response.json({ development_mode: false });
-    if (path.endsWith('/files')) return Response.json({ files: [{ id: 'audio', relative_path: 'bird/call.wav', original_path: 'bird/call.wav', class_name: 'bird', sha256: 'hash', size_bytes: 20, duplicate: false }], next_cursor: null, total: 1, snapshot: 'files' });
+    if (path.endsWith('/files')) return Response.json({ files: [{ id: 'audio', relative_path: 'bird/call.wav', original_path: 'bird/call.wav', class_name: 'bird', sha256: 'hash', size_bytes: 20, duplicate: false, is_feedback: false }], classes: ['bird'], has_feedback: false, next_cursor: null, total: 1, snapshot: 'files' });
     if (path === `${base}/datasets`) return deletes.length && options.reload ? options.reload() : Response.json({ datasets: deletes.length ? owned.slice(1) : owned, next_cursor: null, total: deletes.length ? 1 : 2, snapshot: 'catalog' });
     if (path.endsWith('/datasets')) return Response.json({ datasets: [{ id: 'shared', name: 'Compartido', file_count: 1, local_file_count: 0, total_size_bytes: 20, is_synced: false }] });
     if (path.endsWith('/status')) return Response.json({ connected: false, bucket: '', total_objects: 0, total_bytes: 0 });
@@ -85,14 +85,14 @@ it.each([404, 409, 503])('keeps the row, selection and audio preview after serve
   const remove = await screen.findByRole('button', { name: 'Eliminar Aves privadas' });
   fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar dataset privado Aves privadas' }));
   fireEvent.click(within(remove.closest('tr')!).getByRole('button', { name: 'Consultar audios' }));
-  await screen.findByRole('button', { name: 'bird/call.wav (bird)' });
+  await screen.findByRole('button', { name: 'Descargar call.wav' });
   fireEvent.click(remove);
   fireEvent.click(screen.getByRole('button', { name: 'Confirmar archivado' }));
   await screen.findByText(`${status}: No se puede eliminar en este estado.`);
   expect(deletes).toHaveLength(1);
   expect(screen.getByRole('button', { name: 'Eliminar Aves privadas' })).toBeDefined();
   expect((screen.getByRole('checkbox', { name: 'Seleccionar dataset privado Aves privadas' }) as HTMLInputElement).checked).toBe(true);
-  expect(screen.getByRole('button', { name: 'bird/call.wav (bird)' })).toBeDefined();
+  expect(await screen.findByRole('button', { name: 'Descargar call.wav' })).toBeDefined();
   expect(screen.queryByText(/«Aves privadas» archivado/)).toBeNull();
 });
 
@@ -101,15 +101,15 @@ it.each(['Aves privadas', 'Motor privado'])('clears only the deleted audio previ
   render(<IngestionView sessionToken="owner" />);
   const previewRow = (await screen.findByRole('button', { name: `Eliminar ${name}` })).closest('tr')!;
   fireEvent.click(within(previewRow).getByRole('button', { name: 'Consultar audios' }));
-  await screen.findByRole('button', { name: 'bird/call.wav (bird)' });
+  await screen.findByRole('button', { name: 'Descargar call.wav' });
   fireEvent.click(screen.getByRole('button', { name: 'Eliminar Aves privadas' }));
   fireEvent.click(screen.getByRole('button', { name: 'Confirmar archivado' }));
   await waitFor(() => expect(screen.queryByRole('button', { name: 'Eliminar Aves privadas' })).toBeNull());
   if (name === 'Aves privadas') {
-    expect(screen.queryByRole('button', { name: 'bird/call.wav (bird)' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Descargar call.wav' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Cerrar consulta de audios' })).toBeNull();
   } else {
-    expect(await screen.findByRole('button', { name: 'bird/call.wav (bird)' })).toBeDefined();
+    expect(await screen.findByRole('button', { name: 'Descargar call.wav' })).toBeDefined();
   }
 });
 

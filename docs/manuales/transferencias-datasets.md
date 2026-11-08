@@ -38,6 +38,29 @@ Los archivos quedan en el entorno donde se ejecuta F.A.M.A., no como una descarg
 
 **Descargar versión como ZIP** conserva su flujo de exportación al navegador. La consulta de audios, la paginación y la curación supervisada mantienen sus acciones independientes.
 
+## Consultar audios de un dataset
+
+El botón **Consultar audios**, disponible en las tablas privada y compartida, abre el mismo modal de la aplicación. Incluye un selector de **Clase**, una tabla con **Audio**, **Clase** y **Tamaño**, el total del filtro y navegación **Anterior** / **Siguiente**. La interfaz solicita páginas de hasta 50 audios. Cambiar el filtro vuelve a la primera página; las clases disponibles corresponden al dataset completo, no solo a los audios de la página actual. Cerrar o pulsar Escape devuelve el foco al botón de origen.
+
+**Todas las clases** no aplica filtro. Las clases reales conservan sus nombres. Si existe procedencia de retroalimentación confirmada, aparece además **Retroalimentación (audios incorporados)**: reúne únicamente audios ya incorporados, sin mezclar la cola pendiente ni modificar su clase de entrenamiento. Sigue siendo una opción distinta de una clase real llamada «Retroalimentación». Un nombre de archivo o la ausencia de metadatos no acreditan esa procedencia; los registros históricos sin origen reconocido permanecen consultables en sus clases reales.
+
+En privados, pulsar el nombre descarga ese audio al navegador mediante la ruta existente protegida por propietario y SHA. En compartidos, los nombres son de solo lectura: este modal no ofrece descargas unitarias, ZIP ni nuevas sincronizaciones. Las transferencias completas y la exportación ZIP existentes conservan sus acciones independientes. Los tamaños del modal usan MB decimales hasta 1000 MB y GB estrictamente por encima, truncando a dos decimales.
+
+La carga, un dataset vacío y un filtro sin resultados tienen estados distintos. Un error conserva el detalle disponible y permite **Reintentar**; no elimina audios ni realiza acciones automáticamente. Si la revisión o el inventario cambia durante la navegación, vuelve a consultar la primera página. Una respuesta tardía de una consulta cerrada se descarta.
+
+### Contrato de consulta acotada
+
+- Privados: `GET /api/ingestion/imports/datasets/{dataset_id}/files?browse=true&limit=50`.
+- Compartidos: `GET /api/ingestion/datasets/{dataset_name}/files?browse=true&limit=50`.
+- `class_name` selecciona una clase exacta y `feedback=true` selecciona procedencia confirmada. Si se proporcionan ambos, se aplica su intersección. La interfaz envía uno u otro; no envía la etiqueta virtual como nombre de clase.
+- `limit` no puede superar 200. `cursor` pertenece al dataset, los filtros y su revisión o inventario. Un cursor incompatible se rechaza con `422`; una revisión o inventario cambiado, con `409`.
+- La respuesta acotada incluye `files`, las facetas globales `classes` y `has_feedback`, el `total` filtrado, `next_cursor` y `snapshot`. Cada archivo incluye `is_feedback`, que indica origen reconocido, no una verificación remota de su contenido. El acceso privado se comprueba antes de calcular facetas y páginas; no admite consultar nuevos datasets archivados en este modo.
+- Sin `browse=true`, cada ruta mantiene su respuesta histórica. No hay migración ni cambios de formato persistido o de la ruta de descarga privada.
+
+La procedencia privada procede de los metadatos persistidos del miembro o de su importación de origen, con unión limitada al propietario. En compartidos se exige una coincidencia canónica del registro persistido de incorporación con el dataset, la ruta relativa y la clave de objeto del inventario; para un elemento remoto se exige además su estado sincronizado. Eso no sustituye una comprobación actual del contenido en GCS. La paginación limita la respuesta HTTP compartida, pero conserva el recorrido completo del inventario que ya realizaba el servidor.
+
+La incorporación de este modal al checkout no acredita su despliegue. Sustituir la API activa requiere mantenimiento autorizado por separado; la aceptación visual sigue correspondiendo al usuario, sin automatización de navegador.
+
 ## Registro de audios incorporados
 
 Esta tabla es de consulta: muestra los últimos 50 registros aceptados en cuatro columnas: **Dataset de destino**, **Nombre del audio revisado**, **Estado local** y **Copia cloud**. En el audio distingue **Original** del nombre real **En el dataset**; este último se toma del destino persistido y no renombra el archivo. Para un dataset privado presenta su nombre legible, sin mostrar el UUID, los identificadores de feedback/predicción, el directorio técnico ni los intentos. Si los metadatos históricos no incluyen los nombres, muestra una indicación neutral de dato no disponible, nunca sustituye el nombre por la ruta o un UUID de almacenamiento. Distingue la incorporación local del acuse de copia cloud. No tiene botón de sincronización ni solicita subidas. El procesamiento automático del backend se mantiene sin cambios. La consulta se actualiza al abrir la vista, tras una revisión que la invalide y al recuperar el foco o volver a la pestaña; no es un seguimiento continuo en tiempo real. Los audios con copia cloud confirmada permanecen visibles como registro. Un error de consulta conserva los últimos datos disponibles; volver a la pestaña o recargar permite reintentar.

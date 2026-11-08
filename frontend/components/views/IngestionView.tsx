@@ -13,8 +13,8 @@ import { PendingFeedbackItem } from "@/lib/schemas/feedback";
 import FeedbackSyncPanel from "@/components/feedback/FeedbackSyncPanel";
 import DatasetImportPanel from "@/components/ingestion/DatasetImportPanel";
 import DatasetExportDialog from "@/components/ingestion/DatasetExportDialog";
-import ImportDetailPage from "@/components/ingestion/ImportDetailPage";
-import { importBase, importRequest, catalogPageSchema, audioSchema, saveDownload,
+import DatasetAudioDialog from "@/components/ingestion/DatasetAudioDialog";
+import { importBase, importRequest, catalogPageSchema,
   jobsPageSchema, executionSchema, jsonRequest, deletePrivateDataset, type CatalogDataset } from "@/lib/api/datasetImports";
 
 // ============================================================================
@@ -48,14 +48,6 @@ interface DatasetItem {
   domain_label?: string;
   source?: "gcs" | "local";
   gcs_available?: boolean;
-}
-
-interface DatasetFile {
-  name: string;
-  class_name: string;
-  path: string;
-  size_bytes: number;
-  updated: string | null;
 }
 
 interface SyncDatasetResult {
@@ -249,7 +241,6 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
   const [privateLoading, setCatalogLoading] = useState(true);
   const [privateError, setCatalogError] = useState("");
   const [privateDetail, setPrivateDetail] = useState<string | null>(null);
-  const [downloadError, setDownloadError] = useState("");
   const catalogRequest = useRef<AbortController | null>(null);
   const deletionRequest = useRef<AbortController | null>(null);
   const [deletion, setDeletion] = useState({ identity: sessionIdentity, pending: false, message: "", error: false });
@@ -287,7 +278,6 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
             if (retained) setPrivateSelection({ catalog, ids: retained.ids.filter(id => page.datasets.some(dataset => dataset.id === id)) });
             setCatalogError("");
             setPrivateDetail(retained?.detail && page.datasets.some(dataset => dataset.id === retained.detail) ? retained.detail : null);
-            setDownloadError("");
           });
       })
       .catch(reason => {
@@ -295,7 +285,6 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
         if (!retained) {
           setPrivateCatalog({ token: sessionIdentity, datasets: [], next: null, total: null });
           setPrivateDetail(null);
-          setDownloadError("");
         }
         setCatalogError(reason instanceof Error ? reason.message : "No se pudo consultar el catálogo privado.");
       })
@@ -310,7 +299,6 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
     setCatalogError("");
     setPrivateCatalog({ token: sessionIdentity, datasets: [], next: null, total: null });
     setPrivateDetail(null);
-    setDownloadError("");
     return loadPrivateCatalog(cursor);
   }, [sessionIdentity, loadPrivateCatalog]);
 
@@ -345,7 +333,6 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
       setPrivateCatalog(catalog);
       setPrivateSelection({ catalog, ids });
       setPrivateDetail(detail);
-      if (privateDetail === dataset.id) setDownloadError("");
       setDeletion({ identity: sessionIdentity, pending: true, message: `«${dataset.name}» archivado. Sus archivos locales y las copias en GCS se conservan; esta acción no libera espacio.`, error: false });
       setCatalogLoading(true);
       await loadPrivateCatalog(null, { ids, detail });
@@ -379,9 +366,9 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
   };
 
   // Explorador de archivos de un dataset
-  const [inspectingDataset, setInspectingDataset] = useState<string | null>(null);
-  const [datasetFiles, setDatasetFiles] = useState<DatasetFile[]>([]);
-  const [isLoadingFiles, setIsLoadingFiles] = useState<boolean>(false);
+  const [inspectingDataset, setInspectingDataset] = useState<{ name: string; identity: string } | null>(null);
+  const audioTrigger = useRef<HTMLButtonElement>(null);
+  const closeAudioDialog = useCallback(() => { setPrivateDetail(null); setInspectingDataset(null); }, []);
 
   // Consola de Logs reactiva
   const [logs, setLogs] = useState<LogEntry[]>([
@@ -719,25 +706,17 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
     }
   };
 
-  // Inspeccionar archivos de un dataset
-  const handleInspectDataset = async (datasetName: string) => {
-    setInspectingDataset(datasetName);
-    setIsLoadingFiles(true);
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/ingestion/datasets/${datasetName}/files`);
-      if (res.ok) {
-        const data = await res.json();
-        setDatasetFiles(data.files || []);
-      } else {
-        throw new Error(`HTTP ${res.status}`);
-      }
-    } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      addLog("WARN", `No fue posible cargar los archivos de ${datasetName}: ${errMsg}`);
-    } finally {
-      setIsLoadingFiles(false);
-    }
+  // Both catalogs use one presentation; shared files remain read-only.
+  const handleInspectDataset = (datasetName: string, trigger: HTMLButtonElement) => {
+    audioTrigger.current = trigger;
+    setPrivateDetail(null);
+    setInspectingDataset({ name: datasetName, identity: sessionIdentity });
   };
+  const selectedPrivateAudioDataset = importedDatasets.find(dataset => dataset.id === privateDetail);
+  const audioDataset = selectedPrivateAudioDataset
+    ? { kind: "private" as const, id: selectedPrivateAudioDataset.id, name: selectedPrivateAudioDataset.name }
+    : inspectingDataset?.identity === sessionIdentity
+      ? { kind: "shared" as const, id: inspectingDataset.name, name: inspectingDataset.name } : null;
 
   return (
     <div className="space-y-5">
@@ -870,7 +849,7 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
                 <td className="py-2.5 font-mono text-gray-300" title="Acuses durables históricos de subida; no verifica la existencia actual en GCS.">{dataset.synced_file_count}</td>
                 <td className="py-2.5 font-mono text-gray-300">{dataset.file_count}</td>
                 <td className="py-2.5 text-gray-400">{formatBytes(dataset.total_size_bytes)}</td>
-                <td className="py-2.5"><button type="button" className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded bg-[#1c1e24] hover:bg-[#252830] border border-[#2d303b] transition-colors" disabled={deleting} onClick={() => { setPrivateDetail(dataset.id); setDownloadError(""); }}>Consultar audios</button></td>
+                <td className="py-2.5"><button type="button" className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded bg-[#1c1e24] hover:bg-[#252830] border border-[#2d303b] transition-colors" disabled={deleting} aria-haspopup="dialog" onClick={event => { audioTrigger.current = event.currentTarget; setInspectingDataset(null); setPrivateDetail(dataset.id); }}>Consultar audios</button></td>
                 <td className="py-2.5">
                   <button type="button" aria-label={`Eliminar ${dataset.name}`}
                     className="rounded border border-red-900 bg-red-950/30 px-2 py-1 text-red-300 transition-colors enabled:hover:bg-red-900/50 enabled:hover:border-red-700 enabled:hover:text-red-100 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-red-300"
@@ -892,18 +871,7 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
             <button type="button" disabled={catalogLoading || deleting} onClick={() => void fetchPrivateCatalog()}>Primera página de importaciones</button>
             <button type="button" disabled={catalogLoading || deleting || !catalogMatchesSession || !privateCatalog.next} onClick={() => void fetchPrivateCatalog(privateCatalog.next)}>Siguiente página de importaciones</button>
           </div>
-          {privateDetail && importedDatasets.some(dataset => dataset.id === privateDetail) && <div>
-            <button type="button" onClick={() => setPrivateDetail(null)}>Cerrar consulta de audios</button>
-            <ImportDetailPage key={`${sessionToken}:${privateDetail}`} token={sessionToken}
-              endpoint={`${importBase}/datasets/${encodeURIComponent(privateDetail)}/files`} collection="files" label="audios importados" schema={audioSchema}
-              renderItem={file => <button type="button" disabled={deleting} className="underline" onClick={() => {
-                setDownloadError("");
-                void importRequest(sessionToken, `${importBase}/datasets/${encodeURIComponent(privateDetail)}/files/${file.sha256}`)
-                  .then(response => saveDownload(response, file.original_path.split("/").pop() || "audio.wav"))
-                  .catch(reason => setDownloadError(reason instanceof Error ? reason.message : "No se pudo descargar el audio."));
-              }}>{file.original_path} ({file.class_name})</button>} />
-            {downloadError && <p role="alert">{downloadError}</p>}
-          </div>}
+
         </div>
         </>}
         </PrivateDatasetUpload>
@@ -1036,10 +1004,11 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
                     <td className="py-2.5 text-right pr-2">
                       <button
                         type="button"
-                        onClick={() => handleInspectDataset(d.name)}
+                        aria-haspopup="dialog"
+                        onClick={event => handleInspectDataset(d.name, event.currentTarget)}
                         className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded bg-[#1c1e24] hover:bg-[#252830] border border-[#2d303b] transition-colors"
                       >
-                        Ver archivos
+                        Consultar audios
                       </button>
                     </td>
                   </tr>
@@ -1295,75 +1264,9 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
       {/* ==================================================================== */}
       {/* 4. MODAL EXPLORADOR DE ARCHIVOS POR CLASE */}
       {/* ==================================================================== */}
-      {inspectingDataset && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#16171b] border border-[#2d303b] rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl transition-all duration-150">
-            <div className="flex items-center justify-between p-4 border-b border-[#23252e]">
-              <div className="flex items-center gap-2">
-                <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                </svg>
-                <h2 className="text-sm font-bold text-white">
-                  Contenido de: datasets/{inspectingDataset}/
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setInspectingDataset(null)}
-                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-[#23252e] transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 space-y-2 text-xs">
-              {isLoadingFiles ? (
-                <div className="py-12 text-center text-gray-400">
-                  <svg className="w-5 h-5 animate-spin mx-auto text-emerald-400 mb-2" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                  </svg>
-                  <span>Cargando archivos desde GCS...</span>
-                </div>
-              ) : datasetFiles.length === 0 ? (
-                <p className="text-center text-gray-500 py-8">
-                  No se encontraron archivos en este dataset.
-                </p>
-              ) : (
-                <div className="divide-y divide-[#23252e]">
-                  {datasetFiles.map((file, idx) => (
-                    <div key={idx} className="py-2 flex items-center justify-between hover:bg-[#1c1e24] px-2 rounded">
-                      <div className="flex items-center gap-2 overflow-hidden">
-                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-[#1f2128] text-emerald-400 border border-[#2e323e] font-mono flex-shrink-0">
-                          {file.class_name}
-                        </span>
-                        <span className="font-mono text-gray-200 truncate">{file.name}</span>
-                      </div>
-                      <div className="flex items-center gap-3 text-[11px] text-gray-400 font-mono flex-shrink-0">
-                        <span>{formatBytes(file.size_bytes)}</span>
-                        <span>{file.updated ? new Date(file.updated).toLocaleDateString() : ""}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="p-3 border-t border-[#23252e] flex justify-between items-center bg-[#111215] rounded-b-2xl text-xs text-gray-400">
-              <span>Total: {datasetFiles.length} archivo(s)</span>
-              <button
-                type="button"
-                onClick={() => setInspectingDataset(null)}
-                className="px-3 py-1 bg-[#1f2128] hover:bg-[#2a2d37] text-gray-200 rounded-lg transition-colors"
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {audioDataset && !archiveConfirmation && !deleting && <DatasetAudioDialog
+        key={`${sessionIdentity}:${audioDataset.kind}:${audioDataset.id}`} dataset={audioDataset}
+        token={sessionToken} onClose={closeAudioDialog} returnFocus={audioTrigger} />}
 
       {/* ==================================================================== */}
       {/* 5. TARJETA: MÉTRICAS DE SINCRONIZACIÓN (RF_02) Y TENSORES (RF_03) */}
