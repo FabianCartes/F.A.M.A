@@ -1,6 +1,10 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import SessionBoundary from '../SessionBoundary';
+import Boundary from '../SessionBoundary';
+import SidebarSession from '@/components/SidebarSession';
+function SessionBoundary({ children }: { children: React.ReactNode }) {
+  return <Boundary><SidebarSession isCollapsed={false} onToggleCollapsed={() => {}} />{children}</Boundary>;
+}
 import PredictionView from '@/components/views/PredictionView';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn() }) }));

@@ -6,6 +6,12 @@ El workspace requiere una identidad confirmada por la sesión web. Al abrir la a
 
 En `/login`, introduce el correo electrónico y la contraseña de una cuenta habilitada. La aplicación confirma la cookie antes de abrir el workspace. Una visita a `/login` con sesión ya confirmada vuelve a la aplicación.
 
+## Sesión en la barra lateral
+
+La sesión actual aparece en la parte inferior de la barra lateral, justo encima del aviso de GCP. Con el panel expandido se muestran un icono de usuario, el nombre, el rol registrado y el botón **Cerrar sesión**. El nombre completo puede consultarse al situar el puntero sobre él si no cabe en el espacio disponible. Ya no se duplica la sesión en una barra superior.
+
+En escritorio, al comprimir la barra queda únicamente el icono de usuario. Su control **Mostrar sesión de usuario** expande la barra para consultar los datos y acceder al cierre; pulsarlo no cierra la sesión. En la presentación móvil se conservan los datos y la acción. Esta reubicación no modifica las reglas de acceso, los tiempos de sesión ni la confirmación y recuperación del cierre descritas a continuación.
+
 ## Fallos y reintentos
 
 - **Comprobación fallida:** el workspace permanece bloqueado. La pantalla de acceso conserva la advertencia y el botón **Reintentar comprobación**. Un fallo de red o de servidor no significa que el usuario sea anónimo; no se redirige mientras esa comprobación siga sin resolverse.

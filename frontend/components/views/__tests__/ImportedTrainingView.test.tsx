@@ -1,7 +1,11 @@
 import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react';
 import { it, expect, vi, afterEach } from 'vitest';
 import TrainingView from '../TrainingView';
-import SessionBoundary from '@/components/auth/SessionBoundary';
+import Boundary from '@/components/auth/SessionBoundary';
+import SidebarSession from '@/components/SidebarSession';
+function SessionBoundary({ children }: { children: React.ReactNode }) {
+ return <Boundary><SidebarSession isCollapsed={false} onToggleCollapsed={() => {}} />{children}</Boundary>;
+}
 vi.mock('next/navigation',()=>({useRouter:()=>({replace:vi.fn()})}));
 afterEach(()=>{cleanup();vi.unstubAllGlobals();});
 it('keeps an explicit legacy choice across rerender and same-owner session refresh', async () => {

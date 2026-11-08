@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
+import SidebarSession from "./SidebarSession";
 import { API_BASE_URL } from "@/lib/api";
 import { getFeedbackStats } from "@/lib/api/feedbackApi";
 
@@ -212,6 +213,7 @@ export default function Sidebar({
           isCollapsed ? "md:p-2" : ""
         }`}
       >
+        <SidebarSession isCollapsed={isCollapsed} onToggleCollapsed={onToggleCollapsed} />
         {/* GCP Status */}
         <div
           className={`flex items-center justify-between ${isCollapsed ? "md:justify-center md:gap-1.5" : ""}`}

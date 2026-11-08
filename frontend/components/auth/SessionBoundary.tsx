@@ -12,6 +12,8 @@ import "./auth.css";
 type Session = { user: SessionUser | null; message: string; busy: boolean; logoutFailed?: boolean };
 const WebSession = createContext<SessionUser | null>(null);
 export function useOptionalWebSession() { return useContext(WebSession); }
+const WebSessionLogout = createContext<(() => void) | null>(null);
+export function useOptionalWebSessionLogout() { return useContext(WebSessionLogout); }
 
 export default function SessionBoundary({ children, mode = "workspace" }: {
   children?: ReactNode; mode?: "workspace" | "login";
@@ -120,10 +122,7 @@ export default function SessionBoundary({ children, mode = "workspace" }: {
 
   if (session.busy || !session.user) return <AuthSurface><p role="status">{session.busy ? "Comprobando sesión…" : "Abriendo acceso…"}</p></AuthSurface>;
 
-  return <WebSession.Provider value={session.user}><div className="session-workspace">
-    <div className="session-toolbar" aria-label="Sesión actual">
-      <span>{session.user.nombre_completo}</span><button onClick={() => void logout()}>Cerrar sesión</button>
-    </div>
+  return <WebSession.Provider value={session.user}><WebSessionLogout.Provider value={() => void logout()}><div className="session-workspace">
     <div className="session-content" key={session.user.id}>{children}</div>
-  </div></WebSession.Provider>;
+  </div></WebSessionLogout.Provider></WebSession.Provider>;
 }

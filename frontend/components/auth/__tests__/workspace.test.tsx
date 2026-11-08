@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { useState } from "react";
 import SessionBoundary, { useOptionalWebSession } from "../SessionBoundary";
 import { importRequest } from "@/lib/api/datasetImports";
+import SidebarSession from "@/components/SidebarSession";
 
 const navigation = vi.hoisted(() => ({ replace: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => navigation }));
@@ -12,7 +13,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.clearAllMocks(); });
 function PrivateState() {
   const owner = useOptionalWebSession();
   const [text, setText] = useState("");
-  return <><p>Workspace content</p>{owner && <label>Private draft<input aria-label="Private draft" value={text} onChange={event => setText(event.target.value)} /></label>}</>;
+  return <><SidebarSession isCollapsed={false} onToggleCollapsed={() => {}} /><p>Workspace content</p>{owner && <label>Private draft<input aria-label="Private draft" value={text} onChange={event => setText(event.target.value)} /></label>}</>;
 }
 
 it("hides the workspace before redirecting on imported HTTP 401", async () => {

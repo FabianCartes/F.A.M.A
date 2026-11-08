@@ -1,6 +1,10 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import SessionBoundary from "../SessionBoundary";
+import Boundary from "../SessionBoundary";
+import SidebarSession from "@/components/SidebarSession";
+function SessionBoundary({ children }: { children: React.ReactNode }) {
+  return <Boundary><SidebarSession isCollapsed={false} onToggleCollapsed={() => {}} />{children}</Boundary>;
+}
 import DatasetExportDialog from "@/components/ingestion/DatasetExportDialog";
 import DatasetImportPanel from "@/components/ingestion/DatasetImportPanel";
 
