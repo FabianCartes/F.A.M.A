@@ -69,6 +69,9 @@ class FeedbackSyncState(BaseModel):
     class_label: str
     local_status: Literal["incorporated"]
     sync_status: Literal["pending", "synced"]
+    dataset_display_name: Optional[str] = None
+    audio_filename: Optional[str] = None
+    incorporated_filename: Optional[str] = None
     attempts: int = Field(..., ge=0)
     error_code: Optional[Literal["upload_failed", "integrity_mismatch"]]
 

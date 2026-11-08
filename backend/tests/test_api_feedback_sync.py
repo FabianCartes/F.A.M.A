@@ -3,7 +3,38 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from tests.test_feedback_sync_worker import workflow
+from types import SimpleNamespace
+from sqlalchemy.orm import sessionmaker
+
+from tests.test_api_feedback import test_db, fake_gcs
+
+
+@pytest.fixture
+def workflow(test_db, tmp_path, monkeypatch):
+    """Read-only API checks need no file database or worker thread."""
+    from app.services import storage
+    original_download = storage.download_prediction_audio
+
+    def distinct_audio(source):
+        # Separate predictions must not accidentally exercise duplicate admission.
+        audio = bytearray(original_download(source))
+        audio[44] = ord(source[-5])
+        return bytes(audio)
+
+    monkeypatch.setattr(storage, 'download_prediction_audio', distinct_audio)
+    from app.models import Prediccion
+    from app.services.feedback import FeedbackService
+    sessions = sessionmaker(bind=test_db.get_bind())
+    service = FeedbackService(tmp_path / 'raw')
+    (service.raw_data_dir / 'AvesChilenas/rayadito').mkdir(parents=True)
+    with sessions() as db:
+        pred = Prediccion(ruta_audio_prueba='raw_audios/' + 'a' * 32 + '.wav',
+                          etiqueta_predicha='Rayadito', dataset_name='AvesChilenas', confianza=.9)
+        db.add(pred)
+        db.commit()
+        feedback = service.record_feedback(db, pred.id_prediccion, True)
+        service.approve_feedback(db, feedback.id_retroalimentacion)
+    return SimpleNamespace(sessions=sessions, service=service)
 
 
 def test_recent_accepted_states_are_bounded_read_only_and_separate_from_curation(workflow):
@@ -43,6 +74,8 @@ def test_recent_accepted_states_are_bounded_read_only_and_separate_from_curation
             'dataset_name': 'AvesChilenas', 'storage_class': 'rayadito',
             'class_label': 'Rayadito', 'local_status': 'incorporated',
             'sync_status': 'synced', 'attempts': 1, 'error_code': None,
+            'dataset_display_name': 'AvesChilenas', 'audio_filename': None,
+            'incorporated_filename': 'feedback_2.wav',
         }]
         recent = client.get('/api/feedback/sync').json()
         assert [item['id_retroalimentacion'] for item in recent] == [2, 1]

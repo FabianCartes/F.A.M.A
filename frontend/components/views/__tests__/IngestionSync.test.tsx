@@ -9,8 +9,9 @@ const record: FeedbackSyncState = {
   id_retroalimentacion: 7, id_prediccion: 12, dataset_name: 'AvesChilenas',
   storage_class: 'rayadito', class_label: 'Rayadito', local_status: 'incorporated',
   sync_status: 'pending', attempts: 0, error_code: null,
+  dataset_display_name: 'AvesChilenas', audio_filename: 'canto_original.wav', incorporated_filename: 'feedback_7.wav',
 };
-const refresh = () => fireEvent.click(screen.getByRole('button', { name: 'Actualizar sincronización' }));
+const refresh = () => fireEvent(window, new Event('focus'));
 const deferred = <T,>() => {
   let resolve!: (value: T) => void;
   let reject!: (error: Error) => void;
@@ -36,14 +37,50 @@ describe('accepted feedback synchronization through the rendered panel', () => {
     expect(within(rows[0]).getByText(/Subida fallida.*reintento automático/)).toBeDefined();
     expect(within(rows[1]).getByText(/Integridad inconsistente.*atención manual/)).toBeDefined();
     expect(within(rows[2]).getByText('Copia cloud confirmada')).toBeDefined();
-    expect(rows[0].textContent).toContain('Feedback #7');
-    expect(rows[0].textContent).toContain('Predicción #12');
+    expect(rows[0].textContent).not.toMatch(/Feedback #|Predicción #|Directorio:/);
+    expect(within(rows[0]).getByText('canto_original.wav')).toBeDefined();
+    expect(within(rows[0]).getByText('feedback_7.wav')).toBeDefined();
+    expect(screen.getAllByRole('columnheader').map(header => header.textContent)).toEqual([
+      'Dataset de destino', 'Nombre del audio revisado', 'Estado local', 'Copia cloud',
+    ]);
     expect(within(rows[0]).getByText('AvesChilenas')).toBeDefined();
-    expect(within(rows[0]).getByText('Rayadito')).toBeDefined();
-    expect(rows[0].textContent).toContain('Directorio: rayadito');
-    expect(within(rows[0]).getByRole('cell', { name: '2' })).toBeDefined();
+
     expect(screen.getByText(/no una auditoría física actual.*no una comprobación de existencia actual/)).toBeDefined();
-    expect(screen.getAllByRole('button')).toHaveLength(1);
+    expect(screen.getByRole('heading', { name: 'Registro de audios incorporados' })).toBeDefined();
+    expect(screen.getByRole('region', { name: 'Registro de audios incorporados' })).toBeDefined();
+  });
+
+  it('shows the private dataset name without rendering UUIDs or storage identities', async () => {
+    const uuid = '0123456789abcdef0123456789abcdef';
+    vi.mocked(feedbackApi.getFeedbackSync).mockResolvedValue([{ ...record,
+      dataset_name: `imported:${uuid}`, dataset_display_name: 'Motor particular', storage_class: uuid,
+    }]);
+    await open();
+    expect(screen.getByText('Motor particular')).toBeDefined();
+    expect(screen.getByText('canto_original.wav')).toBeDefined();
+    expect(screen.getByText('feedback_7.wav')).toBeDefined();
+    expect(document.body.textContent).not.toContain(uuid);
+    expect(document.body.textContent).not.toMatch(/Feedback #|Predicción #|Directorio:/);
+  });
+
+  it('uses neutral labels for older records without descriptive names, never storage UUIDs', async () => {
+    const uuid = '0123456789abcdef0123456789abcdef';
+    vi.mocked(feedbackApi.getFeedbackSync).mockResolvedValue([{ ...record,
+      dataset_name: `imported:${uuid}`, storage_class: uuid,
+      dataset_display_name: null, audio_filename: null, incorporated_filename: null,
+    }]);
+    await open();
+    expect(screen.getByText('Dataset privado')).toBeDefined();
+    expect(screen.getByText('Nombre original no disponible')).toBeDefined();
+    expect(screen.getByText('Nombre de incorporación no disponible')).toBeDefined();
+    expect(document.body.textContent).not.toContain(uuid);
+  });
+
+  it('is a read-only record without a manual synchronization button', async () => {
+    await open();
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(feedbackApi.getFeedbackSync).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Pendiente de copia cloud')).toBeDefined();
   });
 
   it('refreshes when focus returns or the document becomes visible, not while hidden', async () => {
@@ -55,9 +92,9 @@ describe('accepted feedback synchronization through the rendered panel', () => {
     await act(async () => { fireEvent(document, new Event('visibilitychange')); fireEvent(window, new Event('focus')); });
     expect(feedbackApi.getFeedbackSync).toHaveBeenCalledTimes(2);
     vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
-    vi.mocked(feedbackApi.getFeedbackSync).mockResolvedValue([{ ...record, attempts: 4 }]);
+    vi.mocked(feedbackApi.getFeedbackSync).mockResolvedValue([{ ...record, attempts: 4, audio_filename: 'actualizado.wav' }]);
     await act(async () => { fireEvent(document, new Event('visibilitychange')); });
-    expect(screen.getByRole('cell', { name: '4' })).toBeDefined();
+    expect(screen.getByText('actualizado.wav')).toBeDefined();
     vi.restoreAllMocks();
   });
 
@@ -72,7 +109,7 @@ describe('accepted feedback synchronization through the rendered panel', () => {
     expect(screen.queryByText(/No hay registros/)).toBeNull();
     vi.mocked(feedbackApi.getFeedbackSync).mockResolvedValue([]);
     await act(async () => { refresh(); });
-    expect(screen.getByText('No hay registros recientes de sincronización.')).toBeDefined();
+    expect(screen.getByText('No hay registros recientes de audios incorporados.')).toBeDefined();
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
@@ -80,7 +117,7 @@ describe('accepted feedback synchronization through the rendered panel', () => {
     await open();
     vi.mocked(feedbackApi.getFeedbackSync).mockRejectedValueOnce(new Error('offline'));
     await act(async () => { refresh(); });
-    expect(screen.getByText('Rayadito')).toBeDefined();
+    expect(screen.getByText('AvesChilenas')).toBeDefined();
     expect(screen.getByRole('alert').textContent).toContain('última consulta');
     await act(async () => { refresh(); });
     expect(screen.queryByRole('alert')).toBeNull();
@@ -110,7 +147,7 @@ describe('accepted feedback synchronization through the rendered panel', () => {
     const next = deferred<FeedbackSyncState[]>();
     vi.mocked(feedbackApi.getFeedbackSync).mockReturnValueOnce(next.promise);
     await act(async () => { rerender(<FeedbackSyncPanel refreshKey={1} />); });
-    expect(screen.getByText('Rayadito')).toBeDefined();
+    expect(screen.getByText('AvesChilenas')).toBeDefined();
     const signal = vi.mocked(feedbackApi.getFeedbackSync).mock.calls[1][1]!;
     unmount();
     expect(signal.aborted).toBe(true);

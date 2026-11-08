@@ -23,6 +23,10 @@ Los archivos quedan en el entorno donde se ejecuta F.A.M.A., no como una descarg
 
 **Descargar versión como ZIP** conserva su flujo de exportación al navegador. La consulta de audios, la paginación y la curación supervisada mantienen sus acciones independientes.
 
+## Registro de audios incorporados
+
+Esta tabla es de consulta: muestra los últimos 50 registros aceptados en cuatro columnas: **Dataset de destino**, **Nombre del audio revisado**, **Estado local** y **Copia cloud**. En el audio distingue **Original** del nombre real **En el dataset**; este último se toma del destino persistido y no renombra el archivo. Para un dataset privado presenta su nombre legible, sin mostrar el UUID, los identificadores de feedback/predicción, el directorio técnico ni los intentos. Si los metadatos históricos no incluyen los nombres, muestra una indicación neutral de dato no disponible, nunca sustituye el nombre por la ruta o un UUID de almacenamiento. Distingue la incorporación local del acuse de copia cloud. No tiene botón de sincronización ni solicita subidas. El procesamiento automático del backend se mantiene sin cambios. La consulta se actualiza al abrir la vista, tras una revisión que la invalide y al recuperar el foco o volver a la pestaña; no es un seguimiento continuo en tiempo real. Los audios con copia cloud confirmada permanecen visibles como registro. Un error de consulta conserva los últimos datos disponibles; volver a la pestaña o recargar permite reintentar.
+
 ## Límites de la comprobación
 
 Las pruebas de interfaz usan controles públicos y respuestas HTTP sintéticas. No acreditan acceso a GCS, permisos reales, transferencia de datos, calidad de modelos ni despliegue de la copia dev. La comprobación visual y funcional de esa copia corresponde al cierre operativo; no debe sustituirse por resultados del checkout.

@@ -123,6 +123,9 @@ export const FeedbackSyncStateSchema = z.object({
   class_label: z.string(),
   local_status: z.literal("incorporated"),
   sync_status: z.enum(["pending", "synced"]),
+  dataset_display_name: z.string().nullable().optional(),
+  audio_filename: z.string().nullable().optional(),
+  incorporated_filename: z.string().nullable().optional(),
   attempts: z.number().int().nonnegative(),
   error_code: z.enum(["upload_failed", "integrity_mismatch"]).nullable(),
 });

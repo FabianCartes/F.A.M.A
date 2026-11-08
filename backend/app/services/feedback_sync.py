@@ -5,6 +5,7 @@ import unicodedata
 
 from app.models.feedback import Retroalimentacion
 from app.models.feedback_sync import FeedbackSync
+from sqlalchemy.orm import joinedload
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,29 @@ def _validate_component(value):
             or any(c in value for c in "/\\\\")
             or any(unicodedata.category(c).startswith("C") for c in value)):
         raise ValueError("Invalid storage path component")
+
+
+def _dataset_display_name(db, row, prediction):
+    """Resolve display metadata only after the caller's visibility/limit filter."""
+    if not row.dataset_name.startswith("imported:"):
+        return row.dataset_name
+    if prediction is None or prediction.dataset_name != row.dataset_name:
+        return None
+    from sqlalchemy import inspect
+    from app.models.dataset_import import ImportedDataset
+    from app.models.imported_training_source import ImportedModelSource
+    from app.services.imported_feedback import imported_model_id
+    model_id = imported_model_id(prediction.modelo_id)
+    if model_id is None or not all(inspect(db.get_bind()).has_table(table) for table in
+                                  ("imported_model_source", "imported_dataset")):
+        return None
+    source = db.get(ImportedModelSource, model_id)
+    if source is None or row.dataset_name != "imported:" + source.dataset_id:
+        return None
+    # A matching ID alone is not enough: never attach another owner's name to
+    # an inconsistent historical association. Missing metadata stays unnamed.
+    return db.query(ImportedDataset.name).filter_by(
+        id=source.dataset_id, owner_id=source.owner_id).scalar()
 
 
 class FeedbackSyncQueue:
@@ -94,19 +118,24 @@ class FeedbackSyncQueue:
         """Read-only accepted milestones, newest feedback first; no file/cloud IO."""
         if type(limit) is not int or not 1 <= limit <= 500:
             raise ValueError("Limit must be between 1 and 500")
-        query = (db.query(FeedbackSync, Retroalimentacion.id_prediccion)
+        query = (db.query(FeedbackSync, Retroalimentacion)
                  .join(Retroalimentacion, FeedbackSync.id_retroalimentacion ==
-                       Retroalimentacion.id_retroalimentacion))
+                       Retroalimentacion.id_retroalimentacion)
+                 .options(joinedload(Retroalimentacion.prediccion)))
         if prediction_ids is not None:
             query = query.filter(Retroalimentacion.id_prediccion.in_(prediction_ids))
         rows = (query.filter(Retroalimentacion.procesado.is_(True))
                 .order_by(FeedbackSync.id_retroalimentacion.desc()).limit(limit).all())
         return [dict(id_retroalimentacion=row.id_retroalimentacion,
-                     id_prediccion=prediction_id, dataset_name=row.dataset_name,
+                     id_prediccion=feedback.id_prediccion, dataset_name=row.dataset_name,
+                     dataset_display_name=_dataset_display_name(db, row, feedback.prediccion),
+                     audio_filename=(feedback.prediccion.nombre_original
+                                     if feedback.prediccion is not None else None),
+                     incorporated_filename=row.local_relative_path.rsplit("/", 1)[-1],
                      storage_class=row.storage_class, class_label=row.class_label,
                      local_status="incorporated", sync_status=row.status,
                      attempts=row.attempts, error_code=row.error_code)
-                for row, prediction_id in rows]
+                for row, feedback in rows]
 
     def pending(self, db, limit=50):
         if type(limit) is not int or not 1 <= limit <= 500:

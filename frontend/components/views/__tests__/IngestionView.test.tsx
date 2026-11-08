@@ -127,7 +127,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
     await open();
     await act(async () => { fireEvent.click(incorporate()); });
     expect(screen.getByTestId('curation-queue-empty')).toBeDefined();
-    const sync = within(screen.getByRole('region', { name: 'Sincronización de audios incorporados' }));
+    const sync = within(screen.getByRole('region', { name: 'Registro de audios incorporados' }));
     expect(sync.getByText('AvesChilenas')).toBeDefined();
     expect(sync.getByText('Incorporado localmente')).toBeDefined();
     expect(sync.getByText(/Pendiente de copia cloud/)).toBeDefined();
@@ -144,7 +144,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
     expect(screen.queryByText(/Audio #42/)).toBeNull();
   });
 
-  it('identifies queued audio by original name and local reception seconds, with IDs only in synchronization', async () => {
+  it('identifies reviewed audio by original names without technical IDs in either table', async () => {
     const filename = '<canto> & ' + 'nombre largo '.repeat(20) + '.wav';
     vi.mocked(feedbackApi.getPendingFeedback).mockResolvedValue([{ ...item,
       audio_filename: filename, fecha_carga: '2026-10-06T20:30:17+00:00',
@@ -154,6 +154,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
       id_retroalimentacion: 42, id_prediccion: 101, dataset_name: 'AvesChilenas',
       storage_class: 'chucao', class_label: 'Chucao', local_status: 'incorporated',
       sync_status: 'pending', attempts: 2, error_code: null,
+      audio_filename: 'grabacion_original.wav', incorporated_filename: 'feedback_42.wav',
     }]);
     await open();
     expect(queue().getByRole('columnheader', { name: 'Audio' })).toBeDefined();
@@ -168,11 +169,11 @@ describe('IngestionView persisted inference dataset and curation', () => {
     expect(queue().queryByText(/#42|#101/)).toBeNull();
     expect(screen.queryByText(/technical-uuid/)).toBeNull();
     expect(screen.queryByRole('columnheader', { name: 'Feedback / Predicción' })).toBeNull();
-    const sync = within(screen.getByRole('region', { name: 'Sincronización de audios incorporados' }));
-    expect(sync.getByText('Chucao')).toBeDefined();
-    expect(sync.getByText('2')).toBeDefined();
-    expect(sync.getByText(/Feedback #42/)).toBeDefined();
-    expect(sync.getByText(/Predicción #101/)).toBeDefined();
+    const sync = within(screen.getByRole('region', { name: 'Registro de audios incorporados' }));
+    expect(sync.getByText('grabacion_original.wav')).toBeDefined();
+    expect(sync.getByText('feedback_42.wav')).toBeDefined();
+    expect(sync.queryByText(/Feedback #42|Predicción #101|Directorio:/)).toBeNull();
+    expect(sync.queryByRole('columnheader', { name: 'Intentos' })).toBeNull();
   });
 
   it.each([null, undefined, ''])('does not invent original names or upload dates for missing metadata (%s)', async value => {
