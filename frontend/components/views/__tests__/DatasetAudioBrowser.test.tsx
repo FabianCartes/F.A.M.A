@@ -43,6 +43,25 @@ async function open(kind: Kind) {
   return { dialog, trigger };
 }
 
+it.each<Kind>(['private', 'shared'])('closes the audio consultation from the upper-right header for %s', async kind => {
+  mockHttp();
+  render(<IngestionView sessionToken="owner" />);
+  const { dialog, trigger } = await open(kind);
+  const close = within(dialog).getByRole('button', { name: 'Cerrar consulta' });
+  const header = within(dialog).getByRole('heading', { level: 2 }).parentElement!;
+  expect(header.tagName).toBe('HEADER');
+  expect(header.className).toContain('flex');
+  expect(header.className).toContain('justify-between');
+  expect(header.className).toContain('items-start');
+  expect(header.lastElementChild).toBe(close);
+  expect(within(dialog).queryByRole('button', { name: 'Cerrar consulta de audios' })).toBeNull();
+  expect(dialog.querySelectorAll('button').item(0)).toBe(close);
+  expect(document.activeElement).toBe(close);
+  fireEvent.click(close);
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(document.activeElement).toBe(trigger);
+});
+
 it.each<Kind>(['private', 'shared'])('uses one styled modal and filtered server pages for %s', async kind => {
   const { reads } = mockHttp(async (source, url) => Response.json(page(source, url.searchParams.has('class_name')
     ? { total: 1, next_cursor: null }
@@ -71,10 +90,11 @@ it.each<Kind>(['private', 'shared'])('uses one styled modal and filtered server 
   expect(reads.at(-1)?.searchParams.has('cursor')).toBe(false);
   expect(within(selector).getByRole('option', { name: 'Motor' })).toBeDefined();
   expect((within(dialog).getByRole('button', { name: 'Anterior' }) as HTMLButtonElement).disabled).toBe(true);
-  const close = within(dialog).getByRole('button', { name: 'Cerrar consulta de audios' });
-  selector.focus(); fireEvent.keyDown(selector, { key: 'Tab', shiftKey: true });
-  expect(document.activeElement).toBe(close);
-  fireEvent.keyDown(close, { key: 'Tab' }); expect(document.activeElement).toBe(selector);
+  const close = within(dialog).getByRole('button', { name: 'Cerrar consulta' });
+  const last = kind === 'private' ? within(dialog).getByRole('button', { name: 'Descargar canto.wav' }) : selector;
+  close.focus(); fireEvent.keyDown(close, { key: 'Tab', shiftKey: true });
+  expect(document.activeElement).toBe(last);
+  fireEvent.keyDown(last, { key: 'Tab' }); expect(document.activeElement).toBe(close);
   fireEvent.keyDown(document, { key: 'Escape' });
   expect(screen.queryByRole('dialog')).toBeNull(); expect(document.activeElement).toBe(trigger);
 });
@@ -109,7 +129,7 @@ it('downloads private filenames through the existing SHA route, never shared row
   expect(downloads).toEqual([`${privateBase}/hash`]); expect(create).toHaveBeenCalledOnce(); expect(revoke).toHaveBeenCalledWith('blob:audio');
   const [, options] = vi.mocked(global.fetch).mock.calls.find(([url]) => String(url).endsWith('/hash'))!;
   expect(new Headers(options?.headers).get('Authorization')).toBe('Bearer owner');
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Cerrar consulta de audios' }));
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Cerrar consulta' }));
   const shared = await open('shared');
   expect(within(shared.dialog).queryByRole('button', { name: /Descargar/ })).toBeNull();
   expect(within(shared.dialog).queryByRole('link')).toBeNull();

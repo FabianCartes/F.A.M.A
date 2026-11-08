@@ -4,12 +4,13 @@ import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom';
 
 /** Shared app dialog shell; confirmations keep their compact default layout. */
-export default function DatasetConfirmationDialog({ title, onClose, returnFocus, children, wide = false }: {
+export default function DatasetConfirmationDialog({ title, onClose, returnFocus, children, wide = false, headerAction }: {
   title: string;
   onClose: () => void;
   returnFocus: RefObject<HTMLButtonElement | null>;
   children: ReactNode;
   wide?: boolean;
+  headerAction?: ReactNode;
 }) {
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -46,7 +47,10 @@ export default function DatasetConfirmationDialog({ title, onClose, returnFocus,
   }, [onClose, returnFocus]);
   return createPortal(<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4">
     <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className={`w-full ${wide ? "max-w-3xl max-h-[85vh] overflow-y-auto" : "max-w-lg"} space-y-4 rounded-xl border border-[#373a46] bg-[#16171b] p-6 text-sm text-gray-300 shadow-2xl`}>
-      <h2 id={titleId} className="text-lg font-semibold text-white">{title}</h2>
+      {headerAction ? <header className="flex items-start justify-between gap-4">
+        <h2 id={titleId} className="min-w-0 text-lg font-semibold text-white">{title}</h2>
+        {headerAction}
+      </header> : <h2 id={titleId} className="text-lg font-semibold text-white">{title}</h2>}
       {children}
     </div>
   </div>, document.body);

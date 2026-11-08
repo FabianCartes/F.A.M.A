@@ -94,7 +94,8 @@ export default function DatasetAudioDialog({ dataset, token, onClose, returnFocu
     } finally { if (!controller.signal.aborted) setDownloading(false); }
   }
 
-  return <DatasetConfirmationDialog title={`Consultar audios · ${name}`} onClose={onClose} returnFocus={returnFocus} wide>
+  return <DatasetConfirmationDialog title={`Consultar audios · ${name}`} onClose={onClose} returnFocus={returnFocus} wide
+    headerAction={<button type="button" className={`${buttonClass} shrink-0`} onClick={onClose}>Cerrar consulta</button>}>
     <div className="flex flex-wrap items-center gap-3">
       <label className="flex items-center gap-2">Clase
         <select aria-label="Clase" value={request.filter} disabled={loading || !page}
@@ -137,7 +138,6 @@ export default function DatasetAudioDialog({ dataset, token, onClose, returnFocu
           onClick={() => navigate({ ...request, cursors: request.cursors.slice(0, -1) })}>Anterior</button>
         <button type="button" className={buttonClass} disabled={loading || !!error || !page?.next_cursor}
           onClick={() => { if (page?.next_cursor) navigate({ ...request, cursors: [...request.cursors, page.next_cursor] }); }}>Siguiente</button>
-        <button type="button" className={buttonClass} onClick={onClose}>Cerrar consulta de audios</button>
       </div>
     </div>
   </DatasetConfirmationDialog>;

@@ -107,7 +107,7 @@ it.each(['Aves privadas', 'Motor privado'])('clears only the deleted audio previ
   await waitFor(() => expect(screen.queryByRole('button', { name: 'Eliminar Aves privadas' })).toBeNull());
   if (name === 'Aves privadas') {
     expect(screen.queryByRole('button', { name: 'Descargar call.wav' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Cerrar consulta de audios' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Cerrar consulta' })).toBeNull();
   } else {
     expect(await screen.findByRole('button', { name: 'Descargar call.wav' })).toBeDefined();
   }
