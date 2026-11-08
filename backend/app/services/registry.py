@@ -545,6 +545,7 @@ class ModelRegistry:
         self,
         db: Any,
         checkpoints_root: Optional[Path] = None,
+        *, metadata_only: bool = False,
     ) -> Optional[AudioPredictor]:
         """
         Sincroniza y registra los modelos entrenados presentes en PostgreSQL.
@@ -629,7 +630,7 @@ class ModelRegistry:
                 # Solo registrar si el archivo existe físicamente y contiene pesos reales (> 10KB).
                 if ckpt_file and ckpt_file.stat().st_size > 10000:
                     try:
-                        if is_active:
+                        if is_active and not metadata_only:
                             pred.load_weights()
                         self._apply_display_name(pred, names[m.id_modelo])
                         self._predictors[model_key] = pred
@@ -753,7 +754,7 @@ def discover_and_register_bundles(registry: ModelRegistry, checkpoints_root: Opt
     return count
 
 
-def build_default_registry() -> ModelRegistry:
+def build_default_registry(*, metadata_only: bool = False) -> ModelRegistry:
     """Construye el catálogo productivo exclusivamente desde modelos persistidos.
 
     Un catálogo vacío o una BD inaccesible no habilitan semillas ni descubrimiento
@@ -765,7 +766,10 @@ def build_default_registry() -> ModelRegistry:
     reg = ModelRegistry()
     try:
         with SessionLocal() as db:
-            reg.register_from_db(db)
+            if metadata_only:
+                reg.register_from_db(db, metadata_only=True)
+            else:
+                reg.register_from_db(db)
     except Exception:
         # The HTTP catalogue reports database availability through publish_from_db.
         pass
@@ -773,14 +777,29 @@ def build_default_registry() -> ModelRegistry:
 
 
 _global_model_registry: Optional[ModelRegistry] = None
+_model_registry_initialization_lock = RLock()
 
 
 def get_model_registry() -> ModelRegistry:
     """Proveedor de dependencias para FastAPI (Dependency Injection)."""
+    return initialize_model_registry()
+
+
+def initialize_model_registry(*, metadata_only: bool = False) -> ModelRegistry:
+    """Initialize the shared singleton once; isolated startup never loads weights.
+
+    Metadata-only initialization preserves persisted public defaults and aliases
+    from the existing factory. Private prewarming remains nonpublishing. Later
+    dependency calls reuse this exact instance without upgrading it eagerly.
+    """
     global _global_model_registry
-    if _global_model_registry is None:
-        _global_model_registry = build_default_registry()
-    return _global_model_registry
+    # Serialize check/build/assignment, including callers with different modes.
+    # The first initialization wins; later calls never upgrade or unload it.
+    with _model_registry_initialization_lock:
+        if _global_model_registry is None:
+            _global_model_registry = (build_default_registry(metadata_only=True)
+                                      if metadata_only else build_default_registry())
+        return _global_model_registry
 
 
 def set_global_model_registry(registry: Optional[ModelRegistry]) -> None:

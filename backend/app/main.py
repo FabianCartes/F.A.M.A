@@ -75,7 +75,7 @@ from app.database import Base, engine, get_db
 from app.models import Prediccion, ConjuntoDatos, Audio, Modelo, MetricaEntrenamiento, Retroalimentacion, Usuario
 from app.routes.auth import router as auth_router
 from app.routes.dataset_imports import router as dataset_import_router
-from app.services.registry import get_model_registry, ModelRegistry, ModelNotFoundError
+from app.services.registry import get_model_registry, initialize_model_registry, ModelRegistry, ModelNotFoundError
 from app.services.evaluation_catalogue import read_model_evaluations
 from app.schemas.model_info import ModelListResponse
 from app.schemas.prediction import PredictionResponse
@@ -467,14 +467,30 @@ ensemble_service = SuperEnsembleService()
 # ============================================================================
 # CICLO DE VIDA (LIFESPAN / STARTUP): CARGA ÚNICA EN MEMORIA
 # ============================================================================
+def _prewarm_model_metadata(*, isolated: bool = False):
+    from app.database import SessionLocal
+    try:
+        registry = (initialize_model_registry(metadata_only=True)
+                    if isolated else get_model_registry())
+        with SessionLocal() as db_session:
+            failures = registry.prewarm_from_db(
+                db_session, checkpoints_root=training_service.checkpoints_dir)
+        if failures:
+            print(f"[Startup Warning] Metadata prewarm skipped {failures} unavailable models.")
+    except Exception:
+        # Never expose private identities, paths or database diagnostics here.
+        print("[Startup Warning] Metadata prewarm unavailable.")
+
+
 @asynccontextmanager
 async def lifespan(app_instance: FastAPI):
     """
     Carga el Super-Ensamble Tri-Modelo en memoria una única vez al iniciar
     el servidor FastAPI, evitando recargas redundantes en peticiones HTTP.
-    La política isolated omite únicamente los efectos de startup de este módulo.
+    Isolated precalienta solo metadatos; omite ensemble, seed y workers.
     """
     if _APP_STARTUP_POLICY == "isolated":
+        _prewarm_model_metadata(isolated=True)
         yield
         return
 
@@ -490,16 +506,7 @@ async def lifespan(app_instance: FastAPI):
     except Exception as seed_err:
         print(f"[Startup Warning] Excepción al realizar seeding inicial: {seed_err}")
     from app.database import SessionLocal
-    try:
-        registry = get_model_registry()
-        with SessionLocal() as db_session:
-            failures = registry.prewarm_from_db(
-                db_session, checkpoints_root=training_service.checkpoints_dir)
-        if failures:
-            print(f"[Startup Warning] Metadata prewarm skipped {failures} unavailable models.")
-    except Exception:
-        # Never expose private identities, paths or database diagnostics here.
-        print("[Startup Warning] Metadata prewarm unavailable.")
+    _prewarm_model_metadata()
     worker = FeedbackSyncWorker(SessionLocal, feedback_service.raw_data_dir)
     async with worker.running():
         yield
