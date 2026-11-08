@@ -14,7 +14,7 @@ import time
 import uuid
 
 from fastapi import HTTPException
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import object_session
 from app.models.dataset_import import DatasetImport, ImportedDataset
 from app.models.dataset_import_metadata import (
@@ -280,8 +280,29 @@ class DatasetImports:
             reject(409, "La vista previa cambió. Consulta de nuevo la primera página.")
         return result
 
-    def dataset_page(self, db, owner, dataset_id, **pagination):
+    def dataset_page(self, db, owner, dataset_id, *, browse=False, class_name=None, feedback=None, **pagination):
         dataset = self.dataset(db, owner, dataset_id)
+        if browse:
+            from app.services.dataset_import_archive import require_active
+            require_active(db, dataset)
+            provenance = func.coalesce(or_(
+                DatasetMember.legacy_metadata["origin"]["kind"].as_string() == "feedback",
+                DatasetImport.request["origin"]["kind"].as_string() == "feedback"), False)
+            query = db.query(*DatasetMember.__table__.c, provenance.label("is_feedback")).outerjoin(
+                DatasetImport, (DatasetImport.id == DatasetMember.source_import_id)
+                & (DatasetImport.owner_id == owner)).filter(DatasetMember.dataset_id == dataset.id,
+                    DatasetMember.dataset_revision <= dataset.revision)
+            classes = sorted(value for value, in query.with_entities(DatasetMember.class_name).distinct())
+            has_feedback = query.filter(provenance.is_(True)).first() is not None
+            if class_name is not None:
+                query = query.filter(DatasetMember.class_name == class_name)
+            if feedback is not None:
+                query = query.filter(provenance.is_(feedback))
+            result = page(query, DatasetMember.id,
+                scope=f"{dataset.id}:browse:{class_name!r}:{feedback!r}", snapshot=dataset.revision,
+                key="files", serialize=lambda row: dict(public_file(row), is_feedback=bool(row.is_feedback)), **pagination)
+            result.update(classes=classes, has_feedback=has_feedback)
+            return result
         return page(db.query(DatasetMember).filter(DatasetMember.dataset_id == dataset.id,
                     DatasetMember.dataset_revision <= dataset.revision), DatasetMember.id,
                     scope=f"{dataset.id}:files", snapshot=dataset.revision, key="files", serialize=public_file, **pagination)

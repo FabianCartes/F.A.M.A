@@ -122,8 +122,17 @@ def datasets(db: Session = Depends(get_db), user=Depends(get_import_user), servi
 
 @router.get("/datasets/{dataset_id}/files")
 def files(dataset_id: str, db: Session = Depends(get_db), user=Depends(get_import_user), service=Depends(get_import_service),
-          paging=Depends(pagination)):
-    return service.dataset_page(db, user.id, dataset_id, **paging)
+          paging=Depends(pagination),
+          browse: bool = Query(False, description="Activa facetas y filtros; sin él se conserva la respuesta histórica."),
+          class_name: str | None = Query(None, description="Clase exacta; solo con browse=true."),
+          feedback: bool | None = Query(None, description="Procedencia de retroalimentación; interseca la clase, solo con browse=true.")):
+    """Browse published own audio; facets span the dataset before filters/pages.
+
+    Browse cursors bind filters and revision (422 mismatch, 409 revision change).
+    Individual downloads continue using the existing SHA-guarded route.
+    """
+    return service.dataset_page(db, user.id, dataset_id, browse=browse,
+                                class_name=class_name, feedback=feedback, **paging)
 
 
 @router.get("/datasets/{dataset_id}/revisions/{revision}")
