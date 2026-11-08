@@ -37,7 +37,7 @@ def test_worker_reports_sandbox_refusal_without_publishing(imports, tmp_path, mo
     assert admitted.status_code == 202
     assert client.execution.run_once()
     state = client.get(f"{base}/{source}").json()
-    assert state["status"] == "needs_correction"
+    assert state["status"] == "cancelled"
     issues = client.get(f"{base}/{source}/issues").json()["issues"]
     assert [issue["code"] for issue in issues] == ["sandbox_unavailable"]
     assert client.get(base + "/datasets").json()["datasets"] == []

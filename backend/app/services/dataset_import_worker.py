@@ -28,12 +28,13 @@ class ImportJobWorker:
     """
 
     def __init__(self, queue, staging_root, execute, *, lease_seconds=60,
-                 execution_seconds=1800, heartbeat_wait=None):
+                 execution_seconds=1800, heartbeat_wait=None, import_service=None):
         self.queue, self.root, self.execute = queue, _private_root(staging_root), execute
         self.lease_seconds = lease_duration(lease_seconds)
         self.execution_seconds = lease_duration(execution_seconds)
         self.heartbeat_wait = heartbeat_wait or (lambda stop, interval: stop.wait(interval))
         self._work = None
+        self.import_service = import_service
 
     def run_once(self):
         # A timed-out cooperative callback may still be unwinding. Do not spawn
@@ -76,7 +77,7 @@ class ImportJobWorker:
             staging.mkdir(mode=0o700)
         except Exception:
             try:
-                self.queue.finish(attempt, error="staging_failed")
+                self.queue.finish(attempt, error="staging_failed", import_service=self.import_service)
             except LeaseLost:
                 pass
             return True
@@ -90,13 +91,13 @@ class ImportJobWorker:
                 outcome = {"error": "execution_timeout"}
             if not lost.is_set():
                 try:
-                    self.queue.finish(attempt, **outcome)
+                    self.queue.finish(attempt, **outcome, import_service=self.import_service)
                 except LeaseLost:
                     lost.set()
                 except Exception:
                     # Invalid callback output is not persisted or interpolated.
                     try:
-                        self.queue.finish(attempt, error="execution_failed")
+                        self.queue.finish(attempt, error="execution_failed", import_service=self.import_service)
                     except LeaseLost:
                         lost.set()
         finally:

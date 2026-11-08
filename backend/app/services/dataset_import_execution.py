@@ -31,7 +31,7 @@ class ImportExecution:
 
     def __init__(self, queue, service, staging_root, *, storage=None, **worker_options):
         self.queue, self.service, self.root, self.storage = queue, service, Path(staging_root), storage
-        self.worker = ImportJobWorker(queue, self.root, self.execute, **worker_options)
+        self.worker = ImportJobWorker(queue, self.root, self.execute, import_service=service, **worker_options)
         service.attempt_root = self.root
 
     def run_once(self):
@@ -138,7 +138,7 @@ class ImportExecution:
         for path in (staging / "files", staging, self.root):
             if path.exists():
                 _durable_directory(path)
-        with self.queue.publication(attempt) as (db, job):
+        with self.queue.publication(attempt, import_service=self.service) as (db, job):
             source = self._source(db, attempt)
             if source.archive_sha256 != expected or source.status not in ("validating", "needs_correction", "ready"):
                 reject(409, "La importación cambió durante la validación.")
@@ -178,7 +178,13 @@ class ImportExecution:
             result["errors"].extend(quota_issues(result["quota"]))
             replace_preview(db, source, result)
             source.preview_token = uuid.uuid4().hex + uuid.uuid4().hex
-            source.status = "needs_correction" if result["errors"] else "ready"
+            source.status = "cancelled" if result["errors"] else "ready"
+            if result["errors"]:
+                from app.services.dataset_import_receipts import release_cancelled_receipt
+                from app.services.dataset_import_cleanup import request
+                source.error = "validation_failed"
+                release_cancelled_receipt(db, source)
+                request(db, source.id)
             token = source.preview_token
             publish = automatic and not result["errors"]
             if not publish:

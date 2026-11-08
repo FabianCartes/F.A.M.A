@@ -26,7 +26,7 @@ it.each([false, true])("new upload authorizes only local publication; rejected=%
     if (path.endsWith("/chunks/0") || path.endsWith("/finalize")) return Response.json({ import_id: "new", name: "synthetic.zip", size_bytes: 3, received_bytes: 3, reserved_bytes: 4099, chunk_bytes: 16 * 1024 ** 2, status: path.endsWith("/finalize") ? "sealed" : "receiving" });
     if (path.endsWith("/preview")) return Response.json({ ...job, status: "queued", stage: "queued", progress: 0 }, { status: 202 });
     if (path === job.status_url) { finished = true; return Response.json(job); }
-    if (path === B + "/new") return Response.json(finished ? { ...source, status: rejected ? "needs_correction" : "imported", added_count: rejected ? 0 : 1, preview: { ...source.preview, error_count: rejected ? 1 : 0 }, execution: job } : source);
+    if (path === B + "/new") return Response.json(finished ? { ...source, status: rejected ? "cancelled" : "imported", added_count: rejected ? 0 : 1, preview: { ...source.preview, error_count: rejected ? 1 : 0 }, execution: job } : source);
     if (path.endsWith("/files")) return page("files", []);
     if (path.endsWith("/classes")) return page("classes", ["bird"]);
     if (path.endsWith("/issues")) return page("issues", rejected ? [{ id: "issue", path: "bird/nested/", code: "class_folders_required", severity: "error", action: "Organiza el ZIP como clase/audio.wav, sin carpeta contenedora ni subcarpetas." }] : []);
@@ -41,10 +41,22 @@ it.each([false, true])("new upload authorizes only local publication; rejected=%
   fireEvent.change(screen.getByLabelText("Archivo ZIP"), { target: { files: [new File(["abc"], "synthetic.zip")] } });
   fireEvent.click(screen.getByRole("button", { name: "Importar ZIP" }));
   await screen.findByText(rejected ? /ZIP rechazado/ : /Importada localmente: 1 archivo/);
-  if (rejected) await screen.findByText(/Organiza el ZIP como clase/);
-  expect(writes.filter(w => w.path === B)).toHaveLength(1);
+  if (rejected) {
+    await screen.findByText(/Organiza el ZIP como clase/);
+    expect(screen.queryByRole("button", { name: "Cancelar importación" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reintentar trabajo" })).toBeNull();
+    expect(screen.queryByText(/cancela esta solicitud/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Nueva importación" }));
+    fireEvent.change(screen.getByLabelText("Archivo ZIP"), { target: { files: [new File(["xyz"], "synthetic.zip")] } });
+    fireEvent.click(screen.getByRole("button", { name: "Importar ZIP" }));
+    await waitFor(() => expect(writes.filter(w => w.path === B)).toHaveLength(2));
+    const keys = writes.filter(w => w.path === B).map(w => (w.body as { request_key: string }).request_key);
+    expect(keys[0]).not.toBe(keys[1]);
+    await screen.findByText(/ZIP rechazado/);
+  }
+  expect(writes.filter(w => w.path === B)).toHaveLength(rejected ? 2 : 1);
   expect(writes.find(w => w.path === B)?.body).toMatchObject({ auto_import: true, layout: "class_folders", target_id: null });
   expect(writes.filter(w => /\/(confirm|sync|cancel)$/.test(w.path))).toEqual([]);
-  expect(writes.filter(w => w.path.endsWith("/preview"))).toHaveLength(1);
+  expect(writes.filter(w => w.path.endsWith("/preview"))).toHaveLength(rejected ? 2 : 1);
   expect(screen.queryByRole("button", { name: "Confirmar importación local" })).toBeNull();
 });

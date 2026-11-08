@@ -266,15 +266,16 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange,
         </>}
         {job && <div className="space-y-3">
           {job.execution && <p role="status">{executionStatus === "queued" ? "Trabajo admitido; pendiente de ejecución" : executionStatus === "running" ? "Trabajo en ejecución" : executionStatus === "succeeded" ? (job.status === "needs_correction" ? "Validación rechazada" : "Trabajo completado") : executionStatus === "cancelled" ? "Trabajo cancelado" : "Trabajo fallido"}: {job.execution.stage}{job.status !== "validating" && <> · {job.execution.progress}%</>}</p>}
-          {job.execution?.error && <p role="alert">No se completó el trabajo ({job.execution.error.code}). Consulta el estado antes de reintentar.</p>}
+          {job.execution?.error && <p role="alert">{job.status === "cancelled" ? "La importación falló y quedó cancelada. Crea una nueva importación con el ZIP corregido." : <>No se completó el trabajo ({job.execution.error.code}). Consulta el estado antes de reintentar.</>}</p>}
           {job.execution?.status === "queued" && <button className={buttonClass} disabled={!!busy} onClick={() => void act("Cancelando trabajo…", async () => {
             const response = await importRequest(token, `${importBase}/${job.id}/jobs/${job.execution!.id}/cancel`, jsonRequest({}));
             setJob({ ...job, execution: executionSchema.parse(await response.json()) });
           })}>Cancelar trabajo pendiente</button>}
-          {job.execution && ["failed", "cancelled"].includes(job.execution.status) && <button className={buttonClass} disabled={!!busy} onClick={() => void act("Admitiendo reintento…", () => admit(job, `jobs/${job.execution!.id}/retry`))}>Reintentar trabajo</button>}
+          {job.status !== "cancelled" && job.execution && ["failed", "cancelled"].includes(job.execution.status) && <button className={buttonClass} disabled={!!busy} onClick={() => void act("Admitiendo reintento…", () => admit(job, `jobs/${job.execution!.id}/retry`))}>Reintentar trabajo</button>}
           <p role="status">Importación {job.id}: {statusLabels[job.status] || job.status}</p>
           <p>Sincronización: {statusLabels[job.sync_status] || job.sync_status}</p>
           <p>Clases propuestas: {job.preview.class_count} · Archivos: {job.preview.file_count} · Nuevos: {job.preview.new_count ?? 0} · Duplicados internos: {job.preview.duplicate_count ?? 0} · Errores: {job.preview.error_count} · Advertencias: {job.preview.warning_count}</p>
+          {job.status === "cancelled" && job.preview.error_count > 0 && <p role="alert">ZIP rechazado: la importación quedó cancelada. Revisa las incidencias y crea una nueva importación con el ZIP corregido. No se publicó contenido de este ZIP.</p>}
           {automatic && job.status === "needs_correction" && <p role="alert">ZIP rechazado: revisa las incidencias, cancela esta solicitud y crea una nueva importación con el ZIP corregido. No se publicó contenido de este ZIP.</p>}
           {job.preview.quota && <section aria-label="Cuota del dataset">
             <p>Bytes únicos: actuales {job.preview.quota.current_bytes} + nuevos {job.preview.quota.new_bytes} = proyectados {job.preview.quota.projected_bytes} / límite {job.preview.quota.limit_bytes}.</p>
@@ -289,7 +290,7 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange,
             <ImportDetailPage token={token} endpoint={`${importBase}/${job.id}/issues`} collection="issues" label="incidencias" schema={issueSchema} snapshot={job.preview_token}
               renderItem={issue => <span role={issue.severity === "error" ? "alert" : undefined}>{issue.severity === "warning" ? "Advertencia: " : ""}{issue.path}: {issue.code}. {issue.action}</span>} />
           </div>}
-          {job.error && <p role="alert">{job.error === "expired" ? "La importación venció." : "La sincronización no está completa. Reintenta; la copia local se conserva."}</p>}
+          {job.error && <p role="alert">{job.error === "expired" ? "La importación venció." : job.status === "cancelled" ? "La importación quedó cancelada por un error. Puedes iniciar una nueva importación; sus diagnósticos se conservan." : "La sincronización no está completa. Reintenta; la copia local se conserva."}</p>}
           {!automatic && ["ready", "committing"].includes(job.status) && <button className={buttonClass} disabled={!!busy || executing || !!quotaExceeded || job.preview.error_count > 0} onClick={() => void act("Admitiendo confirmación local…", () => action("confirm", { preview_token: job.preview_token }))}>Confirmar importación local</button>}
           {job.status === "imported" && <>
             <p>Importada localmente: {job.added_count} archivo(s) nuevo(s).{job.added_count === 0 ? " No hay novedades; no se creó un dataset vacío." : ""}</p>

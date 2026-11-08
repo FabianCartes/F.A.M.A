@@ -1,6 +1,6 @@
 """Database-backed execution admission; notifications are never queue authority."""
 from dataclasses import dataclass
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 import hashlib
 import json
 import math
@@ -146,7 +146,7 @@ class ImportJobQueue:
         return row, now
 
     @contextmanager
-    def publication(self, attempt):
+    def publication(self, attempt, *, import_service=None):
         """Serialize a short publication against reclaim, cancellation and admission.
 
         No hashing, decoding or network is permitted in this transaction. The
@@ -155,10 +155,14 @@ class ImportJobQueue:
         its previously committed journal remains available for recovery.
         """
         with self.sessions() as db, db.begin():
-            row, _ = self._current(db, attempt)
-            yield db, row
-            if row.status == "running" and row.lease_until <= self._now(db):
-                raise LeaseLost("Attempt expired during publication")
+            mutation = (import_service.mutation(db, attempt["import_id"])
+                        if import_service is not None else nullcontext())
+            with mutation:
+                row, _ = self._current(db, attempt)
+                yield db, row
+                if row.status == "running" and row.lease_until <= self._now(db):
+                    raise LeaseLost("Attempt expired during publication")
+                db.commit()
 
     def complete_publication(self, db, row, result):
         now = self._now(db)
@@ -186,7 +190,7 @@ class ImportJobQueue:
                 raise ValueError("Progress must not decrease")
             row.stage, row.progress, row.updated_at = stage, progress, now
 
-    def finish(self, attempt, *, result=None, error=None):
+    def finish(self, attempt, *, result=None, error=None, import_service=None):
         if error not in (None, "execution_failed", "execution_timeout", "staging_failed"):
             raise ValueError("Invalid execution error")
         result = {} if result is None else result
@@ -199,12 +203,26 @@ class ImportJobQueue:
             elif type(value) is not int or not 0 <= value <= 2**31 - 1:
                 raise ValueError("Invalid result count")
         with self.sessions() as db, db.begin():
-            row, now = self._current(db, attempt)
-            row.status = row.stage = "failed" if error else "succeeded"
-            row.result = {} if error else dict(result)
-            row.error = {"code": error} if error else None
-            row.progress = row.progress if error else 100
-            row.lease_until, row.updated_at = None, now
+            # Filesystem ownership precedes the queue gate, as in admission and
+            # cleanup. The failed job and source close in the same transaction.
+            mutation = (import_service.mutation(db, attempt["import_id"])
+                        if import_service is not None and error else nullcontext())
+            with mutation:
+                row, now = self._current(db, attempt)
+                if error and import_service is not None and row.kind in ("preview", "confirm"):
+                    source = db.get(DatasetImport, row.import_id)
+                    if source.status not in ("committing", "imported", "cancelled"):
+                        from app.services.dataset_import_receipts import release_cancelled_receipt
+                        from app.services.dataset_import_cleanup import request
+                        source.status, source.error = "cancelled", error
+                        release_cancelled_receipt(db, source)
+                        request(db, source.id)
+                row.status = row.stage = "failed" if error else "succeeded"
+                row.result = {} if error else dict(result)
+                row.error = {"code": error} if error else None
+                row.progress = row.progress if error else 100
+                row.lease_until, row.updated_at = None, now
+                db.commit()  # Keep mutation ownership through terminal commit.
 
     def admit(self, owner, import_id, kind, request_key, parameters):
         if kind not in ("preview", "confirm", "sync"):

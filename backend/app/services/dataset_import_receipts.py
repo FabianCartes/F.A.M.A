@@ -130,6 +130,15 @@ def release_receipt(db, import_id):
         db.commit()
 
 
+def release_cancelled_receipt(db, source):
+    """Release only the logical promise within the caller's gated transaction."""
+    if source.status != "cancelled":
+        raise ValueError("Only cancelled imports release their reservation")
+    if has_receipt(db, source.id):
+        row = db.get(ImportReceipt, source.id)
+        row.reservation_active, row.status = False, "cancelled"
+
+
 def release_published_receipt(db, source):
     """Release a fulfilled promise inside the caller's publication transaction.
 
