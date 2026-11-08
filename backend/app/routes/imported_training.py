@@ -120,8 +120,13 @@ def create_snapshot(body: SnapshotRequest, user=Depends(get_user), preparations=
         if body.reuse_current:
             current = preparations.snapshots.current(user.id, body.dataset_id)
             if current is not None:
+                preparations.snapshots.admit_preparation(user.id, current['id'])
                 return descriptor(current)
         return descriptor(preparations.snapshots.create(user.id, body.dataset_id))
+    except HTTPException as error:
+        if error.status_code == 503:
+            raise
+        raise unavailable() from None
     except Exception:
         raise unavailable() from None
 
@@ -166,8 +171,13 @@ def create_preparation(snapshot_id: str, body: PreparationRequest,
     except Exception:
         raise unavailable() from None
     try:
+        preparations.snapshots.admit_preparation(user.id, snapshot_id)
         manifest = preparations.create(user.id, snapshot_id, **body.model_dump())
         return public_preparation(manifest)
+    except HTTPException as error:
+        if error.status_code == 503:
+            raise
+        raise unavailable() from None
     except PreparationError as error:
         if error.code in ('source_unavailable', 'invalid_identity'):
             raise unavailable() from None

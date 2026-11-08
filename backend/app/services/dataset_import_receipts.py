@@ -72,6 +72,8 @@ def reserve_receipt(service, db, owner, import_id, *, name, size_bytes):
             if physical is not None:
                 physical.require(db, service, import_id, "archive", size_bytes)
             return _view(prior)
+        from app.services.dataset_import_archive import require_import_active
+        require_import_active(db, source)
         if source.status != "receiving" or source.archive_sha256:
             reject(409, "La importación no admite una recepción nueva.")
         if size_bytes > service.limits.received_bytes:

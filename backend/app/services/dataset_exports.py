@@ -89,14 +89,16 @@ class ExportQueue:
             if physical_storage(self.service, db) is not None:
                 reject(503, "Las exportaciones no están habilitadas con presupuesto físico.")
             _gate(db)
-            reference = authorized_reference(self.service, db, owner, dataset_id, revision)
-            if reference["status"] != "complete":
-                reject(409, "La revisión todavía no tiene un manifiesto completo.")
             prior = db.query(DatasetExport).filter_by(owner_id=owner, request_key=request_key).first()
             if prior:
                 if (prior.dataset_id, prior.revision) != (dataset_id, revision):
                     reject(409, "La operación ya existe con otros parámetros.")
                 return _snapshot(prior)
+            from app.services.dataset_import_archive import require_active
+            require_active(db, self.service.dataset(db, owner, dataset_id))
+            reference = authorized_reference(self.service, db, owner, dataset_id, revision)
+            if reference["status"] != "complete":
+                reject(409, "La revisión todavía no tiene un manifiesto completo.")
             active = db.query(DatasetExport).filter(DatasetExport.status.in_(("queued", "running")))
             if (active.count() >= self.jobs.limits.global_active
                     or active.filter_by(owner_id=owner).count() >= self.jobs.limits.owner_active):

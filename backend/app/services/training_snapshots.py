@@ -113,6 +113,14 @@ class TrainingSnapshots:
             yield from batch
             cursor = batch[-1]["member_id"]
 
+    def admit_preparation(self, owner, snapshot_id):
+        """Linearize a new preparation, without restricting historical reads."""
+        with self.sessions.begin() as db:
+            _gate(db)
+            snapshot = self._row(db, owner, snapshot_id)
+            from app.services.dataset_import_archive import require_active
+            require_active(db, self.source.dataset(db, owner, snapshot.dataset_id))
+
     def current(self, owner, dataset_id):
         """Find an owned ready snapshot of the current revision; never reinterpret history."""
         with self.sessions() as db:
@@ -129,6 +137,8 @@ class TrainingSnapshots:
         with self.sessions.begin() as db:
             _gate(db)
             dataset = self.source.dataset(db, owner, dataset_id)
+            from app.services.dataset_import_archive import require_active
+            require_active(db, dataset)
             fields = ("source_import_id", "stored_name", "class_name", "original_path", "relative_path", "sha256", "size_bytes")
             db.add(TrainingSnapshot(id=snapshot_id, owner_id=owner, dataset_id=dataset.id,
                 dataset_revision=dataset.revision, name=dataset.name, description=dataset.description or "",

@@ -65,14 +65,22 @@ def approve(service, db, feedback, *, owner_id, dataset_name, curation_source_id
     queue = FeedbackSyncQueue()
     # This is the same raw intent used by reject/record: neither can race past
     # a durable admission intention. Imported mutation remains held through commit.
-    service._mkdir(service.raw_data_dir)
-    intent = service._intent_path(feedback.id_retroalimentacion)
-    service._safe_path(intent)
-    service._safe_path(intent.with_suffix('.json.lock'))
-    with _filesystem_lock(intent.with_suffix('.json.lock')):
-        with imports.mutation(db):
-            from app.services.dataset_import_jobs import _gate
-            _gate(db)
+    # The database admission gate precedes feedback filesystem publication.
+    # Existing durable intents/queue entries are replay, not new admission.
+    with imports.mutation(db):
+        from app.services.dataset_import_jobs import _gate
+        from app.services.dataset_import_archive import require_active
+        _gate(db)
+        db.refresh(feedback)
+        dataset = imports.dataset(db, owner_id, source.dataset_id)
+        intent = service._intent_path(feedback.id_retroalimentacion)
+        service._safe_path(intent)
+        existing = queue.get(db, feedback.id_retroalimentacion)
+        if existing is None and not intent.exists():
+            require_active(db, dataset)
+        service._mkdir(service.raw_data_dir)
+        service._safe_path(intent.with_suffix('.json.lock'))
+        with _filesystem_lock(intent.with_suffix('.json.lock')):
             db.refresh(feedback)
             pred = feedback.prediccion
             db.refresh(pred)

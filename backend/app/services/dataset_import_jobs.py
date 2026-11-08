@@ -247,7 +247,20 @@ class ImportJobQueue:
                 if prior.parameters_sha256 != digest or prior.parameters != parameters:
                     _reject(409, "La operación ya existe con otros parámetros.")
                 return _snapshot(prior)
+            from app.services.dataset_import_archive import require_active, require_schema
+            require_schema(db)
             summary = db.get(ImportSummary, source.id)
+            target_id = (source.dataset_id or source.request.get("target_id")
+                         or (summary.preview.get("resolved_target_id") if summary else None))
+            if target_id:
+                target = db.get(ImportedDataset, target_id)
+                if target is not None:
+                    require_active(db, target)
+            else:
+                collision = db.scalar(select(ImportedDataset).where(
+                    ImportedDataset.owner_id == owner, ImportedDataset.name == source.request.get("name")))
+                if collision is not None:
+                    require_active(db, collision)
             if summary is None:
                 _reject(503, "Los metadatos requieren migración verificada antes de continuar.")
             # An automatic preview keeps its kind and reviewed root on retry;

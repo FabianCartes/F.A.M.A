@@ -80,7 +80,9 @@ class ImportedTrainingSource:
             raise ImportedSourceError()
         try:
             with self.preparations.snapshots.sessions() as db:
-                datasets = db.query(ImportedDataset).filter_by(owner_id=owner).order_by(ImportedDataset.id).limit(129).all()
+                from app.services.dataset_import_archive import require_schema
+                require_schema(db)
+                datasets = db.query(ImportedDataset).filter_by(owner_id=owner, archived=False).order_by(ImportedDataset.id).limit(129).all()
                 snapshots = db.query(TrainingSnapshot).filter_by(owner_id=owner, state="ready").order_by(TrainingSnapshot.id).limit(129).all()
                 try:
                     validate_imported_sources(db.get_bind())
@@ -154,17 +156,27 @@ class ImportedTrainingSource:
             raise ImportedSourceError() from error
 
     def resolve_for_training(self, owner, dataset_id, snapshot_id, version, **options):
-        """Admit only the owner's current dataset revision; resolve stays historical."""
+        """Admit the current source under the shared archive gate.
+
+        The successful active/revision check is the admission linearization point,
+        not process start. After this transaction commits, archival may proceed
+        while verified source capture and the already-admitted start continue.
+        Historical resolve deliberately does not repeat the admission check.
+        """
         from app.models.dataset_import import ImportedDataset
         if type(owner) is not int or owner <= 0:
             raise ImportedSourceError()
         try:
             snapshot = self.preparations.snapshots.get(owner, snapshot_id)
-            with self.preparations.snapshots.sessions() as db:
+            with self.preparations.snapshots.sessions.begin() as db:
+                from app.services.dataset_import_jobs import _gate
+                from app.services.dataset_import_archive import require_active
+                _gate(db)
                 dataset = db.get(ImportedDataset, dataset_id)
                 if (dataset is None or dataset.owner_id != owner
                         or snapshot["dataset_id"] != dataset.id):
                     raise ImportedSourceError()
+                require_active(db, dataset)
                 if snapshot["dataset_revision"] != dataset.revision:
                     raise ImportedSourceError("preparation_stale",
                         "La preparación corresponde a una revisión anterior del dataset. Cree un nuevo "
@@ -173,6 +185,9 @@ class ImportedTrainingSource:
         except ImportedSourceError:
             raise
         except Exception as error:
+            from fastapi import HTTPException
+            if isinstance(error, HTTPException) and error.status_code == 503:
+                raise
             raise ImportedSourceError() from error
 
     def resolve(self, owner, dataset_id, snapshot_id, version, *, architecture,

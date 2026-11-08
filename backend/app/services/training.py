@@ -496,6 +496,9 @@ class TrainingService:
                 raise ImportedSourceError("profile_conflict", "El perfil preparado exige una arquitectura única.")
             architecture = selected_models[0]["architecture"]
             sources = self.imported_sources or configured_sources(SessionLocal)
+            # Source admission linearizes with archive under the shared DB gate.
+            # Source capture and process start below belong to that admitted work;
+            # an archive after admission must not cancel or re-check its source.
             imported_source = sources.resolve_for_training(owner_id, imported_dataset_id, snapshot_id,
                 imported_prepared_version, architecture=architecture,
                 audio_config=_json_config(audio_config), windowing_config=_json_config(windowing_config))
