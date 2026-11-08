@@ -148,6 +148,42 @@ class ModelRegistry:
             expected_checkpoint_sha256=expected_hash,
         )
 
+    def prewarm_from_db(self, db: Any, checkpoints_root: Optional[Path] = None) -> int:
+        """Cache private checkpoint metadata without publication or admission.
+
+        Returns an aggregate failure count, never private diagnostics. Callers
+        retain session ownership; this method performs no database writes.
+        Lazy metadata construction may deserialize a checkpoint, not inference.
+        Publication must still verify ownership, file SHA and evaluation reports.
+        """
+        from app.models.training import Modelo
+        from app.services.model_names import model_display_names
+
+        root = (Path(checkpoints_root) if checkpoints_root is not None else
+                Path(__file__).resolve().parent.parent.parent / "checkpoints")
+        failures = 0
+        with self._publication_lock:
+            models = db.query(Modelo).order_by(Modelo.id_modelo.desc()).all()
+            names = model_display_names(models)
+            for model in models:
+                try:
+                    owner, _ = self._source_owner(db, model)
+                    if owner is None:
+                        continue
+                    expected_hash, error = _persisted_checkpoint_hash(model)
+                    if error:
+                        failures += 1
+                        continue
+                    candidate = self._metadata_candidate(
+                        model, root, names[model.id_modelo], expected_hash)
+                    self._db_predictors[candidate.model_id] = candidate
+                    # Keep trusted provenance even for legacy checkpoint payloads
+                    # without an imported_source marker. This publishes nothing.
+                    self._imported_owners[candidate.model_id] = owner
+                except Exception:
+                    failures += 1
+        return failures
+
     def _hide_unknown_identity(self, model):
         self._hide_model_aliases(model)
         self._discard_invalid_standard_predictor(f"fama_trained_model_{model.id_modelo}")
@@ -355,6 +391,13 @@ class ModelRegistry:
                 except Exception:
                     self._hide_unknown_identity(model)
                     continue
+                if source_owner is None and key in self._imported_owners:
+                    # A lost association cannot turn known private metadata into
+                    # legacy metadata. Reject before any public cache fast path;
+                    # diagnostics must not identify the private model.
+                    self._hide_unknown_identity(model)
+                    errors.append({"model_id": "", "code": "checkpoint_invalid"})
+                    continue
                 if source_owner is not None:
                     self._hide_model_aliases(model)
                     self._imported_owners[key] = source_owner
@@ -465,7 +508,7 @@ class ModelRegistry:
                         errors.append({"model_id": key, "code": "standard_evaluation_invalid"})
                         continue
                 cached = self._db_predictors.get(key)
-                if cached is not None:
+                if cached is not None and self.has_model(key):
                     if getattr(cached, "expected_checkpoint_sha256", None) == expected_hash:
                         self._apply_display_name(cached, names[model.id_modelo])
                         if admitted_pair is not None and admitted_pair_ids is not None:

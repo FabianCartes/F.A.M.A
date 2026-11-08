@@ -490,6 +490,16 @@ async def lifespan(app_instance: FastAPI):
     except Exception as seed_err:
         print(f"[Startup Warning] Excepción al realizar seeding inicial: {seed_err}")
     from app.database import SessionLocal
+    try:
+        registry = get_model_registry()
+        with SessionLocal() as db_session:
+            failures = registry.prewarm_from_db(
+                db_session, checkpoints_root=training_service.checkpoints_dir)
+        if failures:
+            print(f"[Startup Warning] Metadata prewarm skipped {failures} unavailable models.")
+    except Exception:
+        # Never expose private identities, paths or database diagnostics here.
+        print("[Startup Warning] Metadata prewarm unavailable.")
     worker = FeedbackSyncWorker(SessionLocal, feedback_service.raw_data_dir)
     async with worker.running():
         yield
