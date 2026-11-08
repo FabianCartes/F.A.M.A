@@ -30,6 +30,44 @@ def test_cli_processes_one_job_and_reports_claim_not_domain_success(imports, tmp
     assert json.loads(capsys.readouterr().out) == {"claimed": False}
 
 
+@pytest.mark.parametrize("poll,expected", [(None, 3600), (17, 17)])
+def test_cleanup_watch_is_foreground_local_maintenance_and_preserves_active_jobs(
+        imports, tmp_path, monkeypatch, capsys, poll, expected):
+    from types import SimpleNamespace
+    from scripts import run_dataset_import_worker as cli
+
+    main, args = command(imports, monkeypatch)
+    client, _, _, _ = imports
+    source = uploaded(client, tmp_path)
+    admitted = client.post(f"/api/ingestion/imports/{source}/preview",
+                           json={"request_key": "protected", "root": ""}).json()
+    before = client.get(f"/api/ingestion/imports/{source}").json()
+    waits = []
+
+    class Stop:
+        def set(self):
+            pass
+
+        def wait(self, interval):
+            waits.append(interval)
+            return True
+
+    monkeypatch.setattr(cli, "threading", SimpleNamespace(Event=Stop))
+    def no_cloud(*args, **kwargs):
+        raise AssertionError("Maintenance must not configure GCS")
+    monkeypatch.setattr("app.services.dataset_import_storage.GCSImportStorage", no_cloud)
+    args += ["--cleanup-only", "--watch"]
+    if poll is not None:
+        args += ["--poll-seconds", str(poll)]
+    assert main(args) == 0
+    output = capsys.readouterr()
+    assert json.loads(output.out) == {"completed": 0, "failed": 0}
+    assert output.err == ""
+    assert waits == [expected]
+    assert client.get(admitted["status_url"]).json()["status"] == "queued"
+    assert client.get(f"/api/ingestion/imports/{source}").json() == before
+
+
 def test_cli_help_and_missing_arguments_do_not_connect(monkeypatch, capsys):
     from scripts.run_dataset_import_worker import main
     def forbidden(*args, **kwargs):

@@ -82,3 +82,13 @@ La consulta de esta lista utiliza `GET /api/ingestion/imports?latest=true`, con 
 Un error definitivo de validación o ejecución local anterior a la publicación deja la solicitud **cancelada**, conserva el diagnóstico y libera su reserva lógica de recepción. Las advertencias por sí solas no cancelan. Pulsa **Nueva importación** y selecciona el ZIP corregido: se usa una identidad nueva. Una pérdida de conexión, un error de autenticación o un tiempo de espera del cliente no prueban un fallo terminal del servidor; conserva la solicitud y consulta su estado. Una confirmación con publicación pendiente de recuperación no se cancela automáticamente. Un fallo posterior de GCS conserva la importación local.
 
 La cancelación no elimina inmediatamente los archivos ni declara libre su espacio físico. El mantenimiento existente retira únicamente temporales elegibles, conserva los objetos publicados y el historial, y omite trabajos activos, confirmaciones en curso y directorios todavía bloqueados por un escritor. Las reservas físicas solo se recuperan tras la limpieza efectiva.
+
+Para una ejecución explícita, desde `backend/`, usa el intérprete validado y las rutas privadas existentes del mismo perfil que la API y los workers:
+
+```sh
+python -m scripts.run_dataset_import_worker --database-url "$DATABASE_URL" --import-root "$IMPORT_ROOT" --staging-root "$STAGING_ROOT" --cleanup-only
+```
+
+Para mantenimiento periódico en un proceso de primer plano dedicado, añade `--watch --poll-seconds 3600`. Con `--cleanup-only --watch`, el intervalo predeterminado es 3600 segundos; con `--local-only --watch` o `--sync-only --watch` sigue siendo 2 segundos. Se ejecuta una pasada al arrancar y luego espera entre pasadas. SIGINT/SIGTERM detienen el proceso después de la operación actual. No necesita configuración GCS, no migra ni activa perfiles y no sustituye los requisitos del almacenamiento físico vigente. No combines `--execution-seconds` con `--cleanup-only`.
+
+Estos comandos describen una operación con eliminación real de temporales elegibles: no son un modo de simulación. Este cambio de código no instala, inicia ni autoriza automáticamente el mantenimiento sobre datos reales; su activación requiere autorización operativa y configuración verificadas por separado. Las pruebas sintéticas no acreditan despliegue ni una comprobación física con Python 3.12.
