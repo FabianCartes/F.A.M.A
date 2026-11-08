@@ -10,6 +10,7 @@ La documentación está organizada temáticamente en subdirectorios especializad
 
 ## Consolidación Git del MVP local
 
+- [Alcance del MVP y consolidación actual](./arquitectura/mvp-scope-consolidation.md): límites funcionales y commits locales autorizados en los pasos 1–2; no incluye receta portable, reproducción desde cero ni despliegue.
 - [Plan y commits locales](./arquitectura/local-mvp-consolidation-plan.md): rama `feat/local-mvp`, preservación del índice y las fuentes, unidades funcionales y exclusiones.
 - [Recibo de consolidación](./receipts/local-mvp-consolidation.json): comprobaciones nuevas, fallos conservados y límites. Los resultados backend son fragmentados; no representan una suite completa en verde.
 - El respaldo privado de fuentes/índice no es un respaldo consistente de datos operativos ni una restauración comprobada. Logs crudos, scripts operativos locales y metadatos históricos excluidos no forman parte de un checkout limpio; sus referencias en recibos son históricas.
