@@ -962,12 +962,25 @@ def list_ingestion_datasets():
 
 
 @app.get("/api/ingestion/datasets/{dataset_name}/files")
-def list_ingestion_dataset_files(dataset_name: str, db: Session = Depends(get_db)):
-    """
-    Lista los archivos individuales contenidos en un dataset en GCS.
+def list_ingestion_dataset_files(
+    dataset_name: str, db: Session = Depends(get_db),
+    browse: bool = Query(False, description="Opt-in bounded, read-only audio browser."),
+    class_name: Optional[str] = Query(None, description="Exact real class; intersects feedback."),
+    feedback: Optional[bool] = Query(None, description="Filter confirmed incorporated feedback origin."),
+    limit: int = Query(50, ge=1, le=200, description="Browse page size; inventory enumeration remains eager."),
+    cursor: Optional[str] = Query(None, description="Opaque cursor bound to dataset, filters and inventory snapshot."),
+):
+    """Legacy full list by default; browse adds full facets and snapshot-bound pages.
+
+    Shared rows are read-only. Cursor mismatch is 422; inventory drift is 409.
+    No cloud streaming or individual download is provided by browsing.
     """
     try:
         validate_ingestion_segment(dataset_name)
+        if browse:
+            return ingestion_service.browse_dataset_files(
+                dataset_name, db=db, class_name=class_name, feedback=feedback,
+                limit=limit, cursor=cursor)
         files = ingestion_service.list_dataset_files(dataset_name, db=db)
     except ValueError:
         raise HTTPException(status_code=422, detail="Nombre de dataset inválido.") from None

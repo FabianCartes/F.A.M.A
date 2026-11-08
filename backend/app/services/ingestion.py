@@ -394,6 +394,30 @@ class IngestionService:
             db.rollback()
         return files
 
+    def browse_dataset_files(self, dataset_name: str, db: Optional[Any] = None, *,
+                             class_name=None, feedback=None, limit=50, cursor=None):
+        """Read-only full-inventory facets and bounded pages; no download capability."""
+        from app.services.shared_dataset_audio_browse import browse_files
+
+        files = self.list_dataset_files(dataset_name, db=db)
+        if db is not None:
+            from sqlalchemy import inspect
+            from app.models.feedback_sync import FeedbackSync
+
+            if inspect(db.get_bind()).has_table(FeedbackSync.__tablename__):
+                with db.no_autoflush:
+                    records = db.query(FeedbackSync).filter_by(dataset_name=dataset_name).all()
+                canonical = {"datasets/" + row.local_relative_path: row.status for row in records
+                             if row.local_relative_path.startswith(
+                                 f"{dataset_name}/{row.storage_class}/")
+                             and row.object_key == "datasets/" + row.local_relative_path}
+                for item in files:
+                    status = canonical.get(item["path"])
+                    item["is_feedback"] = status is not None and (
+                        item["source"] == "local" or status == "synced")
+        return browse_files(dataset_name, files, class_name=class_name, feedback=feedback,
+                            limit=limit, cursor=cursor)
+
     @staticmethod
     def _read_audio_metadata(source) -> Tuple[Optional[int], Optional[float]]:
         """Observe container metadata without decoding/resampling the recording."""
