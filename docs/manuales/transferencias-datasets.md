@@ -1,8 +1,12 @@
 # Transferencias de datasets
 
-En **Gestión de audios**, las importaciones privadas y el catálogo compartido aparecen en dos secciones. Un mismo nombre no convierte sus datasets en la misma colección: conservan identidades y ámbitos separados.
+En **Gestión de audios**, la sección **Catálogo** reúne dos tablas de estilo uniforme, con los títulos **Catálogo datasets privados** y **Catálogo datasets públicos**. «Públicos» identifica colecciones compartidas en la aplicación, no acceso público en Internet. La columna **Ámbito** distingue **Privado** y **Compartido**. Un mismo nombre no convierte sus datasets en la misma colección: conservan identidades, selecciones y acciones separadas.
 
-## Importaciones privadas · Local → GCS
+**Disponibilidad** separa la copia local del conocimiento remoto: en privados GCS no está verificado; en compartidos se distingue un listado GCS consultado de un conteo desconocido. La paginación y los errores del catálogo privado siguen siendo independientes. No existe aquí una acción para convertir un dataset privado en público: importar o subir a GCS no lo publica ni cambia permisos.
+
+## Catálogo datasets privados
+
+La columna **Fecha de importación** muestra la primera fecha registrada de una solicitud de importación completada que incorporó audios al dataset privado. Se conserva aunque después se agreguen audios o cambie el dataset; no intenta calcular su última modificación. Sin historial válido muestra **No disponible**. Es la fecha de inicio de esa solicitud, no una hora exacta de finalización. La API del catálogo entrega `imported_at` en segundos Unix, derivado de los registros existentes y limitado al propietario y los datasets de la página; no requiere migración. La columna **Última Modificación** del catálogo compartido no cambia.
 
 1. Pulsa **Importar ZIP** para abrir las instrucciones y el flujo de importación existente. El ZIP debe tener una carpeta por clase en su raíz, con audios WAV válidos. La importación automática valida antes de conservar el contenido local; las solicitudes históricas manuales mantienen su confirmación local.
 2. Importar no sube automáticamente a GCS ni inicia preparación o entrenamiento.

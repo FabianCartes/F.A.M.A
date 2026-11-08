@@ -837,7 +837,7 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
           <table aria-label="Catálogo" className="w-full min-w-[760px] text-left text-xs [&_th]:pr-4 [&_td]:pr-4">
             <thead><tr className="border-b border-[#23252e] text-gray-400">
               <th className="pb-3">{importedDatasets.length > 0 && <input className="rounded bg-[#121316] border-[#2d303b] text-emerald-600 focus:ring-0 cursor-pointer" type="checkbox" aria-label="Seleccionar todos los datasets privados" disabled={catalogLoading || deleting || uploadBusy || !importedDatasets.length} checked={importedDatasets.length > 0 && privateSelectedIds.length === importedDatasets.length} onChange={event => setPrivateSelection({ catalog: privateCatalog, ids: event.target.checked ? importedDatasets.map(dataset => dataset.id) : [] })} />}</th>
-              <th className="pb-3 font-medium">Dataset</th><th className="pb-3 font-medium">Ámbito</th><th className="pb-3 font-medium">Disponibilidad</th><th className="pb-3 font-medium">Clases</th><th className="pb-3 font-medium">Acuses de subida</th><th className="pb-3 font-medium">Archivos Locales</th><th className="pb-3 font-medium">Tamaño</th><th className="pb-3 font-medium">Acción</th><th className="pb-3 font-medium">Eliminar</th>
+              <th className="pb-3 font-medium">Dataset</th><th className="pb-3 font-medium">Ámbito</th><th className="pb-3 font-medium">Disponibilidad</th><th className="pb-3 font-medium">Clases</th><th className="pb-3 font-medium">Acuses de subida</th><th className="pb-3 font-medium">Archivos Locales</th><th className="pb-3 font-medium">Tamaño</th><th className="pb-3 font-medium">Fecha de importación</th><th className="pb-3 font-medium">Acción</th><th className="pb-3 font-medium">Eliminar</th>
             </tr></thead>
             <tbody className="divide-y divide-[#23252e]/60">{importedDatasets.map(dataset => (
               <tr key={`import:${dataset.id}`} className="hover:bg-[#1c1e24]/40 transition-colors">
@@ -849,6 +849,7 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
                 <td className="py-2.5 font-mono text-gray-300" title="Acuses durables históricos de subida; no verifica la existencia actual en GCS.">{dataset.synced_file_count}</td>
                 <td className="py-2.5 font-mono text-gray-300">{dataset.file_count}</td>
                 <td className="py-2.5 text-gray-400">{formatBytes(dataset.total_size_bytes)}</td>
+                <td className="py-2.5 text-gray-400">{dataset.imported_at != null && !Number.isNaN(new Date(dataset.imported_at * 1000).getTime()) ? new Date(dataset.imported_at * 1000).toLocaleDateString("es-CL", { year: "numeric", month: "short", day: "numeric" }) : "No disponible"}</td>
                 <td className="py-2.5"><button type="button" className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded bg-[#1c1e24] hover:bg-[#252830] border border-[#2d303b] transition-colors" disabled={deleting} aria-haspopup="dialog" onClick={event => { audioTrigger.current = event.currentTarget; setInspectingDataset(null); setPrivateDetail(dataset.id); }}>Consultar audios</button></td>
                 <td className="py-2.5">
                   <button type="button" aria-label={`Eliminar ${dataset.name}`}

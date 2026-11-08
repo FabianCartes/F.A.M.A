@@ -105,6 +105,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
     expect(screen.getByText('Guarda los archivos en el entorno donde se ejecuta F.A.M.A.; no inicia el entrenamiento.')).toBeDefined();
     const upload = screen.getByRole('button', { name: 'Importar ZIP' });
     expect(upload.closest('section')).toBe(download.closest('section'));
+    expect(upload.closest('section')).toBe(screen.getByRole('region', { name: 'Catálogo' }));
     const exportZip = screen.getByRole('button', { name: 'Descargar versión como ZIP' });
     expect(exportZip.parentElement).toBe(download.parentElement);
     expect(download.nextElementSibling).toBe(exportZip);

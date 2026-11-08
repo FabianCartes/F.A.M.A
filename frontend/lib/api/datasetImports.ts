@@ -45,6 +45,7 @@ export const catalogDatasetSchema = datasetSchema.extend({
   description: z.string().nullable(), revision: z.number().int().nonnegative(),
   class_count: z.number().int().nonnegative(), total_size_bytes: z.number().int().nonnegative(),
   synced_file_count: z.number().int().nonnegative(),
+  imported_at: z.number().finite().nullable().optional(),
 });
 export const catalogPageSchema = pageMetadataSchema.extend({ datasets: z.array(catalogDatasetSchema).max(200) });
 export type CatalogDataset = z.infer<typeof catalogDatasetSchema>;

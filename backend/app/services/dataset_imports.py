@@ -245,8 +245,13 @@ class DatasetImports:
                     DatasetMember.dataset_revision <= ImportedDataset.revision,
                     ImportFile.sync_status == "synced")
             .group_by(DatasetMember.dataset_id).all()) if ids else {}
+        imported_at = dict(db.query(DatasetImport.dataset_id, func.min(DatasetImport.created_at))
+            .filter(DatasetImport.owner_id == owner, DatasetImport.dataset_id.in_(ids),
+                    DatasetImport.status == "imported", DatasetImport.added_count > 0)
+            .group_by(DatasetImport.dataset_id).all()) if ids else {}
         for dataset in result["datasets"]:
             dataset["synced_file_count"] = synced.get(dataset["id"], 0)
+            dataset["imported_at"] = imported_at.get(dataset["id"])
         return result
 
     def list_jobs(self, db, owner, *, latest=False, **pagination):
