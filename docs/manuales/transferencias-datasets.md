@@ -59,7 +59,9 @@ La carga, un dataset vacío y un filtro sin resultados tienen estados distintos.
 
 La procedencia privada procede de los metadatos persistidos del miembro o de su importación de origen, con unión limitada al propietario. En compartidos se exige una coincidencia canónica del registro persistido de incorporación con el dataset, la ruta relativa y la clave de objeto del inventario; para un elemento remoto se exige además su estado sincronizado. Eso no sustituye una comprobación actual del contenido en GCS. La paginación limita la respuesta HTTP compartida, pero conserva el recorrido completo del inventario que ya realizaba el servidor.
 
-La incorporación de este modal al checkout no acredita su despliegue. Sustituir la API activa requiere mantenimiento autorizado por separado; la aceptación visual sigue correspondiendo al usuario, sin automatización de navegador.
+La incorporación de este modal al checkout no acredita por sí sola su despliegue. Sustituir la API activa requiere mantenimiento autorizado por separado; la aceptación visual sigue correspondiendo al usuario, sin automatización de navegador.
+
+Tras el reinicio, se autorizó y aplicó la actualización local de API y frontend: imagen `fama-audio-browser-modal:local`, cinco fuentes backend y tres archivos de interfaz verificados por hash. Se conservó el contenedor anterior detenido para recuperación y se respaldó PostgreSQL, comprobando su restauración en una instancia temporal sin red con los conteos de 33 tablas coincidentes. No se ejecutó ninguna migración. La API saludable y la interfaz en `http://127.0.0.1:3000` respondieron a las comprobaciones HTTP; ambas rutas publican el modo opcional `browse` y el acceso privado sin sesión sigue rechazándose con `401`, también a través del proxy frontend. Esto no sustituye una comprobación visual ni una consulta o descarga autenticada de audios reales.
 
 ## Registro de audios incorporados
 
