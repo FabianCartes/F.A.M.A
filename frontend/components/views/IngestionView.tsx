@@ -15,7 +15,7 @@ import DatasetImportPanel from "@/components/ingestion/DatasetImportPanel";
 import DatasetExportDialog from "@/components/ingestion/DatasetExportDialog";
 import ImportDetailPage from "@/components/ingestion/ImportDetailPage";
 import { importBase, importRequest, catalogPageSchema, audioSchema, saveDownload,
-  jobsPageSchema, executionSchema, jsonRequest, type CatalogDataset } from "@/lib/api/datasetImports";
+  jobsPageSchema, executionSchema, jsonRequest, deletePrivateDataset, type CatalogDataset } from "@/lib/api/datasetImports";
 
 // ============================================================================
 // INTERFACES DEL MODELO DE DOMINIO DE INGESTA (RF_02 / RF_06 / ADR 0013)
@@ -251,6 +251,14 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
   const [privateDetail, setPrivateDetail] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState("");
   const catalogRequest = useRef<AbortController | null>(null);
+  const deletionRequest = useRef<AbortController | null>(null);
+  const [deletion, setDeletion] = useState({ identity: sessionIdentity, pending: false, message: "", error: false });
+  const deleting = deletion.identity === sessionIdentity && deletion.pending;
+  const [archiveConfirmation, setArchiveConfirmation] = useState<{ dataset: CatalogDataset; catalog: typeof privateCatalog } | null>(null);
+  const archiveTrigger = useRef<HTMLButtonElement>(null);
+  const closeArchiveConfirmation = useCallback(() => setArchiveConfirmation(null), []);
+
+  useEffect(() => () => { deletionRequest.current?.abort(); deletionRequest.current = null; }, [sessionIdentity]);
   const catalogMatchesSession = privateCatalog.token === sessionIdentity;
   const importedDatasets = catalogMatchesSession ? privateCatalog.datasets : [];
   const catalogLoading = privateLoading || !catalogMatchesSession;
@@ -258,7 +266,7 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
   const collectionTotal = catalogMatchesSession && !catalogLoading && !catalogError ? privateCatalog.total : null;
 
   // Effect-driven loads update state only after real request completion.
-  const loadPrivateCatalog = useCallback((cursor: string | null = null) => {
+  const loadPrivateCatalog = useCallback((cursor: string | null = null, retained?: { ids: string[]; detail: string | null }) => {
     catalogRequest.current?.abort();
     const controller = new AbortController();
     catalogRequest.current = controller;
@@ -274,17 +282,21 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
           .then(raw => {
             const page = catalogPageSchema.parse(raw);
             if (controller.signal.aborted) return;
-            setPrivateCatalog({ token: sessionIdentity, datasets: page.datasets, next: page.next_cursor, total: page.total });
+            const catalog = { token: sessionIdentity, datasets: page.datasets, next: page.next_cursor, total: page.total };
+            setPrivateCatalog(catalog);
+            if (retained) setPrivateSelection({ catalog, ids: retained.ids.filter(id => page.datasets.some(dataset => dataset.id === id)) });
             setCatalogError("");
-            setPrivateDetail(null);
+            setPrivateDetail(retained?.detail && page.datasets.some(dataset => dataset.id === retained.detail) ? retained.detail : null);
             setDownloadError("");
           });
       })
       .catch(reason => {
         if (controller.signal.aborted) return;
-        setPrivateCatalog({ token: sessionIdentity, datasets: [], next: null, total: null });
-        setPrivateDetail(null);
-        setDownloadError("");
+        if (!retained) {
+          setPrivateCatalog({ token: sessionIdentity, datasets: [], next: null, total: null });
+          setPrivateDetail(null);
+          setDownloadError("");
+        }
         setCatalogError(reason instanceof Error ? reason.message : "No se pudo consultar el catálogo privado.");
       })
       .finally(() => {
@@ -317,6 +329,35 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
     failed: number;
     total: number;
   }>({ downloaded: 0, skipped: 0, failed: 0, total: 0 });
+
+  async function removePrivateDataset(dataset: CatalogDataset) {
+    if (deletionRequest.current || catalogLoading || isSyncing) return;
+    closeArchiveConfirmation();
+    const controller = new AbortController();
+    deletionRequest.current = controller;
+    setDeletion({ identity: sessionIdentity, pending: true, message: "Archivando dataset…", error: false });
+    try {
+      await deletePrivateDataset(sessionToken, dataset, controller.signal);
+      if (controller.signal.aborted) return;
+      const catalog = { ...privateCatalog, datasets: importedDatasets.filter(item => item.id !== dataset.id), total: null };
+      const ids = privateSelectedIds.filter(id => id !== dataset.id);
+      const detail = privateDetail === dataset.id ? null : privateDetail;
+      setPrivateCatalog(catalog);
+      setPrivateSelection({ catalog, ids });
+      setPrivateDetail(detail);
+      if (privateDetail === dataset.id) setDownloadError("");
+      setDeletion({ identity: sessionIdentity, pending: true, message: `«${dataset.name}» archivado. Sus archivos locales y las copias en GCS se conservan; esta acción no libera espacio.`, error: false });
+      setCatalogLoading(true);
+      await loadPrivateCatalog(null, { ids, detail });
+    } catch (reason) {
+      if (!controller.signal.aborted) setDeletion({ identity: sessionIdentity, pending: false, message: reason instanceof Error ? reason.message : "No se pudo archivar el dataset privado.", error: true });
+    } finally {
+      if (!controller.signal.aborted) {
+        deletionRequest.current = null;
+        setDeletion(current => ({ ...current, pending: false }));
+      }
+    }
+  }
 
   // Curación Supervisada Human-in-the-Loop (RF_06 / ADR 0013)
   const [pendingFeedbacks, setPendingFeedbacks] = useState<PendingFeedbackItem[]>([]);
@@ -800,18 +841,28 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
         </div>
         <p className="text-xs text-gray-400">Importa un ZIP al entorno local y selecciona los datasets para guardar una copia privada en GCS. La copia local se conserva; no se publica en el catálogo compartido.</p>
         <p className="text-[11px] text-gray-400">{collectionTotal === null ? "Catálogo privado pendiente de consulta" : `${collectionTotal} importaciones privadas`}</p>
-        <button type="button" className="text-xs text-gray-300 hover:text-white focus-visible:outline-2 focus-visible:outline-emerald-300" disabled={catalogLoading} onClick={() => void fetchPrivateCatalog()}>Actualizar estados</button>
-        <PrivateDatasetUpload key={sessionIdentity} token={sessionToken} datasets={importedDatasets} selectedIds={privateSelectedIds} loading={catalogLoading} onCatalogChange={fetchPrivateCatalog}>
+        <button type="button" className="text-xs text-gray-300 hover:text-white focus-visible:outline-2 focus-visible:outline-emerald-300" disabled={catalogLoading || deleting} onClick={() => void fetchPrivateCatalog()}>Actualizar estados</button>
+        <PrivateDatasetUpload key={sessionIdentity} token={sessionToken} datasets={importedDatasets} selectedIds={privateSelectedIds} loading={catalogLoading || deleting} onCatalogChange={fetchPrivateCatalog}>
         {uploadBusy => <>
         <div className="overflow-x-auto">
+          {archiveConfirmation && archiveConfirmation.catalog === privateCatalog && catalogMatchesSession && !catalogLoading && !deleting && !uploadBusy && !isSyncing &&
+            <DatasetConfirmationDialog title="Confirmar archivado de dataset" onClose={closeArchiveConfirmation} returnFocus={archiveTrigger}>
+              <p>¿Eliminar «{archiveConfirmation.dataset.name}» del catálogo?</p>
+              <p>El dataset quedará archivado y no estará disponible para nuevas operaciones.</p>
+              <p>Sus archivos locales y las copias en GCS se conservan. Esta acción no libera espacio.</p>
+              <div className="flex justify-end gap-2">
+                <button type="button" className="rounded-lg border border-[#373a46] px-3 py-2 transition-colors hover:bg-[#252830] hover:border-[#515565] hover:text-white focus-visible:outline-2 focus-visible:outline-emerald-300" onClick={closeArchiveConfirmation}>Cancelar</button>
+                <button type="button" className="rounded-lg border border-red-900 bg-red-950 px-3 py-2 text-red-300 transition-colors hover:bg-red-900 hover:border-red-700 hover:text-red-100 focus-visible:outline-2 focus-visible:outline-red-300" onClick={() => void removePrivateDataset(archiveConfirmation.dataset)}>Confirmar archivado</button>
+              </div>
+            </DatasetConfirmationDialog>}
           <table aria-label="Catálogo" className="w-full min-w-[760px] text-left text-xs [&_th]:pr-4 [&_td]:pr-4">
             <thead><tr className="border-b border-[#23252e] text-gray-400">
-              <th className="pb-3">{importedDatasets.length > 0 && <input className="rounded bg-[#121316] border-[#2d303b] text-emerald-600 focus:ring-0 cursor-pointer" type="checkbox" aria-label="Seleccionar todos los datasets privados" disabled={catalogLoading || uploadBusy || !importedDatasets.length} checked={importedDatasets.length > 0 && privateSelectedIds.length === importedDatasets.length} onChange={event => setPrivateSelection({ catalog: privateCatalog, ids: event.target.checked ? importedDatasets.map(dataset => dataset.id) : [] })} />}</th>
-              <th className="pb-3 font-medium">Dataset</th><th className="pb-3 font-medium">Ámbito</th><th className="pb-3 font-medium">Disponibilidad</th><th className="pb-3 font-medium">Clases</th><th className="pb-3 font-medium">Acuses de subida</th><th className="pb-3 font-medium">Archivos Locales</th><th className="pb-3 font-medium">Tamaño</th><th className="pb-3 font-medium">Acción</th>
+              <th className="pb-3">{importedDatasets.length > 0 && <input className="rounded bg-[#121316] border-[#2d303b] text-emerald-600 focus:ring-0 cursor-pointer" type="checkbox" aria-label="Seleccionar todos los datasets privados" disabled={catalogLoading || deleting || uploadBusy || !importedDatasets.length} checked={importedDatasets.length > 0 && privateSelectedIds.length === importedDatasets.length} onChange={event => setPrivateSelection({ catalog: privateCatalog, ids: event.target.checked ? importedDatasets.map(dataset => dataset.id) : [] })} />}</th>
+              <th className="pb-3 font-medium">Dataset</th><th className="pb-3 font-medium">Ámbito</th><th className="pb-3 font-medium">Disponibilidad</th><th className="pb-3 font-medium">Clases</th><th className="pb-3 font-medium">Acuses de subida</th><th className="pb-3 font-medium">Archivos Locales</th><th className="pb-3 font-medium">Tamaño</th><th className="pb-3 font-medium">Acción</th><th className="pb-3 font-medium">Eliminar</th>
             </tr></thead>
             <tbody className="divide-y divide-[#23252e]/60">{importedDatasets.map(dataset => (
               <tr key={`import:${dataset.id}`} className="hover:bg-[#1c1e24]/40 transition-colors">
-                <td className="py-2.5"><input className="rounded bg-[#121316] border-[#2d303b] text-emerald-600 focus:ring-0 cursor-pointer" type="checkbox" aria-label={`Seleccionar dataset privado ${dataset.name}`} disabled={catalogLoading || uploadBusy} checked={privateSelectedIds.includes(dataset.id)} onChange={event => setPrivateSelection({ catalog: privateCatalog, ids: event.target.checked ? [...privateSelectedIds, dataset.id] : privateSelectedIds.filter(id => id !== dataset.id) })} /></td>
+                <td className="py-2.5"><input className="rounded bg-[#121316] border-[#2d303b] text-emerald-600 focus:ring-0 cursor-pointer" type="checkbox" aria-label={`Seleccionar dataset privado ${dataset.name}`} disabled={catalogLoading || deleting || uploadBusy} checked={privateSelectedIds.includes(dataset.id)} onChange={event => setPrivateSelection({ catalog: privateCatalog, ids: event.target.checked ? [...privateSelectedIds, dataset.id] : privateSelectedIds.filter(id => id !== dataset.id) })} /></td>
                 <td className="py-2.5 font-medium text-gray-200"><div className="flex items-center gap-2"><DatasetFolderIcon /><span className="font-semibold">{dataset.name}</span></div></td>
                 <td className="py-2.5 text-gray-300">Privado</td>
                 <td className="py-2.5 text-gray-400">Copia local catalogada · {dataset.synced_file_count > 0 ? `Subida a GCS registrada (${dataset.synced_file_count}/${dataset.file_count})` : "Sin subida a GCS registrada"}</td>
@@ -819,25 +870,33 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
                 <td className="py-2.5 font-mono text-gray-300" title="Acuses durables históricos de subida; no verifica la existencia actual en GCS.">{dataset.synced_file_count}</td>
                 <td className="py-2.5 font-mono text-gray-300">{dataset.file_count}</td>
                 <td className="py-2.5 text-gray-400">{formatBytes(dataset.total_size_bytes)}</td>
-                <td className="py-2.5"><button type="button" className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded bg-[#1c1e24] hover:bg-[#252830] border border-[#2d303b] transition-colors" onClick={() => { setPrivateDetail(dataset.id); setDownloadError(""); }}>Consultar audios</button></td>
+                <td className="py-2.5"><button type="button" className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded bg-[#1c1e24] hover:bg-[#252830] border border-[#2d303b] transition-colors" disabled={deleting} onClick={() => { setPrivateDetail(dataset.id); setDownloadError(""); }}>Consultar audios</button></td>
+                <td className="py-2.5">
+                  <button type="button" aria-label={`Eliminar ${dataset.name}`}
+                    className="rounded border border-red-900 bg-red-950/30 px-2 py-1 text-red-300 transition-colors enabled:hover:bg-red-900/50 enabled:hover:border-red-700 enabled:hover:text-red-100 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-red-300"
+                    disabled={catalogLoading || deleting || uploadBusy || isSyncing}
+                    aria-haspopup="dialog"
+                     onClick={event => { archiveTrigger.current = event.currentTarget; setArchiveConfirmation({ dataset, catalog: privateCatalog }); }}>Eliminar</button>
+                </td>
               </tr>
             ))}</tbody>
           </table>
         </div>
         <div className="space-y-4 py-4 text-xs text-gray-400">
+          {deletion.identity === sessionIdentity && deletion.message && <p role={deletion.error ? "alert" : "status"}>{deletion.message}</p>}
           {catalogLoading && <p role="status">Consultando catálogo privado…</p>}
           {catalogError && <p role="alert">Catálogo privado no disponible: {catalogError}</p>}
           {!catalogLoading && !catalogError && importedDatasets.length === 0 && <p>No hay importaciones privadas en esta página.</p>}
           <p>Acuses de subida: confirmaciones históricas, no una verificación actual del bucket. Los archivos locales son metadatos del catálogo, no un escaneo actual del disco.</p>
           <div className="flex flex-wrap gap-3">
-            <button type="button" disabled={catalogLoading} onClick={() => void fetchPrivateCatalog()}>Primera página de importaciones</button>
-            <button type="button" disabled={catalogLoading || !catalogMatchesSession || !privateCatalog.next} onClick={() => void fetchPrivateCatalog(privateCatalog.next)}>Siguiente página de importaciones</button>
+            <button type="button" disabled={catalogLoading || deleting} onClick={() => void fetchPrivateCatalog()}>Primera página de importaciones</button>
+            <button type="button" disabled={catalogLoading || deleting || !catalogMatchesSession || !privateCatalog.next} onClick={() => void fetchPrivateCatalog(privateCatalog.next)}>Siguiente página de importaciones</button>
           </div>
           {privateDetail && importedDatasets.some(dataset => dataset.id === privateDetail) && <div>
             <button type="button" onClick={() => setPrivateDetail(null)}>Cerrar consulta de audios</button>
             <ImportDetailPage key={`${sessionToken}:${privateDetail}`} token={sessionToken}
               endpoint={`${importBase}/datasets/${encodeURIComponent(privateDetail)}/files`} collection="files" label="audios importados" schema={audioSchema}
-              renderItem={file => <button type="button" className="underline" onClick={() => {
+              renderItem={file => <button type="button" disabled={deleting} className="underline" onClick={() => {
                 setDownloadError("");
                 void importRequest(sessionToken, `${importBase}/datasets/${encodeURIComponent(privateDetail)}/files/${file.sha256}`)
                   .then(response => saveDownload(response, file.original_path.split("/").pop() || "audio.wav"))
