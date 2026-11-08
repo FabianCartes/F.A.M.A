@@ -192,8 +192,9 @@ def create(payload: CreateImport, db: Session = Depends(get_db), user=Depends(ge
 
 @router.get("")
 def jobs(db: Session = Depends(get_db), user=Depends(get_import_user), service=Depends(get_import_service),
+         latest: bool = Query(False, description="Últimas diez importaciones propias, por fecha; sin cursor."),
          paging=Depends(pagination)):
-    return service.list_jobs(db, user.id, **paging)
+    return service.list_jobs(db, user.id, latest=latest, **paging)
 
 
 @router.get("/{job_id}/files")

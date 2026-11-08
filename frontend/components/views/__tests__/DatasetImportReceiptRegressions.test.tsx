@@ -8,7 +8,7 @@ const base = "/api/ingestion/imports";
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 const data = "0123456789abcdefXYZ";
 const mismatch = "01234567BAD!cdefXYZ";
-const original = { id: "own", status: "receiving", sync_status: "pending", dataset_id: null,
+const original = { id: "own", archive_name: "own.zip", status: "receiving", sync_status: "pending", dataset_id: null,
   added_count: 0, preview_token: null, error: null,
   preview: { root: "", file_count: 0, class_count: 0, error_count: 0, warning_count: 0, total_size_bytes: 0, synced_count: 0 } };
 
@@ -90,7 +90,7 @@ async function select(contents = data) {
   const start = within(dialog).getByRole("button", { name: "Importar dataset" }) as HTMLButtonElement;
   await waitFor(() => expect(start.disabled).toBe(false));
   fireEvent.click(start);
-  fireEvent.click(screen.getByRole("button", { name: /own —/ }));
+  fireEvent.click(screen.getByRole("button", { name: /own.zip —/ }));
   const file = new File([contents], "own.zip", { type: "application/zip" });
   const slices = vi.spyOn(file, "slice"), whole = vi.spyOn(file, "arrayBuffer");
   fireEvent.change(screen.getByLabelText("Archivo ZIP"), { target: { files: [file] } });
@@ -179,7 +179,7 @@ it("keeps one PUT in flight, reports only acknowledged bytes, and clears history
   expect(receipt.calls.filter(call => call.startsWith("PUT"))).toEqual([]);
   release();
   await ready();
-  fireEvent.click(screen.getByRole("button", { name: /own —/ }));
+  fireEvent.click(screen.getByRole("button", { name: /own.zip —/ }));
   expect(screen.queryByText(/Archivo seleccionado/)).toBeNull();
   expect(screen.queryByText(/Bytes reconocidos/)).toBeNull();
   const before = receipt.stateHash();

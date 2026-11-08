@@ -6,7 +6,7 @@ import DatasetImportPanel from "@/components/ingestion/DatasetImportPanel";
 import { durableFetch } from "./datasetImportTransport";
 
 const base = "/api/ingestion/imports";
-const source = { id: "resume", status: "receiving", sync_status: "pending", dataset_id: null,
+const source = { id: "resume", archive_name: "resume.zip", status: "receiving", sync_status: "pending", dataset_id: null,
   added_count: 0, preview_token: null, error: null,
   preview: { file_count: 0, class_count: 0, error_count: 0, warning_count: 0, total_size_bytes: 0, synced_count: 0 } };
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -70,7 +70,7 @@ async function open(history = true, contents = chunks.join("")) {
   const start = within(dialog).getByRole("button", { name: "Importar dataset" }) as HTMLButtonElement;
   await waitFor(() => expect(start.disabled).toBe(false));
   fireEvent.click(start);
-  if (history) fireEvent.click(screen.getByRole("button", { name: /resume —/ }));
+  if (history) fireEvent.click(screen.getByRole("button", { name: /resume.zip —/ }));
   else fireEvent.change(screen.getByLabelText("Nombre del dataset"), { target: { value: "Birds" } });
   const file = new BrowserFile([contents], "birds.zip", { type: "application/zip" });
   const slices = vi.spyOn(file, "slice");
@@ -166,7 +166,7 @@ it("does not report unacknowledged progress or admit preview when receipt admiss
 it("requires file reselection after choosing an import from history, rather than reusing another selection", async () => {
   transport(12);
   await open();
-  fireEvent.click(screen.getByRole("button", { name: /resume —/ }));
+  fireEvent.click(screen.getByRole("button", { name: /resume.zip —/ }));
   expect(screen.queryByText("Archivo seleccionado: birds.zip")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Validar ZIP" }));
   expect((await screen.findByRole("alert")).textContent).toContain("Selecciona el ZIP original");

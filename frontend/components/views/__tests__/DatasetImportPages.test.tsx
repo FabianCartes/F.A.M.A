@@ -7,7 +7,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 it.each([60, 600])("keeps the rendered review page bounded across %i synthetic files", async total => {
   const base = "/api/ingestion/imports";
-  const job = { id: `integral-${total}`, status: "ready", sync_status: "pending", dataset_id: null, added_count: 0,
+  const job = { id: `integral-${total}`, archive_name: `integral-${total}.zip`, status: "ready", sync_status: "pending", dataset_id: null, added_count: 0,
     preview_token: "a".repeat(64), error: null, preview: { root: "", file_count: total, class_count: 1,
       error_count: 0, warning_count: 0, total_size_bytes: total * 204, synced_count: 0, new_count: total } };
   const writes: string[] = [];
@@ -41,7 +41,7 @@ it.each([60, 600])("keeps the rendered review page bounded across %i synthetic f
   const start = within(screen.getByRole("dialog")).getByRole("button", { name: "Importar dataset" }) as HTMLButtonElement;
   await waitFor(() => expect(start.disabled).toBe(false));
   fireEvent.click(start);
-  fireEvent.click(await screen.findByRole("button", { name: new RegExp(`${job.id} —`) }));
+  fireEvent.click(await screen.findByRole("button", { name: new RegExp(`${job.id}.zip —`) }));
   const review = screen.getByRole("region", { name: "archivos" });
   let maximumRows = 0;
   for (let offset = 0; offset < total; offset += 50) {
@@ -62,7 +62,7 @@ it.each([60, 600])("keeps the rendered review page bounded across %i synthetic f
 
 it("replaces review pages instead of accumulating rows and preserves the reviewed token", async () => {
   const base = "/api/ingestion/imports";
-  const job = { id: "paged", status: "ready", sync_status: "pending", dataset_id: null, added_count: 0,
+  const job = { id: "paged", archive_name: "paged.zip", status: "ready", sync_status: "pending", dataset_id: null, added_count: 0,
     preview_token: "a".repeat(64), error: null, preview: { root: "", file_count: 51, class_count: 1,
       error_count: 0, warning_count: 0, total_size_bytes: 5100, synced_count: 0, new_count: 51 } };
   const files = Array.from({ length: 50 }, (_, i) => ({ id: String(i), original_path: `birds/${i}.wav`,
@@ -94,7 +94,7 @@ it("replaces review pages instead of accumulating rows and preserves the reviewe
   const start = within(screen.getByRole("dialog")).getByRole("button", { name: "Importar dataset" }) as HTMLButtonElement;
   await waitFor(() => expect(start.disabled).toBe(false));
   fireEvent.click(start);
-  fireEvent.click(await screen.findByRole("button", { name: /paged —/ }));
+  fireEvent.click(await screen.findByRole("button", { name: /paged.zip —/ }));
   await screen.findByText("birds/0.wav → birds");
   fireEvent.click(screen.getByRole("button", { name: "Siguiente página de archivos" }));
   await screen.findByText(/birds\/final.wav/);
@@ -108,7 +108,7 @@ it("replaces review pages instead of accumulating rows and preserves the reviewe
 
 it("ignores a delayed page from a previous job and keeps confirmation explicit", async () => {
   const base = "/api/ingestion/imports";
-  const job = (id: string) => ({ id, status: "ready", sync_status: "pending", dataset_id: null, added_count: 0,
+  const job = (id: string) => ({ id, archive_name: `${id}.zip`, status: "ready", sync_status: "pending", dataset_id: null, added_count: 0,
     preview_token: id.repeat(64), error: null, preview: { root: "", file_count: 1, class_count: 1,
       error_count: 0, warning_count: 0, total_size_bytes: 100, synced_count: 0, new_count: 1 } });
   const jobs = [job("a"), job("b")];
@@ -142,9 +142,9 @@ it("ignores a delayed page from a previous job and keeps confirmation explicit",
   const start = within(screen.getByRole("dialog")).getByRole("button", { name: "Importar dataset" }) as HTMLButtonElement;
   await waitFor(() => expect(start.disabled).toBe(false));
   fireEvent.click(start);
-  fireEvent.click(await screen.findByRole("button", { name: /a —/ }));
+  fireEvent.click(await screen.findByRole("button", { name: /a.zip —/ }));
   await waitFor(() => expect(fetcher.mock.calls.some(([url]) => url.endsWith("/a/files"))).toBe(true));
-  fireEvent.click(screen.getByRole("button", { name: /b —/ }));
+  fireEvent.click(screen.getByRole("button", { name: /b.zip —/ }));
   await screen.findByText("birds/current.wav → birds");
   await act(async () => { resolveOld(page("files", [file("old")], jobs[0].preview_token)); await old; });
   await waitFor(() => expect(screen.queryByText("birds/old.wav → birds")).toBeNull());

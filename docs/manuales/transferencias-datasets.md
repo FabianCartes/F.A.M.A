@@ -30,3 +30,9 @@ Esta tabla es de consulta: muestra los últimos 50 registros aceptados en cuatro
 ## Límites de la comprobación
 
 Las pruebas de interfaz usan controles públicos y respuestas HTTP sintéticas. No acreditan acceso a GCS, permisos reales, transferencia de datos, calidad de modelos ni despliegue de la copia dev. La comprobación visual y funcional de esa copia corresponde al cierre operativo; no debe sustituirse por resultados del checkout.
+
+## Historial reciente de importaciones ZIP
+
+6. Para recuperar trabajos tras abandonar la pantalla o gestionar una subida fallida, abre **Recuperar importaciones anteriores** dentro de **Importar ZIP**. Muestra solo las **10 importaciones más recientes** del propietario, por fecha de creación descendente, identificadas por el **nombre original del ZIP**, su **fecha y hora local** y el estado; no usa el UUID como etiqueta. Si un registro antiguo no conserva recibo o fecha, lo indica sin inventar metadatos. No hay paginación en esta lista; los registros anteriores no se eliminan. La acción histórica **Subir este dataset a GCS** sigue disponible con su confirmación individual.
+
+La consulta de esta lista utiliza `GET /api/ingestion/imports?latest=true`, con un máximo de diez resultados y sin cursor. El parámetro opcional `limit` puede reducirlo, pero no ampliar ese máximo. Los campos descriptivos aditivos son `archive_name` (nombre del recibo ZIP o `null`) y `created_at` (segundos Unix). Sin `latest=true`, la API mantiene el historial paginado por ID y su cursor existente, utilizado por la búsqueda de importaciones para subir datasets privados. La lectura no sube, cancela ni modifica importaciones.

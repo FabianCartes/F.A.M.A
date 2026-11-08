@@ -47,7 +47,7 @@ it('refreshes without transfer and downloads only confirmed selections without p
 
 it('uploads only the recovered import after named confirmation and reports admission, not completion', async () => {
   const base = '/api/ingestion/imports';
-  const source = { id: 'private-import', name: 'Aves privadas', status: 'imported', sync_status: 'pending', dataset_id: 'owned-dataset', added_count: 2,
+  const source = { id: 'private-import', archive_name: 'private-import.zip', name: 'Aves privadas', status: 'imported', sync_status: 'pending', dataset_id: 'owned-dataset', added_count: 2,
     preview_token: null, error: null, preview: { root: '', file_count: 2, class_count: 1, error_count: 0, warning_count: 0, total_size_bytes: 20, synced_count: 0 } };
   const execution = { id: 'upload', import_id: source.id, kind: 'sync', status: 'queued', stage: 'queued', progress: 0, result: {}, error: null, status_url: `${base}/${source.id}/jobs/upload` };
   const posts: string[] = [];
@@ -66,7 +66,7 @@ it('uploads only the recovered import after named confirmation and reports admis
   const start = within(screen.getByRole('dialog')).getByRole('button', { name: 'Importar dataset' });
   await waitFor(() => expect((start as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(start);
-  fireEvent.click(await screen.findByRole('button', { name: /private-import —/ }));
+  fireEvent.click(await screen.findByRole('button', { name: /private-import.zip —/ }));
   fireEvent.click(screen.getByRole('button', { name: 'Actualizar importaciones' }));
   await waitFor(() => expect((screen.getByRole('button', { name: 'Actualizar importaciones' }) as HTMLButtonElement).disabled).toBe(false));
   expect(posts).toEqual([]);

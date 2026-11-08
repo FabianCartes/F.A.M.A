@@ -10,7 +10,7 @@ const page = (key: string, rows: unknown[]) => Response.json({ [key]: rows, tota
 
 it.each([undefined, false, true])("remount preserves explicit authorization %s without creating work", async auto_import => {
   const writes: string[] = [];
-  const source = { id: "history", status: "ready", sync_status: "pending", dataset_id: null, added_count: 0, preview_token: "a".repeat(64), preview: { ...preview, auto_import }, error: null, execution: null };
+  const source = { id: "history", archive_name: "history.zip", status: "ready", sync_status: "pending", dataset_id: null, added_count: 0, preview_token: "a".repeat(64), preview: { ...preview, auto_import }, error: null, execution: null };
   const reads: string[] = [];
   vi.stubGlobal("fetch", vi.fn(async (input: string, options?: RequestInit) => {
     const path = new URL(input, "http://synthetic.test").pathname;
@@ -30,7 +30,7 @@ it.each([undefined, false, true])("remount preserves explicit authorization %s w
     const open = dialog.getByRole("button", { name: "Importar dataset" });
     await waitFor(() => expect((open as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(open);
-    fireEvent.click(await screen.findByRole("button", { name: /history —/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /history.zip —/ }));
     await screen.findByText(/Clases propuestas: 1/);
     expect(Boolean(screen.queryByRole("button", { name: "Confirmar importación local" }))).toBe(auto_import !== true);
     expect(screen.queryByRole("button", { name: "Sincronizar con GCS" })).toBeNull();

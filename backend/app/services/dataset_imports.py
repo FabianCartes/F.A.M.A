@@ -167,7 +167,12 @@ class DatasetImports:
                 execution = public_job(_snapshot(job))
         preview["synced_count"] = db.query(func.count(func.distinct(ImportFile.sha256))).filter(
             ImportFile.import_id == row.id, ImportFile.sync_status == "synced").scalar()
-        return {"id": row.id, "status": row.status, "sync_status": row.sync_status,
+        from sqlalchemy import inspect
+        from app.models.dataset_import_receipt import ImportReceipt
+        receipt_name = (db.query(ImportReceipt.name).filter_by(import_id=row.id).scalar()
+                        if inspect(db.get_bind()).has_table(ImportReceipt.__tablename__) else None)
+        return {"id": row.id, "archive_name": receipt_name, "created_at": row.created_at,
+                "status": row.status, "sync_status": row.sync_status,
                 "dataset_id": row.dataset_id, "added_count": row.added_count,
                 "preview_token": row.preview_token, "preview": preview,
                 "error": row.error, "execution": execution,
@@ -244,7 +249,18 @@ class DatasetImports:
             dataset["synced_file_count"] = synced.get(dataset["id"], 0)
         return result
 
-    def list_jobs(self, db, owner, **pagination):
+    def list_jobs(self, db, owner, *, latest=False, **pagination):
+        if latest:
+            if pagination.get("cursor") is not None:
+                raise HTTPException(422, "El historial reciente no admite cursor.")
+            limit = pagination.get("limit")
+            if limit is not None and (type(limit) is not int or not 1 <= limit <= 200):
+                raise HTTPException(422, "Tamaño de historial no válido.")
+            query = db.query(DatasetImport).filter_by(owner_id=owner)
+            rows = query.order_by(DatasetImport.created_at.desc(), DatasetImport.id.desc()).limit(
+                min(limit or 10, 10)).all()
+            return {"imports": [self.view(row) for row in rows], "total": query.count(),
+                    "next_cursor": None, "snapshot": "recent-history"}
         return page(db.query(DatasetImport).filter_by(owner_id=owner), DatasetImport.id,
                     scope=f"imports:{owner}", snapshot="history", key="imports", serialize=self.view, **pagination)
 

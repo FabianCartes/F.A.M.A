@@ -9,7 +9,7 @@ const quota = { current_bytes: 100, current_files: 1, new_bytes: 200, new_files:
 
 async function openReview(capacity: typeof quota = quota, status = "ready", errorCount = 0) {
   const writes: string[] = [];
-  const job = { id: "quota-review", status, sync_status: "pending", dataset_id: null,
+  const job = { id: "quota-review", archive_name: "quota-review.zip", status, sync_status: "pending", dataset_id: null,
     added_count: 0, preview_token: "a".repeat(64), error: null,
     preview: { root: "", file_count: 3, class_count: 1, error_count: errorCount, warning_count: 0,
       total_size_bytes: 300, synced_count: 0, new_count: 2, quota: capacity } };
@@ -23,7 +23,7 @@ async function openReview(capacity: typeof quota = quota, status = "ready", erro
     const page = (key: string, items: unknown[], snapshot: string) => Response.json({
       [key]: items, total: items.length, next_cursor: null, snapshot });
     if (input.endsWith("/datasets")) return page("datasets", [], "catalog");
-    if (input.endsWith("/imports")) return page("imports", [job], "history");
+    if (new URL(input, "http://synthetic.test").pathname.endsWith("/imports")) return page("imports", [job], "history");
     if (input.endsWith("/files")) return page("files", [], job.preview_token);
     if (input.endsWith("/classes")) return page("classes", ["birds"], job.preview_token);
     if (input.endsWith("/issues")) return page("issues", errorCount ? [{ id: "quota", severity: "error",
@@ -36,7 +36,7 @@ async function openReview(capacity: typeof quota = quota, status = "ready", erro
   const start = within(dialog).getByRole("button", { name: "Importar dataset" }) as HTMLButtonElement;
   await waitFor(() => expect(start.disabled).toBe(false));
   fireEvent.click(start);
-  fireEvent.click(await screen.findByRole("button", { name: /quota-review —/ }));
+  fireEvent.click(await screen.findByRole("button", { name: /quota-review.zip —/ }));
   await screen.findByText("archivos: 0");
   await screen.findByText("clases: 1");
   await screen.findByText(`incidencias: ${errorCount ? 1 : 0}`);

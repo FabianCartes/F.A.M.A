@@ -13,7 +13,7 @@ const preview = { auto_import: true, root: "", file_count: 1, class_count: 1, er
   warning_count: 1, total_size_bytes: 100, synced_count: 0, new_count: 1 };
 const execution = { id: "exec", import_id: "source", kind: "preview", status: "running", stage: "verifying",
   progress: 1, result: {}, error: null, status_url: `${base}/source/jobs/exec` };
-const source = { id: "source", status: "ready", sync_status: "pending", dataset_id: null, added_count: 0,
+const source = { id: "source", archive_name: "source.zip", status: "ready", sync_status: "pending", dataset_id: null, added_count: 0,
   preview_token: "a".repeat(64), preview, error: null, execution };
 const page = (key: string, rows: unknown[]) => Response.json({ [key]: rows, total: rows.length,
   next_cursor: null, snapshot: source.preview_token });
@@ -88,7 +88,7 @@ it.each(["ready", "committing", "needs_correction"])("recovers automatic %s with
     status: status === "needs_correction" ? "succeeded" : "failed",
     error: status === "needs_correction" ? null : { code: "execution_failed" } },
     preview: { ...preview, error_count: status === "needs_correction" ? 1 : 0 } };
-  const legacy = { ...source, id: "legacy", execution: null, preview: { ...preview, auto_import: undefined } };
+  const legacy = { ...source, id: "legacy", archive_name: "legacy.zip", execution: null, preview: { ...preview, auto_import: undefined } };
   const writes: string[] = [];
   vi.stubGlobal("fetch", vi.fn(async (input: string, options?: RequestInit) => {
     const path = new URL(input, "http://synthetic.test").pathname;
@@ -96,11 +96,11 @@ it.each(["ready", "committing", "needs_correction"])("recovers automatic %s with
     if (path.endsWith("/access")) return Response.json({ development_mode: true });
     if (path.endsWith("/limits")) return Response.json(limits);
     if (path === base) return page("imports", [automatic, legacy]);
-    if (path === execution.status_url + "/retry") return Response.json({ ...execution, id: "retry", status: "queued",
+    if (path === execution.status_url + "/retry") return Response.json({ ...execution, id: "retry", archive_name: "retry.zip", status: "queued",
       status_url: `${base}/source/jobs/retry` }, { status: 202 });
-    if (path === `${base}/source/jobs/retry`) return Response.json({ ...execution, id: "retry", status: "succeeded" });
+    if (path === `${base}/source/jobs/retry`) return Response.json({ ...execution, id: "retry", archive_name: "retry.zip", status: "succeeded" });
     if (path === `${base}/source`) return Response.json({ ...source, status: "imported", dataset_id: "dataset", added_count: 1,
-      execution: { ...execution, id: "retry", status: "succeeded" } });
+      execution: { ...execution, id: "retry", archive_name: "retry.zip", status: "succeeded" } });
     if (path.endsWith("/files")) return page("files", []);
     if (path.endsWith("/classes")) return page("classes", ["bird"]);
     if (path.endsWith("/issues")) return page("issues", status === "needs_correction" ? [issue] : []);
@@ -108,7 +108,7 @@ it.each(["ready", "committing", "needs_correction"])("recovers automatic %s with
   }));
   const first = render(<DatasetImportPanel />);
   await open();
-  fireEvent.click(screen.getByRole("button", { name: /source —/ }));
+  fireEvent.click(screen.getByRole("button", { name: /source.zip —/ }));
   expect(screen.queryByRole("button", { name: "Confirmar importación local" })).toBeNull();
   expect(screen.queryByText(/Importada localmente/)).toBeNull();
   if (status === "needs_correction") {
@@ -122,13 +122,13 @@ it.each(["ready", "committing", "needs_correction"])("recovers automatic %s with
   first.unmount();
   render(<DatasetImportPanel />);
   await open();
-  fireEvent.click(screen.getByRole("button", { name: /source —/ }));
+  fireEvent.click(screen.getByRole("button", { name: /source.zip —/ }));
   expect(screen.queryByRole("button", { name: "Confirmar importación local" })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: /legacy —/ }));
+  fireEvent.click(screen.getByRole("button", { name: /legacy.zip —/ }));
   expect(screen.getByRole("button", { name: "Confirmar importación local" })).toBeDefined();
   expect(writes).toEqual([]);
   if (status === "committing") {
-    fireEvent.click(screen.getByRole("button", { name: /source —/ }));
+    fireEvent.click(screen.getByRole("button", { name: /source.zip —/ }));
     fireEvent.click(screen.getByRole("button", { name: "Reintentar trabajo" }));
     await screen.findByText(/Importada localmente: 1 archivo/);
     expect(writes).toEqual([execution.status_url + "/retry"]);

@@ -37,6 +37,7 @@ export const jobSchema = z.object({
   id: z.string(), status: z.string(), sync_status: z.string(), dataset_id: z.string().nullable(),
   added_count: z.number(), preview_token: z.string().nullable(), preview: previewSchema, error: z.string().nullable(),
   execution: executionSchema.nullable().optional(),
+  archive_name: z.string().nullable().optional(), created_at: z.number().nullable().optional(),
 });
 export const datasetSchema = z.object({ id: z.string(), name: z.string(), file_count: z.number(), revision: z.number().int().nonnegative().optional() });
 export const datasetsPageSchema = pageMetadataSchema.extend({ datasets: z.array(datasetSchema).max(200) });

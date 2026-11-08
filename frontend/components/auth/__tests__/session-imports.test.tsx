@@ -16,7 +16,7 @@ it("enables private import with a confirmed cookie and no Bearer in non-developm
     if (path.endsWith("/limits")) return Response.json({ received_bytes: 1024, expanded_bytes: 4096,
       entries: 10, depth: 12, path_bytes: 240, audio_bytes: 1024, audio_seconds: 600,
       validation_seconds: 60, free_bytes: 1, ttl_seconds: 86400, concurrent_imports: 4 });
-    if (path.endsWith("/api/ingestion/imports")) return Response.json({ imports: [], total: 0, next_cursor: null, snapshot: "empty" });
+    if (new URL(path, "http://synthetic.test").pathname.endsWith("/api/ingestion/imports")) return Response.json({ imports: [], total: 0, next_cursor: null, snapshot: "empty" });
     throw new Error("Unexpected request " + path);
   });
   vi.stubGlobal("fetch", request);

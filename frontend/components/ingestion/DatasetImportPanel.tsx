@@ -45,7 +45,6 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange,
   const [receiptProgress, setReceiptProgress] = useState<ReceiptProgress | null>(null);
   const [error, setError] = useState("");
   const [localDataset, setLocalDataset] = useState<string | null>(null);
-  const [historyNext, setHistoryNext] = useState<string | null>(null);
   const active = useRef(false);
   const requestKey = useRef("");
   const operationKey = useRef({ signature: "", key: "" });
@@ -145,15 +144,9 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange,
   }
 
   async function refresh(sessionToken = token) {
-    const jobs = await importRequest(sessionToken, importBase).then(r => r.json());
+    const jobs = await importRequest(sessionToken, `${importBase}?latest=true`).then(r => r.json());
     const jobPage = jobsPageSchema.parse(jobs);
-    setHistory(jobPage.imports); setHistoryNext(jobPage.next_cursor);
-  }
-
-  async function historyPage(cursor: string | null) {
-    const response = await importRequest(token, `${importBase}${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
-    const page = jobsPageSchema.parse(await response.json());
-    setHistory(page.imports); setHistoryNext(page.next_cursor);
+    setHistory(jobPage.imports.slice(0, 10));
   }
 
   async function initialize() {
@@ -317,15 +310,13 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange,
           {!["imported", "committing", "cancelled"].includes(job.status) && <button className={buttonClass} disabled={!!busy || executing} onClick={() => void act("Cancelando…", () => action("cancel"))}>Cancelar importación</button>}
           <button className={buttonClass} disabled={!!busy} onClick={reset}>Nueva importación</button>
         </div>}
-        {history.length > 0 && <details><summary>Recuperar importaciones anteriores</summary><ul>{history.map(item => <li key={item.id}>
+        {history.length > 0 && <details><summary>Recuperar importaciones anteriores</summary><ul aria-label="Últimas 10 importaciones">{history.map(item => <li key={item.id}>
           <button disabled={!!busy} className="underline text-xs" onClick={() => {
             setFile(null); setReceiptProgress(null); setError("");
             if (fileInputRef.current) fileInputRef.current.value = "";
             setJob(item); setLocalDataset(null);
-          }}>{item.id} — {statusLabels[item.status] || item.status}</button>
+          }}>{item.archive_name || 'Nombre del ZIP no disponible'} — {item.created_at != null && Number.isFinite(item.created_at) && !Number.isNaN(new Date(item.created_at * 1000).getTime()) ? new Date(item.created_at * 1000).toLocaleString('es-CL', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'Fecha no disponible'} — {statusLabels[item.status] || item.status}</button>
         </li>)}</ul>
-          <button disabled={!!busy} onClick={() => void act("Consultando historial…", () => historyPage(null))}>Primera página de importaciones</button>
-          <button disabled={!!busy || !historyNext} onClick={() => void act("Consultando historial…", () => historyPage(historyNext))}>Siguiente página de importaciones</button>
         </details>}
       </div>}
       {busy && <p role="status" aria-live="polite">{busy}</p>}

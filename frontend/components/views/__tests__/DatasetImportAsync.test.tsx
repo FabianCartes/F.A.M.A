@@ -8,7 +8,7 @@ it("restores a durable job after remount and never treats admission as final suc
   const base = "/api/ingestion/imports";
   const execution = { id: "execution", import_id: "source", kind: "confirm", status: "running",
     stage: "verifying", progress: 20, result: {}, error: null, status_url: `${base}/source/jobs/execution` };
-  const source = { id: "source", status: "ready", sync_status: "pending", dataset_id: null, added_count: 0,
+  const source = { id: "source", archive_name: "source.zip", status: "ready", sync_status: "pending", dataset_id: null, added_count: 0,
     preview_token: "a".repeat(64), error: null, execution,
     preview: { root: "", file_count: 1, class_count: 1, error_count: 0, warning_count: 0,
       total_size_bytes: 100, synced_count: 0, new_count: 1 } };
@@ -38,7 +38,7 @@ it("restores a durable job after remount and never treats admission as final suc
     const start = within(screen.getByRole("dialog")).getByRole("button", { name: "Importar dataset" });
     await waitFor(() => expect((start as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(start);
-    fireEvent.click(await screen.findByRole("button", { name: /source —/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /source.zip —/ }));
     expect((await screen.findByText(/Trabajo en ejecución/)).textContent).toContain("20%");
     expect(screen.queryByText(/Importada localmente/)).toBeNull();
     expect((screen.getByRole("button", { name: "Confirmar importación local" }) as HTMLButtonElement).disabled).toBe(true);

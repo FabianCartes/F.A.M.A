@@ -31,7 +31,7 @@ describe("private dataset import", () => {
     const base = "/api/ingestion/imports";
     const writes: { path: string; body: unknown }[] = [];
     const preview = { root: "wrap", ...counts };
-    const ready = { id: "independent", status: "ready", sync_status: "pending", dataset_id: null,
+    const ready = { id: "independent", archive_name: "independent.zip", status: "ready", sync_status: "pending", dataset_id: null,
       added_count: 0, preview_token: "q".repeat(64), preview, error: null };
     let snapshot = ready.preview_token;
     vi.stubGlobal("fetch", durableFetch(async (input: string, options?: RequestInit) => {
@@ -63,7 +63,7 @@ describe("private dataset import", () => {
     render(<DatasetImportPanel />);
     expect(writes).toEqual([]);
     await openImport();
-    fireEvent.click(await screen.findByRole("button", { name: /independent —/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /independent.zip —/ }));
     expect(screen.queryByLabelText("Raíz de clases dentro del ZIP")).toBeNull();
     const confirmButton = screen.getByRole("button", { name: "Confirmar importación local" }) as HTMLButtonElement;
     expect(confirmButton.disabled).toBe(false);
@@ -105,7 +105,7 @@ describe("private dataset import", () => {
     const files = [{ id: "audio", relative_path: "birds/a.wav", original_path: "birds/a.wav", class_name: "birds",
       sha256: "a".repeat(64), size_bytes: 100, duplicate: false, existing: false }];
     const preview = { auto_import: true, root: "", ...counts, file_count: 1, new_count: 1, duplicate_count: 0, duplicate_collection: false };
-    const job = { id: "job1", status: "ready", sync_status: "pending", dataset_id: null, added_count: 0,
+    const job = { id: "job1", archive_name: "job1.zip", status: "ready", sync_status: "pending", dataset_id: null, added_count: 0,
       preview_token: "p".repeat(64), preview, error: null };
     vi.stubGlobal("fetch", durableFetch(async (input: string, options?: RequestInit) => {
       calls.push(`${options?.method || "GET"} ${input}`);
@@ -118,8 +118,8 @@ describe("private dataset import", () => {
       if (input.endsWith("/datasets")) return collectionResponse("datasets", [{
         id: "existing", name: "Existing birds", file_count: 2, revision: 1,
       }], "catalog");
-      if (input.endsWith("/imports") && !options?.method) return collectionResponse("imports", [], "history");
-      if (input.endsWith("/imports")) {
+      if (new URL(input, "http://synthetic.test").pathname.endsWith("/imports") && !options?.method) return collectionResponse("imports", [], "history");
+      if (new URL(input, "http://synthetic.test").pathname.endsWith("/imports")) {
         expect(JSON.parse(String(options?.body))).toMatchObject({
           name: "Birds", description: "New collection", target_id: null, layout: "class_folders", auto_import: true,
         });
@@ -172,7 +172,7 @@ describe("private dataset import", () => {
 
   it("keeps confirmation unavailable on validation errors and recovers a pending journal", async () => {
     const issue = { id: "issue", severity: "error", path: "birds/broken.wav", code: "invalid_wav", action: "Sustituye el WAV dañado." };
-    const job = { id: "pending", status: "committing", sync_status: "pending", dataset_id: "d1", added_count: 0,
+    const job = { id: "pending", archive_name: "pending.zip", status: "committing", sync_status: "pending", dataset_id: "d1", added_count: 0,
       preview_token: "p".repeat(64), preview: { root: "aves", ...counts }, error: null };
     vi.stubGlobal("fetch", durableFetch(async (input: string, options?: RequestInit) => {
       const page = reviewResponse(input, job.preview_token, [], input.includes("/invalid/") ? [issue] : []);
@@ -181,8 +181,8 @@ describe("private dataset import", () => {
       if (input.endsWith("/limits")) return Response.json({ received_bytes: 1024, expanded_bytes: 4096, entries: 10,
         depth: 12, path_bytes: 240, audio_bytes: 1024, audio_seconds: 600, validation_seconds: 60, free_bytes: 1, ttl_seconds: 86400, concurrent_imports: 4 });
       if (input.endsWith("/datasets")) return collectionResponse("datasets", [], "catalog");
-      if (input.endsWith("/imports")) return collectionResponse("imports", [job,
-        { ...job, id: "invalid", status: "needs_correction", preview: { ...job.preview, error_count: 1 } }], "history");
+      if (new URL(input, "http://synthetic.test").pathname.endsWith("/imports")) return collectionResponse("imports", [job,
+        { ...job, id: "invalid", archive_name: "invalid.zip", status: "needs_correction", preview: { ...job.preview, error_count: 1 } }], "history");
       if (input.endsWith("/confirm")) {
         expect(JSON.parse(String(options?.body))).toMatchObject({ preview_token: job.preview_token });
         return Response.json({ ...job, status: "imported", added_count: 1 });
@@ -191,10 +191,10 @@ describe("private dataset import", () => {
     }));
     render(<DatasetImportPanel />);
     await openImport();
-    fireEvent.click(await screen.findByRole("button", { name: /invalid —/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /invalid.zip —/ }));
     expect((await screen.findByRole("alert")).textContent).toContain(issue.action);
     expect(screen.queryByRole("button", { name: "Confirmar importación local" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /pending —/ }));
+    fireEvent.click(screen.getByRole("button", { name: /pending.zip —/ }));
     fireEvent.click(screen.getByRole("button", { name: "Confirmar importación local" }));
     await screen.findByText(/Importada localmente: 1 archivo/);
   });
@@ -270,7 +270,7 @@ describe("private dataset import", () => {
   });
 
   it("continues an in-flight confirmation while hidden without sending cancel or a duplicate write", async () => {
-    const job = { id: "working", status: "ready", sync_status: "pending", dataset_id: null, added_count: 0,
+    const job = { id: "working", archive_name: "working.zip", status: "ready", sync_status: "pending", dataset_id: null, added_count: 0,
       preview_token: "p".repeat(64), preview: { root: "", ...counts }, error: null };
     const writes: string[] = [];
     let complete!: (response: Response) => void;
@@ -289,7 +289,7 @@ describe("private dataset import", () => {
     }));
     render(<DatasetImportPanel />);
     await openImport();
-    fireEvent.click(screen.getByRole("button", { name: /working —/ }));
+    fireEvent.click(screen.getByRole("button", { name: /working.zip —/ }));
     fireEvent.click(screen.getByRole("button", { name: "Confirmar importación local" }));
     expect(screen.getByText("Admitiendo confirmación local…")).toBeDefined();
     fireEvent.click(screen.getByTestId("dataset-import-backdrop"));
