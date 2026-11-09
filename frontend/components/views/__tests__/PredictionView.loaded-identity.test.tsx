@@ -1,3 +1,4 @@
+import { chooseModel } from "../../prediction/__tests__/selectorActions";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import PredictionView, { type RegisteredModel } from "../PredictionView";
@@ -56,8 +57,7 @@ const deferred = <T,>() => {
 
 let models: RegisteredModel[];
 let predict: () => Promise<Response>;
-const selection = () => screen.getByRole("combobox", { name: "Modelo:" }) as HTMLSelectElement;
-const catalogueIdentity = () => screen.getByRole("region", { name: "Identidad de checkpoints del modelo seleccionado" });
+const catalogueIdentity = () => screen.queryByRole("region", { name: "Identidad de checkpoints del modelo seleccionado" });
 const resultIdentity = () => screen.getByRole("region", { name: "Identidad del checkpoint del resultado" });
 const show = async () => {
   let view!: ReturnType<typeof render>;
@@ -98,18 +98,16 @@ describe("Identidad del checkpoint en Predicción", () => {
   it("distingue checkpoint registrado, instancia cargada e informe de evaluación", async () => {
     await show();
 
-    const current = catalogueIdentity();
-    expect(current.textContent).toContain(registeredA);
-    expect(current.textContent).toContain(loadedB);
-    expect(current.textContent).toContain("No coincide");
-    expect(current.textContent).toContain("no acredita continuamente los parámetros en memoria");
+    expect(catalogueIdentity()).toBeNull();
+    expect(screen.getByRole("heading", { name: modelA.name })).toBeDefined();
 
     const summary = screen.getByRole("region", { name: "Evaluaciones finales del modelo seleccionado" });
     expect(within(summary).getByRole("row", { name: /^Validación/ }).textContent).toContain("No coincide");
     fireEvent.click(screen.getByRole("button", { name: "Ver detalle de evaluación" }));
     const report = await screen.findByRole("dialog", { name: "Detalle de evaluación final" });
-    expect(report.textContent).toContain(reportC);
-    expect(report.textContent).toContain("NO es aplicable al checkpoint registrado");
+    expect(report.textContent).not.toContain(reportC);
+    expect(report.textContent).toContain("Informe histórico completado");
+    expect(report.textContent).not.toContain("Informe aplicable del par admitido");
   });
 
   it("mantiene la identidad cargada en la respuesta original al cambiar modelo y refrescar catálogo", async () => {
@@ -118,7 +116,7 @@ describe("Identidad del checkpoint en Predicción", () => {
     predict = () => pending.promise;
     await startInference(view);
 
-    fireEvent.change(selection(), { target: { value: modelB.id } });
+    await chooseModel(modelB.name);
     const updatedB = { ...modelB, checkpoint_sha256: registeredG, loaded_checkpoint_sha256: loadedH };
     models = [modelA, updatedB];
     await act(async () => {
@@ -138,9 +136,8 @@ describe("Identidad del checkpoint en Predicción", () => {
     expect(result.textContent).toContain(registeredA);
     expect(result.textContent).toContain("No coincide");
     expect(result.textContent).not.toContain(loadedF);
-    const current = catalogueIdentity();
-    expect(current.textContent).toContain(registeredG);
-    expect(current.textContent).toContain(loadedH);
+    expect(catalogueIdentity()).toBeNull();
+    expect(screen.getByRole("heading", { name: modelB.name })).toBeDefined();
     expect(within(result).queryByText(registeredG)).toBeNull();
   });
 
@@ -156,7 +153,7 @@ describe("Identidad del checkpoint en Predicción", () => {
     });
     const view = await show();
 
-    expect(catalogueIdentity().textContent).toContain("Coincide");
+    expect(catalogueIdentity()).toBeNull();
     await startInference(view);
     const result = await screen.findByRole("region", { name: "Identidad del checkpoint del resultado" });
     expect(result.textContent).toContain("Coincide");
@@ -185,8 +182,7 @@ describe("Identidad del checkpoint en Predicción", () => {
     await startInference(view);
     await screen.findByRole("region", { name: "Identidad del checkpoint del resultado" });
 
-    expect(catalogueIdentity().textContent).toContain("No disponible");
-    expect(catalogueIdentity().textContent).toContain("No verificable");
+    expect(catalogueIdentity()).toBeNull();
     expect(resultIdentity().textContent).toContain("No disponible");
     expect(resultIdentity().textContent).toContain("No verificable");
     expect(resultIdentity().textContent).not.toContain("Coincide");

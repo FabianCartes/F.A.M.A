@@ -1,3 +1,4 @@
+import { modelOptions } from '../../prediction/__tests__/selectorActions';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import PredictionView from '../PredictionView';
@@ -16,15 +17,17 @@ it('does not request a private catalogue or infer anonymously; login lists arbit
   expect(fetcher.mock.calls.length).toBe(0);
   session.user = { id: 1 }; confirmApiSession();
   await act(async () => { view.rerender(<PredictionView />); });
+  modelOptions();
   expect(screen.getByRole('group', { name: 'Mis modelos' })).toBeDefined();
-  expect((screen.getByLabelText('Modelo:') as HTMLSelectElement).value).toBe(model.id);
+  expect((screen.getByLabelText('Modelo:') as HTMLButtonElement).value).toBe(model.id);
   const call = (fetcher.mock.calls as unknown as [string, RequestInit][]).find(([url]) => url.includes('/api/models'))!;
   expect(call[0]).toContain('private_only=true');
   expect(call[1].credentials).toBe('same-origin');
   session.user = null; confirmApiSession();
   await act(async () => { view.rerender(<PredictionView />); });
+  modelOptions();
   expect(screen.queryByRole('option', { name: model.name })).toBeNull();
-  expect((screen.getByLabelText('Modelo:') as HTMLSelectElement).value).toBe('');
+  expect((screen.getByLabelText('Modelo:') as HTMLButtonElement).value).toBe('');
   fireEvent.click(screen.getByRole('button', { name: /Ejecutar inferencia/ }));
   expect((fetcher.mock.calls as unknown as [string][]).some(([url]) => url.includes('/api/predict'))).toBe(false);
 });
@@ -65,6 +68,7 @@ it('ignores an old owner catalogue even when its JSON finishes after a session c
   await act(async () => {});
   session.user = null; confirmApiSession();
   await act(async () => { view.rerender(<PredictionView />); finish({ models: [model] }); });
+  modelOptions();
   expect(screen.queryByRole('option', { name: model.name })).toBeNull();
 });
 

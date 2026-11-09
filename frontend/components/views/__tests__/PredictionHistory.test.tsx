@@ -1,3 +1,4 @@
+import { chooseModel } from "../../prediction/__tests__/selectorActions";
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import PredictionView from '../PredictionView';
@@ -30,7 +31,7 @@ it('loads saved records after mounting and remounting, paginates, and separates 
   expect(request[1]?.credentials).toBe('same-origin');
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Cargar más predicciones' })); });
   expect(screen.getByText('saved-19.wav')).toBeDefined();
-  await act(async () => { fireEvent.change(screen.getByLabelText('Modelo:'), { target: { value: models[1].id } }); });
+  await chooseModel(models[1].name);
   expect(screen.queryByText('saved-20.wav')).toBeNull();
   expect(screen.getByText('saved-30.wav')).toBeDefined();
   view.unmount();
@@ -48,7 +49,7 @@ it('ignores a late history JSON after model or session changes', async () => {
     return Response.json({ items: [item(30, 302)], next_cursor: null });
   });
   const view = render(<PredictionView />); await act(async () => {});
-  await act(async () => { fireEvent.change(screen.getByLabelText('Modelo:'), { target: { value: models[1].id } }); });
+  await chooseModel(models[1].name);
   await act(async () => { finish({ items: [item(20)], next_cursor: null }); });
   expect(screen.queryByText('saved-20.wav')).toBeNull();
   expect(screen.getByText('saved-30.wav')).toBeDefined();

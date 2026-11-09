@@ -21,6 +21,10 @@ La documentación está organizada temáticamente en subdirectorios especializad
 - [Entrada y recuperación de sesión](./manuales/acceso-web.md) y [plan](./arquitectura/login-only-access-plan.md) y [recibo](./receipts/login-only-access.json): guardia central del workspace, login obligatorio y errores con reintento; no sustituye la autorización de las APIs.
 - [Contratos de sesión web](./manuales/sesion-web-importados.md): cookies, Bearer y configuración del backend conservados.
 
+## Mejoras de Predicciones — implementación local
+
+- [Selector con búsqueda y detalle de evaluación simplificado](./arquitectura/prediction-searchable-selector-plan.md): selector accesible, disposición de la tarjeta, fechas legibles y ayudas de evaluación; implementado y aplicado al frontend local, con comprobaciones y límites documentados.
+
 ## GPU opcional local
 
 - [Uso, CPU y recuperación](./manuales/gpu-opcional-entrenamiento.md): configuración GPU opcional, restricciones de memoria y límites del fallback CPU.

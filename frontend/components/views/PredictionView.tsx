@@ -1,6 +1,8 @@
 "use client";
 
 import { getPredictionHistory } from "@/lib/api/predictionHistory";
+import PredictionModelSelector from "@/components/prediction/PredictionModelSelector";
+import InfoTooltip from "@/components/common/InfoTooltip";
 
 import { useState, useEffect, useMemo, useRef, useCallback, ChangeEvent, FormEvent } from "react";
 import { API_BASE_URL, apiSessionRevision, notifyUnauthorized } from "@/lib/api";
@@ -197,8 +199,19 @@ function evaluationAttemptLabel(attempt?: EvaluationAttempt | null): string | nu
   return EVALUATION_STATUS_LABELS[attempt.status] || "Estado no reconocido";
 }
 
-function safeTimestamp(value: unknown): string | null {
-  return typeof value === "string" && value.length > 0 ? value : null;
+function evaluationDate(record?: { finished_at?: unknown; started_at?: unknown; created_at?: unknown } | null): { label: string; value: string } | null {
+  for (const [key, label] of [["finished_at", "Finalizado"], ["started_at", "Iniciado"], ["created_at", "Solicitado"]] as const) {
+    const raw = record?.[key];
+    if (typeof raw !== "string" || !raw.trim()) continue;
+    const date = new Date(raw);
+    if (!Number.isFinite(date.getTime())) continue;
+    const day = new Intl.DateTimeFormat("es-CL", { dateStyle: "long", timeZone: "UTC" }).format(date);
+    const time = new Intl.DateTimeFormat("es-CL", {
+      hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "UTC",
+    }).format(date);
+    return { label, value: `${day}, ${time} UTC` };
+  }
+  return null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -208,11 +221,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function EvaluationSplitCard({
   label,
   split,
-  modelCheckpointHash,
 }: {
   label: string;
   split?: EvaluationSplit | null;
-  modelCheckpointHash?: string | null;
 }) {
   const latestAttempt = split?.latest_attempt;
   const latestCompleted = split?.latest_completed;
@@ -242,10 +253,6 @@ function EvaluationSplitCard({
   const predictionColumns = Array.isArray(report?.prediction_columns)
     ? report.prediction_columns.filter((value): value is string | number => typeof value === "string" || (typeof value === "number" && Number.isFinite(value)))
     : classNames;
-  const provenance = displayedCompleted?.provenance;
-  const checkpointHash = typeof provenance?.checkpoint_sha256 === "string" && /^[0-9a-f]{64}$/i.test(provenance.checkpoint_sha256)
-    ? provenance.checkpoint_sha256
-    : null;
   const attemptStatus = evaluationAttemptLabel(latestAttempt) || "No hay intentos registrados";
   const attemptId = Number.isSafeInteger(latestAttempt?.id_evaluation) && Number(latestAttempt?.id_evaluation) > 0
     ? Number(latestAttempt?.id_evaluation)
@@ -260,22 +267,17 @@ function EvaluationSplitCard({
   const rejectionRate = rejection && typeof rejection.rate === "number" && Number.isFinite(rejection.rate) && rejection.rate >= 0 && rejection.rate <= 1
     ? formatFinalRate(rejection.rate)
     : "No disponible";
-  const checkpointMatch = registeredCheckpointMatch(modelCheckpointHash, provenance?.checkpoint_sha256);
-  const zeroDenominatorLabels = (value: unknown) => {
-    if (!isRecord(value)) return [];
-    return ["precision", "recall", "f1"].filter((metric) => value[metric] === true);
-  };
+  const attemptDate = evaluationDate(latestAttempt);
+  const completedDate = evaluationDate(displayedCompleted);
 
   return (
     <article className="min-w-0 space-y-4" aria-label={`Evaluación ${label}`}>
       <h3 className="text-sm font-semibold text-white">{label}</h3>
       <section aria-label={`Último intento ${label}`} className="rounded-lg border border-[#252834] bg-[#111215] p-3 space-y-1 text-xs text-gray-300">
         <h4 className="font-semibold text-gray-200">Último intento{attemptId ? ` #${attemptId}` : ""}: {attemptStatus}</h4>
-        {latestAttempt ? <>
-          {safeTimestamp(latestAttempt.created_at) && <p className="break-all text-[11px] text-gray-400">Creado: {safeTimestamp(latestAttempt.created_at)}</p>}
-          {safeTimestamp(latestAttempt.started_at) && <p className="break-all text-[11px] text-gray-400">Inicio: {safeTimestamp(latestAttempt.started_at)}</p>}
-          {safeTimestamp(latestAttempt.finished_at) && <p className="break-all text-[11px] text-gray-400">Finalizado: {safeTimestamp(latestAttempt.finished_at)}</p>}
-        </> : <p className="text-[11px] text-gray-400">Sin intentos registrados para este split.</p>}
+        {latestAttempt
+          ? <p className="text-[11px] text-gray-400">{attemptDate ? `${attemptDate.label}: ${attemptDate.value}` : "Fecha no disponible"}</p>
+          : <p className="text-[11px] text-gray-400">Sin intentos registrados para esta evaluación.</p>}
       </section>
 
       {report && displayedCompleted ? (
@@ -283,9 +285,9 @@ function EvaluationSplitCard({
           <div>
             <p className="text-xs font-semibold text-emerald-300">{admittedCompleted ? "Informe aplicable del par admitido" : "Informe histórico completado"}{completedId ? ` #${completedId}` : ""}</p>
             <p className="mt-1 text-xs text-gray-300">Muestras: {formatFinalCount(report.sample_count)}</p>
-            {safeTimestamp(displayedCompleted.created_at) && <p className="break-all text-[11px] text-gray-400">Informe creado: {safeTimestamp(displayedCompleted.created_at)}</p>}
-            {safeTimestamp(displayedCompleted.started_at) && <p className="break-all text-[11px] text-gray-400">Informe iniciado: {safeTimestamp(displayedCompleted.started_at)}</p>}
-            {safeTimestamp(displayedCompleted.finished_at) && <p className="break-all text-[11px] text-gray-400">Informe finalizado: {safeTimestamp(displayedCompleted.finished_at)}</p>}
+            <p className="text-[11px] text-gray-400">{completedDate
+              ? `${completedDate.label === "Finalizado" ? "Evaluación finalizada" : completedDate.label === "Iniciado" ? "Evaluación iniciada" : "Evaluación solicitada"}: ${completedDate.value}`
+              : "Fecha de evaluación no disponible"}</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[18rem] text-left text-xs" aria-label={`Métricas del ${admittedCompleted ? "informe admitido" : "informe histórico"} ${label}`}>
@@ -306,17 +308,19 @@ function EvaluationSplitCard({
             <table className="w-full min-w-[32rem] text-left text-xs" aria-label={`Métricas por clase ${label}`}>
               <thead className="text-gray-400"><tr>
                 <th scope="col" className="py-1 pr-3">Clase</th><th scope="col" className="py-1 pr-3">Precision</th>
-                <th scope="col" className="py-1 pr-3">Recall</th><th scope="col" className="py-1 pr-3">F1</th><th scope="col" className="py-1">Soporte</th>
+                <th scope="col" className="py-1 pr-3">Recall</th><th scope="col" className="py-1 pr-3">F1</th><th scope="col" className="py-1">Audios evaluados <InfoTooltip
+                  id={`audios-evaluados-${label}`} title="Audios evaluados por clase"
+                  impact="Número de audios reales de cada clase usados en esta evaluación; no es una puntuación del modelo."
+                  usage="Compara las métricas teniendo en cuenta cuántos audios representan a cada clase. Pocos audios dan resultados menos representativos."
+                /></th>
               </tr></thead>
               <tbody>{perClass.map((row, index) => {
                 const labelValue = typeof row.label === "string" || (typeof row.label === "number" && Number.isFinite(row.label))
                   ? String(row.label)
                   : classNames[index] === undefined ? `Clase ${index + 1}` : String(classNames[index]);
-                const undefinedMetrics = zeroDenominatorLabels(row.zero_denominator);
                 return <tr key={`${labelValue}-${index}`} className="border-t border-[#252834]">
                   <th scope="row" className="py-1 pr-3 font-medium text-gray-300">
                     {labelValue}
-                    {undefinedMetrics.length > 0 && <span className="block text-[11px] font-normal text-gray-400">Denominador nulo: {undefinedMetrics.join(", ")}</span>}
                   </th>
                   <td className="py-1 pr-3 font-mono">{formatFinalRate(row.precision)}</td>
                   <td className="py-1 pr-3 font-mono">{formatFinalRate(row.recall)}</td>
@@ -331,7 +335,7 @@ function EvaluationSplitCard({
               <caption className="pb-1 text-left font-semibold text-gray-300">Matriz de confusión · filas reales, columnas predichas</caption>
               <thead className="text-gray-400"><tr>
                 <th scope="col" className="py-1 pr-3">Real \ Predicha</th>
-                {confusionMatrix[0]?.map((_, index) => <th scope="col" key={index} className="py-1 px-2">{predictionColumns[index] || classNames[index] || `Clase ${index + 1}`}</th>)}
+                {confusionMatrix[0]?.map((_, index) => <th scope="col" key={index} className="py-1 px-2">{predictionColumns[index] === rejection?.label ? "Rechazo" : predictionColumns[index] || classNames[index] || `Clase ${index + 1}`}</th>)}
               </tr></thead>
               <tbody>{confusionMatrix.map((row, rowIndex) => <tr key={rowIndex} className="border-t border-[#252834]">
                 <th scope="row" className="py-1 pr-3 font-medium text-gray-300">{classNames[rowIndex] || `Clase ${rowIndex + 1}`}</th>
@@ -340,27 +344,18 @@ function EvaluationSplitCard({
             </table>
           </div>}
           <div className="space-y-1 text-xs text-gray-300">
-            <p>{coverage?.complete === true
+            <div className="flex flex-wrap items-center gap-1"><span>{coverage?.complete === true
               ? "Cobertura completa"
               : coverage?.complete === false
                 ? `Cobertura incompleta${absentClasses?.length ? ` · clases ausentes: ${absentClasses.join(", ")}` : ""}`
-                : "Cobertura no disponible"}</p>
-            {Array.isArray(report.support) && <p>Soporte por clase: {report.support.map(formatFinalCount).join(", ")}</p>}
-            {rejection && <p>Rechazos: {rejectionCount} ({rejectionRate}){typeof rejection.label === "string" ? ` · etiqueta ${rejection.label}` : ""}</p>}
+                : "Cobertura no disponible"}</span><InfoTooltip
+                  id={`cobertura-${label}`} title="Cobertura de clases"
+                  impact="La cobertura es completa cuando todas las clases tienen audios en esta evaluación. No significa que todas las predicciones sean correctas."
+                  usage="Si faltan clases, sus resultados no permiten valorar cómo funciona el modelo para ellas. Consulta los audios evaluados por clase."
+                /></div>
+            {rejection && <p>Rechazos: {rejectionCount} ({rejectionRate})</p>}
           </div>
-          <dl className="grid min-w-0 grid-cols-1 gap-1 text-[11px] text-gray-400 sm:grid-cols-2">
-            <div><dt className="inline">Schema del informe:</dt> <dd className="inline">{typeof report.schema_version === "number" ? report.schema_version : "No disponible"}</dd></div>
-            <div><dt className="inline">Schema de procedencia:</dt> <dd className="inline">{typeof provenance?.schema_version === "number" ? provenance.schema_version : "No disponible"}</dd></div>
-            <div><dt className="inline">Split:</dt> <dd className="inline">{provenance?.split || "No disponible"}</dd></div>
-            <div><dt className="inline">Evaluador:</dt> <dd className="inline">{provenance?.evaluator_version || "No disponible"}</dd></div>
-            <div className="break-words"><dt className="inline">Dataset:</dt> <dd className="inline">{provenance?.dataset || "No disponible"}</dd></div>
-            <div className="min-w-0 break-all"><dt className="inline">SHA-256 del checkpoint:</dt> <dd className="inline font-mono">{checkpointHash || "No disponible"}</dd></div>
-          </dl>
-          <p className="text-[11px] text-amber-200">{admittedCompleted
-            ? "La guarda admitió este informe junto con su split par; esto no acredita los parámetros cargados actualmente en runtime."
-            : checkpointMatch === "Coincide"
-              ? "Informe histórico: el SHA-256 coincide con el checkpoint registrado, pero esto no acredita compatibilidad de evaluación ni parámetros cargados actualmente en runtime."
-              : "Informe histórico; NO es aplicable al checkpoint registrado porque la identidad no coincide o no se puede verificar."}</p>
+
         </div>
       ) : (
         <p className="rounded-lg border border-[#252834] bg-[#111215] p-3 text-xs text-gray-400">No hay un informe completado para este split.</p>
@@ -370,7 +365,7 @@ function EvaluationSplitCard({
           <h4 className="font-semibold text-gray-200">Informe histórico completado #{Number.isSafeInteger(latestCompleted.id_evaluation) ? Number(latestCompleted.id_evaluation) : "No disponible"}</h4>
           <p>Muestras: {formatFinalCount(latestCompleted.report?.sample_count)}</p>
           <p>Accuracy: {formatFinalRate(latestCompleted.report?.metrics?.accuracy)} · F1 macro: {formatFinalRate(latestCompleted.report?.metrics?.f1_macro)}</p>
-          <p className="text-[11px] text-amber-200">No pertenece al par admitido y se conserva como historial; su hash no acredita compatibilidad runtime.</p>
+          <p className="text-[11px] text-amber-200">Solo histórico; no forma parte de la evaluación aplicable.</p>
         </section>
       )}
     </article>
@@ -529,7 +524,6 @@ function PrivatePredictionView({ authenticated, revision }: { authenticated: boo
   const [loading, setLoading] = useState<boolean>(false);
   const [result, setResult] = useState<CurrentPrediction | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [latency, setLatency] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [classFilter, setClassFilter] = useState<string>("all");
   const [modelStatusSnapshot, setModelStatus] = useState<(BackendModelStatus & { requestedDomain: string }) | null>(null);
@@ -561,7 +555,6 @@ function PrivatePredictionView({ authenticated, revision }: { authenticated: boo
     return availableModels.find((m) => m.id === selectedModelId);
   }, [availableModels, selectedModelId]);
   const selectedModelHasWeights = selectedModel?.has_weights === true;
-  const hasSelectableModels = availableModels.some((model) => model.has_weights === true);
   const hasUnavailableModels = availableModels.some((model) => model.has_weights !== true);
 
   const selectedDomain = useMemo(() => {
@@ -1052,10 +1045,8 @@ function PrivatePredictionView({ authenticated, revision }: { authenticated: boo
     }
 
     setLoading(true);
-    setLatency(null);
     setError(null);
     setResult(null);
-    const startTime = performance.now();
     const sequence = ++inferenceSequence.current;
     const inferenceClasses = [...(selectedModel?.classes || [])];
     const inferenceModel = selectedModel?.name || selectedModelId;
@@ -1106,10 +1097,8 @@ function PrivatePredictionView({ authenticated, revision }: { authenticated: boo
           data.confianza < 0 || data.confianza > 1 || typeof data.gcp_upload !== "boolean") {
         throw new Error("Respuesta de inferencia inválida. No se recibió una predicción válida del servidor.");
       }
-      const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
       const predData = data as PredictionResponse;
       if (sequence !== inferenceSequence.current) return;
-      setLatency(`${elapsed}s`);
       const modelMismatch = predData.modelo_id
         ? predData.modelo_id !== inferenceModelId
         : Boolean(predData.modelo && predData.modelo !== inferenceModel && predData.modelo !== inferenceModelId);
@@ -1188,41 +1177,18 @@ function PrivatePredictionView({ authenticated, revision }: { authenticated: boo
             <label htmlFor="model-select" className="text-[11px] text-gray-400 font-medium shrink-0">
               Modelo:
             </label>
-            <select
-              id="model-select"
+            <PredictionModelSelector
+              models={availableModels}
               value={selectedModelId}
-              onChange={(e) => setSelectionState((state) => ({
+              onChange={(modelId) => setSelectionState((state) => ({
                 ...state,
-                modelId: e.target.value,
+                modelId,
                 evaluationDialogOpen: false,
                 evaluationDialogModelId: null,
               }))}
-              className="bg-[#101114] border border-[#2d303b] text-white text-xs font-semibold rounded px-2.5 py-1 focus:outline-none focus:border-blue-500 cursor-pointer min-w-0 w-full sm:w-auto max-w-[240px] sm:max-w-[340px] truncate"
-            >
-              {availableModels.length > 0 ? (
-                <>
-                  {!hasSelectableModels && <option value="" disabled>Sin modelos con pesos disponibles</option>}
-                  <optgroup label="Mis modelos">
-                    {availableModels.map((m) => (
-                      <option key={m.id} value={m.id} disabled={m.has_weights !== true} className="bg-[#16171b] text-white">
-                        {m.name || m.id}{m.has_weights === true ? "" : " (no disponible)"}
-                      </option>
-                    ))}
-                  </optgroup>
-                </>
-              ) : (
-                <option value="">Sin modelos disponibles</option>
-              )}
-            </select>
+            />
           </div>
 
-          {/* Indicador de Latencia / Estado a la derecha */}
-          <div
-            className="flex items-center gap-2 px-2.5 py-1.5 rounded-full bg-black/40 border border-green-800/40 text-green-400 text-xs font-mono shrink-0 whitespace-nowrap"
-            title="Tiempo total observado por el navegador, incluida transferencia y lectura de respuesta"
-          >
-            <span>Tiempo total de solicitud: {latency ?? "no disponible"}</span>
-          </div>
         </div>
       </div>
 
@@ -1492,44 +1458,35 @@ function PrivatePredictionView({ authenticated, revision }: { authenticated: boo
       {/* Fila 1: Modelo seleccionado + Cargar Audio */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Tarjeta: datos declarados del modelo seleccionado */}
-        <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 flex flex-col justify-between">
+        <div className="min-w-0 bg-[#16171b] border border-[#23252e] rounded-xl p-5 flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
               <span className="text-xs text-gray-400 font-medium">Modelo seleccionado</span>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-950/60 border border-green-800/60 text-green-400 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
                 {selectedModel ? "Modelo seleccionado" : "Sin modelo disponible"}
               </span>
             </div>
-            <div className="flex items-start justify-between">
-              <div>
-                <h2 className="text-base font-bold text-white">
+            <div className="flex min-w-0 flex-col gap-2">
+              <div className="min-w-0 w-full">
+                <h2 className="break-words text-base font-bold text-white">
                   {selectedModel?.name || "Sin modelo disponible"}
                 </h2>
-                <p className="text-[11px] text-gray-400 mt-0.5">
+                <p className="break-words text-[11px] text-gray-400 mt-0.5">
                   {selectedModel?.description || "Descripción no publicada"}
                 </p>
               </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <span className="text-[10px] text-gray-400 font-mono bg-[#1d1f27] border border-[#2b2d38] px-1.5 py-0.5 rounded uppercase">
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                <span className="min-w-0 max-w-full break-words text-[10px] text-gray-400 font-mono bg-[#1d1f27] border border-[#2b2d38] px-1.5 py-0.5 rounded uppercase">
                   Última respuesta: {result?.detalles?.device || "Dispositivo no informado"}
                 </span>
-                <span className="text-xs text-blue-400 font-mono bg-blue-950/50 border border-blue-800/50 px-2 py-0.5 rounded">
+                <span className="max-w-full break-words text-xs text-blue-400 font-mono bg-blue-950/50 border border-blue-800/50 px-2 py-0.5 rounded">
                   {Number.isInteger(selectedModel?.version) ? `Versión v${selectedModel?.version}` : "Versión no publicada"}
                 </span>
               </div>
             </div>
           </div>
 
-          <section aria-label="Identidad de checkpoints del modelo seleccionado" className="mt-4 border-t border-[#23252e]/70 pt-3 space-y-2">
-            <h3 className="text-xs font-semibold text-gray-200">Checkpoint registrado y cargado</h3>
-            <dl className="grid min-w-0 grid-cols-1 gap-1 text-[11px] text-gray-400 sm:grid-cols-2">
-              <div className="min-w-0 break-all"><dt className="inline">Checkpoint registrado:</dt> <dd className="inline font-mono">{validCheckpointHash(selectedModel?.checkpoint_sha256) || "No disponible"}</dd></div>
-              <div className="min-w-0 break-all"><dt className="inline">Checkpoint cargado por la instancia:</dt> <dd className="inline font-mono">{validCheckpointHash(selectedModel?.loaded_checkpoint_sha256) || "No disponible"}</dd></div>
-              <div><dt className="inline">Correspondencia instancia / registro:</dt> <dd className="inline">{registeredCheckpointMatch(selectedModel?.checkpoint_sha256, selectedModel?.loaded_checkpoint_sha256)}</dd></div>
-            </dl>
-            <p className="text-[11px] text-gray-400">La procedencia se registra al cargar; no acredita continuamente los parámetros en memoria.</p>
-          </section>
           <section aria-label="Evaluaciones finales del modelo seleccionado" className="mt-5 border-t border-[#23252e]/70 pt-4 space-y-3">
             <div>
               <h3 className="text-xs font-semibold text-gray-200">Evaluación final · checkpoint registrado</h3>
@@ -1630,8 +1587,7 @@ function PrivatePredictionView({ authenticated, revision }: { authenticated: boo
                 <header className="mb-4 flex items-start justify-between gap-4 border-b border-[#292c36] pb-3">
                   <div className="min-w-0">
                     <h2 id="evaluation-dialog-title" className="text-base font-bold text-white">Detalle de evaluación final</h2>
-                    <p className="mt-1 break-words text-xs text-gray-300">{selectedModel?.name || "Modelo seleccionado"} · checkpoint registrado: {selectedModel?.checkpoint_sha256 && /^[a-f0-9]{64}$/i.test(selectedModel.checkpoint_sha256) ? selectedModel.checkpoint_sha256 : "SHA-256 no verificable"}</p>
-                    <p className="mt-1 text-[11px] text-gray-400">Los informes no acreditan qué parámetros están cargados actualmente en runtime.</p>
+                    <p className="mt-1 break-words text-xs text-gray-300">{selectedModel?.name || "Modelo seleccionado"}</p>
                   </div>
                   <button
                     ref={evaluationDialogCloseRef}
@@ -1654,12 +1610,12 @@ function PrivatePredictionView({ authenticated, revision }: { authenticated: boo
                   <EvaluationSplitCard
                     label="Validación (val)"
                     split={evaluationCatalogueStatus === "available" ? selectedModel?.evaluations?.val : null}
-                    modelCheckpointHash={selectedModel?.checkpoint_sha256}
+
                   />
                   <EvaluationSplitCard
                     label="Test (test)"
                     split={evaluationCatalogueStatus === "available" ? selectedModel?.evaluations?.test : null}
-                    modelCheckpointHash={selectedModel?.checkpoint_sha256}
+
                   />
                 </div>
               </div>

@@ -1,3 +1,4 @@
+import { chooseModel, modelOptions } from "../../prediction/__tests__/selectorActions";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import PredictionView, { type RegisteredModel } from "../PredictionView";
@@ -16,7 +17,7 @@ function deferred() {
 }
 let catalogue: () => Promise<Response>;
 let predict: () => Promise<Response>;
-const selection = () => screen.getByRole("combobox", { name: "Modelo:" }) as HTMLSelectElement;
+const selection = () => screen.getByRole("combobox", { name: "Modelo:" }) as HTMLButtonElement;
 const focus = async () => { await act(async () => { fireEvent(window, new Event("focus")); }); };
 const show = async () => { let view!: ReturnType<typeof render>; await act(async () => { view = render(<PredictionView />); }); return view; };
 const openDetails = async () => {
@@ -109,6 +110,92 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("Catálogo público de Predicción", () => {
+  it("summarizes evaluation details without internal metadata and explains class samples", async () => {
+    const evaluated = { ...model11, checkpoint_sha256: "a".repeat(64), evaluations: {
+      val: { latest_attempt: attempt(7, "completed", "val", 2, 2), latest_completed: completed(7, "val", v2Report, 2, 2) },
+    } } as RegisteredModel;
+    catalogue = async () => response([evaluated], evaluated.id, [], { evaluation_catalogue_status: "available" });
+    await show();
+    expect(screen.queryByRole("region", { name: "Identidad de checkpoints del modelo seleccionado" })).toBeNull();
+    const dialog = await openDetails();
+    expect(dialog.textContent).not.toMatch(/Schema|SHA-256|Denominador nulo|etiqueta __|checkpoint registrado:|parámetros.*runtime|Soporte por clase:/);
+    expect(dialog.textContent).not.toContain("a".repeat(64));
+    expect(dialog.textContent).not.toContain("2025-02-01T");
+    const latest = within(dialog).getByRole("region", { name: "Último intento Validación (val)" });
+    expect(within(latest).getAllByText(/Finalizado:/)).toHaveLength(1);
+    expect(latest.textContent).toContain("1 de febrero de 2025");
+    expect(latest.textContent).toContain("10:02");
+    expect(latest.textContent).toContain("UTC");
+    expect(dialog.textContent).toContain("Evaluación finalizada:");
+    expect(dialog.textContent).toContain("Rechazos: 1 (50.00%)");
+    const table = within(dialog).getByRole("table", { name: "Métricas por clase Validación (val)" });
+    expect(within(table).getByRole("columnheader", { name: /Audios evaluados/ })).toBeDefined();
+    fireEvent.focus(within(table).getByRole("button", { name: /Ver ayuda:/ }));
+    expect(screen.getByRole("tooltip").textContent).toContain("Número de audios reales de cada clase");
+    fireEvent.blur(within(table).getByRole("button", { name: /Ver ayuda:/ }));
+    const coverageHelp = within(dialog).getByRole("button", { name: /Ver ayuda: cobertura-/ });
+    fireEvent.focus(coverageHelp);
+    expect(screen.getByRole("tooltip").textContent).toContain("todas las clases tienen audios");
+  });
+
+  it.each([
+    ["invalid", "2025-02-01T10:01:00Z", "2025-02-01T10:00:00Z", "Iniciado: 1 de febrero de 2025, 10:01 UTC"],
+    [null, null, "2025-02-01T10:00:00Z", "Solicitado: 1 de febrero de 2025, 10:00 UTC"],
+    [null, "invalid", "invalid", "Fecha no disponible"],
+  ])("uses a clearly labelled valid date when completion=%s", async (finished_at, started_at, created_at, expected) => {
+    const evaluated = { ...model11, evaluations: { val: {
+      latest_attempt: { ...attempt(7, "running", "val"), finished_at, started_at, created_at },
+    } } } as RegisteredModel;
+    catalogue = async () => response([evaluated], evaluated.id, [], { evaluation_catalogue_status: "available" });
+    await show();
+    const dialog = await openDetails();
+    const latest = within(dialog).getByRole("region", { name: "Último intento Validación (val)" });
+    expect(latest.textContent).toContain(expected);
+    expect(latest.querySelectorAll("p")).toHaveLength(1);
+    expect(latest.textContent).not.toContain("Invalid Date");
+    expect(latest.textContent).not.toContain("2025-02-01T");
+  });
+
+  it("gives a long selected model name full width above wrapping metadata badges", async () => {
+    const motor = { ...engine, name: "motores · PANNs-CNN14 (v2)", version: 2,
+      description: "Inferencia bioacústica con pesos reales entrenados (PANNs-CNN14)" };
+    catalogue = async () => response([motor], motor.id);
+    await show();
+    const heading = screen.getByRole("heading", { name: motor.name });
+    const titleBlock = heading.parentElement!;
+    const description = within(titleBlock).getByText(motor.description);
+    const header = titleBlock.parentElement!;
+    const badges = screen.getByText("Versión v2").parentElement!;
+    expect(header.classList.contains("flex-col")).toBe(true);
+    expect(titleBlock.classList.contains("w-full")).toBe(true);
+    expect(titleBlock.classList.contains("min-w-0")).toBe(true);
+    expect(heading.classList.contains("break-words")).toBe(true);
+    expect(description.parentElement).toBe(titleBlock);
+    expect(description.classList.contains("break-words")).toBe(true);
+    expect(badges.parentElement).toBe(header);
+    expect(badges.classList.contains("flex-wrap")).toBe(true);
+    expect(badges.classList.contains("shrink-0")).toBe(false);
+    expect(screen.getByText("Última respuesta: Dispositivo no informado")).toBeDefined();
+    expect(selection().value).toBe(motor.id);
+  });
+
+  it("searches loaded model names without changing selection or requesting inference", async () => {
+    await show();
+    const requestsBefore = vi.mocked(fetch).mock.calls.length;
+    fireEvent.click(selection());
+    const search = screen.getByRole("combobox", { name: "Buscar modelo por nombre" });
+    fireEvent.change(search, { target: { value: "  mOTOR  " } });
+    const options = within(screen.getByRole("listbox", { name: "Modelos disponibles" }));
+    expect(options.getAllByRole("option").map(option => option.textContent)).toEqual(["Motor v2"]);
+    expect(selection().value).toBe(bird.id);
+    expect(vi.mocked(fetch).mock.calls).toHaveLength(requestsBefore);
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("/api/predict"))).toBe(false);
+    fireEvent.click(options.getByRole("option", { name: "Motor v2" }));
+    expect(selection().value).toBe(engine.id);
+    expect(screen.queryByRole("listbox", { name: "Modelos disponibles" })).toBeNull();
+    expect(document.activeElement).toBe(selection());
+  });
+
   it("shows the training display version without changing the technical selection", async () => {
     const trained = { ...model11, name: "Aves Chilenas · EfficientNet-B0 (v2)", version: 2,
       architecture: "EfficientNet-B0", dataset: "Aves Chilenas" };
@@ -124,7 +211,7 @@ describe("Catálogo público de Predicción", () => {
     });
     const view = await show();
     expect(selection().value).toBe("fama_trained_model_11");
-    expect(selection().selectedOptions[0].textContent).toContain(trained.name);
+    expect(selection().textContent).toContain(trained.name);
     expect(screen.getByRole("heading", { name: trained.name })).toBeTruthy();
     expect(screen.getByText("Versión v2")).toBeTruthy();
     expect(screen.queryByText("Versión no publicada")).toBeNull();
@@ -161,8 +248,8 @@ describe("Catálogo público de Predicción", () => {
     expect(evaluations.textContent).toContain("Test (test)");
     expect(evaluations.textContent).toContain("Informe histórico completado #41");
     expect(evaluations.textContent).toContain("Informe histórico completado #42");
-    expect(evaluations.textContent).toContain("Inicio: 2025-02-01T10:01:00Z");
-    expect(evaluations.textContent).toContain("Informe creado: 2025-02-01T10:00:00Z");
+    expect(evaluations.textContent).toContain("Finalizado: 1 de febrero de 2025, 10:02 UTC");
+    expect(evaluations.textContent).toContain("Evaluación finalizada: 1 de febrero de 2025, 10:02 UTC");
     expect(evaluations.textContent).toContain("Muestras: 4");
     expect(evaluations.textContent).toContain("Accuracy");
     expect(evaluations.textContent).toContain("Precision macro");
@@ -171,9 +258,9 @@ describe("Catálogo público de Predicción", () => {
     expect(evaluations.textContent).toContain("F1 ponderado");
     expect(evaluations.textContent).toContain("Balanced accuracy");
     expect(evaluations.textContent).toContain("Cobertura completa");
-    expect(evaluations.textContent).toContain("classification-report-v1");
-    expect(evaluations.textContent).toContain("a".repeat(64));
-    expect(evaluations.textContent).toContain("no acreditan qué parámetros están cargados actualmente en runtime");
+    expect(evaluations.textContent).not.toContain("classification-report-v1");
+    expect(evaluations.textContent).not.toContain("a".repeat(64));
+    expect(evaluations.textContent).not.toContain("no acreditan qué parámetros están cargados actualmente en runtime");
     expect(evaluations.textContent).not.toContain("Rechazos:");
   });
 
@@ -208,7 +295,7 @@ describe("Catálogo público de Predicción", () => {
     expect(details.textContent).toContain("Informe histórico completado #141");
     expect(details.textContent).toContain("Informe aplicable del par admitido #132");
     expect(details.textContent).toContain("Informe histórico completado #143");
-    expect(details.textContent).toContain("no acredita los parámetros cargados actualmente en runtime");
+    expect(details.textContent).not.toContain("no acredita los parámetros cargados actualmente en runtime");
   });
 
   it.each([
@@ -309,7 +396,7 @@ describe("Catálogo público de Predicción", () => {
     await show();
 
     const evaluations = await openDetails();
-    expect(evaluations.textContent).toContain("Schema del informe: 2");
+    expect(evaluations.textContent).not.toContain("Schema del informe:");
     expect(evaluations.textContent).toContain("Rechazos: 1 (50.00%)");
     expect(evaluations.textContent).toContain("Cobertura incompleta · clases ausentes: Rayadito");
   });
@@ -331,14 +418,14 @@ describe("Catálogo público de Predicción", () => {
     expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes("/api/models"))).toHaveLength(1);
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("/api/evaluations"))).toBe(false);
 
-    fireEvent.change(selection(), { target: { value: bird.id } });
+    await chooseModel(bird.name);
     summary = screen.getByRole("region", { name: "Evaluaciones finales del modelo seleccionado" });
     expect(summary.textContent).not.toContain("#71");
     evaluations = await openDetails();
     expect(evaluations.textContent).toContain("Informe histórico completado #70");
     fireEvent.click(within(evaluations).getByRole("button", { name: "Cerrar detalle" }));
 
-    fireEvent.change(selection(), { target: { value: first.id } });
+    await chooseModel(first.name);
     catalogue = async () => response([first, second], first.id, [], {
       evaluation_catalogue_status: "unavailable",
       evaluation_catalogue_error: "evaluation_records_invalid",
@@ -400,7 +487,7 @@ describe("Catálogo público de Predicción", () => {
     expect(screen.queryByRole("region", { name: "Evaluaciones finales" })).toBeNull();
   });
 
-  it("abre un diálogo accesible con métricas completas, clases, matriz, rechazos y hash legible", async () => {
+  it("abre un diálogo accesible con métricas completas, clases, matriz, rechazos sin identificadores internos", async () => {
     const evaluatedModel = {
       ...model11,
       checkpoint_sha256: "a".repeat(64),
@@ -421,9 +508,10 @@ describe("Catálogo público de Predicción", () => {
     expect(dialog.textContent).toContain("Recall macro");
     expect(dialog.textContent).toContain("F1 ponderado");
     expect(dialog.textContent).toContain("Chucao");
-    expect(dialog.textContent).toContain("__rejected__");
+    expect(dialog.textContent).toContain("Rechazo");
+    expect(dialog.textContent).not.toContain("__rejected__");
     expect(dialog.textContent).toContain("Rechazos: 1 (50.00%)");
-    expect(dialog.textContent).toContain("a".repeat(64));
+    expect(dialog.textContent).not.toContain("a".repeat(64));
     expect(within(dialog).getByRole("table", { name: "Matriz de confusión Validación (val)" })).toBeDefined();
 
     const close = within(dialog).getByRole("button", { name: "Cerrar detalle" });
@@ -463,7 +551,8 @@ describe("Catálogo público de Predicción", () => {
     if (expected === "No coincide") {
       expect(validation.textContent).toContain("no es aplicable al checkpoint registrado");
       const details = await openDetails();
-      expect(details.textContent).toContain("NO es aplicable al checkpoint registrado");
+      expect(details.textContent).toContain("Informe histórico completado");
+      expect(details.textContent).not.toContain("Informe aplicable del par admitido");
     }
   });
 
@@ -486,9 +575,9 @@ describe("Catálogo público de Predicción", () => {
 
     fireEvent.click(trigger);
     expect(screen.getByRole("dialog")).toBeDefined();
-    fireEvent.change(selection(), { target: { value: second.id } });
+    await chooseModel(second.name);
     expect(screen.queryByRole("dialog")).toBeNull();
-    fireEvent.change(selection(), { target: { value: first.id } });
+    await chooseModel(first.name);
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes("/api/models"))).toHaveLength(1);
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("/api/evaluations") || String(url).includes("/api/predict"))).toBe(false);
@@ -509,8 +598,8 @@ describe("Catálogo público de Predicción", () => {
     await show();
 
     expect(selection().value).toBe(model11.id);
-    const option = within(selection()).getByRole("option", { name: /Modelo sin pesos.*no disponible/i });
-    expect((option as HTMLOptionElement).disabled).toBe(true);
+    const option = within(modelOptions()).getByRole("option", { name: /Modelo sin pesos.*no disponible/i });
+    expect(option.getAttribute("aria-disabled") === "true").toBe(true);
   });
 
   it.each([false, undefined])("bloquea inferencia cuando ningún modelo confirma pesos (%s)", async hasWeights => {
@@ -520,7 +609,7 @@ describe("Catálogo público de Predicción", () => {
     const view = await show();
 
     expect(selection().value).toBe("");
-    expect(within(selection()).getByRole("option", { name: "Sin modelos con pesos disponibles" })).toBeDefined();
+    expect(selection().textContent).toBe("Sin modelos con pesos disponibles");
     expect(screen.getByRole("status", { name: "Disponibilidad de modelos" }).textContent).toContain("pesos");
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:test");
     vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
@@ -529,28 +618,28 @@ describe("Catálogo público de Predicción", () => {
         target: { files: [new File(["audio"], "audio.wav")] },
       });
     });
-    // Even a synthetic change event cannot enable an unavailable option.
-    fireEvent.change(selection(), { target: { value: bird.id } });
+    // Clicking an unavailable option cannot enable inference.
+    await chooseModel(bird.name);
     expect((screen.getByRole("button", { name: /Ejecutar inferencia/ }) as HTMLButtonElement).disabled).toBe(true);
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("/api/predict"))).toBe(false);
   });
 
   it("reemplaza un modelo que pierde pesos por otro disponible del mismo dominio y permite recuperación", async () => {
     await show();
-    fireEvent.change(selection(), { target: { value: engine.id } });
+    await chooseModel(engine.name);
     const nextEngine = { ...engine, id: "engine-v3", name: "Motor v3" };
     catalogue = async () => response([bird, { ...engine, has_weights: false }, nextEngine], bird.id);
 
     await focus();
 
     expect(selection().value).toBe(nextEngine.id);
-    const unavailable = within(selection()).getByRole("option", { name: /Motor v2.*no disponible/i });
-    expect((unavailable as HTMLOptionElement).disabled).toBe(true);
+    const unavailable = within(modelOptions()).getByRole("option", { name: /Motor v2.*no disponible/i });
+    expect(unavailable.getAttribute("aria-disabled") === "true").toBe(true);
     catalogue = async () => response([bird, engine, nextEngine], engine.id);
     await focus();
     expect(selection().value).toBe(nextEngine.id);
-    expect((within(selection()).getByRole("option", { name: "Motor v2" }) as HTMLOptionElement).disabled).toBe(false);
-    fireEvent.change(selection(), { target: { value: engine.id } });
+    expect(within(modelOptions()).getByRole("option", { name: "Motor v2" }).getAttribute("aria-disabled")).toBe("false");
+    await chooseModel(engine.name);
     expect(selection().value).toBe(engine.id);
   });
 
@@ -580,17 +669,17 @@ describe("Catálogo público de Predicción", () => {
     catalogue = async () => response([bird, model11]);
     await focus();
     expect(screen.queryByRole("status", { name: "Publicación de modelos" })).toBeNull();
-    expect(within(selection()).getByRole("option", { name: "Modelo 11" })).toBeDefined();
+    expect(within(modelOptions()).getByRole("option", { name: "Modelo 11" })).toBeDefined();
   });
 
   it("conserva el catálogo y la selección frente a HTTP 503 o red caída y permite recuperación", async () => {
     await show();
-    fireEvent.change(selection(), { target: { value: engine.id } });
+    await chooseModel(engine.name);
     catalogue = async () => new Response(JSON.stringify({ detail: { errors: [{ code: "database_unavailable" }] } }), { status: 503 });
     await focus();
     expect(screen.getByRole("alert").textContent).toContain("No se pudo actualizar el catálogo de modelos (HTTP 503)");
     expect(selection().value).toBe(engine.id);
-    expect(within(selection()).getByRole("option", { name: "Aves CNN" })).toBeDefined();
+    expect(within(modelOptions()).getByRole("option", { name: "Aves CNN" })).toBeDefined();
     catalogue = async () => { throw new Error("/private/backend/path"); };
     await focus();
     expect(screen.getByRole("alert").textContent).not.toContain("/private");
@@ -629,7 +718,7 @@ describe("Catálogo público de Predicción", () => {
     catalogue = async () => new Response(null, { status: 503 });
     const view = await show();
     expect(selection().value).toBe("");
-    expect(within(selection()).getAllByRole("option").map(o => o.textContent)).toEqual(["Sin modelos disponibles"]);
+    expect(selection().textContent).toBe("Sin modelos disponibles");
     expect(screen.getByRole("alert")).toBeDefined();
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:test");
     vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
@@ -644,7 +733,7 @@ describe("Catálogo público de Predicción", () => {
 
   it("reemplaza una selección retirada dentro del mismo dominio antes de cambiar a aves", async () => {
     await show();
-    fireEvent.change(selection(), { target: { value: engine.id } });
+    await chooseModel(engine.name);
     const nextEngine = { ...engine, id: "engine-v3", name: "Motor v3" };
     catalogue = async () => response([bird, nextEngine], bird.id);
     await focus();
@@ -668,10 +757,10 @@ describe("Catálogo público de Predicción", () => {
     const pending = deferred();
     catalogue = () => pending.promise;
     await focus();
-    fireEvent.change(selection(), { target: { value: engine.id } });
+    await chooseModel(engine.name);
     await act(async () => { pending.resolve(response([bird, engine, model11], model11.id)); });
     expect(selection().value).toBe(engine.id);
-    expect(within(selection()).getByRole("option", { name: "Modelo 11" })).toBeDefined();
+    expect(within(modelOptions()).getByRole("option", { name: "Modelo 11" })).toBeDefined();
   });
 
   it.each(["success", "failure"])("ignora una respuesta antigua (%s) tras un catálogo nuevo y otra elección", async outcome => {
@@ -681,7 +770,7 @@ describe("Catálogo público de Predicción", () => {
     await focus();
     catalogue = async () => response([bird, engine, model11]);
     await focus();
-    fireEvent.change(selection(), { target: { value: model11.id } });
+    await chooseModel(model11.name);
     await act(async () => {
       if (outcome === "success") old.resolve(response([bird], bird.id, [{ code: "checkpoint_invalid" }]));
       else old.reject(new Error("HTTP 503"));
@@ -697,15 +786,15 @@ describe("Catálogo público de Predicción", () => {
     catalogue = async () => response([bird, engine, model11]);
     vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
     await act(async () => { fireEvent(document, new Event("visibilitychange")); });
-    expect(within(selection()).queryByRole("option", { name: "Modelo 11" })).toBeNull();
+    expect(within(modelOptions()).queryByRole("option", { name: "Modelo 11" })).toBeNull();
     vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
     await act(async () => { fireEvent(document, new Event("visibilitychange")); });
-    expect(within(selection()).getByRole("option", { name: "Modelo 11" })).toBeDefined();
+    expect(within(modelOptions()).getByRole("option", { name: "Modelo 11" })).toBeDefined();
     view.unmount();
     catalogue = async () => response([model11], model11.id);
     await show();
     expect(selection().value).toBe(model11.id);
-    expect(within(selection()).queryByRole("option", { name: "Aves CNN" })).toBeNull();
+    expect(within(modelOptions()).queryByRole("option", { name: "Aves CNN" })).toBeNull();
   });
 
   it("aborta solicitudes y retira listeners sin errores tardíos después del desmontaje", async () => {
@@ -751,12 +840,12 @@ describe("Catálogo público de Predicción", () => {
 
   it("publica nuevas opciones al recuperar foco sin reemplazar la elección del usuario", async () => {
     await show();
-    fireEvent.change(selection(), { target: { value: engine.id } });
+    await chooseModel(engine.name);
     catalogue = async () => response([bird, engine, model11], model11.id);
     await focus();
-    expect(within(selection()).getByRole("option", { name: "Modelo 11" })).toBeDefined();
+    expect(within(modelOptions()).getByRole("option", { name: "Modelo 11" })).toBeDefined();
     expect(selection().value).toBe(engine.id);
-    fireEvent.change(selection(), { target: { value: model11.id } });
+    await chooseModel(model11.name);
     expect(screen.getByRole("option", { name: "Chincol" })).toBeDefined();
   });
 });
@@ -776,8 +865,8 @@ describe("U7Independent", () => {
     catalogue = async () => response([{ ...bird, has_weights: value } as RegisteredModel], bird.id);
     const view = await show();
     await upload(view);
-    const option = within(selection()).getByRole("option", { name: /Aves CNN/ }) as HTMLOptionElement;
-    expect(option.disabled).toBe(true);
+    const option = within(modelOptions()).getByRole("option", { name: /Aves CNN/ });
+    expect(option.getAttribute("aria-disabled")).toBe("true");
     expect(selection().value).toBe("");
     const before = vi.mocked(fetch).mock.calls.length;
     fireEvent.click(screen.getByRole("button", { name: /Ejecutar inferencia/ }));
@@ -786,7 +875,7 @@ describe("U7Independent", () => {
     catalogue = async () => response([bird], bird.id);
     await focus();
     expect(selection().value).toBe(bird.id);
-    expect((within(selection()).getByRole("option", { name: "Aves CNN" }) as HTMLOptionElement).disabled).toBe(false);
+    expect(within(modelOptions()).getByRole("option", { name: "Aves CNN" }).getAttribute("aria-disabled")).toBe("false");
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Ejecutar inferencia/ })); });
     expect(calls("/api/predict")).toHaveLength(1);
     expect(String(calls("/api/predict")[0][0])).toContain("model_id=bird-cnn");
@@ -823,7 +912,7 @@ describe("U7Independent", () => {
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Ejecutar inferencia/ })); });
     expect(String(calls("/api/predict")[0][0])).toContain("model_id=bird-ensemble");
     expect((calls("/api/predict")[0][1]?.body as FormData).get("dataset_name")).toBe("AvesChilenas");
-    fireEvent.change(selection(), { target: { value: engine.id } });
+    await chooseModel(engine.name);
     catalogue = failed ? async () => new Response(null, { status: 503 })
       : async () => response([{ ...engine, checkpoint_sha256: "c".repeat(64) }], engine.id);
     await focus();
@@ -874,7 +963,7 @@ describe("U7Independent", () => {
         expect(card.getByText(text)).toBeDefined();
       }
     }
-    fireEvent.change(selection(), { target: { value: "engine-ensemble" } });
+    await chooseModel(engine.name);
     if (domain !== "engine_diagnostics") expect(screen.queryByRole("article", { name: "Legacy component" })).toBeNull();
     expect(calls("/api/predict")).toHaveLength(0);
     expect(calls("/api/model-info").some(([url]) => String(url).includes("dataset_name=engine_diagnostics"))).toBe(true);

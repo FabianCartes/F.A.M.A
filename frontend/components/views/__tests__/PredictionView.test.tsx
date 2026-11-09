@@ -1,3 +1,4 @@
+import { chooseModel, modelOptions } from "../../prediction/__tests__/selectorActions";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen, act, within } from "@testing-library/react";
 import PredictionView from "../PredictionView";
@@ -30,7 +31,7 @@ async function preparePrediction({ classes = ['alarm', 'normal'], dbId = 201, da
   URL.revokeObjectURL = vi.fn();
   let view!: ReturnType<typeof render>;
   await act(async () => { view = render(<PredictionView />); });
-  fireEvent.change(screen.getByLabelText('Modelo:'), { target: { value: 'machine-model' } });
+  await chooseModel(mockModels[1].name);
   await act(async () => { fireEvent.change(view.container.querySelector('input[type="file"]')!, { target: { files: [new File(['audio'], 'machine.wav')] } }); });
   const infer = async () => { await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Ejecutar inferencia/ })); }); };
   await infer();
@@ -45,6 +46,7 @@ describe('PredictionView validation and responsive controls', () => {
     api.setPrediction(async () => Response.json({ filename: 'actual.wav', db_id: 305, modelo_id: 'machine-model', modelo: 'Executed CNN', clase: 'alarm', confianza: 0.8, gcp_upload: false }));
     await api.infer();
     expect(screen.getByText('Modelo ejecutado:').parentElement?.textContent).toContain('Executed CNN');
+    expect(screen.queryByText(/Tiempo total de solicitud:/)).toBeNull();
     expect(screen.getByText('Puntuación del modelo (sin calibración acreditada):')).toBeDefined();
     expect(screen.getByText('ID de predicción: 305')).toBeDefined();
     expect(screen.queryByText(/AVE-|ENG-/)).toBeNull();
@@ -59,7 +61,7 @@ describe('PredictionView validation and responsive controls', () => {
     let resolve!: (response: Response) => void;
     api.setPrediction(() => new Promise(done => { resolve = done; }));
     fireEvent.click(screen.getByRole('button', { name: /Ejecutar inferencia/ }));
-    fireEvent.change(screen.getByLabelText('Modelo:'), { target: { value: mockModels[2].id } });
+    await chooseModel(mockModels[2].name);
     await act(async () => { resolve(Response.json({ filename: 'different.wav', modelo_id: mockModels[2].id, modelo: 'Executed industrial', clase: 'bad_ignition', confianza: 0.8, gcp_upload: false })); });
     expect(screen.getByText('Modelo ejecutado:').parentElement?.textContent).toContain(mockModels[2].id);
     expect(screen.getByRole('alert').textContent).toContain('difiere del modelo solicitado');
@@ -78,18 +80,18 @@ describe('PredictionView validation and responsive controls', () => {
     api.setPrediction(async () => Response.json({ filename: 'individual.wav', clase: 'alarm', confianza: 0.8, gcp_upload: false, modelos_activos: ['Invented participant (55%)'] }));
     await api.infer();
     expect(screen.queryByText(/Invented participant/)).toBeNull();
-    fireEvent.change(screen.getByLabelText('Modelo:'), { target: { value: 'chilean-birds-ensemble' } });
+    await chooseModel(mockModels[0].name);
     expect(screen.queryByText(/Invented participant/)).toBeNull();
     expect(screen.getByText('Veredicto del Modelo')).toBeDefined();
   });
 
   it('keeps ensemble participants attached to the executed result after selection changes', async () => {
     const api = await preparePrediction();
-    fireEvent.change(screen.getByLabelText('Modelo:'), { target: { value: 'chilean-birds-ensemble' } });
+    await chooseModel(mockModels[0].name);
     api.setPrediction(async () => Response.json({ filename: 'ensemble.wav', clase: 'Chucao', confianza: 0.8, gcp_upload: false, modelo: 'Executed ensemble', modelos_activos: ['Actual CNN (42%)'] }));
     await api.infer();
     expect(screen.getByText('✓ Actual CNN (42%)')).toBeDefined();
-    fireEvent.change(screen.getByLabelText('Modelo:'), { target: { value: 'machine-model' } });
+    await chooseModel(mockModels[1].name);
     expect(screen.getByText('✓ Actual CNN (42%)')).toBeDefined();
     expect(screen.getByText('Veredicto del Super-Ensamble')).toBeDefined();
     expect(screen.getByText('Audio original · canal 1 (mono/estéreo)')).toBeDefined();
@@ -103,7 +105,7 @@ describe('PredictionView validation and responsive controls', () => {
     await act(async () => { render(<PredictionView />); });
     expect(screen.getByText(/Contrato publicado: Audios de duración no publicada a frecuencia no publicada/)).toBeDefined();
     expect(screen.queryByText(/5\.0s|22 kHz|Operativo|55%/)).toBeNull();
-    expect(screen.getByText('Tiempo total de solicitud: no disponible')).toBeDefined();
+    expect(screen.queryByText(/Tiempo total de solicitud:/)).toBeNull();
   });
 
   it('rejects oversized WAV before browser decoding or prediction HTTP', async () => {
@@ -199,7 +201,7 @@ describe('PredictionView validation and responsive controls', () => {
     const correction = panel().getByLabelText('Clase correcta');
     expect(within(correction).getAllByRole('option').map(o => o.getAttribute('value'))).toEqual(['', 'alarm', 'normal']);
     fireEvent.change(correction, { target: { value: 'normal' } });
-    fireEvent.change(screen.getByLabelText('Modelo:'), { target: { value: mockModels[2].id } });
+    await chooseModel(mockModels[2].name);
     expect(panel().getByLabelText('Clase correcta')).toBe(correction);
     expect(panel().queryByRole('option', { name: 'low_oil' })).toBeNull();
     expect(screen.getByText(/Dataset de inferencia/).parentElement?.textContent).toContain('maquinaria-canonical');
@@ -264,7 +266,7 @@ describe('PredictionView validation and responsive controls', () => {
     let resolve!: (response: Response) => void;
     api.setPrediction(() => new Promise(done => { resolve = done; }));
     fireEvent.click(screen.getByRole('button', { name: /Ejecutar inferencia/ }));
-    fireEvent.change(screen.getByLabelText('Modelo:'), { target: { value: mockModels[2].id } });
+    await chooseModel(mockModels[2].name);
     await act(async () => { resolve({ ok: true, json: async () => ({ filename: 'machine.wav', db_id: 202, clase: 'alarm', confianza: 0.9, gcp_upload: true, detalles: { dataset_name: 'executed-target' } }) } as Response); });
     fireEvent.click(choice('Incorrecta'));
     expect(panel().getByRole('option', { name: 'normal' })).toBeDefined();
@@ -303,20 +305,19 @@ describe('PredictionView validation and responsive controls', () => {
     expect(choice('Incorrecta').matches(':disabled')).toBe(true);
   });
 
-  it('renders responsive heading, model groups, latency and deterministic inference contracts', async () => {
+  it('renders responsive heading, model groups and deterministic inference contracts without timing badge', async () => {
     render(<PredictionView />);
     expect(screen.getByText('Predicción y Monitoreo Acústico')).toBeDefined();
     const select = await screen.findByLabelText('Modelo:');
-    await screen.findByRole('option', { name: mockModels[2].name });
-    expect(select.className).toContain('truncate');
-    expect(select.className).toContain('min-w-0');
-    const latency = screen.getByText('Tiempo total de solicitud: no disponible').closest('div');
-    expect(latency?.className).toContain('shrink-0');
-    expect(latency?.className).toContain('whitespace-nowrap');
-    expect(select.querySelector('optgroup[label="Mis modelos"]')).not.toBeNull();
-    expect(select.querySelectorAll('optgroup')).toHaveLength(1);
+    const options = within(modelOptions());
+    await options.findByRole('option', { name: mockModels[2].name });
+    expect(select.querySelector('span')?.className).toContain('truncate');
+    expect(select.parentElement?.className).toContain('min-w-0');
+    expect(screen.queryByText(/Tiempo total de solicitud:/)).toBeNull();
+    expect(options.getByRole('group', { name: 'Mis modelos' })).toBeDefined();
+    expect(options.getAllByRole('group')).toHaveLength(1);
     expect(screen.getByText(/Audios de 5\.0s a 22\.050 Hz/)).toBeDefined();
-    await act(async () => { fireEvent.change(select, { target: { value: mockModels[2].id } }); });
+    await chooseModel(mockModels[2].name);
     expect(screen.getByText(/Grupo seleccionado: Diagnóstico Acústico de Motores/)).toBeDefined();
     expect(screen.getByText('2 Fallas Mecánicas')).toBeDefined();
     expect(screen.getByText('1.5s @ 32 kHz')).toBeDefined();
@@ -336,9 +337,9 @@ describe('PredictionView validation and responsive controls', () => {
     expect(screen.queryByText(/Tríada Completa Habilitada/)).toBeNull();
     expect(screen.queryByText(/Super-Ensamble Activo/)).toBeNull();
     expect(screen.queryAllByText(/88\.68%|88\.31%|81\.44%/)).toHaveLength(0);
-    expect(screen.getByText('Tiempo total de solicitud: no disponible')).toBeDefined();
+    expect(screen.queryByText(/Tiempo total de solicitud:/)).toBeNull();
     expect(screen.getByText('Estado del servicio legacy no disponible para esta selección.')).toBeDefined();
-    expect(screen.getByRole('option', { name: mockModels[0].name })).toBeDefined();
+    expect(within(modelOptions()).getByRole('option', { name: mockModels[0].name })).toBeDefined();
   });
 
   it('renders registration, local availability and observed load as separate facts', async () => {
@@ -383,12 +384,12 @@ describe('PredictionView validation and responsive controls', () => {
           triad_status: [], active_models: [], classes: [], total_classes: 0, model_name: null, device: 'cpu', is_fallback: false } }) as Response);
     await act(async () => { render(<PredictionView />); });
 
-    await act(async () => { fireEvent.change(screen.getByLabelText('Modelo:'), { target: { value: engine.id } }); });
+    await chooseModel(engine.name);
 
     expect(screen.getByText('Estado del servicio legacy no disponible para esta selección.')).toBeDefined();
     expect(screen.queryAllByText('Entrenado y Operativo')).toHaveLength(0);
     expect(screen.queryByText('Peso cargado: 40%')).toBeNull();
-    expect(screen.getByRole('option', { name: engine.name })).toBeDefined();
+    expect(within(modelOptions()).getByRole('option', { name: engine.name })).toBeDefined();
   });
 
   it('uses the execution list rather than unrelated legacy active-component labels', async () => {
@@ -406,7 +407,7 @@ describe('PredictionView validation and responsive controls', () => {
 
   it('does not apply the legacy service device or an assumed test split to an individual selection', async () => {
     await act(async () => { render(<PredictionView />); });
-    await act(async () => { fireEvent.change(screen.getByLabelText('Modelo:'), { target: { value: 'machine-model' } }); });
+    await chooseModel(mockModels[1].name);
 
     expect(screen.queryByText('Dispositivo: CPU')).toBeNull();
     expect(screen.queryByText('Evaluación en test set')).toBeNull();
@@ -456,7 +457,7 @@ describe("U7IndependentStable", () => {
       String(input).includes("/api/models")
         ? failed ? new Response(null, { status: 503 }) : Response.json({ models: [mockModels[2]] })
         : originalFetch(input, options));
-    fireEvent.change(screen.getByLabelText("Modelo:"), { target: { value: mockModels[2].id } });
+    await chooseModel(mockModels[2].name);
     await act(async () => { fireEvent(window, new Event("focus")); });
     expect(screen.getByRole("region", { name: "Identidad del checkpoint del resultado" }).textContent).toBe(checkpoint);
     expect(checkpoint).toContain("d".repeat(64));
