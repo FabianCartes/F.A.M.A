@@ -46,6 +46,20 @@ from app.services.predictors.base import (
 )
 
 
+class ClassVectorUnavailable(ModelWeightsError):
+    """Explicit ordinary acoustic rejection, never corrupt/missing weights.
+
+    Only predict_probabilities raises this subtype; predict() is unchanged.
+    """
+    def __init__(self, result):
+        status = result.detalles.get('status')
+        if status not in ('silence', 'noise'):
+            raise ModelWeightsError('Invalid class-vector rejection status')
+        self.status = status
+        self.result = result
+        super().__init__(f'Class probabilities unavailable: {status}')
+
+
 def _standard_frontend_contract(checkpoint):
     from app.services.imported_training_source import validate_imported_checkpoint, ImportedSourceError
     try:
@@ -350,6 +364,20 @@ class TrainedModelPredictor(AudioPredictor):
         return self._model_id
 
     def predict(self, audio_file_path: Path) -> PredictionResult:
+        return self._predict(audio_file_path)
+
+    def predict_probabilities(self, audio_file_path: Path) -> dict:
+        """Return unrounded probabilities in checkpoint class order.
+
+        Silence/noise have no class vector and raise ModelWeightsError. Loading,
+        provenance validation and acoustic policy are identical to predict().
+        """
+        result = self._predict(audio_file_path, full_vector=True)
+        if isinstance(result, PredictionResult):
+            raise ClassVectorUnavailable(result)
+        return result
+
+    def _predict(self, audio_file_path: Path, full_vector: bool = False):
         """
         Ejecuta la inferencia real de extremo a extremo sin mocks.
         Aplica VAD de silencio y filtro de ruido biológico.
@@ -442,9 +470,22 @@ class TrainedModelPredictor(AudioPredictor):
         t_start = time.perf_counter()
         with torch.no_grad():
             outputs = self.model(mel_tensor)
+            if full_vector and (not isinstance(outputs, torch.Tensor)
+                    or outputs.shape != (1, len(self.classes)) or not self.classes):
+                raise ModelWeightsError("Invalid class probabilities: neural output shape")
             probabilities = torch.softmax(outputs, dim=1)
             confidence, pred_idx = torch.max(probabilities, dim=1)
         latency_ms = round((time.perf_counter() - t_start) * 1000.0, 2)
+
+        if full_vector:
+            vector = probabilities.detach().cpu().numpy()
+            if (vector.shape != (1, len(self.classes)) or not np.isfinite(vector).all()
+                    or (vector < 0).any() or (vector > 1).any()
+                    or not np.isclose(vector.sum(), 1.0, rtol=0, atol=1e-6)):
+                raise ModelWeightsError("Invalid class probabilities")
+            return {"classes": list(self.classes), "probabilities": vector[0].tolist(),
+                    "model_id": self.model_id,
+                    "loaded_checkpoint_sha256": loaded_checkpoint_sha256}
 
         predicted_class = self.classes[pred_idx.item()]
         conf_val = round(float(confidence.item()), 4)

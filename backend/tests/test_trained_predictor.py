@@ -29,14 +29,6 @@ CHECKPOINT_PATH = (
 def resolve_test_audio_path() -> Path:
     repo_root = Path(__file__).resolve().parent.parent.parent
     candidate_repo = repo_root / "audios_prueba" / "audio_prueba.wav"
-    if candidate_repo.exists():
-        return candidate_repo
-    candidate_cwd = Path("audios_prueba/audio_prueba.wav").resolve()
-    if candidate_cwd.exists():
-        return candidate_cwd
-    downloads = Path.home() / "Downloads" / "audio_prueba.wav"
-    if downloads.exists():
-        return downloads
     return candidate_repo
 
 
