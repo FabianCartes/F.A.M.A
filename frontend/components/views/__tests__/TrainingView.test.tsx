@@ -169,8 +169,7 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
   });
 
   it.each([
-    ["Dúo", "2 Modelos (Dúo)", "Iniciar Pipeline Dúo Ensamble (2 Modelos)", 2],
-    ["Tríada", "3 Modelos (Tríada)", "Iniciar Pipeline Tri Ensamble (3 Modelos)", 3],
+    ["Tríada", "3 Modelos (Tríada)", "Iniciar Pipeline de Tri Ensamble (3 Modelos)", 3],
   ] as const)("preserves custom per-model parameters and weights in %s requests", async (_name, topology, start, size) => {
     await act(async () => { render(<TrainingView />); });
     await act(async () => { fireEvent.click(screen.getByText(topology)); });
@@ -178,44 +177,42 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
       fireEvent.change(screen.getByLabelText("Épocas del Modelo #1"), { target: { value: "7" } });
       fireEvent.change(screen.getByLabelText("Learning Rate del Modelo #1"), { target: { value: "0.003" } });
       fireEvent.change(screen.getByLabelText("Batch Size del Modelo #1"), { target: { value: "4" } });
-      fireEvent.change(screen.getByLabelText("Ponderación del Modelo #1"), { target: { value: size === 2 ? "75" : "50" } });
+      fireEvent.change(screen.getByLabelText("Ponderación del Modelo #1"), { target: { value: "50" } });
       fireEvent.change(screen.getByLabelText("Ponderación del Modelo #2"), { target: { value: "25" } });
-      if (size === 3) fireEvent.change(screen.getByLabelText("Ponderación del Modelo #3"), { target: { value: "25" } });
+      fireEvent.change(screen.getByLabelText("Ponderación del Modelo #3"), { target: { value: "25" } });
     });
-    await act(async () => { fireEvent.click(screen.getByText(size === 3 ? /Iniciar Pipeline.*Tri Ensamble \(3 Modelos\)/i : start)); });
+    await act(async () => { fireEvent.click(screen.getByText(start)); });
     const postCall = vi.mocked(global.fetch).mock.calls.find((c) => c[0] === `${API_BASE_URL}/api/training/start`);
     expect(postCall).toBeDefined();
     const payload = JSON.parse(String(postCall?.[1]?.body));
     expect(payload.models).toHaveLength(size);
-    expect(payload.models[0]).toEqual({ architecture: "EfficientNet-B0", epochs: 7, learning_rate: 0.003, batch_size: 4, weight: size === 2 ? 0.75 : 0.5 });
+    expect(payload.models[0]).toEqual({ architecture: "EfficientNet-B0", epochs: 7, learning_rate: 0.003, batch_size: 4, weight: 0.5 });
     expect(payload.models[1]).toMatchObject({ architecture: "ConvNeXt-Nano", epochs: 12, learning_rate: 0.0005, batch_size: 16, weight: 0.25 });
-    if (size === 3) expect(payload.models[2]).toMatchObject({ architecture: "ResNet-34d", epochs: 15, learning_rate: 0.0003, batch_size: 8, weight: 0.25 });
+    expect(payload.models[2]).toMatchObject({ architecture: "ResNet-34d", epochs: 15, learning_rate: 0.0003, batch_size: 8, weight: 0.25 });
   });
 
-  it("renders the 1, 2, and 3 model topology options", async () => {
+  it("offers only individual and triad topology", async () => {
     await act(async () => {
       render(<TrainingView />);
     });
 
     expect(screen.getByText("1 Modelo (Individual)")).toBeDefined();
-    expect(screen.getByText("2 Modelos (Dúo)")).toBeDefined();
-    expect(screen.getByText("3 Modelos (Tríada)")).toBeDefined();
+    expect(screen.queryByRole("button", { name: /2 Modelos \(Dúo\)/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "3 Modelos (Tríada)" })).toBeDefined();
   });
 
-  it("switches to Duo Ensemble and reveals 2 models with sliders", async () => {
-    await act(async () => {
-      render(<TrainingView />);
-    });
+  it("shows the triad topology without a decorative star", async () => {
+    await act(async () => { render(<TrainingView />); });
+    expect(screen.getByRole("button", { name: "3 Modelos (Tríada)" }).querySelector('svg')).toBeNull();
+  });
 
-    const duoBtn = screen.getByText("2 Modelos (Dúo)");
-    await act(async () => {
-      fireEvent.click(duoBtn);
-    });
-
-    expect(screen.getByText("Composición y Ponderación del Ensamble (2 Modelos)")).toBeDefined();
-    expect(screen.getByText(/Modelo #1:/)).toBeDefined();
-    expect(screen.getByText(/Modelo #2:/)).toBeDefined();
-    expect(screen.queryByText(/Modelo #3:/)).toBeNull();
+  it("returns from triad to individual without ensemble controls", async () => {
+    await act(async () => { render(<TrainingView />); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "3 Modelos (Tríada)" })); });
+    expect(screen.getByText("Composición y Ponderación del Ensamble (3 Modelos)")).toBeDefined();
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "1 Modelo (Individual)" })); });
+    expect(screen.queryByText(/Composición y Ponderación del Ensamble/)).toBeNull();
+    expect(screen.getByRole("button", { name: /Iniciar Entrenamiento Local \(1 Modelo\)/ })).toBeDefined();
   });
 
   it("switches to Trio Ensemble and reveals 3 models", async () => {
@@ -234,24 +231,24 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     expect(screen.getByText(/Modelo #3:/)).toBeDefined();
   });
 
-  it("sends models array in payload when starting Duo Ensemble training", async () => {
+  it("sends models array in payload when starting Triad Ensemble training", async () => {
     await act(async () => {
       render(<TrainingView />);
     });
 
-    // Cambiar a Dúo Ensamble
-    const duoBtn = screen.getByText("2 Modelos (Dúo)");
+    // Select triad ensemble
+    const trioBtn = screen.getByText("3 Modelos (Tríada)");
     await act(async () => {
-      fireEvent.click(duoBtn);
+      fireEvent.click(trioBtn);
     });
 
     // Iniciar entrenamiento
-    const startBtn = screen.getByText("Iniciar Pipeline Dúo Ensamble (2 Modelos)");
+    const startBtn = screen.getByText("Iniciar Pipeline de Tri Ensamble (3 Modelos)");
     await act(async () => {
       fireEvent.click(startBtn);
     });
 
-    // Verificar que se llamó a POST /api/training/start con la lista de 2 modelos
+    // Verificar que se llamó a POST /api/training/start con la lista de 3 modelos
     const postCall = vi.mocked(global.fetch).mock.calls.find(
       (c) => c[0] === `${API_BASE_URL}/api/training/start`
     );
@@ -259,9 +256,10 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     const payload = JSON.parse(String(postCall?.[1]?.body));
 
     expect(payload.models).toBeDefined();
-    expect(payload.models).toHaveLength(2);
+    expect(payload.models).toHaveLength(3);
     expect(payload.models[0].architecture).toBe("EfficientNet-B0");
     expect(payload.models[1].architecture).toBe("ConvNeXt-Nano");
+    expect(payload.models[2].architecture).toBe("ResNet-34d");
     const totalWeight = payload.models.reduce((acc: number, m: { weight: number }) => acc + m.weight, 0);
     expect(totalWeight).toBeCloseTo(1.0, 2);
   });
@@ -273,18 +271,17 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
 
     // Panel exists
     expect(screen.getByText("Física de Audio y Adaptación al Dominio")).toBeDefined();
-    expect(screen.getByText("Tos Médica")).toBeDefined();
-    expect(screen.getByText("Diagnóstico Industrial")).toBeDefined();
-
-    // Click Tos Médica preset
-    const coughBtn = screen.getByText("Tos Médica");
+    expect(screen.queryByRole("button", { name: /Tos Médica/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /Bioacústica \(Aves\)/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Personalizado/i })).toBeDefined();
+    const industrialBtn = screen.getByRole("button", { name: /Diagnóstico Industrial/i });
     await act(async () => {
-      fireEvent.click(coughBtn);
+      fireEvent.click(industrialBtn);
     });
 
-    // Verify sample rate input value is 16000
+    // The remaining industrial preset keeps its existing configuration.
     const srInput = screen.getByLabelText(/Tasa de Muestreo/i) as HTMLInputElement;
-    expect(srInput.value).toBe("16000");
+    expect(srInput.value).toBe("32000");
 
     // Start training
     const startBtn = screen.getByText("Iniciar Entrenamiento Local (1 Modelo)");
@@ -299,12 +296,12 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     const payload = JSON.parse(String(postCall?.[1]?.body));
 
     expect(payload.audio_config).toBeDefined();
-    expect(payload.audio_config.target_sr).toBe(16000);
-    expect(payload.audio_config.f_max).toBe(4000);
+    expect(payload.audio_config.target_sr).toBe(32000);
+    expect(payload.audio_config.f_max).toBe(16000);
     expect(payload.windowing_config).toBeDefined();
-    expect(payload.windowing_config.hop_seconds).toBe(0.5);
+    expect(payload.windowing_config.hop_seconds).toBe(0.75);
     expect(payload.regularization_config).toBeDefined();
-    expect(payload.regularization_config.loss_type).toBe("focal");
+    expect(payload.regularization_config.loss_type).toBe("cross_entropy");
   });
 
   it("displays Nyquist warning when f_max > target_sr / 2", async () => {
@@ -347,20 +344,21 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     expect(fMaxInput.className).not.toContain("border-red-500");
   });
 
-  it("renders model filter pills in chart when Duo Ensemble is selected", async () => {
+  it("renders model filter pills in chart when Triad Ensemble is selected", async () => {
     await act(async () => {
       render(<TrainingView />);
     });
 
-    const duoBtn = screen.getByText("2 Modelos (Dúo)");
+    const trioBtn = screen.getByText("3 Modelos (Tríada)");
     await act(async () => {
-      fireEvent.click(duoBtn);
+      fireEvent.click(trioBtn);
     });
 
     // Chart should show filter pills
     expect(screen.getByRole("button", { name: "Modelo Actual" })).toBeDefined();
     expect(screen.getByRole("button", { name: "Modelo 1" })).toBeDefined();
     expect(screen.getByRole("button", { name: "Modelo 2" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Modelo 3" })).toBeDefined();
     expect(screen.getByRole("button", { name: "Todos" })).toBeDefined();
 
     // Toggle to Modelo 1
@@ -523,15 +521,15 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     expect(within(modal).getAllByText("EfficientNet-B0").length).toBeGreaterThan(0);
   });
 
-  it("allows setting custom epochs per model in Duo/Trio ensemble and sends them in payload", async () => {
+  it("allows setting custom epochs per model in Triad ensemble and sends them in payload", async () => {
     await act(async () => {
       render(<TrainingView />);
     });
 
-    // 1. Switch to Duo Ensemble
-    const duoBtn = screen.getByText("2 Modelos (Dúo)");
+    // 1. Switch to triad ensemble
+    const trioBtn = screen.getByText("3 Modelos (Tríada)");
     await act(async () => {
-      fireEvent.click(duoBtn);
+      fireEvent.click(trioBtn);
     });
 
     // 2. Locate epochs input for Model #1 and Model #2
@@ -551,7 +549,7 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     expect(model2Epochs.value).toBe("20");
 
     // 4. Start training
-    const startBtn = screen.getByText("Iniciar Pipeline Dúo Ensamble (2 Modelos)");
+    const startBtn = screen.getByText("Iniciar Pipeline de Tri Ensamble (3 Modelos)");
     await act(async () => {
       fireEvent.click(startBtn);
     });
@@ -854,10 +852,10 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
       render(<TrainingView />);
     });
 
-    // Cambiar a Dúo
-    const duoBtn = screen.getByText("2 Modelos (Dúo)");
+    // Select triad ensemble
+    const trioBtn = screen.getByText("3 Modelos (Tríada)");
     await act(async () => {
-      fireEvent.click(duoBtn);
+      fireEvent.click(trioBtn);
     });
 
     const modelLr0 = screen.getByLabelText("Learning Rate del Modelo #1") as HTMLInputElement;
@@ -877,7 +875,7 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
       fireEvent.change(modelBatch1, { target: { value: "8" } });
     });
 
-    const startBtn = screen.getByText("Iniciar Pipeline Dúo Ensamble (2 Modelos)");
+    const startBtn = screen.getByText("Iniciar Pipeline de Tri Ensamble (3 Modelos)");
     await act(async () => {
       fireEvent.click(startBtn);
     });
@@ -898,9 +896,9 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
       render(<TrainingView />);
     });
 
-    const duoBtn = screen.getByText("2 Modelos (Dúo)");
+    const trioBtn = screen.getByText("3 Modelos (Tríada)");
     await act(async () => {
-      fireEvent.click(duoBtn);
+      fireEvent.click(trioBtn);
     });
 
     const modelLr0 = screen.getByLabelText("Learning Rate del Modelo #1") as HTMLInputElement;

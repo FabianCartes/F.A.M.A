@@ -1305,20 +1305,20 @@ export default function TrainingView() {
       {/* ==================================================================== */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Tarjeta: Seleccionar Dataset */}
-        <div>
-          <div data-testid={sourceType==='legacy'?'dataset-selection-card':undefined} className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-3 shadow-sm">
+        <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-3 shadow-sm">
+          <div data-testid={sourceType==='legacy'?'dataset-selection-card':undefined} className="space-y-3">
             <TrainingDatasetSelector key={session?.id ?? 'legacy'} includeImported={Boolean(session)} defaultLegacyName={session ? undefined : 'AvesChilenas'} disabled={isTraining || isStarting} onSelect={row=>{
               setCatalogChoice({owner:session?.id,row});setImported(null);
             }}/>
             {sourceType==='legacy'&&<p className="text-xs text-cyan-400">Arquitectura: {ensembleSize === 1 ? architecture : `${ensembleSize} Modelos Ensamble`}</p>}
             {!catalogSelection&&sourceType==='legacy'&&<>
               <p role="status" className="text-xs text-gray-400">Referencia legacy predeterminada. Al iniciar se verificará que AvesChilenas esté registrado y sea compatible; no es una preparación importada lista.</p>
-              <p className="text-xs text-amber-400">Cada grabación cuenta como un grupo independiente; la independencia no está verificada por el número de archivos.</p>
+              <p className="text-xs text-white">Cada grabación cuenta como un grupo independiente; la independencia no está verificada por el número de archivos.</p>
             </>}
             {catalogSelection?.source_type==='legacy'&&<>
               <p role="status" className="text-xs text-gray-300">{legacyBlocked?'Configuración incompatible: este dataset no está admitido en el flujo actual.':'Compatible con el flujo actual. La preparación y validación se realizan al iniciar; no es una preparación importada lista.'}</p>
               <p className="text-xs text-gray-400">{catalogSelection.class_count == null ? 'Clases desconocidas' : `${catalogSelection.class_count} clases`} · {catalogSelection.audio_count} audios</p>
-              <p className="text-xs text-amber-400">Cada grabación cuenta como un grupo independiente; la independencia no está verificada por el número de archivos.</p>
+              <p className="text-xs text-white">Cada grabación cuenta como un grupo independiente; la independencia no está verificada por el número de archivos.</p>
             </>}
           </div>
           {terminalMessage && <p role="status">{terminalMessage}</p>}
@@ -1439,12 +1439,11 @@ export default function TrainingView() {
               <span className="text-[11px] text-gray-400 font-medium block">
                 Presets de Dominio Acústico (1-Clic)
               </span>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {(
                   [
                     { key: "bioacoustics", label: "Bioacústica (Aves)", badge: "22.05 kHz · 5.0s" },
                     { key: "industrial", label: "Diagnóstico Industrial", badge: "32 kHz · 1.5s" },
-                    { key: "medical_cough", label: "Tos Médica", badge: "16 kHz · 2.0s" },
                     { key: "custom", label: "Personalizado", badge: "Manual" },
                   ] as const
                 ).map((p) => {
@@ -1855,7 +1854,7 @@ export default function TrainingView() {
           </span>
         </div>
 
-        {/* Selector Dinámico de Ensamble (1 a 3 Modelos) */}
+        {/* Selector de topología: individual o tríada */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg bg-[#111215] border border-[#23252e]">
           <div>
             <div className="flex items-center gap-1.5">
@@ -1889,18 +1888,6 @@ export default function TrainingView() {
             <button
               type="button"
               disabled={isTraining || sourceType === 'imported'}
-              onClick={() => handleEnsembleSizeChange(2)}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                ensembleSize === 2
-                  ? "bg-cyan-600 text-white shadow-sm font-semibold"
-                  : "text-gray-400 hover:text-gray-200"
-              }`}
-            >
-              2 Modelos (Dúo)
-            </button>
-            <button
-              type="button"
-              disabled={isTraining || sourceType === 'imported'}
               onClick={() => handleEnsembleSizeChange(3)}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
                 ensembleSize === 3
@@ -1908,9 +1895,6 @@ export default function TrainingView() {
                   : "text-gray-400 hover:text-gray-200"
               }`}
             >
-              <svg className="w-3.5 h-3.5 text-amber-300" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-              </svg>
               <span>3 Modelos (Tríada)</span>
             </button>
           </div>

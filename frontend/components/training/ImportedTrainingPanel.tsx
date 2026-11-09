@@ -80,17 +80,18 @@ export default function ImportedTrainingPanel({onSelect, profile, seed, architec
      if(current())setError(rejectionMessage(reason instanceof ImportedTrainingError ? reason.code : undefined));
    } finally {if(current())setPending(false);}
  }
- return <section aria-label="Preparación importada" className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-3 shadow-sm">
+ return <section aria-label="Preparación importada" className={selectedDataset ? "space-y-3" : "bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-3 shadow-sm"}>
  {!selectedDataset&&<label className="text-[11px] text-gray-400 block font-medium">Dataset para entrenamiento<select className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-2 text-xs text-gray-200 mt-1.5" disabled={disabled} value={dataset} onChange={e=>reset(e.target.value)}><option value="">Seleccione una colección propia</option>{catalog.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>}
  {architectureControl}
  {profile.architecture==='panns_cnn14'&&<p className="text-xs text-amber-400">En este flujo, PANNs-CNN14 se inicializa sin pesos preentrenados. Requiere al menos 64 bandas mel.</p>}
  <button className="bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg px-3 py-2 text-xs disabled:opacity-40" type="button" disabled={disabled||pending||!selected||Boolean(ready)} onClick={()=>void prepare()}>Preparar dataset</button>
  <p className="text-xs text-gray-400">70% entrenamiento · 15% validación · 15% test.</p>
- <p className="text-xs text-amber-400">Se asume que cada WAV es una grabación independiente; esta independencia no está verificada.</p>
+ <p className="text-xs text-white">Se asume que cada WAV es una grabación independiente</p>
+ <p className="text-xs text-gray-400">Si cambias la física del audio, la arquitectura o la semilla, prepara el dataset de nuevo.</p>
  {!ready&&selected?.reasons.includes('preparation_stale')&&<p role="status" className="text-xs text-amber-400">El dataset tiene una revisión nueva, que puede incluir audios aceptados en retroalimentación. Prepare de nuevo antes del siguiente entrenamiento. Las preparaciones anteriores se conservan.</p>}
  {selected&&!ready&&!pending&&!error&&<p className="text-xs text-gray-400">{selected.reasons.some(code=>!['preparation_required','preparation_stale'].includes(code)) ? rejectionMessage(selected.reasons.find(code=>!['preparation_required','preparation_stale'].includes(code))) : 'Necesita preparación con la configuración actual.'}</p>}
- {pending&&<p role="status">Preparando dataset. No se iniciará entrenamiento automáticamente.</p>}
- {error&&<p role="alert">{error}</p>}
+ {pending&&<p role="status" className="text-xs leading-relaxed text-gray-400">Preparando dataset. No se iniciará entrenamiento automáticamente.</p>}
+ {error&&<p role="alert" className="text-xs leading-relaxed text-amber-400">{error}</p>}
  {ready&&<p role="status" className="text-xs text-emerald-400">{restored?'Ya preparado para entrenar.':'Preparado para entrenar.'} Iniciar entrenamiento es una acción separada.</p>}
  </section>;
 }

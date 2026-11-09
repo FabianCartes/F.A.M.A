@@ -23,9 +23,10 @@ it('keeps an explicit legacy choice across rerender and same-owner session refre
  }));
  const view = render(<SessionBoundary><TrainingView/></SessionBoundary>);
  await screen.findByText('Owner');
- await screen.findByRole('option',{name:/AvesChilenas.*Registrado/});
- fireEvent.change(screen.getByLabelText('Dataset para entrenamiento'), {target:{value:'legacy:1'}});
- expect((screen.getByLabelText('Dataset para entrenamiento') as HTMLSelectElement).value).toBe('legacy:1');
+ fireEvent.click(screen.getByRole('combobox',{name:'Dataset para entrenamiento'}));
+ await screen.findByRole('option',{name:/AvesChilenas.*Compartido/});
+ fireEvent.click(screen.getByRole('option',{name:'AvesChilenas — Compartido'}));
+ expect(screen.getByLabelText('Dataset para entrenamiento').textContent).toBe('AvesChilenas — Compartido');
  expect(screen.queryByRole('region', {name:'Preparación importada'})).toBeNull();
  const legacyArchitecture = screen.getByRole('combobox', {name:'Arquitectura de Red Neuronal'});
  expect(screen.getAllByRole('combobox', {name:'Arquitectura de Red Neuronal'})).toHaveLength(1);
@@ -37,7 +38,7 @@ it('keeps an explicit legacy choice across rerender and same-owner session refre
  fireEvent(window, new Event('focus'));
  await waitFor(() => expect(identityReads).toBe(2));
  await screen.findByText('Owner');
- expect((screen.getByLabelText('Dataset para entrenamiento') as HTMLSelectElement).value).toBe('legacy:1');
+ expect(screen.getByLabelText('Dataset para entrenamiento').textContent).toBe('AvesChilenas — Compartido');
  expect(screen.queryByLabelText('Colección importada')).toBeNull();
 });
 it.each([
@@ -60,7 +61,8 @@ it.each([
  return new Response(JSON.stringify(data));});vi.stubGlobal('fetch',transport);vi.stubGlobal('alert',vi.fn());
  render(<SessionBoundary><TrainingView/></SessionBoundary>);
  await screen.findByText('Owner');
- await screen.findByRole('option',{name:/Arbitrary WAV.*Importado propio/});fireEvent.change(screen.getByLabelText('Dataset para entrenamiento'),{target:{value:'imported:arbitrary'}});
+ fireEvent.click(screen.getByRole('combobox',{name:'Dataset para entrenamiento'}));
+ await screen.findByRole('option',{name:/Arbitrary WAV.*Privado/});fireEvent.click(screen.getByRole('option',{name:'Arbitrary WAV — Privado'}));
  expect(screen.queryByTestId('dataset-selection-card')).toBeNull();
  const preparation = screen.getByRole('region', {name:'Preparación importada'});
  const architecture = within(preparation).getByRole('combobox', {name:'Arquitectura de Red Neuronal'});
@@ -87,7 +89,8 @@ it.each([
  expect((screen.getByRole('button',{name:'Iniciar Entrenamiento Local (1 Modelo)'}) as HTMLButtonElement).disabled).toBe(true);
  fireEvent.click(screen.getByText('Preparar dataset'));
  await screen.findByText(/Preparado para entrenar/);
- expect((screen.getByText('2 Modelos (Dúo)') as HTMLButtonElement).disabled).toBe(true);
+ expect(screen.queryByRole('button',{name:/2 Modelos/})).toBeNull();
+ expect((screen.getByRole('button',{name:'3 Modelos (Tríada)'}) as HTMLButtonElement).disabled).toBe(true);
  fireEvent.change(screen.getByLabelText('Épocas de Entrenamiento'),{target:{value:'1'}});
  fireEvent.change(screen.getByLabelText(/Batch Size \(Tamaño de Lote\)/),{target:{value:'2'}});
  fireEvent.click(screen.getByText('Iniciar Entrenamiento Local (1 Modelo)'));

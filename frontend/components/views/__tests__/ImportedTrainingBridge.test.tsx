@@ -58,7 +58,7 @@ it('shows the confirmed owner import after navigating to training with blocking 
   render(<Home />);
   await screen.findByText('Owner');
   fireEvent.click(screen.getByRole('button', { name: 'Entrenamiento' }));
-  await screen.findByLabelText('Buscar dataset por nombre');
+  fireEvent.click(await screen.findByRole('combobox',{name:'Dataset para entrenamiento'}));
   await waitFor(() => expect(screen.queryByRole('option', { name: /Owner confirmed WAV/ })).toBeNull());
   fireEvent.click(screen.getByRole('button', { name: 'Gestión de audios' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Importar ZIP' }));
@@ -72,10 +72,14 @@ it('shows the confirmed owner import after navigating to training with blocking 
   await screen.findByText(/Importada localmente: 1 archivo/);
   fireEvent.click(screen.getByRole('button', { name: 'Cerrar importación' }));
   fireEvent.click(screen.getByRole('button', { name: 'Entrenamiento' }));
-  await screen.findByRole('option', { name: /Owner confirmed WAV.*Importado propio/ });
-  fireEvent.change(screen.getByLabelText('Dataset para entrenamiento'), { target: { value: 'imported:owner-import' } });
+  fireEvent.click(screen.getByRole('combobox',{name:'Dataset para entrenamiento'}));
+  await screen.findByRole('option', { name: /Owner confirmed WAV.*Privado/ });
+  fireEvent.click(screen.getByRole('option',{name:'Owner confirmed WAV — Privado'}));
   await screen.findByText(/Necesita preparación/);
+  fireEvent.click(screen.getByRole('combobox',{name:'Dataset para entrenamiento'}));
+  expect(screen.getByRole('option',{name:'Owner confirmed WAV — Privado'})).toBeTruthy();
   expect(screen.queryByRole('option', { name: /Foreign/ })).toBeNull();
+  fireEvent.keyDown(screen.getByLabelText('Buscar dataset por nombre'),{key:'Escape'});
   expect(screen.queryByLabelText('Preparación existente')).toBeNull();
   expect(screen.queryByLabelText('Mapa explícito JSON')).toBeNull();
   expect(screen.queryByLabelText('Perfil explícito JSON')).toBeNull();
