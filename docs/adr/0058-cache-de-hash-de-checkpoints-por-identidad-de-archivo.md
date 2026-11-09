@@ -9,7 +9,7 @@ Se introduce `app.services.checkpoint_digest.file_sha256`, que reutiliza el hash
 Cualquier escritura actualiza `ctime`, que un proceso sin privilegios no puede restaurar; reemplazar el archivo cambia el inode. Por eso una reescritura del mismo tamaño con `mtime` restaurado o un `os.replace` siempre fuerzan un nuevo hash (cubierto por pruebas). Riesgo residual aceptado:
 
 - Un actor con privilegios de root o con escritura que eluda el VFS (bloques del dispositivo, cambio del reloj del sistema) podría alterar bytes sin cambiar la identidad.
-- En sistemas de archivos con marcas de tiempo gruesas (p. ej. resolución de segundos), una escritura in situ del mismo tamaño dentro del mismo tic no se distinguiría. Los volúmenes del proyecto (ext4/btrfs) tienen resolución de nanosegundos.
+- Marcas de tiempo gruesas: aunque ext4/btrfs almacenan nanosegundos, Linux toma `ctime` de un reloj de granularidad gruesa (milisegundos). Una escritura in situ del mismo tamaño dentro del mismo tic que el `fstat` que generó la clave no se distinguiría. Desde Linux 6.13, los timestamps de grano múltiple de ext4/btrfs usan el reloj fino para la escritura siguiente a una consulta de `ctime`, lo que debería cerrar este caso; no se verificó en el kernel del entorno. Hallazgo informativo R1-001 de la revisión nativa.
 
 Un hash calculado mientras el archivo cambiaba queda guardado bajo una identidad que ya no existe, por lo que no se reutiliza.
 
