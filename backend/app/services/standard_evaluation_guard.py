@@ -61,11 +61,8 @@ def admitted_manifest_pair_provenance(val_manifest_sha256: str, test_manifest_sh
 
 
 def checkpoint_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
+    from app.services.checkpoint_digest import file_sha256
+    return file_sha256(path)
 
 
 def _file_signature(path):

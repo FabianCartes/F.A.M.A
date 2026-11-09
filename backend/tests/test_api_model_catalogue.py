@@ -1256,3 +1256,71 @@ def test_catalogue_returns_null_checkpoint_hash_when_file_is_unavailable(
     assert str(checkpoint) not in response.text
     assert "Private checkpoint path" not in response.text
     assert registry.get("11").model is None
+
+
+def _record_full_digests(monkeypatch):
+    import hashlib
+
+    original = hashlib.sha256
+    computed = []
+
+    class RecordingHash:
+        def __init__(self, data=b""):
+            self._hash = original(data)
+
+        def update(self, data):
+            self._hash.update(data)
+
+        def hexdigest(self):
+            value = self._hash.hexdigest()
+            computed.append(value)
+            return value
+
+        def digest(self):
+            return self._hash.digest()
+
+    monkeypatch.setattr(hashlib, "sha256", RecordingHash)
+    return computed
+
+
+def test_repeated_catalogue_requests_hash_each_unchanged_checkpoint_once(catalogue, monkeypatch):
+    client, _, _, standard_hash = seed_standard_model(catalogue, 405)
+    install_torch_metadata_adapter(monkeypatch)
+    computed = _record_full_digests(monkeypatch)
+
+    for _ in range(3):
+        response = client.get("/api/models")
+        assert response.status_code == 200
+        assert "fama_trained_model_405" in {model["id"] for model in response.json()["models"]}
+
+    assert computed.count(standard_hash) == 1
+
+
+def test_same_size_checkpoint_tampering_after_warm_catalogue_is_rejected(catalogue, monkeypatch):
+    import os
+    import time
+
+    client, registry, _, _ = catalogue
+    client, checkpoint, _, _ = seed_standard_model(catalogue, 407, active=True)
+    install_torch_metadata_adapter(monkeypatch)
+    assert any(model["id"] == "fama_trained_model_407"
+               for model in client.get("/api/models").json()["models"])
+
+    original = checkpoint.stat()
+    data = bytearray(checkpoint.read_bytes())
+    marker = data.index(b"synthetic-secret-marker")
+    data[marker:marker + 9] = b"tampered!"
+    time.sleep(0.01)
+    checkpoint.write_bytes(bytes(data))
+    os.utime(checkpoint, ns=(original.st_atime_ns, original.st_mtime_ns))
+    assert checkpoint.stat().st_size == original.st_size
+
+    response = client.get("/api/models")
+    assert response.status_code == 200
+    assert all(model["id"] != "fama_trained_model_407" for model in response.json()["models"])
+    assert response.json()["publication_errors"] == [{
+        "model_id": "fama_trained_model_407",
+        "code": "standard_evaluation_invalid",
+        "reason": "checkpoint_invalid",
+    }]
+    assert not registry.has_model("fama_trained_model_407")

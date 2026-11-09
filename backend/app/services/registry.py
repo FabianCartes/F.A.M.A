@@ -205,7 +205,7 @@ class ModelRegistry:
         A checkpoint marker can deny publication, never authorize an owner.
         Reuse validated cached metadata or the fresh lazy candidate at publication.
         """
-        import hashlib
+        from app.services.checkpoint_digest import file_sha256
         from app.services.predictors.trained_predictor import TrainedModelPredictor
         route = urlparse(model.ruta_binario_gcp)
         basename = Path(unquote(route.path) if route.scheme else model.ruta_binario_gcp).name
@@ -217,7 +217,7 @@ class ModelRegistry:
             raise ModelWeightsError("checkpoint_missing")
         if checkpoint.stat().st_size <= 10000:
             raise ModelWeightsError("checkpoint_too_small")
-        if hashlib.sha256(checkpoint.read_bytes()).hexdigest() != expected_hash:
+        if file_sha256(checkpoint) != expected_hash:
             raise ModelWeightsError("checkpoint_hash_mismatch")
         key = f"fama_trained_model_{model.id_modelo}"
         cached = self._db_predictors.get(key)
@@ -637,8 +637,9 @@ class ModelRegistry:
     @staticmethod
     def _apply_display_name(predictor, display):
         predictor.custom_name = display["name"]
+        metadata = predictor.metadata
         for field, value in display.items():
-            setattr(predictor.metadata, field, value)
+            setattr(metadata, field, value)
 
     def register_from_db(
         self,

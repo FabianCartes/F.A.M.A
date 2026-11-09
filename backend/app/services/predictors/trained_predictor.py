@@ -340,12 +340,9 @@ class TrainedModelPredictor(AudioPredictor):
 
     def _checkpoint_sha256(self) -> Optional[str]:
         """Hash the registered checkpoint file bytes without loading its tensor state."""
+        from app.services.checkpoint_digest import file_sha256
         try:
-            digest = hashlib.sha256()
-            with self.checkpoint_path.open("rb") as stream:
-                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                    digest.update(chunk)
-            return digest.hexdigest()
+            return file_sha256(self.checkpoint_path)
         except Exception:
             # Catalogue metadata is best-effort; never expose filesystem details.
             return None

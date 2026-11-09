@@ -517,3 +517,30 @@ def test_blocked_active_persisted_model_rejects_unrelated_default_resolution(
     db.commit.assert_not_called()
     assert unrelated_default.metadata_reads == 0
     assert unrelated_default.prediction_calls == 0
+
+
+def test_repeated_metadata_reads_hash_an_unchanged_checkpoint_once(tmp_path, monkeypatch):
+    checkpoint_path = tmp_path / "metadata-reads.pt"
+    snapshot = _checkpoint_bytes(0)
+    checkpoint_path.write_bytes(snapshot)
+    expected = hashlib.sha256(snapshot).hexdigest()
+    predictor = TrainedModelPredictor(checkpoint_path=checkpoint_path, lazy_load=True)
+
+    original = hashlib.sha256
+    computed = []
+
+    class RecordingHash:
+        def __init__(self, data=b""):
+            self._hash = original(data)
+
+        def update(self, data):
+            self._hash.update(data)
+
+        def hexdigest(self):
+            value = self._hash.hexdigest()
+            computed.append(value)
+            return value
+
+    monkeypatch.setattr(hashlib, "sha256", RecordingHash)
+    assert [predictor.metadata.checkpoint_sha256 for _ in range(4)] == [expected] * 4
+    assert computed.count(expected) <= 1
