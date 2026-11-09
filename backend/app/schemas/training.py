@@ -211,3 +211,27 @@ class StartTrainingRequest(BaseModel):
                 self.models = [ModelEnsembleItem(architecture=arch, weight=1.0)]
 
         return self
+
+
+class TriadWeightsRevisionRequest(BaseModel):
+    """Weights-only revision body; the owner comes only from the authenticated identity.
+
+    Values are coerced to float so [1, 0, 0] and [1.0, 0.0, 0.0] are one revision.
+    """
+    model_config = {"extra": "forbid"}
+    weights: List[float] = Field(..., min_length=3, max_length=3)
+
+    @field_validator("weights", mode="before")
+    @classmethod
+    def _numbers_only(cls, value):
+        if not isinstance(value, list) or any(isinstance(w, bool) for w in value):
+            raise ValueError("weights must be a list of three numbers")
+        return value
+
+    @field_validator("weights")
+    @classmethod
+    def _valid_distribution(cls, value):
+        if (any(not math.isfinite(w) or w < 0 for w in value) or not any(w > 0 for w in value)
+                or not math.isclose(sum(value), 1.0, rel_tol=0.0, abs_tol=1e-9)):
+            raise ValueError("weights must be finite, non-negative and sum to 1")
+        return [float(w) for w in value]

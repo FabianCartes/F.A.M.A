@@ -1118,7 +1118,7 @@ async def upload_ingestion_files(
 
 # ============================================================================
 # ENDPOINTS DE ENTRENAMIENTO Y MÉTRICAS (RF_04, CU_INV_03, CU_INV_04, CU_INV_05)
-from app.schemas.training import StartTrainingRequest
+from app.schemas.training import StartTrainingRequest, TriadWeightsRevisionRequest
 from app.services.imported_training_source import ImportedSourceError
 
 
@@ -1214,6 +1214,30 @@ def _training_resource_owner(request, response, credentials, db, *, required=Fal
     return user.id if user else None
 
 
+@app.post("/api/training/models/{model_id}/triad-weights")
+def revise_triad_weights(model_id: int, body: TriadWeightsRevisionRequest, request: Request, response: Response,
+                         registry: ModelRegistry = Depends(get_model_registry),
+                         credentials=Depends(security_bearer), db: Session = Depends(get_db)):
+    """Crea (o devuelve) una versión evaluada de una composición propia con nuevos pesos.
+
+    El propietario sale solo de la identidad autenticada. Evalúa de forma síncrona en el
+    hilo de la petición, sin sostener el lock de publicación del registro. Se rechaza
+    si el estado del servicio indica entrenamiento/evaluación activos. Es una comprobación
+    de estado sin lock: a diferencia de start_training, no revisa el proceso worker ni
+    impide que un entrenamiento empiece durante la evaluación.
+    """
+    owner = imported_user(request, response, credentials, db).id
+    db.close()  # la evaluación abre sus propias sesiones; no retener la de la petición
+    unavailable = HTTPException(status_code=404, detail="Composición importada no disponible.")
+    if training_service.status in {"training", "evaluating"}:
+        raise HTTPException(status_code=409, detail="Hay un entrenamiento en curso; intente de nuevo al terminar.")
+    try:
+        records = registry._triad_service(training_service.checkpoints_dir)
+        revised = records.revise_weights(owner, model_id, body.weights)
+    except Exception:
+        raise unavailable from None
+    return {"id": revised["predictor"].model_id, "name": "Tríada importada",
+            "weights": [float(w) for w in revised["manifest"]["weights"]]}
 
 
 @app.get("/api/training/progress")

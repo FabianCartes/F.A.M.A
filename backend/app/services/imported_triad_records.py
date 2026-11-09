@@ -175,6 +175,24 @@ class ImportedTriadRecords:
 
     admit = read_admitted
 
+    def revise_weights(self, owner, model_id, weights):
+        """Create (or idempotently return) a new admitted version with new weights.
+
+        Service level only; HTTP/UI exposure is deliberately deferred to T5. The
+        source must be freshly admitted for this owner. Same ordered components,
+        new weights (existing manifest rules, no normalization) and its own joint
+        evaluation/persistence. The previous composition, reports and manifest are
+        never touched; no training, preparation, activation or default change.
+        Every failure is the uniform private error.
+        """
+        try:
+            source = self.read_admitted(owner, model_id)
+            descriptor = self.manifests.create(owner, source['manifest']['components'], weights)
+            saved = self.evaluate_and_persist(owner, descriptor['id'])
+            return self.read_admitted(owner, saved['model'].id_modelo)
+        except Exception:
+            raise ImportedTriadEvaluationError() from None
+
     def evaluate_and_persist(self, owner, composition_id, *, cancelled=lambda: False):
         def check_cancelled():
             if cancelled():
