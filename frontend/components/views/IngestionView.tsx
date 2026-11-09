@@ -360,9 +360,9 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
   const reportFeedbackError = (err: unknown) => {
     const detail = err instanceof Error ? err.message : String(err);
     const conflict = typeof err === "object" && err !== null && "statusCode" in err && err.statusCode === 409;
-    setFeedbackError(conflict
-      ? `Conflicto (409): el audio ya fue finalizado. Actualiza la cola para consultar su estado. ${detail}`
-      : `No se completó la acción; el audio sigue pendiente. ${detail}`);
+    setFeedbackError(conflict && detail === "El audio exacto ya está incorporado en otra fila del dataset; permanece pendiente."
+      ? "Este audio ya esta presente en el conjunto de datos de destino"
+      : detail);
   };
 
   // Explorador de archivos de un dataset

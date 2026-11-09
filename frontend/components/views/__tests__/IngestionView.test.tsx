@@ -343,6 +343,34 @@ describe('IngestionView persisted inference dataset and curation', () => {
     expect((discard() as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it('shows a plain duplicate-audio message without HTTP or action prefixes', async () => {
+    vi.mocked(feedbackApi.getPendingFeedback).mockResolvedValue([item]);
+    vi.mocked(feedbackApi.approveFeedback).mockRejectedValueOnce(Object.assign(
+      new Error('El audio exacto ya está incorporado en otra fila del dataset; permanece pendiente.'), { statusCode: 409 }));
+    await open();
+    await act(async () => { fireEvent.click(incorporate()); });
+    expect(queue().getByRole('alert').textContent).toBe('Este audio ya esta presente en el conjunto de datos de destino');
+    expect(queue().getByText('test.wav')).toBeDefined();
+    expect(feedbackApi.approveFeedback).toHaveBeenCalledTimes(1);
+    expect(feedbackApi.rejectFeedback).not.toHaveBeenCalled();
+    expect(feedbackApi.getPendingFeedback).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    [409, 'El destino no puede cambiar respecto a la inferencia.'],
+    [503, 'No se pudo confirmar la incorporación local. Reintente con la misma intención.'],
+    [undefined, 'Error de red al conectar con el servidor: Failed to fetch'],
+  ])('shows other errors without invented state or duplicate messages (%s)', async (statusCode, detail) => {
+    vi.mocked(feedbackApi.getPendingFeedback).mockResolvedValue([item]);
+    vi.mocked(feedbackApi.approveFeedback).mockRejectedValueOnce(Object.assign(new Error(detail), { statusCode }));
+    await open();
+    await act(async () => { fireEvent.click(incorporate()); });
+    expect(queue().getByRole('alert').textContent).toBe(detail);
+    expect(queue().getByText('test.wav')).toBeDefined();
+    expect(feedbackApi.approveFeedback).toHaveBeenCalledTimes(1);
+    expect(feedbackApi.getPendingFeedback).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps failures pending, reports finalized conflicts and allows refreshing the queue', async () => {
     vi.mocked(feedbackApi.getPendingFeedback).mockResolvedValue([item]);
     vi.mocked(feedbackApi.approveFeedback).mockRejectedValueOnce(new Error('GCS no disponible'));
@@ -354,8 +382,8 @@ describe('IngestionView persisted inference dataset and curation', () => {
     expect(screen.getByRole('alert').textContent).toContain('GCS no disponible');
     expect(screen.getByText('test.wav')).toBeDefined();
     await act(async () => { fireEvent.click(discard()); });
-    expect(screen.getByRole('alert').textContent).toContain('409');
-    expect(screen.getByRole('alert').textContent).toContain('finalizado');
+    expect(screen.getByRole('alert').textContent).toBe('Ya finalizado');
+    expect(screen.getByRole('alert').textContent).not.toContain('409');
     expect(screen.getByText('test.wav')).toBeDefined();
     await act(async () => { fireEvent.click(screen.getByTitle('Actualizar cola de curación')); });
     expect(feedbackApi.getPendingFeedback).toHaveBeenCalledTimes(2);
@@ -374,7 +402,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
     expect(feedbackApi.rejectFeedback).not.toHaveBeenCalled();
     expect((button as HTMLButtonElement).disabled).toBe(true);
     await act(async () => { reject(Object.assign(new Error('Escritura parcial'), { statusCode: 503 })); });
-    expect(screen.getByRole('alert').textContent).toContain('sigue pendiente');
+    expect(screen.getByRole('alert').textContent).toBe('Escritura parcial');
     await act(async () => { fireEvent.click(screen.getByTitle('Actualizar cola de curación')); });
     expect(queue().getByText('AvesChilenas')).toBeDefined();
     expect(queue().queryByRole('combobox')).toBeNull();

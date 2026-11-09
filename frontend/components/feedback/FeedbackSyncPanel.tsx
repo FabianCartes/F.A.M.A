@@ -85,15 +85,6 @@ export default function FeedbackSyncPanel({ refreshKey }: { refreshKey: number }
                   <td className="p-2 text-emerald-300">Incorporado localmente</td>
                   <td className="p-2">
                     <p>{record.sync_status === "synced" ? "Copia cloud confirmada" : "Pendiente de copia cloud"}</p>
-                    {record.sync_status === "pending" && (
-                      <p className="text-amber-300">
-                        {record.error_code === "integrity_mismatch"
-                          ? "Integridad inconsistente: requiere atención manual; el reintento no repara los archivos."
-                          : record.error_code === "upload_failed"
-                            ? "Subida fallida: reintento automático del backend."
-                            : "Sincronización automática a cargo del backend."}
-                      </p>
-                    )}
                   </td>
                 </tr>
               ))}

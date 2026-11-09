@@ -26,7 +26,7 @@ describe('accepted feedback synchronization through the rendered panel', () => {
     vi.mocked(feedbackApi.getFeedbackSync).mockResolvedValue([record]);
   });
 
-  it('distinguishes automatic upload retry, manual integrity attention and durable cloud acknowledgement', async () => {
+  it('shows only the cloud milestone without per-row diagnostic text', async () => {
     vi.mocked(feedbackApi.getFeedbackSync).mockResolvedValue([
       { ...record, attempts: 2, error_code: 'upload_failed' },
       { ...record, id_retroalimentacion: 8, error_code: 'integrity_mismatch', attempts: 3 },
@@ -34,8 +34,9 @@ describe('accepted feedback synchronization through the rendered panel', () => {
     ]);
     await open();
     const rows = screen.getAllByRole('row').slice(1);
-    expect(within(rows[0]).getByText(/Subida fallida.*reintento automático/)).toBeDefined();
-    expect(within(rows[1]).getByText(/Integridad inconsistente.*atención manual/)).toBeDefined();
+    expect(within(rows[0]).getAllByRole('cell')[3].textContent).toBe('Pendiente de copia cloud');
+    expect(within(rows[1]).getAllByRole('cell')[3].textContent).toBe('Pendiente de copia cloud');
+    expect(screen.queryByText(/Subida fallida|Integridad inconsistente|Sincronización automática a cargo/)).toBeNull();
     expect(within(rows[2]).getByText('Copia cloud confirmada')).toBeDefined();
     expect(rows[0].textContent).not.toMatch(/Feedback #|Predicción #|Directorio:/);
     expect(within(rows[0]).getByText('canto_original.wav')).toBeDefined();
