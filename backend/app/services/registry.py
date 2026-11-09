@@ -52,10 +52,11 @@ class ModelRegistry:
     Catálogo y gestor de ciclo de vida de modelos en memoria.
     """
 
-    def __init__(self, raw_data_root: Optional[Path] = None):
+    def __init__(self, raw_data_root: Optional[Path] = None, *, triad_records=None):
         # Deployment uses the canonical resolver; isolated catalogues can supply
         # their actual filesystem root without replacing internal collaborators.
         self._raw_data_root = raw_data_root
+        self.triad_records = triad_records
         self._predictors: Dict[str, AudioPredictor] = {}
         # Track provenance, not ID spelling: explicit registrations are not DB-owned.
         self._db_predictors: Dict[str, AudioPredictor] = {}
@@ -66,6 +67,83 @@ class ModelRegistry:
         self._publication_lock = RLock()
         self._imported_owners: Dict[str, int] = {}
         self._private_aliases: set[str] = set()
+
+    def _is_triad(self, model):
+        key = f"fama_trained_model_{model.id_modelo}"
+        return (model.arquitectura == 'ImportedTriad'
+                or str(model.estado or '').startswith('imported_triad_')
+                or str(model.ruta_binario_gcp or '').endswith('.json')
+                or getattr(self._db_predictors.get(key), 'composition_admission', None) is not None)
+
+    def _triad_service(self, checkpoints_root):
+        if self.triad_records is None:
+            from app.database import SessionLocal
+            from app.services.imported_training_source import configured_sources
+            from app.services.imported_triad_manifests import ImportedTriadManifests
+            from app.services.imported_triad_evaluation import ImportedTriadEvaluation
+            from app.services.imported_triad_records import ImportedTriadRecords
+            sources = configured_sources(SessionLocal)
+            # Confined child of the existing explicit private preparation root.
+            # Readers never create roots or descriptors.
+            manifest_root = sources.preparations.root / 'triad-manifests'
+            if not manifest_root.is_dir():
+                raise ModelWeightsError('Composición importada no disponible.')
+            manifests = ImportedTriadManifests(manifest_root)
+            self.triad_records = ImportedTriadRecords(SessionLocal, manifests,
+                ImportedTriadEvaluation(SessionLocal, manifests, sources, checkpoints_root))
+        return self.triad_records
+
+    def readmit_composition(self, predictor, owner_id, checkpoints_root):
+        """Fresh authority, same immutable SHA/pair; retain a valid cached instance."""
+        admission = predictor.composition_admission
+        try:
+            fresh = self._triad_service(checkpoints_root).read_admitted(owner_id, admission['model_id'])
+            expected = (admission['sha256'], admission['pair_ids'], admission['provenance'])
+            actual = (fresh['model'].hash_binario, fresh['pair_ids'], fresh['provenance'])
+            if expected != actual or owner_id != admission['owner_id']:
+                raise ValueError()
+        except Exception:
+            with self._publication_lock:
+                self._discard_invalid_standard_predictor(predictor.model_id)
+            raise ModelWeightsError('Composición importada no disponible.') from None
+        return predictor
+
+    def _publish_triad(self, model, owner_id, root, admitted_pair_ids):
+        key = f'fama_trained_model_{model.id_modelo}'
+        self._hide_model_aliases(model)
+        # Row ownership can deny visibility, never authorize publication.
+        self._imported_owners[key] = model.id_usuario or -1
+        cached = self._db_predictors.get(key)
+        if (cached is not None and getattr(cached, 'composition_admission', {}).get('owner_id')
+                != model.id_usuario):
+            self._discard_invalid_standard_predictor(key)
+        if type(owner_id) is not int or owner_id <= 0 or owner_id != model.id_usuario:
+            return
+        try:
+            fresh = self._triad_service(root).read_admitted(owner_id, model.id_modelo)
+            admission = dict(owner_id=owner_id, model_id=model.id_modelo,
+                sha256=fresh['model'].hash_binario, pair_ids=fresh['pair_ids'],
+                provenance=fresh['provenance'])
+            cached = self._db_predictors.get(key)
+            if cached is not None and getattr(cached, 'composition_admission', None) == admission:
+                pred = cached
+            else:
+                self._discard_invalid_standard_predictor(key)
+                pred = fresh['predictor']
+                pred.composition_admission = admission
+                pred.imported_source = dict(owner_id=owner_id,
+                    dataset_id=fresh['manifest']['cohort']['dataset_id'])
+                pred.metadata.name = 'Tríada importada'
+                pred.metadata.architecture = 'ImportedTriad'
+                pred.metadata.checkpoint_sha256 = admission['sha256']
+                pred.metadata.metrics = dict(composition_sha256=admission['sha256'],
+                    components=fresh['manifest']['components'], weights=fresh['manifest']['weights'])
+            self._predictors[key] = pred
+            self._db_predictors[key] = pred
+            if admitted_pair_ids is not None:
+                admitted_pair_ids[key] = fresh['pair_ids']
+        except Exception:
+            self._discard_invalid_standard_predictor(key)
 
     def _hide_model_aliases(self, model):
         route = urlparse(model.ruta_binario_gcp)
@@ -167,6 +245,10 @@ class ModelRegistry:
             names = model_display_names(models)
             for model in models:
                 try:
+                    if self._is_triad(model):
+                        self._hide_model_aliases(model)
+                        self._imported_owners[f'fama_trained_model_{model.id_modelo}'] = model.id_usuario or -1
+                        continue
                     owner, _ = self._source_owner(db, model)
                     if owner is None:
                         continue
@@ -199,7 +281,9 @@ class ModelRegistry:
             is_default: Si es True, designa a este modelo como el fallback por defecto.
         """
         model_id = predictor.model_id
-        if model_id in self._imported_owners or getattr(predictor, "imported_source", None) is not None:
+        from app.services.predictors.imported_triad_predictor import ImportedTriadPredictor
+        if (isinstance(predictor, ImportedTriadPredictor) or model_id in self._imported_owners
+                or getattr(predictor, "imported_source", None) is not None):
             raise ValueError("Imported predictors require owner-scoped publication")
         self._predictors[model_id] = predictor
         if is_default or self._default_model_id is None:
@@ -386,6 +470,9 @@ class ModelRegistry:
             self._reset_db_identity_errors(models)
             for model in models:
                 key = f"fama_trained_model_{model.id_modelo}"
+                if self._is_triad(model):
+                    self._publish_triad(model, owner_id, root, admitted_pair_ids)
+                    continue
                 try:
                     source_owner, has_sources = self._source_owner(db, model)
                 except Exception:
@@ -570,6 +657,10 @@ class ModelRegistry:
 
             for m in db_models:
                 model_key = f"fama_trained_model_{m.id_modelo}"
+                if self._is_triad(m):
+                    self._hide_model_aliases(m)
+                    self._imported_owners[model_key] = m.id_usuario or -1
+                    continue
                 try:
                     source_owner, has_sources = self._source_owner(db, m)
                 except Exception:

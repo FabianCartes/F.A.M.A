@@ -710,23 +710,30 @@ async def predict_audio(
             from urllib.parse import urlparse, unquote
             owner_id, private_key = None, None
             try:
+                # Compositions have their own owner/JSON identity, never the
+                # association of a component. Only their canonical DB key resolves.
+                matches = [(f'fama_trained_model_{row.id_modelo}', row.id_usuario)
+                    for row in db.query(Modelo).all()
+                    if registry._is_triad(row)
+                    and model_id == f'fama_trained_model_{row.id_modelo}']
                 if inspect(db.get_bind()).has_table("imported_model_source"):
                     from app.models.imported_training_source import ImportedModelSource
-                    matches = []
                     for model, source in db.query(Modelo, ImportedModelSource).join(
                             ImportedModelSource, ImportedModelSource.model_id == Modelo.id_modelo).all():
+                        if registry._is_triad(model):
+                            continue
                         route = urlparse(model.ruta_binario_gcp)
                         basename = Path(unquote(route.path) if route.scheme else model.ruta_binario_gcp).name
                         key = f"fama_trained_model_{model.id_modelo}"
                         if model_id in (key, str(model.id_modelo), basename, Path(basename).stem):
                             matches.append((key, source.owner_id))
-                    if matches:
-                        user = imported_user(request, response, credentials, db)
-                        if len(matches) != 1 or user.id != matches[0][1]:
-                            raise HTTPException(status_code=404, detail="Modelo no disponible.")
-                        private_key, owner_id = matches[0][0], user.id
-                        registry.publish_from_db(db, checkpoints_root=training_service.checkpoints_dir,
-                                                 owner_id=owner_id)
+                if matches:
+                    user = imported_user(request, response, credentials, db)
+                    if len(matches) != 1 or user.id != matches[0][1]:
+                        raise HTTPException(status_code=404, detail="Modelo no disponible.")
+                    private_key, owner_id = matches[0][0], user.id
+                    registry.publish_from_db(db, checkpoints_root=training_service.checkpoints_dir,
+                                             owner_id=owner_id)
             except SQLAlchemyError:
                 db.rollback()
                 raise HTTPException(status_code=503, detail="Catálogo de modelos temporalmente no disponible.") from None
@@ -817,7 +824,15 @@ async def predict_audio(
 
         # 4. Keep synchronous inference off the event loop; never pass db to its thread.
         try:
-            pred_result = await lease.predict(predictor, audio_bytes)
+            composition = getattr(predictor, 'composition_admission', None)
+            if composition is not None:
+                pred_result = await lease.predict(predictor, audio_bytes,
+                    admission=partial(registry.readmit_composition, predictor, local_owner,
+                                      training_service.checkpoints_dir))
+                pred_result.detalles.update(composition_sha256=composition['sha256'],
+                    admitted_pair_ids=list(composition['pair_ids']))
+            else:
+                pred_result = await lease.predict(predictor, audio_bytes)
             clase = pred_result.clase
             confianza = float(pred_result.confianza)
         except MalformedAudioError:
@@ -826,6 +841,9 @@ async def predict_audio(
                 detail="Audio inválido o no soportado. Proporcione un archivo WAV válido.",
             )
         except ModelWeightsError as weights_err:
+            if getattr(predictor, 'composition_admission', None) is not None:
+                raise HTTPException(status_code=503,
+                    detail='Composición importada no disponible.') from None
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=f"Modelo '{predictor.model_id}' no disponible para inferencia: {weights_err}",
@@ -925,6 +943,9 @@ async def predict_audio(
         )
     except Exception as err:
         request_outcome = "error"
+        if getattr(predictor, 'composition_admission', None) is not None:
+            raise HTTPException(status_code=500,
+                detail='Composición importada no disponible.') from None
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error durante el procesamiento del audio: {str(err)}",
@@ -1160,7 +1181,11 @@ def start_training_pipeline(req: StartTrainingRequest, request: Request, respons
             kwargs.update(imported_dataset_id=req.imported_dataset_id, snapshot_id=req.snapshot_id,
                           imported_prepared_version=req.imported_prepared_version, owner_id=owner.id)
         if getattr(req, "_explicit_models", False) and req.models is not None:
-            kwargs["models"] = [m.model_dump() for m in req.models]
+            # Los campos de tríada importada solo viajan si se informan; las peticiones
+            # legacy conservan exactamente su forma anterior.
+            triad_only = ("imported_prepared_version", "audio_config", "windowing_config")
+            kwargs["models"] = [m.model_dump(exclude={k for k in triad_only if getattr(m, k) is None})
+                                 for m in req.models]
         if req.prepared_version is not None:
             kwargs["prepared_version"] = req.prepared_version
         if req.allow_historical_preparation:

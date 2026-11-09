@@ -90,13 +90,17 @@ class _Lease:
             raise value
         return value
 
-    async def predict(self, predictor, audio_bytes):
+    async def predict(self, predictor, audio_bytes, *, admission=None):
         def work():
             path = None
             try:
                 with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as audio:
                     path = Path(audio.name)
                     audio.write(audio_bytes)
+                # Composition-only fresh authority runs in the retained worker,
+                # immediately before forward; no publication lock spans inference.
+                if admission is not None:
+                    admission()
                 return predictor.predict(path)
             finally:
                 if path is not None:
