@@ -37,6 +37,30 @@ class ImportedTriadRecords:
     def __init__(self, sessions, manifests, evaluation):
         self.sessions, self.manifests, self.evaluation = sessions, manifests, evaluation
 
+    @classmethod
+    def for_training(cls, checkpoints_root):
+        """Worker-local lazy configuration; reuse the catalogue's exact reader factory.
+
+        Only training creates the private descriptor child. No sessions or model
+        objects enter spawn configuration, and importing this module opens no DB.
+        """
+        from app.database import SessionLocal
+        from app.services.imported_training_source import configured_sources
+        from app.services.training_snapshots import _root_directory
+        from app.services.registry import ModelRegistry
+        sources = configured_sources(SessionLocal)
+        with _root_directory(sources.preparations.root / 'triad-manifests'):
+            pass
+        return ModelRegistry()._triad_service(checkpoints_root)
+
+    def complete_training(self, owner, components, *, cancelled=lambda: False):
+        """Capture ordered references; persistence independently rebinds authority."""
+        descriptor = self.manifests.create(owner, [dict(model_id=c['model_id'],
+            checkpoint_sha256=c['sha256'], imported_source=c['source']) for c in components],
+            [c['weight'] for c in components])
+        saved = self.evaluate_and_persist(owner, descriptor['id'], cancelled=cancelled)
+        return self.read_admitted(owner, saved['model'].id_modelo)
+
     def _artifact(self, owner, composition_id):
         composition = self.manifests.get(owner, composition_id)
         data = json.dumps(composition['manifest'], sort_keys=True, ensure_ascii=False,
@@ -151,8 +175,12 @@ class ImportedTriadRecords:
 
     admit = read_admitted
 
-    def evaluate_and_persist(self, owner, composition_id):
+    def evaluate_and_persist(self, owner, composition_id, *, cancelled=lambda: False):
+        def check_cancelled():
+            if cancelled():
+                raise ImportedTriadEvaluationError()
         try:
+            check_cancelled()
             manifest, pointer, size = self._artifact(owner, composition_id)
             # Idempotent reads do not rerun evaluation or append attempts.
             with self.sessions() as db:
@@ -163,6 +191,7 @@ class ImportedTriadRecords:
                         raise ImportedTriadEvaluationError()
                     return self.read_admitted(owner, existing[0].id_modelo)
             result = self.evaluation.evaluate(owner, composition_id)
+            check_cancelled()
             if result['manifest'] != manifest or self._artifact(owner, composition_id) != (manifest, pointer, size):
                 raise ImportedTriadEvaluationError()
             self.evaluation.bind_current(owner, composition_id)
@@ -193,10 +222,12 @@ class ImportedTriadRecords:
             with self.sessions() as db:
                 evaluations = EvaluationService(db)
                 for split in ('val', 'test'):
+                    check_cancelled()
                     identity = {**result['identities'][split].model_dump(), 'id_modelo': key}
                     attempt = evaluations.create(identity)
                     evaluations.start(attempt['id_evaluation'])
                     evaluations.complete(attempt['id_evaluation'], result['reports'][split])
+            check_cancelled()
             binding = self.evaluation.bind_current(owner, composition_id)
             if self._artifact(owner, composition_id) != (manifest, pointer, size):
                 raise ImportedTriadEvaluationError()
@@ -207,6 +238,7 @@ class ImportedTriadRecords:
                 row = db.get(Modelo, key)
                 self._matches(row, owner, composition_id, pointer, size, pending=True)
                 self._pair(db, row, binding)
+                check_cancelled()
                 row.estado = EVALUATED
             return self.read_admitted(owner, key)
         except Exception:

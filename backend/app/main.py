@@ -1214,6 +1214,8 @@ def _training_resource_owner(request, response, credentials, db, *, required=Fal
     return user.id if user else None
 
 
+
+
 @app.get("/api/training/progress")
 def get_training_progress(request: Request, response: Response, credentials=Depends(security_bearer), db: Session = Depends(get_db)):
     """

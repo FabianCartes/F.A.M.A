@@ -1,6 +1,7 @@
 """
 Esquemas DTOs para el subsistema de entrenamiento y ensamble dinámico de modelos.
 """
+import math
 from typing import List, Optional, Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -67,11 +68,22 @@ class ModelEnsembleItem(BaseModel):
     """
     Especificación de un modelo miembro del ensamble con su respectiva ponderación y épocas dedicadas.
     """
+    imported_prepared_version: Optional[str] = Field(default=None, strict=True, pattern=r"^[0-9a-f]{64}$")
+    audio_config: Optional[AudioConfigSchema] = None
+    windowing_config: Optional[WindowingConfigSchema] = None
     architecture: str
     weight: float = Field(ge=0.0, le=1.0)
     epochs: Optional[int] = Field(default=None, ge=1, le=1000, description="Épocas de entrenamiento individuales para este modelo")
     learning_rate: Optional[float] = Field(default=None, gt=0.0, le=1.0, description="Tasa de aprendizaje individual para este modelo")
     batch_size: Optional[int] = Field(default=None, ge=1, le=512, description="Tamaño de lote individual para este modelo")
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_prepared_member(cls, data):
+        if (isinstance(data, dict) and data.get("imported_prepared_version") is not None
+                and set(data) - set(cls.model_fields)):
+            raise ValueError("El componente preparado no admite propietario, rutas ni campos adicionales.")
+        return data
 
     @field_validator("architecture")
     @classmethod
@@ -122,9 +134,17 @@ class StartTrainingRequest(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def validate_imported_selection(cls, data):
-        if isinstance(data, dict) and any(data.get(k) is not None for k in (
-                "imported_dataset_id", "snapshot_id", "imported_prepared_version")):
-            required = ("imported_dataset_id", "snapshot_id", "imported_prepared_version")
+        members = data.get("models") if isinstance(data, dict) else None
+        if not isinstance(members, (list, tuple)):
+            members = []  # Let Pydantic report malformed containers as validation errors.
+        refs = [m.get("imported_prepared_version") if isinstance(m, dict)
+                else getattr(m, "imported_prepared_version", None) for m in members]
+        triad = any(ref is not None for ref in refs)
+        if isinstance(data, dict) and (triad or any(data.get(k) is not None for k in (
+                "imported_dataset_id", "snapshot_id", "imported_prepared_version"))):
+            if triad and (len(refs) != 3 or not all(refs) or data.get("imported_prepared_version") is not None):
+                raise ValueError("La tríada exige tres preparaciones sin selección individual.")
+            required = ("imported_dataset_id", "snapshot_id") if triad else ("imported_dataset_id", "snapshot_id", "imported_prepared_version")
             if not all(data.get(k) is not None for k in required):
                 raise ValueError("La selección importada exige dataset, snapshot y preparación explícitos.")
             if ("dataset_name" in data or data.get("prepared_version") is not None
@@ -154,7 +174,13 @@ class StartTrainingRequest(BaseModel):
             if total_weight <= 0.0:
                 raise ValueError("La suma de ponderaciones debe ser mayor a 0.")
 
-            # Auto-normalización determinista de pesos
+            if any(m.imported_prepared_version is not None for m in self.models):
+                if (not all(math.isfinite(m.weight) for m in self.models)
+                        or not math.isclose(total_weight, 1.0, rel_tol=0.0, abs_tol=1e-9)):
+                    raise ValueError("Los pesos de la tríada deben sumar 1.")
+                return self
+
+            # Auto-normalización determinista de pesos legacy
             normalized_models = []
             for item in self.models:
                 normalized_models.append(

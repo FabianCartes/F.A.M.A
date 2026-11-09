@@ -8,6 +8,7 @@ import json
 import soundfile as sf
 import threading
 from queue import Empty
+from copy import deepcopy
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional
@@ -123,6 +124,12 @@ class TrainingService:
         self.start_timestamp: Optional[float] = None
         self._stop_requested: bool = False
         self.seed = 42
+        self.component_results = []
+        self.triad_records = None  # Explicit in-process fixtures; never transported to spawn.
+        self.ensemble_available = False
+        self.composition_model_id = None
+        self.composition_sha256 = None
+        self.current_phase = 'training'
 
     def _add_log(self, level: str, message: str) -> None:
         entry = {
@@ -171,6 +178,11 @@ class TrainingService:
                             "current_architecture": "current_architecture",
                             "metrics_history": "metrics_history", "logs": "logs",
                             "error_message": "error_message",
+                            "component_results": "component_results",
+                            "ensemble_available": "ensemble_available",
+                            "composition_model_id": "composition_model_id",
+                            "composition_sha256": "composition_sha256",
+                            "current_phase": "current_phase",
                         }.items():
                             if key in snapshot:
                                 setattr(self, attr, snapshot[key])
@@ -186,6 +198,7 @@ class TrainingService:
             with self._lock:
                 if exitcode != 0 or not terminal_event or final_status is None or crash:
                     self.status = "failed"
+                    self.ensemble_available = False
                     self.error_message = crash or f"Training process exited without a valid completion (code {exitcode})."
                     self._add_log("ERROR", self.error_message)
                 else:
@@ -193,6 +206,7 @@ class TrainingService:
         except Exception as exc:
             with self._lock:
                 self.status = "failed"
+                self.ensemble_available = False
                 self.error_message = f"Training supervision failed: {exc}"
             runner.request_stop()
         finally:
@@ -340,7 +354,7 @@ class TrainingService:
                 from app.services.imported_training_source import ImportedSourceError
                 raise ImportedSourceError()
             elapsed = round(time.time() - self.start_timestamp, 1) if self.start_timestamp else 0.0
-            return {
+            return deepcopy({
                 "status": self.status,
                 "job_id": self.current_job_id,
                 "seed": self.seed,
@@ -349,6 +363,11 @@ class TrainingService:
                 "total_models": getattr(self, "total_models", 1),
                 "current_architecture": getattr(self, "current_architecture", ""),
                 "models_config": getattr(self, "models_config", []),
+                "component_results": list(self.component_results),
+                "ensemble_available": self.ensemble_available and not self._stop_requested,
+                "composition_model_id": self.composition_model_id,
+                "composition_sha256": self.composition_sha256,
+                "current_phase": self.current_phase,
                 "epoch": self.current_epoch,
                 "total_epochs": self.total_epochs,
                 "train_loss": self.current_train_loss,
@@ -359,7 +378,7 @@ class TrainingService:
                 "logs": list(self.logs),
                 "elapsed_seconds": elapsed,
                 "error_message": self.error_message,
-            }
+            })
 
     def stop_training(self, *, owner_id=_INTERNAL_ACCESS) -> Dict[str, Any]:
         """
@@ -370,7 +389,8 @@ class TrainingService:
                     and self.current_source_owner != owner_id):
                 from app.services.imported_training_source import ImportedSourceError
                 raise ImportedSourceError()
-            if self.status != "training":
+            if self.status != "training" and not (
+                    self.status == 'evaluating' and self.current_phase == 'joint_evaluation'):
                 return {"status": self.status, "message": "No hay ningún entrenamiento activo para detener."}
             self._stop_requested = True
             if self._worker_process is not None:
@@ -486,22 +506,57 @@ class TrainingService:
         if allow_historical_preparation and prepared_version is None:
             raise ValueError("Historical preparation requires an explicit prepared_version")
 
+        # Normalize dict/schema members once, before admission or state mutation.
+        if models is not None:
+            models = [_json_config(model) for model in models]
+        component_sources = None
         imported_source = None
+        member_refs = any(m.get("imported_prepared_version") is not None for m in (models or []))
+        if imported_dataset_id is None and (snapshot_id is not None or imported_prepared_version is not None or member_refs):
+            from app.services.imported_training_source import ImportedSourceError
+            raise ImportedSourceError("profile_conflict", "Selección importada incompleta.")
         if imported_dataset_id is not None:
             from app.services.imported_training_source import configured_sources, ImportedSourceError
             if prepared_version is not None or allow_historical_preparation or is_tri_model:
                 raise ImportedSourceError("profile_conflict", "Selección importada incompatible con opciones legacy.")
             selected_models = models or [{"architecture": architecture}]
-            if len(selected_models) != 1:
+            if member_refs:
+                if (len(selected_models) != 3 or imported_prepared_version is not None
+                        or not all(m.get("imported_prepared_version") is not None for m in selected_models)):
+                    raise ImportedSourceError("profile_conflict", "La tríada exige tres preparaciones sin selección individual.")
+                weights = [m.get("weight") for m in selected_models]
+                if (any(type(w) not in (float, int) or not math.isfinite(w) or w < 0 for w in weights)
+                        or not any(w > 0 for w in weights)
+                        or not math.isclose(sum(weights), 1.0, rel_tol=0.0, abs_tol=1e-9)):
+                    raise ImportedSourceError("profile_conflict", "Los pesos de la tríada deben sumar 1.")
+                from app.schemas.training import ModelEnsembleItem
+                try:
+                    selected_models = [ModelEnsembleItem.model_validate(m).model_dump(mode="json")
+                                       for m in selected_models]
+                except ValueError as error:
+                    raise ImportedSourceError("profile_conflict", "Configuración de componente no válida.") from error
+                models = selected_models
+            elif len(selected_models) != 1:
                 raise ImportedSourceError("profile_conflict", "El perfil preparado exige una arquitectura única.")
             architecture = selected_models[0]["architecture"]
             sources = self.imported_sources or configured_sources(SessionLocal)
             # Source admission linearizes with archive under the shared DB gate.
             # Source capture and process start below belong to that admitted work;
             # an archive after admission must not cancel or re-check its source.
-            imported_source = sources.resolve_for_training(owner_id, imported_dataset_id, snapshot_id,
-                imported_prepared_version, architecture=architecture,
-                audio_config=_json_config(audio_config), windowing_config=_json_config(windowing_config))
+            if member_refs:
+                components = [dict(version=m["imported_prepared_version"], architecture=m["architecture"],
+                    audio_config=m.get("audio_config") or _json_config(audio_config),
+                    windowing_config=m.get("windowing_config") or _json_config(windowing_config))
+                    for m in selected_models]
+                component_sources = sources.resolve_triad_for_training(
+                    owner_id, imported_dataset_id, snapshot_id, components)
+                if any(s["preparation"]["manifest"]["seed"] != seed for s in component_sources):
+                    raise ImportedSourceError("profile_conflict", "La semilla no coincide con la preparación.")
+                imported_source = component_sources[0]
+            else:
+                imported_source = sources.resolve_for_training(owner_id, imported_dataset_id, snapshot_id,
+                    imported_prepared_version, architecture=architecture,
+                    audio_config=_json_config(audio_config), windowing_config=_json_config(windowing_config))
             from scripts.migrate_imported_training_source import validate_imported_sources
             with SessionLocal() as admission_db:
                 try:
@@ -551,28 +606,14 @@ class TrainingService:
             if models is not None and len(models) > 0:
                 resolved_models = []
                 for m in models:
-                    if isinstance(m, dict):
-                        m_epochs = m.get("epochs")
-                        m_lr = m.get("learning_rate")
-                        m_batch = m.get("batch_size")
-                        resolved_models.append({
-                            "architecture": m["architecture"],
-                            "weight": float(m.get("weight", 1.0)),
-                            "epochs": int(m_epochs) if m_epochs is not None else None,
-                            "learning_rate": float(m_lr) if m_lr is not None else None,
-                            "batch_size": int(m_batch) if m_batch is not None else None,
-                        })
-                    else:
-                        m_epochs = getattr(m, "epochs", None)
-                        m_lr = getattr(m, "learning_rate", None)
-                        m_batch = getattr(m, "batch_size", None)
-                        resolved_models.append({
-                            "architecture": getattr(m, "architecture"),
-                            "weight": float(getattr(m, "weight", 1.0)),
-                            "epochs": int(m_epochs) if m_epochs is not None else None,
-                            "learning_rate": float(m_lr) if m_lr is not None else None,
-                            "batch_size": int(m_batch) if m_batch is not None else None,
-                        })
+                    resolved = {
+                        "architecture": m["architecture"], "weight": float(m.get("weight", 1.0)),
+                        **{key: convert(m[key]) if m.get(key) is not None else None
+                           for key, convert in (("epochs", int), ("learning_rate", float), ("batch_size", int))},
+                    }
+                    if component_sources is not None:
+                        resolved["imported_prepared_version"] = m["imported_prepared_version"]
+                    resolved_models.append(resolved)
                 is_ensemble = len(resolved_models) > 1
             elif is_tri_model:
                 resolved_models = [{"architecture": a, "weight": 1.0 / len(triad_list)} for a in triad_list]
@@ -583,6 +624,11 @@ class TrainingService:
 
             mode_tag = "ensemble" if is_ensemble else resolved_models[0]["architecture"].lower().replace('-', '_')
             job_id = f"fama_{mode_tag}_{uuid.uuid4().hex}"
+            self.component_results = []
+            self.ensemble_available = False
+            self.composition_model_id = None
+            self.composition_sha256 = None
+            self.current_phase = 'training'
             self.current_job_id = job_id
             self.current_source_owner = owner_id if imported_source is not None else None
             self.seed = seed
@@ -609,6 +655,7 @@ class TrainingService:
             "dataset_name": dataset_name,
             "dataset_id": dataset_id,
             "source": source,
+            "component_sources": component_sources,
             "architecture": architecture,
             "epochs": self.total_epochs,
             "learning_rate": learning_rate,
@@ -846,6 +893,10 @@ class TrainingService:
         calcula las métricas reales época a época, guarda el checkpoint binario con pesos
         y persiste los resultados en PostgreSQL.
         """
+        # Job intent and completed references are worker-local, never progress authority.
+        joint_weights = tuple(m['weight'] for m in config['models']) if config.get('component_sources') else ()
+        joint_owner = config['component_sources'][0]['identity']['owner_id'] if joint_weights else None
+        joint_components = []
         seed = config["seed"]
         random.seed(seed)
         np.random.seed(seed)
@@ -917,6 +968,24 @@ class TrainingService:
                 if self._is_stop_requested():
                     break
 
+                if config.get("component_sources"):
+                    source = config["component_sources"][idx]
+                    train_df, val_df = (source["splits"][s] for s in ("train", "val"))
+                    classes = list(source["classes"])
+                    label_to_idx = {c: i for i, c in enumerate(classes)}
+                    profile = source["identity"]["profile"]
+                    training_audio = dict(profile["audio"])
+                    config = {**config, "source": source, "audio_config": training_audio,
+                              "windowing_config": {"hop_seconds": profile["window_hop_seconds"],
+                                  "aggregation_mode": "max", "gem_p": 3.0, "vad_threshold": 0.0}}
+                    target_sr, duration_seconds, n_mels, n_fft, hop_length, f_min, f_max = (
+                        training_audio[key] for key in (
+                            "target_sr", "duration_seconds", "n_mels", "n_fft", "hop_length", "f_min", "f_max"))
+                    preprocessing_contract = build_gpu_audio_frontend_contract(
+                        sample_rate=target_sr, duration_seconds=duration_seconds, n_mels=n_mels,
+                        n_fft=n_fft, hop_length=hop_length, f_min=f_min, f_max=f_max)
+                component_weight = (config["models"][idx]["weight"] if config.get("models")
+                                    else model_weights.get(arch, 1.0))
                 preset = ARCHITECTURE_PRESETS.get(arch, {})
                 custom_epochs = model_epochs_list[idx] if idx < len(model_epochs_list) else None
                 if custom_epochs is not None:
@@ -949,7 +1018,7 @@ class TrainingService:
                     self.total_epochs = arch_epochs
 
                 if is_ensemble:
-                    self._add_log("INFO", f"[Paso {idx+1}/{len(models_to_train)}] Entrenando {arch} (LR: {arch_lr}, Batch: {arch_batch}, Épocas: {arch_epochs}, Peso: {model_weights.get(arch, 1.0):.2f})...")
+                    self._add_log("INFO", f"[Paso {idx+1}/{len(models_to_train)}] Entrenando {arch} (LR: {arch_lr}, Batch: {arch_batch}, Épocas: {arch_epochs}, Peso: {component_weight:.2f})...")
                 else:
                     self._add_log("INFO", f"Hiperparámetros -> LR: {arch_lr}, Batch: {arch_batch}, Épocas: {arch_epochs}")
 
@@ -1260,7 +1329,7 @@ class TrainingService:
                     "checkpoint_epoch": checkpoint_epoch,
                     "checkpoint_val_loss": checkpoint_val_loss,
                     "classes": classes,
-                    "ensemble_weight": model_weights.get(arch, 1.0),
+                    "ensemble_weight": component_weight,
                     "ensemble_models": config.get("models"),
                     "audio_config": {
                         "target_sr": target_sr, "duration_seconds": duration_seconds,
@@ -1402,6 +1471,14 @@ class TrainingService:
                         model_id, checkpoint_path, file_hash, config, classes, training_audio,
                         preprocessing_contract, is_ensemble, arch)
 
+                if config.get("component_sources"):
+                    completed = dict(model_index=idx + 1, model_id=model_id, architecture=arch,
+                        weight=joint_weights[idx], filename=checkpoint_filename,
+                        sha256=file_hash, source=deepcopy(source['identity']))
+                    joint_components.append(completed)
+                    with self._lock:
+                        self.component_results.append(deepcopy(completed))
+
                 # Limpieza de memoria RAM y VRAM antes del siguiente modelo
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
@@ -1410,14 +1487,41 @@ class TrainingService:
                 if is_ensemble and idx < len(models_to_train) - 1:
                     self._add_log("INFO", f"Memoria liberada exitosamente. Pasando al siguiente modelo ({models_to_train[idx+1]})...")
 
+            if config.get('component_sources') and not self._is_stop_requested():
+                # Freeze exact completed sequence and original indexed weights BEFORE
+                # exposing the phase callback. DB admission independently rebinds it.
+                joint_request = json.dumps(joint_components, allow_nan=False)
+                with self._lock:
+                    self.status = 'evaluating'
+                    self.current_phase = 'joint_evaluation'
+                self._emit_progress()
+                # Progress callbacks may request a stop at this phase boundary.
+                if not self._is_stop_requested():
+                    from app.services.imported_triad_records import ImportedTriadRecords
+                    records = self.triad_records
+                    if records is None:
+                        records = ImportedTriadRecords.for_training(self.checkpoints_dir)
+                    if not self._is_stop_requested():
+                        admitted = records.complete_training(joint_owner, json.loads(joint_request),
+                                                             cancelled=self._is_stop_requested)
+                        with self._lock:
+                            self.composition_model_id = admitted['model'].id_modelo
+                            self.composition_sha256 = admitted['model'].hash_binario
+                            self.ensemble_available = not self._is_stop_requested()
+
             if self._is_stop_requested():
                 with self._lock:
                     self.status = "stopped"
+                    self.ensemble_available = False
+                    self.current_phase = 'stopped'
                 self._add_log("WARN", "Training stopped before completing the pipeline.")
             else:
                 with self._lock:
                     self.status = "completed"
-                if is_ensemble:
+                    self.current_phase = 'completed'
+                if config.get('component_sources'):
+                    self._add_log('SUCCESS', 'Composición importada con informes conjuntos completos y readmisión verificada; sin activación.')
+                elif is_ensemble:
                     self._add_log("SUCCESS", f"Entrenamiento de {len(models_to_train)} componentes finalizado; informes individuales completos. Ensamble combinado sin evaluar ni publicar (EVAL-4).")
                 else:
                     self._add_log("SUCCESS", f"Pipeline de modelado finalizado exitosamente. Mejor Val Acc: {best_val_acc:.2f}%")
@@ -1425,8 +1529,11 @@ class TrainingService:
 
         except Exception as exc:
             with self._lock:
-                self.status = "failed"
-                self.error_message = str(exc)
+                self.status = ('stopped' if self.current_phase == 'joint_evaluation'
+                               and self._is_stop_requested() else 'failed')
+                self.ensemble_available = False
+                self.current_phase = self.status
+                self.error_message = None if self.status == 'stopped' else str(exc)
             self._add_log("ERROR", f"Fallo catastrófico en el entrenamiento: {exc}")
 
     def _history_checkpoint(self, filename: str) -> tuple[Dict[str, Any], Optional[int]]:
@@ -1467,6 +1574,8 @@ class TrainingService:
                     associations = {r.model_id: r for r in db.query(ImportedModelSource).all()}
 
                 for m in modelos:
+                    if m.arquitectura == 'ImportedTriad' and m.id_usuario != owner_id:
+                        continue
                     association = associations.get(m.id_modelo)
                     if association is not None and association.owner_id != owner_id:
                         continue
