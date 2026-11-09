@@ -90,7 +90,7 @@ it.each([
  fireEvent.click(screen.getByText('Preparar dataset'));
  await screen.findByText(/Preparado para entrenar/);
  expect(screen.queryByRole('button',{name:/2 Modelos/})).toBeNull();
- expect((screen.getByRole('button',{name:'3 Modelos (Tríada)'}) as HTMLButtonElement).disabled).toBe(true);
+ expect((screen.getByRole('button',{name:'3 Modelos (Tríada)'}) as HTMLButtonElement).disabled).toBe(false);
  fireEvent.change(screen.getByLabelText('Épocas de Entrenamiento'),{target:{value:'1'}});
  fireEvent.change(screen.getByLabelText(/Batch Size \(Tamaño de Lote\)/),{target:{value:'2'}});
  fireEvent.click(screen.getByText('Iniciar Entrenamiento Local (1 Modelo)'));

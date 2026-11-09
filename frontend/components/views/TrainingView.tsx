@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { API_BASE_URL, apiSessionRevision, notifyUnauthorized } from "@/lib/api";
 import { useOptionalWebSession } from '@/components/auth/SessionBoundary';
 import ImportedTrainingPanel from '@/components/training/ImportedTrainingPanel';
+import TriadComponentsEditor, { TriadProgressSummary, triadWeightsFromPercents, type TriadProgressState } from '@/components/training/TriadComponentsEditor';
 import TrainingDatasetSelector, { type CatalogSelection } from '@/components/training/TrainingDatasetSelector';
 import type { ImportedSelection, ImportedProfile } from '@/lib/schemas/importedTraining';
 import type { ModelHistoryItem } from "@/lib/schemas/training";
@@ -103,6 +104,8 @@ const ARCHITECTURE_PRESETS: Record<
   },
 };
 
+const PROFILE_ARCHITECTURE: Record<string,ImportedProfile['architecture']> = {'EfficientNet-B0':'efficientnet_b0','ConvNeXt-Nano':'convnext_nano','ResNet-34d':'resnet34d','PANNs-CNN14':'panns_cnn14','AudioCNN':'audio_cnn'};
+
 export default function TrainingView() {
   const privateStart = useRef<AbortController|null>(null);
   const mounted = useRef(true);
@@ -114,6 +117,9 @@ export default function TrainingView() {
   const sourceType = catalogSelection?.source_type ?? (session ? 'imported' : 'legacy');
   const legacyBlocked = catalogSelection?.source_type === 'legacy' && !catalogSelection.eligible;
   const [terminalMessage, setTerminalMessage] = useState('');
+  const [triadImported, setTriadImported] = useState<ImportedSelection[]|null>(null);
+  const [triadStatus, setTriadStatus] = useState<TriadProgressState|null>(null);
+  const [triadStartedHere, setTriadStartedHere] = useState(false);
   const effectiveImported = sourceType === 'imported' && session && imported?.dataset_id === catalogSelection?.id ? imported : null;
   // 1. Estado de Configuración (IE_03)
   const selectedDataset = catalogSelection?.source_type === 'legacy' ? catalogSelection.id : 'AvesChilenas';
@@ -176,10 +182,14 @@ export default function TrainingView() {
   // Ventaneo Denso y Captura de Eventos Breves
   const [hopSeconds, setHopSeconds] = useState<number | string>(1.0);
   const importedProfile = useMemo<ImportedProfile>(() => ({
-    architecture: ({'EfficientNet-B0':'efficientnet_b0','ConvNeXt-Nano':'convnext_nano','ResNet-34d':'resnet34d','PANNs-CNN14':'panns_cnn14','AudioCNN':'audio_cnn'} as Record<string,ImportedProfile['architecture']>)[architecture],
+    architecture: PROFILE_ARCHITECTURE[architecture],
     channels:1, preprocessing:'mono_mel', windowing:'energy_peak_pad', window_hop_seconds:Number(hopSeconds),
     audio:{target_sr:Number(targetSr),duration_seconds:Number(durationSeconds),n_mels:Number(nMels),n_fft:Number(nFft),hop_length:Number(hopLength),f_min:Number(fMin),f_max:Math.min(Number(fMax),Number(targetSr)/2),use_gpu_frontend:false},
   }),[architecture,hopSeconds,targetSr,durationSeconds,nMels,nFft,hopLength,fMin,fMax]);
+  const privateTriad = sourceType === 'imported' && ensembleSize === 3;
+  const triadProfiles = useMemo(() => ensembleModels.slice(0, 3).map(m => ({...importedProfile, architecture: PROFILE_ARCHITECTURE[m.architecture]})), [ensembleModels, importedProfile]);
+  const triadWeights = triadWeightsFromPercents(ensembleModels.slice(0, 3).map(m => m.weight));
+  const effectiveTriad = privateTriad && session && triadImported?.every(t => t.dataset_id === catalogSelection?.id) ? triadImported : null;
   const [aggregationMode, setAggregationMode] = useState<"max" | "mean">("max");
   const [gemP, setGemP] = useState<number | string>(3.0);
   const [vadThreshold, setVadThreshold] = useState<number | string>(0.0);
@@ -517,28 +527,6 @@ export default function TrainingView() {
     return sumWeights(ensembleModels.slice(0, ensembleSize).map((m) => m.weight));
   }, [ensembleModels, ensembleSize]);
 
-  const handleModelArchChange = (index: number, newArch: string) => {
-    const defaultEpochs = parseInt(ARCHITECTURE_PRESETS[newArch]?.epochs || "10", 10);
-    const defaultLr = ARCHITECTURE_PRESETS[newArch]?.lr || "0.001";
-    const defaultBatch = parseInt(ARCHITECTURE_PRESETS[newArch]?.batch || "16", 10);
-    setEnsembleModels((prev) =>
-      prev.map((m, idx) =>
-        idx === index
-          ? {
-              ...m,
-              architecture: newArch,
-              epochs: defaultEpochs,
-              learning_rate: defaultLr,
-              batch_size: defaultBatch,
-            }
-          : m
-      )
-    );
-    if (index === 0) {
-      handleArchitectureChange(newArch);
-    }
-  };
-
   const handleModelEpochsChange = (index: number, newEpochs: number | string) => {
     setEnsembleModels((prev) =>
       prev.map((m, idx) => (idx === index ? { ...m, epochs: newEpochs } : m))
@@ -858,6 +846,10 @@ export default function TrainingView() {
             setMetricsHistory(data.metrics_history || []);
             setLogs(data.logs || []);
 
+            // Only a private-triad job reports a joint phase; other jobs never show triad status.
+            setTriadStatus(data.total_models === 3 && Array.isArray(data.component_results)
+              ? {status: data.status, phase: data.current_phase, currentIndex: data.current_model_index || 1, total: 3, currentArchitecture: data.current_architecture || '',
+                 components: data.component_results, available: data.ensemble_available === true} : null);
             const total = data.total_models || (data.is_tri_model ? 3 : 1);
             if (total > 1 || data.is_tri_model) {
               setTriadProgress({
@@ -898,7 +890,11 @@ export default function TrainingView() {
   // Iniciar Entrenamiento (CU_INV_03)
   const handleStartTraining = async () => {
     if (!progressKnown || isTraining || isStarting || startInFlight.current || legacyBlocked) return;
-    if (sourceType === 'imported' && (!effectiveImported || ensembleSize !== 1)) {
+    if (privateTriad) {
+      if (!effectiveTriad || !triadWeights.valid) {
+        alert('Prepare las tres arquitecturas con porcentajes que sumen exactamente 100 % antes de iniciar.'); return;
+      }
+    } else if (sourceType === 'imported' && (!effectiveImported || ensembleSize !== 1)) {
       alert('Seleccione una preparación propia verificada; importados admite solo un modelo.'); return;
     }
     if(sourceType==='imported' && new URL(API_BASE_URL||'/',window.location.origin).origin!==window.location.origin){alert('Los recursos privados requieren API del mismo origen.');return;}
@@ -1094,6 +1090,16 @@ export default function TrainingView() {
       ? [{ architecture, weight: 100, epochs, learning_rate: learningRate, batch_size: batchSize }]
       : ensembleModels.slice(0, ensembleSize);
     const sumW = currentEnsemble.reduce((acc, m) => acc + (parseFloat(String(m.weight)) || 0), 0) || 100;
+    const triadComponents = privateTriad && effectiveTriad ? effectiveTriad.map((prep, idx) => ({
+      architecture: ensembleModels[idx].architecture,
+      weight: triadWeights.weights[idx],
+      imported_prepared_version: prep.prepared_version,
+      audio_config: prep.profile.audio,
+      windowing_config: {hop_seconds: prep.profile.window_hop_seconds, aggregation_mode: 'max', gem_p: 3.0, vad_threshold: 0.0},
+      epochs: parseInt(String(ensembleModels[idx].epochs), 10),
+      learning_rate: parseFloat(String(ensembleModels[idx].learning_rate)),
+      batch_size: parseInt(String(ensembleModels[idx].batch_size), 10),
+    })) : null;
     const normalizedEnsemble = currentEnsemble.map((m) => ({
       architecture: m.architecture,
       weight: Math.round(((parseFloat(String(m.weight)) || 0) / sumW) * 1000) / 1000,
@@ -1130,7 +1136,7 @@ export default function TrainingView() {
     }
 
     try {
-      if(effectiveImported)privateStart.current=startController;
+      if(effectiveImported||effectiveTriad)privateStart.current=startController;
       const res = await fetch(`${API_BASE_URL}/api/training/start`, {
         signal: startController.signal,
         method: "POST",
@@ -1147,7 +1153,7 @@ export default function TrainingView() {
           framework,
           is_tri_model: ensembleSize === 3,
           early_stopping: earlyStoppingEnabled,
-          models: normalizedEnsemble,
+          models: triadComponents ?? normalizedEnsemble,
           audio_config: {
             target_sr: typeof targetSr === "number" ? targetSr : parseInt(String(targetSr), 10) || 22050,
             duration_seconds: typeof durationSeconds === "number" ? durationSeconds : parseFloat(String(durationSeconds)) || 5.0,
@@ -1163,7 +1169,12 @@ export default function TrainingView() {
             gem_p: typeof gemP === "number" ? gemP : parseFloat(String(gemP)) || 3.0,
             vad_threshold: typeof vadThreshold === "number" ? vadThreshold : parseFloat(String(vadThreshold)) || 0.0,
           },
-          ...(effectiveImported ? {
+          ...(effectiveTriad ? {
+            dataset_name: undefined, is_tri_model: undefined,
+            imported_dataset_id: effectiveTriad[0].dataset_id,
+            snapshot_id: effectiveTriad[0].snapshot_id,
+          } : {}),
+          ...(effectiveImported && !effectiveTriad ? {
             dataset_name: undefined, is_tri_model: undefined,
             imported_dataset_id: effectiveImported.dataset_id,
             snapshot_id: effectiveImported.snapshot_id,
@@ -1184,13 +1195,14 @@ export default function TrainingView() {
 
       if(!mounted.current || requestRevision!==apiSessionRevision() || startInFlight.current!==startController)return;
       if (!res.ok) {
-        if(effectiveImported && res.status===401)notifyUnauthorized(requestRevision);
+        if((effectiveImported||effectiveTriad) && res.status===401)notifyUnauthorized(requestRevision);
         const errData = await res.json();
-        throw new Error(effectiveImported ? (typeof errData.detail==='string' ? errData.detail : errData.detail?.message || 'Revise la preparación y los parámetros de entrenamiento.') : errData.detail || `Error HTTP ${res.status}`);
+        throw new Error((effectiveImported||effectiveTriad) ? (typeof errData.detail==='string' ? errData.detail : errData.detail?.message || 'Revise la preparación y los parámetros de entrenamiento.') : errData.detail || `Error HTTP ${res.status}`);
       }
 
       await res.json();
       if(!mounted.current || requestRevision!==apiSessionRevision() || startInFlight.current!==startController)return;
+      if(privateTriad){setTriadStartedHere(true);setTriadStatus(null);}
       setIsTraining(true);
     } catch (err: unknown) {
       if(!mounted.current || requestRevision!==apiSessionRevision() || startInFlight.current!==startController)return;
@@ -1229,6 +1241,33 @@ export default function TrainingView() {
   };
 
 
+
+  const handleModelArchChange = (index: number, newArch: string) => {
+    const defaultEpochs = parseInt(ARCHITECTURE_PRESETS[newArch]?.epochs || "10", 10);
+    const defaultLr = ARCHITECTURE_PRESETS[newArch]?.lr || "0.001";
+    const defaultBatch = parseInt(ARCHITECTURE_PRESETS[newArch]?.batch || "16", 10);
+    setEnsembleModels((prev) =>
+      prev.map((m, idx) =>
+        idx === index
+          ? {
+              ...m,
+              architecture: newArch,
+              epochs: defaultEpochs,
+              learning_rate: defaultLr,
+              batch_size: defaultBatch,
+            }
+          : m
+      )
+    );
+    if (index === 0) {
+      handleArchitectureChange(newArch);
+    }
+  };
+
+  const triadControl = (
+    <TriadComponentsEditor models={ensembleModels.slice(0,3)} disabled={isTraining || isStarting}
+      onArchitecture={handleModelArchChange} onPercent={handleWeightChange}/>
+  );
 
   const architectureControl = (
   <div>
@@ -1308,7 +1347,7 @@ export default function TrainingView() {
         <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-3 shadow-sm">
           <div data-testid={sourceType==='legacy'?'dataset-selection-card':undefined} className="space-y-3">
             <TrainingDatasetSelector key={session?.id ?? 'legacy'} includeImported={Boolean(session)} defaultLegacyName={session ? undefined : 'AvesChilenas'} disabled={isTraining || isStarting} onSelect={row=>{
-              setCatalogChoice({owner:session?.id,row});setImported(null);
+              setCatalogChoice({owner:session?.id,row});setImported(null);setTriadImported(null);setTriadStatus(null);setTriadStartedHere(false);
             }}/>
             {sourceType==='legacy'&&<p className="text-xs text-cyan-400">Arquitectura: {ensembleSize === 1 ? architecture : `${ensembleSize} Modelos Ensamble`}</p>}
             {!catalogSelection&&sourceType==='legacy'&&<>
@@ -1323,7 +1362,7 @@ export default function TrainingView() {
           </div>
           {terminalMessage && <p role="status">{terminalMessage}</p>}
           {progressError && <p role="alert">{progressError} <button type="button" onClick={()=>setProgressRetry(n=>n+1)}>Reintentar consulta de progreso</button></p>}
-          {sourceType==='imported' && session && catalogSelection?.source_type==='imported' && <ImportedTrainingPanel key={`${session.id}:${catalogSelection.id}`} selectedDataset={catalogSelection} architectureControl={architectureControl} disabled={isTraining || isStarting} profile={importedProfile} seed={Number(seed)} onSelect={setImported}/>}
+          {sourceType==='imported' && session && catalogSelection?.source_type==='imported' && <ImportedTrainingPanel key={`${session.id}:${catalogSelection.id}`} selectedDataset={catalogSelection} architectureControl={privateTriad ? triadControl : architectureControl} disabled={isTraining || isStarting || (privateTriad && !triadWeights.valid)} profile={importedProfile} seed={Number(seed)} onSelect={setImported} triadProfiles={privateTriad ? triadProfiles : undefined} onSelectTriad={setTriadImported}/>}
         </div>
 
         {/* Tarjeta: Monitor de Hardware / Cómputo */}
@@ -1887,7 +1926,7 @@ export default function TrainingView() {
             </button>
             <button
               type="button"
-              disabled={isTraining || sourceType === 'imported'}
+              disabled={isTraining}
               onClick={() => handleEnsembleSizeChange(3)}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
                 ensembleSize === 3
@@ -2090,7 +2129,7 @@ export default function TrainingView() {
         </div>
 
         {/* Configuración Detallada de Miembros del Ensamble con Porcentajes Directos */}
-        {ensembleSize > 1 && (
+        {ensembleSize > 1 && sourceType !== 'imported' && (
           <div className="space-y-3 pt-2 border-t border-[#23252e]/60">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <span className="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
@@ -2333,7 +2372,7 @@ export default function TrainingView() {
           <button
             type="button"
             onClick={handleStartTraining}
-            disabled={!progressKnown || isTraining || isStarting || legacyBlocked || (sourceType === 'imported' && (!effectiveImported || ensembleSize !== 1))}
+            disabled={!progressKnown || isTraining || isStarting || legacyBlocked || (sourceType === 'imported' && (privateTriad ? !effectiveTriad || !triadWeights.valid : !effectiveImported || ensembleSize !== 1))}
             className={`flex-1 py-2.5 rounded-lg text-white font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-40 disabled:cursor-not-allowed ${
               ensembleSize === 3
                 ? "bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 shadow-emerald-950/40"
@@ -2385,6 +2424,7 @@ export default function TrainingView() {
             </button>
           )}
         </div>
+        {privateTriad && triadStatus && (triadStartedHere || triadStatus.components.length > 0 || triadStatus.available) && <TriadProgressSummary state={triadStatus}/>}
         {isStarting && <p role="status" className="text-xs text-gray-400">{sourceType === 'imported'
           ? 'Verificando la integridad y compatibilidad del dataset. Puede tardar unos segundos.'
           : 'Preparando la solicitud de inicio. Puede tardar unos segundos.'}</p>}
