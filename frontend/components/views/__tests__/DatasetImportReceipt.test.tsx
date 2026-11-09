@@ -83,13 +83,13 @@ it("uploads sequential bounded slices, acknowledges bytes, seals then separately
   const { writes } = transport(0, false);
   const { slices, wholeRead } = await open(false);
   fireEvent.click(screen.getByRole("button", { name: "Importar ZIP" }));
-  await screen.findByText("Importación resume: lista para confirmar");
+  await screen.findByText("Estado: lista para confirmar");
   expect(writes).toEqual([`POST ${base}`, `POST ${base}/resume/receipt`,
     ...[0, 1, 2, 3].map(index => `PUT ${base}/resume/receipt/chunks/${index}`),
     `POST ${base}/resume/receipt/finalize`, `POST ${base}/resume/preview`]);
   expect(slices.mock.calls.map(([start, end]) => [start, end])).toEqual([[0, 4], [4, 8], [8, 12], [12, 14]]);
   expect(wholeRead).not.toHaveBeenCalled();
-  expect(screen.getByText(/Bytes reconocidos por el servidor: 14 de 14/)).toBeDefined();
+  expect(screen.getByText(/Subido: 0 MB de 0 MB/)).toBeDefined();
 });
 
 it("rejects a changed middle chunk despite identical name, size and endpoints, without appending or finalizing", async () => {
@@ -112,10 +112,11 @@ it("checks every prefix page before uploading the suffix, and displays verificat
     return normal(input, options);
   });
   fireEvent.click(screen.getByRole("button", { name: "Validar ZIP" }));
-  await screen.findByText(/Verificando archivo para reanudar: 8 de 12/);
+  await screen.findByText(/Verificando el ZIP para reanudar: 0 MB de 0 MB/);
+  await waitFor(() => expect(release).toBeTypeOf("function"));
   expect(writes.filter(path => path.startsWith("PUT"))).toEqual([]);
   await act(async () => release());
-  await screen.findByText("Importación resume: lista para confirmar");
+  await screen.findByText("Estado: lista para confirmar");
   expect(pages).toEqual(["", "?cursor=page%2Btwo"]);
   expect(writes.filter(path => path.startsWith("PUT"))).toEqual([`PUT ${base}/resume/receipt/chunks/3`]);
   expect(slices.mock.calls.map(([start, end]) => [start, end])).toEqual([[0, 4], [4, 8], [8, 12], [12, 14]]);
@@ -133,10 +134,10 @@ it("recovers a lost chunk acknowledgement from server state, without counting it
   await open();
   fireEvent.click(screen.getByRole("button", { name: "Validar ZIP" }));
   await screen.findByRole("alert");
-  expect(screen.getByText(/Bytes reconocidos por el servidor: 0 de 14/)).toBeDefined();
+  expect(screen.getByText(/Subido: 0 MB de 0 MB/)).toBeDefined();
   expect(writes.some(path => /\/finalize|\/preview/.test(path))).toBe(false);
   fireEvent.click(screen.getByRole("button", { name: "Validar ZIP" }));
-  await screen.findByText("Importación resume: lista para confirmar");
+  await screen.findByText("Estado: lista para confirmar");
   expect(writes.filter(path => path.startsWith("PUT"))).toEqual([0, 1, 2, 3].map(index => `PUT ${base}/resume/receipt/chunks/${index}`));
 });
 
@@ -160,7 +161,7 @@ it("does not report unacknowledged progress or admit preview when receipt admiss
   fireEvent.click(screen.getByRole("button", { name: "Validar ZIP" }));
   expect((await screen.findByRole("alert")).textContent).toContain("429: Presupuesto temporal agotado");
   expect(writes).toEqual([]);
-  expect(screen.queryByText(/Bytes reconocidos/)).toBeNull();
+  expect(screen.queryByText(/Subido:/)).toBeNull();
 });
 
 it("requires file reselection after choosing an import from history, rather than reusing another selection", async () => {
@@ -187,7 +188,7 @@ it("reverifies the complete archive after a lost finalization reply, without res
   expect(writes.some(path => path.endsWith("/preview"))).toBe(false);
   slices.mockClear();
   fireEvent.click(screen.getByRole("button", { name: "Validar ZIP" }));
-  await screen.findByText("Importación resume: lista para confirmar");
+  await screen.findByText("Estado: lista para confirmar");
   expect(slices.mock.calls.map(([start, end]) => [start, end])).toEqual([[0, 4], [4, 8], [8, 12], [12, 14]]);
   expect(writes.filter(path => path.startsWith("PUT"))).toHaveLength(4);
   expect(writes.filter(path => path.endsWith("/preview"))).toHaveLength(1);
@@ -204,11 +205,11 @@ it("keeps chunks sequential and does not display bytes as acknowledged before th
   await open();
   fireEvent.click(screen.getByRole("button", { name: "Validar ZIP" }));
   await waitFor(() => expect(release).toBeTypeOf("function"));
-  expect(screen.getByText(/Bytes reconocidos por el servidor: 0 de 14/)).toBeDefined();
+  expect(screen.getByText(/Subido: 0 MB de 0 MB/)).toBeDefined();
   expect(writes.filter(path => path.startsWith("PUT"))).toEqual([]);
   fireEvent.click(screen.getByTestId("dataset-import-backdrop"));
   await act(async () => release());
   fireEvent.click(screen.getByRole("button", { name: "Importar dataset" }));
-  await screen.findByText("Importación resume: lista para confirmar");
+  await screen.findByText("Estado: lista para confirmar");
   expect(writes.filter(path => path.endsWith("/preview"))).toHaveLength(1);
 });

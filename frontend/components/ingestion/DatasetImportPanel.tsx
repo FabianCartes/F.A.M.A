@@ -6,12 +6,51 @@ import Link from "next/link";
 import { useOptionalWebSession } from "@/components/auth/SessionBoundary";
 import { z } from "zod";
 import { importBase, importRequest, jsonRequest, saveDownload, jobSchema, limitsSchema,
-  audioSchema, issueSchema, jobsPageSchema, executionSchema,
+  audioSchema, issueSchema, jobsPageSchema, executionSchema, classesPageSchema,
   type ImportJob, type ImportLimits } from "@/lib/api/datasetImports";
 import ImportDetailPage from "./ImportDetailPage";
+import RejectedImportReason from "./RejectedImportReason";
 import { uploadImportReceipt, type ReceiptProgress } from "@/lib/api/datasetImportReceipt";
 
 const classSchema = z.string();
+
+function formatWeightLimit(bytes: number) {
+  const megabytes = bytes / 1_000_000;
+  const useGigabytes = megabytes > 1000;
+  const value = useGigabytes ? megabytes / 1000 : megabytes;
+  // Truncate rather than advertise a rounded maximum above the server limit.
+  const display = Math.floor(value * 100) / 100;
+  return `${display.toLocaleString('es', { maximumFractionDigits: 2 })} ${useGigabytes ? 'GB' : 'MB'}`;
+}
+
+function CompletedImportSummary({ job, token, datasetName }: { job: ImportJob; token: string; datasetName?: string }) {
+  const [classes, setClasses] = useState<string[]>([]);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    const controller = new AbortController();
+    async function load() {
+      const response = await importRequest(token, `${importBase}/${job.id}/classes`, { signal: controller.signal });
+      const page = classesPageSchema.parse(await response.json());
+      if (job.preview_token && page.snapshot !== job.preview_token) throw new Error("Las clases cambiaron. Vuelve a consultar la importación.");
+      if (!controller.signal.aborted) setClasses(page.classes);
+    }
+    void load().catch(reason => {
+      if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "No se pudieron consultar las clases.");
+    });
+    return () => controller.abort();
+  }, [job.id, job.preview_token, token]);
+  return <section aria-label="Resumen de importación" className="space-y-2 rounded-lg border border-[#2d303b] bg-[#111215] p-4">
+    <h3 className="font-semibold text-white">{datasetName || "Nombre del dataset no disponible"}</h3>
+    <p>Importada localmente: {job.added_count} archivo(s) nuevo(s).</p>
+    <p>Tamaño: {formatWeightLimit(job.preview.total_size_bytes)}</p>
+    <p>Clases: {job.preview.class_count}</p>
+    {classes.length > 0 && <p className="break-words">{classes.join(", ")}</p>}
+    {job.preview.class_count > classes.length && classes.length > 0 && <p>Y {job.preview.class_count - classes.length} clases más.</p>}
+    {job.preview.warning_count > 0 && <p>{job.preview.warning_count} advertencia(s) durante la validación.</p>}
+    {job.added_count === 0 && <p>Sin audios nuevos; no se creó un dataset vacío.</p>}
+    {error && <p role="alert">{error}</p>}
+  </section>;
+}
 
 const statusLabels: Record<string, string> = {
   receiving: "recibiendo", validating: "validando", needs_correction: "requiere corrección",
@@ -38,13 +77,14 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange,
   const [limits, setLimits] = useState<ImportLimits | null>(null);
   const [history, setHistory] = useState<ImportJob[]>([]);
   const [job, setJob] = useState<ImportJob | null>(null);
+  const rejected = job?.status === "cancelled" && job.preview.error_count > 0;
   const [name, setName] = useState("");
+  const [createdImport, setCreatedImport] = useState<{ id: string; name: string } | null>(null);
   const [description, setDescription] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState("");
   const [receiptProgress, setReceiptProgress] = useState<ReceiptProgress | null>(null);
   const [error, setError] = useState("");
-  const [localDataset, setLocalDataset] = useState<string | null>(null);
   const active = useRef(false);
   const requestKey = useRef("");
   const operationKey = useRef({ signature: "", key: "" });
@@ -170,6 +210,7 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange,
         name, description, target_id: null, layout: "class_folders", auto_import: true }));
       current = jobSchema.parse(await response.json());
       setJob(current);
+      setCreatedImport({ id: current.id, name });
     }
     if (current.status === "receiving") {
       if (!file) throw new Error("Selecciona el ZIP original para reintentar la recepción.");
@@ -202,7 +243,7 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange,
   }
 
   function reset() {
-    setJob(null); setFile(null); setReceiptProgress(null); setLocalDataset(null); setError(""); requestKey.current = "";
+    setJob(null); setFile(null); setReceiptProgress(null); setError(""); requestKey.current = "";
   }
 
   return <>
@@ -224,23 +265,33 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange,
         </button>
       </div>
       <div className="p-5 space-y-4 leading-relaxed">
+      <>
       <h3 className="text-sm font-semibold text-white">Instrucciones del archivo ZIP</h3>
-      <p>Una carpeta por clase directamente en la raíz del ZIP, con audios WAV válidos dentro de cada clase, sin carpeta contenedora ni subcarpetas, aunque estén vacías.</p>
+      <ul aria-label="Cómo preparar el ZIP" className="list-disc space-y-2 pl-5">
+        <li>Una carpeta por clase en la raíz del ZIP, con audios WAV dentro; sin carpeta contenedora ni subcarpetas.</li>
+        <li>Incluye al menos un WAV válido y único. Las clases vacías o pequeñas generan advertencias.</li>
+        <li>Los duplicados de la misma clase se omiten; el mismo audio en clases distintas bloquea la importación. Se comparan bytes, no similitud acústica.</li>
+        <li>El ZIP se importará automáticamente solo si supera la validación del servidor, sin una segunda confirmación. No necesitas mantener esta ventana abierta.</li>
+        <li>Importar no inicia preparación ni entrenamiento ni publica el dataset en el catálogo compartido. La copia local se conserva aunque falle GCS.</li>
+      </ul>
       <pre className="overflow-x-auto rounded-lg border border-[#23252e] bg-[#111215] p-3 text-xs text-emerald-300">{"chucao/audio_01.wav\ncolilarga/audio_01.wav"}</pre>
-      <p>Organiza el ZIP antes de subirlo. El nombre de cada carpeta determina la clase; el ZIP se importará automáticamente solo si supera la validación del servidor, sin una segunda confirmación. No necesitas mantener esta ventana abierta.</p>
-      <p>Se requiere al menos un WAV válido y único y una clase con contenido. Las clases vacías o pequeñas generan advertencias.</p>
-      <p>Los duplicados de la misma clase se omiten; el mismo contenido con otra clase bloquea la importación. Se comparan bytes, no similitud acústica.</p>
-      <p>Importar no inicia preparación ni entrenamiento. La copia local se conserva aunque falle GCS.</p>
-      <p className="text-gray-400">Las colecciones importadas se conservan fuera del catálogo compartido.</p>
       {developmentMode && <p role="status" className="rounded-lg border border-amber-800/60 bg-amber-950/40 p-3 text-amber-300">Modo de desarrollo local: identidad de pruebas compartida en este equipo, sin acceso a colecciones de otros usuarios. No exponer este modo públicamente.</p>}
       {sessionRequired && <p role="status" className="rounded-lg border border-amber-800/60 bg-amber-950/40 p-3 text-amber-300">Inicia sesión para acceder a tus importaciones. <Link href="/login" className="underline">Abrir acceso</Link>. El modo de desarrollo local conserva su alcance separado según la guía de importación.</p>}
       {!limits && error && <button className={buttonClass} disabled={!!busy} onClick={() => void act("Consultando configuración…", initialize)}>Reintentar conexión</button>}
         {limits && <>
-          <p>Límites del servidor: ZIP {limits.received_bytes} bytes; expansión {limits.expanded_bytes} bytes; {limits.entries} entradas; profundidad {limits.depth}; rutas {limits.path_bytes} bytes; WAV {limits.audio_bytes} bytes / {limits.audio_seconds} s; validación {limits.validation_seconds} s. Hasta {limits.concurrent_imports} importaciones activas y una operación de almacenamiento simultánea. Temporales: {limits.ttl_seconds} s; reserva libre: {limits.free_bytes} bytes.</p>
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-white">Límites de peso</h3>
+            <ul aria-label="Límites de peso" className="list-disc space-y-1 pl-5">
+              <li>ZIP: hasta {formatWeightLimit(limits.received_bytes)}</li>
+              <li>Contenido descomprimido: hasta {formatWeightLimit(limits.expanded_bytes)}</li>
+              <li>Cada audio WAV: hasta {formatWeightLimit(limits.audio_bytes)}</li>
+            </ul>
+          </div>
           <button className={buttonClass} disabled={!!busy} onClick={() => void act("Descargando ejemplo…", async () => {
             await saveDownload(await importRequest(token, `${importBase}/example.zip`), "dataset-example.zip");
           })}>Descargar ZIP de ejemplo sintético</button>
         </>}
+        </>
         {!started ? <div className="border-t border-[#23252e] pt-4"><button className={buttonClass} disabled={!!busy || !limits} onClick={() => setStarted(true)}>Importar dataset</button></div> : <div className="space-y-4 border-t border-[#23252e] pt-4">
           <button className={buttonClass} disabled={!!busy} onClick={() => void act("Actualizando…", () => refresh())}>Actualizar importaciones</button>
           {limits && <>
@@ -254,32 +305,46 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange,
               setError("Selecciona un ZIP dentro del límite recibido."); setFile(null);
             } else { setFile(selected); setError(""); }
           }} className={inputClass} /></label>}
-          {file && <p className="text-gray-400">Archivo seleccionado: {file.name}</p>}
+          {file && !rejected && <p className="text-gray-400">Archivo seleccionado: {file.name}</p>}
           {job?.status === "receiving" && <p>Para reanudar, selecciona el ZIP original y pulsa {automatic ? "Importar ZIP" : "Validar ZIP"}. Se comprobarán todos los fragmentos ya reconocidos antes de continuar; el nombre y el tamaño no prueban que sea el mismo archivo.</p>}
-          {receiptProgress && <p role="status">Bytes reconocidos por el servidor: {receiptProgress.receipt.received_bytes} de {receiptProgress.receipt.size_bytes}.
-            {receiptProgress.phase === "verifying" ? ` Verificando archivo para reanudar: ${receiptProgress.verified} de ${receiptProgress.receipt.received_bytes} bytes.` :
-              receiptProgress.phase === "sealed" ? " Recepción completa; la validación de audios es un trabajo separado." :
-                receiptProgress.phase === "sealing" ? " Verificando y finalizando recepción; todavía no valida los audios." : " Subiendo fragmentos secuenciales."}</p>}
+          {receiptProgress && !rejected && job?.status !== "imported" && <div role="status" aria-label="Progreso del ZIP">
+            <p>Subido: {formatWeightLimit(receiptProgress.receipt.received_bytes)} de {formatWeightLimit(receiptProgress.receipt.size_bytes)}</p>
+            <p>{receiptProgress.phase === "verifying"
+              ? `Verificando el ZIP para reanudar: ${formatWeightLimit(receiptProgress.verified)} de ${formatWeightLimit(receiptProgress.receipt.received_bytes)}`
+              : receiptProgress.phase === "sealed" ? "ZIP recibido. Preparando la validación de los audios."
+                : receiptProgress.phase === "sealing" ? "Comprobando el ZIP recibido…" : "Subiendo el ZIP…"}</p>
+          </div>}
           {(!job || ["receiving", "validating", "needs_correction", "ready"].includes(job.status)) && <>
-            <button className={buttonClass} disabled={!!busy || executing || (!job && (!file || !name.trim()))} onClick={() => void act(automatic ? "Admitiendo importación…" : "Admitiendo validación…", validate)}>{automatic ? "Importar ZIP" : "Validar ZIP"}</button>
+            <button className={buttonClass} disabled={!!busy || executing || (!job && (!file || !name.trim()))} onClick={() => void act(automatic ? "Importando ZIP…" : "Validando ZIP…", validate)}>{automatic ? "Importar ZIP" : "Validar ZIP"}</button>
           </>}
         </>}
         {job && <div className="space-y-3">
-          {job.execution && <p role="status">{executionStatus === "queued" ? "Trabajo admitido; pendiente de ejecución" : executionStatus === "running" ? "Trabajo en ejecución" : executionStatus === "succeeded" ? (job.status === "needs_correction" ? "Validación rechazada" : "Trabajo completado") : executionStatus === "cancelled" ? "Trabajo cancelado" : "Trabajo fallido"}: {job.execution.stage}{job.status !== "validating" && <> · {job.execution.progress}%</>}</p>}
-          {job.execution?.error && <p role="alert">{job.status === "cancelled" ? "La importación falló y quedó cancelada. Crea una nueva importación con el ZIP corregido." : <>No se completó el trabajo ({job.execution.error.code}). Consulta el estado antes de reintentar.</>}</p>}
+          {job.status === "cancelled" && job.preview.error_count > 0 ? <>
+            <p className="font-semibold text-white">ZIP rechazado</p>
+            <RejectedImportReason key={`${token}:${job.id}:${job.preview_token}`} job={job} token={token} />
+          </> : <>
+          {job.status !== "imported" && <section aria-label="Importación en curso" className="space-y-2 rounded-lg border border-[#2d303b] bg-[#111215] p-4">
+            <h3 className="font-semibold text-white">{(job.dataset_id && datasetNames[job.dataset_id]) || (createdImport?.id === job.id ? createdImport.name : job.archive_name) || "Importación de ZIP"}</h3>
+            <p role="status">{executionStatus === "queued" ? "En espera para importar" : executionStatus === "running"
+              ? (job.execution?.kind === "confirm" ? "Guardando el dataset…" : "Validando los audios…")
+              : job.status === "receiving" ? "Subiendo el ZIP…" : job.status === "validating" ? "Validando los audios…"
+                : job.status === "committing" ? "Guardando el dataset…" : `Estado: ${statusLabels[job.status] || "pendiente de consulta"}`}</p>
+            {job.preview.file_count > 0 && <p>Audios: {job.preview.file_count} · Clases: {job.preview.class_count}</p>}
+            {job.preview.total_size_bytes > 0 && <p>Tamaño: {formatWeightLimit(job.preview.total_size_bytes)}</p>}
+          </section>}
+          {job.execution?.error && <p role="alert">{job.status === "cancelled" ? "La importación falló y quedó cancelada. Crea una nueva importación con el ZIP corregido." : "No se pudo completar la importación. Consulta su estado antes de reintentar."}</p>}
           {job.execution?.status === "queued" && <button className={buttonClass} disabled={!!busy} onClick={() => void act("Cancelando trabajo…", async () => {
             const response = await importRequest(token, `${importBase}/${job.id}/jobs/${job.execution!.id}/cancel`, jsonRequest({}));
             setJob({ ...job, execution: executionSchema.parse(await response.json()) });
           })}>Cancelar trabajo pendiente</button>}
           {job.status !== "cancelled" && job.execution && ["failed", "cancelled"].includes(job.execution.status) && <button className={buttonClass} disabled={!!busy} onClick={() => void act("Admitiendo reintento…", () => admit(job, `jobs/${job.execution!.id}/retry`))}>Reintentar trabajo</button>}
-          <p role="status">Importación {job.id}: {statusLabels[job.status] || job.status}</p>
-          <p>Sincronización: {statusLabels[job.sync_status] || job.sync_status}</p>
+          {job.status === "imported" ? <CompletedImportSummary key={`${token}:${job.id}:${job.preview_token}`} job={job} token={token} datasetName={publishedDatasetName} /> : !executing && ["ready", "needs_correction", "failed", "cancelled"].includes(job.status) ? <>
           <p>Clases propuestas: {job.preview.class_count} · Archivos: {job.preview.file_count} · Nuevos: {job.preview.new_count ?? 0} · Duplicados internos: {job.preview.duplicate_count ?? 0} · Errores: {job.preview.error_count} · Advertencias: {job.preview.warning_count}</p>
           {job.status === "cancelled" && job.preview.error_count > 0 && <p role="alert">ZIP rechazado: la importación quedó cancelada. Revisa las incidencias y crea una nueva importación con el ZIP corregido. No se publicó contenido de este ZIP.</p>}
           {automatic && job.status === "needs_correction" && <p role="alert">ZIP rechazado: revisa las incidencias, cancela esta solicitud y crea una nueva importación con el ZIP corregido. No se publicó contenido de este ZIP.</p>}
           {job.preview.quota && <section aria-label="Cuota del dataset">
-            <p>Bytes únicos: actuales {job.preview.quota.current_bytes} + nuevos {job.preview.quota.new_bytes} = proyectados {job.preview.quota.projected_bytes} / límite {job.preview.quota.limit_bytes}.</p>
-            <p>Archivos únicos: actuales {job.preview.quota.current_files} + nuevos {job.preview.quota.new_files} = proyectados {job.preview.quota.projected_files} / límite {job.preview.quota.limit_files}.</p>
+            <p>Espacio del dataset tras importar: {formatWeightLimit(job.preview.quota.projected_bytes)} de {formatWeightLimit(job.preview.quota.limit_bytes)} disponibles.</p>
+            <p>Audios del dataset tras importar: {job.preview.quota.projected_files} de {job.preview.quota.limit_files} permitidos.</p>
             <p>La confirmación vuelve a comprobar la cuota y la revisión del destino.</p>
           </section>}
           {job.preview.duplicate_collection && <p>Colección ya importada: se detectó el mismo contenido y etiquetas.</p>}
@@ -290,32 +355,18 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange,
             <ImportDetailPage token={token} endpoint={`${importBase}/${job.id}/issues`} collection="issues" label="incidencias" schema={issueSchema} snapshot={job.preview_token}
               renderItem={issue => <span role={issue.severity === "error" ? "alert" : undefined}>{issue.severity === "warning" ? "Advertencia: " : ""}{issue.path}: {issue.code}. {issue.action}</span>} />
           </div>}
+          </> : null}
           {job.error && <p role="alert">{job.error === "expired" ? "La importación venció." : job.status === "cancelled" ? "La importación quedó cancelada por un error. Puedes iniciar una nueva importación; sus diagnósticos se conservan." : "La sincronización no está completa. Reintenta; la copia local se conserva."}</p>}
           {!automatic && ["ready", "committing"].includes(job.status) && <button className={buttonClass} disabled={!!busy || executing || !!quotaExceeded || job.preview.error_count > 0} onClick={() => void act("Admitiendo confirmación local…", () => action("confirm", { preview_token: job.preview_token }))}>Confirmar importación local</button>}
-          {job.status === "imported" && <>
-            <p>Importada localmente: {job.added_count} archivo(s) nuevo(s).{job.added_count === 0 ? " No hay novedades; no se creó un dataset vacío." : ""}</p>
-            {job.dataset_id && <>
-              <p className="text-xs break-words">Destino privado en GCS: dataset {publishedDatasetName ? `${publishedDatasetName} (${job.dataset_id})` : job.dataset_id}, importación {job.id}. La copia local se conserva; no se publica en el catálogo compartido.</p>
-              <button className={buttonClass} disabled={!!busy || executing} onClick={() => {
-                if (!window.confirm(`Subir a GCS el dataset privado ${publishedDatasetName ? `«${publishedDatasetName}» (${job.dataset_id})` : job.dataset_id} de la importación ${job.id}. Se conserva la copia local y no se publica en el catálogo compartido. ¿Continuar?`)) return;
-                void act("Admitiendo subida a GCS…", () => action("sync"));
-              }}>Subir este dataset a GCS</button>
-              <p className="text-xs">{job.sync_status === "running" || job.sync_status === "error" ? "Puedes reanudar la subida pendiente con la misma acción. " : ""}Acuses históricos de subida: {job.preview.synced_count}. Un trabajo admitido todavía no acredita una copia completa.</p>
-              <button className={buttonClass} disabled={!!busy} onClick={() => setLocalDataset(job.dataset_id)}>Consultar archivos locales</button>
-              {localDataset === job.dataset_id && <ImportDetailPage key={`${token}:${job.dataset_id}`} token={token} endpoint={`${importBase}/datasets/${job.dataset_id}/files`} collection="files" label="archivos locales" schema={audioSchema}
-                renderItem={f => <button className="underline text-xs" disabled={!!busy} onClick={() => void act("Descargando audio…", async () => {
-                await saveDownload(await importRequest(token, `${importBase}/datasets/${job.dataset_id}/files/${f.sha256}`), f.original_path.split("/").pop() || "audio.wav");
-              })}>{f.original_path} ({f.class_name})</button>} />}
-            </>}
-          </>}
           {!["imported", "committing", "cancelled"].includes(job.status) && <button className={buttonClass} disabled={!!busy || executing} onClick={() => void act("Cancelando…", () => action("cancel"))}>Cancelar importación</button>}
+          </>}
           <button className={buttonClass} disabled={!!busy} onClick={reset}>Nueva importación</button>
         </div>}
         {history.length > 0 && <details><summary>Recuperar importaciones anteriores</summary><ul aria-label="Últimas 10 importaciones">{history.map(item => <li key={item.id}>
           <button disabled={!!busy} className="underline text-xs" onClick={() => {
             setFile(null); setReceiptProgress(null); setError("");
             if (fileInputRef.current) fileInputRef.current.value = "";
-            setJob(item); setLocalDataset(null);
+            setJob(item);
           }}>{item.archive_name || 'Nombre del ZIP no disponible'} — {item.created_at != null && Number.isFinite(item.created_at) && !Number.isNaN(new Date(item.created_at * 1000).getTime()) ? new Date(item.created_at * 1000).toLocaleString('es-CL', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'Fecha no disponible'} — {statusLabels[item.status] || item.status}</button>
         </li>)}</ul>
         </details>}

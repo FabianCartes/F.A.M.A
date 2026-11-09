@@ -34,5 +34,6 @@ it('lists only ten recent ZIP names and local dates, retaining opaque recovery I
   expect(screen.queryByRole('button', { name: /página de importaciones/ })).toBeNull();
   expect(fetcher.mock.calls.some(([url]) => new URL(url, 'http://localhost').searchParams.get('latest') === 'true')).toBe(true);
   fireEvent.click(within(list).getAllByRole('button')[0]);
-  expect(screen.getByText('Importación opaque-uuid-0: recibiendo')).toBeDefined();
+  expect(screen.getByRole('region', { name: 'Importación en curso' }).textContent).toContain('grabacion_0.zip');
+  expect(screen.getByText('Subiendo el ZIP…')).toBeDefined();
 });

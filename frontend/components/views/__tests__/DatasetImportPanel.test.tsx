@@ -27,7 +27,7 @@ function reviewResponse(input: string, snapshot: string, files: unknown[] = [], 
 }
 
 describe("private dataset import", () => {
-  it("recovers the historical root without an editable field and preserves local success on cloud error", async () => {
+  it("recovers the historical root and shows completed local import without modal cloud actions", async () => {
     const base = "/api/ingestion/imports";
     const writes: { path: string; body: unknown }[] = [];
     const preview = { root: "wrap", ...counts };
@@ -73,12 +73,9 @@ describe("private dataset import", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirmar importación local" }));
     await screen.findByText(/Importada localmente: 1 archivo/);
     expect(writes.map(w => w.path)).toEqual([base + "/independent/preview", base + "/independent/confirm"]);
-    vi.spyOn(window, "confirm").mockReturnValue(true);
-    fireEvent.click(screen.getByRole("button", { name: "Subir este dataset a GCS" }));
-    await screen.findByText("Sincronización: error");
-    expect(screen.getByText(/Importada localmente: 1 archivo/)).toBeDefined();
-    expect(screen.getByRole("button", { name: "Subir este dataset a GCS" })).toBeDefined();
-    expect(writes.filter(w => w.path.endsWith("/sync"))).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Subir este dataset a GCS" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Consultar archivos locales" })).toBeNull();
+    expect(writes.filter(w => w.path.endsWith("/sync"))).toHaveLength(0);
   });
 
   it("explains format in a modal without an embedded login before exposing a file picker", async () => {
@@ -99,7 +96,7 @@ describe("private dataset import", () => {
     expect((within(screen.getByRole("dialog")).getByRole("button", { name: "Importar dataset" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("imports automatically without login in local mode and only syncs on explicit action", async () => {
+  it("imports automatically in local mode without redundant cloud actions", async () => {
     vi.stubGlobal("crypto", webcrypto);
     const calls: string[] = [];
     const files = [{ id: "audio", relative_path: "birds/a.wav", original_path: "birds/a.wav", class_name: "birds",
@@ -160,14 +157,13 @@ describe("private dataset import", () => {
     expect((screen.getByLabelText("Nombre del dataset") as HTMLInputElement).value).toBe("Birds");
     expect(screen.getByText("Archivo seleccionado: birds.zip")).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: "Importar ZIP" }));
-    await screen.findByText("birds/a.wav → birds");
+    expect(await screen.findByRole("region", { name: "Resumen de importación" })).toBeDefined();
     expect(calls.some(call => call.includes("/sync"))).toBe(false);
     expect(screen.queryByRole("button", { name: "Confirmar importación local" })).toBeNull();
     await screen.findByText(/Importada localmente: 1 archivo/);
     expect(calls.some(call => call.includes("/sync"))).toBe(false);
-    vi.spyOn(window, "confirm").mockReturnValue(true);
-    fireEvent.click(screen.getByRole("button", { name: "Subir este dataset a GCS" }));
-    await waitFor(() => expect(screen.getByText("Sincronización: sincronizada")).toBeDefined());
+    expect(screen.queryByRole("button", { name: "Subir este dataset a GCS" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Consultar archivos locales" })).toBeNull();
   });
 
   it("keeps confirmation unavailable on validation errors and recovers a pending journal", async () => {

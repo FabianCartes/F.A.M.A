@@ -39,7 +39,8 @@ it("restores a durable job after remount and never treats admission as final suc
     await waitFor(() => expect((start as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(start);
     fireEvent.click(await screen.findByRole("button", { name: /source.zip —/ }));
-    expect((await screen.findByText(/Trabajo en ejecución/)).textContent).toContain("20%");
+    expect(await screen.findByText("Guardando el dataset…")).toBeDefined();
+    expect(screen.queryByText(/20%/)).toBeNull();
     expect(screen.queryByText(/Importada localmente/)).toBeNull();
     expect((screen.getByRole("button", { name: "Confirmar importación local" }) as HTMLButtonElement).disabled).toBe(true);
     await waitFor(() => expect(resolveStatus).toBeDefined());

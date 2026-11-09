@@ -97,7 +97,7 @@ async function select(contents = data) {
   return { slices, whole };
 }
 function validate() { fireEvent.click(screen.getByRole("button", { name: "Validar ZIP" })); }
-async function ready() { await screen.findByText("Importación own: lista para confirmar"); }
+async function ready() { await screen.findByText("Estado: lista para confirmar"); }
 
 it.each([
   ["changed", "El archivo seleccionado no coincide con el prefijo aceptado. Selecciona el ZIP original o cancela la importación."],
@@ -137,7 +137,7 @@ it.each(["lostchunk", "lostfinal", "finalfail"])("recovers %s without retransmit
   const error = (await screen.findByRole("alert")).textContent;
   expect(error).toBe(mode === "lostchunk" ? "Own lost chunk reply" : mode === "lostfinal" ? "Own lost final reply" : "409: Own finalize refused");
   expect(receipt.calls.some(call => call.endsWith("/preview"))).toBe(false);
-  if (mode === "lostchunk") expect(screen.getByText(/Bytes reconocidos por el servidor: 0 de 19/)).toBeDefined();
+  if (mode === "lostchunk") expect(screen.getByText(/Subido: 0 MB de 0 MB/)).toBeDefined();
   validate();
   await ready();
   expect(receipt.calls.filter(call => call.startsWith("PUT"))).toHaveLength(5);
@@ -160,7 +160,7 @@ it("clears the selected file and progress when resetting a failed receipt", asyn
   await screen.findByRole("alert");
   fireEvent.click(screen.getByRole("button", { name: "Nueva importación" }));
   expect(screen.queryByText(/Archivo seleccionado/)).toBeNull();
-  expect(screen.queryByText(/Bytes reconocidos/)).toBeNull();
+  expect(screen.queryByText(/Subido:/)).toBeNull();
   expect((screen.getByRole("button", { name: "Importar ZIP" }) as HTMLButtonElement).disabled).toBe(true);
 });
 
@@ -175,13 +175,13 @@ it("keeps one PUT in flight, reports only acknowledged bytes, and clears history
   const file = await select();
   validate();
   await waitFor(() => expect(file.slices).toHaveBeenCalledTimes(1));
-  expect(screen.getByText(/Bytes reconocidos por el servidor: 0 de 19/)).toBeDefined();
+  expect(screen.getByText(/Subido: 0 MB de 0 MB/)).toBeDefined();
   expect(receipt.calls.filter(call => call.startsWith("PUT"))).toEqual([]);
   release();
   await ready();
   fireEvent.click(screen.getByRole("button", { name: /own.zip —/ }));
   expect(screen.queryByText(/Archivo seleccionado/)).toBeNull();
-  expect(screen.queryByText(/Bytes reconocidos/)).toBeNull();
+  expect(screen.queryByText(/Subido:/)).toBeNull();
   const before = receipt.stateHash();
   validate();
   expect((await screen.findByRole("alert")).textContent).toBe("Selecciona el ZIP original para reintentar la recepción.");

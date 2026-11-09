@@ -13,11 +13,13 @@ const page = (key: string, rows: unknown[]) => Response.json({ [key]: rows, tota
 it.each([false, true])("new upload authorizes only local publication; rejected=%s", async rejected => {
   vi.stubGlobal("crypto", webcrypto);
   const writes: { path: string; body: unknown }[] = [];
+  const reads: string[] = [];
   const source = { id: "new", status: "receiving", sync_status: "pending", dataset_id: null, added_count: 0, preview_token: "a".repeat(64), preview: { ...preview, auto_import: true }, error: null, execution: null };
   const job = { id: "work", import_id: "new", kind: "preview", status: "succeeded", stage: "succeeded", progress: 100, result: {}, error: null, status_url: B + "/new/jobs/work" };
   let finished = false;
   vi.stubGlobal("fetch", vi.fn(async (input: string, options?: RequestInit) => {
     const path = new URL(input, "http://synthetic.test").pathname;
+    if (!options?.method) reads.push(path);
     if (options?.method) writes.push({ path, body: options.method === "POST" && options.body ? JSON.parse(String(options.body)) : undefined });
     if (path.endsWith("/access")) return Response.json({ development_mode: true });
     if (path.endsWith("/limits")) return Response.json(limits);
@@ -26,7 +28,7 @@ it.each([false, true])("new upload authorizes only local publication; rejected=%
     if (path.endsWith("/chunks/0") || path.endsWith("/finalize")) return Response.json({ import_id: "new", name: "synthetic.zip", size_bytes: 3, received_bytes: 3, reserved_bytes: 4099, chunk_bytes: 16 * 1024 ** 2, status: path.endsWith("/finalize") ? "sealed" : "receiving" });
     if (path.endsWith("/preview")) return Response.json({ ...job, status: "queued", stage: "queued", progress: 0 }, { status: 202 });
     if (path === job.status_url) { finished = true; return Response.json(job); }
-    if (path === B + "/new") return Response.json(finished ? { ...source, status: rejected ? "cancelled" : "imported", added_count: rejected ? 0 : 1, preview: { ...source.preview, error_count: rejected ? 1 : 0 }, execution: job } : source);
+    if (path === B + "/new") return Response.json(finished ? { ...source, status: rejected ? "cancelled" : "imported", error: rejected ? "validation_failed" : null, added_count: rejected ? 0 : 1, preview: { ...source.preview, error_count: rejected ? 1 : 0 }, execution: { ...job, error: rejected ? { code: "validation_failed" } : null } } : source);
     if (path.endsWith("/files")) return page("files", []);
     if (path.endsWith("/classes")) return page("classes", ["bird"]);
     if (path.endsWith("/issues")) return page("issues", rejected ? [{ id: "issue", path: "bird/nested/", code: "class_folders_required", severity: "error", action: "Organiza el ZIP como clase/audio.wav, sin carpeta contenedora ni subcarpetas." }] : []);
@@ -40,9 +42,19 @@ it.each([false, true])("new upload authorizes only local publication; rejected=%
   fireEvent.change(screen.getByLabelText("Nombre del dataset"), { target: { value: "New" } });
   fireEvent.change(screen.getByLabelText("Archivo ZIP"), { target: { files: [new File(["abc"], "synthetic.zip")] } });
   fireEvent.click(screen.getByRole("button", { name: "Importar ZIP" }));
-  await screen.findByText(rejected ? /ZIP rechazado/ : /Importada localmente: 1 archivo/);
+  await screen.findByText(rejected ? /Coloca cada audio WAV dentro/ : /Importada localmente: 1 archivo/);
   if (rejected) {
-    await screen.findByText(/Organiza el ZIP como clase/);
+    expect(screen.getByText(/Coloca cada audio WAV dentro/).textContent).toBe("Coloca cada audio WAV dentro de una carpeta con el nombre de su clase, directamente en la raíz del ZIP. No incluyas audios sueltos, una carpeta contenedora ni subcarpetas.");
+    expect(reads.filter(path => /\/(files|classes)$/.test(path))).toEqual([]);
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("ZIP rechazado")).toBeDefined();
+    expect(within(dialog).getByText("Instrucciones del archivo ZIP")).toBeDefined();
+    expect(within(dialog).getByLabelText("Cómo preparar el ZIP")).toBeDefined();
+    expect(within(dialog).getByText(/chucao\/audio_01.wav/)).toBeDefined();
+    expect(within(dialog).getByLabelText("Límites de peso")).toBeDefined();
+    expect(within(dialog).getByRole("button", { name: "Descargar ZIP de ejemplo sintético" })).toBeDefined();
+    expect(dialog.textContent).not.toMatch(/Clases propuestas|Cuota del dataset|bird\/nested|class_folders_required|página de incidencias|Importación en curso|Progreso del ZIP|Archivo seleccionado|quedó cancelada/);
+    expect(within(dialog).queryByRole("alert")).toBeNull();
     expect(screen.queryByRole("button", { name: "Cancelar importación" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Reintentar trabajo" })).toBeNull();
     expect(screen.queryByText(/cancela esta solicitud/)).toBeNull();
@@ -52,7 +64,7 @@ it.each([false, true])("new upload authorizes only local publication; rejected=%
     await waitFor(() => expect(writes.filter(w => w.path === B)).toHaveLength(2));
     const keys = writes.filter(w => w.path === B).map(w => (w.body as { request_key: string }).request_key);
     expect(keys[0]).not.toBe(keys[1]);
-    await screen.findByText(/ZIP rechazado/);
+    await screen.findByText(/Coloca cada audio WAV dentro/);
   }
   expect(writes.filter(w => w.path === B)).toHaveLength(rejected ? 2 : 1);
   expect(writes.find(w => w.path === B)?.body).toMatchObject({ auto_import: true, layout: "class_folders", target_id: null });

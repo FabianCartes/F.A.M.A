@@ -45,8 +45,8 @@ async function openReview(capacity: typeof quota = quota, status = "ready", erro
 
 it("shows bounded unique dataset capacity and permits the exact boundary without automatic writes", async () => {
   const writes = await openReview();
-  expect(await screen.findByText("Bytes únicos: actuales 100 + nuevos 200 = proyectados 300 / límite 300.")).toBeDefined();
-  expect(screen.getByText("Archivos únicos: actuales 1 + nuevos 2 = proyectados 3 / límite 3.")).toBeDefined();
+  expect(await screen.findByText("Espacio del dataset tras importar: 0 MB de 0 MB disponibles.")).toBeDefined();
+  expect(screen.getByText("Audios del dataset tras importar: 3 de 3 permitidos.")).toBeDefined();
   expect((screen.getByRole("button", { name: "Confirmar importación local" }) as HTMLButtonElement).disabled).toBe(false);
   expect(writes).toEqual([]);
 });

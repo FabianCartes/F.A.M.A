@@ -103,7 +103,7 @@ it('refreshes without transfer and downloads only confirmed selections without p
   await screen.findByText(/Descarga completada · GCS → Local: Aves/);
 });
 
-it('uploads only the recovered import after named confirmation and reports admission, not completion', async () => {
+it('recovers a completed import without redundant cloud or local-file actions', async () => {
   const base = '/api/ingestion/imports';
   const source = { id: 'private-import', archive_name: 'private-import.zip', name: 'Aves privadas', status: 'imported', sync_status: 'pending', dataset_id: 'owned-dataset', added_count: 2,
     preview_token: null, error: null, preview: { root: '', file_count: 2, class_count: 1, error_count: 0, warning_count: 0, total_size_bytes: 20, synced_count: 0 } };
@@ -128,16 +128,11 @@ it('uploads only the recovered import after named confirmation and reports admis
   fireEvent.click(screen.getByRole('button', { name: 'Actualizar importaciones' }));
   await waitFor(() => expect((screen.getByRole('button', { name: 'Actualizar importaciones' }) as HTMLButtonElement).disabled).toBe(false));
   expect(posts).toEqual([]);
-  const upload = screen.getByRole('button', { name: 'Subir este dataset a GCS' });
-  fireEvent.click(upload);
-  expect(confirm).toHaveBeenLastCalledWith(expect.stringContaining('owned-dataset'));
-  expect(confirm).toHaveBeenLastCalledWith(expect.stringContaining('Aves privadas'));
+  expect(screen.queryByRole('button', { name: 'Subir este dataset a GCS' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Consultar archivos locales' })).toBeNull();
+  expect(screen.getByRole('region', { name: 'Resumen de importación' }).textContent).toContain('Aves privadas');
+  expect(confirm).not.toHaveBeenCalled();
   expect(posts).toEqual([]);
-  confirm.mockReturnValue(true);
-  fireEvent.click(upload);
-  await screen.findByText(/Trabajo admitido; pendiente de ejecución/);
-  expect(posts).toEqual([`${base}/private-import/sync`]);
-  expect(screen.queryByText(/Trabajo completado/)).toBeNull();
 });
 
 it('uploads only selected private datasets using paginated history and monitors admission separately', async () => {
