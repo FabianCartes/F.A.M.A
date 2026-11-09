@@ -29,7 +29,16 @@ async function request(path: string, body?: unknown, signal?: AbortSignal): Prom
   return data;
 }
 
+const revisedTriadSchema = z.object({id: z.string().min(1), name: z.string(), weights: z.array(z.number()).length(3)});
+const CATALOGUE_ID = /^fama_trained_model_(\d+)$/;
+
 export const importedTrainingApi = {
+  /** Weights-only revision of a private composition; owner comes from the session, never the body. */
+  async reviseTriadWeights(catalogueId: string, weights: number[], signal?: AbortSignal) {
+    const match = CATALOGUE_ID.exec(catalogueId);
+    if (!match) throw new ImportedTrainingError('Composición importada no disponible.');
+    return revisedTriadSchema.parse(await request(`/api/training/models/${match[1]}/triad-weights`, {weights}, signal));
+  },
   async catalog(signal?: AbortSignal) {
     const data = await request('/api/training/datasets?include_imported=true', undefined, signal);
     const envelope = z.object({datasets: z.array(z.unknown())}).parse(data);

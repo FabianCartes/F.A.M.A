@@ -2,6 +2,7 @@
 
 import { getPredictionHistory } from "@/lib/api/predictionHistory";
 import PredictionModelSelector from "@/components/prediction/PredictionModelSelector";
+import TriadWeightRevision, { triadCompositionWeights } from "@/components/prediction/TriadWeightRevision";
 import InfoTooltip from "@/components/common/InfoTooltip";
 
 import { useState, useEffect, useMemo, useRef, useCallback, ChangeEvent, FormEvent } from "react";
@@ -532,6 +533,8 @@ function PrivatePredictionView({ authenticated, revision }: { authenticated: boo
   const selectedModelId = selectionState.modelId;
   const historySelectedModel = useRef(selectedModelId);
   historySelectedModel.current = selectedModelId;
+  const [catalogueRefresh, setCatalogueRefresh] = useState(0);
+  const preferredModelId = useRef<string | null>(null);
   const [catalogueError, setCatalogueError] = useState<string | null>(null);
   const [catalogueLoaded, setCatalogueLoaded] = useState(false);
   const [evaluationCatalogueStatus, setEvaluationCatalogueStatus] = useState<"available" | "unavailable" | "legacy">("legacy");
@@ -554,6 +557,7 @@ function PrivatePredictionView({ authenticated, revision }: { authenticated: boo
   const selectedModel = useMemo(() => {
     return availableModels.find((m) => m.id === selectedModelId);
   }, [availableModels, selectedModelId]);
+  const triadWeights = triadCompositionWeights(selectedModel);
   const selectedModelHasWeights = selectedModel?.has_weights === true;
   const hasUnavailableModels = availableModels.some((model) => model.has_weights !== true);
 
@@ -686,9 +690,13 @@ function PrivatePredictionView({ authenticated, revision }: { authenticated: boo
         const priorCatalogue = previousModels;
         previousModels = models;
         setAvailableModels(models);
+        const wanted = preferredModelId.current;
+        const wantedListed = wanted !== null && models.some((m) => m.id === wanted && m.has_weights === true);
+        if (wantedListed) preferredModelId.current = null;
         setSelectionState((state) => {
           const current = state.modelId;
           const selectable = models.filter((m) => m.has_weights === true);
+          if (wantedListed && wanted) return { ...state, modelId: wanted, evaluationDialogOpen: false, evaluationDialogModelId: null };
           if (selectable.some((m) => m.id === current)) return state;
           const defaultModel = selectable.find((m) => m.id === data.default_model_id);
           const domain = resolveModelDomain(priorCatalogue.find((m) => m.id === current), current);
@@ -722,7 +730,7 @@ function PrivatePredictionView({ authenticated, revision }: { authenticated: boo
       window.removeEventListener("focus", fetchModels);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [authenticated, revision, sessionCurrent]);
+  }, [authenticated, revision, sessionCurrent, catalogueRefresh]);
 
   useEffect(() => {
     if (!authenticated || !selectedDomain || !privateApiSameOrigin()) return;
@@ -1415,6 +1423,11 @@ function PrivatePredictionView({ authenticated, revision }: { authenticated: boo
               </span>
             </div>
           </div>
+
+          {triadWeights && selectedModel && (
+            <TriadWeightRevision key={selectedModel.id} modelId={selectedModel.id} weights={triadWeights}
+              onRevised={(newId) => { preferredModelId.current = newId; setCatalogueRefresh((n) => n + 1); }} />
+          )}
 
           {/* Tarjetas de Especificaciones Individuales */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">

@@ -1,6 +1,6 @@
 import { chooseModel, modelOptions } from "../../prediction/__tests__/selectorActions";
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, render, screen, act, within } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { cleanup, fireEvent, render, screen, act, within } from "@testing-library/react";
 import PredictionView from "../PredictionView";
 
 vi.mock('@/components/auth/SessionBoundary', () => ({ useOptionalWebSession: () => ({ id: 1 }) }));
@@ -473,5 +473,39 @@ describe("U7IndependentStable", () => {
     expect(api.predictionCalls()).toHaveLength(2);
     expect(api.feedbackCalls()).toHaveLength(1);
     expect(JSON.parse(String(api.feedbackCalls()[0][1]?.body))).toEqual({ id_prediccion: 902, fue_correcta: false, etiqueta_corregida: "normal", id_usuario: 1 });
+  });
+
+  describe('private triad weight revision', () => {
+    const triad = { id: 'fama_trained_model_4', name: 'Tríada importada', architecture: 'ImportedTriad', description: 'Composición', target_sr: 22050, duration_seconds: 5, classes: ['a', 'b'], is_default: false, has_weights: true, metrics: { weights: [0.1, 0.4, 0.5] } };
+    afterEach(cleanup);
+    const revised = { ...triad, id: 'fama_trained_model_9', metrics: { weights: [0.7, 0.2, 0.1] } };
+
+    it('offers the form only for a selected composition, then selects the new version', async () => {
+      let models: unknown[] = [triad];
+      const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit): Promise<Response> => {
+        const url = String(input);
+        if (url.includes('/api/models')) return { ok: true, json: async () => ({ models }) } as Response;
+        if (url.endsWith('/triad-weights')) { models = [triad, revised]; return Response.json({ id: revised.id, name: revised.name, weights: [0.7, 0.2, 0.1] }); }
+        return { ok: false } as Response;
+      });
+      global.fetch = fetchMock;
+      await act(async () => { render(<PredictionView />); });
+      expect(screen.getByRole('form', { name: 'Ajustar pesos de la tríada' })).toBeDefined();
+      expect(screen.getByText(/Pesos actuales: 10 % · 40 % · 50 %/)).toBeDefined();
+      for (const [i, v] of ['70', '20', '10'].entries()) fireEvent.change(screen.getByLabelText(`Porcentaje del componente ${i + 1}`), { target: { value: v } });
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Evaluar nuevos pesos' })); });
+      const post = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/api/training/models/4/triad-weights'))!;
+      expect(JSON.parse(String(post[1]?.body))).toEqual({ weights: [0.7, 0.2, 0.1] });
+      expect(screen.getByText(/Pesos actuales: 70 % · 20 % · 10 %/)).toBeDefined();
+      expect(screen.getByText('ID: fama_trained_model_9')).toBeDefined();
+    });
+
+    it('shows nothing new for an individual model', async () => {
+      global.fetch = vi.fn(async (input: RequestInfo | URL) => String(input).includes('/api/models')
+        ? { ok: true, json: async () => ({ models: mockModels }) } as Response : { ok: false } as Response);
+      await act(async () => { render(<PredictionView />); });
+      expect(screen.queryByRole('form', { name: 'Ajustar pesos de la tríada' })).toBeNull();
+      expect(screen.queryByText('Ajustar pesos')).toBeNull();
+    });
   });
 });
