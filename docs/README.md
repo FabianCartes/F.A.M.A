@@ -26,6 +26,7 @@ La documentación está organizada temáticamente en subdirectorios especializad
 - [Plan de entrenamiento e inferencia de tríada](./arquitectura/triad-training-inference-plan.md): especificación y seguimiento del flujo aprobado; preparación, entrenamiento secuencial, evaluación conjunta, publicación privada, inferencia, revisión de pesos e interfaz implementados y verificados con pruebas sintéticas por cortes. Sin commit, sin aplicación al entorno activo ni entrenamiento real.
 - [Uso: entrenar una tríada privada](./manuales/integracion-flujo-entrenamiento.md#entrenar-una-tríada-privada): pasos, invalidación de preparaciones, disponibilidad y límites.
 - [ADR 0057 — identidad inmutable de composiciones](./adr/0057-identidad-inmutable-de-composiciones-importadas.md): separación entre identidad del ensamble, procedencia individual y admisión a evaluación/registro; un manifiesto no acredita disponibilidad.
+- [ADR 0058 — caché del hash de checkpoints](./adr/0058-cache-de-hash-de-checkpoints-por-identidad-de-archivo.md): el catálogo reutiliza el SHA-256 mientras la identidad del archivo (`dev`, inode, tamaño, `mtime_ns`, `ctime_ns`) no cambie; la carga para inferencia sigue hasheando sus bytes.
 
 ## Mejoras de Predicciones — implementación local
 
@@ -72,7 +73,7 @@ docs/
 ├── arquitectura/                # Diseño de sistemas, pipelines, MLOps y despliegue
 ├── limites/                     # Límites matemáticos, físicos y problemas conocidos
 ├── manuales/                    # Manual de usuario, revisión, despliegue e índices canónicos
-├── adr/                         # Architectural Decision Records (ADR 0001 a 0057)
+├── adr/                         # Architectural Decision Records (ADR 0001 a 0058)
 ├── receipts/                    # Recibos técnicos reproducibles en formato JSON (RDD)
 ├── duplicados-exactos/           # Tarea acotada: admisión de feedback sin duplicados SHA-256
 └── images/                      # Diagramas, matrices de confusión y gráficos vectoriales
@@ -120,6 +121,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`benchmark_local_cpu_20261016.md`](./modelos/benchmark_local_cpu_20261016.md): Mediciones reales CPU autorizadas de un audio/checkpoint; fallos de compatibilidad conservados, preprocesamiento medido y predictor detenido por filtro de ruido, sin acreditar forward, latencia hasta pantalla ni 50 GB.
 
 ### 3. [`docs/arquitectura/`](./arquitectura/) — Arquitectura de Software y MLOps
+* [`0058-cache-de-hash-de-checkpoints-por-identidad-de-archivo.md`](./adr/0058-cache-de-hash-de-checkpoints-por-identidad-de-archivo.md): Caché por identidad de archivo para el SHA-256 de checkpoints en el catálogo; riesgo residual acotado a escrituras privilegiadas o marcas de tiempo gruesas. Catálogo local de 5,4 s a 0,9 s en caliente.
 * [`0056-audio-local-privado-de-inferencia.md`](./adr/0056-audio-local-privado-de-inferencia.md): Audio privado local para inferencia importada, identidad relativa verificada, aprobación explícita y conservación ante commit o cancelación inciertos; GCS legacy separado. [Recibo de despliegue local](./receipts/local-inference-no-gcs.json), sin inferencia real ejecutada por el agente.
 * [`0053-procedencia-durable-de-entrenamiento-importado.md`](./adr/0053-procedencia-durable-de-entrenamiento-importado.md): Asociación durable mínima adelantada a T3, autenticación solo de recursos importados y checkpoint pendiente sin publicación; exclusión explícita del bootstrap, evidencia funcional y límites en el plan, sin migraciones reales.
 * [`0052-preparacion-local-de-datasets-importados.md`](./adr/0052-preparacion-local-de-datasets-importados.md): Contrato de T0 para preparación local con mapa de grupos explícito y cobertura de clases; snapshot local separado del manifiesto remoto, sin alterar ZIP, legacy ni GCS de predicción. Implementación pendiente.

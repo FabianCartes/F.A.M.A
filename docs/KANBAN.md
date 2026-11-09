@@ -6,6 +6,11 @@ kanban-plugin: basic
 
 - [x] **MVP-GIT:** rama `feat/local-mvp`, respaldo validado de fuentes/índice y commits funcionales locales; fuentes conservadas, salvo dos correcciones de fixtures verificadas. [Plan y unidades](arquitectura/local-mvp-consolidation-plan.md), [recibo y exclusiones](receipts/local-mvp-consolidation.json). Frontend469PASS/tipos0; backend333 casos distintos con resultados aprobados en ejecuciones fragmentadas, no suite completa verde. Fallos, comprobaciones incompatibles con el runner y artefactos retirados se conservan sin aprobarlos. Sin push, PR, merge, nuevo despliegue, GCS o datos reales modificados; no acredita producción ni aceptación visual.
 
+## Rendimiento del catálogo de predicción
+
+- [x] **PERF-CAT-1 — caché del hash de checkpoints:** `GET /api/models` hasheaba ~8,7 GB por petición (cada checkpoint ~10 veces). Caché por identidad de archivo en `checkpoint_digest.file_sha256`, usada por el guard estándar, `_metadata_candidate` y `TrainedModelPredictor.metadata`; inferencia sin cambios. [ADR 0058](adr/0058-cache-de-hash-de-checkpoints-por-identidad-de-archivo.md). 9 pruebas nuevas; regresión de 23 módulos sin fallos nuevos frente a la línea base (100 fallos/8 errores previos conservados). Contenedor local: frío 6,8→2,8 s, caliente 5,4→0,9 s, mismo catálogo. Imagen no reconstruida ni desplegada.
+- [ ] **PERF-CAT-2 — condicional:** la tríada reconstruye predictores lazy y deserializa componentes en cada petición (~0,9 s restantes). Evaluar caché de inspección por identidad solo si se necesita bajar de ese tiempo.
+
 ## Entrenamiento de datasets importados — plan para nueva sesión
 
 - [x] **TRAIN-IMPORT-T0 — investigación y contrato de diseño cerrados:** [resultado T0](arquitectura/entrenamiento-datasets-importados-plan.md#resultado-técnico-de-t0) y [ADR 0052](adr/0052-preparacion-local-de-datasets-importados.md). Contratos de snapshot local y registry→predictor trazados; usuario confirma mapa explícito de grupos, cobertura de clases en train/val/test y WAV single-label local. Predicción HTTP conserva GCS. Sin implementación ni pruebas funcionales.
