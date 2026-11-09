@@ -163,6 +163,66 @@ class ImportedTrainingSource:
         while verified source capture and the already-admitted start continue.
         Historical resolve deliberately does not repeat the admission check.
         """
+        self._admit_for_training(owner, dataset_id, snapshot_id)
+        try:
+            return self.resolve(owner, dataset_id, snapshot_id, version, **options)
+        except ImportedSourceError:
+            raise
+        except Exception as error:
+            from fastapi import HTTPException
+            if isinstance(error, HTTPException) and error.status_code == 503:
+                raise
+            raise ImportedSourceError() from error
+
+    def resolve_triad_for_training(self, owner, dataset_id, snapshot_id, components):
+        """Return ordered resolved sources for a common admitted cohort.
+
+        components is a list of exactly three dicts with required ``version``
+        (prepared version) and ``architecture`` (resolve's architecture name),
+        and optional ``audio_config`` / ``windowing_config``. No per-component
+        owner, dataset or snapshot overrides are accepted. Profiles may differ;
+        cohort assignments, class indices, seed, policy and provenance may not.
+        Repeated architectures/preparations are allowed. This does not persist
+        an ensemble or start training. Admission linearizes once, as for the
+        single-source method; subsequent archival does not cancel admission.
+        """
+        if (type(components) is not list or len(components) != 3
+                or any(type(c) is not dict or not {"version", "architecture"} <= c.keys()
+                       or c.keys() - {"version", "architecture", "audio_config", "windowing_config"}
+                       for c in components)):
+            raise ImportedSourceError()
+        self._admit_for_training(owner, dataset_id, snapshot_id)
+        return self.resolve_triad(owner, dataset_id, snapshot_id, components)
+
+    def resolve_triad(self, owner, dataset_id, snapshot_id, components):
+        """Resolve historical prepared bytes and their actual common cohort.
+
+        Archive/revision admission applies to NEW training only. Historical
+        evaluation still verifies owner, full snapshot bytes and each preparation.
+        """
+        if (type(components) is not list or len(components) != 3
+                or any(type(c) is not dict or not {"version", "architecture"} <= c.keys()
+                       or c.keys() - {"version", "architecture", "audio_config", "windowing_config"}
+                       for c in components)):
+            raise ImportedSourceError()
+        sources = [self.resolve(owner, dataset_id, snapshot_id, **component)
+                   for component in components]
+        first = sources[0]
+        for source in sources[1:]:
+            if (source["classes"] != first["classes"]
+                    or source["identity"]["class_to_index"] != first["identity"]["class_to_index"]
+                    or any(source["preparation"]["manifest"][key]
+                           != first["preparation"]["manifest"][key]
+                           for key in ("seed", "policy", "provenance"))
+                    or any({(r["member_id"], r["group_id"], r["recording_id"])
+                            for r in source["splits"][split]}
+                           != {(r["member_id"], r["group_id"], r["recording_id"])
+                               for r in first["splits"][split]}
+                           for split in ("train", "val", "test"))):
+                raise ImportedSourceError()
+        return sources
+
+    def _admit_for_training(self, owner, dataset_id, snapshot_id):
         from app.models.dataset_import import ImportedDataset
         if type(owner) is not int or owner <= 0:
             raise ImportedSourceError()
@@ -181,7 +241,6 @@ class ImportedTrainingSource:
                     raise ImportedSourceError("preparation_stale",
                         "La preparación corresponde a una revisión anterior del dataset. Cree un nuevo "
                         "snapshot, complete la procedencia de todos los audios y vuelva a preparar las particiones.")
-            return self.resolve(owner, dataset_id, snapshot_id, version, **options)
         except ImportedSourceError:
             raise
         except Exception as error:
