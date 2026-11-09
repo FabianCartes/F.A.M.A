@@ -1,0 +1,19 @@
+{
+  "architecture": "convnext_nano",
+  "repository": "timm/convnext_nano.in12k_ft_in1k",
+  "revision": "f185680dbe452e7d20db71f4e5020b89fe708945",
+  "filename": "model.safetensors",
+  "size_bytes": 62388542,
+  "sha256": "1f7a556379b5f6e3356fed18331b98f3d405f9b33607be259c265cf692d94cec",
+  "cache_directory": "/home/kevin/Work/fama/.pretrained-cache-0bda6d69b0d7a77c/huggingface",
+  "repository_directory": "/home/kevin/Work/fama/.pretrained-cache-0bda6d69b0d7a77c/huggingface/models--timm--convnext_nano.in12k_ft_in1k",
+  "source": "Pinned official timm Hugging Face repository; SHA and size matched LFS metadata",
+  "reason": "Private triad training failed offline at ConvNeXt-Nano construction: the cache only had EfficientNet-B0 and ResNet-34d.",
+  "publication": "Staged download, verified, renamed into the cache without overwriting; refs/main added with the pinned revision.",
+  "incident": "huggingface_hub 2.x in the host venv stored the blob as a symlink into the staging directory's shared store; deleting the stage left it dangling. Replaced by a verified regular file (same SHA and size), matching the ResNet-34d layout.",
+  "offline_verification": "Inside fama-manual-dev-44938bc83ad0184c-api with HF_HUB_OFFLINE=1: timm.create_model pretrained OK for efficientnet_b0, convnext_nano and resnet34d.",
+  "b0_unchanged": true,
+  "resnet34d_unchanged": true,
+  "container_restarted": false,
+  "training_started": false
+}

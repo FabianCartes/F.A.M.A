@@ -21,6 +21,12 @@ La documentación está organizada temáticamente en subdirectorios especializad
 - [Entrada y recuperación de sesión](./manuales/acceso-web.md) y [plan](./arquitectura/login-only-access-plan.md) y [recibo](./receipts/login-only-access.json): guardia central del workspace, login obligatorio y errores con reintento; no sustituye la autorización de las APIs.
 - [Contratos de sesión web](./manuales/sesion-web-importados.md): cookies, Bearer y configuración del backend conservados.
 
+## Ensamble de tres modelos — implementación local
+
+- [Plan de entrenamiento e inferencia de tríada](./arquitectura/triad-training-inference-plan.md): especificación y seguimiento del flujo aprobado; preparación, entrenamiento secuencial, evaluación conjunta, publicación privada, inferencia, revisión de pesos e interfaz implementados y verificados con pruebas sintéticas por cortes. Sin commit, sin aplicación al entorno activo ni entrenamiento real.
+- [Uso: entrenar una tríada privada](./manuales/integracion-flujo-entrenamiento.md#entrenar-una-tríada-privada): pasos, invalidación de preparaciones, disponibilidad y límites.
+- [ADR 0057 — identidad inmutable de composiciones](./adr/0057-identidad-inmutable-de-composiciones-importadas.md): separación entre identidad del ensamble, procedencia individual y admisión a evaluación/registro; un manifiesto no acredita disponibilidad.
+
 ## Mejoras de Predicciones — implementación local
 
 - [Selector con búsqueda y detalle de evaluación simplificado](./arquitectura/prediction-searchable-selector-plan.md): selector accesible, disposición de la tarjeta, fechas legibles y ayudas de evaluación; implementado y aplicado al frontend local, con comprobaciones y límites documentados.
@@ -40,7 +46,7 @@ La documentación está organizada temáticamente en subdirectorios especializad
 
 ## Pesos preentrenados locales
 
-- [EfficientNet-B0](./receipts/pretrained-b0-cache.json) y [ResNet-34d](./receipts/pretrained-resnet34d-cache.json): procedencia, hashes y alcance de las comprobaciones de carga offline; no son métricas de modelos entrenados.
+- [EfficientNet-B0](./receipts/pretrained-b0-cache.json), [ConvNeXt-Nano](./receipts/pretrained-convnext-nano-cache.json) y [ResNet-34d](./receipts/pretrained-resnet34d-cache.json): procedencia, hashes y alcance de las comprobaciones de carga offline; no son métricas de modelos entrenados.
 - [Uso de la caché persistente](./manuales/entorno-manual-entrenamiento.md#pesos-preentrenados-de-resnet-34d): configuración conservada y preparación compatible por arquitectura.
 
 ## Bootstrap de entrenamiento importado
@@ -66,7 +72,7 @@ docs/
 ├── arquitectura/                # Diseño de sistemas, pipelines, MLOps y despliegue
 ├── limites/                     # Límites matemáticos, físicos y problemas conocidos
 ├── manuales/                    # Manual de usuario, revisión, despliegue e índices canónicos
-├── adr/                         # Architectural Decision Records (ADR 0001 a 0056)
+├── adr/                         # Architectural Decision Records (ADR 0001 a 0057)
 ├── receipts/                    # Recibos técnicos reproducibles en formato JSON (RDD)
 ├── duplicados-exactos/           # Tarea acotada: admisión de feedback sin duplicados SHA-256
 └── images/                      # Diagramas, matrices de confusión y gráficos vectoriales
