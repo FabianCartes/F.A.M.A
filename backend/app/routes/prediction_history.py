@@ -12,6 +12,7 @@ from app.services.auth import security_bearer
 from app.services.imported_identity import imported_user
 from app.services.imported_feedback import imported_model_id
 from app.services.local_prediction_audio import LocalPredictionAudio
+from app.services.registry import get_model_registry
 
 router = APIRouter(prefix='/api/inference', tags=['Predicciones'])
 
@@ -39,20 +40,36 @@ def prediction_history(request: Request, response: Response,
         model_id: str = Query(min_length=1, max_length=100),
         limit: int = Query(default=20, ge=1, le=20),
         cursor: int | None = Query(default=None, gt=0),
-        credentials=Depends(security_bearer), db: Session = Depends(get_db)):
+        credentials=Depends(security_bearer), db: Session = Depends(get_db),
+        registry=Depends(get_model_registry)):
     user = imported_user(request, response, credentials, db)
     response.headers['Cache-Control'] = 'no-store'
     numeric = imported_model_id(model_id)
     source = (db.get(ImportedModelSource, numeric) if numeric
               and inspect(db.get_bind()).has_table('imported_model_source') else None)
-    dataset = db.get(ImportedDataset, source.dataset_id) if source else None
-    if (source is None or source.owner_id != user.id or dataset is None
-            or dataset.owner_id != user.id):
+    if source is not None:
+        if source.owner_id != user.id:
+            raise HTTPException(404, 'Modelo no disponible.')
+        dataset_id = source.dataset_id
+    else:
+        # Deny unknown/foreign/non-triad rows before configuring a private store.
+        from app.models.training import Modelo
+        model = db.get(Modelo, numeric) if numeric else None
+        if model is None or model.id_usuario != user.id or model.arquitectura != 'ImportedTriad':
+            raise HTTPException(404, 'Modelo no disponible.')
+        try:
+            from app.services.training import training_service
+            manifest = registry._triad_service(training_service.checkpoints_dir).read_manifest(user.id, numeric)
+            dataset_id = manifest['cohort']['dataset_id']
+        except Exception:
+            raise HTTPException(404, 'Modelo no disponible.') from None
+    dataset = db.get(ImportedDataset, dataset_id)
+    if dataset is None or dataset.owner_id != user.id:
         raise HTTPException(404, 'Modelo no disponible.')
     canonical = f'fama_trained_model_{numeric}'
     query = db.query(Prediccion).filter(
         Prediccion.modelo_id.in_([str(numeric), canonical]),
-        Prediccion.dataset_name == 'imported:' + source.dataset_id,
+        Prediccion.dataset_name == 'imported:' + dataset_id,
         Prediccion.ruta_audio_prueba.startswith(f'local_predictions/{user.id}/'))
     if cursor is not None:
         query = query.filter(Prediccion.id_prediccion < cursor)

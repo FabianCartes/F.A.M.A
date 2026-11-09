@@ -100,6 +100,67 @@ def test_cold_owner_inference_is_one_composition_result(http, bound):
     assert registry.get_default_model_id() == 'ordinary'
 
 
+def test_catalogue_versions_include_pending_rows_and_compare_ordered_components(http, bound, monkeypatch, tmp_path):
+    from app.models.dataset_import import ImportedDataset
+    from app.models.training import Modelo
+    from app.services.predictors.trained_predictor import TrainedModelPredictor
+    from app.services.registry import get_model_registry
+
+    client, registry, saved, headers = http
+    records = registry.triad_records
+    pending = records.revise_weights(1, saved['model'].id_modelo, [0.2, 0.3, 0.5])
+    revised = records.revise_weights(1, saved['model'].id_modelo, [0.4, 0.3, 0.3])
+    reordered = bound[1].create(1, list(reversed(bound[4]['manifest']['components'])), [0.1, 0.4, 0.5])
+    trained = records.create(1, reordered['id'])
+    with bound[0].begin() as db:
+        db.get(ImportedDataset, bound[4]['manifest']['cohort']['dataset_id']).name = 'Birds'
+        db.get(Modelo, pending['model'].id_modelo).estado = 'imported_triad_pending'
+
+    def forbidden(*args, **kwargs):
+        pytest.fail('catalogue must not load neural weights or reevaluate compositions')
+    monkeypatch.setattr(TrainedModelPredictor, 'load_weights', forbidden)
+    monkeypatch.setattr(records.evaluation, 'evaluate', forbidden)
+    for _ in range(2):
+        response = client.get('/api/models?private_only=true', headers=headers(1))
+        assert response.status_code == 200, response.text
+        models = {m['id']: m for m in response.json()['models'] if m['architecture'] == 'ImportedTriad'}
+        original = models[saved['predictor'].model_id]
+        revision = models[revised['predictor'].model_id]
+        new_training = models[trained['predictor'].model_id]
+        assert original['name'] == 'Birds · Tríada v1'
+        assert revision['name'] == 'Birds · Tríada v3'
+        assert new_training['name'] == 'Birds · Tríada v4'
+        assert pending['predictor'].model_id not in models
+        assert original['metrics']['triad_version'] == 1
+        assert revision['metrics']['triad_version'] == 3
+        assert revision['metrics']['same_components_as_version'] == 1
+        assert not original['metrics'].get('same_components_as_version')
+        assert not new_training['metrics'].get('same_components_as_version')
+        # A new registry instance must derive the same identities, not count the visible cache.
+        registry = ModelRegistry(triad_records=records)
+        client.app.dependency_overrides[get_model_registry] = lambda: registry
+
+    # A missing/corrupt earlier descriptor cannot be silently skipped: its
+    # dataset is unknown, so later versions must lose unprovable claims.
+    descriptor = bound[1].root / (pending['model'].hash_binario + '.json')
+    assert not descriptor.is_symlink()
+    assert descriptor.resolve(strict=True).is_relative_to(tmp_path.resolve(strict=True))
+    original_mode = descriptor.stat().st_mode & 0o777
+    descriptor.chmod(0o600)
+    try:
+        descriptor.write_bytes(b'corrupt synthetic descriptor')
+    finally:
+        descriptor.chmod(original_mode)
+    response = client.get('/api/models?private_only=true', headers=headers(1))
+    assert response.status_code == 200, response.text
+    models = {m['id']: m for m in response.json()['models'] if m['architecture'] == 'ImportedTriad'}
+    assert models[saved['predictor'].model_id]['name'] == 'Birds · Tríada v1'
+    for key in (revised['predictor'].model_id, trained['predictor'].model_id):
+        assert models[key]['name'] == 'Tríada importada'
+        assert 'triad_version' not in models[key]['metrics']
+        assert 'same_components_as_version' not in models[key]['metrics']
+
+
 def test_owner_catalogue_has_actual_joint_reports_and_no_foreign_discovery(http, bound):
     client, registry, saved, headers = http
     key = saved['predictor'].model_id

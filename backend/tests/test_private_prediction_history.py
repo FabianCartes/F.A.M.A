@@ -5,6 +5,72 @@ from tests.test_api_feedback import client, test_db, fake_gcs
 from tests.test_imported_feedback_api import owners
 from app.models.dataset_import import ImportedDataset
 from app.models.prediction import Prediccion
+# Reuse the isolated, persisted composition fixture and its real HTTP writer.
+from tests.test_dataset_import_api import imports
+from tests.test_imported_dataset_preparation import cohort
+from tests.test_imported_triad_evaluation import bound, synthetic_audio
+from tests.test_imported_triad_registry import (
+    http as triad_http, usable_synthetic_checkpoints,
+)
+
+
+def test_triad_prediction_is_retrievable_only_in_its_exact_composition_history(triad_http, bound, monkeypatch):
+    from app.routes.prediction_history import router
+    from tests.test_imported_dataset_preparation import wav_bytes as synthetic_wav
+    from tests.test_imported_triad_records import service
+
+    client, registry, saved, headers = triad_http
+    client.app.include_router(router)
+    key = saved['predictor'].model_id
+    revision = service(bound).revise_weights(1, saved['model'].id_modelo, [0.4, 0.3, 0.3])
+    revision_key = revision['predictor'].model_id
+    recorded = client.post('/api/predict', params={'model_id': key}, headers=headers(1),
+        files={'file': ('synthetic-history.wav', synthetic_wav(7), 'audio/wav')})
+    assert recorded.status_code == 200, recorded.text
+    assert recorded.json()['modelo_id'] == key
+    dataset_id = bound[4]['manifest']['cohort']['dataset_id']
+    with bound[0].begin() as db:
+        for number, audio_key, dataset in (
+            (101, 'local_predictions/2/' + 'a' * 32 + '/' + 'b' * 64 + '/44.wav', dataset_id),
+            (102, 'local_predictions/1/../secret.wav', dataset_id),
+            (103, 'local_predictions/1/' + 'a' * 32 + '/' + 'b' * 64 + '/44.wav', 'e' * 32),
+        ):
+            db.add(Prediccion(id_prediccion=number, nombre_original='not-visible.wav',
+                ruta_audio_prueba=audio_key, etiqueta_predicha='zebra', confianza=.75,
+                modelo_id=key, dataset_name='imported:' + dataset))
+
+    def forbidden(*args, **kwargs):
+        pytest.fail('history must not load neural weights, evaluate or iterate audio')
+    from app.services.predictors.trained_predictor import TrainedModelPredictor
+    monkeypatch.setattr(TrainedModelPredictor, 'load_weights', forbidden)
+    monkeypatch.setattr(registry.triad_records.evaluation, 'evaluate', forbidden)
+    monkeypatch.setattr(registry.triad_records.evaluation.sources.preparations.snapshots,
+        'iter_verified', forbidden)
+
+    history = client.get('/api/inference/history', params={'model_id': key}, headers=headers(1))
+    assert history.status_code == 200, history.text
+    assert history.headers['cache-control'] == 'no-store'
+    assert history.json()['next_cursor'] is None
+    assert len(history.json()['items']) == 1
+    item = history.json()['items'][0]
+    assert item['filename'] == 'synthetic-history.wav'
+    assert item['modelo_id'] == key
+    assert item['clase'] == recorded.json()['clase']
+    assert item['confianza'] == recorded.json()['confianza']
+    assert 'local_predictions' not in history.text
+    assert bound[4]['id'] not in history.text
+    numeric = str(saved['model'].id_modelo)
+    assert client.get('/api/inference/history', params={'model_id': numeric},
+        headers=headers(1)).json() == history.json()
+    # The same dataset and even the same components do not merge histories.
+    for other_key in (revision_key, 'fama_trained_model_1'):
+        empty = client.get('/api/inference/history', params={'model_id': other_key}, headers=headers(1))
+        assert empty.status_code == 200, empty.text
+        assert empty.json() == {'items': [], 'next_cursor': None}
+    assert client.get('/api/inference/history', params={'model_id': key}).status_code == 401
+    foreign = client.get('/api/inference/history', params={'model_id': key}, headers=headers(2))
+    assert foreign.status_code == 404
+    assert foreign.json() == {'detail': 'Modelo no disponible.'}
 
 
 @pytest.fixture

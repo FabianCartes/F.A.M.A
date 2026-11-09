@@ -108,7 +108,7 @@ class ModelRegistry:
             raise ModelWeightsError('Composición importada no disponible.') from None
         return predictor
 
-    def _publish_triad(self, model, owner_id, root, admitted_pair_ids):
+    def _publish_triad(self, model, owner_id, root, admitted_pair_ids, presentation=None):
         key = f'fama_trained_model_{model.id_modelo}'
         self._hide_model_aliases(model)
         # Row ownership can deny visibility, never authorize publication.
@@ -133,11 +133,15 @@ class ModelRegistry:
                 pred.composition_admission = admission
                 pred.imported_source = dict(owner_id=owner_id,
                     dataset_id=fresh['manifest']['cohort']['dataset_id'])
-                pred.metadata.name = 'Tríada importada'
-                pred.metadata.architecture = 'ImportedTriad'
-                pred.metadata.checkpoint_sha256 = admission['sha256']
-                pred.metadata.metrics = dict(composition_sha256=admission['sha256'],
-                    components=fresh['manifest']['components'], weights=fresh['manifest']['weights'])
+            # Refresh presentation even on a retained predictor: a now-unreadable
+            # preceding reservation must not leave stale version claims cached.
+            presentation = presentation or {}
+            pred.metadata.name = presentation.get('name', 'Tríada importada')
+            pred.metadata.architecture = 'ImportedTriad'
+            pred.metadata.checkpoint_sha256 = admission['sha256']
+            pred.metadata.metrics = dict(composition_sha256=admission['sha256'],
+                components=fresh['manifest']['components'], weights=fresh['manifest']['weights'],
+                **presentation.get('metrics', {}))
             self._predictors[key] = pred
             self._db_predictors[key] = pred
             if admitted_pair_ids is not None:
@@ -468,10 +472,18 @@ class ModelRegistry:
             names = model_display_names(models)
             self._reconcile_db_models(models)
             self._reset_db_identity_errors(models)
+            triad_versions = {}
+            if (type(owner_id) is int and owner_id > 0
+                    and any(m.id_usuario == owner_id and self._is_triad(m) for m in models)):
+                try:
+                    triad_versions = self._triad_service(root).catalogue_versions(owner_id)
+                except Exception:
+                    pass  # Availability never authorizes guessed version metadata.
             for model in models:
                 key = f"fama_trained_model_{model.id_modelo}"
                 if self._is_triad(model):
-                    self._publish_triad(model, owner_id, root, admitted_pair_ids)
+                    self._publish_triad(model, owner_id, root, admitted_pair_ids,
+                        triad_versions.get(model.id_modelo))
                     continue
                 try:
                     source_owner, has_sources = self._source_owner(db, model)

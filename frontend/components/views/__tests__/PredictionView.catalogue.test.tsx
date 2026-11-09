@@ -110,6 +110,33 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("Catálogo público de Predicción", () => {
+  it("shows the same triad title and full ordered weights on the selected card, with joint metrics only", async () => {
+    const triad = {
+      ...model11, id: 'fama_trained_model_28', name: 'Birds · Tríada v4',
+      architecture: 'ImportedTriad', dataset_name: 'Birds', checkpoint_sha256: 'a'.repeat(64),
+      metrics: {
+        triad_version: 4, same_components_as_version: 1,
+        dataset_id: 'birds-private', dataset_display_name: 'Birds',
+        weights: [0.4, 0.3, 0.3], f1_macro: 0.99, accuracy: 0.99,
+        components: ['efficientnet_b0', 'convnext_nano', 'resnet34d'].map((architecture, index) => ({
+          model_id: index + 1, checkpoint_sha256: String(index + 1).repeat(64),
+          imported_source: { profile: { architecture } },
+        })),
+      },
+      evaluations: { test: { latest_attempt: attempt(8, 'completed', 'test', 2, 2),
+        latest_completed: completed(8, 'test', v2Report, 2, 2) } },
+    } as unknown as RegisteredModel;
+    catalogue = async () => response([triad], triad.id, [], { evaluation_catalogue_status: 'available' });
+    await show();
+    expect(selection().textContent).toContain('Birds · Tríada v4');
+    const card = screen.getByRole('region', { name: 'Modelo seleccionado' });
+    expect(within(card).getByRole('heading', { name: 'Birds · Tríada v4' })).toBeDefined();
+    expect(within(card).getByText('B0 40 · CNX 30 · R34 30')).toBeDefined();
+    expect(within(card).getByTitle('Mismos modelos que la v1; solo cambian los pesos')).toBeDefined();
+    expect(card.textContent).not.toContain('99.00%');
+    expect(card.textContent).not.toContain('99%');
+  });
+
   it("summarizes evaluation details without internal metadata and explains class samples", async () => {
     const evaluated = { ...model11, checkpoint_sha256: "a".repeat(64), evaluations: {
       val: { latest_attempt: attempt(7, "completed", "val", 2, 2), latest_completed: completed(7, "val", v2Report, 2, 2) },

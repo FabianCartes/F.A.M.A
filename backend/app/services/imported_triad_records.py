@@ -133,6 +133,71 @@ class ImportedTriadRecords:
             identities[attempt.split] = actual.model_dump()
         return (admitted['val'], admitted['test']), identities
 
+    def catalogue_versions(self, owner):
+        """Stable presentation from ALL persisted owner rows, not admitted rows.
+
+        Reservation IDs establish creation order, including pending/unavailable
+        compositions. If an earlier row cannot be bound to a dataset, later
+        versions are unknown: stop rather than silently closing the gap. Nothing
+        here admits inference, evaluates, repairs rows or creates attempts.
+        """
+        from sqlalchemy import or_
+        from app.models.dataset_import import ImportedDataset
+        versions, counts, references = {}, {}, {}
+        if type(owner) is not int or owner <= 0:
+            return versions
+        with self.sessions() as db:
+            rows = db.query(Modelo).filter(Modelo.id_usuario == owner, or_(
+                Modelo.arquitectura == IMPORTED_TRIAD,
+                Modelo.estado.like('imported_triad_%'))).order_by(Modelo.id_modelo).all()
+            for row in rows:
+                try:
+                    manifest, pointer, size = self._artifact(owner, row.hash_binario)
+                    self._unique(db, owner, row.hash_binario, row.id_modelo)
+                    self._matches(row, owner, row.hash_binario, pointer, size,
+                        pending=row.estado == PENDING)
+                    dataset_id = manifest['cohort']['dataset_id']
+                    dataset = db.get(ImportedDataset, dataset_id)
+                    if dataset is None or dataset.owner_id != owner or not dataset.name:
+                        raise ImportedTriadEvaluationError()
+                    version = counts.get(dataset_id, 0) + 1
+                    counts[dataset_id] = version
+                    metadata = dict(triad_version=version, dataset_id=dataset_id,
+                        dataset_display_name=dataset.name)
+                    for previous, previous_version in references.get(dataset_id, []):
+                        if (previous['components'] == manifest['components']
+                                and previous['weights'] != manifest['weights']):
+                            metadata['same_components_as_version'] = previous_version
+                            break
+                    versions[row.id_modelo] = dict(name=f'{dataset.name} · Tríada v{version}',
+                        metrics=metadata)
+                    references.setdefault(dataset_id, []).append((manifest, version))
+                except Exception:
+                    # No guessed dataset for this row, and therefore no guessed
+                    # sequence for any later row belonging to this owner.
+                    break
+        return versions
+
+    def read_manifest(self, owner, model_id):
+        """Read historical identity without checkpoints, audio or evaluation.
+
+        The persisted owner, unique row, artifact pointer, size and SHA bind this
+        descriptor. This does not admit inference or claim current availability.
+        """
+        try:
+            if type(owner) is not int or owner <= 0 or type(model_id) is not int or model_id <= 0:
+                raise ImportedTriadEvaluationError()
+            with self.sessions() as db:
+                row = db.get(Modelo, model_id)
+                if row is None or row.id_usuario != owner:
+                    raise ImportedTriadEvaluationError()
+                self._unique(db, owner, row.hash_binario, model_id)
+                manifest, pointer, size = self._artifact(owner, row.hash_binario)
+                self._matches(row, owner, row.hash_binario, pointer, size)
+                return manifest
+        except Exception:
+            raise ImportedTriadEvaluationError() from None
+
     def read_admitted(self, owner, model_id):
         try:
             if type(model_id) is not int or model_id <= 0 or type(owner) is not int or owner <= 0:

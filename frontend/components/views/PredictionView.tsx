@@ -1,7 +1,7 @@
 "use client";
 
 import { getPredictionHistory } from "@/lib/api/predictionHistory";
-import PredictionModelSelector from "@/components/prediction/PredictionModelSelector";
+import PredictionModelSelector, { TriadModelBadges, triadModelDetails } from "@/components/prediction/PredictionModelSelector";
 import TriadWeightRevision, { triadCompositionWeights } from "@/components/prediction/TriadWeightRevision";
 import InfoTooltip from "@/components/common/InfoTooltip";
 
@@ -1471,7 +1471,7 @@ function PrivatePredictionView({ authenticated, revision }: { authenticated: boo
       {/* Fila 1: Modelo seleccionado + Cargar Audio */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Tarjeta: datos declarados del modelo seleccionado */}
-        <div className="min-w-0 bg-[#16171b] border border-[#23252e] rounded-xl p-5 flex flex-col justify-between">
+        <div role="region" aria-label="Modelo seleccionado" className="min-w-0 bg-[#16171b] border border-[#23252e] rounded-xl p-5 flex flex-col justify-between">
           <div>
             <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
               <span className="text-xs text-gray-400 font-medium">Modelo seleccionado</span>
@@ -1485,6 +1485,7 @@ function PrivatePredictionView({ authenticated, revision }: { authenticated: boo
                 <h2 className="break-words text-base font-bold text-white">
                   {selectedModel?.name || "Sin modelo disponible"}
                 </h2>
+                <TriadModelBadges model={selectedModel} />
                 <p className="break-words text-[11px] text-gray-400 mt-0.5">
                   {selectedModel?.description || "Descripción no publicada"}
                 </p>
@@ -1494,7 +1495,9 @@ function PrivatePredictionView({ authenticated, revision }: { authenticated: boo
                   Última respuesta: {result?.detalles?.device || "Dispositivo no informado"}
                 </span>
                 <span className="max-w-full break-words text-xs text-blue-400 font-mono bg-blue-950/50 border border-blue-800/50 px-2 py-0.5 rounded">
-                  {Number.isInteger(selectedModel?.version) ? `Versión v${selectedModel?.version}` : "Versión no publicada"}
+                  {selectedModel?.architecture === "ImportedTriad"
+                    ? (triadModelDetails(selectedModel).version ? `Tríada v${triadModelDetails(selectedModel).version}` : "Versión no verificable")
+                    : Number.isInteger(selectedModel?.version) ? `Versión v${selectedModel?.version}` : "Versión no publicada"}
                 </span>
               </div>
             </div>

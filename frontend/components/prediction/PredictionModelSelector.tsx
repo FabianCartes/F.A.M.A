@@ -4,6 +4,48 @@ interface ModelOption {
   id: string;
   name?: string;
   has_weights?: boolean;
+  architecture?: string | null;
+  metrics?: unknown;
+}
+
+/** Presentation only: version/reference claims come from the complete server ledger. */
+export function triadModelDetails(model?: ModelOption) {
+  const metrics: Record<string, unknown> = model?.architecture === "ImportedTriad" && model.metrics && typeof model.metrics === "object"
+    ? model.metrics as Record<string, unknown> : {};
+  const version = typeof metrics.triad_version === "number" && Number.isInteger(metrics.triad_version) && metrics.triad_version > 0
+    ? metrics.triad_version : null;
+  const reference = metrics.same_components_as_version;
+  const tooltip = version && typeof reference === "number" && Number.isInteger(reference) && reference > 0 && reference < version
+    ? `Mismos modelos que la v${reference}; solo cambian los pesos` : undefined;
+  const weights = metrics.weights;
+  const components = metrics.components;
+  const aliases: Record<string, string> = {
+    efficientnet_b0: "B0", "EfficientNet-B0": "B0", convnext_nano: "CNX", "ConvNeXt-Nano": "CNX",
+    resnet34d: "R34", "ResNet-34d": "R34", audio_cnn: "CNN", AudioCNN: "CNN",
+    panns_cnn14: "PANNs", "PANNs-CNN14": "PANNs",
+  };
+  let weightsLabel: string | undefined;
+  if (Array.isArray(weights) && weights.length === 3 && weights.every(w => typeof w === "number" && Number.isFinite(w) && w >= 0 && w <= 1)
+      && Math.abs(weights.reduce((a, b) => a + b, 0) - 1) <= 1e-9 && Array.isArray(components) && components.length === 3) {
+    const names = components.map(c => c?.imported_source?.profile?.architecture);
+    if (names.every(name => typeof name === "string" && name.length > 0)) {
+      weightsLabel = names.map((name, i) => `${aliases[name] || name} ${Number((weights[i] * 100).toFixed(6))}`).join(" · ");
+    }
+  }
+  return {
+    version, tooltip, weightsLabel,
+    datasetId: typeof metrics.dataset_id === "string" ? metrics.dataset_id : undefined,
+    datasetName: typeof metrics.dataset_display_name === "string" ? metrics.dataset_display_name : undefined,
+  };
+}
+
+export function TriadModelBadges({ model }: { model?: ModelOption }) {
+  const { weightsLabel, tooltip } = triadModelDetails(model);
+  if (!weightsLabel && !tooltip) return null;
+  return <span className="flex flex-wrap gap-1 mt-1 text-[11px] text-emerald-300">
+    {weightsLabel && <span className="break-words rounded border border-emerald-900 px-1.5 py-0.5">{weightsLabel}</span>}
+    {tooltip && <span title={tooltip} aria-label={tooltip} className="cursor-help rounded border border-[#323642] px-1.5 py-0.5 text-gray-400">Solo pesos ⓘ</span>}
+  </span>;
 }
 
 export default function PredictionModelSelector({ models, value, onChange }: {
@@ -17,8 +59,18 @@ export default function PredictionModelSelector({ models, value, onChange }: {
   const trigger = useRef<HTMLButtonElement>(null);
   const listId = useId();
   const selected = models.find(model => model.id === value);
-  const matches = models.filter(model => (model.name || model.id).toLocaleLowerCase()
-    .includes(query.trim().toLocaleLowerCase()));
+  const groups = new Map<string, { label: string; models: ModelOption[] }>();
+  for (const model of models) {
+    if (!(model.name || model.id).toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())) continue;
+    const details = triadModelDetails(model);
+    const key = details.datasetId && details.datasetName ? `dataset:${details.datasetId}` : "other";
+    if (!groups.has(key)) groups.set(key, { label: key === "other" ? "Mis modelos" : details.datasetName!, models: [] });
+    groups.get(key)!.models.push(model);
+  }
+  for (const [key, group] of groups) {
+    if (key !== "other") group.models.sort((a, b) => (triadModelDetails(b).version ?? 0) - (triadModelDetails(a).version ?? 0));
+  }
+  const matches = Array.from(groups.values()).flatMap(group => group.models);
   const placeholder = models.length ? "Sin modelos con pesos disponibles" : "Sin modelos disponibles";
   useEffect(() => {
     if (open) document.getElementById(`${listId}-${active}`)?.scrollIntoView?.({ block: "nearest" });
@@ -49,7 +101,7 @@ export default function PredictionModelSelector({ models, value, onChange }: {
       onKeyDown={event => {
         if (event.key === "ArrowDown" || event.key === "ArrowUp") {
           event.preventDefault();
-          const enabled = models.map((model, index) => model.has_weights === true ? index : -1).filter(index => index >= 0);
+          const enabled = matches.map((model, index) => model.has_weights === true ? index : -1).filter(index => index >= 0);
           setActive(event.key === "ArrowUp" ? enabled.at(-1) ?? 0 : enabled[0] ?? 0);
           setOpen(true);
         }
@@ -79,17 +131,18 @@ export default function PredictionModelSelector({ models, value, onChange }: {
         }}
         className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-2 text-xs text-gray-200 focus:border-emerald-600" />
       <ul id={listId} role="listbox" aria-label="Modelos disponibles" className="max-h-60 overflow-y-auto mt-1">
-        <li role="group" aria-label="Mis modelos">
-          <span className="block px-3 py-1 text-[11px] text-gray-400">Mis modelos</span>
+        {Array.from(groups.entries()).map(([key, group]) => <li key={key} role="group" aria-label={group.label}>
+          <span className="block px-3 py-1 text-[11px] text-gray-400">{group.label}</span>
           <ul role="presentation">
-            {matches.map((model, index) => <li id={`${listId}-${index}`} key={model.id} role="option"
+            {group.models.map(model => { const index = matches.indexOf(model); return <li id={`${listId}-${index}`} key={model.id} role="option"
               aria-selected={model.id === value} aria-disabled={model.has_weights !== true}
               onMouseEnter={() => setActive(index)} onMouseDown={event => event.preventDefault()} onClick={() => choose(model)}
               className={`px-3 py-2 text-xs rounded-lg ${active === index ? "bg-[#23252e]" : ""} ${model.has_weights === true ? "text-gray-200 cursor-pointer" : "text-gray-500 cursor-not-allowed"}`}>
               {model.name || model.id}{model.has_weights === true ? "" : " (no disponible)"}
-            </li>)}
+              <TriadModelBadges model={model} />
+            </li>; })}
           </ul>
-        </li>
+        </li>)}
       </ul>
       {!matches.length && <p role="status" className="px-3 py-2 text-xs text-gray-400">
         {models.length ? "No hay modelos que coincidan con la búsqueda." : "Sin modelos disponibles"}
