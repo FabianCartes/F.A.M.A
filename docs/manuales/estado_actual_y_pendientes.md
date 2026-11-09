@@ -1,5 +1,11 @@
 # Estado actual y pendientes para retomar F.A.M.A.
 
+**Kevin habilitado, 4 de noviembre:** cuenta web ID 2 administradora activa, login y acceso administrativo comprobados; Token Creator concedido y comprobado solo sobre la cuenta de servicio oficial. Linux confirmado y guía adaptada. Faltan autenticación propia, credencial SQL, perfil/runtime y comprobación de sus archivos/arranque en su equipo. [Guía vigente](entrega_a_kevin.md), [recibo](../receipts/alta_kevin_administrador_20261104.json). Los cortes inferiores conservan su fecha.
+
+**Acceso restablecido, 1 de noviembre:** después del reinicio inicial se observaron detenidos proxy, backend y web. Se relanzaron como procesos locales independientes del lanzador del chat; login real de `admin@fama.cl`, sesión administradora y cierre comprobados. No se cambió la contraseña. La captura del operador mostraba `admin@fama.test`, identidad distinta. La causa de la terminación anterior y la operación como servicio permanente no quedan resueltas por esta comprobación. [Recibo posterior al incidente](../receipts/restablecimiento_login_oficial_20261101.json).
+
+**Reinicio comprobado, 1 de noviembre:** web oficial en `http://localhost:3010/`, backend 8010 y proxy 5434, conservando `fama_oficial`/`0004_integration`, bucket y perfil. PostgreSQL/GCS conectan; `/ready` responde 200 y la instalación permanece completada. No se repitieron pruebas funcionales autenticadas ni inferencia. [Recibo de este arranque](../receipts/reinicio_oficial_20261101.json).
+
 **Entrega a Kevin, preparada el 25 de octubre:** [guía de responsabilidades y material compartible](entrega_a_kevin.md). Faltan correo Google y sistema operativo para concretar accesos y arranque; todavía no se han concedido permisos ni creado su cuenta con esta guía.
 
 **Actualización oficial aplicada, 25 de octubre:** `fama_oficial` está en `0004_integration` y la carpeta habitual ejecuta `fix/afinamiento-integral` (`54bdaaf`). Login real, permisos, GCS, datasets, dashboard y catálogo de seis modelos comprobados; cinco hashes históricos completados tras contrastarlos con GCS. Respaldos anterior/posterior restaurados y verificados en laboratorio aislado. Perfil, contraseñas e índices conservados. [Operación y límites](actualizacion_oficial_0004_20261025.md), [recibo](../receipts/actualizacion_oficial_0004_20261025.json).

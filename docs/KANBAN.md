@@ -2,6 +2,18 @@
 kanban-plugin: basic
 ---
 
+## Entrega a Kevin — 4 de noviembre
+
+- [x] Confirmar correo y Linux; crear cuenta administradora activa ID 2 y verificar login/sesión/Administración, cerrando solo las sesiones de prueba.
+- [x] Conceder y comprobar Token Creator únicamente sobre la cuenta de servicio oficial; actualizar instrucciones Linux. [Guía](manuales/entrega_a_kevin.md), [recibo](receipts/alta_kevin_administrador_20261104.json).
+- [ ] Entregar credencial SQL por privado; Kevin genera su ADC y prepara dependencias, perfil/runtime y archivos. Verificar arranque desde su equipo Linux.
+
+## Operación del nodo oficial — 1 de noviembre
+
+- [x] Restablecer los servicios tras observar su detención y comprobar login/logout reales de la identidad oficial; arranque local independiente, sin cambios de contraseña. La causa de terminación previa y el servicio permanente siguen sin certificar. [Recibo posterior](receipts/restablecimiento_login_oficial_20261101.json).
+
+- [x] Reanudar proxy, backend y web compilada con el perfil oficial; comprobar SQL/GCS, salud, disponibilidad, instalación completada y rechazo de sesión sin cookies. Sin migración, cambio de credenciales o nueva inferencia. [Recibo](receipts/reinicio_oficial_20261101.json).
+
 ## Integración de dev en afinamiento integral — publicada y verificada
 
 - [x] Conservar nuestros avances en `aa53e09`, integrar `dev` `adecb01` y resolver contratos de sesiones, permisos, evaluación y esquema.

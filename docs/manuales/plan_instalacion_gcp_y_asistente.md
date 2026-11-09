@@ -1,5 +1,11 @@
 # Plan de implementación: Cloud SQL, GCS y primera instalación
 
+**Entrega a Kevin, avance del 4 de noviembre:** correo y Linux confirmados; cuenta administradora creada y comprobada, y permiso de impersonación sobre la cuenta de servicio oficial aplicado/verificado. Sigue instalación y autenticación en su equipo, entrega privada de credencial SQL y adopción local de su cuenta existente. [Guía actualizada](entrega_a_kevin.md), [recibo](../receipts/alta_kevin_administrador_20261104.json).
+
+**Continuidad de acceso, 1 de noviembre:** servicios relanzados mediante proceso local independiente después de observar su detención; login/logout reales del administrador oficial comprobados sin cambiar credenciales o esquema. El arranque como servicio permanente continúa siendo parte del despliegue institucional. [Recibo de restablecimiento](../receipts/restablecimiento_login_oficial_20261101.json).
+
+**Reinicio operativo, 1 de noviembre:** nodo oficial reanudado con el perfil completado y la compilación standalone existentes; PostgreSQL, GCS, salud y disponibilidad comprobados. Sin nueva migración ni cambio de credenciales. No modifica las etapas pendientes de entrega a Kevin o despliegue universitario. [Recibo](../receipts/reinicio_oficial_20261101.json).
+
 **Entrega a Kevin, preparada el 25 de octubre:** [guía de responsabilidades y material compartible](entrega_a_kevin.md). Faltan correo Google y sistema operativo para concretar accesos y arranque; todavía no se han concedido permisos ni creado su cuenta con esta guía.
 
 **Actualización oficial aplicada, 25 de octubre:** `fama_oficial` está en `0004_integration` y la carpeta habitual ejecuta `fix/afinamiento-integral` (`54bdaaf`). Login real, permisos, GCS, datasets, dashboard y catálogo de seis modelos comprobados; cinco hashes históricos completados tras contrastarlos con GCS. Respaldos anterior/posterior restaurados y verificados en laboratorio aislado. Perfil, contraseñas e índices conservados. [Operación y límites](actualizacion_oficial_0004_20261025.md), [recibo](../receipts/actualizacion_oficial_0004_20261025.json).

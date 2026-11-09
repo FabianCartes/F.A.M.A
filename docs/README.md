@@ -1,6 +1,10 @@
 # Centro de Documentación Técnica — F.A.M.A.
 
-**Entrega a Kevin:** [responsabilidades, datos compartibles, archivos y preparación de su equipo](./manuales/entrega_a_kevin.md). Guía sin secretos; permisos, cuenta y arranque de Kevin aún por verificar.
+**Acceso oficial restablecido, 1 de noviembre:** [recibo posterior a la detención de servicios](./receipts/restablecimiento_login_oficial_20261101.json), relanzamiento independiente y login/logout administradores comprobados sin cambio de contraseña.
+
+**Reinicio oficial del 1 de noviembre:** [recibo operativo](./receipts/reinicio_oficial_20261101.json) de web, backend, PostgreSQL y GCS con perfil completado y esquema 0004; sin migraciones ni cambio de credenciales.
+
+**Entrega a Kevin, 4 de noviembre:** [guía con preparación nativa Linux](./manuales/entrega_a_kevin.md), [recibo de alta y permiso técnico](./receipts/alta_kevin_administrador_20261104.json). Cuenta administradora y política IAM comprobadas; autenticación/configuración y arranque en su equipo todavía pendientes. Guía y recibo sin contraseñas.
 
 **Nodo oficial actualizado a 0004, 25 de octubre:** [mantenimiento aplicado y recuperación](./manuales/actualizacion_oficial_0004_20261025.md), [recibo actual](./receipts/actualizacion_oficial_0004_20261025.json). Código integrado activo en la carpeta habitual, seis modelos disponibles y copias anterior/posterior restauradas en laboratorio.
 
@@ -71,6 +75,7 @@ docs/
 ### 1. [`docs/tesis/`](./tesis/) — Tesis y Objetivos de Grado
 * [`VIDA_01_CINF_FINAL_PT_2026_1_CARTES.md`](./tesis/VIDA_01_CINF_FINAL_PT_2026_1_CARTES.md) / [`.pdf`](./tesis/VIDA_01_CINF_FINAL_PT_2026_1_CARTES.pdf): Memoria formal de proyecto de título.
 * [`analisis_objetivos_fama.md`](./tesis/analisis_objetivos_fama.md): Matriz de objetivos/RF/RNF con actualización acotada del 15 de octubre de 2026; distingue correcciones comprobadas, antecedentes históricos y objetivos operativos aún no acreditados.
+* [`capitulo_08_implantacion/capitulo_08.tex`](./tesis/capitulo_08_implantacion/capitulo_08.tex): Borrador LaTeX de implantación y puesta en marcha, con plan de capacitación propuesto y alcance operacional documentado al 4 de noviembre de 2026. Incluye [vista previa independiente](./tesis/capitulo_08_implantacion/main.tex) y [notas para Overleaf y fuentes](./tesis/capitulo_08_implantacion/notas_integracion.md).
 
 ### 2. [`docs/modelos/`](./modelos/) — Modelado Acústico y Experimentos
 Informes técnicos de evolución de los modelos de Machine Learning (desde la PoC al 88.68% F1):
