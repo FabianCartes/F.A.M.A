@@ -1,0 +1,157 @@
+{
+  "schema": "fama.mvp-source-consolidation/v1",
+  "scope": "Definir el alcance del MVP y consolidar fuentes existentes en commits locales; no reproducibilidad ni despliegue.",
+  "baseCommit": "a76b2bf5c95ee8491ecc2c01866c08504aebadf5",
+  "sourceHead": "6eed19e3cf9b13a5b06e7f351df118b119c32bc4",
+  "strategy": "feature-branch-chain",
+  "units": [
+    {
+      "unit": "U1",
+      "parent": "754adfb122e816271b64603892a7087f5ab0d65c",
+      "commit": "14ad9fa24715e61d5ec5c764ea8649b0707a9ca9",
+      "authoredLines": 127,
+      "focusedResult": [
+        "Test Files  5 passed (5)",
+        "Tests  22 passed (22)"
+      ],
+      "typecheckExitCode": 0
+    },
+    {
+      "unit": "U2",
+      "parent": "14ad9fa24715e61d5ec5c764ea8649b0707a9ca9",
+      "commit": "52661f9a4bb5b09f8aaa24537f7bf87bdd217347",
+      "authoredLines": 46,
+      "focusedResult": [
+        "Test Files  2 passed (2)",
+        "Tests  19 passed (19)"
+      ],
+      "typecheckExitCode": 0
+    },
+    {
+      "unit": "U3",
+      "parent": "52661f9a4bb5b09f8aaa24537f7bf87bdd217347",
+      "commit": "bcff52b766b60bf1ecc76f681788679aba69486e",
+      "authoredLines": 99,
+      "focusedResult": [
+        "Test Files  2 passed (2)",
+        "Tests  40 passed (40)"
+      ],
+      "typecheckExitCode": 0
+    },
+    {
+      "unit": "U4",
+      "parent": "bcff52b766b60bf1ecc76f681788679aba69486e",
+      "commit": "5784bdd1f92bbcd9a19dc25d14e35d1c416a10e9",
+      "authoredLines": 519,
+      "focusedResult": [
+        "Test Files  13 passed (13)",
+        "Tests  79 passed (79)"
+      ],
+      "typecheckExitCode": 0
+    },
+    {
+      "unit": "U5",
+      "parent": "5784bdd1f92bbcd9a19dc25d14e35d1c416a10e9",
+      "commit": "8de334cd405735aa2dcaf1911249110df1c9da7a",
+      "authoredLines": 311,
+      "focusedResult": [
+        "Test Files  5 passed (5)",
+        "Tests  42 passed (42)"
+      ],
+      "typecheckExitCode": 0
+    },
+    {
+      "unit": "U6",
+      "parent": "8de334cd405735aa2dcaf1911249110df1c9da7a",
+      "commit": "6eed19e3cf9b13a5b06e7f351df118b119c32bc4",
+      "authoredLines": 62,
+      "focusedResult": [
+        "Test Files  2 passed (2)",
+        "Tests  51 passed (51)"
+      ],
+      "typecheckExitCode": 0
+    }
+  ],
+  "verification": {
+    "frontend": {
+      "command": "npm test",
+      "passed": 568,
+      "testFiles": 66,
+      "exitCode": 0,
+      "candidateMatchesCommittedSources": true
+    },
+    "types": {
+      "command": "tsc --noEmit --incremental false",
+      "exitCode": 0
+    },
+    "scopedLint": {
+      "command": "eslint <fuentes frontend modificadas y nuevas, excepto ImportedTrainingPanel.tsx>",
+      "exitCode": 0,
+      "excludedFile": "frontend/components/training/ImportedTrainingPanel.tsx",
+      "reason": "3 errores y 1 advertencia preexistentes; no se afirma lint global aprobado."
+    },
+    "build": {
+      "command": "npm run build -- --webpack",
+      "exitCode": 0,
+      "context": "Snapshot aislado, dependencias existentes; sin instalaciones ni modificación de la copia activa."
+    },
+    "backend": {
+      "runner": "tests/run_isolated_training_checks.py",
+      "selectors": [
+        "tests/test_dataset_catalog_import_date.py",
+        "tests/test_dataset_import_api.py",
+        "tests/test_dataset_import_history.py"
+      ],
+      "database": "SQLite sintético, red y base real bloqueadas",
+      "passed": 17,
+      "exitCode": 0,
+      "deselected": [
+        "tests/test_dataset_import_api.py::test_duplicate_and_label_conflict_do_not_change_published_membership"
+      ],
+      "baseline": {
+        "passed": 15,
+        "failed": 1,
+        "exitCode": 1
+      },
+      "candidateBeforeExclusion": {
+        "passed": 17,
+        "failed": 1,
+        "exitCode": 1
+      },
+      "failure": "La misma aserción espera needs_correction y recibe cancelled en base y candidato. El caso excluido no se considera aprobado."
+    },
+    "sourceAudit": {
+      "initialNonManualFilesIdenticalInWorktreeAndCommit": 44,
+      "stagedIndexEmpty": true,
+      "frontendMatchesFullSuiteAndBuildCandidate": true,
+      "backendMatchesIsolatedCandidate": true
+    },
+    "nativeReview": {
+      "status": "unavailable",
+      "reason": "untracked files require an explicit declaration",
+      "approval": false
+    }
+  },
+  "preservedOutsideCommits": [
+    "Credenciales y configuración privada",
+    "Datos, audio, ZIP, checkpoints, bases y backups",
+    "Logs crudos, recibos temporales y scripts privados",
+    "Proxy GCS no rastreado y su prueba, pendientes de revisión separada",
+    "Dos inserciones históricas de mantenimiento/healthcheck en el manual de transferencias"
+  ],
+  "notPerformed": [
+    "push",
+    "PR",
+    "merge",
+    "despliegue",
+    "reinicios",
+    "instalaciones",
+    "migraciones reales",
+    "entrenamiento o inferencia real",
+    "navegador",
+    "GCS",
+    "reproducción desde clon limpio",
+    "certificación de producción"
+  ],
+  "risk": "none: consolidación de comportamiento existente con campos/props aditivos; no se modifican guardas, contratos de admisión ni operaciones persistentes."
+}
