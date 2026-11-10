@@ -152,12 +152,12 @@ def test_get_current_user_me(client, test_db):
     assert data["rol"] == "investigador"
     assert data["activo"] is True
 
-    # Petición sin token
+    # Petición sin cookie
     client.cookies.clear()
     res_no_auth = client.get("/api/auth/me")
     assert res_no_auth.status_code == 401
 
-    # Petición con token inválido
+    # Una cabecera Authorization no autentica
     res_bad_token = client.get("/api/auth/me", headers={"Authorization": "Bearer token.invalido.123"})
     assert res_bad_token.status_code == 401
 

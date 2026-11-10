@@ -1,4 +1,4 @@
-"""Bearer control plane and cookie-authorized native byte ranges, never a Blob."""
+"""Cookie-authenticated control plane and native byte ranges, never a Blob."""
 import fcntl
 import os
 from pathlib import Path

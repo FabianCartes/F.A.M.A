@@ -1,6 +1,5 @@
 import sys
 from pathlib import Path
-from datetime import timedelta
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -49,45 +48,6 @@ def test_password_hashing_and_verification():
     another_hash = hash_password(plain_pass)
     assert hashed != another_hash
     assert verify_password(plain_pass, another_hash) is True
-
-
-def test_token_generation_and_decoding():
-    """Valida la generación de tokens JWT seguros y su posterior decodificación."""
-    from app.services.auth import create_access_token, decode_access_token
-
-    payload_data = {
-        "sub": "42",
-        "email": "investigador@fama.cl",
-        "rol": "investigador",
-    }
-    token = create_access_token(data=payload_data, expires_delta=timedelta(minutes=15))
-    assert isinstance(token, str)
-    assert len(token) > 20
-
-    decoded = decode_access_token(token)
-    assert decoded["sub"] == "42"
-    assert decoded["email"] == "investigador@fama.cl"
-    assert decoded["rol"] == "investigador"
-    assert "exp" in decoded
-
-
-def test_token_expiration_and_tampering():
-    """Valida que tokens expirados o con firma manipulada sean rechazados."""
-    from app.services.auth import create_access_token, decode_access_token
-
-    payload_data = {"sub": "1", "email": "admin@fama.cl", "rol": "administrador"}
-
-    # Token ya expirado
-    expired_token = create_access_token(data=payload_data, expires_delta=timedelta(seconds=-10))
-    with pytest.raises(ValueError, match="expirado|expired"):
-        decode_access_token(expired_token)
-
-    # Token con firma alterada
-    valid_token = create_access_token(data=payload_data, expires_delta=timedelta(minutes=10))
-    parts = valid_token.split(".")
-    tampered_token = f"{parts[0]}.{parts[1]}.badsignature"
-    with pytest.raises(ValueError, match="(?i)firma|signature|inv[aá]lid"):
-        decode_access_token(tampered_token)
 
 
 def test_usuario_model_attributes_and_defaults(db_session):

@@ -41,10 +41,6 @@ class WebAuthRoute(APIRoute):
 
 router = APIRouter(prefix="/api/auth", tags=["Autenticación y Sesión"], route_class=WebAuthRoute)
 
-# Browser sessions have their own routes; login/me Bearer responses stay intact.
-from app.routes.web_auth import router as web_auth_router
-router.include_router(web_auth_router)
-
 
 # ============================================================================
 # ESQUEMAS PYDANTIC (CONTRATOS DE ENTRADA Y SALIDA)

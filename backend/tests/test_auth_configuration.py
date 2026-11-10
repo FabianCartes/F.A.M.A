@@ -12,7 +12,7 @@ def synthetic_bootstrap_display_name(monkeypatch):
     monkeypatch.setenv("ADMIN_INITIAL_NAME", "Synthetic administrator")
 
 
-def test_missing_environment_key_cannot_issue_a_session(monkeypatch):
+def test_missing_environment_key_rejects_boot_configuration(monkeypatch):
     monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
     # Fresh module execution observes the missing environment key without
     # escaping the repository's original in-process isolation guard.
@@ -21,7 +21,7 @@ def test_missing_environment_key_cannot_issue_a_session(monkeypatch):
     spec.loader.exec_module(module)
 
     with pytest.raises(module.AuthenticationConfigurationError):
-        module.create_access_token({"sub": "1"})
+        module.ensure_authentication_configured()
 
 
 def test_login_without_web_configuration_returns_503_and_never_a_session(auth_client, monkeypatch):
@@ -50,11 +50,11 @@ def test_profile_without_web_configuration_reports_configuration_failure(auth_cl
 
 
 @pytest.mark.parametrize("key", ["", " ", "short", "fama_bioacoustic_secret_key_mlops_2026", "\ud800" * 32])
-def test_unsafe_signing_key_cannot_issue_a_session(monkeypatch, key):
+def test_unsafe_retained_key_rejects_boot_configuration(monkeypatch, key):
     monkeypatch.setattr(auth, "SECRET_KEY", key)
 
     with pytest.raises(auth.AuthenticationConfigurationError):
-        auth.create_access_token({"sub": "1"})
+        auth.ensure_authentication_configured()
 
 
 def test_configured_login_issues_a_usable_session_without_echoing_secrets(auth_client, monkeypatch):

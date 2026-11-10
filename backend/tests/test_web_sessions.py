@@ -190,7 +190,8 @@ def test_bearer_jwt_never_grants_web_access(web, monkeypatch):
     from app.services import auth
     client, _ = web
     monkeypatch.setattr(auth, "SECRET_KEY", "synthetic-jwt-key-not-used-for-web-sessions")
-    token = auth.create_access_token({"sub": "1", "rol": "administrador"})
+    from tests.test_cookie_identity import legacy_bearer
+    token = legacy_bearer()
     assert client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"}).status_code == 401
 
 
