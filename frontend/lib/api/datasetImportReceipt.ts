@@ -4,7 +4,7 @@ import { importBase, importRequest, jsonRequest } from "./datasetImports";
 const bytes = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 export const receiptSchema = z.object({
   import_id: z.string(), name: z.string(), size_bytes: bytes.positive(),
-  received_bytes: bytes, reserved_bytes: bytes, chunk_bytes: bytes.positive().max(2 ** 31 - 1),
+  received_bytes: bytes, chunk_bytes: bytes.positive().max(2 ** 31 - 1),
   status: z.enum(["receiving", "sealed", "cancelled"]),
 }).refine(row => row.received_bytes <= row.size_bytes &&
   (row.received_bytes === row.size_bytes || row.received_bytes % row.chunk_bytes === 0),

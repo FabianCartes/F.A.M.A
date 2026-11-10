@@ -51,17 +51,14 @@ describe("S1/S4 preserved shared consumer seams", () => {
   fireEvent.click(screen.getByRole("button", { name: /Inferencia Bioacústica/ }));
   expect(navigate.mock.calls).toEqual([["ingesta"], ["entrenamiento"], ["prediccion"]]);
  });
- it("keeps ZIP controls operable and session-gated without submitting data", async () => {
+ it("keeps ZIP import session-gated, has no ZIP export and submits no data", async () => {
   render(<IngestionView />); await screen.findAllByText("AvesChilenas");
   fireEvent.click(screen.getByRole("button", { name: "Importar ZIP" }));
-  let dialog = await screen.findByRole("dialog");
+  const dialog = await screen.findByRole("dialog");
   await within(dialog).findByText(/Inicia sesión para acceder a tus importaciones/i);
   fireEvent.click(within(dialog).getByRole("button", { name: /Cerrar importación/ }));
-  fireEvent.click(screen.getByRole("button", { name: "Descargar versión como ZIP" }));
-  dialog = await screen.findByRole("dialog");
-  await within(dialog).findByText(/Inicia sesión en F.A.M.A./i);
-  fireEvent.click(within(dialog).getByRole("button", { name: "Cerrar exportación" }));
   expect(screen.queryByRole("dialog")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Descargar versión como ZIP" })).toBeNull();
   expect(calls.filter(c => c.method !== "GET")).toEqual([]);
  });
  it("preserves ingestion empty-queue navigation callback", async () => {

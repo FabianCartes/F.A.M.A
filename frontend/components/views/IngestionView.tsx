@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, type ReactNode } from "react";
-import DatasetConfirmationDialog from "@/components/ingestion/DatasetConfirmationDialog";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { API_BASE_URL, apiFetch as fetch } from "@/lib/api";
 import { useOptionalWebSession } from "@/components/auth/SessionBoundary";
 import {
@@ -15,10 +14,9 @@ import DatasetInventory, { type DatasetItem } from "@/components/ingestion/Datas
 import DatasetUpload, { type UploadLimits } from "@/components/ingestion/DatasetUpload";
 import DatasetCatalogue from "@/components/ingestion/DatasetCatalogue";
 import DatasetImportPanel from "@/components/ingestion/DatasetImportPanel";
-import DatasetExportDialog from "@/components/ingestion/DatasetExportDialog";
+
 import DatasetAudioDialog from "@/components/ingestion/DatasetAudioDialog";
-import { importBase, importRequest, catalogPageSchema,
-  jobsPageSchema, executionSchema, jsonRequest, deletePrivateDataset, type CatalogDataset } from "@/lib/api/datasetImports";
+
 
 
 // ============================================================================
@@ -72,144 +70,6 @@ function uploadDateLabel(value?: string | null): string {
   })}`;
 }
 
-function DatasetFolderIcon() {
-  return <svg aria-hidden="true" focusable="false" data-dataset-folder className="w-3.5 h-3.5 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-  </svg>;
-}
-
-type UploadExecution = ReturnType<typeof executionSchema.parse>;
-type PrivateUpload = { name: string; execution: UploadExecution };
-
-// Keyed by session in the view: abort reads/admissions and discard all private
-// selection/monitoring state when ownership changes. The server owns execution.
-function PrivateDatasetUpload({ datasets, selectedIds, loading, onCatalogChange, children }: {
-  datasets: CatalogDataset[]; selectedIds: string[]; loading: boolean;
-  onCatalogChange: () => void; children: (busy: boolean) => ReactNode;
-}) {
-  const [confirmation, setConfirmation] = useState<{ datasets: CatalogDataset[]; ids: string[] } | null>(null);
-  const closeConfirmation = useCallback(() => setConfirmation(null), []);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  // Catalog replacement invalidates the confirmation, even for unchanged IDs.
-  const dialogOpen = confirmation !== null && confirmation.datasets === datasets && confirmation.ids === selectedIds && !loading;
-  const [admitting, setAdmitting] = useState(false);
-  const [uploads, setUploads] = useState<PrivateUpload[]>([]);
-  const [error, setError] = useState("");
-  const active = useRef(false);
-  const lifetime = useRef<AbortController | null>(null);
-  // Preserve the key across ambiguous admission failures. Retrying must not
-  // duplicate an operation whose response was lost, including partial batches.
-  const operations = useRef(new Map<string, { key: string; source: string; execution?: UploadExecution }>());
-  const selected = datasets.filter(dataset => selectedIds.includes(dataset.id));
-  const executing = uploads.some(({ execution }) => ["queued", "running"].includes(execution.status));
-  const busy = admitting || executing;
-
-  useEffect(() => {
-    const controller = new AbortController();
-    lifetime.current = controller;
-    return () => controller.abort();
-  }, []);
-
-  useEffect(() => {
-    if (!executing) return;
-    const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout>;
-    async function poll() {
-      try {
-        const updates = await Promise.all(uploads.map(async upload => {
-          const current = upload.execution;
-          if (!["queued", "running"].includes(current.status)) return upload;
-          const response = await importRequest(`${importBase}/${encodeURIComponent(current.import_id)}/jobs/${encodeURIComponent(current.id)}`, { signal: controller.signal });
-          return { ...upload, execution: executionSchema.parse(await response.json()) };
-        }));
-        if (controller.signal.aborted) return;
-        setUploads(updates);
-        setError("");
-        if (updates.some((upload, index) => upload.execution.status === "succeeded" && uploads[index].execution.status !== "succeeded")) onCatalogChange();
-      } catch (reason) {
-        if (controller.signal.aborted) return;
-        setError(`No se pudo consultar la subida; se reintentará la consulta sin reenviar. ${reason instanceof Error ? reason.message : ""}`);
-        timer = setTimeout(poll, 3000);
-      }
-    }
-    timer = setTimeout(poll, 1000);
-    return () => { controller.abort(); clearTimeout(timer); };
-  }, [uploads, executing, onCatalogChange]);
-
-  async function uploadSelection() {
-    if (active.current || busy || !selected.length || !dialogOpen) return;
-    setConfirmation(null);
-    const controller = lifetime.current;
-    if (!controller || controller.signal.aborted) return;
-    active.current = true;
-    setAdmitting(true);
-    setError("");
-    setUploads([]);
-    try {
-      const sources = new Map<string, string>();
-      const cursors = new Set<string>();
-      let cursor: string | null = null;
-      do {
-        const response = await importRequest(`${importBase}${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { signal: controller.signal });
-        const page = jobsPageSchema.parse(await response.json());
-        if (controller.signal.aborted) return;
-        for (const source of page.imports) {
-          if (source.status === "imported" && source.dataset_id && selectedIds.includes(source.dataset_id) && !sources.has(source.dataset_id)) sources.set(source.dataset_id, source.id);
-        }
-        cursor = page.next_cursor;
-        if (cursor && cursors.has(cursor)) throw new Error("El historial no avanzó; actualiza las importaciones antes de reintentar.");
-        if (cursor) cursors.add(cursor);
-      } while (cursor && sources.size < selected.length);
-      const missing = selected.filter(dataset => !sources.has(dataset.id));
-      if (missing.length) throw new Error(`No hay una importación confirmada en el historial para: ${missing.map(dataset => dataset.name).join(", ")}. No se inició la selección.`);
-      for (const dataset of selected) {
-        if (controller.signal.aborted) return;
-        const source = sources.get(dataset.id)!;
-        const signature = JSON.stringify([dataset.id, dataset.revision]);
-        let operation = operations.current.get(signature);
-        if (!operation) {
-          operation = { key: crypto.randomUUID(), source };
-          operations.current.set(signature, operation);
-        }
-        if (!operation.execution) {
-          const response = await importRequest(`${importBase}/${encodeURIComponent(operation.source)}/sync`, { ...jsonRequest({ request_key: operation.key }), signal: controller.signal });
-          const execution = executionSchema.parse(await response.json());
-          if (controller.signal.aborted) return;
-          operation.execution = execution;
-        }
-        const execution = operation.execution;
-        setUploads(current => [...current, { name: dataset.name, execution }]);
-      }
-    } catch (reason) {
-      if (!controller.signal.aborted) setError(`No se completó la admisión. Consulta el historial antes de reintentar; los trabajos ya admitidos continúan. ${reason instanceof Error ? reason.message : ""}`);
-    } finally {
-      if (!controller.signal.aborted) { active.current = false; setAdmitting(false); }
-    }
-  }
-
-  return <>
-    {children(busy)}
-    <div className="space-y-2 text-xs text-gray-300">
-      <p>{selected.length} dataset(s) privados seleccionados</p>
-      {selected.length > 0 && <p>Local → GCS: {selected.map(dataset => dataset.name).join(", ")}</p>}
-      <button type="button" className="rounded-lg border border-emerald-800/60 bg-emerald-950/40 px-3 py-2 font-semibold text-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-emerald-300" ref={triggerRef} aria-haspopup="dialog" aria-expanded={dialogOpen} disabled={loading || busy || !selected.length} onClick={() => setConfirmation({ datasets, ids: selectedIds })}>Subir selección a GCS</button>
-      {dialogOpen && <DatasetConfirmationDialog title="Confirmar subida privada a GCS" onClose={closeConfirmation} returnFocus={triggerRef}>
-           <p>{selected.length} dataset(s) privados · Local → GCS</p>
-          <ul className="max-h-48 overflow-y-auto">{selected.map(dataset => <li key={dataset.id}>{dataset.name}</li>)}</ul>
-          <p>Tamaño estimado: {formatBytes(selected.reduce((total, dataset) => total + dataset.total_size_bytes, 0))}</p>
-          <p>Se conserva la copia local y no se publica en el catálogo compartido.</p>
-          <div className="flex justify-end gap-3">
-            <button type="button" className="rounded-lg border border-[#373a46] px-3 py-2 focus-visible:outline-2 focus-visible:outline-emerald-300" onClick={() => setConfirmation(null)}>Cancelar</button>
-            <button type="button" className="rounded-lg border border-emerald-800 bg-emerald-950 px-3 py-2 text-emerald-400 focus-visible:outline-2 focus-visible:outline-emerald-300" onClick={() => void uploadSelection()}>Confirmar subida</button>
-          </div>
-      </DatasetConfirmationDialog>}
-      {admitting && <p role="status">Consultando historial y solicitando subida…</p>}
-      {uploads.map(({ name, execution }) => <p key={execution.id} role={execution.status === "failed" ? "alert" : "status"}>{name}: {execution.status === "queued" ? "Trabajo admitido; pendiente de ejecución" : execution.status === "running" ? `Subida en curso (${execution.progress}%)` : execution.status === "succeeded" ? "Subida completada para la revisión sincronizada; copia privada en GCS" : `Subida ${execution.status === "cancelled" ? "cancelada" : "fallida"}; consulta el historial antes de reintentar`}</p>)}
-      {error && <p role="alert">{error}</p>}
-    </div>
-  </>;
-}
-
 export default function IngestionView({ onNavigate, administrator = true }: IngestionViewProps = {}) {
   const webUser = useOptionalWebSession();
   const webUserId = webUser?.id;
@@ -225,78 +85,6 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
   const [isUploading, setIsUploading] = useState(false);
   const [showCatalogue, setShowCatalogue] = useState(false);
   const [uploadLimits, setUploadLimits] = useState<UploadLimits | null | undefined>(undefined);
-  const [privateCatalog, setPrivateCatalog] = useState<{ token: string; datasets: CatalogDataset[]; next: string | null; total: number | null }>({ token: sessionIdentity, datasets: [], next: null, total: null });
-  const [privateSelection, setPrivateSelection] = useState<{ catalog: typeof privateCatalog; ids: string[] }>({ catalog: privateCatalog, ids: [] });
-  const privateSelectedIds = privateSelection.catalog === privateCatalog && privateCatalog.token === sessionIdentity ? privateSelection.ids : [];
-  const [privateLoading, setCatalogLoading] = useState(true);
-  const [privateError, setCatalogError] = useState("");
-  const [privateDetail, setPrivateDetail] = useState<string | null>(null);
-  const catalogRequest = useRef<AbortController | null>(null);
-  const deletionRequest = useRef<AbortController | null>(null);
-  const [deletion, setDeletion] = useState({ identity: sessionIdentity, pending: false, message: "", error: false });
-  const deleting = deletion.identity === sessionIdentity && deletion.pending;
-  const [archiveConfirmation, setArchiveConfirmation] = useState<{ dataset: CatalogDataset; catalog: typeof privateCatalog } | null>(null);
-  const archiveTrigger = useRef<HTMLButtonElement>(null);
-  const closeArchiveConfirmation = useCallback(() => setArchiveConfirmation(null), []);
-
-  useEffect(() => () => { deletionRequest.current?.abort(); deletionRequest.current = null; }, [sessionIdentity]);
-  const catalogMatchesSession = privateCatalog.token === sessionIdentity;
-  const importedDatasets = catalogMatchesSession ? privateCatalog.datasets : [];
-  const catalogLoading = privateLoading || !catalogMatchesSession;
-  const catalogError = catalogMatchesSession ? privateError : "";
-  const collectionTotal = catalogMatchesSession && !catalogLoading && !catalogError ? privateCatalog.total : null;
-
-  // Effect-driven loads update state only after real request completion.
-  const loadPrivateCatalog = useCallback((cursor: string | null = null, retained?: { ids: string[]; detail: string | null }) => {
-    catalogRequest.current?.abort();
-    const controller = new AbortController();
-    catalogRequest.current = controller;
-    return importRequest(`${importBase}/access`, { signal: controller.signal })
-      .then(response => response.json())
-      .then(access => {
-        if (controller.signal.aborted) return;
-        if (access.development_mode !== true && access.authenticated !== true && !webUserId) {
-          throw new Error("Inicia sesión para consultar el catálogo privado de importaciones.");
-        }
-        return importRequest(`${importBase}/datasets${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { signal: controller.signal })
-          .then(response => response.json())
-          .then(raw => {
-            const page = catalogPageSchema.parse(raw);
-            if (controller.signal.aborted) return;
-            const catalog = { token: sessionIdentity, datasets: page.datasets, next: page.next_cursor, total: page.total };
-            setPrivateCatalog(catalog);
-            if (retained) setPrivateSelection({ catalog, ids: retained.ids.filter(id => page.datasets.some(dataset => dataset.id === id)) });
-            setCatalogError("");
-            setPrivateDetail(retained?.detail && page.datasets.some(dataset => dataset.id === retained.detail) ? retained.detail : null);
-          });
-      })
-      .catch(reason => {
-        if (controller.signal.aborted) return;
-        if (!retained) {
-          setPrivateCatalog({ token: sessionIdentity, datasets: [], next: null, total: null });
-          setPrivateDetail(null);
-        }
-        setCatalogError(reason instanceof Error ? reason.message : "No se pudo consultar el catálogo privado.");
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setCatalogLoading(false);
-      });
-  }, [sessionIdentity, webUserId]);
-
-  // User events clear the previous page immediately; effects need no synchronous reset.
-  const fetchPrivateCatalog = useCallback((cursor: string | null = null) => {
-    setCatalogLoading(true);
-    setCatalogError("");
-    setPrivateCatalog({ token: sessionIdentity, datasets: [], next: null, total: null });
-    setPrivateDetail(null);
-    return loadPrivateCatalog(cursor);
-  }, [sessionIdentity, loadPrivateCatalog]);
-
-  useEffect(() => {
-    void loadPrivateCatalog();
-    return () => catalogRequest.current?.abort();
-  }, [loadPrivateCatalog]);
-
   // Descarga bloqueante GCS → Local; la preparación por modelo es independiente.
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [transferStatus, setTransferStatus] = useState<{ message: string; error: boolean } | null>(null);
@@ -308,34 +96,6 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
     preprocessed: number;
     total: number;
   }>({ downloaded: 0, skipped: 0, failed: 0, preprocessed: 0, total: 0 });
-
-  async function removePrivateDataset(dataset: CatalogDataset) {
-    if (deletionRequest.current || catalogLoading || isSyncing) return;
-    closeArchiveConfirmation();
-    const controller = new AbortController();
-    deletionRequest.current = controller;
-    setDeletion({ identity: sessionIdentity, pending: true, message: "Archivando dataset…", error: false });
-    try {
-      await deletePrivateDataset(dataset, controller.signal);
-      if (controller.signal.aborted) return;
-      const catalog = { ...privateCatalog, datasets: importedDatasets.filter(item => item.id !== dataset.id), total: null };
-      const ids = privateSelectedIds.filter(id => id !== dataset.id);
-      const detail = privateDetail === dataset.id ? null : privateDetail;
-      setPrivateCatalog(catalog);
-      setPrivateSelection({ catalog, ids });
-      setPrivateDetail(detail);
-      setDeletion({ identity: sessionIdentity, pending: true, message: `«${dataset.name}» archivado. Sus archivos locales y las copias en GCS se conservan; esta acción no libera espacio.`, error: false });
-      setCatalogLoading(true);
-      await loadPrivateCatalog(null, { ids, detail });
-    } catch (reason) {
-      if (!controller.signal.aborted) setDeletion({ identity: sessionIdentity, pending: false, message: reason instanceof Error ? reason.message : "No se pudo archivar el dataset privado.", error: true });
-    } finally {
-      if (!controller.signal.aborted) {
-        deletionRequest.current = null;
-        setDeletion(current => ({ ...current, pending: false }));
-      }
-    }
-  }
 
   // Curación Supervisada Human-in-the-Loop (RF_06 / ADR 0013)
   const [pendingFeedbacks, setPendingFeedbacks] = useState<PendingFeedbackItem[]>([]);
@@ -359,7 +119,7 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
   // Explorador de archivos de un dataset
   const [inspectingDataset, setInspectingDataset] = useState<{ name: string; identity: string } | null>(null);
   const audioTrigger = useRef<HTMLButtonElement>(null);
-  const closeAudioDialog = useCallback(() => { setPrivateDetail(null); setInspectingDataset(null); }, []);
+  const closeAudioDialog = useCallback(() => setInspectingDataset(null), []);
 
   // Consola de Logs reactiva
   const [logs, setLogs] = useState<LogEntry[]>([
@@ -685,7 +445,7 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
       );
       setPendingFeedbacks(previous => previous.filter(pending => pending.id_retroalimentacion !== item.id_retroalimentacion));
       setSyncRefreshKey(previous => previous + 1);
-      await Promise.all([fetchDatasets(), fetchPrivateCatalog(), fetchPendingFeedbacks()]);
+      await Promise.all([fetchDatasets(), fetchPendingFeedbacks()]);
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       reportFeedbackError(err);
@@ -718,18 +478,14 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
     }
   };
 
-  // Both catalogs use one presentation; shared files remain read-only.
+  // Shared files remain read-only.
   const handleInspectDataset = (datasetName: string) => {
     // The inventory reports only the dataset; the pressed button is the focused element.
     audioTrigger.current = document.activeElement instanceof HTMLButtonElement ? document.activeElement : null;
-    setPrivateDetail(null);
     setInspectingDataset({ name: datasetName, identity: sessionIdentity });
   };
-  const selectedPrivateAudioDataset = importedDatasets.find(dataset => dataset.id === privateDetail);
-  const audioDataset = selectedPrivateAudioDataset
-    ? { kind: "private" as const, id: selectedPrivateAudioDataset.id, name: selectedPrivateAudioDataset.name }
-    : inspectingDataset?.identity === sessionIdentity
-      ? { kind: "shared" as const, id: inspectingDataset.name, name: inspectingDataset.name } : null;
+  const audioDataset = inspectingDataset?.identity === sessionIdentity
+    ? { kind: "shared" as const, id: inspectingDataset.name, name: inspectingDataset.name } : null;
 
   return (
     <div className="space-y-5">
@@ -748,7 +504,7 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
               Gestión de audios
             </h1>
             <p className="text-xs text-gray-400">
-              Importaciones privadas, catálogo compartido y transferencias explícitas
+              Inventario compartido y transferencias explícitas
             </p>
           </div>
         </div>
@@ -760,7 +516,6 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
             onClick={() => {
               fetchStatus();
               fetchDatasets();
-              void fetchPrivateCatalog();
               fetchPendingFeedbacks();
               setSyncRefreshKey(previous => previous + 1);
             }}
@@ -824,73 +579,7 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
         </div>
       )}
 
-      {/* ==================================================================== */}
-      {/* Importaciones privadas: identidades independientes del catálogo compartido. */}
-      <section aria-label="Catálogo" className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-xl font-bold text-white tracking-tight font-heading">Catálogo datasets privados</h2>
-          <div className="flex flex-wrap gap-3"><DatasetExportDialog /><DatasetImportPanel key={sessionIdentity} onCatalogChange={fetchPrivateCatalog} triggerLabel="Importar ZIP" datasetNames={Object.fromEntries(importedDatasets.map(dataset => [dataset.id, dataset.name]))} /></div>
-        </div>
-        <p className="text-xs text-gray-400">Importa un ZIP al entorno local y selecciona los datasets para guardar una copia privada en GCS. La copia local se conserva; no se publica en el catálogo compartido.</p>
-        <p className="text-[11px] text-gray-400">{collectionTotal === null ? "Catálogo privado pendiente de consulta" : `${collectionTotal} importaciones privadas`}</p>
-        <button type="button" className="text-xs text-gray-300 hover:text-white focus-visible:outline-2 focus-visible:outline-emerald-300" disabled={catalogLoading || deleting} onClick={() => void fetchPrivateCatalog()}>Actualizar estados</button>
-        <PrivateDatasetUpload key={sessionIdentity} datasets={importedDatasets} selectedIds={privateSelectedIds} loading={catalogLoading || deleting} onCatalogChange={fetchPrivateCatalog}>
-        {uploadBusy => <>
-        <div className="overflow-x-auto">
-          {archiveConfirmation && archiveConfirmation.catalog === privateCatalog && catalogMatchesSession && !catalogLoading && !deleting && !uploadBusy && !isSyncing &&
-            <DatasetConfirmationDialog title="Confirmar archivado de dataset" onClose={closeArchiveConfirmation} returnFocus={archiveTrigger}>
-              <p>¿Eliminar «{archiveConfirmation.dataset.name}» del catálogo?</p>
-              <p>El dataset quedará archivado y no estará disponible para nuevas operaciones.</p>
-              <p>Sus archivos locales y las copias en GCS se conservan. Esta acción no libera espacio.</p>
-              <div className="flex justify-end gap-2">
-                <button type="button" className="rounded-lg border border-[#373a46] px-3 py-2 transition-colors hover:bg-[#252830] hover:border-[#515565] hover:text-white focus-visible:outline-2 focus-visible:outline-emerald-300" onClick={closeArchiveConfirmation}>Cancelar</button>
-                <button type="button" className="rounded-lg border border-red-900 bg-red-950 px-3 py-2 text-red-300 transition-colors hover:bg-red-900 hover:border-red-700 hover:text-red-100 focus-visible:outline-2 focus-visible:outline-red-300" onClick={() => void removePrivateDataset(archiveConfirmation.dataset)}>Confirmar archivado</button>
-              </div>
-            </DatasetConfirmationDialog>}
-          <table aria-label="Catálogo" className="w-full min-w-[760px] text-left text-xs [&_th]:pr-4 [&_td]:pr-4">
-            <thead><tr className="border-b border-[#23252e] text-gray-400">
-              <th className="pb-3">{importedDatasets.length > 0 && <input className="rounded bg-[#121316] border-[#2d303b] text-emerald-600 focus:ring-0 cursor-pointer" type="checkbox" aria-label="Seleccionar todos los datasets privados" disabled={catalogLoading || deleting || uploadBusy || !importedDatasets.length} checked={importedDatasets.length > 0 && privateSelectedIds.length === importedDatasets.length} onChange={event => setPrivateSelection({ catalog: privateCatalog, ids: event.target.checked ? importedDatasets.map(dataset => dataset.id) : [] })} />}</th>
-              <th className="pb-3 font-medium">Dataset</th><th className="pb-3 font-medium">Ámbito</th><th className="pb-3 font-medium">Disponibilidad</th><th className="pb-3 font-medium">Clases</th><th className="pb-3 font-medium">Acuses de subida</th><th className="pb-3 font-medium">Archivos Locales</th><th className="pb-3 font-medium">Tamaño</th><th className="pb-3 font-medium">Fecha de importación</th><th className="pb-3 font-medium">Acción</th><th className="pb-3 font-medium">Eliminar</th>
-            </tr></thead>
-            <tbody className="divide-y divide-[#23252e]/60">{importedDatasets.map(dataset => (
-              <tr key={`import:${dataset.id}`} className="hover:bg-[#1c1e24]/40 transition-colors">
-                <td className="py-2.5"><input className="rounded bg-[#121316] border-[#2d303b] text-emerald-600 focus:ring-0 cursor-pointer" type="checkbox" aria-label={`Seleccionar dataset privado ${dataset.name}`} disabled={catalogLoading || deleting || uploadBusy} checked={privateSelectedIds.includes(dataset.id)} onChange={event => setPrivateSelection({ catalog: privateCatalog, ids: event.target.checked ? [...privateSelectedIds, dataset.id] : privateSelectedIds.filter(id => id !== dataset.id) })} /></td>
-                <td className="py-2.5 font-medium text-gray-200"><div className="flex items-center gap-2"><DatasetFolderIcon /><span className="font-semibold">{dataset.name}</span></div></td>
-                <td className="py-2.5 text-gray-300">Privado</td>
-                <td className="py-2.5 text-gray-400">Copia local catalogada · {dataset.synced_file_count > 0 ? `Subida a GCS registrada (${dataset.synced_file_count}/${dataset.file_count})` : "Sin subida a GCS registrada"}</td>
-                <td className="py-2.5 text-gray-300">{dataset.class_count} clase(s)</td>
-                <td className="py-2.5 font-mono text-gray-300" title="Acuses durables históricos de subida; no verifica la existencia actual en GCS.">{dataset.synced_file_count}</td>
-                <td className="py-2.5 font-mono text-gray-300">{dataset.file_count}</td>
-                <td className="py-2.5 text-gray-400">{formatBytes(dataset.total_size_bytes)}</td>
-                <td className="py-2.5 text-gray-400">{dataset.imported_at != null && !Number.isNaN(new Date(dataset.imported_at * 1000).getTime()) ? new Date(dataset.imported_at * 1000).toLocaleDateString("es-CL", { year: "numeric", month: "short", day: "numeric" }) : "No disponible"}</td>
-                <td className="py-2.5"><button type="button" className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded bg-[#1c1e24] hover:bg-[#252830] border border-[#2d303b] transition-colors" disabled={deleting} aria-haspopup="dialog" onClick={event => { audioTrigger.current = event.currentTarget; setInspectingDataset(null); setPrivateDetail(dataset.id); }}>Consultar audios</button></td>
-                <td className="py-2.5">
-                  <button type="button" aria-label={`Eliminar ${dataset.name}`}
-                    className="rounded border border-red-900 bg-red-950/30 px-2 py-1 text-red-300 transition-colors enabled:hover:bg-red-900/50 enabled:hover:border-red-700 enabled:hover:text-red-100 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-red-300"
-                    disabled={catalogLoading || deleting || uploadBusy || isSyncing}
-                    aria-haspopup="dialog"
-                     onClick={event => { archiveTrigger.current = event.currentTarget; setArchiveConfirmation({ dataset, catalog: privateCatalog }); }}>Eliminar</button>
-                </td>
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
-        <div className="space-y-4 py-4 text-xs text-gray-400">
-          {deletion.identity === sessionIdentity && deletion.message && <p role={deletion.error ? "alert" : "status"}>{deletion.message}</p>}
-          {catalogLoading && <p role="status">Consultando catálogo privado…</p>}
-          {catalogError && <p role="alert">Catálogo privado no disponible: {catalogError}</p>}
-          {!catalogLoading && !catalogError && importedDatasets.length === 0 && <p>No hay importaciones privadas en esta página.</p>}
-          <p>Acuses de subida: confirmaciones históricas, no una verificación actual del bucket. Los archivos locales son metadatos del catálogo, no un escaneo actual del disco.</p>
-          <div className="flex flex-wrap gap-3">
-            <button type="button" disabled={catalogLoading || deleting} onClick={() => void fetchPrivateCatalog()}>Primera página de importaciones</button>
-            <button type="button" disabled={catalogLoading || deleting || !catalogMatchesSession || !privateCatalog.next} onClick={() => void fetchPrivateCatalog(privateCatalog.next)}>Siguiente página de importaciones</button>
-          </div>
-
-        </div>
-        </>}
-        </PrivateDatasetUpload>
-
-      </section>
+      <div className="flex justify-end"><DatasetImportPanel key={sessionIdentity} triggerLabel="Importar ZIP" /></div>
 
       {/* Inventario observado por origen y acciones independientes. */}
       <div className="flex justify-end"><button type="button" aria-expanded={showCatalogue} onClick={() => setShowCatalogue(value => !value)} className="px-4 py-2 text-xs text-blue-300 border border-[#373a46] rounded-lg hover:bg-[#23252e]">{showCatalogue ? "Cerrar catálogo" : "Explorar datasets disponibles"}</button></div>
@@ -1105,7 +794,7 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
       {/* ==================================================================== */}
       {/* 4. MODAL EXPLORADOR DE ARCHIVOS POR CLASE */}
       {/* ==================================================================== */}
-      {audioDataset && !archiveConfirmation && !deleting && <DatasetAudioDialog
+      {audioDataset && <DatasetAudioDialog
         key={`${sessionIdentity}:${audioDataset.kind}:${audioDataset.id}`} dataset={audioDataset}
         onClose={closeAudioDialog} returnFocus={audioTrigger} />}
 

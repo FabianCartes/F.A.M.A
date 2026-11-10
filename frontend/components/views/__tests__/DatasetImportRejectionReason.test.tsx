@@ -7,7 +7,7 @@ import SessionBoundary from "@/components/auth/SessionBoundary";
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }) }));
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
-const job: ImportJob = { id: "rejected", status: "cancelled", sync_status: "pending", dataset_id: null, added_count: 0, error: "validation_failed", preview_token: "snapshot", preview: { file_count: 5, class_count: 2, error_count: 2, warning_count: 1, total_size_bytes: 100, synced_count: 0 } };
+const job: ImportJob = { id: "rejected", status: "cancelled", dataset_id: null, added_count: 0, error: "validation_failed", preview_token: "snapshot", preview: { file_count: 5, class_count: 2, error_count: 2, warning_count: 1, total_size_bytes: 100 } };
 const issue = (action: string, severity = "error") => ({ id: action, code: "technical_code", path: "private/path.wav", severity, action });
 const page = (issues: unknown[], next_cursor: string | null = null, snapshot = "snapshot") => Response.json({ issues, next_cursor, snapshot, total: 3 });
 

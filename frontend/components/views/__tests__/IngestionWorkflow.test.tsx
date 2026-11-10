@@ -61,7 +61,8 @@ describe('Gestión de audios mediante formularios y HTTP', () => {
     }));
     await act(async () => { render(<IngestionView administrator={false} />); });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Incorporar al dataset' })); });
-    const row = within(screen.getByRole('row', { name: /AvesChilenas.*Chucao.*Incorporado localmente/ }));
+    const row = within(within(screen.getByRole('table', { name: 'Estados de audios incorporados' }))
+      .getByRole('row', { name: /AvesChilenas.*Incorporado localmente/ }));
     expect(row.getByText('Registrado en PostgreSQL')).toBeDefined();
     expect(row.getByText('Pendiente de copia cloud')).toBeDefined();
     expect(row.getByText('Propuesto por cuenta #2 · Incorporado por cuenta #2')).toBeDefined();

@@ -42,6 +42,7 @@ function CompletedImportSummary({ job, datasetName }: { job: ImportJob; datasetN
   return <section aria-label="Resumen de importación" className="space-y-2 rounded-lg border border-[#2d303b] bg-[#111215] p-4">
     <h3 className="font-semibold text-white">{datasetName || "Nombre del dataset no disponible"}</h3>
     <p>Importada localmente: {job.added_count} archivo(s) nuevo(s).</p>
+    <p>El ZIP permanece local y todavía no aparece en el inventario compartido.</p>
     <p>Tamaño: {formatWeightLimit(job.preview.total_size_bytes)}</p>
     <p>Clases: {job.preview.class_count}</p>
     {classes.length > 0 && <p className="break-words">{classes.join(", ")}</p>}
@@ -55,7 +56,7 @@ function CompletedImportSummary({ job, datasetName }: { job: ImportJob; datasetN
 const statusLabels: Record<string, string> = {
   receiving: "recibiendo", validating: "validando", needs_correction: "requiere corrección",
   ready: "lista para confirmar", committing: "confirmando; reintento recuperable", imported: "importada",
-  failed: "fallida", cancelled: "cancelada", pending: "pendiente", running: "en curso", synced: "sincronizada", error: "error",
+  failed: "fallida", cancelled: "cancelada",
 };
 const inputClass = "mt-1 block w-full rounded-lg border border-[#2d303b] bg-[#111215] px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500";
 const buttonClass = "rounded-lg border border-emerald-800/60 bg-emerald-950/40 px-3 py-2 text-xs font-semibold text-emerald-400 hover:bg-emerald-900/50 transition-colors focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed";
@@ -87,12 +88,11 @@ export default function DatasetImportPanel({ onCatalogChange, triggerLabel = "Im
   const active = useRef(false);
   const requestKey = useRef("");
   const operationKey = useRef({ signature: "", key: "" });
-  const publishedDataset = job?.status === "imported" ? job.dataset_id : null;
-  const publishedDatasetName = publishedDataset ? datasetNames[publishedDataset] : undefined;
-  const publishedSyncCount = job?.preview.synced_count;
+  const localDataset = job?.status === "imported" ? job.dataset_id : null;
+  const localDatasetName = localDataset ? datasetNames[localDataset] : undefined;
   useEffect(() => {
-    if (publishedDataset) onCatalogChange?.();
-  }, [publishedDataset, publishedSyncCount, onCatalogChange]);
+    if (localDataset) onCatalogChange?.();
+  }, [localDataset, onCatalogChange]);
   const executionId = job?.execution?.id;
   const executionStatus = job?.execution?.status;
   const importId = job?.id;
@@ -272,7 +272,7 @@ export default function DatasetImportPanel({ onCatalogChange, triggerLabel = "Im
         <li>Incluye al menos un WAV válido y único. Las clases vacías o pequeñas generan advertencias.</li>
         <li>Los duplicados de la misma clase se omiten; el mismo audio en clases distintas bloquea la importación. Se comparan bytes, no similitud acústica.</li>
         <li>El ZIP se importará automáticamente solo si supera la validación del servidor, sin una segunda confirmación. No necesitas mantener esta ventana abierta.</li>
-        <li>Importar no inicia preparación ni entrenamiento ni publica el dataset en el catálogo compartido. La copia local se conserva aunque falle GCS.</li>
+        <li>Importar no inicia preparación ni entrenamiento ni publica el dataset en el catálogo compartido. El ZIP permanece local y todavía no aparece en el inventario compartido.</li>
       </ul>
       <pre className="overflow-x-auto rounded-lg border border-[#23252e] bg-[#111215] p-3 text-xs text-emerald-300">{"chucao/audio_01.wav\ncolilarga/audio_01.wav"}</pre>
       {developmentMode && <p role="status" className="rounded-lg border border-amber-800/60 bg-amber-950/40 p-3 text-amber-300">Modo de desarrollo local: identidad de pruebas compartida en este equipo, sin acceso a colecciones de otros usuarios. No exponer este modo públicamente.</p>}
@@ -338,7 +338,7 @@ export default function DatasetImportPanel({ onCatalogChange, triggerLabel = "Im
             setJob({ ...job, execution: executionSchema.parse(await response.json()) });
           })}>Cancelar trabajo pendiente</button>}
           {job.status !== "cancelled" && job.execution && ["failed", "cancelled"].includes(job.execution.status) && <button className={buttonClass} disabled={!!busy} onClick={() => void act("Admitiendo reintento…", () => admit(job, `jobs/${job.execution!.id}/retry`))}>Reintentar trabajo</button>}
-          {job.status === "imported" ? <CompletedImportSummary key={`${job.id}:${job.preview_token}`} job={job} datasetName={publishedDatasetName} /> : !executing && ["ready", "needs_correction", "failed", "cancelled"].includes(job.status) ? <>
+          {job.status === "imported" ? <CompletedImportSummary key={`${job.id}:${job.preview_token}`} job={job} datasetName={localDatasetName || (createdImport?.id === job.id ? createdImport.name : job.archive_name ?? undefined)} /> : !executing && ["ready", "needs_correction", "failed", "cancelled"].includes(job.status) ? <>
           <p>Clases propuestas: {job.preview.class_count} · Archivos: {job.preview.file_count} · Nuevos: {job.preview.new_count ?? 0} · Duplicados internos: {job.preview.duplicate_count ?? 0} · Errores: {job.preview.error_count} · Advertencias: {job.preview.warning_count}</p>
           {job.status === "cancelled" && job.preview.error_count > 0 && <p role="alert">ZIP rechazado: la importación quedó cancelada. Revisa las incidencias y crea una nueva importación con el ZIP corregido. No se publicó contenido de este ZIP.</p>}
           {automatic && job.status === "needs_correction" && <p role="alert">ZIP rechazado: revisa las incidencias, cancela esta solicitud y crea una nueva importación con el ZIP corregido. No se publicó contenido de este ZIP.</p>}
@@ -350,13 +350,13 @@ export default function DatasetImportPanel({ onCatalogChange, triggerLabel = "Im
           {job.preview.duplicate_collection && <p>Colección ya importada: se detectó el mismo contenido y etiquetas.</p>}
           {job.preview_token && <div key={`${job.id}:${job.preview_token}`}>
             <ImportDetailPage endpoint={`${importBase}/${job.id}/files`} collection="files" label="archivos" schema={audioSchema} snapshot={job.preview_token}
-              renderItem={f => <>{f.original_path} → {f.class_name}{f.duplicate || f.existing ? " (omitido)" : ""}{f.relative_path !== f.original_path ? ` · Ruta de exportación: ${f.relative_path}` : ""}</>} />
+              renderItem={f => <>{f.original_path} → {f.class_name}{f.duplicate || f.existing ? " (omitido)" : ""}{f.relative_path !== f.original_path ? ` · Ruta local: ${f.relative_path}` : ""}</>} />
             <ImportDetailPage endpoint={`${importBase}/${job.id}/classes`} collection="classes" label="clases" schema={classSchema} snapshot={job.preview_token} renderItem={value => value} />
             <ImportDetailPage endpoint={`${importBase}/${job.id}/issues`} collection="issues" label="incidencias" schema={issueSchema} snapshot={job.preview_token}
               renderItem={issue => <span role={issue.severity === "error" ? "alert" : undefined}>{issue.severity === "warning" ? "Advertencia: " : ""}{issue.path}: {issue.code}. {issue.action}</span>} />
           </div>}
           </> : null}
-          {job.error && <p role="alert">{job.error === "expired" ? "La importación venció." : job.status === "cancelled" ? "La importación quedó cancelada por un error. Puedes iniciar una nueva importación; sus diagnósticos se conservan." : "La sincronización no está completa. Reintenta; la copia local se conserva."}</p>}
+          {job.error && <p role="alert">{job.error === "expired" ? "La importación venció." : job.status === "cancelled" ? "La importación quedó cancelada por un error. Puedes iniciar una nueva importación; sus diagnósticos se conservan." : "No se pudo completar la importación. Consulta su estado antes de reintentar."}</p>}
           {!automatic && ["ready", "committing"].includes(job.status) && <button className={buttonClass} disabled={!!busy || executing || !!quotaExceeded || job.preview.error_count > 0} onClick={() => void act("Admitiendo confirmación local…", () => action("confirm", { preview_token: job.preview_token }))}>Confirmar importación local</button>}
           {!["imported", "committing", "cancelled"].includes(job.status) && <button className={buttonClass} disabled={!!busy || executing} onClick={() => void act("Cancelando…", () => action("cancel"))}>Cancelar importación</button>}
           </>}

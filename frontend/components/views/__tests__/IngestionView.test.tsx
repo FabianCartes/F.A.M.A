@@ -31,7 +31,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
   });
   afterEach(() => { global.fetch = originalFetch; });
 
-  it('separates same-name shared and private datasets without merging identities or counts', async () => {
+  it('shows only the shared inventory with independent local and GCS counts and no private or export actions', async () => {
     const legacy = { ...mockDatasets[0], id: 'shared-id', name: 'Colección compartida',
       file_count: 5, local_file_count: 2, gcs_file_count: 5, is_synced: false };
     const imported = { id: 'shared-id', name: 'Colección compartida', description: 'Importación privada',
@@ -47,32 +47,22 @@ describe('IngestionView persisted inference dataset and curation', () => {
     });
 
     await open();
-    await waitFor(() => expect(screen.getAllByText('Colección compartida')).toHaveLength(2));
-    const names = screen.getAllByText('Colección compartida');
-    expect(names).toHaveLength(2);
-    expect(screen.getByText('1 colecciones compartidas')).toBeDefined();
-    expect(screen.getByText('1 importaciones privadas')).toBeDefined();
-    const rows = names.map(name => name.closest('tr')!);
-    expect(rows[0]).not.toBe(rows[1]);
-    const legacyRow = rows.find(row => within(row).queryByText('Compartido'));
-    const importedRow = rows.find(row => within(row).queryByText('Privado'));
-    expect(legacyRow).toBeDefined();
-    expect(importedRow).toBeDefined();
-    for (const [row, localCount, cloudCount] of [[legacyRow!, '2', '5'], [importedRow!, '3', '1']] as const) {
-      const table = within(row.closest('table')!);
-      const headers = table.getAllByRole('columnheader');
-      const cells = within(row).getAllByRole('cell');
-      expect(cells[headers.indexOf(table.getByRole('columnheader', { name: /Archivos Locales/i }))].textContent?.trim()).toBe(localCount);
-      expect(cells[headers.indexOf(table.getByRole('columnheader', { name: row === importedRow ? 'Acuses de subida' : 'Archivos en GCS' }))].textContent?.trim()).toBe(cloudCount);
-    }
+    const inventory = within(screen.getByRole('table', { name: 'Inventario de datasets' }));
+    expect(inventory.getAllByText('Colección compartida')).toHaveLength(1);
+    expect(inventory.getByText('2 audios')).toBeDefined();
+    expect(inventory.getByText('5 audios')).toBeDefined();
+    expect(screen.queryByRole('table', { name: 'Catálogo' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Descargar versión como ZIP|Subir selección a GCS|Eliminar/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Importar ZIP' })).toBeDefined();
+    expect(vi.mocked(global.fetch).mock.calls.some(([url]) => String(url).includes('/imports/datasets'))).toBe(false);
   });
 
-  it('refreshes the private dataset audio count after explicit feedback incorporation', async () => {
+  it('refreshes the shared inventory audio count after explicit feedback incorporation', async () => {
     const imported = { id: 'owned-aves', name: 'aves', description: '', revision: 1,
       file_count: 1194, class_count: 15, total_size_bytes: 8523910642, synced_file_count: 0 };
     let incorporated = false;
     vi.mocked(feedbackApi.getPendingFeedback).mockResolvedValueOnce([
-      { ...item, dataset_name: 'imported:owned-aves' },
+      { ...item, dataset_name: 'aves' },
     ]).mockResolvedValue([]);
     vi.mocked(feedbackApi.approveFeedback).mockImplementation(async () => {
       incorporated = true;
@@ -86,27 +76,24 @@ describe('IngestionView persisted inference dataset and curation', () => {
         : path === '/api/ingestion/imports/datasets' ? {
           datasets: [{ ...imported, revision: incorporated ? 2 : 1, file_count: incorporated ? 1195 : 1194 }],
           next_cursor: null, total: 1, snapshot: 'catalog',
-        } : path === '/api/ingestion/datasets' ? { datasets: mockDatasets } : mockStatus;
+        } : path === '/api/ingestion/datasets' ? { datasets: [{ ...mockDatasets[0], id: 'aves', name: 'aves', local_file_count: incorporated ? 1195 : 1194 }] } : mockStatus;
       return { ok: true, status: 200, json: async () => body } as Response;
     });
     await open();
-    const row = () => screen.getByText('aves').closest('tr')!;
-    expect(within(row()).getByText('1194')).toBeDefined();
+    const row = () => within(screen.getByRole('table', { name: 'Inventario de datasets' })).getByText('aves').closest('tr')!;
+    expect(within(row()).getByText('1194 audios')).toBeDefined();
     await act(async () => { fireEvent.click(incorporate()); });
-    await waitFor(() => expect(within(row()).getByText('1195')).toBeDefined());
-    expect(within(row()).queryByText('1194')).toBeNull();
+    await waitFor(() => expect(within(row()).getByText('1195 audios')).toBeDefined());
+    expect(within(row()).queryByText('1194 audios')).toBeNull();
     expect(feedbackApi.approveFeedback).toHaveBeenCalledTimes(1);
-    expect(within(row()).getByText('Privado')).toBeDefined();
   });
 
-  it('separates import from shared download while preserving export and explicit download', async () => {
+  it('separates local ZIP import from explicit shared download without export', async () => {
     await open();
     const download = screen.getByRole('button', { name: 'Descargar desde GCS' });
     expect(screen.getByRole('button', {name:'Preprocesar audios locales'})).toBeDefined();
-    const upload = screen.getByRole('button', { name: 'Importar dataset' });
-
-    const exportZip = screen.getByRole('button', { name: 'Descargar versión como ZIP' });
-    expect(exportZip.parentElement).toBe(upload.parentElement);
+    const upload = screen.getByRole('button', { name: 'Importar ZIP' });
+    expect(screen.queryByRole('button', { name: 'Descargar versión como ZIP' })).toBeNull();
 
     expect(upload.classList.contains('text-xs')).toBe(true);
     expect(screen.queryByRole('dialog')).toBeNull();

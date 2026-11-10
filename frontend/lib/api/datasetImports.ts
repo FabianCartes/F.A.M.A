@@ -10,7 +10,7 @@ const previewSchema = z.object({
   root: z.string().optional(),
   auto_import: z.boolean().optional(),
   file_count: z.number(), class_count: z.number(), error_count: z.number(), warning_count: z.number(),
-  total_size_bytes: z.number(), synced_count: z.number(),
+  total_size_bytes: z.number(),
   new_count: z.number().optional(), duplicate_count: z.number().optional(), duplicate_collection: z.boolean().optional(),
   quota: z.object({
     current_bytes: z.number().int().nonnegative(), current_files: z.number().int().nonnegative(),
@@ -27,14 +27,14 @@ export const filesPageSchema = pageMetadataSchema.extend({ files: z.array(audioS
 export const classesPageSchema = pageMetadataSchema.extend({ classes: z.array(z.string()).max(200) });
 export const issuesPageSchema = pageMetadataSchema.extend({ issues: z.array(issueSchema).max(200) });
 export const executionSchema = z.object({
-  id: z.string(), import_id: z.string(), kind: z.enum(["preview", "confirm", "sync"]),
+  id: z.string(), import_id: z.string(), kind: z.enum(["preview", "confirm"]),
   status: z.enum(["queued", "running", "succeeded", "failed", "cancelled"]),
   stage: z.string(), progress: z.number().int().min(0).max(100),
-  result: z.object({ dataset_id: z.string().optional(), added_count: z.number().optional(), synced_count: z.number().optional() }),
+  result: z.object({ dataset_id: z.string().optional(), added_count: z.number().optional() }),
   error: z.object({ code: z.string() }).nullable(), status_url: z.string(),
 });
 export const jobSchema = z.object({
-  id: z.string(), status: z.string(), sync_status: z.string(), dataset_id: z.string().nullable(),
+  id: z.string(), status: z.string(), dataset_id: z.string().nullable(),
   added_count: z.number(), preview_token: z.string().nullable(), preview: previewSchema, error: z.string().nullable(),
   execution: executionSchema.nullable().optional(),
   archive_name: z.string().nullable().optional(), created_at: z.number().nullable().optional(),
@@ -44,7 +44,6 @@ export const datasetsPageSchema = pageMetadataSchema.extend({ datasets: z.array(
 export const catalogDatasetSchema = datasetSchema.extend({
   description: z.string().nullable(), revision: z.number().int().nonnegative(),
   class_count: z.number().int().nonnegative(), total_size_bytes: z.number().int().nonnegative(),
-  synced_file_count: z.number().int().nonnegative(),
   imported_at: z.number().finite().nullable().optional(),
 });
 export const catalogPageSchema = pageMetadataSchema.extend({ datasets: z.array(catalogDatasetSchema).max(200) });
@@ -53,7 +52,7 @@ export const jobsPageSchema = pageMetadataSchema.extend({ imports: z.array(jobSc
 export const limitsSchema = z.object({
   received_bytes: z.number(), expanded_bytes: z.number(), entries: z.number(), depth: z.number(),
   path_bytes: z.number(), audio_bytes: z.number(), audio_seconds: z.number(),
-  validation_seconds: z.number(), free_bytes: z.number(), ttl_seconds: z.number(),
+  validation_seconds: z.number(), ttl_seconds: z.number(),
   concurrent_imports: z.number(),
   dataset_bytes: z.number().optional(), dataset_entries: z.number().optional(),
 });

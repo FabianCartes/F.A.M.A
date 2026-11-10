@@ -34,15 +34,15 @@ describe('accepted feedback synchronization through the rendered panel', () => {
     ]);
     await open();
     const rows = screen.getAllByRole('row').slice(1);
-    expect(within(rows[0]).getAllByRole('cell')[3].textContent).toBe('Pendiente de copia cloud');
-    expect(within(rows[1]).getAllByRole('cell')[3].textContent).toBe('Pendiente de copia cloud');
+    expect(within(rows[0]).getByRole('cell', { name: 'Pendiente de copia cloud' })).toBeDefined();
+    expect(within(rows[1]).getByRole('cell', { name: 'Pendiente de copia cloud' })).toBeDefined();
     expect(screen.queryByText(/Subida fallida|Integridad inconsistente|Sincronización automática a cargo/)).toBeNull();
     expect(within(rows[2]).getByText('Copia cloud confirmada')).toBeDefined();
     expect(rows[0].textContent).not.toMatch(/Feedback #|Predicción #|Directorio:/);
     expect(within(rows[0]).getByText('canto_original.wav')).toBeDefined();
     expect(within(rows[0]).getByText('feedback_7.wav')).toBeDefined();
     expect(screen.getAllByRole('columnheader').map(header => header.textContent)).toEqual([
-      'Dataset de destino', 'Nombre del audio revisado', 'Estado local', 'Copia cloud',
+      'Dataset de destino', 'Nombre del audio revisado', 'Estado local', 'Registro y autoría', 'Copia cloud',
     ]);
     expect(within(rows[0]).getByText('AvesChilenas')).toBeDefined();
 

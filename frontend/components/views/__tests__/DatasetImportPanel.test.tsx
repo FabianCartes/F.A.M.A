@@ -30,8 +30,8 @@ describe("private dataset import", () => {
   it("recovers the historical root and shows completed local import without modal cloud actions", async () => {
     const base = "/api/ingestion/imports";
     const writes: { path: string; body: unknown }[] = [];
-    const preview = { root: "wrap", ...counts };
-    const ready = { id: "independent", archive_name: "independent.zip", status: "ready", sync_status: "pending", dataset_id: null,
+    const preview = { root: "wrap", file_count: 0, class_count: 1, error_count: 0, warning_count: 0, total_size_bytes: 0 };
+    const ready = { id: "independent", archive_name: "independent.zip", status: "ready", dataset_id: null,
       added_count: 0, preview_token: "q".repeat(64), preview, error: null };
     let snapshot = ready.preview_token;
     vi.stubGlobal("fetch", durableFetch(async (input: string, options?: RequestInit) => {
@@ -72,6 +72,8 @@ describe("private dataset import", () => {
     await waitFor(() => expect((screen.getByRole("button", { name: "Confirmar importación local" }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: "Confirmar importación local" }));
     await screen.findByText(/Importada localmente: 1 archivo/);
+    expect(screen.getByText('El ZIP permanece local y todavía no aparece en el inventario compartido.')).toBeDefined();
+    expect(screen.queryByRole('link', { name: /catálogo/i })).toBeNull();
     expect(writes.map(w => w.path)).toEqual([base + "/independent/preview", base + "/independent/confirm"]);
     expect(screen.queryByRole("button", { name: "Subir este dataset a GCS" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Consultar archivos locales" })).toBeNull();

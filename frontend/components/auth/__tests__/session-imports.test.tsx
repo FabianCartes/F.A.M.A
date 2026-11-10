@@ -5,7 +5,6 @@ import SidebarSession from "@/components/SidebarSession";
 function SessionBoundary({ children }: { children: React.ReactNode }) {
   return <Boundary><SidebarSession isCollapsed={false} onToggleCollapsed={() => {}} />{children}</Boundary>;
 }
-import DatasetExportDialog from "@/components/ingestion/DatasetExportDialog";
 import DatasetImportPanel from "@/components/ingestion/DatasetImportPanel";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }) }));
@@ -35,18 +34,3 @@ it("enables private import with a confirmed cookie and no Bearer in non-developm
   expect(request.mock.calls.some(([path]) => path.endsWith("/limits"))).toBe(true);
 });
 
-
-it("loads export collections using the same confirmed cookie outside development mode", async () => {
-  const request = vi.fn(async (path: string) => {
-    if (path.endsWith("/api/auth/me")) return Response.json(user);
-    if (path.endsWith("/access")) return Response.json({ development_mode: false });
-    if (path.endsWith("/datasets")) return Response.json({ datasets: [], total: 0, next_cursor: null, snapshot: "empty" });
-    throw new Error("Unexpected request " + path);
-  });
-  vi.stubGlobal("fetch", request);
-  render(<SessionBoundary><DatasetExportDialog /></SessionBoundary>);
-  await screen.findByText(user.nombre_completo);
-  fireEvent.click(screen.getByRole("button", { name: "Descargar versión como ZIP" }));
-  expect(await screen.findByRole("button", { name: "Primera página de datasets" })).toBeDefined();
-  expect(request.mock.calls.some(([path]) => path.endsWith("/datasets"))).toBe(true);
-});
