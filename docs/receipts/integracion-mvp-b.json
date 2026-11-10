@@ -98,5 +98,12 @@
       "Python 3.12 image"
     ]
   },
-  "protected_u0_note": "docs/KANBAN.md and docs/README.md were intentionally appended by stage b after the hashes were recorded; the verifier confirmed only additions over U0 content."
+  "protected_u0_note": "docs/KANBAN.md and docs/README.md were intentionally appended by stage b after the hashes were recorded; the verifier confirmed only additions over U0 content.",
+  "native_review": {
+    "assessed_risk": "high",
+    "escalation": "item 3",
+    "status": "not_run",
+    "reason": "STATUS required an undocumented intended-untracked selection for docs/receipts/integracion-mvp-u0.json",
+    "user_decision": "Vamos por la 2 (b without native review; independent verifier only)"
+  }
 }
