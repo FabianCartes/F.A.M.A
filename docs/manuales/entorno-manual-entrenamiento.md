@@ -73,7 +73,7 @@ docker --host unix:///var/run/docker.sock exec fama-admin-persistent-9c4b15c847a
 docker --host unix:///var/run/docker.sock start fama-manual-dev-44938bc83ad0184c-api
 ```
 
-La red es interna. Aunque se solicitó un binding de API a `127.0.0.1:8000`, Docker no lo materializó en este entorno. **No usar esa URL como prueba de disponibilidad.** Next.js accede a la IP privada de la API, que puede cambiar al reiniciar. Con el puerto 3000 libre, desde la raíz del proyecto:
+La red es interna. Aunque se solicitó un binding de API a `127.0.0.1:8000`, Docker no lo materializó en este entorno. **No usar esa URL como prueba de disponibilidad.** Next.js accede a la IP privada de la API (`172.23.0.3`, fija en la red interna). Con el puerto 3000 libre, desde la raíz del proyecto:
 
 ```bash
 API_IP="$(docker --host unix:///var/run/docker.sock inspect \
@@ -95,7 +95,7 @@ La UI utiliza una **copia de las fuentes**, sin dotenv, y reutiliza las dependen
 - Abrir la interfaz y usar la cuenta de investigador propia del entorno.
 - Revisar las vistas y anotar errores concretos, sin interpretar una pantalla disponible como aprobación de todas las funcionalidades.
 - La política `isolated` omite bootstrap legacy, precarga de modelos, seed y feedback worker. Los modelos legacy no se cargan automáticamente.
-- El worker de importación está **activo como servicio de usuario `fama-zip-worker-connected`** en el host, usando la misma BD y carpeta de imports. Su preflight comprobó el validador real bajo `NoNewPrivileges`, con Bubblewrap, seccomp y límites intactos; no se cambió la política Docker. Su modo local procesa preview/confirm, no GCS. El intento antiguo dentro de Docker continúa siendo evidencia histórica de un runtime incompatible, no del estado del worker nuevo.
+- El worker de importación está **activo como servicio persistente de usuario `fama-zip-worker-connected-large`** en el host (arranca al iniciar sesión), usando la misma BD y carpeta de imports. Su preflight comprobó el validador real bajo `NoNewPrivileges`, con Bubblewrap, seccomp y límites intactos; no se cambió la política Docker. Su modo local procesa preview/confirm, no GCS. El intento antiguo dentro de Docker continúa siendo evidencia histórica de un runtime incompatible, no del estado del worker nuevo.
 - El trabajo `47a3ab3adec64dbea026dbd456959dbc` apareció cancelado antes del arranque del worker, con cero intentos; no se reactivó. Se necesita una nueva acción del usuario en la aplicación para comprobar preview/publicación real, sin presentar readiness sintética como importación exitosa.
 - Las rutas actuales de entrenamiento, inferencia, feedback y preparación están desplegadas y se habilitaron los permisos de almacenamiento en DB que antes faltaban. No se ha ejecutado entrenamiento ni inferencia real para validar este despliegue.
 - No se configuraron credenciales GCS ni salida externa de red; antes de S16, `/api/predict` dependía de subida GCS. El despliegue S16 elimina ese requisito solo para modelos privados importados; el flujo legacy sigue necesitando GCS. Véase el apartado de inferencia privada local. No pulsar sincronización cloud como prueba de salud; el worker de feedback no se inició automáticamente.

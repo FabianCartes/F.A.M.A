@@ -16,7 +16,7 @@ La reparación utiliza el host existente, con UID1000 y la `.venv` del proyecto,
 - Adaptador/configuración privados: `.zip-worker-repair-1bdd65240872a605/`; directorio0700 y archivos0600. No copiarlos a Git ni imprimir sus contenidos.
 - La URL no incluye contraseña. El acceso usa el `PGPASSFILE` existente y `PGHOSTADDR` para la IP privada actual de PostgreSQL, sin cambiar la credencial ni publicar el puerto de BD.
 - Modo: `--local-only --watch`; consume únicamente `preview` y `confirm`. No consume trabajos cloud ni inicia entrenamiento.
-- La ejecución activa usa una unidad transitoria de usuario `fama-zip-worker-connected-large`, con `NoNewPrivileges=yes` y umask0077. Su `ExecStartPre` comprueba identidad de BD, privilegios efectivos mediante transacción de solo lectura y el validador real bajo esas mismas restricciones, antes de reclamar trabajos. Si esa comprobación falla, no debe comenzar el consumidor.
+- La ejecución activa usa la unidad persistente de usuario `fama-zip-worker-connected-large` (`~/.config/systemd/user/fama-zip-worker-connected-large.service`, habilitada en `default.target`), con `NoNewPrivileges=yes` y umask0077. Un primer `ExecStartPre` espera como máximo120s a que la IP privada de PostgreSQL acepte TCP (`wait-db.py`, privado, solo alcanzabilidad). El segundo `ExecStartPre` comprueba identidad de BD, privilegios efectivos mediante transacción de solo lectura y el validador real bajo esas mismas restricciones, antes de reclamar trabajos. Si esa comprobación falla, no debe comenzar el consumidor.
 
 El adaptador invoca el CLI existente; no es un segundo validador ni un fallback sin sandbox. El servicio ya pasó su preflight bajo `NoNewPrivileges`, comprobó identidad/permisos y el validador real, y permanece activo consultando la cola. Véase [evidencia del despliegue](../receipts/zip-worker-connected-deployment.json).
 
@@ -38,27 +38,25 @@ Detener solo este consumidor:
 systemctl --user stop fama-zip-worker-connected-large
 ```
 
-La parada debe respetar la finalización cooperativa del intento actual. No cancelar trabajos, borrar staging ni restaurar la BD para detener el proceso. El servicio transitorio no constituye instalación permanente ni arranque automático al reiniciar el equipo; API, BD y worker deben estar disponibles para continuar importaciones después de un reinicio.
+La parada debe respetar la finalización cooperativa del intento actual. No cancelar trabajos, borrar staging ni restaurar la BD para detener el proceso. `stop` no deshabilita la unidad: vuelve a arrancar al siguiente inicio de sesión. Para retirarla, `systemctl --user disable --now fama-zip-worker-connected-large`.
 
 Antes de reactivarlo tras cambiar la IP de PostgreSQL, las rutas o la versión de fuentes, revisar la configuración privada y repetir la comprobación de arranque correspondiente a la nueva configuración. No repetir un sandbox indisponible sin resolver su prerrequisito.
 
 ### Reactivación tras detener o reiniciar el equipo
 
-Si la unidad todavía existe, `systemctl --user restart fama-zip-worker-connected-large` vuelve a ejecutar su preflight. Si el equipo se reinició y la unidad transitoria ya no existe, desde la raíz de este checkout, después de verificar que API/BD y su IP privada no cambiaron:
+Tras un reinicio no hay pasos manuales si se cumplen estos prerrequisitos:
 
-```bash
-PROJECT="$PWD"
-ADAPTER="$PROJECT/.zip-worker-repair-1bdd65240872a605/run-worker.py"
-PYTHON="$PROJECT/.venv/bin/python"
-systemd-run --user --unit=fama-zip-worker-connected-large --service-type=exec \
-  --property=NoNewPrivileges=yes --property=UMask=0077 \
-  --property=TimeoutStartSec=30 --property=TimeoutStopSec=1830 \
-  --property=Restart=no \
-  --property="ExecStartPre=$PYTHON -I -B $ADAPTER --check" \
-  --working-directory="$PROJECT/backend" "$PYTHON" -I -B "$ADAPTER"
-```
+| Pieza | Configuración | Motivo |
+| --- | --- | --- |
+| Daemon Docker | `docker.service` habilitado (`sudo systemctl enable docker.service`) | Con solo `docker.socket` el daemon no arranca hasta el primer uso y los contenedores no vuelven. |
+| BD y API | `--restart unless-stopped` | Vuelven al arrancar el daemon; un `docker stop` explícito se respeta. |
+| IP privada | BD `172.23.0.2`, API `172.23.0.3`, consumidor GCS `172.23.0.4`, fijas en la red interna | `worker.json` usa `PGHOSTADDR` y Next.js la IP de la API; con asignación dinámica podían cambiar o intercambiarse. |
+| Alias de red | La BD conserva el alias `db` | API y consumidor GCS conectan a `db:5432`. Al reconectar la BD para fijar su IP, usar `docker network connect --ip 172.23.0.2 --alias db`; sin `--alias` ambos pierden la BD aunque el health de la API siga en200. |
+| Worker | Unidad de usuario habilitada | Arranca al iniciar sesión. Sin `loginctl enable-linger` no arranca antes del login. |
 
-No imprimir `worker.json` ni `PGPASSFILE`. Un fallo de preflight impide arrancar el consumidor y no dispara reintentos automáticos. Detenerse a resolver el requisito, no desactivar la comprobación.
+Para relanzarlo manualmente, `systemctl --user restart fama-zip-worker-connected-large` vuelve a ejecutar la espera y el preflight. No imprimir `worker.json` ni `PGPASSFILE`. Un fallo de preflight impide arrancar el consumidor y no dispara reintentos automáticos (`Restart=no`); si la BD no responde en120s la unidad queda fallida. Detenerse a resolver el requisito, no desactivar la comprobación. Si cambian las IP, las rutas o la versión de fuentes, actualizar la configuración privada antes de reiniciar.
+
+Esta persistencia es propia del host local. En un servidor que sea a su vez un contenedor no hay systemd ni daemon Docker propios, y Bubblewrap requiere user namespaces que el perfil por defecto de Docker bloquea; esa receta pertenece a la preparación de despliegue, no a este manual.
 
 ## Aceptación desde la aplicación
 

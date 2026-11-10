@@ -27,6 +27,10 @@ Después del `204`, retira la fila y su selección y cierra su consulta de audio
 
 El archivado es persistente y exige que la revisión siga vigente. El backend comprueba el propietario y oculta los datasets archivados del catálogo activo y del selector de entrenamiento; rechaza nuevas importaciones sobre ellos, transferencias, preparaciones, entrenamientos y aprobaciones de retroalimentación. Los trabajos ya admitidos y sus reintentos idempotentes continúan; se conservan archivos, historial, preparaciones y contadores. Los nombres archivados siguen reservados por la unicidad existente; no hay restauración desde la interfaz ni liberación de espacio.
 
+Antes de desplegar este contrato, respalda PostgreSQL y comprueba su restauración en una instancia aislada. Detén la API y los escritores de importación, preparación, entrenamiento y transferencia antes de ejecutar, desde `backend/`, `python -m scripts.migrate_dataset_import_archive --writers-stopped` con el intérprete y la conexión de mantenimiento validados. La migración añade `archived BOOLEAN NOT NULL DEFAULT FALSE`, preserva los registros existentes y es idempotente. Si el esquema no está disponible o es incompatible, las nuevas admisiones fallan de forma segura. El rollback de aplicación conserva la columna aditiva; no elimines la columna ni restaures destructivamente la base por inercia.
+
+La activación local se comprobó con PostgreSQL 16 restaurado y la imagen Python 3.12, comparando conteos de 33 tablas y repitiendo la migración. La verificación funcional aislada del backend usa Python 3.14 y SQLite; no equivale a probar un archivado autenticado sobre datos reales. Durante el mantenimiento no se archivó ningún dataset real. Los respaldos y configuraciones operativas son privados y no deben versionarse.
+
 ## Catálogo datasets públicos · Compartidos en GCS
 
 Ambas tablas muestran el mismo icono decorativo de carpeta junto al nombre, sin etiquetas de dominio ni de origen (incluida **Importado ZIP**). No tienen columna **Estado**: las cantidades se comparan directamente en sus columnas, sin inferir sincronización, hashes ni identidad del contenido.
@@ -66,6 +70,8 @@ La procedencia privada procede de los metadatos persistidos del miembro o de su 
 La incorporación de este modal al checkout no acredita por sí sola su despliegue. Sustituir la API activa requiere mantenimiento autorizado por separado; la aceptación visual sigue correspondiendo al usuario, sin automatización de navegador.
 
 Tras el reinicio, se autorizó y aplicó la actualización local de API y frontend: imagen `fama-audio-browser-modal:local`, cinco fuentes backend y tres archivos de interfaz verificados por hash. Se conservó el contenedor anterior detenido para recuperación y se respaldó PostgreSQL, comprobando su restauración en una instancia temporal sin red con los conteos de 33 tablas coincidentes. No se ejecutó ninguna migración. La API saludable y la interfaz en `http://127.0.0.1:3000` respondieron a las comprobaciones HTTP; ambas rutas publican el modo opcional `browse` y el acceso privado sin sesión sigue rechazándose con `401`, también a través del proxy frontend. Esto no sustituye una comprobación visual ni una consulta o descarga autenticada de audios reales.
+
+El consumidor independiente de sincronización ejecuta un worker de cola, no un servidor HTTP. Su arranque desactiva el healthcheck heredado de la imagen de API (`--no-healthcheck`), que consultaba incorrectamente `localhost:8000/health`. Docker muestra ahora su estado de ejecución sin atribuirle un estado HTTP `healthy`/`unhealthy`; la ausencia de ese indicador no certifica una sincronización con GCS. La corrección conserva imagen, configuración de trabajo, montajes, seguridad y redes del consumidor; no cambia el healthcheck de la API. El contenedor anterior queda detenido para recuperación.
 
 ## Registro de audios incorporados
 
