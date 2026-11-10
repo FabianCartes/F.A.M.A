@@ -6,6 +6,7 @@ import shutil
 import zipfile
 
 import pytest
+from tests.http_security import cookie_headers, cookie_security, COOKIE_PASSWORD, COOKIE_ORIGIN
 
 from tests.test_dataset_import_api import imports, prepare, confirm, operation  # noqa: F401 - public fixture
 from tests.test_dataset_import_manifests import ManifestObjects
@@ -14,8 +15,18 @@ from tests.test_dataset_zip_validation import wav_bytes
 
 @pytest.fixture
 def exported_source(imports, tmp_path, monkeypatch):
-    from app.routes.dataset_imports import get_import_storage
+    from app.routes.dataset_imports import get_import_storage, get_import_user
+    from app.routes.auth import router as auth_router
+    from app.services.auth import create_user
     client, service, app, sessions = imports
+    app.include_router(auth_router)
+    app.dependency_overrides.pop(get_import_user)
+    with sessions() as db:
+        for identity in (1, 2):
+            create_user(db, f"export{identity}@example.test", COOKIE_PASSWORD, "Synthetic", "administrador")
+    client.headers["Origin"] = COOKIE_ORIGIN
+    response = client.post("/api/auth/login", json={"email": "export1@example.test", "password": COOKIE_PASSWORD})
+    assert response.status_code == 200, response.text
     storage = ManifestObjects()
     app.dependency_overrides[get_import_storage] = lambda: storage
     monkeypatch.setenv("FAMA_EXPORT_DOWNLOAD_ORIGIN", "https://downloads.example.test")
@@ -187,20 +198,20 @@ def test_invalid_authorized_manifest_is_rejected_without_download(exported_sourc
 
 
 def test_http_ownership_idempotency_ranges_and_route_fail_closed(exported_source, tmp_path, monkeypatch):
-    from types import SimpleNamespace
-    from app.routes.dataset_imports import get_import_user
-    client, _, app, _, _, dataset, _ = exported_source
+    client, _, app, sessions, _, dataset, _ = exported_source
     queue, _, job = completed(exported_source, tmp_path)
     assert admit(client, dataset)["id"] == job["id"]
     history = client.get(f"/api/ingestion/imports/datasets/{dataset}/exports")
     assert history.status_code == 200 and history.json()["exports"][0]["id"] == job["id"]
-    app.dependency_overrides[get_import_user] = lambda: SimpleNamespace(id=2)
-    assert client.get(job["status_url"]).status_code == 404
-    assert client.get(f"/api/ingestion/imports/datasets/{dataset}/exports").status_code == 404
-    assert client.post(job["status_url"] + "/sessions").status_code == 404
+    foreign = cookie_headers(sessions, 2)
+    assert client.get(job["status_url"], headers=foreign).status_code == 404
+    assert client.get(f"/api/ingestion/imports/datasets/{dataset}/exports", headers=foreign).status_code == 404
+    assert client.post(job["status_url"] + "/sessions", headers=foreign).status_code == 404
     assert client.post(f"/api/ingestion/imports/datasets/{dataset}/revisions/1/exports",
-                       json={"request_key": "foreign"}).status_code == 404
-    app.dependency_overrides[get_import_user] = lambda: SimpleNamespace(id=1)
+                       headers=foreign, json={"request_key": "foreign"}).status_code == 404
+    anonymous = client.get(job["status_url"], headers={"Cookie": "", "Authorization": "Bearer ignored"})
+    assert anonymous.status_code == 401
+    assert anonymous.headers["cache-control"] == "no-store"
     monkeypatch.delenv("FAMA_EXPORT_DOWNLOAD_ORIGIN")
     assert client.post(job["status_url"] + "/sessions").status_code == 503
     monkeypatch.setenv("FAMA_EXPORT_DOWNLOAD_ORIGIN", "https://downloads.example.test")

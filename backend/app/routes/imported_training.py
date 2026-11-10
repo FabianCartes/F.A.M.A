@@ -5,15 +5,14 @@ No queue or retry: an interrupted client must explicitly reselect a resource.
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.routing import APIRoute
+from app.routes.auth import WebAuthRoute
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictBool
 from sqlalchemy import inspect
 
 from app.database import get_db
-from app.services.imported_identity import imported_user
+from app.services.web_sessions import current_web_user
 
-class BoundedPreparationRoute(APIRoute):
+class BoundedPreparationRoute(WebAuthRoute):
     def get_route_handler(self):
         handler = super().get_route_handler()
 
@@ -23,8 +22,10 @@ class BoundedPreparationRoute(APIRoute):
                 async for chunk in request.stream():
                     size += len(chunk)
                     if size > 8 * 1024 * 1024:
-                        raise HTTPException(413, detail={'code': 'request_budget',
-                            'message': 'JSON excede 8 MiB. Reduzca el mapa o la procedencia antes de solicitar preparación.'})
+                        from fastapi.responses import JSONResponse
+                        return JSONResponse(status_code=413, headers={"Cache-Control": "no-store"}, content={
+                            "detail": {'code': 'request_budget',
+                                'message': 'JSON excede 8 MiB. Reduzca el mapa o la procedencia antes de solicitar preparación.'}})
                     chunks.append(chunk)
                 # FastAPI parses the same bounded bytes; it must not consume the stream again.
                 request._body = b''.join(chunks)
@@ -33,7 +34,6 @@ class BoundedPreparationRoute(APIRoute):
 
 
 router = APIRouter(prefix="/api/training/imported", tags=["imported training"], route_class=BoundedPreparationRoute)
-security = HTTPBearer(auto_error=False)
 
 
 class SnapshotRequest(BaseModel):
@@ -50,10 +50,7 @@ class PreparationRequest(BaseModel):
     profile: dict[str, Any]
 
 
-def get_user(request: Request, response: Response,
-             credentials: HTTPAuthorizationCredentials | None = Depends(security),
-             db=Depends(get_db)):
-    return imported_user(request, response, credentials, db)
+get_user = current_web_user
 
 
 def get_preparations():

@@ -51,7 +51,7 @@ router.include_router(web_auth_router)
 # ============================================================================
 class LoginRequest(BaseModel):
     email: str = Field(..., min_length=1, max_length=150, description="Correo electrónico del usuario")
-    password: str = Field(..., description="Contraseña en texto plano")
+    password: str = Field(..., min_length=1, max_length=1024, description="Contraseña en texto plano")
 
     @field_validator("email", mode="before")
     @classmethod

@@ -8,13 +8,13 @@ from app.database import get_db
 from app.models.dataset_import import ImportedDataset
 from app.models.imported_training_source import ImportedModelSource
 from app.models.prediction import Prediccion
-from app.services.auth import security_bearer
-from app.services.imported_identity import imported_user
+from app.services.web_sessions import web_identity
+from app.routes.auth import WebAuthRoute
 from app.services.imported_feedback import imported_model_id
 from app.services.local_prediction_audio import LocalPredictionAudio
 from app.services.registry import get_model_registry
 
-router = APIRouter(prefix='/api/inference', tags=['Predicciones'])
+router = APIRouter(prefix='/api/inference', tags=['Predicciones'], route_class=WebAuthRoute)
 
 
 class HistoryItem(BaseModel):
@@ -40,9 +40,9 @@ def prediction_history(request: Request, response: Response,
         model_id: str = Query(min_length=1, max_length=100),
         limit: int = Query(default=20, ge=1, le=20),
         cursor: int | None = Query(default=None, gt=0),
-        credentials=Depends(security_bearer), db: Session = Depends(get_db),
+        db: Session = Depends(get_db),
         registry=Depends(get_model_registry)):
-    user = imported_user(request, response, credentials, db)
+    user = web_identity(request, response, db)
     response.headers['Cache-Control'] = 'no-store'
     numeric = imported_model_id(model_id)
     source = (db.get(ImportedModelSource, numeric) if numeric

@@ -1,5 +1,6 @@
 """Local development admission through public HTTP, never an ambient database."""
 import pytest
+from tests.http_security import cookie_headers, cookie_security, COOKIE_ORIGIN
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -51,7 +52,8 @@ def local_imports(tmp_path, monkeypatch):
     root.mkdir(mode=0o700)
     app.state.test_sessions = sessions
     app.state.import_execution = ImportExecution(ImportJobQueue(sessions), service, root)
-    with TestClient(app, client=("127.0.0.1", 50000), raise_server_exceptions=False) as client:
+    with TestClient(app, client=("127.0.0.1", 50000), raise_server_exceptions=False,
+                    headers={"Origin": COOKIE_ORIGIN}) as client:
         yield client, app
     engine.dispose()
 
@@ -70,10 +72,12 @@ def test_development_flags_cannot_admit_anonymous_imports(local_imports, monkeyp
     assert client.get(BASE + "/datasets").status_code == 401
     registration = client.post("/api/auth/register", json={"email": "check@example.test",
         "password": "synthetic-password", "nombre_completo": "Check"})
-    assert registration.status_code == 201, registration.text
-    login = client.post("/api/auth/login", json={"email": "check@example.test", "password": "synthetic-password"})
-    assert login.status_code == 200, login.text
-    headers = {"Authorization": "Bearer " + login.json()["access_token"]}
+    assert registration.status_code == 401, registration.text
+    from app.services.auth import create_user
+    sessions = local_imports[1].state.test_sessions
+    with sessions() as db:
+        user_id = create_user(db, "check@example.test", "synthetic-password", "Check").id
+    headers = cookie_headers(sessions, user_id)
     assert client.get(BASE, headers=headers).json()["imports"] == []
     assert client.get(BASE + "/datasets", headers=headers).json()["datasets"] == []
 
@@ -82,7 +86,7 @@ def test_docker_frontend_cannot_enable_anonymous_imports(local_imports, monkeypa
     _, app = local_imports
     enable_local(monkeypatch)
     monkeypatch.setenv("FAMA_IMPORT_DEV_FRONTEND_IP", "172.30.253.10")
-    with TestClient(app, client=("172.30.253.10", 50000)) as frontend:
+    with TestClient(app, client=("172.30.253.10", 50000), headers={"Origin": COOKIE_ORIGIN}) as frontend:
         assert frontend.get(BASE + "/access").json() == {"available": True, "development_mode": False, "authenticated": False}
         assert frontend.post(BASE, json={"request_key": "denied", "name": "Denied"}).status_code == 401
         assert frontend.get(BASE + "/datasets").status_code == 401
@@ -97,7 +101,7 @@ def test_no_frontend_peer_grants_anonymous_identity(local_imports, monkeypatch, 
     _, app = local_imports
     enable_local(monkeypatch)
     monkeypatch.setenv("FAMA_IMPORT_DEV_FRONTEND_IP", "172.30.253.10")
-    with TestClient(app, client=(peer, 50000)) as other:
+    with TestClient(app, client=(peer, 50000), headers={"Origin": COOKIE_ORIGIN}) as other:
         headers = {"X-Forwarded-For": "172.30.253.10", "Forwarded": "for=172.30.253.10"}
         assert other.get(BASE, headers=headers).status_code == 401
         assert other.post(BASE, json={"request_key": "denied", "name": "Denied"}, headers=headers).status_code == 401
@@ -108,7 +112,7 @@ def test_frontend_configuration_never_accepts_ranges_or_names(local_imports, mon
     _, app = local_imports
     enable_local(monkeypatch)
     monkeypatch.setenv("FAMA_IMPORT_DEV_FRONTEND_IP", configured)
-    with TestClient(app, client=("172.30.253.10", 50000)) as other:
+    with TestClient(app, client=("172.30.253.10", 50000), headers={"Origin": COOKIE_ORIGIN}) as other:
         assert other.get(BASE).status_code == 401
 
 
@@ -149,7 +153,7 @@ def test_opt_in_outside_development_fails_closed(local_imports, monkeypatch, env
 def test_remote_peers_cannot_use_local_exception_or_spoof_forwarding(local_imports, monkeypatch):
     _, app = local_imports
     enable_local(monkeypatch)
-    with TestClient(app, client=("192.0.2.10", 50000)) as remote:
+    with TestClient(app, client=("192.0.2.10", 50000), headers={"Origin": COOKIE_ORIGIN}) as remote:
         headers = {"X-Forwarded-For": "127.0.0.1", "Forwarded": "for=127.0.0.1", "Host": "localhost"}
         assert remote.get(BASE + "/access", headers=headers).json() == {"available": True, "development_mode": False, "authenticated": False}
         assert remote.get(BASE, headers=headers).status_code == 401
@@ -175,9 +179,9 @@ def test_local_and_authenticated_owners_remain_isolated(local_imports, tmp_path,
     private_dataset = confirm(client, private_job).json()["dataset_id"]
     private_files = client.get(f"{BASE}/datasets/{private_dataset}/files").json()
     enable_local(monkeypatch)
-    # An actual Bearer session retains its owner despite obsolete local flags.
+    # The actual cookie session retains its owner despite obsolete local flags.
     assert len(client.get(BASE + "/datasets").json()["datasets"]) == 1
-    del client.headers["Authorization"]
+    client.cookies.clear()
     assert client.get(BASE).status_code == 401
     assert client.get(BASE + "/datasets").status_code == 401
     for method, suffix, payload in [
@@ -195,5 +199,5 @@ def test_local_and_authenticated_owners_remain_isolated(local_imports, tmp_path,
     # Invalid credentials must not silently fall back to the anonymous identity.
     assert client.get(BASE, headers={"Authorization": "Bearer invalid"}).status_code == 401
     monkeypatch.delenv("FAMA_IMPORT_DEV_MODE")
-    client.headers["Authorization"] = "Bearer " + login.json()["access_token"]
+    client.cookies.update(saved_cookies)
     assert client.get(f"{BASE}/datasets/{private_dataset}/files").json() == private_files

@@ -12,7 +12,7 @@ El login canónico `/api/auth/login` valida el esquema de sesión antes de reser
 | `POST /api/auth/web/login` | JSON `email`, `password`; devuelve `user` y cookie opaca `HttpOnly`, nunca JWT. Requiere `Origin` exacto. |
 | `GET /api/auth/web/me` | Confirma usuario activo y sesión vigente; 401 si falta, expira o se revoca. |
 | `POST /api/auth/web/logout` | Revoca sesión del navegador; 204 sin cuerpo. Requiere `Origin` exacto. No revoca JWT independientes. |
-| Importación y entrenamiento importado | Cookie o Bearer válidos y propiedad exacta. Si hay ambas credenciales, deben ser válidas y del mismo usuario. |
+| Routers de importación, preparación e historial importados | Cookie vigente y propietario exacto. Bearer sin cookie no autentica estas rutas; Authorization no sustituye la identidad de una cookie válida. |
 | Entrenamiento legacy | Conserva acceso previo; una credencial inválida no activa una nueva barrera global. |
 
 No hay fallback desde Bearer inválido a cookie ni desde cookie presente a identidad local `-1`. La excepción local sin credenciales conserva sus restricciones anteriores y nunca habilita entrenamiento importado. El rol administrador no concede propiedad sobre importados ajenos.

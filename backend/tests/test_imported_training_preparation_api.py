@@ -1,5 +1,6 @@
 """Public synchronous preparation bridge with real owner identity and T1/T2."""
 import pytest
+from tests.http_security import cookie_headers, cookie_security, COOKIE_ORIGIN
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -34,8 +35,9 @@ def bridge(cohort, tmp_path, monkeypatch):
             yield db
     app.dependency_overrides[get_db] = database
     app.dependency_overrides[get_preparations] = lambda: preparations
-    headers = lambda uid: {'Authorization': 'Bearer ' + auth.create_access_token({'sub': str(uid)})}
-    with TestClient(app, raise_server_exceptions=False) as client:
+    credentials = {uid: cookie_headers(sessions, uid) for uid in (1, 2)}
+    headers = lambda uid: dict(credentials.get(uid) or cookie_headers(sessions, uid))
+    with TestClient(app, raise_server_exceptions=False, headers={"Origin": COOKIE_ORIGIN}) as client:
         yield client, headers, preparations
 
 
@@ -147,13 +149,14 @@ def test_cookie_origin_and_conflicting_bearer_on_preparation_routes(bridge, coho
     with cohort[0].sessions() as db:
         db.get(Usuario, 1).password_hash = hash_password('SyntheticPass123!')
         db.commit()
-    assert client.post('/api/auth/web/login', headers={'Origin':'http://localhost:3000'}, json={'email':'owner1@example.test','password':'SyntheticPass123!'}).status_code == 200
+    assert client.post('/api/auth/login', headers={'Origin':'http://localhost:3000'}, json={'email':'owner1@example.test','password':'SyntheticPass123!'}).status_code == 200
     path='/api/training/imported/snapshots/' + cohort[1]['id'] + '/members'
     assert client.get(path).status_code == 200
-    assert client.get(path, headers=headers(2)).status_code == 401
-    assert client.get(path, headers={'Authorization':'Bearer invalid'}).status_code == 401
+    assert client.get(path, headers=headers(2)).status_code == 404
+    assert client.get(path, headers={'Authorization':'Bearer invalid'}).status_code == 200
     assert client.get(path, headers=headers(1)).status_code == 200
     before=set(preparations.snapshots.root.iterdir())
+    client.headers.pop('Origin', None)
     for origin in (None, 'https://foreign.example.test'):
         response=client.post('/api/training/imported/snapshots', headers={} if origin is None else {'Origin':origin}, json={'dataset_id':cohort[5]})
         assert response.status_code == 403, response.text
@@ -193,7 +196,8 @@ def test_schema_missing_is_read_only_before_snapshot_creation(bridge, cohort):
         assert response.json()['detail']['code'] == 'source_migration_required'
         assert not inspect(engine).has_table('imported_model_source')
         assert set(preparations.snapshots.root.iterdir()) == before
-        assert not any(s.lstrip().upper().startswith(('CREATE ', 'INSERT ', 'UPDATE ', 'DELETE ', 'ALTER ')) for s in statements)
+        assert not any(s.lstrip().upper().startswith(('CREATE ', 'INSERT ', 'UPDATE ', 'DELETE ', 'ALTER '))
+                       for s in statements if not s.startswith('UPDATE sesion_web '))
     finally:
         event.remove(engine, 'before_cursor_execute', record)
 

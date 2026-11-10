@@ -1,6 +1,7 @@
 """Owner-scoped history exercised only through the HTTP interface."""
 from datetime import datetime, timezone
 import pytest
+from tests.http_security import cookie_security
 from tests.test_api_feedback import client, test_db, fake_gcs
 from tests.test_imported_feedback_api import owners
 from app.models.dataset_import import ImportedDataset
@@ -114,7 +115,7 @@ def test_private_history_does_not_disclose_foreign_or_unknown_models(client, his
 def test_private_history_requires_authentication_and_bounds_pages(client, history_rows):
     response = client.get('/api/inference/history?model_id=301')
     assert response.status_code == 401
-    assert response.json() == {'detail': 'Autenticación requerida. Token no provisto.'}
+    assert response.json() == {'detail': 'Sesión requerida o expirada.'}
     for query in ('limit=0', 'limit=21', 'cursor=0', 'cursor=bad'):
         response = client.get('/api/inference/history?model_id=301&' + query, headers=history_rows[1])
         assert response.status_code == 422, response.text
@@ -131,7 +132,8 @@ def test_history_twenty_row_boundary_and_sparse_window_are_read_only(client, tes
     test_db.commit()
     statements = []
     def observe(connection, cursor, statement, parameters, context, executemany):
-        statements.append(statement.strip().split()[0].upper())
+        if not statement.startswith('UPDATE sesion_web '):
+            statements.append(statement.strip().split()[0].upper())
     event.listen(test_db.get_bind(), 'before_cursor_execute', observe)
     try:
         response = client.get('/api/inference/history?model_id=301', headers=history_rows[1])
@@ -175,7 +177,7 @@ def web_history(client, test_db, history_rows, monkeypatch):
     monkeypatch.setenv('FAMA_RATE_LIMIT_KEY', 'synthetic-history-rate-key-isolated-only')
     test_db.get(Usuario, 1).password_hash = auth.hash_password('SyntheticPass123!')
     test_db.commit()
-    response = client.post('/api/auth/web/login', headers={'Origin': 'http://localhost:3000'},
+    response = client.post('/api/auth/login', headers={'Origin': 'http://localhost:3000'},
         json={'email': 'owner1@example.test', 'password': 'SyntheticPass123!'})
     assert response.status_code == 200, response.text
     return history_rows
@@ -186,7 +188,7 @@ def test_private_history_accepts_existing_web_cookie_and_keeps_it_private(client
     assert response.status_code == 200, response.text
     assert [row['id'] for row in response.json()['items']] == [2, 1]
     assert response.headers['cache-control'] == 'no-store'
-    assert client.post('/api/auth/web/logout', headers={'Origin': 'http://localhost:3000'}).status_code == 204
+    assert client.post('/api/auth/logout', headers={'Origin': 'http://localhost:3000'}).status_code == 204
     assert client.get('/api/inference/history?model_id=301').status_code == 401
 
 
@@ -199,7 +201,8 @@ def test_history_never_falls_back_from_conflicting_or_invalid_credentials(client
     if credential == 'bad_cookie':
         client.cookies.clear()
         client.cookies.set('fama_session_dev', 'x' * 43)
-        headers = web_history[1]
     response = client.get('/api/inference/history?model_id=301', headers=headers)
-    assert response.status_code == (403 if credential == 'foreign_origin' else 401), response.text
-    assert 'call-2.wav' not in response.text
+    expected = {'invalid': 200, 'foreign': 404, 'foreign_origin': 403, 'bad_cookie': 401}[credential]
+    assert response.status_code == expected, response.text
+    if expected != 200:
+        assert 'call-2.wav' not in response.text

@@ -11,13 +11,10 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, Path as PathParameter, Query, Request, Response
 from fastapi.responses import FileResponse, Response, JSONResponse
-from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.database import get_db
-from app.services.auth import security_bearer
-from app.services.imported_identity import imported_user
 from app.services.web_sessions import current_web_user
 from app.routes.auth import WebAuthRoute
 from app.services.dataset_imports import DatasetImports, reject, _durable_directory
@@ -30,10 +27,7 @@ def development_imports_enabled(request: Request) -> bool:
     return False
 
 
-def get_import_user(request: Request, response: Response,
-                    credentials: HTTPAuthorizationCredentials | None = Depends(security_bearer),
-                    db: Session = Depends(get_db)):
-    user = imported_user(request, response, credentials, db)
+def get_import_user(user=Depends(current_web_user)):
     if user.id <= 0:
         reject(401, "La identidad local de desarrollo no es una cuenta de usuario.")
     return user
