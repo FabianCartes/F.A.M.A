@@ -1,0 +1,102 @@
+{
+  "stage": "b",
+  "base": "6fc4432a6659ae61a486802aed45554885fc10a3",
+  "status": "verified_committed_locally",
+  "protected_u0": {
+    "backend/tests/test_api_training.py": {
+      "sha256": "0767b9a3783c45c82401ad75b9437c133e8d8f5e1e7365050afe0997def7ac7e",
+      "diff_sha256": "9393fc424b781c66a9cc5d9807e2d60daa8b54c6310b627ab69f25dbab956d22"
+    },
+    "backend/tests/test_training_flow.py": {
+      "sha256": "1b0e6eee575a677266b49ea1358fc1969e559eb4106094895b1e9fca2c77619a",
+      "diff_sha256": "8315ae0b67efd624550789521b2c34e86c469d4632db8be6c81d4c5378221faa"
+    },
+    "docs/KANBAN.md": {
+      "sha256": "b8d6bcc4a79957155bb7bb84f1cb9c83730107144ad38460c7346ab44eca75dc",
+      "diff_sha256": "4b211f3674b545e35d25bb4653c03d36ed818d648041f1b1e9297fcff2e1ebda"
+    },
+    "docs/README.md": {
+      "sha256": "49bf5e9561193de9c6091dfa2d12451cda8b54777c78312a940a87208b1ecbf7",
+      "diff_sha256": "152a8fc71fbbd416e3f39a05bd134d7aeb8f2d5356eb6c1efb534c4c8bbf4144"
+    },
+    "docs/manuales/integracion-flujo-entrenamiento.md": {
+      "sha256": "03e47fc265fac6a4f69c1b07823ed55e2cae56b097567479f5b258e3e61e5786",
+      "diff_sha256": "d0c173fc0b046b9aade25d5e86e529d694691a00f0bbadcf9441a97728c3ab8d"
+    },
+    "docs/manuales/manual_usuario_plataforma.md": {
+      "sha256": "043847f8b17c3c6b535b2d0ac10e5ff39c544523d27bd0b4fccbef151c20480f",
+      "diff_sha256": "6103358627f6414334199d43bdf110b977fc511848df10891c5e1e419587bf98"
+    },
+    "frontend/components/views/__tests__/TrainingDatasetCatalog.test.tsx": {
+      "sha256": "efb3c349ae8e2129b84682dbf7a5850dbab74878ceb79003900ee093c3e17790",
+      "diff_sha256": "511529721bd2b00512df2ab804dc5b2d54b6f6bcbabb6ac3940f6827830703f6"
+    },
+    "docs/receipts/integracion-mvp-u0.json": {
+      "sha256": "e1b5ef89b9f32ebb2b5db7f1422c2a4c4f85e00653cdf4ddc7fa2d8748c56aa2",
+      "diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "checks": [
+    {
+      "command": "backend/tests/run_isolated_training_checks.py --maxfail=10000 tests/test_dataset_import*.py tests/test_t8_interaction_independent.py tests/test_imported_model_access.py tests/test_dataset_catalog_import_date.py",
+      "candidate": "265 passed, 31 failed",
+      "base_6fc4432": "313 passed, 33 failed, 20 errors",
+      "new_failures": 0
+    },
+    {
+      "command": "runner --maxfail=1000 feedback/imported/partition/gcs/ingestion tests",
+      "candidate": "80 failed, 654 passed, 1 skipped, 62 errors",
+      "base_6fc4432": "80 failed, 635 passed, 1 skipped, 62 errors",
+      "new_failures": 0,
+      "note": "19-case difference is local git-excluded test_gcs_egress_proxy.py"
+    },
+    {
+      "command": "frontend npm test -- --run",
+      "candidate": "654 passed, 19 failed",
+      "base_6fc4432": "644 passed, 57 failed",
+      "new_failures": 0
+    },
+    {
+      "command": "frontend npm run lint",
+      "candidate": "5 errors, 5 warnings",
+      "base_6fc4432": "5 errors, 5 warnings (identical)"
+    },
+    {
+      "command": "frontend npm run build",
+      "candidate": "exit 0",
+      "base_6fc4432": "not comparable: Turbopack rejected symlinked node_modules in worktree"
+    }
+  ],
+  "limitations": [
+    "No GCS/PostgreSQL/browser/production verification",
+    "No Engram tool available",
+    "Pre-existing failures accepted for later stages are not declared passed"
+  ],
+  "progress": {
+    "T1": "done",
+    "T2": "done",
+    "T3": "done"
+  },
+  "engram_mirror": "saved: topic odd/integracion-mvp-gcs-unico/tasks",
+  "independent_verification": {
+    "verdicts": {
+      "S3": "PASS",
+      "S4": "PASS",
+      "S5": "PASS",
+      "S6": "PASS"
+    },
+    "blockers": 0,
+    "advisories": [
+      "Legacy queued/running sync jobs stay counted as active and the frontend rejects kind sync",
+      "diff_sha256 values were computed with `git diff -- <file>` against the pre-b index, not against 6fc4432; file sha256 values match",
+      "Test fixtures still carry sync_status/synced_count without effect"
+    ],
+    "not_verified": [
+      "browser",
+      "real GCS",
+      "PostgreSQL",
+      "Python 3.12 image"
+    ]
+  },
+  "protected_u0_note": "docs/KANBAN.md and docs/README.md were intentionally appended by stage b after the hashes were recorded; the verifier confirmed only additions over U0 content."
+}

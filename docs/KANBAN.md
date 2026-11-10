@@ -2,6 +2,14 @@
 kanban-plugin: basic
 ---
 
+## Integración de afinamiento integral en `mvp` — etapa b: GCS e inventario único
+
+- [x] **B-RETIRO — backend:** retirados la sincronización privada hacia GCS, revisiones/manifiestos, exportación ZIP, reserva física `dataset_storage_*` y `run_local_collection.py`, con sus pruebas exclusivas. Confirmar ya no encola `sync` y `/sync` responde 404. Conservados `ImportedDataset`/`DatasetMember`, worker genérico, sincronización GCS→local y feedback sync; sin migraciones destructivas. Suite de importación 265PASS/31FAIL, los 31 idénticos a la base `6fc4432`; consumidores feedback/importados con el mismo conjunto de fallos que la base. [Plan](arquitectura/integracion-mvp-gcs-unico-plan.md) y [recibo](receipts/integracion-mvp-b.json).
+- [x] **B-INVENTARIO — frontend:** `IngestionView` muestra un inventario único con conteo local y de GCS, sin catálogo privado, subida privada ni exportación. El ZIP confirmado queda local, todavía ausente del inventario compartido hasta c. Vitest 654PASS/19FAIL (base 644PASS/57FAIL, cero fallos nuevos), lint con los mismos 5 errores previos, build correcto.
+- [ ] **B-EXPORTACIÓN-POSTERIOR:** exportación ZIP como función posterior sobre `datasets/` y `conjunto_datos`; no se reimplementa en b.
+- [ ] **B-MANUALES:** actualizados en b `importacion-datasets-zip`, `trabajos-importacion-datasets`, `transferencias-datasets` y `worker-importacion-zip-local`. Siguen describiendo sync privado/exportación como registro histórico: `gcs-sync-consumer`, `presupuesto-fisico-importacion-dev`, `prueba-manual-principal-importacion` e `integracion-dev-worker-plazo`.
+- [ ] **B-SYNC-HEREDADO:** en una base anterior a b, un trabajo `sync` en cola o en curso ya no se reclama, pero sigue contando como activo (límite 429 y bloqueo de su importación), y el frontend rechazaría `kind: sync`. Requiere cancelación o limpieza explícita, sin migración destructiva.
+
 ## Integración de afinamiento integral en `mvp` — etapa a cerrada con límites
 
 - [x] **A-SESIÓN — cierre funcional limitado aceptado por el usuario:** migración cookie a1/a2 aplicada; backend287PASS/31FAIL, frontend650PASS/52FAIL (base616PASS/83FAIL; cero fallos nuevos), lint con5errores previos, build/tipos correctos. Se aceptan los problemas de exportación sin corregirlos en a. Verificación independiente93PASS pero parcial; sin navegador ni aprobación S1–S8 completa. No corregir exportación/registry de b–e silenciosamente. Commits locales encadenados en `fix/mvp-cookie-session`; sin push/PR ni aprobación nativa. [Plan](arquitectura/integracion-mvp-sesion-cookie-plan.md) y [recibo](receipts/integracion-mvp-a.json).
