@@ -54,7 +54,9 @@ describe("private dataset import", () => {
       }
       if (url.endsWith("/confirm")) {
         expect(body).toMatchObject({ preview_token: "r".repeat(64) });
-        return Response.json({ ...ready, status: "imported", dataset_id: "private", added_count: 1 });
+        return Response.json({ ...ready, status: "imported", dataset_id: "private", added_count: 1,
+          execution: { id: "run", import_id: "independent", kind: "confirm", status: "succeeded", stage: "succeeded",
+            progress: 100, result: { added_count: 1 }, error: null, status_url: "/run" } });
       }
       if (url.endsWith("/sync")) return Response.json({ ...ready, status: "imported", dataset_id: "private",
         added_count: 1, sync_status: "error", error: "sync_failed_or_integrity_conflict" });
@@ -72,7 +74,8 @@ describe("private dataset import", () => {
     await waitFor(() => expect((screen.getByRole("button", { name: "Confirmar importación local" }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: "Confirmar importación local" }));
     await screen.findByText(/Importada localmente: 1 archivo/);
-    expect(screen.getByText('El ZIP permanece local y todavía no aparece en el inventario compartido.')).toBeDefined();
+    expect(screen.getByText('Publicada en GCS y en el inventario compartido; quedas asignado a este dataset.')).toBeDefined();
+    expect(screen.queryByText(/permanece local/)).toBeNull();
     expect(screen.queryByRole('link', { name: /catálogo/i })).toBeNull();
     expect(writes.map(w => w.path)).toEqual([base + "/independent/preview", base + "/independent/confirm"]);
     expect(screen.queryByRole("button", { name: "Subir este dataset a GCS" })).toBeNull();
@@ -195,6 +198,35 @@ describe("private dataset import", () => {
     fireEvent.click(screen.getByRole("button", { name: /pending.zip —/ }));
     fireEvent.click(screen.getByRole("button", { name: "Confirmar importación local" }));
     await screen.findByText(/Importada localmente: 1 archivo/);
+  });
+
+  it.each([
+    ["failed", "La publicación en GCS no terminó; los audios siguen guardados en local. Usa «Reintentar trabajo» para completarla."],
+    ["cancelled", "La publicación en GCS no terminó; los audios siguen guardados en local. Usa «Reintentar trabajo» para completarla."],
+    ["running", "Publicando en GCS y en el inventario compartido…"],
+    ["queued", "Publicando en GCS y en el inventario compartido…"],
+  ])("does not claim shared publication while its execution is %s", async (status, expected) => {
+    const execution = { id: "run", import_id: "published", kind: "confirm", status, stage: status,
+      progress: 1, result: {}, error: status === "failed" ? { code: "execution_failed" } : null, status_url: "/run" };
+    const job = { id: "published", archive_name: "aves.zip", status: "imported", dataset_id: "d1", added_count: 2,
+      preview_token: "p".repeat(64), preview: { root: "", ...counts }, error: null, execution };
+    vi.stubGlobal("fetch", durableFetch(async (input: string) => {
+      const page = reviewResponse(input, job.preview_token);
+      if (page) return page;
+      if (input.endsWith("/access")) return Response.json({ development_mode: true });
+      if (input.endsWith("/limits")) return Response.json({ received_bytes: 1024, expanded_bytes: 4096, entries: 10,
+        depth: 12, path_bytes: 240, audio_bytes: 1024, audio_seconds: 600, validation_seconds: 60, free_bytes: 1, ttl_seconds: 86400, concurrent_imports: 4 });
+      if (input.endsWith("/datasets")) return collectionResponse("datasets", [], "catalog");
+      if (new URL(input, "http://synthetic.test").pathname.endsWith("/imports")) return collectionResponse("imports", [job], "history");
+      throw new Error(`Unexpected: ${input}`);
+    }));
+    render(<DatasetImportPanel />);
+    await openImport();
+    fireEvent.click(await screen.findByRole("button", { name: /aves.zip —/ }));
+    await screen.findByText(/Importada localmente: 2 archivo/);
+    expect(screen.getByText(expected)).toBeDefined();
+    expect(screen.queryByText(/Publicada en GCS/)).toBeNull();
+    if (status === "failed") expect(screen.getByRole("button", { name: "Reintentar trabajo" })).toBeDefined();
   });
 
   it("closes on backdrop, Escape and close button, not inside clicks, and restores focus", async () => {

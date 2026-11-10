@@ -42,7 +42,11 @@ function CompletedImportSummary({ job, datasetName }: { job: ImportJob; datasetN
   return <section aria-label="Resumen de importación" className="space-y-2 rounded-lg border border-[#2d303b] bg-[#111215] p-4">
     <h3 className="font-semibold text-white">{datasetName || "Nombre del dataset no disponible"}</h3>
     <p>Importada localmente: {job.added_count} archivo(s) nuevo(s).</p>
-    <p>El ZIP permanece local y todavía no aparece en el inventario compartido.</p>
+    {job.added_count > 0 && job.execution && (job.execution.status === "succeeded"
+      ? <p>Publicada en GCS y en el inventario compartido; quedas asignado a este dataset.</p>
+      : ["queued", "running"].includes(job.execution.status)
+        ? <p>Publicando en GCS y en el inventario compartido…</p>
+        : <p>La publicación en GCS no terminó; los audios siguen guardados en local. Usa «Reintentar trabajo» para completarla.</p>)}
     <p>Tamaño: {formatWeightLimit(job.preview.total_size_bytes)}</p>
     <p>Clases: {job.preview.class_count}</p>
     {classes.length > 0 && <p className="break-words">{classes.join(", ")}</p>}
@@ -272,7 +276,7 @@ export default function DatasetImportPanel({ onCatalogChange, triggerLabel = "Im
         <li>Incluye al menos un WAV válido y único. Las clases vacías o pequeñas generan advertencias.</li>
         <li>Los duplicados de la misma clase se omiten; el mismo audio en clases distintas bloquea la importación. Se comparan bytes, no similitud acústica.</li>
         <li>El ZIP se importará automáticamente solo si supera la validación del servidor, sin una segunda confirmación. No necesitas mantener esta ventana abierta.</li>
-        <li>Importar no inicia preparación ni entrenamiento ni publica el dataset en el catálogo compartido. El ZIP permanece local y todavía no aparece en el inventario compartido.</li>
+        <li>Importar no inicia preparación ni entrenamiento. Al confirmar, los audios se publican en GCS y en el inventario compartido con un nombre único, y quedas asignado al dataset; el administrador lo asigna a los demás.</li>
       </ul>
       <pre className="overflow-x-auto rounded-lg border border-[#23252e] bg-[#111215] p-3 text-xs text-emerald-300">{"chucao/audio_01.wav\ncolilarga/audio_01.wav"}</pre>
       {developmentMode && <p role="status" className="rounded-lg border border-amber-800/60 bg-amber-950/40 p-3 text-amber-300">Modo de desarrollo local: identidad de pruebas compartida en este equipo, sin acceso a colecciones de otros usuarios. No exponer este modo públicamente.</p>}
@@ -296,7 +300,7 @@ export default function DatasetImportPanel({ onCatalogChange, triggerLabel = "Im
           <button className={buttonClass} disabled={!!busy} onClick={() => void act("Actualizando…", () => refresh())}>Actualizar importaciones</button>
           {limits && <>
           {!job && <div className="grid gap-3 sm:grid-cols-2">
-            <label>Nombre del dataset<input className={inputClass} value={name} onChange={e => setName(e.target.value)} maxLength={150} disabled={!!busy} /></label>
+            <label>Nombre del dataset<input className={inputClass} value={name} onChange={e => setName(e.target.value)} maxLength={100} disabled={!!busy} /></label>
             <label>Descripción<textarea className={inputClass} value={description} onChange={e => setDescription(e.target.value)} maxLength={2000} disabled={!!busy} /></label>
           </div>}
           {(!job || job.status === "receiving") && <label className="block">Archivo ZIP<input ref={fileInputRef} type="file" accept=".zip,application/zip" disabled={!!busy} onChange={e => {
