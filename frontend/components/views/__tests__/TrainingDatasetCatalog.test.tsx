@@ -6,11 +6,48 @@ vi.mock('next/navigation',()=>({useRouter:()=>({replace:vi.fn()})}));
 
 afterEach(()=>{cleanup();vi.unstubAllGlobals();});
 
-it('requires explicit preparation for Smoke despite eligible sync metadata and clears rejection on source switching',async()=>{
+it('keeps an unprepared ZIP candidate visible and enables training only after explicit architecture preparation',async()=>{
+ const profile={architecture:'resnet34d',channels:1,preprocessing:'mono_mel',windowing:'energy_peak_pad',window_hop_seconds:1,audio:{target_sr:22050,duration_seconds:5,n_mels:128,n_fft:2048,hop_length:512,f_min:800,f_max:10000,use_gpu_frontend:false}};
  const transport=vi.fn(async(input:RequestInfo|URL)=>{
   const url=String(input);
-  if(url.includes('/auth/web/me'))return Response.json({id:1,email:'owner@example.test',nombre_completo:'Owner',rol:'investigador',activo:true});
-  if(url.includes('include_imported'))return Response.json({datasets:[{source_type:'imported',id:'own',name:'Smoke',eligible:true,reasons:[],preparations:[]}]});
+  if(url.endsWith('/api/auth/me'))return Response.json({id:1,email:'owner@example.test',nombre_completo:'Owner',rol:'investigador',activo:true});
+  if(url.includes('include_imported'))return Response.json({datasets:[{source_type:'imported',id:'zip-candidate',name:'New ZIP',eligible:false,reasons:['preparation_required'],preparations:[]}]});
+  if(url.includes('/datasets'))return Response.json({datasets:[]});
+  if(url.endsWith('/snapshots'))return Response.json({id:'snap',dataset_id:'zip-candidate',state:'ready',name:'New ZIP',file_count:1});
+  if(url.endsWith('/members'))return Response.json({snapshot_id:'snap',members:[{member_id:'member',class_name:'Fixture',original_path:'Fixture/a.wav',size_bytes:44,sha256:'hash'}]});
+  if(url.endsWith('/preparations'))return Response.json({snapshot_id:'snap',version_id:'version',state:'ready',profile,class_to_index:{Fixture:0},warnings:[],seed:42});
+  if(url.includes('/progress'))return Response.json({status:'idle'});
+  if(url.includes('/history'))return Response.json({history:[]});
+  return Response.json({});
+ });vi.stubGlobal('fetch',transport);
+ render(<SessionBoundary><TrainingView/></SessionBoundary>);
+ fireEvent.click(await screen.findByRole('combobox',{name:'Dataset para entrenamiento'}));
+ fireEvent.click(await screen.findByRole('option',{name:'New ZIP — Privado'}));
+ const start=screen.getByRole('button',{name:'Iniciar Entrenamiento Local (1 Modelo)'}) as HTMLButtonElement;
+ expect(start.disabled).toBe(true);
+ expect(screen.getByText(/Necesita preparación/)).toBeTruthy();
+ const architecture=screen.getByRole('combobox',{name:'Arquitectura de Red Neuronal'});
+ fireEvent.change(architecture,{target:{value:'ResNet-34d'}});
+ expect(transport.mock.calls.some(call=>String(call[0]).endsWith('/snapshots'))).toBe(false);
+ fireEvent.click(screen.getByRole('button',{name:'Preparar dataset'}));
+ await screen.findByText(/Preparado para entrenar/);
+ await waitFor(()=>expect(start.disabled).toBe(false));
+ const call=transport.mock.calls.find(call=>String(call[0]).endsWith('/preparations')) as unknown as [string,RequestInit];
+ expect(JSON.parse(String(call[1].body))).toMatchObject({profile,seed:42});
+ expect(transport.mock.calls.filter(call=>String(call[0]).endsWith('/snapshots'))).toHaveLength(1);
+ expect(transport.mock.calls.filter(call=>String(call[0]).endsWith('/preparations'))).toHaveLength(1);
+ expect(transport.mock.calls.some(call=>String(call[0]).endsWith('/start'))).toBe(false);
+ fireEvent.change(architecture,{target:{value:'AudioCNN'}});
+ await waitFor(()=>expect(start.disabled).toBe(true));
+ expect(screen.queryByText(/Preparado para entrenar/)).toBeNull();
+ expect(transport.mock.calls.filter(call=>String(call[0]).endsWith('/preparations'))).toHaveLength(1);
+});
+
+it('requires explicit preparation for an unprepared candidate and clears rejection on source switching',async()=>{
+ const transport=vi.fn(async(input:RequestInfo|URL)=>{
+  const url=String(input);
+  if(url.endsWith('/api/auth/me'))return Response.json({id:1,email:'owner@example.test',nombre_completo:'Owner',rol:'investigador',activo:true});
+  if(url.includes('include_imported'))return Response.json({datasets:[{source_type:'imported',id:'own',name:'Smoke',eligible:false,reasons:['preparation_required'],preparations:[]}]});
   if(url.includes('/datasets'))return Response.json({datasets:[{id:'Smoke',name:'Smoke',record_id:'legacy:7',source_type:'legacy',audio_count:9,class_count:3,eligible:true,eligibility_state:'current_flow_compatible',reasons:[]}]});
   if(url.endsWith('/snapshots'))return Response.json({id:'snap',dataset_id:'own',state:'ready',name:'Smoke',file_count:1});
   if(url.endsWith('/members'))return Response.json({snapshot_id:'snap',members:[]});
@@ -26,9 +63,14 @@ it('requires explicit preparation for Smoke despite eligible sync metadata and c
  expect(screen.getByText(/Necesita preparación/)).toBeTruthy();
  expect((screen.getByRole('button',{name:'Iniciar Entrenamiento Local (1 Modelo)'}) as HTMLButtonElement).disabled).toBe(true);
  expect(transport.mock.calls.some(call=>String(call[0]).endsWith('/snapshots'))).toBe(false);
+ fireEvent.change(screen.getByRole('combobox',{name:'Arquitectura de Red Neuronal'}),{target:{value:'ResNet-34d'}});
+ expect(transport.mock.calls.some(call=>String(call[0]).endsWith('/preparations'))).toBe(false);
  fireEvent.click(screen.getByRole('button',{name:'Preparar dataset'}));
  expect(await screen.findByRole('alert')).toHaveProperty('textContent',expect.stringContaining('Grupos independientes insuficientes'));
  expect(screen.queryByText(/unsafe data/)).toBeNull();
+ const preparationCall=transport.mock.calls.find(call=>String(call[0]).endsWith('/preparations')) as unknown as [string,RequestInit];
+ expect(JSON.parse(String(preparationCall[1].body))).toMatchObject({profile:{architecture:'resnet34d'},seed:42});
+ expect((screen.getByRole('button',{name:'Iniciar Entrenamiento Local (1 Modelo)'}) as HTMLButtonElement).disabled).toBe(true);
  fireEvent.click(await screen.findByRole('combobox',{name:'Dataset para entrenamiento'}));
  fireEvent.click(screen.getByRole('option',{name:'Smoke — Compartido'}));
  expect(screen.queryByRole('region',{name:'Preparación importada'})).toBeNull();
@@ -40,20 +82,22 @@ it('requires explicit preparation for Smoke despite eligible sync metadata and c
  expect(transport.mock.calls.filter(call=>String(call[0]).endsWith('/preparations'))).toHaveLength(1);
  expect(transport.mock.calls.some(call=>String(call[0]).endsWith('/start'))).toBe(false);
 });
-it('displays the retained legacy default reference before dispatching its original dataset name',async()=>{
+it('dispatches an explicitly selected registered legacy candidate without using imported preparation',async()=>{
  const transport=vi.fn(async(input:RequestInfo|URL)=>{
   const url=String(input);
-  if(url.includes('/datasets'))return Response.json({datasets:[]});
+  if(url.includes('/datasets'))return Response.json({datasets:[{id:'AvesChilenas',name:'AvesChilenas',record_id:'legacy:1',source_type:'legacy',audio_count:9,class_count:3,eligible:true,eligibility_state:'current_flow_compatible',reasons:[]}]});
   if(url.includes('/history'))return Response.json({history:[]});
   if(url.endsWith('/progress'))return Response.json({status:'idle'});
   return Response.json({status:'started'});
  });vi.stubGlobal('fetch',transport);
  render(<TrainingView/>);
  const start=screen.getByRole('button',{name:'Iniciar Entrenamiento Local (1 Modelo)'}) as HTMLButtonElement;
- await waitFor(()=>expect(start.disabled).toBe(false));
  const selector=screen.getByRole('combobox',{name:'Dataset para entrenamiento'});
- expect(selector.textContent).toContain('AvesChilenas');
- expect(selector.textContent).toContain('predeterminado');
+ fireEvent.click(selector);
+ fireEvent.click(await screen.findByRole('option',{name:'AvesChilenas — Compartido'}));
+ await waitFor(()=>expect(start.disabled).toBe(false));
+ expect(selector.textContent).toBe('AvesChilenas — Compartido');
+ expect(screen.queryByRole('button',{name:'Preparar dataset'})).toBeNull();
  fireEvent.click(start);
  await waitFor(()=>expect(transport.mock.calls.some(call=>String(call[0]).endsWith('/start'))).toBe(true));
  const call=transport.mock.calls.find(call=>String(call[0]).endsWith('/start')) as unknown as [string,RequestInit];
@@ -61,17 +105,17 @@ it('displays the retained legacy default reference before dispatching its origin
  expect(body.dataset_name).toBe('AvesChilenas');
  expect(body).not.toHaveProperty('imported_dataset_id');
 });
-it('shows unsupported registered sources with an incompatibility reason and never starts or prepares them',async()=>{
+it('shows blocked registered sources with an incompatibility reason and never starts or prepares them',async()=>{
  const transport=vi.fn(async(input:RequestInfo|URL)=>{
   const url=String(input);
-  if(url.includes('/datasets'))return Response.json({datasets:[{id:'MaquinariaMinas',name:'MaquinariaMinas',record_id:'legacy:23',source_type:'legacy',audio_count:0,class_count:null,eligible:false,eligibility_state:'blocked',reasons:['incompatible_configuration']}]});
+  if(url.includes('/datasets'))return Response.json({datasets:[{id:'../outside',name:'Invalid registered source',record_id:'legacy:23',source_type:'legacy',audio_count:0,class_count:null,eligible:false,eligibility_state:'blocked',reasons:['incompatible_configuration']}]});
   if(url.includes('/progress'))return Response.json({status:'idle'});
   if(url.includes('/history'))return Response.json({history:[]});
   return Response.json({});
  });vi.stubGlobal('fetch',transport);
  render(<TrainingView/>);
  fireEvent.click(await screen.findByRole('combobox',{name:'Dataset para entrenamiento'}));
- fireEvent.click(await screen.findByRole('option',{name:/MaquinariaMinas/}));
+ fireEvent.click(await screen.findByRole('option',{name:/Invalid registered source/}));
  expect(await screen.findByText(/Configuración incompatible/)).toBeTruthy();
  expect(screen.queryByRole('button',{name:'Preparar dataset'})).toBeNull();
  const start=screen.getByRole('button',{name:'Iniciar Entrenamiento Local (1 Modelo)'}) as HTMLButtonElement;

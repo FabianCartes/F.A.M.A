@@ -428,7 +428,9 @@ def test_catalog_opt_in_keeps_imported_auth_and_owner_isolation(client, training
         assert response.status_code == 200, response.text
         legacy, imported = response.json()["datasets"]
         assert legacy["source_type"] == "legacy"
-        assert imported == previous.json()["datasets"][0]
+        assert previous.json()["datasets"][0]["id"] == "medical_cough"
+        assert [entry for entry in previous.json()["datasets"]
+                if entry.get("source_type") == "imported"] == [imported]
         assert imported == {"source_type": "imported", "id": str(owner) * 32,
                             "name": f"Private {owner}", "eligible": False,
                             "reasons": ["preparation_required"], "preparations": []}
@@ -478,12 +480,42 @@ def test_new_dataset_completes_and_registers_a_model_through_HTTP(client, persis
 
 
 @pytest.mark.parametrize("name", ["../outside", "CON", "bad/name", "name."])
-def test_catalog_does_not_expose_unsafe_registered_dataset_names(client, training_env, name):
-    _, sessions, _, _ = training_env
-    register(sessions, name)
+def test_catalog_does_not_expose_unsafe_registered_dataset_names(client, training_env, monkeypatch, name):
+    from pathlib import Path
+    _, sessions, root, thread = training_env
+    record_id = register(sessions, name)
+    real_is_dir, real_iterdir = Path.is_dir, Path.iterdir
+    forbidden = root / "raw" / name
+    unsafe_accesses = []
+
+    def checked_is_dir(path):
+        if path == forbidden:
+            unsafe_accesses.append(("stat", path))
+            raise AssertionError("Unsafe registered name reached filesystem stat")
+        return real_is_dir(path)
+
+    def checked_iterdir(path):
+        if path == forbidden:
+            unsafe_accesses.append(("enumerate", path))
+            raise AssertionError("Unsafe registered name reached filesystem enumeration")
+        return real_iterdir(path)
+
+    monkeypatch.setattr(Path, "is_dir", checked_is_dir)
+    monkeypatch.setattr(Path, "iterdir", checked_iterdir)
     response = client.get("/api/training/datasets")
     assert response.status_code == 200
     assert response.json()["datasets"] == []
+    response = client.get("/api/training/datasets?include_unavailable=true")
+    assert response.status_code == 200
+    entry, = response.json()["datasets"]
+    assert entry["record_id"] == f"legacy:{record_id}"
+    assert entry["eligible"] is False
+    assert entry["eligibility_state"] == "blocked"
+    assert entry["reasons"] == ["incompatible_configuration"]
+    assert entry["classes"] == []
+    assert entry["class_count"] is None
+    assert unsafe_accesses == []
+    thread.assert_not_called()
 
 
 def test_training_lifecycle(client):

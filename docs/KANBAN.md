@@ -5,7 +5,7 @@ kanban-plugin: basic
 ## Integración de afinamiento integral en `mvp` — etapa c: publicación del ZIP
 
 - [x] **C-PUBLICACIÓN:** confirmar un ZIP lo publica en GCS `datasets/{ds}/{clase}/` y en `conjunto_datos`/`audio` reutilizando `upload_files_to_gcs` por lotes, deja la copia en `raw_data_dir` y asigna al importador. Nombre único global (409) y válido (422). Si falla la publicación, la importación sigue local y el trabajo se reintenta sin duplicar; fallos de validación o confirmación local siguen cancelándose solos. Límite por archivo de subida 96 MiB por defecto. [Plan](arquitectura/integracion-mvp-c-publicacion-plan.md).
-- [ ] **C-MANUAL-USUARIO:** `manual_usuario_plataforma.md` aún cita 64 MiB por archivo; está entre los cambios U0 sin commitear.
+- [x] **C-MANUAL-USUARIO:** `manual_usuario_plataforma.md` actualizado a 96 MiB por archivo junto con el commit de U0.
 - [ ] **C-LAYOUT-HEREDADO:** importaciones por API sin `layout: class_folders` con el mismo nombre de archivo en subcarpetas de una clase no se publican (`already_exists`); la interfaz siempre usa `class_folders`.
 - [ ] **C-PLAZO-PUBLICACIÓN:** una publicación larga comparte el tope de `--execution-seconds` (1800 s); si se agota, el reintento continúa desde lo subido.
 
@@ -20,6 +20,12 @@ kanban-plugin: basic
 ## Integración de afinamiento integral en `mvp` — etapa a cerrada con límites
 
 - [x] **A-SESIÓN — cierre funcional limitado aceptado por el usuario:** migración cookie a1/a2 aplicada; backend287PASS/31FAIL, frontend650PASS/52FAIL (base616PASS/83FAIL; cero fallos nuevos), lint con5errores previos, build/tipos correctos. Se aceptan los problemas de exportación sin corregirlos en a. Verificación independiente93PASS pero parcial; sin navegador ni aprobación S1–S8 completa. No corregir exportación/registry de b–e silenciosamente. Commits locales encadenados en `fix/mvp-cookie-session`; sin push/PR ni aprobación nativa. [Plan](arquitectura/integracion-mvp-sesion-cookie-plan.md) y [recibo](receipts/integracion-mvp-a.json).
+
+## Integración de afinamiento integral en `mvp` — solo U0
+
+- [x] **U0-MERGE:** merge local `3ab6b45` confirmado; revisión estática de las 11 fusiones silenciosas terminada. No implica suite completa aprobada.
+- [x] **U0-CATÁLOGO:** contradicción investigada y corregida en pruebas/manuales, sin cambios de producción. Un ZIP confirmado sigue visible como candidato sin preparar; arquitectura → **Preparar dataset** determina aptitud y no inicia entrenamiento. 259 pruebas backend, 20 frontend, tipos y lint focal aprobados; fuentes ZIP sintéticas y HTTP simulado, no E2E real.
+- [x] **U0-CIERRE — límites aceptados por el usuario:** suite backend anterior 3032 PASS / 342 FAIL / 151 SKIP / 46 ERROR. Dos fallos de catálogo corregidos; exportación, almacenamiento, sesión, registry y otros contratos residuales quedan inventariados, sin corregirlos ni atribuir toda su causalidad al merge. El usuario acepta cerrar la integración mecánica y la corrección focal; no equivale a suite global aprobada ni garantiza que los fallos se resuelvan automáticamente después. [Decisión, recibo y límites](receipts/integracion-mvp-u0.json). No avanzar automáticamente a etapa 1 ni a las unidades a–h; sin commit/push de la corrección focal.
 
 ## Consolidación del MVP local — Git y evidencia
 

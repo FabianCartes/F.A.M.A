@@ -29,6 +29,11 @@ La documentación está organizada temáticamente en subdirectorios especializad
 - [Etapa b: GCS e inventario único](./arquitectura/integracion-mvp-gcs-unico-plan.md) y [recibo](./receipts/integracion-mvp-b.json): retiro de sincronización privada, manifiestos, exportación ZIP y reserva física; inventario único local/GCS. ZIP confirmado local hasta la etapa c. Commits locales en `mvp`, sin push ni PR.
 - [Etapa a: consolidación de sesión por cookie](./arquitectura/integracion-mvp-sesion-cookie-plan.md) y [recibo de verificación](./receipts/integracion-mvp-a.json): implementación a1/a2 aplicada y cierre funcional limitado aceptado por el usuario, conservando los problemas de exportación y la prueba independiente parcial. Incluye comparación frontend base/candidato; no equivale a suite global verde ni aprobación técnica integral. Entrega local organizada en commits encadenados sobre `fix/mvp-cookie-session`, sin push ni PR.
 
+## Integración de afinamiento integral en `mvp` — U0 cerrado con límites
+
+- [Evidencia y clasificación de U0](./receipts/integracion-mvp-u0.json): merge local `3ab6b45`, revisión estática de las 11 fusiones silenciosas y corrección acotada del catálogo. Regresión nueva: 259 pruebas backend y 20 frontend aprobadas, tipos y lint focal correctos. El recorrido del ZIP conserva candidato visible y preparación explícita por arquitectura.
+- La suite backend de la sesión anterior terminó con 342 fallos, 46 errores, 3032 aprobadas y 151 omitidas; no se repitió completa tras la corrección. U0 quedó cerrado por aceptación explícita del usuario de los fallos residuales documentados; su resolución se comprobará en las unidades futuras autorizadas. No se inició la etapa 1 ni las unidades posteriores; sin cambios de producción, servicios, datos reales, commit o push en esta corrección.
+
 ## Consolidación Git del MVP local
 
 - [Alcance del MVP y consolidación actual](./arquitectura/mvp-scope-consolidation.md) y [evidencia de los cortes](./receipts/mvp-source-consolidation.json): límites funcionales y commits locales autorizados en los pasos 1–2; no incluye receta portable, reproducción desde cero ni despliegue.

@@ -1,0 +1,243 @@
+{
+  "schema": "fama.integration-u0-evidence/v1",
+  "target": {
+    "branch": "mvp",
+    "merge": "3ab6b45c3655d9b6091a94454330413ca4edba3f",
+    "parents": [
+      "dcbc80652ba8844bf3af3bdfbb1bb0a11326fe8c",
+      "84ea7dfb7aa5f8e6cd173a10752a346cd07ae424"
+    ]
+  },
+  "status": "closed_with_accepted_limits",
+  "closure": {
+    "user_decision": "Acepto el criterio, todavia faltan varias etapas, por esa razon existen errores que probablemente en las siguientes etapas se resolveran",
+    "meaning": "U0 mechanical integration and its bounded catalogue correction are closed with documented residual failures. This is not full functional acceptance or proof those failures will resolve automatically.",
+    "next_stage_authorized": false
+  },
+  "scope": {
+    "authorized": "Only U0, including the catalogue contradiction correction. No stage 1 or later integration units.",
+    "user_requirement": "importar zip -> se importa -> en la vista de entrenamiento debe aparecer como candidato -> selecciona arquitectura y pulsa preparar dataset, este indica si el dataset se puede entrenar o no.",
+    "production_changes": false,
+    "committed": false,
+    "pushed": false,
+    "real_services_or_data_used": false
+  },
+  "cause": {
+    "incoming": "aa53e09 removes the two-name allowlist in favour of safe registered names.",
+    "local": "74d382b adds optional catalogue metadata while retaining the old two-name policy.",
+    "merge": "Silently retains incompatible default-catalogue expectations. Both assertions inspect the default catalogue, not different query flags."
+  },
+  "correction": [
+    "Align the service catalogue test with safe registered candidates; keep invalid names blocked and missing preparation rejected before scheduling.",
+    "Remove a duplicate catalogue test; fix imported owner-isolation test to compare imported rows rather than the first row of a now-expanded response.",
+    "Check invalid-name catalogue projection without filesystem access.",
+    "Update UI fixtures to current auth endpoint and explicit shared selection; pin unprepared ZIP visibility, selected architecture preparation, success/rejection and architecture invalidation.",
+    "Update the two existing manuals; preserve separate imported preparation and standard-source admission flows."
+  ],
+  "checks": [
+    {
+      "name": "historical focused reproduction before correction",
+      "result": "failed",
+      "exit_code": 1,
+      "detail": "Old catalogue test fails at line 101: medical_cough is returned. Runner fails fast; the second selected test did not execute."
+    },
+    {
+      "name": "frontend baseline before correction",
+      "command": "cd frontend && npm test -- components/views/__tests__/TrainingDatasetCatalog.test.tsx components/training/__tests__/ImportedTrainingPanel.test.tsx --maxWorkers=1",
+      "result": "failed",
+      "exit_code": 1,
+      "passed": 15,
+      "failed": 2
+    },
+    {
+      "name": "backend focused correction",
+      "runner": "backend/tests/run_isolated_training_checks.py",
+      "selectors": [
+        "test_catalog_opt_in_lists_registered_legacy_without_claiming_audio_readiness",
+        "test_training_catalog_offers_registered_identities_and_no_implicit_local_datasets",
+        "test_catalog_does_not_expose_unsafe_registered_dataset_names",
+        "test_catalog_includes_new_registered_dataset_for_training",
+        "test_new_empty_dataset_does_not_invent_training_classes",
+        "test_catalog_opt_in_keeps_imported_auth_and_owner_isolation"
+      ],
+      "result": "passed",
+      "exit_code": 0,
+      "passed": 9
+    },
+    {
+      "name": "backend regression",
+      "command": "cd backend && PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 /home/kevin/Work/fama/.venv/bin/python tests/run_isolated_training_checks.py tests/test_training_flow.py tests/test_api_training.py tests/test_imported_dataset_preparation.py tests/test_imported_training_source.py -q",
+      "result": "passed",
+      "exit_code": 0,
+      "passed": 259,
+      "sqlite_memory_connections": 259,
+      "skipped": 0,
+      "deselected": 0,
+      "protected_paths_unchanged": 30,
+      "private_scratch_cleanup": true,
+      "network_forbidden": true
+    },
+    {
+      "name": "frontend focused correction",
+      "command": "cd frontend && npm test -- components/views/__tests__/TrainingDatasetCatalog.test.tsx components/training/__tests__/ImportedTrainingPanel.test.tsx components/training/__tests__/TrainingDatasetSelector.test.tsx --maxWorkers=1",
+      "result": "passed",
+      "exit_code": 0,
+      "files": 3,
+      "passed": 20
+    },
+    {
+      "name": "frontend typecheck and focused lint",
+      "command": "cd frontend && npx tsc --noEmit --incremental false && npx eslint components/views/__tests__/TrainingDatasetCatalog.test.tsx",
+      "result": "passed",
+      "exit_code": 0
+    },
+    {
+      "name": "native assessment",
+      "result": "unavailable",
+      "detail": "Native assessment could not resolve intended untracked scope; it offered no reviewDue. No review started, approval inferred or authority mutated. Previous merge-review decline is not reused as consent for a new candidate."
+    }
+  ],
+  "prior_full_backend_suite": {
+    "command": "cd backend && ../.venv/bin/python -W ignore -m pytest -q -p no:cacheprovider -rf",
+    "source": "Prior session log explicitly supplied for resumption; not a rerun on the corrected tree.",
+    "python": "3.14.8",
+    "duration_seconds": 1172.81,
+    "passed": 3032,
+    "failed": 342,
+    "skipped": 151,
+    "errors": 46,
+    "process_exit_code": "not captured by this session; failure established by pytest summary",
+    "failed_modules": {
+      "tests/test_api_predictions.py": 2,
+      "tests/test_api_training.py": 1,
+      "tests/test_application_startup_policy.py": 2,
+      "tests/test_database_url.py": 1,
+      "tests/test_dataset_export_verifier_regressions.py": 19,
+      "tests/test_dataset_exports.py": 28,
+      "tests/test_dataset_import_api.py": 1,
+      "tests/test_dataset_import_archive.py": 1,
+      "tests/test_dataset_import_automatic.py": 8,
+      "tests/test_dataset_import_chunk_regressions.py": 4,
+      "tests/test_dataset_import_chunks.py": 18,
+      "tests/test_dataset_import_cleanup.py": 2,
+      "tests/test_dataset_import_decimal_quota_boundaries.py": 1,
+      "tests/test_dataset_import_dev_mode.py": 12,
+      "tests/test_dataset_import_failure_cancellation.py": 3,
+      "tests/test_dataset_import_integration.py": 1,
+      "tests/test_dataset_import_layout.py": 3,
+      "tests/test_dataset_import_layout_regressions.py": 9,
+      "tests/test_dataset_import_metadata_migration.py": 1,
+      "tests/test_dataset_import_quotas.py": 9,
+      "tests/test_dataset_import_receipts.py": 5,
+      "tests/test_dataset_import_verifier_regressions.py": 2,
+      "tests/test_dataset_storage_lab_activation.py": 4,
+      "tests/test_dataset_storage_relocation.py": 15,
+      "tests/test_dataset_storage_runtime.py": 5,
+      "tests/test_feedback_local_approval.py": 41,
+      "tests/test_feedback_storage.py": 7,
+      "tests/test_imported_model_access.py": 8,
+      "tests/test_imported_training_startup.py": 2,
+      "tests/test_imported_triad_registry.py": 8,
+      "tests/test_imported_triad_revision_api.py": 2,
+      "tests/test_inference_deadlines.py": 5,
+      "tests/test_inference_execution.py": 6,
+      "tests/test_inference_input_limits.py": 20,
+      "tests/test_inference_storage_timing.py": 4,
+      "tests/test_ingestion_service.py": 2,
+      "tests/test_ingestion_upload_validation.py": 5,
+      "tests/test_loaded_checkpoint_identity.py": 24,
+      "tests/test_local_collection_runtime.py": 1,
+      "tests/test_merge_authentication.py": 1,
+      "tests/test_model_catalogue_prewarm.py": 3,
+      "tests/test_model_registry.py": 6,
+      "tests/test_private_prediction_history.py": 1,
+      "tests/test_registry_db_sync.py": 5,
+      "tests/test_resource_access.py": 1,
+      "tests/test_s12_independent_probe.py": 5,
+      "tests/test_s12_receipt_probe.py": 1,
+      "tests/test_schema_migrations.py": 1,
+      "tests/test_storage.py": 9,
+      "tests/test_t8_interaction_independent.py": 1,
+      "tests/test_training_flow.py": 1,
+      "tests/test_training_spawn.py": 1,
+      "tests/test_web_session_integration.py": 14
+    },
+    "classification": {
+      "method": "All failed modules are inventoried below. Families route investigation, not proof that every failure shares a cause or may be waived.",
+      "confirmed": [
+        {
+          "family": "catalogue policy mismatch",
+          "failures": 2,
+          "modules": [
+            "tests/test_training_flow.py",
+            "tests/test_api_training.py"
+          ],
+          "disposition": "Corrected; both complete modules now pass in the guarded 259-case run."
+        },
+        {
+          "family": "physical storage topology qualification",
+          "setup_errors": 46,
+          "signature": "ValueError: Storage topology requires separate qualification",
+          "disposition": "Environment/profile prerequisites; no profile changes authorized. Storage removal belongs to unit b."
+        },
+        {
+          "family": "export queue/worker interface",
+          "signature": "TypeError: ExportQueue.finish() got an unexpected keyword argument 'import_service'",
+          "causality": "Both conflicting signatures already exist in dcbc806. The merge did not introduce this mismatch.",
+          "disposition": "Inherited defect; no fix applied. Export removal belongs to b."
+        },
+        {
+          "family": "session fixtures",
+          "evidence": "Old /api/auth/web/me expectations and unconfigured web-session responses.",
+          "disposition": "Route to a1/a2; no production auth change made."
+        },
+        {
+          "family": "storage configuration",
+          "signature": "storage_configuration_missing",
+          "disposition": "Configuration/fixture reconciliation overlaps b/e; no credentials or bucket configuration loaded."
+        },
+        {
+          "family": "prediction/registry fixture contracts",
+          "signatures": [
+            "SimpleNamespace has no attribute _imported_owners",
+            "SimpleNamespace has no attribute estado"
+          ],
+          "disposition": "Route to e; causal attribution for each case remains unproven."
+        },
+        {
+          "family": "access endpoint count",
+          "evidence": "test_resource_access expects 23 operations but now observes 24; each observed response passed its anonymous 401 assertion.",
+          "disposition": "Inventory expectation mismatch; do not weaken access checks."
+        },
+        {
+          "family": "ZIP authentication integration prerequisite",
+          "evidence": "test_merge_authentication gets 503: explicit queue migration required.",
+          "disposition": "Do not migrate a real database to satisfy a test."
+        },
+        {
+          "family": "spawn terminal-state expectation",
+          "evidence": "test_training_spawn expects checkpoint_persisted but observes completed.",
+          "disposition": "Unresolved expectation/behavior mismatch; not modified or separately reproduced."
+        },
+        {
+          "family": "runtime/schema CLI assumptions",
+          "evidence": "test_database_url reads engine.url while engine is None; schema CLI test expects database_unsupported JSON but sees an empty parsed report.",
+          "disposition": "Cause not fully established; no environment installation or schema change attempted."
+        }
+      ],
+      "unresolved": "This is family-level classification, not a verified base/candidate differential for all 388 nonpassing cases. Residual failures must not be called fixed, pre-existing or approved wholesale."
+    }
+  },
+  "silent_merge_review": {
+    "reviewed_files": 11,
+    "method": "Static comparison against both merge parents and consumer readback; does not certify behavior of every file.",
+    "finding": "Catalogue contradiction corrected within U0. Other session/access/snapshot differences remain assigned to future units."
+  },
+  "limits": [
+    "No new full backend or frontend suite run after this correction.",
+    "No full frontend build, real browser E2E, Docker Python 3.12, PostgreSQL, GCS, GPU or real model-quality validation.",
+    "Synthetic imported preparation tests exercise real ZIP confirmation/snapshots/preparation in private state; UI tests mock HTTP. This is not one live end-to-end deployment test.",
+    "No production code changed; existing generic acoustic defaults do not certify suitability for medical, industrial or bioacoustic domains.",
+    "The user accepted residual failures as explicit U0 limits. Their resolution remains to be verified in future authorized units; no next stage starts automatically."
+  ]
+}
