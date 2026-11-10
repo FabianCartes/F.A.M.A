@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pathlib import Path
 import pytest
+from tests.http_security import cookie_headers, cookie_security, COOKIE_ORIGIN
 from app.models import web_session, access_quota, security_audit
 
 from tests.test_dataset_import_api import imports
@@ -26,7 +27,7 @@ def test_imported_http_catalogue_is_opt_in_and_owner_private(cohort, training_en
     with sessions() as db:
         for uid in (1, 2):
             db.add(Usuario(id=uid, email=f"model-owner{uid}@example.test", password_hash="unused",
-                nombre_completo="Synthetic", rol="investigador", activo=True))
+                nombre_completo="Synthetic", rol="administrador", activo=True))
         db.commit()
     registry = ModelRegistry()
     registry.register(FakeAudioPredictor("legacy-public", "Legacy public"), is_default=True)
@@ -42,7 +43,7 @@ def test_imported_http_catalogue_is_opt_in_and_owner_private(cohort, training_en
             yield db
     app.dependency_overrides[get_db] = database
     app.dependency_overrides[get_model_registry] = lambda: registry
-    headers = lambda uid: {"Authorization": "Bearer " + auth.create_access_token({"sub": str(uid)})}
+    headers = lambda uid: cookie_headers(sessions, uid)
     key = f"fama_trained_model_{model_id}"
     # Populate a second owner's real synthetic checkpoint/evaluations through
     # the same import, snapshot, preparation and training public boundaries.
@@ -76,8 +77,8 @@ def test_imported_http_catalogue_is_opt_in_and_owner_private(cohort, training_en
         return publish(*args, **kwargs) + [{'model_id': 'foreign-private-error-id',
             'code': 'foreign-private-name', 'reason': 'checkpoint_invalid'}]
     monkeypatch.setattr(registry, 'publish_from_db', with_foreign_error)
-    with TestClient(app, raise_server_exceptions=False) as client:
-        public = client.get("/api/models")
+    with TestClient(app, raise_server_exceptions=False, headers={"Origin": COOKIE_ORIGIN}) as client:
+        public = client.get("/api/models", headers=headers(1))
         assert public.status_code == 200, public.text
         assert [model["id"] for model in public.json()["models"]] == ["legacy-public"]
         assert key not in public.text
@@ -117,7 +118,7 @@ def test_imported_http_catalogue_is_opt_in_and_owner_private(cohort, training_en
         assert key_b in client.get('/api/models?include_imported=true', headers=headers(2)).text
         assert 'foreign-private-error-id' in public.text
         # A cached private predictor must not contaminate later public requests.
-        again = client.get("/api/models")
+        again = client.get("/api/models", headers=headers(1))
         assert again.status_code == 200, again.text
         assert key not in again.text
         assert registry.get_default_model_id() == "legacy-public"
@@ -145,7 +146,7 @@ def test_evaluated_imported_model_cannot_be_globally_activated(cohort, training_
     with sessions() as db:
         for uid in (1, 2):
             db.add(Usuario(id=uid, email=f"activation-owner{uid}@example.test", password_hash="unused",
-                nombre_completo="Synthetic", rol="investigador", activo=True))
+                nombre_completo="Synthetic", rol="administrador", activo=True))
         db.commit()
     registry = registry_module.ModelRegistry()
     registry.register(FakeAudioPredictor("legacy-public", "Legacy public"), is_default=True)
@@ -164,8 +165,8 @@ def test_evaluated_imported_model_cannot_be_globally_activated(cohort, training_
     app.dependency_overrides[get_db] = database
     # The catalogue route captured this original dependency at definition time.
     app.dependency_overrides[main.get_model_registry] = lambda: registry
-    headers = lambda uid: {"Authorization": "Bearer " + auth.create_access_token({"sub": str(uid)})}
-    with TestClient(app, raise_server_exceptions=False) as client:
+    headers = lambda uid: cookie_headers(sessions, uid)
+    with TestClient(app, raise_server_exceptions=False, headers={"Origin": COOKIE_ORIGIN}) as client:
         before = client.get("/api/training/history?include_imported=true", headers=headers(1))
         assert before.status_code == 200, before.text
         from app.models.dataset_import import ImportedDataset
@@ -180,7 +181,7 @@ def test_evaluated_imported_model_cannot_be_globally_activated(cohort, training_
         foreign_history = client.get('/api/training/history?include_imported=true', headers=headers(2))
         assert foreign_history.status_code == 200
         assert all(row['id'] != model_id for row in foreign_history.json()['history'])
-        public_history = client.get('/api/training/history').json()['history']
+        public_history = client.get('/api/training/history', headers=headers(1)).json()['history']
         assert all(row['id'] != model_id for row in public_history)
         assert any(row['architecture'] == 'existing' for row in public_history)
         active_before = {row["id"]: row["active"] for row in before.json()["history"]}
@@ -195,7 +196,7 @@ def test_evaluated_imported_model_cannot_be_globally_activated(cohort, training_
         after = client.get("/api/training/history?include_imported=true", headers=headers(1))
         assert after.status_code == 200, after.text
         assert {row["id"]: row["active"] for row in after.json()["history"]} == active_before
-        public = client.get("/api/models")
+        public = client.get("/api/models", headers=headers(1))
         assert public.status_code == 200, public.text
         assert public.json()["default_model_id"] == "legacy-public"
         assert [row["id"] for row in public.json()["models"]] == ["legacy-public"]
@@ -231,6 +232,7 @@ def test_public_legacy_activation_preserves_real_weight_loading(training_env, tm
         model_id = row.id_modelo
     registry = registry_module.ModelRegistry()
     monkeypatch.setattr(main, "training_service", runtime)
+    monkeypatch.setattr(registry_module, "get_checkpoints_dir", lambda: runtime.checkpoints_dir)
     monkeypatch.setattr(registry_module, "get_model_registry", lambda: registry)
     monkeypatch.setattr(registry_module, "__file__", str(tmp_path / "app/services/registry.py"))
     app = FastAPI()
@@ -240,7 +242,10 @@ def test_public_legacy_activation_preserves_real_weight_loading(training_env, tm
         with sessions() as db:
             yield db
     app.dependency_overrides[get_db] = database
-    with TestClient(app, raise_server_exceptions=False) as client:
+    from app.services.auth import create_user
+    with sessions() as db:
+        create_user(db, "legacy-admin@example.test", "SyntheticPassword2026!", "Synthetic", "administrador")
+    with TestClient(app, raise_server_exceptions=False, headers=cookie_headers(sessions, 1)) as client:
         before = client.get("/api/training/history")
         assert before.status_code == 200, before.text
         assert before.json()["history"][0]["active"] is False
@@ -277,7 +282,7 @@ def test_imported_http_predict_is_private_and_persists_locally_without_gcs(cohor
     with sessions() as db:
         for uid in (1, 2):
             db.add(Usuario(id=uid, email=f"predict-owner{uid}@example.test", password_hash="unused",
-                nombre_completo="Synthetic", rol="investigador", activo=True))
+                nombre_completo="Synthetic", rol="administrador", activo=True))
         db.commit()
         before = {row["id"]: row["active"] for row in runtime.get_history(db, owner_id=1)}
         entry = next(row for row in runtime.get_history(db, owner_id=1) if row["id"] == model_id)
@@ -310,7 +315,7 @@ def test_imported_http_predict_is_private_and_persists_locally_without_gcs(cohor
             yield db
     app.dependency_overrides[get_db] = database
     app.dependency_overrides[get_model_registry] = lambda: registry
-    headers = lambda uid: {"Authorization": "Bearer " + auth.create_access_token({"sub": str(uid)})}
+    headers = lambda uid: cookie_headers(sessions, uid)
     stream = io.BytesIO()
     with wave.open(stream, "wb") as audio:
         audio.setnchannels(1)
@@ -321,7 +326,7 @@ def test_imported_http_predict_is_private_and_persists_locally_without_gcs(cohor
     key = f"fama_trained_model_{model_id}"
     requested = {"canonical": key, "numeric": str(model_id), "filename": filename,
                  "stem": Path(filename).stem}[selection]
-    with TestClient(app, raise_server_exceptions=False) as client:
+    with TestClient(app, raise_server_exceptions=False, headers={"Origin": COOKIE_ORIGIN}) as client:
         # No catalogue call or owner publication precedes this cold selection.
         owner = client.post(f"/api/predict?model_id={requested}", files=files, headers=headers(1))
         assert owner.status_code == 200, owner.text
@@ -381,7 +386,7 @@ def test_imported_http_predict_is_private_and_persists_locally_without_gcs(cohor
             assert {p: p.read_bytes() for p in (local_root / 'local_predictions').rglob('*.wav')} == before_files
             original_commit = sessions.class_.commit
             def broken_commit(db):
-                if any(isinstance(row, Prediccion) for row in db.new):
+                if any(isinstance(row, Prediccion) for row in (*db.new, *db.identity_map.values())):
                     raise RuntimeError('synthetic prediction commit failure')
                 return original_commit(db)
             with monkeypatch.context() as failures:
@@ -397,7 +402,7 @@ def test_imported_http_predict_is_private_and_persists_locally_without_gcs(cohor
                 with sessions() as db:
                     before_ids = {row.id_prediccion for row in db.query(Prediccion).all()}
                 def ambiguous_commit(db):
-                    prediction_pending = any(isinstance(row, Prediccion) for row in db.new)
+                    prediction_pending = any(isinstance(row, Prediccion) for row in (*db.new, *db.identity_map.values()))
                     original_commit(db)
                     if prediction_pending:
                         raise RuntimeError('synthetic commit acknowledgement lost')
@@ -425,7 +430,7 @@ def test_imported_http_predict_is_private_and_persists_locally_without_gcs(cohor
             original_query = sessions.class_.query
             lost_commit = [False]
             def unknown_commit(db):
-                if any(isinstance(row, Prediccion) for row in db.new):
+                if any(isinstance(row, Prediccion) for row in (*db.new, *db.identity_map.values())):
                     lost_commit[0] = True
                     raise RuntimeError('synthetic unavailable commit')
                 return original_commit(db)
@@ -473,7 +478,7 @@ def test_imported_http_predict_is_private_and_persists_locally_without_gcs(cohor
             assert recovered.status_code == 200, recovered.text
             assert recovered.json()['local_audio_saved'] is True
             assert 'upload' not in effects
-        public = client.get("/api/models")
+        public = client.get("/api/models", headers=headers(1))
         assert public.status_code == 200, public.text
         assert key not in public.text
         assert public.json()["default_model_id"] == "legacy-public"
@@ -516,8 +521,11 @@ def test_cached_public_legacy_keeps_db_failure_after_real_inference(training_env
         # Inject only SQL bind resolution failure after delivering a real Session.
         # This is not a live database outage or a failure of session construction.
         def get_bind(self, *args, **kwargs):
-            effects.append("database")
-            raise SQLAlchemyError("synthetic-db-unavailable")
+            from app.models.prediction import Prediccion
+            if any(isinstance(row, Prediccion) for row in self.new):
+                effects.append("database")
+                raise SQLAlchemyError("synthetic-db-unavailable")
+            return super().get_bind(*args, **kwargs)
     def database():
         with UnavailableBindSession(bind=sessions.kw["bind"]) as db:
             yield db
@@ -534,13 +542,16 @@ def test_cached_public_legacy_keeps_db_failure_after_real_inference(training_env
     app.add_api_route("/api/predict", main.predict_audio, methods=["POST"])
     app.dependency_overrides[get_db] = database
     app.dependency_overrides[get_model_registry] = lambda: registry
+    from app.services.auth import create_user
+    with sessions() as db:
+        create_user(db, "legacy-admin@example.test", "SyntheticPassword2026!", "Synthetic", "administrador")
     stream = io.BytesIO()
     with wave.open(stream, "wb") as audio:
         audio.setnchannels(1)
         audio.setsampwidth(2)
         audio.setframerate(8000)
         audio.writeframes((np.sin(2 * np.pi * 440 * np.arange(8000) / 8000) * 12000).astype("<i2").tobytes())
-    with TestClient(app, raise_server_exceptions=False) as client:
+    with TestClient(app, raise_server_exceptions=False, headers=cookie_headers(sessions, 1)) as client:
         response = client.post("/api/predict?model_id=legacy-public",
             files={"file": ("synthetic.wav", stream.getvalue(), "audio/wav")})
     assert response.status_code == 500, response.text
@@ -572,7 +583,7 @@ def test_imported_predict_cookie_credentials_and_origin(cohort, training_env, tm
         for uid in (1, 2):
             db.add(Usuario(id=uid, email=f"user{uid}@example.test",
                 password_hash=auth.hash_password(PASSWORD), nombre_completo="Synthetic",
-                rol="investigador", activo=True))
+                rol="administrador", activo=True))
         db.commit()
     registry, effects = ModelRegistry(), []
     monkeypatch.setattr(main, "training_service", runtime)
@@ -593,13 +604,16 @@ def test_imported_predict_cookie_credentials_and_origin(cohort, training_env, tm
             yield db
     app.dependency_overrides[get_db] = database
     app.dependency_overrides[get_model_registry] = lambda: registry
-    token = lambda uid: "Bearer " + auth.create_access_token({"sub": str(uid)})
+    from tests.test_cookie_identity import legacy_bearer
+    token = lambda uid: "Bearer " + legacy_bearer(uid)
     key = f"fama_trained_model_{model_id}"
     files = {"file": ("synthetic.wav", synthetic_wav(frames=8000, rate=8000), "audio/wav")}
     with TestClient(app, raise_server_exceptions=False) as client:
         authenticated = login(client)
         assert authenticated.status_code == 200, authenticated.text
-        for headers in ({"Origin": ORIGIN}, {"Origin": ORIGIN, "Authorization": token(1)}):
+        for headers in ({"Origin": ORIGIN}, {"Origin": ORIGIN, "Authorization": token(1)},
+                        {"Origin": ORIGIN, "Authorization": "Bearer invalid"},
+                        {"Origin": ORIGIN, "Authorization": token(2)}):
             effects.clear()
             accepted = client.post(f"/api/predict?model_id={key}", files=files, headers=headers)
             assert accepted.status_code == 200, accepted.text
@@ -608,8 +622,6 @@ def test_imported_predict_cookie_credentials_and_origin(cohort, training_env, tm
             assert accepted.json()["gcp_upload"] is False
             assert effects == ["predict"]
         for headers, expected in (
-                ({"Origin": ORIGIN, "Authorization": "Bearer invalid"}, 401),
-                ({"Origin": ORIGIN, "Authorization": token(2)}, 401),
                 ({}, 403), ({"Origin": "https://foreign.example.test"}, 403)):
             effects.clear()
             denied = client.post(f"/api/predict?model_id={key}", files=files, headers=headers)

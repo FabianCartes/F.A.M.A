@@ -90,7 +90,7 @@ def end_session(request: Request, response: Response, db: Session):
 
 
 def web_identity(request: Request, response: Response, db: Session, *, expected_user_id=None) -> Usuario:
-    """Validate both identities before refreshing a browser session."""
+    """Validate cookie identity and any expected principal before idle refresh."""
     config = trusted_web_request(request)
     ensure_web_schema(db)
     no_store(response)

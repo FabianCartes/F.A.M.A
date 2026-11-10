@@ -1,5 +1,6 @@
 """Composition publication and execution use real persisted synthetic authority."""
 import pytest
+from tests.http_security import cookie_headers, cookie_security
 from tests.test_imported_triad_evaluation import bound, synthetic_audio, database_snapshot
 from tests.test_dataset_import_api import imports
 from tests.test_imported_dataset_preparation import cohort
@@ -55,7 +56,7 @@ def http(bound, tmp_path, monkeypatch):
     with bound[0].begin() as db:
         for uid in (1, 2):
             db.add(Usuario(id=uid, email=f'triad{uid}@example.test', password_hash='unused',
-                nombre_completo='Synthetic', rol='investigador', activo=True))
+                nombre_completo='Synthetic', rol='administrador', activo=True))
     records = service(bound)
     saved = records.create(1, bound[4]['id'])
     registry = ModelRegistry(triad_records=records)
@@ -72,7 +73,7 @@ def http(bound, tmp_path, monkeypatch):
             yield db
     app.dependency_overrides[get_db] = database
     app.dependency_overrides[get_model_registry] = lambda: registry
-    headers = lambda uid: {'Authorization': 'Bearer ' + auth.create_access_token({'sub': str(uid)})}
+    headers = lambda uid: cookie_headers(bound[0], uid)
     with TestClient(app, raise_server_exceptions=False) as client:
         yield client, registry, saved, headers
 
@@ -178,7 +179,7 @@ def test_owner_catalogue_has_actual_joint_reports_and_no_foreign_discovery(http,
         assert admitted['id_evaluation'] == saved['pair_ids'][index]
         assert admitted['report']['confusion_matrix'] == [[0, 1, 0], [0, 1, 0]]
         assert admitted['provenance']['checkpoint_sha256'] == bound[4]['id']
-    for response in (client.get('/api/models'),
+    for response in (client.get('/api/models', headers=headers(1)),
                      client.get('/api/models?private_only=true', headers=headers(2))):
         assert response.status_code == 200
         assert key not in response.text and bound[4]['id'] not in response.text

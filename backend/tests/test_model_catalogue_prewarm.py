@@ -276,16 +276,26 @@ def test_concurrent_initializers_share_isolated_first_singleton(monkeypatch):
 
 
 def test_isolated_lifespan_http_owner_catalogue_reuses_primed_singleton(catalogue, monkeypatch):
-    from types import SimpleNamespace
     from fastapi.testclient import TestClient
     from app import database
     from app.services import auth, registry as module
     _, _, engine, checkpoint, calls = imported(catalogue, monkeypatch)
-    monkeypatch.setattr(module, '__file__', str(checkpoint.parent.parent / 'app/services/registry.py'))
+    monkeypatch.setattr(module, 'get_checkpoints_dir', lambda: checkpoint.parent)
     monkeypatch.setattr(module, '_global_model_registry', None)
     monkeypatch.setattr(database, 'SessionLocal', lambda: Session(engine))
     monkeypatch.setattr(main, '_APP_STARTUP_POLICY', 'isolated')
-    monkeypatch.setattr(main, 'imported_user', lambda *args: SimpleNamespace(id=1))
+    from sqlalchemy.orm import sessionmaker
+    from app.models.user import Usuario
+    from tests.http_security import configure_cookie_sessions, cookie_headers
+    configure_cookie_sessions(monkeypatch)
+    sessions = sessionmaker(bind=engine)
+    with sessions() as db:
+        for index in (1, 2):
+            db.add(Usuario(id=index, email=f'owner{index}@example.test',
+                           nombre_completo=f'Owner {index}', password_hash='replaced-by-login-helper',
+                           rol='administrador', activo=True))
+        db.commit()
+    credentials = lambda uid: cookie_headers(sessions, uid)
     def forbidden(*args, **kwargs):
         pytest.fail('Isolated HTTP lifecycle enabled automatic effects')
     monkeypatch.setattr(main.ensemble_service, 'load_models', forbidden)
@@ -302,14 +312,12 @@ def test_isolated_lifespan_http_owner_catalogue_reuses_primed_singleton(catalogu
         assert calls == ['fama_trained_model_11']  # warm completed before readiness
         public = client.get('/api/models').json()
         assert public['models'] == [] and public['default_model_id'] == ''
-        private = client.get('/api/models?private_only=true')
+        private = client.get('/api/models?private_only=true', headers=credentials(1))
         assert private.status_code == 200, private.text
         assert [m['id'] for m in private.json()['models']] == ['fama_trained_model_11']
         assert private.json()['default_model_id'] == ''
-        monkeypatch.setattr(main, 'imported_user', lambda *args: SimpleNamespace(id=2))
-        assert client.get('/api/models?private_only=true').json()['models'] == []
+        assert client.get('/api/models?private_only=true', headers=credentials(2)).json()['models'] == []
         checkpoint.write_text('changed synthetic checkpoint' * 500)
-        monkeypatch.setattr(main, 'imported_user', lambda *args: SimpleNamespace(id=1))
-        assert client.get('/api/models?private_only=true').json()['models'] == []
+        assert client.get('/api/models?private_only=true', headers=credentials(1)).json()['models'] == []
         assert calls == ['fama_trained_model_11']
         assert seen and all(registry is warmed for registry in seen)

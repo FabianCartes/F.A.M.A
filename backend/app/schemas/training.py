@@ -103,7 +103,7 @@ class StartTrainingRequest(BaseModel):
     """
     dataset_name: str = "AvesChilenas"
     imported_dataset_id: Optional[str] = Field(default=None, strict=True, pattern=r"^[0-9a-f]{32}$",
-        description="Owned imported dataset ID; requires active Bearer authentication and exact snapshot/preparation; alternative to legacy selection.")
+        description="Owned imported dataset ID; requires an active cookie session and exact snapshot/preparation; alternative to legacy selection.")
     snapshot_id: Optional[str] = Field(default=None, strict=True, pattern=r"^[0-9a-f]{32}$",
         description="Ready immutable local snapshot belonging to the authenticated imported-dataset owner.")
     imported_prepared_version: Optional[str] = Field(default=None, strict=True, pattern=r"^[0-9a-f]{64}$",

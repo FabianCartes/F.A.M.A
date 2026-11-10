@@ -1,5 +1,6 @@
 """Imported training admission through HTTP with real T1/T2 synthetic sources."""
 import pytest
+from tests.http_security import cookie_headers, cookie_security
 
 from tests.test_api_training import client
 from tests.test_training_flow import training_env, register, partitions
@@ -22,7 +23,7 @@ def test_imported_start_requires_auth_before_admission(client, training_env, coh
         "imported_prepared_version": prepared["version_id"],
     })
     assert response.status_code == 401, response.text
-    assert response.json() == {"detail": "Autenticación requerida. Token no provisto."}
+    assert response.json() == {"detail": "Sesión requerida o expirada."}
     assert client.get("/api/training/progress").json() == before
     assert client.get("/api/training/history").json() == history
     process.assert_not_called()
@@ -39,7 +40,7 @@ def authenticated(training_env, monkeypatch):
         db.add(Usuario(id=2, email="foreign@example.test", password_hash="unused",
                        nombre_completo="Synthetic", rol="investigador", activo=True))
         db.commit()
-    return {"Authorization": "Bearer " + auth.create_access_token({"sub": "2"})}
+    return cookie_headers(training_env[1], 2)
 
 
 def test_foreign_imported_start_is_non_disclosing(client, training_env, cohort, tmp_path, authenticated):
@@ -78,7 +79,7 @@ def test_imported_progress_stop_and_history_require_owner(client, training_env, 
     preparations = ImportedDatasetPreparation(cohort[0], tmp_path / "imported-prepared")
     prepared = create(preparations, cohort)
     runtime.imported_sources = ImportedTrainingSource(preparations)
-    owner = {"Authorization": "Bearer " + auth.create_access_token({"sub": "1"})}
+    owner = cookie_headers(training_env[1], 1)
     response = client.post("/api/training/start", headers=owner, json={
         "imported_dataset_id": cohort[5], "snapshot_id": cohort[1]["id"],
         "imported_prepared_version": prepared["version_id"], "architecture": "AudioCNN",
@@ -119,7 +120,7 @@ def test_imported_catalog_requires_auth_and_preserves_legacy_catalog(client, tra
     foreign = client.get("/api/training/datasets?include_imported=true", headers=authenticated)
     assert foreign.status_code == 200, foreign.text
     assert foreign.json() == legacy
-    owner = {"Authorization": "Bearer " + auth.create_access_token({"sub": "1"})}
+    owner = cookie_headers(training_env[1], 1)
     response = client.get("/api/training/datasets?include_imported=true", headers=owner)
     assert response.status_code == 200, response.text
     imported, = [row for row in response.json()["datasets"] if row.get("source_type") == "imported"]
@@ -194,7 +195,7 @@ def test_owned_invalid_selection_has_no_admission_effects(client, training_env, 
         else:
             path.chmod(0o600)
             path.write_bytes(b"modified audio")
-    owner = {"Authorization": "Bearer " + auth.create_access_token({"sub": "1"})}
+    owner = cookie_headers(training_env[1], 1)
     before = runtime.get_progress()
     history = client.get("/api/training/history").json()
     response = client.post("/api/training/start", headers=owner, json=body)
@@ -214,7 +215,7 @@ def test_invalid_credentials_cannot_fall_back_from_imported_selection(client, tr
                            json={"imported_dataset_id": "a" * 32, "snapshot_id": "b" * 32,
                                  "imported_prepared_version": "c" * 64, "architecture": "AudioCNN"})
     assert response.status_code == 401, response.text
-    assert response.json() == {"detail": "Token inválido o expirado: Token inválido: formato no corresponde a JWT"}
+    assert response.json() == {"detail": "Sesión requerida o expirada."}
     assert training_env[0].get_progress() == before
     process.assert_not_called()
 
@@ -244,13 +245,9 @@ def test_imported_selection_is_complete_and_exclusive(client, training_env, body
     training_env[3].assert_not_called()
 
 
-@pytest.mark.parametrize("subject,message", [
-    ("-1", "Token no contiene sujeto de usuario válido."),
-    ("3", "Usuario asociado al token no existe."),
-    ("1", "La cuenta de usuario se encuentra inactiva."),
-])
+@pytest.mark.parametrize("subject", ["-1", "3", "1"])
 def test_imported_resources_require_real_existing_active_user(
-    client, training_env, authenticated, subject, message,
+    client, training_env, authenticated, subject,
 ):
     from app.services import auth
     from app.models.user import Usuario
@@ -258,7 +255,8 @@ def test_imported_resources_require_real_existing_active_user(
         with training_env[1]() as db:
             db.get(Usuario, 1).activo = False
             db.commit()
-    headers = {"Authorization": "Bearer " + auth.create_access_token({"sub": subject})}
+    headers = cookie_headers(training_env[1], subject)
+    message = "Sesión requerida o expirada."
     before = training_env[0].get_progress()
     for path in ("datasets", "history"):
         response = client.get("/api/training/" + path + "?include_imported=true", headers=headers)

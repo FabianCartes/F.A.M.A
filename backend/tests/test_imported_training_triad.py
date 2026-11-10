@@ -3,6 +3,7 @@ import pickle
 from copy import deepcopy
 
 import pytest
+from tests.http_security import cookie_headers, cookie_security
 
 from tests.test_dataset_import_api import imports
 from tests.test_imported_dataset_preparation import cohort, create
@@ -66,7 +67,7 @@ def test_http_triad_uses_existing_authenticated_start(triad, training_env, clien
     runtime, arguments, _ = triad
     body = {k: v for k, v in arguments.items() if k not in ("owner_id", "dataset_name")}
     assert client.post("/api/training/start", json=body).status_code == 401
-    owner = {"Authorization": "Bearer " + auth.create_access_token({"sub": "1"})}
+    owner = cookie_headers(training_env[1], 1)
     response = client.post("/api/training/start", json=body, headers=owner)
     assert response.status_code == 200, response.text
     assert runtime.current_source_owner == 1

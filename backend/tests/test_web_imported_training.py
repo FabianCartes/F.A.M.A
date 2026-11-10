@@ -1,4 +1,5 @@
 """Browser session reaches the existing T3 public source/lifecycle contract."""
+from tests.http_security import cookie_security
 from tests.test_api_training import client
 from tests.test_training_flow import training_env
 from tests.test_dataset_import_api import imports
@@ -46,13 +47,9 @@ def test_browser_identity_guards_real_imported_source_and_lifecycle(
     catalog = client.get("/api/training/datasets?include_imported=true")
     assert catalog.status_code == 200, catalog.text
     assert [row["id"] for row in catalog.json()["datasets"] if row.get("source_type") == "imported"] == [cohort[5]]
-    # Invalid Bearer cannot use an otherwise valid browser session.
-    rejected = client.post("/api/training/start", json=body,
+    # Authorization is ignored: the valid cookie remains the sole identity.
+    admitted = client.post("/api/training/start", json=body,
                            headers={"Origin": ORIGIN, "Authorization": "Bearer invalid"})
-    assert rejected.status_code == 401
-    assert client.get("/api/training/progress").json() == before
-    process.assert_not_called()
-    admitted = client.post("/api/training/start", json=body, headers={"Origin": ORIGIN})
     assert admitted.status_code == 200, admitted.text
     state = client.get("/api/training/progress").json()
     assert login(client, 2).status_code == 200

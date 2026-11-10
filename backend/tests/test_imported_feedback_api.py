@@ -1,10 +1,18 @@
 """Public HTTP identity checks for the imported feedback review lifecycle."""
 import pytest
+from tests.http_security import cookie_headers, cookie_security
 
-from tests.test_api_feedback import client, test_db, fake_gcs
+from tests.test_api_feedback import client as legacy_client, test_db, fake_gcs
 # Register the complete additive source schema before the shared fixture creates it.
 from app.models.training_snapshot import TrainingSnapshot
 from app.models.imported_training_source import ImportedModelSource
+
+
+@pytest.fixture
+def client(legacy_client):
+    from tests.http_security import COOKIE_ORIGIN
+    legacy_client.headers["Origin"] = COOKIE_ORIGIN
+    return legacy_client
 
 
 @pytest.fixture
@@ -34,7 +42,7 @@ def test_imported_feedback_requires_session_before_mutation(client, test_db, pri
         test_db.commit()
         response = client.post(f"/api/feedback/{row.id_retroalimentacion}/{action}")
     assert response.status_code == 401, response.text
-    assert response.json() == {"detail": "Autenticación requerida. Token no provisto."}
+    assert response.json() == {"detail": "Sesión requerida o expirada."}
     # The existing public review list must not expose private feedback anonymously.
     pending = client.get("/api/feedback/pending")
     assert pending.status_code == 200, pending.text
@@ -59,8 +67,9 @@ def owners(test_db, monkeypatch):
     test_db.add(ImportedModelSource(model_id=301, owner_id=1, dataset_id="a" * 32,
                                    snapshot_id="b" * 32, identity={"owner_id": 1, "dataset_id": "a" * 32}))
     test_db.commit()
-    return {identity: {"Authorization": "Bearer " + auth.create_access_token({"sub": str(identity)})}
-            for identity in (1, 2)}
+    from sqlalchemy.orm import sessionmaker
+    sessions = sessionmaker(bind=test_db.get_bind())
+    return {identity: cookie_headers(sessions, identity) for identity in (1, 2)}
 
 
 def test_imported_feedback_uses_session_identity_and_preserves_pending_after_foreign_review(

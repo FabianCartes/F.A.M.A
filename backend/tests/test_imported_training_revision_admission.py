@@ -1,5 +1,6 @@
 """Current-revision admission without invalidating immutable historical sources."""
 import pytest
+from tests.http_security import cookie_headers, cookie_security
 
 from tests.test_api_training import client
 from tests.test_training_flow import training_env
@@ -27,9 +28,8 @@ def setup_source(cohort, tmp_path, training_env, monkeypatch):
     return source, preparations, prepared
 
 
-def owner_headers():
-    from app.services import auth
-    return {"Authorization": "Bearer " + auth.create_access_token({"sub": "1"})}
+def owner_headers(training_env):
+    return cookie_headers(training_env[1], 1)
 
 
 def selection(cohort, prepared):
@@ -45,7 +45,7 @@ def test_stale_start_rejects_without_job_or_history_changes(
     # Fixture-only revision change: independent of the parallel feedback writer.
     with cohort[0].sessions.begin() as db:
         db.get(ImportedDataset, cohort[5]).revision += 1
-    headers = owner_headers()
+    headers = owner_headers(training_env)
     before = client.get("/api/training/progress", headers=headers).json()
     history = client.get("/api/training/history?include_imported=true", headers=headers).json()
     response = client.post("/api/training/start", headers=headers, json=selection(cohort, prepared))
@@ -111,7 +111,7 @@ def test_new_cohort_requires_annotations_and_admits_all_current_members(
     assert preparations.get(1, original_snapshot["id"], old["version_id"]) == old
     assert source.resolve(1, cohort[5], original_snapshot["id"], old["version_id"],
                           architecture="AudioCNN")["identity"]["snapshot_id"] == original_snapshot["id"]
-    headers = owner_headers()
+    headers = owner_headers(training_env)
     response = client.get("/api/training/datasets?include_imported=true", headers=headers)
     assert response.status_code == 200, response.text
     entry, = [row for row in response.json()["datasets"] if row.get("source_type") == "imported"]

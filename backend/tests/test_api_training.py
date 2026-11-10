@@ -17,7 +17,7 @@ from app.database import get_db
 from app.services import training
 from tests.test_training_flow import training_env, partitions, register
 from tests.test_training_persistence import persistence_env
-from tests.http_security import administrator_http
+from tests.http_security import administrator_http, cookie_headers, cookie_security, COOKIE_ORIGIN
 
 app = main.app
 
@@ -143,7 +143,7 @@ def client(training_env, monkeypatch):
             yield db
     app.dependency_overrides[get_db] = isolated_db
     # Without the context manager TestClient does not run model loading/admin seeding.
-    test_client = TestClient(app, raise_server_exceptions=False)
+    test_client = TestClient(app, raise_server_exceptions=False, headers={"Origin": COOKIE_ORIGIN})
     try:
         with administrator_http(app):
             yield test_client
@@ -421,7 +421,7 @@ def test_catalog_opt_in_keeps_imported_auth_and_owner_isolation(client, training
     path = "/api/training/datasets?include_imported=true"
     assert client.get(path + "&include_unavailable=true").status_code == 401
     for owner in (1, 2):
-        headers = {"Authorization": "Bearer " + auth.create_access_token({"sub": str(owner)})}
+        headers = cookie_headers(sessions, owner)
         previous = client.get(path, headers=headers)
         assert previous.status_code == 200, previous.text
         response = client.get(path + "&include_unavailable=true", headers=headers)

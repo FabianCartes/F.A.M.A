@@ -1,5 +1,6 @@
 """Additive imported model-source persistence, synthetic memory database only."""
 import pytest
+from tests.http_security import cookie_headers, cookie_security
 from tests.test_dataset_import_api import imports
 from tests.test_imported_dataset_preparation import cohort, create
 from tests.test_training_flow import training_env
@@ -118,8 +119,8 @@ def test_real_cpu_worker_persists_source_and_completes_evaluation(cohort, traini
             yield db
     main.app.dependency_overrides[get_db] = source_db
     try:
-        owner = {"Authorization": "Bearer " + auth.create_access_token({"sub": "1"})}
-        foreign = {"Authorization": "Bearer " + auth.create_access_token({"sub": "2"})}
+        owner = cookie_headers(sessions, 1)
+        foreign = cookie_headers(sessions, 2)
         assert client.get("/api/training/history").json() == {"history": []}
         assert client.get("/api/training/history?include_imported=true", headers=foreign).json() == {"history": []}
         public_entry, = client.get("/api/training/history?include_imported=true", headers=owner).json()["history"]
