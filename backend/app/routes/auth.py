@@ -12,6 +12,7 @@ from app.database import get_db
 from app.models.user import Usuario
 from app.services.web_sessions import (
     current_web_user, trusted_web_request, start_session, end_session, web_administrator, authenticate_web_user,
+    ensure_web_schema,
 )
 from app.services import accounts
 from app.services import access_limits
@@ -141,6 +142,7 @@ def login(req: LoginRequest, request: Request, response: Response, db: Session =
     y establece una sesión opaca revocable mediante cookie HttpOnly.
     """
     config = trusted_web_request(request)
+    ensure_web_schema(db)
     access_limits.admit(db, [("login_account", req.email.strip().lower()),
                              ("login_peer", access_limits.observed_peer(request))])
     user = authenticate_web_user(db=db, email=req.email, password=req.password)

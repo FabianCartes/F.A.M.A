@@ -2,6 +2,8 @@
 
 Esta integración reutiliza la sesión opaca de `aa53e09a9b935f752b01fe464cbc1a5bd10556c0` sin sustituir el contrato Bearer ni cambiar los permisos de los endpoints legacy. La interfaz del workspace sí exige una identidad confirmada; consulta [acceso web y recuperación](acceso-web.md). No instala la aplicación, no crea usuarios y no habilita automáticamente el esquema en una base existente.
 
+El login canónico `/api/auth/login` valida el esquema de sesión antes de reservar cuotas o comprobar credenciales. Si falta o es incompatible, devuelve 503 sin actualizar último acceso, cuotas, auditoría ni emitir cookie.
+
 ## Contratos HTTP
 
 | Interfaz | Credencial y resultado |

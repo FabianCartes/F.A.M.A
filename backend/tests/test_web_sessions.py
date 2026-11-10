@@ -71,6 +71,32 @@ def test_login_uses_opaque_secure_cookie_not_bearer_token(web):
     assert client.get("/api/auth/me").json()["email"] == "investigador@example.test"
 
 
+@pytest.mark.parametrize("password", [PASSWORD, "wrong-password"])
+def test_missing_session_schema_rejects_login_before_authentication_effects(web, password):
+    from app.models.web_session import SesionWeb
+    client, sessions = web
+    engine = sessions.kw["bind"]
+    SesionWeb.__table__.drop(engine)
+    writes = []
+
+    def observe_writes(connection, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().upper().startswith(("INSERT", "UPDATE", "DELETE")):
+            writes.append(statement)
+
+    event.listen(engine, "before_cursor_execute", observe_writes)
+    try:
+        response = client.post("/api/auth/login", headers={"Origin": ORIGIN}, json={
+            "email": "investigador@example.test", "password": password,
+        })
+        assert response.status_code == 503
+        assert response.json() == {"detail": "Esquema de sesión web no disponible o incompatible."}
+        assert response.headers["cache-control"] == "no-store"
+        assert "set-cookie" not in response.headers
+        assert writes == []
+    finally:
+        event.remove(engine, "before_cursor_execute", observe_writes)
+
+
 def test_only_current_administrator_can_create_accounts(web):
     client, sessions = web
     payload = {"email": "new@example.test", "password": PASSWORD,
