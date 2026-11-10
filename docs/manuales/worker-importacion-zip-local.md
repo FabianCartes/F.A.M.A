@@ -70,7 +70,7 @@ Esta persistencia es propia del host local. En un servidor que sea a su vez un c
 2. Observar transición desde `queued` hacia ejecución y resultado terminal.
 3. Si hay errores de estructura/audio, revisar los códigos públicos: un rechazo correcto no es un fallo del consumidor.
 4. Si la vista previa es válida, revisar clases y audios y confirmar desde la interfaz. El worker no inventa esa confirmación.
-5. Comprobar que la importación termina y conserva miembros/objetos localmente. En la unidad b del MVP el ZIP todavía no aparece en el inventario compartido; su publicación corresponde a c. La subida privada y la exportación ZIP se retiraron: no configurar ni arrancar sus workers.
+5. Comprobar que la importación termina y conserva miembros/objetos localmente. Al terminar, el dataset aparece en GCS y en el inventario compartido, asignado al importador; si la publicación falla, la importación sigue local y **Reintentar trabajo** la completa. La subida privada y la exportación ZIP se retiraron: no configurar ni arrancar sus workers.
 
 No confundir trabajo terminado con publicación confirmada. Un archivo de368bytes recibido no acredita por sí solo contener WAV válidos. La evidencia debe distinguir readiness sintética, resultado del archivo del usuario, confirmación y publicación.
 

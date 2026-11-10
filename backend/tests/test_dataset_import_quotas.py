@@ -262,17 +262,19 @@ def test_recovery_rechecks_quota_and_releases_only_with_membership_commit(import
     reviewed = receive(client, tmp_path, "recover")
     url = f"{BASE}/{reviewed['id']}/receipt"
     promise = client.get(url).json()["reserved_bytes"]
-    complete = client.execution.queue.complete_publication
-    def interrupt(db, job, result):
-        # An interruption after rename and reservation assignment must roll back
-        # membership, source success and release, leaving the journal recoverable.
+    from app.services import dataset_import_receipts
+    complete = dataset_import_receipts.release_published_receipt
+    def interrupt(db, source):
+        # An interruption after rename, reservation release and membership must
+        # roll back all of them, leaving the journal recoverable.
+        complete(db, source)
         raise OSError("synthetic interruption before publication commit")
-    monkeypatch.setattr(client.execution.queue, "complete_publication", interrupt)
+    monkeypatch.setattr(dataset_import_receipts, "release_published_receipt", interrupt)
     assert confirm(client, reviewed).json()["status"] == "failed"
     assert (service.root / "objects" / reviewed["id"]).is_dir()
     assert catalog(client)["datasets"] == []
     assert client.get(url).json()["reserved_bytes"] == promise
-    monkeypatch.setattr(client.execution.queue, "complete_publication", complete)
+    monkeypatch.setattr(dataset_import_receipts, "release_published_receipt", complete)
     service.limits = replace(service.limits, dataset_bytes=len(wav_bytes()) - 1)
     assert confirm(client, reviewed).json()["status"] == "failed"
     assert catalog(client)["datasets"] == []

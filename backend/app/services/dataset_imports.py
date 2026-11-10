@@ -180,6 +180,15 @@ class DatasetImports:
             if payload.get("target_id"):
                 require_active(db, self.dataset(db, owner, payload["target_id"]))
             else:
+                # New datasets publish into the shared catalog under a unique name.
+                from app.models.dataset import ConjuntoDatos
+                from app.services.ingestion import IngestionService, IngestionValidationError
+                try:
+                    IngestionService.validate_dataset_names(IngestionService, [payload["name"]])
+                except IngestionValidationError:
+                    reject(422, "Nombre de dataset no válido: máximo 100 caracteres, sin / \\ : * ? \" < > | ni nombres reservados.")
+                if db.query(ConjuntoDatos.id_conjunto_datos).filter_by(nombre=payload["name"]).first():
+                    reject(409, "Ya existe un dataset con ese nombre. Elige otro nombre.")
                 from app.services.dataset_import_archive import require_schema
                 require_schema(db)
                 named = db.query(ImportedDataset).filter_by(owner_id=owner, name=payload["name"]).first()

@@ -4,8 +4,12 @@
 
 La API admite trabajos durables `preview` y `confirm`; un worker separado los
  ejecuta. HTTP 202 significa admisión, no validación ni publicación terminada.
-Confirmar publica miembros y WAV locales y **no encola `sync`**. La publicación
-al inventario compartido queda para la unidad c; no se adelantan sus permisos.
+Confirmar publica miembros y WAV locales y **no encola `sync`**. El mismo trabajo
+`confirm`, después de la transacción local, publica en GCS y `conjunto_datos`,
+copia a `raw_data_dir` y asigna al importador; solo entonces termina. Si esa
+publicación falla, el trabajo queda `failed` sin cancelar la importación y su
+reintento publica lo que falta. El worker CLI crea el publicador con el bucket
+configurado.
 
 Se retiraron la subida privada a GCS, las revisiones/manifiestos de esa subida,
 la exportación ZIP y su worker, y el ledger físico `dataset_storage` con su perfil

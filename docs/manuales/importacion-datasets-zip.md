@@ -1,11 +1,30 @@
-# Importar datasets ZIP localmente
+# Importar datasets ZIP
 
 ## Alcance vigente del MVP
 
-**Importar ZIP** conserva una copia persistente local después de validar el archivo.
-No sube a GCS, prepara particiones ni inicia entrenamiento. En la unidad b,
-un ZIP confirmado localmente todavía no aparece en el inventario compartido:
-la publicación y sus permisos corresponden a la unidad c.
+**Importar ZIP** valida el archivo, conserva una copia persistente local y, al
+confirmar, publica los audios en GCS (`datasets/{dataset}/{clase}/{archivo}`) y
+en `conjunto_datos`/`audio`. Deja la copia en `raw_data_dir/{dataset}/{clase}/`
+y asigna el dataset al importador; el administrador lo asigna a los demás. No
+prepara particiones ni inicia entrenamiento.
+
+- El nombre del dataset es único en todo el catálogo: máximo 100 caracteres, sin
+  `/ \ : * ? " < > |` ni nombres reservados. Un nombre existente se rechaza con
+  409 al crear la importación, antes de subir el ZIP.
+- La publicación sube por lotes dentro de `FAMA_UPLOAD_MAX_BATCH_BYTES`
+  (256 MiB por defecto); el límite por archivo `FAMA_UPLOAD_MAX_FILE_BYTES` vale
+  por defecto 96 MiB, igual al máximo por audio del ZIP.
+- Si falla la validación o la confirmación local, la importación se cancela
+  automáticamente. Si falla la publicación en GCS, la importación sigue
+  importada con su copia local y el trabajo queda fallido: **Reintentar trabajo**
+  sube solo lo que falta, sin sobrescribir objetos.
+- Antes de subir, la publicación reserva el nombre en `conjunto_datos` y asigna
+  al importador. Si dos importaciones en curso usan el mismo nombre, la que
+  publica después falla con `name_taken` en cada reintento: crea una nueva
+  importación con otro nombre.
+- La publicación comparte el tope por intento del worker (`--execution-seconds`,
+  1800 s por defecto). Si un ZIP grande lo agota, el reintento continúa desde
+  lo ya subido.
 
 Se retiraron la subida privada, sus revisiones/manifiestos, la exportación ZIP y
 el presupuesto físico opt-in. No configurar `FAMA_IMPORT_STORAGE_PROFILE` ni

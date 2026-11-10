@@ -27,8 +27,10 @@ class ImportExecution:
     the same order as admission and reclaim. Queued jobs, not HTTP, dispatch work.
     """
 
-    def __init__(self, queue, service, staging_root, **worker_options):
+    def __init__(self, queue, service, staging_root, *, publisher=None, **worker_options):
         self.queue, self.service, self.root = queue, service, Path(staging_root)
+        # Shared-catalog publisher (IngestionService); None keeps confirmation local.
+        self.publisher = publisher
         self.worker = ImportJobWorker(queue, self.root, self.execute, import_service=service, **worker_options)
         service.attempt_root = self.root
 
@@ -199,6 +201,18 @@ class ImportExecution:
         return source, target, preview
 
     def confirm(self, attempt, staging):
+        result = self._confirm_local(attempt, staging)
+        # Network work happens after the local commit; a failure leaves the
+        # import confirmed and the job failed, and a retry replays the imported
+        # branch above, republishing only what is missing.
+        if self.publisher is not None:
+            from app.services.dataset_import_publication import publish_import
+            publish_import(self.publisher, self.queue.sessions, self.service.root, attempt["import_id"])
+        with self.queue.publication(attempt) as (db, job):
+            self.queue.complete_publication(db, job, result)
+        return result
+
+    def _confirm_local(self, attempt, staging):
         from app.services.dataset_import_receipts import release_published_receipt
         from app.services.dataset_import_cleanup import request
         # Commit the journal before any filesystem publication. A replacement
@@ -211,7 +225,6 @@ class ImportExecution:
                 result = {"added_count": source.added_count}
                 if source.dataset_id:
                     result["dataset_id"] = source.dataset_id
-                self.queue.complete_publication(db, job, result)
                 return result
             source.status = "committing"
             source.dataset_id = target.id if target else source.dataset_id or uuid.uuid4().hex
@@ -280,5 +293,4 @@ class ImportExecution:
             result = {"added_count": len(files)}
             if source.dataset_id:
                 result["dataset_id"] = source.dataset_id
-            self.queue.complete_publication(db, job, result)
         return result

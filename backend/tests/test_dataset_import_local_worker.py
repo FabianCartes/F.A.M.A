@@ -89,8 +89,10 @@ def cli_fixture(queue_store, tmp_path, monkeypatch):
     staging.mkdir(mode=0o700)
     calls = []
     class Execution:
-        def __init__(self, queue, service, path):
+        def __init__(self, queue, service, path, publisher=None):
             assert queue.allowed_kinds is None
+            from app.services.ingestion import IngestionService
+            assert isinstance(publisher, IngestionService)
         def run_once(self):
             calls.append("attempt")
             return False

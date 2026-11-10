@@ -624,7 +624,8 @@ class IngestionService:
     def get_upload_limits() -> Tuple[int, int]:
         """Read file/batch policy without accepting invalid or unbounded limits."""
         try:
-            file_limit = int(os.getenv("FAMA_UPLOAD_MAX_FILE_BYTES", str(64 * 1024 * 1024)))
+            # Default to the ZIP import audio maximum so confirmed imports publish.
+            file_limit = int(os.getenv("FAMA_UPLOAD_MAX_FILE_BYTES", str(96 * 1024 * 1024)))
             batch_limit = int(os.getenv("FAMA_UPLOAD_MAX_BATCH_BYTES", str(256 * 1024 * 1024)))
             if not 0 < file_limit <= batch_limit:
                 raise ValueError("Invalid limits")

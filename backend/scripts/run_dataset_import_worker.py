@@ -14,7 +14,7 @@ def main(argv=None):
     parser.add_argument("--cleanup-only", action="store_true",
                       help="Reclaim eligible staging only; no execution jobs, HTTP work or cloud operations.")
     parser.add_argument("--local-only", action="store_true",
-                        help="Local preview/confirm execution (also the default); compatible with existing launchers.")
+                        help="Preview/confirm execution (also the default); confirmation publishes to the shared catalog. Kept for existing launchers.")
     parser.add_argument("--watch", action="store_true",
                         help="Supervise local preview/confirm attempts or cleanup-only maintenance in the foreground; SIGINT/SIGTERM stop after the current operation.")
     parser.add_argument("--poll-seconds", type=float,
@@ -50,7 +50,9 @@ def main(argv=None):
         queue = ImportJobQueue(sessionmaker(bind=engine))
         if not args.cleanup_only:
             options = {"execution_seconds": args.execution_seconds} if args.execution_seconds is not None else {}
-            execution = ImportExecution(queue, service, staging, **options)
+            from app.services.ingestion import IngestionService
+            # Confirmed imports publish to the configured shared bucket and catalog.
+            execution = ImportExecution(queue, service, staging, publisher=IngestionService(), **options)
         stop = threading.Event() if args.watch else None
         if stop is not None:
             for number in (signal.SIGINT, signal.SIGTERM):

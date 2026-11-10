@@ -284,7 +284,7 @@ class ImportJobQueue:
             # An automatic preview keeps its kind and reviewed root on retry;
             # only an existing publication journal may bypass fresh validation.
             recovering_preview = (kind == "preview" and source.request.get("auto_import") is True
-                                  and source.status == "committing" and source.preview_token
+                                  and source.status in ("committing", "imported") and source.preview_token
                                   and summary.preview.get("staging_attempt"))
             if recovering_preview and parameters["root"] != summary.preview.get("root"):
                 _reject(422, "La recuperación debe conservar la raíz de la vista previa.")
