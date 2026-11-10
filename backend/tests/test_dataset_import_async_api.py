@@ -15,6 +15,33 @@ def uploaded(client, tmp_path):
     return source["id"]
 
 
+def test_private_sync_revision_and_export_endpoints_are_absent(imports, tmp_path):
+    from tests.test_dataset_import_api import prepare, confirm
+    client, _, _, _ = imports
+    job = prepare(client, tmp_path)
+    target = confirm(client, job).json()["dataset_id"]
+    before = client.get(f"{BASE}/{job['id']}").json()
+    catalog = client.get(f"{BASE}/datasets").json()
+    for method, path, payload in [
+        ("post", f"/{job['id']}/sync", {"request_key": "retired"}),
+        ("get", f"/datasets/{target}/revisions/1", None),
+        ("get", f"/datasets/{target}/revisions/1/manifest", None),
+        ("post", f"/datasets/{target}/revisions/1/exports", {"request_key": "retired"}),
+        ("get", f"/datasets/{target}/exports", None),
+        ("get", f"/exports/{'a' * 32}", None),
+        ("post", f"/exports/{'a' * 32}/sessions", None),
+        ("get", f"/exports/{'a' * 32}/download", None),
+        ("head", f"/exports/{'a' * 32}/download", None),
+    ]:
+        response = client.request(method, BASE + path, json=payload)
+        assert response.status_code == 404, response.text
+        if method != "head":
+            assert response.json() == {"detail": "Not Found"}
+    assert client.get(f"{BASE}/{job['id']}").json() == before
+    assert client.get(f"{BASE}/datasets").json() == catalog
+    assert client.execution.queue.active_counts(1) == {"global": 0, "owner": 0}
+
+
 def test_preview_admission_is_202_durable_idempotent_and_does_no_validation(imports, tmp_path, monkeypatch):
     from app.services import dataset_import_execution as module
     client, service, _, _ = imports

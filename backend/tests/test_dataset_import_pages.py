@@ -84,9 +84,11 @@ def test_verified_legacy_metadata_is_readable_and_extendable_without_rewriting_o
         assert snapshot(engine) == original
         migrate_metadata(engine, writers_stopped=True)
         job = client.get(f"/api/ingestion/imports/{job_id}").json()
-        assert job["preview"]["file_count"] == 1 and job["preview"]["synced_count"] == 0
+        assert job["preview"]["file_count"] == 1
+        assert "synced_count" not in job["preview"]
         member = client.get(f"/api/ingestion/imports/datasets/{dataset_id}/files").json()["files"][0]
-        assert member["relative_path"] == "birds/session/a.wav" and member["sync_status"] == "unverified"
+        assert member["relative_path"] == "birds/session/a.wav"
+        assert "sync_status" not in member
         extension = prepare(client, tmp_path, key="extension", target_id=dataset_id, sample=2)
         assert confirm(client, extension).json()["added_count"] == 1
         assert client.get(f"/api/ingestion/imports/datasets/{dataset_id}/files").json()["total"] == 2

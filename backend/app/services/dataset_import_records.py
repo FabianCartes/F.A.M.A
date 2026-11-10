@@ -74,8 +74,7 @@ def file_fields(file, root, source):
 def public_file(file):
     return dict(id=file.id, original_path=file.original_path, relative_path=file.relative_path,
                 class_name=file.class_name, sha256=file.sha256, size_bytes=file.size_bytes,
-                duplicate=getattr(file, "duplicate", False), existing=getattr(file, "existing", False),
-                sync_status=file.sync_status)
+                duplicate=getattr(file, "duplicate", False), existing=getattr(file, "existing", False))
 
 
 def replace_preview(db, row, result):

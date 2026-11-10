@@ -53,9 +53,6 @@ def test_cleanup_watch_is_foreground_local_maintenance_and_preserves_active_jobs
             return True
 
     monkeypatch.setattr(cli, "threading", SimpleNamespace(Event=Stop))
-    def no_cloud(*args, **kwargs):
-        raise AssertionError("Maintenance must not configure GCS")
-    monkeypatch.setattr("app.services.dataset_import_storage.GCSImportStorage", no_cloud)
     args += ["--cleanup-only", "--watch"]
     if poll is not None:
         args += ["--poll-seconds", str(poll)]
@@ -76,7 +73,10 @@ def test_cli_help_and_missing_arguments_do_not_connect(monkeypatch, capsys):
     with pytest.raises(SystemExit) as exit:
         main(["--help"])
     assert exit.value.code == 0
-    assert "--staging-root" in capsys.readouterr().out
+    help_text = capsys.readouterr().out
+    assert "--staging-root" in help_text
+    assert "--sync-only" not in help_text
+    assert "FAMA_IMPORT_STORAGE_PROFILE" not in help_text
     with pytest.raises(SystemExit) as exit:
         main([])
     assert exit.value.code == 2
@@ -170,7 +170,6 @@ def test_cli_execution_option_and_omission_keep_public_job_contract(
     source = uploaded(client, tmp_path)
     job = client.post(f"/api/ingestion/imports/{source}/preview",
                       json={"request_key": "execution-bound", "root": ""}).json()
-    args += ["--local-only"]
     if seconds is not None:
         args += ["--execution-seconds", str(seconds)]
     assert main(args) == 0
@@ -205,7 +204,7 @@ def test_cli_execution_bound_rejected_before_resources(
 
     monkeypatch.setattr("sqlalchemy.create_engine", forbidden)
     monkeypatch.setattr(sys, "argv", ["import-worker"])
-    args += [f"--execution-seconds={value}"] + (["--cleanup-only"] if cleanup else ["--local-only"])
+    args += [f"--execution-seconds={value}"] + (["--cleanup-only"] if cleanup else [])
     with pytest.raises(SystemExit) as exited:
         main(args)
     assert exited.value.code == 2

@@ -5,8 +5,6 @@ import fcntl
 import shutil
 import time
 import uuid
-import re
-from contextlib import ExitStack
 
 from sqlalchemy import func
 
@@ -29,8 +27,8 @@ class ImportExecution:
     the same order as admission and reclaim. Queued jobs, not HTTP, dispatch work.
     """
 
-    def __init__(self, queue, service, staging_root, *, storage=None, **worker_options):
-        self.queue, self.service, self.root, self.storage = queue, service, Path(staging_root), storage
+    def __init__(self, queue, service, staging_root, **worker_options):
+        self.queue, self.service, self.root = queue, service, Path(staging_root)
         self.worker = ImportJobWorker(queue, self.root, self.execute, import_service=service, **worker_options)
         service.attempt_root = self.root
 
@@ -57,33 +55,10 @@ class ImportExecution:
         The callback already owns its attempt flock through actual unwind. The
         worker's cooperative timeout does not release that ownership.
         """
-        from app.services.dataset_storage import physical_storage
-        with self.queue.sessions() as db, self.service.mutation(db, attempt["import_id"]), ExitStack() as locks:
-            reviewed = None
-            source = db.get(DatasetImport, attempt["import_id"])
-            summary = required_summary(db, ImportSummary, source.id)
-            name = summary.preview.get("staging_attempt", "")
-            match = re.fullmatch(r"([0-9a-f]{32})-([1-9][0-9]*)-([1-9][0-9]*)", name)
-            if (self.service.storage_policy is not None and attempt["kind"] == "confirm"
-                    and source.status == "ready" and match and not source.request.get("auto_import")):
-                from app.models.dataset_import_job import ImportJob
-                old = db.get(ImportJob, match[1])
-                if (old and old.import_id == source.id and old.kind == "preview" and old.status == "succeeded"
-                        and old.attempt == int(match[2]) and old.token == int(match[3])):
-                    fd = os.open(self.root / name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-                    locks.callback(os.close, fd)
-                    try:
-                        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                        reviewed = (f"{source.id}:{old.id}", old.attempt, old.token)
-                    except BlockingIOError:
-                        pass  # Unwinding is not death: retain charge, acquire fresh output.
-            db.rollback()
+        with self.queue.sessions() as db, self.service.mutation(db, attempt["import_id"]):
             self.queue._current(db, attempt)
             from app.services.dataset_import_cleanup import require_available
             require_available(db, attempt["import_id"])
-            physical = physical_storage(self.service, db)
-            if physical is not None:
-                physical.attempt(db, self.service, attempt, reviewed=reviewed)
             db.commit()
 
     def _execute(self, attempt, staging, report):
@@ -93,17 +68,8 @@ class ImportExecution:
         with self.queue.sessions() as db:
             persisted = db.get(ImportJob, attempt["id"])
             attempt = dict(attempt, owner_id=persisted.owner_id)
-        report(stage={"preview": "validating", "confirm": "verifying", "sync": "syncing"}[attempt["kind"]], progress=1)
-        try:
-            return {"preview": self.preview, "confirm": self.confirm, "sync": self.sync}[attempt["kind"]](attempt, staging)
-        except LeaseLost:
-            raise
-        except Exception:
-            if attempt["kind"] == "sync":
-                with self.queue.publication(attempt) as (db, _):
-                    source = self._source(db, attempt)
-                    source.sync_status, source.error = "error", "sync_failed_or_integrity_conflict"
-            raise
+        report(stage={"preview": "validating", "confirm": "verifying"}[attempt["kind"]], progress=1)
+        return {"preview": self.preview, "confirm": self.confirm}[attempt["kind"]](attempt, staging)
 
     def preview(self, attempt, staging):
         with self.queue.sessions() as db:
@@ -316,7 +282,3 @@ class ImportExecution:
                 result["dataset_id"] = source.dataset_id
             self.queue.complete_publication(db, job, result)
         return result
-
-    def sync(self, attempt, staging):
-        from app.services.dataset_import_manifests import synchronize
-        return synchronize(self, attempt, staging)

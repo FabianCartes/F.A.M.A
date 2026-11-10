@@ -31,7 +31,6 @@ def layout_api(tmp_path, monkeypatch):
     from app.services.dataset_import_execution import ImportExecution
     from app.services import dataset_import_execution
     from app.services.dataset_zip import ImportLimits, validate_zip
-    from app.models import dataset_import_revision
     from scripts.migrate_dataset_import_jobs import migrate_jobs
 
     monkeypatch.setattr(dataset_import_execution, "validate_zip", validate_zip)
@@ -128,7 +127,8 @@ def test_new_import_preserves_single_class_history_and_original_audio(layout_api
     recovered = request("GET", BASE).json()["imports"][0]
     assert recovered["preview_token"] == preview["preview_token"]
     result = operation(request, worker, source, "confirm", preview_token=recovered["preview_token"])
-    assert result["status"] == "imported" and result["added_count"] == 1 and result["sync_status"] == "pending"
+    assert result["status"] == "imported" and result["added_count"] == 1
+    assert "sync_status" not in result
     files = request("GET", f"{BASE}/datasets/{result['dataset_id']}/files").json()["files"]
     assert [(file["class_name"], file["original_path"]) for file in files] == [("chucao", "chucao/a.wav")]
     assert files[0]["sha256"] == hashlib.sha256(wav_bytes()).hexdigest()

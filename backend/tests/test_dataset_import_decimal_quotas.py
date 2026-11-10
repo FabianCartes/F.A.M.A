@@ -69,7 +69,7 @@ def test_integral_decimal_quotas_preserve_duplicate_and_manual_publication(
         final = state(request, source)
         assert final["status"] == "imported" and final["dataset_id"] == target
         assert final["added_count"] == (1 if extend else 0)
-        assert final["sync_status"] == "pending"
+        assert "sync_status" not in final
         files = request("GET", f"{base}/datasets/{target}/files").json()["files"]
         assert len(files) == (2 if extend else 1)
         downloaded = [request("GET", f"{base}/datasets/{target}/files/{file['sha256']}").content

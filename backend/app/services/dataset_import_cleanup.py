@@ -49,10 +49,6 @@ def run(service, db, *, attempt_root):
 
     # Validate the operator-owned root before claiming or changing any state.
     root = _private_root(attempt_root) if attempt_root is not None else None
-    from app.services.dataset_storage import physical_storage, _reject
-    physical = physical_storage(service, db)
-    if physical is not None and root != physical.roots["attempts"]:
-        _reject()  # A different root cannot prove that all writers have stopped.
     candidates = [identity for (identity,) in db.query(DatasetImport.id)]
     db.rollback()
     outcomes = {"completed": 0, "failed": 0}
@@ -60,8 +56,6 @@ def run(service, db, *, attempt_root):
         try:
             with service.mutation(db, identity), ExitStack() as locks:
                 _gate(db)
-                from app.services.dataset_storage import physical_storage
-                physical = physical_storage(service, db)
                 source = db.get(DatasetImport, identity)
                 summary = db.get(ImportSummary, identity)
                 current = state(db, identity)
@@ -120,17 +114,6 @@ def run(service, db, *, attempt_root):
                         _durable_directory(root)
                     _gate(db)
                     summary = db.get(ImportSummary, identity)
-                    if physical is not None:
-                        destination = service.root / "objects" / identity
-                        retained = 0
-                        if destination.is_symlink():
-                            raise OSError("Published link refused")
-                        if destination.exists():
-                            for path in destination.iterdir():
-                                if path.is_symlink() or not path.is_file():
-                                    raise OSError("Unproven retained object")
-                                retained += path.stat().st_size
-                        physical.reclaim(db, service, identity, retained)
                     summary.preview = dict(summary.preview, **{KEY: {"state": "done"}})
                     release_receipt(db, identity)
                     db.commit()

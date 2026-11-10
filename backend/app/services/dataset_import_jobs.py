@@ -94,7 +94,7 @@ class ImportJobQueue:
     def __init__(self, sessions, *, limits=None, clock=None, allowed_kinds=None):
         if allowed_kinds is not None:
             if (isinstance(allowed_kinds, str) or not allowed_kinds
-                    or not set(allowed_kinds) <= {"preview", "confirm", "sync"}):
+                    or not set(allowed_kinds) <= {"preview", "confirm"}):
                 raise ValueError("Claim kinds must be a nonempty collection of known job kinds")
             allowed_kinds = frozenset(allowed_kinds)
         self.sessions = sessions
@@ -117,7 +117,7 @@ class ImportJobQueue:
         with self.sessions() as db, db.begin():
             _gate(db)
             now = self._now(db)
-            query = select(ImportJob).where(or_(
+            query = select(ImportJob).where(ImportJob.kind.in_(("preview", "confirm")), or_(
                 ImportJob.status == "queued",
                 (ImportJob.status == "running") & (ImportJob.lease_until <= now)
             ))
@@ -180,7 +180,7 @@ class ImportJobQueue:
             row.heartbeat_at, row.updated_at = now, now
 
     def progress(self, attempt, *, stage, progress):
-        if stage not in ("running", "validating", "verifying", "syncing", "prepared"):
+        if stage not in ("running", "validating", "verifying", "prepared"):
             raise ValueError("Invalid execution stage")
         if type(progress) is not int or not 0 <= progress <= 99:
             raise ValueError("Invalid execution progress")
@@ -194,7 +194,7 @@ class ImportJobQueue:
         if error not in (None, "execution_failed", "execution_timeout", "staging_failed"):
             raise ValueError("Invalid execution error")
         result = {} if result is None else result
-        if not isinstance(result, dict) or set(result) - {"dataset_id", "dataset_revision", "added_count", "synced_count"}:
+        if not isinstance(result, dict) or set(result) - {"dataset_id", "dataset_revision", "added_count"}:
             raise ValueError("Invalid execution result")
         for key, value in result.items():
             if key == "dataset_id":
@@ -225,14 +225,14 @@ class ImportJobQueue:
                 db.commit()  # Keep mutation ownership through terminal commit.
 
     def admit(self, owner, import_id, kind, request_key, parameters):
-        if kind not in ("preview", "confirm", "sync"):
+        if kind not in ("preview", "confirm"):
             _reject(422, "Tipo de trabajo no válido.")
         if (not isinstance(request_key, str) or not 1 <= len(request_key) <= 100
                 or not request_key.isascii() or not all(c.isalnum() or c in "-_.:" for c in request_key)):
             _reject(422, "Identidad de operación no válida.")
         if not isinstance(parameters, dict):
             _reject(422, "Parámetros de trabajo no válidos.")
-        expected_keys = {"preview": {"root"}, "confirm": {"preview_token"}, "sync": set()}[kind]
+        expected_keys = {"preview": {"root"}, "confirm": {"preview_token"}}[kind]
         if set(parameters) != expected_keys:
             _reject(422, "Parámetros de trabajo no válidos.")
         if kind == "preview" and (not isinstance(parameters["root"], str) or len(parameters["root"]) > 240):
@@ -315,8 +315,6 @@ class ImportJobQueue:
                             not target_id and other.request["name"] == source.request["name"] or
                             db.get(ImportSummary, other.id).fingerprint == summary.fingerprint):
                         _reject(409, "Hay una confirmación pendiente de recuperación para este destino. Reinténtala primero.")
-            if kind == "sync" and (source.status != "imported" or not source.dataset_id):
-                _reject(409, "Confirma una importación con contenido antes de sincronizar.")
             global_count, owner_count = self._counts(db, owner)
             if global_count >= self.limits.global_active or owner_count >= self.limits.owner_active:
                 _reject(429, "Se alcanzó el límite de trabajos activos.")

@@ -159,40 +159,6 @@ def test_cleanup_protects_queued_and_recoverable_work_and_is_not_triggered_by_ht
     assert (service.root / "staging" / source["id"] / "archive.zip").is_file()
 
 
-def test_sync_rechecks_previously_synced_content_and_keeps_network_outside_publication(imports, tmp_path):
-    client, service, _, _ = imports
-    source = prepare(client, tmp_path)
-    queue, execution = executor(imports, tmp_path)
-    confirmation = queue.admit(1, source["id"], "confirm", "confirm", {"preview_token": source["preview_token"]})
-    assert execution.run_once()
-    dataset = queue.get(1, confirmation["id"])["result"]["dataset_id"]
-
-    class Storage:
-        calls = 0
-
-        def ensure(self, *args):
-            self.calls += 1
-            # Claim needs the gate: a held publication transaction would block
-            # or corrupt this independent operation on the synthetic DB.
-            assert queue.claim(lease_seconds=10) is None
-            assert client.get(f"/api/ingestion/imports/datasets/{dataset}/files").status_code == 200
-            return "generation-1"
-
-        def ensure_manifest(self, *args):
-            assert queue.claim(lease_seconds=10) is None
-            return "manifest-generation-1"
-
-    storage = execution.storage = Storage()
-    first = queue.admit(1, source["id"], "sync", "sync-1", {})
-    assert execution.run_once()
-    assert queue.get(1, first["id"])["status"] == "succeeded"
-    assert storage.calls == 1
-    second = queue.admit(1, source["id"], "sync", "sync-2", {})
-    assert execution.run_once()
-    assert queue.get(1, second["id"])["status"] == "succeeded"
-    assert storage.calls == 2
-
-
 def test_http_cancel_and_upload_cannot_delete_or_replace_active_source(imports, tmp_path):
     client, service, _, _ = imports
     source = prepare(client, tmp_path)

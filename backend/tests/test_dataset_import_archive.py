@@ -2,7 +2,6 @@
 from tests.test_dataset_import_api import imports, prepare, confirm
 import pytest
 from types import SimpleNamespace
-from tests.test_dataset_exports import exported_source
 
 
 def test_archive_hides_catalog_but_preserves_files_and_history(imports, tmp_path):
@@ -33,23 +32,6 @@ def test_archive_hides_catalog_but_preserves_files_and_history(imports, tmp_path
         summary = db.get(DatasetSummary, row.id)
         assert row.archived is True and row.revision == dataset['revision']
         assert (summary.file_count, summary.total_size_bytes) == (dataset['file_count'], dataset['total_size_bytes'])
-
-
-def test_archive_keeps_remote_objects_and_admitted_export(exported_source, tmp_path):
-    from copy import deepcopy
-    from tests.test_dataset_exports import admit
-    from app.services.dataset_exports import ExportQueue, ExportExecution
-    client, service, _, sessions, storage, dataset_id, _ = exported_source
-    admitted = admit(client, dataset_id)
-    before = deepcopy(storage.objects)
-    url = f'/api/ingestion/imports/datasets/{dataset_id}'
-    assert client.request('DELETE', url, json={'revision': 1}).status_code == 204
-    assert storage.objects == before
-    assert client.post(url + '/revisions/1/exports', json={'request_key': 'new'}).status_code == 409
-    assert client.post(url + '/revisions/1/exports', json={'request_key': 'export-1'}).json() == admitted
-    assert ExportExecution(ExportQueue(sessions, service), tmp_path / 'exports', storage=storage).run_once()
-    assert client.get(admitted['status_url']).json()['status'] == 'succeeded'
-    assert storage.objects == before
 
 
 def test_archive_commit_failure_rolls_back_and_retry_succeeds(imports, tmp_path, monkeypatch):

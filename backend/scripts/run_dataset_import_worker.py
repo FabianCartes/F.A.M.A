@@ -7,26 +7,21 @@ import threading
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__, epilog="FAMA_IMPORT_STORAGE_PROFILE optionally selects an existing physical JSON profile; no activation or migration.")
+    parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--database-url", required=True, help="Explicit migrated database; no ambient URL or migration.")
     parser.add_argument("--import-root", required=True, help="Existing private physical absolute import root shared with the API.")
     parser.add_argument("--staging-root", required=True, help="Existing private attempt root, stable across restarts, on the same filesystem.")
-    mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--cleanup-only", action="store_true",
+    parser.add_argument("--cleanup-only", action="store_true",
                       help="Reclaim eligible staging only; no execution jobs, HTTP work or cloud operations.")
-    mode.add_argument("--local-only", action="store_true",
-                      help="Claim preview/confirm only, leaving queued and expired sync jobs unchanged; no cloud storage.")
-    mode.add_argument("--sync-only", action="store_true",
-                      help="Claim sync only, leaving queued and expired preview/confirm jobs unchanged; requires explicit GCS configuration.")
+    parser.add_argument("--local-only", action="store_true",
+                        help="Local preview/confirm execution (also the default); compatible with existing launchers.")
     parser.add_argument("--watch", action="store_true",
-                        help="Supervise local-only/sync-only attempts or cleanup-only maintenance in the foreground; SIGINT/SIGTERM stop after the current operation.")
+                        help="Supervise local preview/confirm attempts or cleanup-only maintenance in the foreground; SIGINT/SIGTERM stop after the current operation.")
     parser.add_argument("--poll-seconds", type=float,
                         help="Wait between watch operations (finite 1–3600 seconds; default 3600 for cleanup-only, 2 for execution).")
     parser.add_argument("--execution-seconds", type=float,
                         help="Per-attempt cooperative execution bound in seconds (finite >0 and <=3600; default 1800). Does not change the lease, validator or HTTP timeout.")
     args = parser.parse_args(argv)
-    if args.watch and not (args.local_only or args.sync_only or args.cleanup_only):
-        parser.error("--watch requires --local-only or --sync-only or --cleanup-only")
     if args.poll_seconds is not None and (not args.watch or not math.isfinite(args.poll_seconds)
                                           or not 1 <= args.poll_seconds <= 3600):
         parser.error("--poll-seconds requires --watch and a finite value between 1 and 3600")
@@ -45,22 +40,17 @@ def main(argv=None):
         from app.services.dataset_import_execution import ImportExecution
         from app.services.dataset_import_jobs import ImportJobQueue
         from app.services.dataset_import_worker import _private_root
-        from app.services.dataset_storage_runtime import runtime_import_service
+        from app.services.dataset_imports import DatasetImports
 
         root, staging = _private_root(args.import_root), _private_root(args.staging_root)
         if root.stat().st_dev != staging.stat().st_dev:
             raise ValueError("Publication requires the same filesystem")
-        service = runtime_import_service(root, attempt_root=staging)
+        service = DatasetImports(root)
         engine = create_engine(normalize_database_url(args.database_url))
-        allowed_kinds = ("preview", "confirm") if args.local_only else ("sync",) if args.sync_only else None
-        queue = ImportJobQueue(sessionmaker(bind=engine), allowed_kinds=allowed_kinds)
+        queue = ImportJobQueue(sessionmaker(bind=engine))
         if not args.cleanup_only:
-            storage = None
-            if not args.local_only:
-                from app.services.dataset_import_storage import GCSImportStorage
-                storage = GCSImportStorage()
             options = {"execution_seconds": args.execution_seconds} if args.execution_seconds is not None else {}
-            execution = ImportExecution(queue, service, staging, storage=storage, **options)
+            execution = ImportExecution(queue, service, staging, **options)
         stop = threading.Event() if args.watch else None
         if stop is not None:
             for number in (signal.SIGINT, signal.SIGTERM):

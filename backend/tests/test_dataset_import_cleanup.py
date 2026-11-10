@@ -74,7 +74,7 @@ def test_failed_deletion_blocks_new_work_and_is_retryable_without_failing_succes
         with sessions() as db:
             assert service.cleanup(db, attempt_root=client.execution.root) == {"completed": 0, "failed": 1}
     assert client.get(url).json() == published
-    assert client.post(url + "/sync", json={"request_key": "during-delete"}).status_code == 409
+    assert client.post(url + "/sync", json={"request_key": "during-delete"}).status_code == 404
     assert client.post(url + "/confirm", json={"request_key": "during-delete",
         "preview_token": source["preview_token"]}).status_code == 409
     with sessions() as db:

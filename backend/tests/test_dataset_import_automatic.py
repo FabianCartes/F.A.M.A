@@ -123,7 +123,8 @@ def test_valid_archive_publishes_automatically_only_when_authorized(layout_api, 
         assert request("GET", confirmation["status_url"]).json()["status"] == "succeeded"
         result = state(request, source)
     assert result["status"] == "imported"
-    assert result["added_count"] == 1 and result["sync_status"] == "pending"
+    assert result["added_count"] == 1
+    assert "sync_status" not in result
     assert result["preview"]["warning_count"] > 0  # Small classes are not errors.
     dataset = result["dataset_id"]
     files = request("GET", f"{BASE}/datasets/{dataset}/files").json()["files"]
@@ -198,7 +199,7 @@ def test_publication_retries_after_rename_preserving_automatic_and_manual_author
     assert finished["result"] == {"dataset_id": recovered["dataset_id"], "added_count": 1}
     assert recovered["dataset_id"] == journal["dataset_id"]
     assert recovered["preview_token"] == journal["preview_token"]
-    assert recovered["sync_status"] == "pending"
+    assert "sync_status" not in recovered
     assert request("GET", f"{BASE}/{source}/receipt").json()["reserved_bytes"] == 0
     catalog = request("GET", BASE + "/datasets").json()["datasets"]
     assert [(d["revision"], d["file_count"]) for d in catalog] == [(1, 1)]

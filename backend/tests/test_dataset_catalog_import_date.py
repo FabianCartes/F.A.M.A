@@ -33,7 +33,7 @@ def test_catalog_keeps_first_successful_import_date_after_more_audio(imports, tm
     dataset = response.json()['datasets'][0]
     assert dataset['imported_at'] == 1700000000
     assert dataset['file_count'] == 2
-    assert dataset['synced_file_count'] == 0
+    assert 'synced_file_count' not in dataset
     assert dataset['revision'] == 2
     assert client.get('/api/ingestion/imports/datasets').json() == response.json()
 

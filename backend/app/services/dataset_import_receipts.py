@@ -63,14 +63,10 @@ def reserve_receipt(service, db, owner, import_id, *, name, size_bytes):
         _gate(db)
         from app.services.dataset_import_cleanup import require_available
         require_available(db, import_id)
-        from app.services.dataset_storage import physical_storage
-        physical = physical_storage(service, db)
         prior = db.get(ImportReceipt, import_id)
         if prior is not None:
             if prior.name != name or prior.size_bytes != size_bytes or source.status == "cancelled":
                 reject(409, "La recepción ya existe con otros parámetros o fue cancelada.")
-            if physical is not None:
-                physical.require(db, service, import_id, "archive", size_bytes)
             return _view(prior)
         from app.services.dataset_import_archive import require_import_active
         require_import_active(db, source)
@@ -102,8 +98,6 @@ def reserve_receipt(service, db, owner, import_id, *, name, size_bytes):
                 raise ValueError
         except ValueError:
             reject(503, "La configuración de fragmentos no es válida.")
-        if physical is not None:
-            physical.initial(db, service, import_id, size_bytes)
         row = ImportReceipt(import_id=import_id, name=name, size_bytes=size_bytes,
             reserved_bytes=promise, reservation_active=True, received_bytes=0,
             chunk_bytes=chunk_bytes, status="receiving")

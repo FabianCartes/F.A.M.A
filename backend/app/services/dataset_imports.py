@@ -48,14 +48,9 @@ def _durable_directory(path):
 
 
 class DatasetImports:
-    def __init__(self, root, *, limits=None, storage_policy=None):
+    def __init__(self, root, *, limits=None):
         self.root = Path(root)
         self.limits = limits or ImportLimits.from_environment()
-        self.storage_policy = storage_policy
-        if storage_policy is not None:
-            # Receipt can precede construction of the worker. Never infer a
-            # different attempt root or fail with AttributeError in that order.
-            self.attempt_root = storage_policy.roots["attempts"]
 
     def _initialize(self):
         if not self.root.is_absolute() or self.root != self.root.resolve():
@@ -77,8 +72,6 @@ class DatasetImports:
 
     @contextmanager
     def mutation(self, db, key=None):
-        from app.services.dataset_storage import physical_storage
-        physical_storage(self, db)  # Fail closed before even creating lock files.
         self._initialize()
         lock_name = "mutation.lock" if key is None else "import-" + hashlib.sha256(key.encode()).hexdigest() + ".lock"
         fd = os.open(self.root / lock_name, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
@@ -128,12 +121,6 @@ class DatasetImports:
         _gate(db)
         from app.services.dataset_import_cleanup import require_available
         require_available(db, import_id)
-        from app.services.dataset_storage import physical_storage, _reject
-        physical = physical_storage(self, db)
-        if physical is not None and not allow_unreserved:
-            from app.services.dataset_import_receipts import has_receipt
-            if not has_receipt(db, import_id):
-                _reject()  # The legacy whole-body route has no physical envelope.
         if db.query(ImportJob.id).filter(ImportJob.import_id == import_id, ImportJob.status.in_(ACTIVE)).first():
             reject(409, "La importación tiene un trabajo activo. Consulta su estado antes de modificarla.")
 
@@ -165,14 +152,14 @@ class DatasetImports:
             job = db.get(ImportJob, execution_id)
             if job and job.import_id == row.id and job.owner_id == row.owner_id:
                 execution = public_job(_snapshot(job))
-        preview["synced_count"] = db.query(func.count(func.distinct(ImportFile.sha256))).filter(
-            ImportFile.import_id == row.id, ImportFile.sync_status == "synced").scalar()
+        preview.pop("synced_count", None)
+        preview.pop("sync_files", None)
         from sqlalchemy import inspect
         from app.models.dataset_import_receipt import ImportReceipt
         receipt_name = (db.query(ImportReceipt.name).filter_by(import_id=row.id).scalar()
                         if inspect(db.get_bind()).has_table(ImportReceipt.__tablename__) else None)
         return {"id": row.id, "archive_name": receipt_name, "created_at": row.created_at,
-                "status": row.status, "sync_status": row.sync_status,
+                "status": row.status,
                 "dataset_id": row.dataset_id, "added_count": row.added_count,
                 "preview_token": row.preview_token, "preview": preview,
                 "error": row.error, "execution": execution,
@@ -213,8 +200,6 @@ class DatasetImports:
             return self.view(row)
 
     def space(self, amount=0):
-        if self.storage_policy is not None:
-            self.storage_policy.check_free("imports", amount)
         if shutil.disk_usage(self.root).free < self.limits.free_bytes:
             reject(507, "Espacio disponible insuficiente. Libera espacio o consulta al administrador.")
 
@@ -232,25 +217,11 @@ class DatasetImports:
         result = page(db.query(ImportedDataset).filter_by(owner_id=owner, archived=False), ImportedDataset.id,
                       scope=f"datasets:{owner}", snapshot="catalog", key="datasets", serialize=serialize, **pagination)
         ids = [dataset["id"] for dataset in result["datasets"]]
-        # Upload acknowledgements belong to the original import, not later
-        # duplicate previews. Restrict to published membership for this page.
-        synced = dict(db.query(DatasetMember.dataset_id, func.count(func.distinct(DatasetMember.id)))
-            .join(ImportedDataset, ImportedDataset.id == DatasetMember.dataset_id)
-            .join(ImportFile, (ImportFile.import_id == DatasetMember.source_import_id)
-                  & (ImportFile.source_import_id == DatasetMember.source_import_id)
-                  & (ImportFile.sha256 == DatasetMember.sha256))
-            .join(DatasetImport, DatasetImport.id == ImportFile.import_id)
-            .filter(ImportedDataset.owner_id == owner, DatasetImport.owner_id == owner,
-                    DatasetMember.dataset_id.in_(ids),
-                    DatasetMember.dataset_revision <= ImportedDataset.revision,
-                    ImportFile.sync_status == "synced")
-            .group_by(DatasetMember.dataset_id).all()) if ids else {}
         imported_at = dict(db.query(DatasetImport.dataset_id, func.min(DatasetImport.created_at))
             .filter(DatasetImport.owner_id == owner, DatasetImport.dataset_id.in_(ids),
                     DatasetImport.status == "imported", DatasetImport.added_count > 0)
             .group_by(DatasetImport.dataset_id).all()) if ids else {}
         for dataset in result["datasets"]:
-            dataset["synced_file_count"] = synced.get(dataset["id"], 0)
             dataset["imported_at"] = imported_at.get(dataset["id"])
         return result
 

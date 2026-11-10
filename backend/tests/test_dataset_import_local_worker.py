@@ -40,15 +40,14 @@ def seed(sessions, kind, number, *, expired=False):
 
 
 @pytest.mark.parametrize("expired", [False, True])
-def test_local_claim_skips_cloud_without_mutating_it(queue_store, expired):
+def test_default_claim_skips_retired_jobs_without_mutating_them(queue_store, expired):
     from app.services.dataset_import_jobs import ImportJobQueue
 
     _, sessions = queue_store
     cloud = seed(sessions, "sync", 1, expired=expired)
     preview = seed(sessions, "preview", 2)
     confirm = seed(sessions, "confirm", 3)
-    queue = ImportJobQueue(sessions, clock=lambda: 100,
-                           allowed_kinds=("preview", "confirm"))
+    queue = ImportJobQueue(sessions, clock=lambda: 100)
     before = queue.get(1, cloud)
     assert queue.claim(lease_seconds=60)["id"] == preview
     assert queue.claim(lease_seconds=60)["id"] == confirm
@@ -56,11 +55,11 @@ def test_local_claim_skips_cloud_without_mutating_it(queue_store, expired):
     assert queue.get(1, cloud) == before
 
 
-def test_default_queue_still_claims_cloud_and_preserves_fencing(queue_store):
+def test_default_queue_reclaims_local_work_and_preserves_fencing(queue_store):
     from app.services.dataset_import_jobs import ImportJobQueue
 
     _, sessions = queue_store
-    identity = seed(sessions, "sync", 1, expired=True)
+    identity = seed(sessions, "preview", 1, expired=True)
     queue = ImportJobQueue(sessions, clock=lambda: 100)
     attempt = queue.claim(lease_seconds=60)
     assert attempt["id"] == identity
@@ -68,7 +67,7 @@ def test_default_queue_still_claims_cloud_and_preserves_fencing(queue_store):
     assert attempt["lease_until"] == 160
 
 
-@pytest.mark.parametrize("invalid", [(), ("unknown",), "preview"])
+@pytest.mark.parametrize("invalid", [(), ("unknown",), ("sync",), "preview"])
 def test_invalid_claim_filter_is_rejected_before_database_access(invalid):
     from app.services.dataset_import_jobs import ImportJobQueue
 
@@ -78,9 +77,9 @@ def test_invalid_claim_filter_is_rejected_before_database_access(invalid):
         ImportJobQueue(forbidden, allowed_kinds=invalid)
 
 
-def cli_fixture(queue_store, tmp_path, monkeypatch, *, local):
+def cli_fixture(queue_store, tmp_path, monkeypatch):
     from scripts import run_dataset_import_worker as cli
-    from app.services import dataset_import_execution, dataset_import_storage
+    from app.services import dataset_import_execution
 
     engine, _ = queue_store
     monkeypatch.setattr("sqlalchemy.create_engine", lambda *args, **kwargs: engine)
@@ -90,27 +89,22 @@ def cli_fixture(queue_store, tmp_path, monkeypatch, *, local):
     staging.mkdir(mode=0o700)
     calls = []
     class Execution:
-        def __init__(self, queue, service, path, *, storage):
-            assert queue.allowed_kinds == (frozenset(("preview", "confirm")) if local else None)
-            assert (storage is None) is local
+        def __init__(self, queue, service, path):
+            assert queue.allowed_kinds is None
         def run_once(self):
             calls.append("attempt")
             return False
     monkeypatch.setattr(dataset_import_execution, "ImportExecution", Execution)
-    if local:
-        def forbidden(*args, **kwargs):
-            raise AssertionError("Local mode must not construct cloud storage")
-        monkeypatch.setattr(dataset_import_storage, "GCSImportStorage", forbidden)
     args = ["--database-url", "sqlite://", "--import-root", str(root),
             "--staging-root", str(staging)]
     return cli, args, calls
 
 
-@pytest.mark.parametrize("local", [False, True])
+@pytest.mark.parametrize("options", [[], ["--local-only"]])
 def test_cli_one_attempt_keeps_existing_output_and_local_storage_contract(
-        queue_store, tmp_path, monkeypatch, capsys, local):
-    cli, args, calls = cli_fixture(queue_store, tmp_path, monkeypatch, local=local)
-    assert cli.main(args + (["--local-only"] if local else [])) == 0
+        queue_store, tmp_path, monkeypatch, capsys, options):
+    cli, args, calls = cli_fixture(queue_store, tmp_path, monkeypatch)
+    assert cli.main(args + options) == 0
     assert calls == ["attempt"]
     assert json.loads(capsys.readouterr().out) == {"claimed": False}
 
@@ -119,7 +113,7 @@ def test_watch_waits_and_restores_signal_handlers(queue_store, tmp_path, monkeyp
     import signal
     import threading
 
-    cli, args, calls = cli_fixture(queue_store, tmp_path, monkeypatch, local=True)
+    cli, args, calls = cli_fixture(queue_store, tmp_path, monkeypatch)
     handlers = []
     monkeypatch.setattr(signal, "signal", lambda number, handler: handlers.append((number, handler)) or "old")
     class Stop:
@@ -129,18 +123,18 @@ def test_watch_waits_and_restores_signal_handlers(queue_store, tmp_path, monkeyp
             calls.append(("wait", seconds))
             return True
     monkeypatch.setattr(threading, "Event", Stop)
-    assert cli.main(args + ["--local-only", "--watch", "--poll-seconds", "3"]) == 0
+    assert cli.main(args + ["--watch", "--poll-seconds", "3"]) == 0
     assert calls == ["attempt", ("wait", 3)]
     assert json.loads(capsys.readouterr().out) == {"claimed": False}
     assert handlers[-2:] == [(signal.SIGINT, "old"), (signal.SIGTERM, "old")]
 
 
 @pytest.mark.parametrize("options", [
-    ["--watch"], ["--poll-seconds", "2"],
-    ["--watch", "--local-only", "--poll-seconds", "nan"],
-    ["--watch", "--local-only", "--poll-seconds", "0"],
-    ["--watch", "--local-only", "--poll-seconds", "3601"],
-    ["--local-only", "--cleanup-only"],
+    ["--sync-only"], ["--poll-seconds", "2"],
+    ["--watch", "--poll-seconds", "nan"],
+    ["--watch", "--poll-seconds", "0"],
+    ["--watch", "--poll-seconds", "3601"],
+    ["--watch", "--poll-seconds", "inf"],
 ])
 def test_invalid_watch_configuration_never_opens_database(monkeypatch, options):
     from scripts.run_dataset_import_worker import main

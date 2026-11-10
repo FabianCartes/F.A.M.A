@@ -2,7 +2,7 @@
 import threading
 import hashlib
 
-from tests.test_dataset_import_api import imports, prepare, confirm, operation
+from tests.test_dataset_import_api import imports, prepare, confirm
 from tests.test_dataset_import_receipts import dump
 
 BASE = "/api/ingestion/imports"
@@ -44,32 +44,6 @@ def test_retry_preserves_attempt_root_fsync_obligation_after_last_directory_disa
     assert cleanup(client, service, sessions) == {"completed": 1, "failed": 0}
     assert cleanup(client, service, sessions) == {"completed": 0, "failed": 0}
     assert client.get(BASE + "/" + source["id"]).json() == published
-
-
-def test_failed_sync_after_completed_cleanup_is_reclaimed(imports, tmp_path):
-    from app.routes.dataset_imports import get_import_storage
-
-    client, service, app, sessions = imports
-    source = prepare(client, tmp_path)
-    published = confirm(client, source).json()
-    cleanup(client, service, sessions)
-    old = set(client.execution.root.iterdir())
-
-    class UnavailableObjects:
-        def ensure(self, *args):
-            raise RuntimeError("synthetic storage unavailable")
-
-    app.dependency_overrides[get_import_storage] = lambda: UnavailableObjects()
-    failed = operation(client, source["id"], "sync").json()
-    assert failed["status"] == "failed"
-    new = set(client.execution.root.iterdir()) - old
-    assert len(new) == 1
-    url = BASE + "/datasets/" + published["dataset_id"] + "/files"
-    before = client.get(url).content
-    cleanup(client, service, sessions)
-    assert client.get(BASE + "/" + source["id"]).json()["status"] == "imported"
-    assert client.get(url).content == before
-    assert not any(path.exists() for path in new)
 
 
 def test_timed_out_callback_protects_files_until_it_stops(imports, tmp_path, monkeypatch):

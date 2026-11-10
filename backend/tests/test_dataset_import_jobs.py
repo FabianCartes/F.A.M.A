@@ -23,6 +23,22 @@ def queue_fixture(imports, *, global_limit=4, owner_limit=1):
     return queue, row["id"]
 
 
+def test_sync_admission_is_rejected_without_changing_local_import_or_capacity(imports, tmp_path):
+    from tests.test_dataset_import_api import prepare, confirm
+    from app.services.dataset_import_jobs import ImportJobQueue
+    client, _, _, sessions = imports
+    source = confirm(client, prepare(client, tmp_path)).json()
+    queue = ImportJobQueue(sessions)
+    catalog = client.get("/api/ingestion/imports/datasets").json()
+    with pytest.raises(HTTPException) as error:
+        queue.admit(1, source["id"], "sync", "retired", {})
+    assert error.value.status_code == 422
+    assert error.value.detail == "Tipo de trabajo no válido."
+    assert client.get(f"/api/ingestion/imports/{source['id']}").json() == source
+    assert client.get("/api/ingestion/imports/datasets").json() == catalog
+    assert queue.active_counts(1) == {"global": 0, "owner": 0}
+
+
 def test_identical_admission_returns_one_job_and_conflict_changes_nothing(imports):
     queue, import_id = queue_fixture(imports)
     first = queue.admit(1, import_id, "preview", "operation-1", {"root": "birds"})
