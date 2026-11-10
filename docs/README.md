@@ -23,6 +23,10 @@ La documentación está organizada temáticamente en subdirectorios especializad
 
 ---
 
+## Integración de afinamiento integral en `mvp` — etapa a
+
+- [Etapa a: consolidación de sesión por cookie](./arquitectura/integracion-mvp-sesion-cookie-plan.md) y [recibo de verificación](./receipts/integracion-mvp-a.json): implementación a1/a2 aplicada y cierre funcional limitado aceptado por el usuario, conservando los problemas de exportación y la prueba independiente parcial. Incluye comparación frontend base/candidato; no equivale a suite global verde ni aprobación técnica integral. Entrega local organizada en commits encadenados sobre `fix/mvp-cookie-session`, sin push ni PR.
+
 ## Consolidación Git del MVP local
 
 - [Alcance del MVP y consolidación actual](./arquitectura/mvp-scope-consolidation.md) y [evidencia de los cortes](./receipts/mvp-source-consolidation.json): límites funcionales y commits locales autorizados en los pasos 1–2; no incluye receta portable, reproducción desde cero ni despliegue.
@@ -34,7 +38,7 @@ La documentación está organizada temáticamente en subdirectorios especializad
 ## Acceso web
 
 - [Entrada y recuperación de sesión](./manuales/acceso-web.md) y [plan](./arquitectura/login-only-access-plan.md) y [recibo](./receipts/login-only-access.json): guardia central del workspace, login obligatorio y errores con reintento; no sustituye la autorización de las APIs.
-- [Contratos de sesión web](./manuales/sesion-web-importados.md): cookies, Bearer y configuración del backend conservados.
+- [Contratos de sesión web](./manuales/sesion-web-importados.md): sesión única por cookie, configuración conservada y aislamiento por propietario.
 
 ## Ensamble de tres modelos — implementación local
 
@@ -186,7 +190,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`22_propuesta_vista_ayuda_y_centro_de_conocimiento.md`](./arquitectura/22_propuesta_vista_ayuda_y_centro_de_conocimiento.md): Diseño y especificación del centro de conocimiento e interactividad en frontend.
 
 ### 4. [`docs/manuales/`](./manuales/) — Manuales y Guías Operativas
-* [`sesion-web-importados.md`](./manuales/sesion-web-importados.md): Sesión web revocable compatible con Bearer, propiedad exacta para importados y migración explícita; decisión en [ADR 0054](./adr/0054-sesion-web-compatible-con-bearer-importados.md), sin barrera global legacy ni operación real.
+* [`sesion-web-importados.md`](./manuales/sesion-web-importados.md): Sesión web revocable por cookie, propiedad exacta para importados y configuración vigente; el [ADR 0054](./adr/0054-sesion-web-compatible-con-bearer-importados.md) conserva la decisión histórica de compatibilidad Bearer, sustituida en la etapa a. Sin operación real.
 * [`entrenamiento-datasets-importados.md`](./manuales/entrenamiento-datasets-importados.md): Contratos T3 y T4: catálogo/start por propietario, snapshot/preparación y UI explícita con perfil fijado y estados veraces; [evidencia T4](./receipts/imported-training-t4-verification.json), cierre funcional `e6ccade`, navegador sintético e independiente acotado aprobados, prerrequisito individual previo incluido con autorización. Sin operación real ni evaluación/publicación T5.
 * [`preparacion-datasets-importados.md`](./manuales/preparacion-datasets-importados.md): T2, preparación inmutable por snapshot con grupos/perfil explícitos, cobertura y advertencias; [evidencia T2](./receipts/imported-training-t2-verification.json), límites y exclusiones, sin admisión ni entrenamiento.
 * [`snapshots-locales-entrenamiento.md`](./manuales/snapshots-locales-entrenamiento.md): Servicio local T1 por propietario/ID, esquema aditivo explícito, integridad y persistencia; [evidencia sintética T1](./receipts/imported-training-t1-verification.json) y límites, sin endpoint ni entrenamiento real.

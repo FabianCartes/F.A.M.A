@@ -1,0 +1,2348 @@
+{
+  "stage": "a",
+  "status": "functional_closure_accepted_with_known_failures",
+  "base_commit": "3ab6b45",
+  "branch": "fix/mvp-cookie-session",
+  "risk": {
+    "item": 2,
+    "reason": "Autenticación y permisos"
+  },
+  "backend": {
+    "runner": "backend/tests/run_isolated_training_checks.py",
+    "environment": {
+      "python": "3.14.8",
+      "PYTHONDONTWRITEBYTECODE": "1",
+      "PYTHON_DOTENV_DISABLED": "1",
+      "DATABASE_URL": "sqlite://",
+      "CUDA_VISIBLE_DEVICES": "",
+      "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1"
+    },
+    "command_options": "-q -o addopts='' --maxfail=0",
+    "modules": [
+      "tests/test_imported_model_access.py",
+      "tests/test_model_catalogue_prewarm.py",
+      "tests/test_cookie_identity.py",
+      "tests/test_web_sessions.py",
+      "tests/test_web_session_integration.py",
+      "tests/test_api_auth.py",
+      "tests/test_jwt_validation.py",
+      "tests/test_auth_service.py",
+      "tests/test_auth_configuration.py",
+      "tests/test_imported_training_persistence.py",
+      "tests/test_imported_training_admission.py",
+      "tests/test_imported_training_revision_admission.py",
+      "tests/test_imported_feedback_api.py",
+      "tests/test_imported_training_preparation_api.py",
+      "tests/test_imported_training_triad.py",
+      "tests/test_imported_triad_registry.py",
+      "tests/test_api_training.py",
+      "tests/test_private_prediction_history.py",
+      "tests/test_dataset_exports.py",
+      "tests/test_dataset_import_dev_mode.py",
+      "tests/test_web_imported_training.py"
+    ],
+    "passed": 287,
+    "failed": 31,
+    "proof": {
+      "phase": "isolated_training_fixture_consumer_suite",
+      "process_exit_code": 1,
+      "pytest_exit_code": 1,
+      "deselected_cases": [],
+      "status": "failed",
+      "guard_before_collection_fixtures_and_body": true,
+      "phase_deadline_seconds": 30,
+      "call_reports": [
+        {
+          "nodeid": "tests/test_imported_model_access.py::test_imported_http_catalogue_is_opt_in_and_owner_private",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 1.542
+        },
+        {
+          "nodeid": "tests/test_imported_model_access.py::test_evaluated_imported_model_cannot_be_globally_activated",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.708
+        },
+        {
+          "nodeid": "tests/test_imported_model_access.py::test_public_legacy_activation_preserves_real_weight_loading",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.274
+        },
+        {
+          "nodeid": "tests/test_imported_model_access.py::test_imported_http_predict_is_private_and_persists_locally_without_gcs[canonical]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 1.101
+        },
+        {
+          "nodeid": "tests/test_imported_model_access.py::test_imported_http_predict_is_private_and_persists_locally_without_gcs[numeric]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.791
+        },
+        {
+          "nodeid": "tests/test_imported_model_access.py::test_imported_http_predict_is_private_and_persists_locally_without_gcs[filename]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.752
+        },
+        {
+          "nodeid": "tests/test_imported_model_access.py::test_imported_http_predict_is_private_and_persists_locally_without_gcs[stem]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.772
+        },
+        {
+          "nodeid": "tests/test_imported_model_access.py::test_cached_public_legacy_keeps_db_failure_after_real_inference",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.256
+        },
+        {
+          "nodeid": "tests/test_imported_model_access.py::test_imported_predict_cookie_credentials_and_origin",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.781
+        },
+        {
+          "nodeid": "tests/test_model_catalogue_prewarm.py::test_prewarm_is_cache_only_and_owner_publication_reuses_metadata",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.053
+        },
+        {
+          "nodeid": "tests/test_model_catalogue_prewarm.py::test_warm_metadata_does_not_bypass_later_admission[sha]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.006
+        },
+        {
+          "nodeid": "tests/test_model_catalogue_prewarm.py::test_warm_metadata_does_not_bypass_later_admission[missing]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.006
+        },
+        {
+          "nodeid": "tests/test_model_catalogue_prewarm.py::test_warm_metadata_does_not_bypass_later_admission[forged]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.005
+        },
+        {
+          "nodeid": "tests/test_model_catalogue_prewarm.py::test_warm_metadata_does_not_bypass_later_admission[other]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.007
+        },
+        {
+          "nodeid": "tests/test_model_catalogue_prewarm.py::test_warm_metadata_does_not_bypass_later_admission[evaluation]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.006
+        },
+        {
+          "nodeid": "tests/test_model_catalogue_prewarm.py::test_lifespan_prewarms_once_before_readiness_without_changing_worker_order[normal]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.001
+        },
+        {
+          "nodeid": "tests/test_model_catalogue_prewarm.py::test_lifespan_prewarms_once_before_readiness_without_changing_worker_order[isolated]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.001
+        },
+        {
+          "nodeid": "tests/test_model_catalogue_prewarm.py::test_prewarm_failure_is_sanitized_and_does_not_prevent_readiness[database-normal]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.001
+        },
+        {
+          "nodeid": "tests/test_model_catalogue_prewarm.py::test_prewarm_failure_is_sanitized_and_does_not_prevent_readiness[database-isolated]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.001
+        },
+        {
+          "nodeid": "tests/test_model_catalogue_prewarm.py::test_prewarm_failure_is_sanitized_and_does_not_prevent_readiness[model-normal]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.001
+        },
+        {
+          "nodeid": "tests/test_model_catalogue_prewarm.py::test_prewarm_failure_is_sanitized_and_does_not_prevent_readiness[model-isolated]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.001
+        },
+        {
+          "nodeid": "tests/test_model_catalogue_prewarm.py::test_invalid_model_does_not_prevent_other_metadata_warming",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.005
+        },
+        {
+          "nodeid": "tests/test_model_catalogue_prewarm.py::test_removed_imported_association_cannot_promote_warm_metadata_to_legacy[True]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.018
+        },
+        {
+          "nodeid": "tests/test_model_catalogue_prewarm.py::test_removed_imported_association_cannot_promote_warm_metadata_to_legacy[False]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.017
+        },
+        {
+          "nodeid": "tests/test_model_catalogue_prewarm.py::test_singleton_initialization_preserves_public_default_without_isolated_weight_load[True]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.005
+        },
+        {
+          "nodeid": "tests/test_model_catalogue_prewarm.py::test_singleton_initialization_preserves_public_default_without_isolated_weight_load[False]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.003
+        },
+        {
+          "nodeid": "tests/test_model_catalogue_prewarm.py::test_concurrent_initializers_share_isolated_first_singleton",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 1.002
+        },
+        {
+          "nodeid": "tests/test_model_catalogue_prewarm.py::test_isolated_lifespan_http_owner_catalogue_reuses_primed_singleton",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.348
+        },
+        {
+          "nodeid": "tests/test_cookie_identity.py::test_bearer_without_cookie_cannot_read_imported_resource",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.025
+        },
+        {
+          "nodeid": "tests/test_cookie_identity.py::test_expected_principal_mismatch_does_not_refresh_idle_lifetime",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.088
+        },
+        {
+          "nodeid": "tests/test_cookie_identity.py::test_imported_auth_database_errors_are_private_and_not_cacheable[/api/ingestion/imports/example.zip]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.098
+        },
+        {
+          "nodeid": "tests/test_cookie_identity.py::test_imported_auth_database_errors_are_private_and_not_cacheable[/api/training/imported/snapshots/unknown]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.102
+        },
+        {
+          "nodeid": "tests/test_cookie_identity.py::test_imported_auth_database_errors_are_private_and_not_cacheable[/api/inference/history?model_id=301]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.105
+        },
+        {
+          "nodeid": "tests/test_cookie_identity.py::test_canonical_login_preserves_bounded_password_contract[]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.008
+        },
+        {
+          "nodeid": "tests/test_cookie_identity.py::test_canonical_login_preserves_bounded_password_contract[xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.012
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_login_uses_opaque_secure_cookie_not_bearer_token",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.086
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_missing_session_schema_rejects_login_before_authentication_effects[SyntheticPassword2026!]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.005
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_missing_session_schema_rejects_login_before_authentication_effects[wrong-password]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.005
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_only_current_administrator_can_create_accounts",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.253
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_login_requires_exact_trusted_origin[None]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.005
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_login_requires_exact_trusted_origin[null]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.005
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_login_requires_exact_trusted_origin[https://evil.example.test]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.004
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_login_requires_exact_trusted_origin[https://fama.example.test.evil.test]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.005
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_registration_rejects_cross_origin_even_with_valid_session",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.088
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_logout_revokes_stolen_cookie_and_requires_trusted_origin",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.101
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_successful_login_rotates_and_revokes_previous_browser_session",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.169
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_idle_boundary_and_absolute_lifetime_are_not_extended",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.226
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_disabled_account_is_rejected_on_the_next_request",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.087
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_bearer_jwt_never_grants_web_access",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.007
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_missing_origin_configuration_fails_closed",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.006
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_all_auth_responses_including_failures_are_not_cacheable",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.013
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_database_outage_fails_closed_without_sql_or_session_cookie",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.086
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_unsafe_origin_configuration_never_issues_cookie[https://fama.example.test/]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.005
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_unsafe_origin_configuration_never_issues_cookie[https://u:p@fama.example.test]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.005
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_unsafe_origin_configuration_never_issues_cookie[https://fama.example.test:99999]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.004
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_unsafe_origin_configuration_never_issues_cookie[http://fama.example.test]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.005
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_unsafe_origin_configuration_never_issues_cookie[https://fama.example.test?x=1]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.005
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_unsafe_origin_configuration_never_issues_cookie[https://fama.example.test#x]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.004
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_invalid_durations_fail_closed[0-1800]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.004
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_invalid_durations_fail_closed[28800-0]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.005
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_invalid_durations_fail_closed[100-101]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.005
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_invalid_durations_fail_closed[many-1800]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.004
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_invalid_durations_fail_closed[2678401-1800]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.004
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_invalid_account_fields_are_rejected_without_echoing_secrets[email-not-an-email]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.086
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_invalid_account_fields_are_rejected_without_echoing_secrets[email-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@test]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.097
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_invalid_account_fields_are_rejected_without_echoing_secrets[password-short]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.097
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_invalid_account_fields_are_rejected_without_echoing_secrets[password-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.096
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_invalid_account_fields_are_rejected_without_echoing_secrets[nombre_completo-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.099
+        },
+        {
+          "nodeid": "tests/test_web_sessions.py::test_failed_login_commit_does_not_issue_a_session_after_rollback",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.095
+        },
+        {
+          "nodeid": "tests/test_web_session_integration.py::test_canonical_login_confirms_cookie_identity_without_token",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.101
+        },
+        {
+          "nodeid": "tests/test_web_session_integration.py::test_logout_revokes_server_session_not_just_browser_cookie",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.096
+        },
+        {
+          "nodeid": "tests/test_web_session_integration.py::test_cookie_authenticates_imported_history_but_preserves_legacy_response",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.107
+        },
+        {
+          "nodeid": "tests/test_web_session_integration.py::test_authorization_header_cannot_switch_cookie_identity[Bearer invalid]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.096
+        },
+        {
+          "nodeid": "tests/test_web_session_integration.py::test_authorization_header_cannot_switch_cookie_identity[Bearer foreign]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.102
+        },
+        {
+          "nodeid": "tests/test_web_session_integration.py::test_authorization_header_cannot_switch_cookie_identity[Basic ignored]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.103
+        },
+        {
+          "nodeid": "tests/test_web_session_integration.py::test_cookie_requires_trusted_origin_even_with_authorization",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.095
+        },
+        {
+          "nodeid": "tests/test_web_session_integration.py::test_import_cookie_keeps_exact_owner_even_for_two_administrators",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.485
+        },
+        {
+          "nodeid": "tests/test_web_session_integration.py::test_session_schema_requires_explicit_idempotent_migration",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.102
+        },
+        {
+          "nodeid": "tests/test_web_session_integration.py::test_incompatible_session_schema_fails_before_creating_cookie",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.008
+        },
+        {
+          "nodeid": "tests/test_web_session_integration.py::test_session_expiration_boundaries_are_enforced[idle]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.091
+        },
+        {
+          "nodeid": "tests/test_web_session_integration.py::test_session_expiration_boundaries_are_enforced[absolute]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.104
+        },
+        {
+          "nodeid": "tests/test_web_session_integration.py::test_suspended_user_cannot_login_or_use_existing_session",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.087
+        },
+        {
+          "nodeid": "tests/test_web_session_integration.py::test_cross_origin_writes_do_not_revoke_or_replace_session",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.097
+        },
+        {
+          "nodeid": "tests/test_web_session_integration.py::test_login_rotation_revokes_previous_browser_session",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.16
+        },
+        {
+          "nodeid": "tests/test_web_session_integration.py::test_web_login_limits_and_no_store_errors",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.377
+        },
+        {
+          "nodeid": "tests/test_api_auth.py::test_login_success",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.153
+        },
+        {
+          "nodeid": "tests/test_api_auth.py::test_login_invalid_credentials",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.153
+        },
+        {
+          "nodeid": "tests/test_api_auth.py::test_login_inactive_user",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.079
+        },
+        {
+          "nodeid": "tests/test_api_auth.py::test_get_current_user_me",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.163
+        },
+        {
+          "nodeid": "tests/test_api_auth.py::test_register_endpoint",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.24
+        },
+        {
+          "nodeid": "tests/test_api_auth.py::test_register_invalid_role",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.153
+        },
+        {
+          "nodeid": "tests/test_jwt_validation.py::test_bearer_never_authenticates_or_switches_cookie_user[payload0]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.099
+        },
+        {
+          "nodeid": "tests/test_jwt_validation.py::test_bearer_never_authenticates_or_switches_cookie_user[payload1]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.097
+        },
+        {
+          "nodeid": "tests/test_jwt_validation.py::test_bearer_never_authenticates_or_switches_cookie_user[payload2]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.096
+        },
+        {
+          "nodeid": "tests/test_jwt_validation.py::test_bearer_never_authenticates_or_switches_cookie_user[payload3]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.101
+        },
+        {
+          "nodeid": "tests/test_jwt_validation.py::test_bearer_never_authenticates_or_switches_cookie_user[payload4]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.095
+        },
+        {
+          "nodeid": "tests/test_auth_service.py::test_password_hashing_and_verification",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.352
+        },
+        {
+          "nodeid": "tests/test_auth_service.py::test_usuario_model_attributes_and_defaults",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.002
+        },
+        {
+          "nodeid": "tests/test_auth_service.py::test_usuario_role_validation",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.001
+        },
+        {
+          "nodeid": "tests/test_auth_service.py::test_seed_initial_admin_when_empty",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.22
+        },
+        {
+          "nodeid": "tests/test_auth_service.py::test_authenticate_user",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.219
+        },
+        {
+          "nodeid": "tests/test_auth_configuration.py::test_missing_environment_key_rejects_boot_configuration",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.001
+        },
+        {
+          "nodeid": "tests/test_auth_configuration.py::test_login_without_web_configuration_returns_503_and_never_a_session",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.005
+        },
+        {
+          "nodeid": "tests/test_auth_configuration.py::test_profile_without_web_configuration_reports_configuration_failure",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.006
+        },
+        {
+          "nodeid": "tests/test_auth_configuration.py::test_unsafe_retained_key_rejects_boot_configuration[]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.0
+        },
+        {
+          "nodeid": "tests/test_auth_configuration.py::test_unsafe_retained_key_rejects_boot_configuration[ ]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.0
+        },
+        {
+          "nodeid": "tests/test_auth_configuration.py::test_unsafe_retained_key_rejects_boot_configuration[short]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.0
+        },
+        {
+          "nodeid": "tests/test_auth_configuration.py::test_unsafe_retained_key_rejects_boot_configuration[fama_bioacoustic_secret_key_mlops_2026]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.0
+        },
+        {
+          "nodeid": "tests/test_auth_configuration.py::test_unsafe_retained_key_rejects_boot_configuration[\\ud800\\ud800\\ud800\\ud800\\ud800\\ud800\\ud800\\ud800\\ud800\\ud800\\ud800\\ud800\\ud800\\ud800\\ud800\\ud800\\ud800\\ud800\\ud800\\ud800\\ud800\\ud800\\ud800\\ud800\\ud800\\ud800\\ud800\\ud800\\ud800\\ud800\\ud800\\ud800]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.0
+        },
+        {
+          "nodeid": "tests/test_auth_configuration.py::test_configured_login_issues_a_usable_session_without_echoing_secrets",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.085
+        },
+        {
+          "nodeid": "tests/test_auth_configuration.py::test_initial_admin_requires_explicit_operator_credentials[email]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.072
+        },
+        {
+          "nodeid": "tests/test_auth_configuration.py::test_initial_admin_requires_explicit_operator_credentials[password]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.075
+        },
+        {
+          "nodeid": "tests/test_auth_configuration.py::test_initial_admin_requires_explicit_operator_credentials[both]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.074
+        },
+        {
+          "nodeid": "tests/test_auth_configuration.py::test_initial_admin_rejects_unsafe_explicit_credentials[ -OperatorPassword2026!]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.002
+        },
+        {
+          "nodeid": "tests/test_auth_configuration.py::test_initial_admin_rejects_unsafe_explicit_credentials[not-an-email-OperatorPassword2026!]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.002
+        },
+        {
+          "nodeid": "tests/test_auth_configuration.py::test_initial_admin_rejects_unsafe_explicit_credentials[bootstrap@example.test- ]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.002
+        },
+        {
+          "nodeid": "tests/test_auth_configuration.py::test_initial_admin_rejects_unsafe_explicit_credentials[bootstrap@example.test-short]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.002
+        },
+        {
+          "nodeid": "tests/test_auth_configuration.py::test_initial_admin_rejects_unsafe_explicit_credentials[bootstrap@example.test-AdminFama2026!]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.002
+        },
+        {
+          "nodeid": "tests/test_auth_configuration.py::test_existing_admin_is_preserved_without_bootstrap_configuration",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.14
+        },
+        {
+          "nodeid": "tests/test_imported_training_persistence.py::test_explicit_migration_from_absent_table",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.003
+        },
+        {
+          "nodeid": "tests/test_imported_training_persistence.py::test_real_cpu_worker_persists_source_and_completes_evaluation[None]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.737
+        },
+        {
+          "nodeid": "tests/test_imported_training_persistence.py::test_real_cpu_worker_persists_source_and_completes_evaluation[association]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.117
+        },
+        {
+          "nodeid": "tests/test_imported_training_persistence.py::test_real_cpu_worker_persists_source_and_completes_evaluation[audio_after_admission]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.079
+        },
+        {
+          "nodeid": "tests/test_imported_training_persistence.py::test_incompatible_source_schema_is_not_repaired_or_backfilled",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.019
+        },
+        {
+          "nodeid": "tests/test_imported_training_admission.py::test_imported_start_requires_auth_before_admission",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.075
+        },
+        {
+          "nodeid": "tests/test_imported_training_admission.py::test_foreign_imported_start_is_non_disclosing",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.087
+        },
+        {
+          "nodeid": "tests/test_imported_training_admission.py::test_imported_progress_stop_and_history_require_owner",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.244
+        },
+        {
+          "nodeid": "tests/test_imported_training_admission.py::test_imported_catalog_requires_auth_and_preserves_legacy_catalog",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.213
+        },
+        {
+          "nodeid": "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[snapshot-source_unavailable-Fuente importada no disponible.]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.188
+        },
+        {
+          "nodeid": "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[schema-source_unavailable-Fuente importada no disponible.]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.199
+        },
+        {
+          "nodeid": "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[version-source_unavailable-Fuente importada no disponible.]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.188
+        },
+        {
+          "nodeid": "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[incomplete-source_unavailable-Fuente importada no disponible.]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.189
+        },
+        {
+          "nodeid": "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[hash-source_unavailable-Fuente importada no disponible.]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.189
+        },
+        {
+          "nodeid": "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[missing-source_unavailable-Fuente importada no disponible.]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.184
+        },
+        {
+          "nodeid": "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[split-source_unavailable-Fuente importada no disponible.]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.182
+        },
+        {
+          "nodeid": "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[architecture-profile_conflict-La arquitectura no coincide con el perfil preparado.]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.19
+        },
+        {
+          "nodeid": "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[audio-profile_conflict-El audio solicitado no coincide con el perfil preparado.]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.187
+        },
+        {
+          "nodeid": "tests/test_imported_training_admission.py::test_owned_invalid_selection_has_no_admission_effects[window-profile_conflict-Las ventanas no coinciden con el perfil preparado.]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.187
+        },
+        {
+          "nodeid": "tests/test_imported_training_admission.py::test_invalid_credentials_cannot_fall_back_from_imported_selection",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.038
+        },
+        {
+          "nodeid": "tests/test_imported_training_admission.py::test_legacy_queries_preserve_access_without_using_supplied_credentials[datasets]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.009
+        },
+        {
+          "nodeid": "tests/test_imported_training_admission.py::test_legacy_queries_preserve_access_without_using_supplied_credentials[history]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.011
+        },
+        {
+          "nodeid": "tests/test_imported_training_admission.py::test_legacy_queries_preserve_access_without_using_supplied_credentials[progress]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.008
+        },
+        {
+          "nodeid": "tests/test_imported_training_admission.py::test_imported_selection_is_complete_and_exclusive[body0]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.004
+        },
+        {
+          "nodeid": "tests/test_imported_training_admission.py::test_imported_selection_is_complete_and_exclusive[body1]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.004
+        },
+        {
+          "nodeid": "tests/test_imported_training_admission.py::test_imported_selection_is_complete_and_exclusive[body2]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.005
+        },
+        {
+          "nodeid": "tests/test_imported_training_admission.py::test_imported_selection_is_complete_and_exclusive[body3]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.004
+        },
+        {
+          "nodeid": "tests/test_imported_training_admission.py::test_imported_selection_is_complete_and_exclusive[body4]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.004
+        },
+        {
+          "nodeid": "tests/test_imported_training_admission.py::test_imported_resources_require_real_existing_active_user[-1]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.023
+        },
+        {
+          "nodeid": "tests/test_imported_training_admission.py::test_imported_resources_require_real_existing_active_user[3]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.022
+        },
+        {
+          "nodeid": "tests/test_imported_training_admission.py::test_imported_resources_require_real_existing_active_user[1]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.025
+        },
+        {
+          "nodeid": "tests/test_imported_training_revision_admission.py::test_stale_start_rejects_without_job_or_history_changes",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.219
+        },
+        {
+          "nodeid": "tests/test_imported_training_revision_admission.py::test_new_cohort_requires_annotations_and_admits_all_current_members",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.345
+        },
+        {
+          "nodeid": "tests/test_imported_feedback_api.py::test_imported_feedback_requires_session_before_mutation[record]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.018
+        },
+        {
+          "nodeid": "tests/test_imported_feedback_api.py::test_imported_feedback_requires_session_before_mutation[approve]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.016
+        },
+        {
+          "nodeid": "tests/test_imported_feedback_api.py::test_imported_feedback_requires_session_before_mutation[reject]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.018
+        },
+        {
+          "nodeid": "tests/test_imported_feedback_api.py::test_imported_feedback_uses_session_identity_and_preserves_pending_after_foreign_review",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.063
+        },
+        {
+          "nodeid": "tests/test_imported_feedback_api.py::test_feedback_stats_hide_private_labels_without_the_owner_session",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.056
+        },
+        {
+          "nodeid": "tests/test_imported_feedback_api.py::test_pending_limit_applies_after_owner_visibility",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.026
+        },
+        {
+          "nodeid": "tests/test_imported_feedback_api.py::test_imported_pending_feedback_is_not_exposed_without_a_session",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.009
+        },
+        {
+          "nodeid": "tests/test_imported_training_preparation_api.py::test_completed_snapshot_members_preparation_roundtrip",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.098
+        },
+        {
+          "nodeid": "tests/test_imported_training_preparation_api.py::test_auth_foreign_and_invalid_mapping_do_not_publish",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.118
+        },
+        {
+          "nodeid": "tests/test_imported_training_preparation_api.py::test_non_real_or_inactive_principal_cannot_create_snapshot[inactive]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.011
+        },
+        {
+          "nodeid": "tests/test_imported_training_preparation_api.py::test_non_real_or_inactive_principal_cannot_create_snapshot[negative]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.016
+        },
+        {
+          "nodeid": "tests/test_imported_training_preparation_api.py::test_non_real_or_inactive_principal_cannot_create_snapshot[invalid]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.009
+        },
+        {
+          "nodeid": "tests/test_imported_training_preparation_api.py::test_oversized_json_is_rejected_before_snapshot_publication",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.007
+        },
+        {
+          "nodeid": "tests/test_imported_training_preparation_api.py::test_altered_snapshot_audio_never_reads_back_ready_preparation",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.046
+        },
+        {
+          "nodeid": "tests/test_imported_training_preparation_api.py::test_cookie_origin_and_conflicting_bearer_on_preparation_routes",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.249
+        },
+        {
+          "nodeid": "tests/test_imported_training_preparation_api.py::test_malformed_snapshot_foreign_key_fails_before_write",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.016
+        },
+        {
+          "nodeid": "tests/test_imported_training_preparation_api.py::test_schema_missing_is_read_only_before_snapshot_creation",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.011
+        },
+        {
+          "nodeid": "tests/test_imported_training_preparation_api.py::test_automatic_snapshot_reuses_only_current_owned_revision",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.114
+        },
+        {
+          "nodeid": "tests/test_imported_training_triad.py::test_three_preparations_admitted_as_serializable_ordered_sources",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.054
+        },
+        {
+          "nodeid": "tests/test_imported_training_triad.py::test_http_triad_uses_existing_authenticated_start",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.558
+        },
+        {
+          "nodeid": "tests/test_imported_training_triad.py::test_sequential_components_keep_own_profiles_and_failure_is_not_completion[False]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 1.735
+        },
+        {
+          "nodeid": "tests/test_imported_training_triad.py::test_sequential_components_keep_own_profiles_and_failure_is_not_completion[True]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.543
+        },
+        {
+          "nodeid": "tests/test_imported_training_triad.py::test_invalid_triad_preserves_prior_state[partial]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.003
+        },
+        {
+          "nodeid": "tests/test_imported_training_triad.py::test_invalid_triad_preserves_prior_state[mixed]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.003
+        },
+        {
+          "nodeid": "tests/test_imported_training_triad.py::test_invalid_triad_preserves_prior_state[two]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.002
+        },
+        {
+          "nodeid": "tests/test_imported_training_triad.py::test_invalid_triad_preserves_prior_state[negative]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.002
+        },
+        {
+          "nodeid": "tests/test_imported_training_triad.py::test_invalid_triad_preserves_prior_state[nan]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.004
+        },
+        {
+          "nodeid": "tests/test_imported_training_triad.py::test_invalid_triad_preserves_prior_state[sum]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.003
+        },
+        {
+          "nodeid": "tests/test_imported_training_triad.py::test_invalid_triad_preserves_prior_state[zero]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.003
+        },
+        {
+          "nodeid": "tests/test_imported_training_triad.py::test_invalid_triad_preserves_prior_state[foreign]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.003
+        },
+        {
+          "nodeid": "tests/test_imported_training_triad.py::test_invalid_triad_preserves_prior_state[stale]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.011
+        },
+        {
+          "nodeid": "tests/test_imported_training_triad.py::test_invalid_triad_preserves_prior_state[seed]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.02
+        },
+        {
+          "nodeid": "tests/test_imported_training_triad.py::test_invalid_triad_preserves_prior_state[architecture]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.013
+        },
+        {
+          "nodeid": "tests/test_imported_training_triad.py::test_invalid_triad_preserves_prior_state[audio]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.02
+        },
+        {
+          "nodeid": "tests/test_imported_training_triad.py::test_invalid_triad_preserves_prior_state[window]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.011
+        },
+        {
+          "nodeid": "tests/test_imported_training_triad.py::test_invalid_triad_preserves_prior_state[archived]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.007
+        },
+        {
+          "nodeid": "tests/test_imported_training_triad.py::test_invalid_triad_preserves_prior_state[revision]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.006
+        },
+        {
+          "nodeid": "tests/test_imported_training_triad.py::test_invalid_triad_preserves_prior_state[override]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.002
+        },
+        {
+          "nodeid": "tests/test_imported_triad_registry.py::test_owner_publication_retains_instance_and_joint_pair",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.336
+        },
+        {
+          "nodeid": "tests/test_imported_triad_registry.py::test_cold_owner_inference_is_one_composition_result",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.321
+        },
+        {
+          "nodeid": "tests/test_imported_triad_registry.py::test_catalogue_versions_include_pending_rows_and_compare_ordered_components",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 1.414
+        },
+        {
+          "nodeid": "tests/test_imported_triad_registry.py::test_owner_catalogue_has_actual_joint_reports_and_no_foreign_discovery",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.51
+        },
+        {
+          "nodeid": "tests/test_imported_triad_registry.py::test_cached_composition_invalidates_without_retiring_valid_components[association]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.294
+        },
+        {
+          "nodeid": "tests/test_imported_triad_registry.py::test_cached_composition_invalidates_without_retiring_valid_components[bytes]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.261
+        },
+        {
+          "nodeid": "tests/test_imported_triad_registry.py::test_cached_composition_invalidates_without_retiring_valid_components[report]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.277
+        },
+        {
+          "nodeid": "tests/test_imported_triad_registry.py::test_cached_composition_invalidates_without_retiring_valid_components[marker]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.249
+        },
+        {
+          "nodeid": "tests/test_imported_triad_registry.py::test_cached_composition_invalidates_without_retiring_valid_components[pending]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.271
+        },
+        {
+          "nodeid": "tests/test_imported_triad_registry.py::test_cached_composition_invalidates_without_retiring_valid_components[owner]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.267
+        },
+        {
+          "nodeid": "tests/test_imported_triad_registry.py::test_restart_prewarm_is_metadata_only_and_fresh_publication_is_lazy",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.254
+        },
+        {
+          "nodeid": "tests/test_imported_triad_registry.py::test_lazy_configured_factory_uses_existing_private_preparation_child",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.456
+        },
+        {
+          "nodeid": "tests/test_imported_triad_registry.py::test_catalogue_during_leased_forward_retains_predictor_and_execution_slot",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.365
+        },
+        {
+          "nodeid": "tests/test_imported_triad_registry.py::test_http_rechecks_authority_after_validation_before_forward[association]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.381
+        },
+        {
+          "nodeid": "tests/test_imported_triad_registry.py::test_http_rechecks_authority_after_validation_before_forward[report]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.393
+        },
+        {
+          "nodeid": "tests/test_imported_triad_registry.py::test_http_rechecks_authority_after_validation_before_forward[sha]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.375
+        },
+        {
+          "nodeid": "tests/test_imported_triad_registry.py::test_composition_neural_failure_is_private_and_does_not_write_history[weights-503]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.285
+        },
+        {
+          "nodeid": "tests/test_imported_triad_registry.py::test_composition_neural_failure_is_private_and_does_not_write_history[runtime-500]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.3
+        },
+        {
+          "nodeid": "tests/test_imported_triad_registry.py::test_lease_rejects_lost_authority_after_publication",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.265
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_api_reports_stale_preparation_and_requires_deliberate_history[False]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.05
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_api_reports_stale_preparation_and_requires_deliberate_history[True]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.044
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_api_rejects_invalid_preparation_selection_before_admission[body0]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.005
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_api_rejects_invalid_preparation_selection_before_admission[body1]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.004
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_api_rejects_invalid_preparation_selection_before_admission[body2]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.004
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_api_rejects_invalid_preparation_selection_before_admission[body3]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.004
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_api_selects_immutable_child_without_adopting_legacy_root",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.052
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_api_admits_curated_derivatives_with_their_original_groups",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.073
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_api_propagates_selected_seed[0]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.04
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_api_propagates_selected_seed[314]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.045
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_api_propagates_selected_seed[4294967295]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.041
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_api_rejects_invalid_seed_without_admission[-1]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.005
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_api_rejects_invalid_seed_without_admission[4294967296]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.004
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_api_rejects_invalid_seed_without_admission[1.5]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.004
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_api_rejects_invalid_seed_without_admission[True]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.004
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_api_rejects_invalid_seed_without_admission[42]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.004
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_api_rejects_invalid_seed_without_admission[None]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.003
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_start_rejection_is_visible_in_api_progress[medical_cough-True]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.01
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_start_rejection_is_visible_in_api_progress[AvesChilenas-False]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.01
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_start_rejection_is_visible_in_api_progress[AvesChilenas-True]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.01
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_api_accepts_registered_canonical_source[AvesChilenas]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.067
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_api_accepts_registered_canonical_source[engine_diagnostics]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.075
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_api_accepts_registered_canonical_source[FAMA_Prueba_Aves]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.065
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_versioned_partition_identity_is_preserved_in_checkpoint_and_history[False]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.632
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_versioned_partition_identity_is_preserved_in_checkpoint_and_history[True]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.107
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_api_reports_checkpoint_registration_outcome[False]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.589
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_api_reports_checkpoint_registration_outcome[True]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.11
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_training_fixture_preserves_external_background_threads",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.001
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_api_completes_training_with_saved_reports_and_available_model",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.628
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_get_training_hardware",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.003
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_get_training_datasets",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.006
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_catalog_opt_in_keeps_imported_auth_and_owner_isolation",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.368
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_catalog_includes_new_registered_dataset_for_training",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.087
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_new_empty_dataset_does_not_invent_training_classes",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.008
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_new_dataset_completes_and_registers_a_model_through_HTTP[FAMA_Prueba_Aves]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.568
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_catalog_does_not_expose_unsafe_registered_dataset_names[../outside]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.011
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_catalog_does_not_expose_unsafe_registered_dataset_names[CON]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.012
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_catalog_does_not_expose_unsafe_registered_dataset_names[bad/name]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.011
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_catalog_does_not_expose_unsafe_registered_dataset_names[name.]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.011
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_training_lifecycle",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.01
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_get_training_history",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.007
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_training_lifecycle_triad",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.004
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_training_lifecycle_dynamic_ensemble",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.004
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_start_training_api_passes_multi_domain_configs",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.005
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_start_training_api_passes_weight_decay",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.005
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_start_training_api_passes_model_epochs",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.004
+        },
+        {
+          "nodeid": "tests/test_api_training.py::test_failed_new_job_does_not_expose_previous_execution_snapshot",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.601
+        },
+        {
+          "nodeid": "tests/test_private_prediction_history.py::test_triad_prediction_is_retrievable_only_in_its_exact_composition_history",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.828
+        },
+        {
+          "nodeid": "tests/test_private_prediction_history.py::test_private_history_persists_and_pages_only_attributable_exact_model",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.027
+        },
+        {
+          "nodeid": "tests/test_private_prediction_history.py::test_private_history_does_not_disclose_foreign_or_unknown_models[301]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.009
+        },
+        {
+          "nodeid": "tests/test_private_prediction_history.py::test_private_history_does_not_disclose_foreign_or_unknown_models[fama_trained_model_301]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.009
+        },
+        {
+          "nodeid": "tests/test_private_prediction_history.py::test_private_history_does_not_disclose_foreign_or_unknown_models[302]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.009
+        },
+        {
+          "nodeid": "tests/test_private_prediction_history.py::test_private_history_does_not_disclose_foreign_or_unknown_models[public-model]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.007
+        },
+        {
+          "nodeid": "tests/test_private_prediction_history.py::test_private_history_requires_authentication_and_bounds_pages",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.024
+        },
+        {
+          "nodeid": "tests/test_private_prediction_history.py::test_history_twenty_row_boundary_and_sparse_window_are_read_only",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.047
+        },
+        {
+          "nodeid": "tests/test_private_prediction_history.py::test_history_rejects_inconsistent_dataset_ownership",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.01
+        },
+        {
+          "nodeid": "tests/test_private_prediction_history.py::test_private_history_accepts_existing_web_cookie_and_keeps_it_private",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.016
+        },
+        {
+          "nodeid": "tests/test_private_prediction_history.py::test_history_never_falls_back_from_conflicting_or_invalid_credentials[invalid]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.01
+        },
+        {
+          "nodeid": "tests/test_private_prediction_history.py::test_history_never_falls_back_from_conflicting_or_invalid_credentials[foreign]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.01
+        },
+        {
+          "nodeid": "tests/test_private_prediction_history.py::test_history_never_falls_back_from_conflicting_or_invalid_credentials[foreign_origin]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.004
+        },
+        {
+          "nodeid": "tests/test_private_prediction_history.py::test_history_never_falls_back_from_conflicting_or_invalid_credentials[bad_cookie]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.007
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_export_without_local_sources_is_complete_and_native_resumable",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.043
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_renewal_establishes_new_session_after_old_cookie_expires",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.036
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_object_failure_never_exposes_partial_zip[missing]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.052
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_object_failure_never_exposes_partial_zip[corrupt]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.026
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_object_failure_never_exposes_partial_zip[wrong-generation]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.027
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_object_failure_never_exposes_partial_zip[short]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.024
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_object_failure_never_exposes_partial_zip[oversize]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.03
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_invalid_authorized_manifest_is_rejected_without_download[schema]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.03
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_invalid_authorized_manifest_is_rejected_without_download[total]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.027
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_invalid_authorized_manifest_is_rejected_without_download[traversal]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.025
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_invalid_authorized_manifest_is_rejected_without_download[absolute]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.03
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_invalid_authorized_manifest_is_rejected_without_download[backslash]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.025
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_invalid_authorized_manifest_is_rejected_without_download[control]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.022
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_invalid_authorized_manifest_is_rejected_without_download[namespace]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.029
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_invalid_authorized_manifest_is_rejected_without_download[duplicate]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.027
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_invalid_authorized_manifest_is_rejected_without_download[generation]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.024
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_invalid_authorized_manifest_is_rejected_without_download[bool-size]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.033
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_invalid_authorized_manifest_is_rejected_without_download[label]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.026
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_invalid_authorized_manifest_is_rejected_without_download[source]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.028
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_invalid_authorized_manifest_is_rejected_without_download[name]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.022
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_http_ownership_idempotency_ranges_and_route_fail_closed",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.03
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_reclaim_blocks_stale_worker_and_recovers_from_persisted_job",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.037
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_cleanup_preserves_active_range_then_retries_parent_fsync",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.033
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_export_checks_totals_against_bounded_policy[exact]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.032
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_export_checks_totals_against_bounded_policy[byte-excess]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.028
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_export_checks_totals_against_bounded_policy[file-excess]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.028
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_sessions_are_bounded_and_renewal_does_not_revoke_live_ranges",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.038
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_same_size_changed_artifact_cannot_keep_original_identity",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.031
+        },
+        {
+          "nodeid": "tests/test_dataset_import_dev_mode.py::test_development_flags_cannot_admit_anonymous_imports",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.3
+        },
+        {
+          "nodeid": "tests/test_dataset_import_dev_mode.py::test_docker_frontend_cannot_enable_anonymous_imports",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.039
+        },
+        {
+          "nodeid": "tests/test_dataset_import_dev_mode.py::test_no_frontend_peer_grants_anonymous_identity[172.30.253.11]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.033
+        },
+        {
+          "nodeid": "tests/test_dataset_import_dev_mode.py::test_no_frontend_peer_grants_anonymous_identity[172.30.253.1]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.035
+        },
+        {
+          "nodeid": "tests/test_dataset_import_dev_mode.py::test_no_frontend_peer_grants_anonymous_identity[192.168.1.10]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.037
+        },
+        {
+          "nodeid": "tests/test_dataset_import_dev_mode.py::test_frontend_configuration_never_accepts_ranges_or_names[172.30.253.0/24]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.031
+        },
+        {
+          "nodeid": "tests/test_dataset_import_dev_mode.py::test_frontend_configuration_never_accepts_ranges_or_names[frontend]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.03
+        },
+        {
+          "nodeid": "tests/test_dataset_import_dev_mode.py::test_frontend_configuration_never_accepts_ranges_or_names[]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.029
+        },
+        {
+          "nodeid": "tests/test_dataset_import_dev_mode.py::test_frontend_configuration_never_accepts_ranges_or_names[invalid]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.032
+        },
+        {
+          "nodeid": "tests/test_dataset_import_dev_mode.py::test_local_mode_requires_login_for_all_import_operations",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.058
+        },
+        {
+          "nodeid": "tests/test_dataset_import_dev_mode.py::test_auth_is_required_by_default[None]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.034
+        },
+        {
+          "nodeid": "tests/test_dataset_import_dev_mode.py::test_auth_is_required_by_default[development]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.038
+        },
+        {
+          "nodeid": "tests/test_dataset_import_dev_mode.py::test_auth_is_required_by_default[production]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.041
+        },
+        {
+          "nodeid": "tests/test_dataset_import_dev_mode.py::test_opt_in_outside_development_fails_closed[None]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.031
+        },
+        {
+          "nodeid": "tests/test_dataset_import_dev_mode.py::test_opt_in_outside_development_fails_closed[production]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.029
+        },
+        {
+          "nodeid": "tests/test_dataset_import_dev_mode.py::test_opt_in_outside_development_fails_closed[staging]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.034
+        },
+        {
+          "nodeid": "tests/test_dataset_import_dev_mode.py::test_remote_peers_cannot_use_local_exception_or_spoof_forwarding",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.031
+        },
+        {
+          "nodeid": "tests/test_dataset_import_dev_mode.py::test_local_and_authenticated_owners_remain_isolated[False]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.426
+        },
+        {
+          "nodeid": "tests/test_dataset_import_dev_mode.py::test_local_and_authenticated_owners_remain_isolated[True]",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.474
+        },
+        {
+          "nodeid": "tests/test_web_imported_training.py::test_browser_identity_guards_real_imported_source_and_lifecycle",
+          "phase": "call",
+          "outcome": "passed",
+          "duration_seconds": 0.585
+        }
+      ],
+      "nonpassing_reports": [
+        {
+          "nodeid": "tests/test_model_catalogue_prewarm.py::test_lifespan_prewarms_once_before_readiness_without_changing_worker_order[normal]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.001
+        },
+        {
+          "nodeid": "tests/test_model_catalogue_prewarm.py::test_singleton_initialization_preserves_public_default_without_isolated_weight_load[True]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.005
+        },
+        {
+          "nodeid": "tests/test_model_catalogue_prewarm.py::test_singleton_initialization_preserves_public_default_without_isolated_weight_load[False]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.003
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_export_without_local_sources_is_complete_and_native_resumable",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.043
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_renewal_establishes_new_session_after_old_cookie_expires",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.036
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_object_failure_never_exposes_partial_zip[missing]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.052
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_object_failure_never_exposes_partial_zip[corrupt]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.026
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_object_failure_never_exposes_partial_zip[wrong-generation]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.027
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_object_failure_never_exposes_partial_zip[short]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.024
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_object_failure_never_exposes_partial_zip[oversize]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.03
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_invalid_authorized_manifest_is_rejected_without_download[schema]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.03
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_invalid_authorized_manifest_is_rejected_without_download[total]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.027
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_invalid_authorized_manifest_is_rejected_without_download[traversal]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.025
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_invalid_authorized_manifest_is_rejected_without_download[absolute]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.03
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_invalid_authorized_manifest_is_rejected_without_download[backslash]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.025
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_invalid_authorized_manifest_is_rejected_without_download[control]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.022
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_invalid_authorized_manifest_is_rejected_without_download[namespace]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.029
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_invalid_authorized_manifest_is_rejected_without_download[duplicate]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.027
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_invalid_authorized_manifest_is_rejected_without_download[generation]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.024
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_invalid_authorized_manifest_is_rejected_without_download[bool-size]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.033
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_invalid_authorized_manifest_is_rejected_without_download[label]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.026
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_invalid_authorized_manifest_is_rejected_without_download[source]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.028
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_invalid_authorized_manifest_is_rejected_without_download[name]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.022
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_http_ownership_idempotency_ranges_and_route_fail_closed",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.03
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_reclaim_blocks_stale_worker_and_recovers_from_persisted_job",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.037
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_cleanup_preserves_active_range_then_retries_parent_fsync",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.033
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_export_checks_totals_against_bounded_policy[exact]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.032
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_export_checks_totals_against_bounded_policy[byte-excess]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.028
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_export_checks_totals_against_bounded_policy[file-excess]",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.028
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_sessions_are_bounded_and_renewal_does_not_revoke_live_ranges",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.038
+        },
+        {
+          "nodeid": "tests/test_dataset_exports.py::test_same_size_changed_artifact_cannot_keep_original_identity",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.031
+        }
+      ],
+      "sqlite_memory_connection_count": 359,
+      "excluded_completed_cases": [],
+      "private_scratch_cleanup": true,
+      "code_guard_and_documentation_preserved": true,
+      "only_sqlite_synthetic_cpu": true,
+      "network_live_db_forbidden": true,
+      "no_further_environment_recovery": true,
+      "protected_paths_unchanged": true,
+      "protected_path_count": 30,
+      "inventory": "docs/receipts/training-checks-inventory.json"
+    },
+    "failure_groups": {
+      "prewarm": 3,
+      "exports_unexpected_import_service_argument": 28
+    },
+    "baseline_notes": [
+      "Independent verifier confirmed normal lifespan seed expectation predates candidate.",
+      "Both failing prewarm test functions remain byte-identical to base; no production lifespan/registry behavior changed.",
+      "ExportQueue TypeError occurred before native range/ownership assertions; export tests are not approved. Export implementation not changed by stage a. No fresh full backend baseline differential executed."
+    ]
+  },
+  "frontend": {
+    "suite_command": "npm test -- --run",
+    "base": {
+      "numPassedTests": 616,
+      "numFailedTests": 83,
+      "numPendingTests": 0
+    },
+    "candidate": {
+      "numPassedTests": 650,
+      "numFailedTests": 52,
+      "numPendingTests": 0
+    },
+    "base_exit": 1,
+    "candidate_exit": 1,
+    "new_failing_test_names": [],
+    "common_failing_test_names": [
+      "closes the audio consultation from the upper-right header for shared",
+      "uses one styled modal and filtered server pages for shared",
+      "downloads private filenames through the existing SHA route, never shared rows",
+      "shows private import date or explicit absence without changing shared modification dates (1700000000)",
+      "shows private import date or explicit absence without changing shared modification dates (null)",
+      "shows private import date or explicit absence without changing shared modification dates (undefined)",
+      "shows only the shared class total: 4 clase(s) ({ class_count: 4, classes: [Array] })",
+      "shows only the shared class total: 2 clase(s) ({ classes: [ 'Zorzal', 'Chincol' ] })",
+      "shows only the shared class total: 0 clase(s) ({ class_count: 0, classes: [] })",
+      "shows only the shared class total: 0 clase(s) ({ classes: [] })",
+      "shows only the shared class total: Desconocido ({})",
+      "shows only the shared class total: Desconocido ({ class_count: null, classes: null })",
+      "shows only the shared class total: 2 clase(s) ({ class_count: -1, classes: [Array] })",
+      "refreshes without transfer and downloads only confirmed selections without preprocessing",
+      "uploads only selected private datasets using paginated history and monitors admission separately",
+      "reports last remote listing honestly for 2 files",
+      "reports last remote listing honestly for 3 files",
+      "reports last remote listing honestly for 0 files",
+      "reports last remote listing honestly for null files",
+      "accepted feedback synchronization through the rendered panel shows only the cloud milestone without per-row diagnostic text",
+      "IngestionView persisted inference dataset and curation separates same-name shared and private datasets without merging identities or counts",
+      "IngestionView persisted inference dataset and curation separates import from shared download while preserving export and explicit download",
+      "IngestionView persisted inference dataset and curation offers explicit upload targets and places review after dataset table",
+      "IngestionView persisted inference dataset and curation handles disconnected GCS and local dataset badge",
+      "IngestionView persisted inference dataset and curation does not announce complete synchronization when database persistence failed",
+      "IngestionView persisted inference dataset and curation does not hide failed stages behind global status (failed/true/0)",
+      "IngestionView persisted inference dataset and curation does not hide failed stages behind global status (completed/false/0)",
+      "IngestionView persisted inference dataset and curation does not hide failed stages behind global status (completed/true/1)",
+      "IngestionView persisted inference dataset and curation shows outstanding temporary cleanup after a partial synchronization",
+      "IngestionView persisted inference dataset and curation announces completion when every synchronization stage is confirmed",
+      "Gestión de audios mediante formularios y HTTP incorpora la corrección mostrando SQL confirmado, autores y GCS pendiente",
+      "offers deletion only on private rows and cancellation sends no DELETE",
+      "blocks duplicate actions while DELETE is pending, then refreshes and preserves other selections",
+      "holds admission pending across an idle progress read, prevents duplicate POSTs and transitions only on acceptance",
+      "releases pending admission after http failure without an automatic retry",
+      "releases pending admission after network failure without an automatic retry",
+      "clears pending for a new session and ignores the previous start response",
+      "ignores progress JSON from a superseded session and checks the new session before enabling start",
+      "keeps evaluating active through evaluation and polls until a terminal state without claiming stop was accepted",
+      "keeps training active through evaluation and polls until a terminal state without claiming stop was accepted",
+      "restores terminal completed without treating it as active",
+      "restores terminal failed without treating it as active",
+      "restores terminal stopped without treating it as active",
+      "restores terminal checkpoint_persisted without treating it as active",
+      "keeps start blocked on initial failure and allows explicit read-only retry",
+      "continues polling after cooperative stop until the actual terminal response",
+      "handles a nontraining stop reply without claiming that a stop is pending",
+      "TrainingView (Dynamic Ensemble Selector) starts training with the assigned dataset displayed in the selector",
+      "TrainingView (Dynamic Ensemble Selector) does not reuse another dataset's selected partition version",
+      "TrainingView (Dynamic Ensemble Selector) reports failed publication without selecting or claiming a saved version",
+      "TrainingView (Dynamic Ensemble Selector) does not offer an invented dataset or allow training without assigned datasets",
+      "trainingApi (TDD Contract Tests) opts into unavailable legacy records without inventing unknown class counts"
+    ],
+    "lint": {
+      "command": "npm run lint",
+      "base_exit": 1,
+      "candidate_exit": 1,
+      "errors": 5,
+      "warnings": 5,
+      "new_diagnostics_after_path_normalization": []
+    },
+    "writer_checks": {
+      "focused_passed": 146,
+      "build_exit": 0,
+      "typecheck_exit": 0
+    },
+    "comparison_base": "HEAD frontend plus unchanged pre-existing U0 TrainingDatasetCatalog.test.tsx",
+    "stdout_stderr_location": "session job-4 and scratch evidence; not a substitute for durable counters in this receipt"
+  },
+  "independent_verification": {
+    "status": "partial",
+    "backend_authentication_passed": 68,
+    "backend_preparation_history_passed": 25,
+    "exit_codes": [
+      0,
+      0
+    ],
+    "deselections": 0,
+    "source_audit": "No severe change-caused defect reproduced; full S1-S8 not approved.",
+    "missing": [
+      "Independent frontend interaction run",
+      "Browser functional proof",
+      "Full independent owner-boundary sweep",
+      "Full backend base differential"
+    ]
+  },
+  "tdd": {
+    "schema_red_exit": 1,
+    "schema_green_exit": 0,
+    "schema_green_passed": 40,
+    "backend_bearer_red": "historical Bearer without cookie returned200; expected401",
+    "backend_bearer_green_exit": 0,
+    "frontend_red": "late401 erased logout recovery; sidebar missing",
+    "frontend_focused_green_passed": 146
+  },
+  "delivery": {
+    "staging": false,
+    "commits": [
+      {
+        "commit": "d8d37754e481c5feeb9978da5328e7c4dfbce999",
+        "message": "fix(sesión): validar el esquema antes de autenticar",
+        "authored_changed_lines": 30
+      },
+      {
+        "commit": "79fe610e35f2b6e3d4b6ecf2e08df6751ca5708c",
+        "message": "refactor(sesión): autenticar los routers importados con cookie",
+        "authored_changed_lines": 295
+      },
+      {
+        "commit": "20b91f16ae36a8d511325deea2327a1a87753ece",
+        "message": "refactor(sesión): usar identidad cookie en entrenamiento e inferencia",
+        "authored_changed_lines": 389
+      },
+      {
+        "commit": "c6161d1db0141b12810f134ad1bc9a294cf7697e",
+        "message": "refactor(sesión): retirar JWT y las rutas de acceso redundantes",
+        "authored_changed_lines": 552
+      },
+      {
+        "commit": "2807512dd9164ff7cbd652aaeaa2d7282d978681",
+        "message": "fix(sesión): conectar el cierre del sidebar y retirar tokens de importación",
+        "authored_changed_lines": 423
+      }
+    ],
+    "push": false,
+    "native_review_started": false,
+    "native_assessment": "Unavailable, including committed range3ab6b45..d8d3775: untracked files require explicit declaration. No reviewDue or native continuation offered, no START or native approval. Independent verification93PASS remains partial.",
+    "pull_requests_created": false,
+    "merge": false,
+    "chain_strategy": "feature-branch-chain",
+    "strategy_selected_by_user": "Cadena sobre rama de trabajo — recomendada",
+    "documentation_commit": "final commit containing this receipt",
+    "review_budget_notes": [
+      "JWT/router removal552lines; atomic code/test retirement kept coherent.",
+      "Frontend423lines; tests/consumers/documentation kept together.",
+      "Counts above400 reported; no minification, omitted tests or repository-external size exception policy."
+    ],
+    "verification_reexecuted_after_user_acceptance": false
+  },
+  "limits": [
+    "No Docker/Python3.12 proof",
+    "No PostgreSQL/GPU/live training/GCS",
+    "No runtime/browser proof",
+    "No general direct-fetch migration",
+    "No b-e implementation",
+    "Engram tools unavailable; local tracking only"
+  ],
+  "u0": "Pre-existing changes preserved; frontend U0 file unchanged and used in differential base. Backend API auth fixture edits are layered on top of U0 assertions. Other U0 file deltas remain unchanged; docs index/KANBAN additions preserved.",
+  "human_disposition": {
+    "quote": "Acepto el cierre aceptando los problemas de exportacion",
+    "accepted": "Cierre funcional limitado de etapa a; exportación no se corrige en esta etapa.",
+    "does_not_mean": [
+      "Suite global aprobada",
+      "Verificación independiente integral aprobada",
+      "Pruebas de navegador realizadas",
+      "Consentimiento de revisión nativa",
+      "Autorización de push, PR, merge o avance a b–e"
+    ]
+  }
+}

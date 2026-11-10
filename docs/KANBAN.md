@@ -2,6 +2,10 @@
 kanban-plugin: basic
 ---
 
+## Integración de afinamiento integral en `mvp` — etapa a cerrada con límites
+
+- [x] **A-SESIÓN — cierre funcional limitado aceptado por el usuario:** migración cookie a1/a2 aplicada; backend287PASS/31FAIL, frontend650PASS/52FAIL (base616PASS/83FAIL; cero fallos nuevos), lint con5errores previos, build/tipos correctos. Se aceptan los problemas de exportación sin corregirlos en a. Verificación independiente93PASS pero parcial; sin navegador ni aprobación S1–S8 completa. No corregir exportación/registry de b–e silenciosamente. Commits locales encadenados en `fix/mvp-cookie-session`; sin push/PR ni aprobación nativa. [Plan](arquitectura/integracion-mvp-sesion-cookie-plan.md) y [recibo](receipts/integracion-mvp-a.json).
+
 ## Consolidación del MVP local — Git y evidencia
 
 - [x] **MVP-GIT:** rama `feat/local-mvp`, respaldo validado de fuentes/índice y commits funcionales locales; fuentes conservadas, salvo dos correcciones de fixtures verificadas. [Plan y unidades](arquitectura/local-mvp-consolidation-plan.md), [recibo y exclusiones](receipts/local-mvp-consolidation.json). Frontend469PASS/tipos0; backend333 casos distintos con resultados aprobados en ejecuciones fragmentadas, no suite completa verde. Fallos, comprobaciones incompatibles con el runner y artefactos retirados se conservan sin aprobarlos. Sin push, PR, merge, nuevo despliegue, GCS o datos reales modificados; no acredita producción ni aceptación visual.
