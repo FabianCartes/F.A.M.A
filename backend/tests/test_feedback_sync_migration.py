@@ -17,13 +17,14 @@ def test_migration_preserves_legacy_rows_and_reexecution_preserves_queue(tmp_pat
         connection.execute(text("""CREATE TABLE prediccion (
             id_prediccion INTEGER PRIMARY KEY, ruta_audio_prueba VARCHAR(255),
             etiqueta_predicha VARCHAR(100), confianza FLOAT, modelo_id VARCHAR(100),
-            dataset_name VARCHAR(100), fecha_prediccion DATETIME)"""))
+            dataset_name VARCHAR(100), fecha_prediccion DATETIME,
+            nombre_original VARCHAR(255), fecha_carga DATETIME)"""))
         connection.execute(text("""CREATE TABLE retroalimentacion (
             id_retroalimentacion INTEGER PRIMARY KEY, id_prediccion INTEGER,
             id_usuario INTEGER, etiqueta_corregida VARCHAR(100), fue_correcta BOOLEAN,
             procesado BOOLEAN, fecha_retroalimentacion DATETIME)"""))
         connection.execute(text("""INSERT INTO prediccion VALUES
-            (1, 'raw_audios/source.wav', 'Rayadito', 0.9, 'model', 'AvesChilenas', NULL)"""))
+            (1, 'raw_audios/source.wav', 'Rayadito', 0.9, 'model', 'AvesChilenas', NULL, NULL, NULL)"""))
         connection.execute(text("""INSERT INTO retroalimentacion VALUES
             (7, 1, 1, NULL, 1, 0, NULL), (8, 1, 1, NULL, 1, 1, NULL)"""))
         before = connection.execute(text("SELECT * FROM retroalimentacion ORDER BY 1")).all()

@@ -462,7 +462,7 @@ def test_cli_defaults_to_preflight_and_requires_execute_for_attempts(reevaluatio
     def forbid_ambient_engine(*args, **kwargs):
         pytest.fail("Explicit CLI must not request app.database's ambient engine")
 
-    monkeypatch.setattr(database, "load_dotenv", forbid_dotenv)
+    monkeypatch.setattr("dotenv.load_dotenv", forbid_dotenv)
     monkeypatch.setattr(database, "_runtime_engine", forbid_ambient_engine)
     monkeypatch.setattr(trained_predictor, "AudioCNN", lambda num_classes: TinyModel(num_classes))
     case = reevaluation_case

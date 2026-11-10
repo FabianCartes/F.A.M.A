@@ -9,7 +9,7 @@ import zipfile
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Header, Path as PathParameter, Query, Request
+from fastapi import APIRouter, Depends, Header, Path as PathParameter, Query, Request, Response
 from fastapi.responses import FileResponse, Response, JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, ConfigDict, Field
@@ -18,9 +18,11 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.database import get_db
 from app.services.auth import security_bearer
 from app.services.imported_identity import imported_user
+from app.services.web_sessions import current_web_user
+from app.routes.auth import WebAuthRoute
 from app.services.dataset_imports import DatasetImports, reject, _durable_directory
 
-router = APIRouter(prefix="/api/ingestion/imports", tags=["dataset-imports"])
+router = APIRouter(prefix="/api/ingestion/imports", tags=["dataset-imports"], route_class=WebAuthRoute)
 
 
 def development_imports_enabled(request: Request) -> bool:
@@ -38,14 +40,25 @@ def get_import_user(request: Request, response: Response,
 
 
 @router.get("/access")
-def access(request: Request):
-    """Keep the capability response stable without enabling anonymous access."""
-    return {"development_mode": development_imports_enabled(request)}
+def access(request: Request, response: Response, db: Session = Depends(get_db)):
+    development = development_imports_enabled(request)
+    authenticated = False
+    from app.web_settings import settings
+    if request.cookies.get(settings().cookie):
+        current_web_user(request, response, db)
+        authenticated = True
+    response.headers["Cache-Control"] = "no-store"
+    return {"available": True, "development_mode": development, "authenticated": authenticated}
 
 
 def get_import_service():
-    root = os.environ.get("FAMA_IMPORT_ROOT", str(Path(__file__).resolve().parents[2] / "data" / "dataset-imports"))
+    from app.runtime import runtime_root
+    from app.configuration import get_configuration
     from app.services.dataset_storage_runtime import runtime_import_service
+    configured = get_configuration().values
+    runtime = runtime_root()
+    default = runtime / "dataset-imports" if runtime else Path(__file__).resolve().parents[2] / "data" / "dataset-imports"
+    root = configured.get("FAMA_IMPORT_ROOT") or os.environ.get("FAMA_IMPORT_ROOT", str(default))
     return runtime_import_service(root)
 
 

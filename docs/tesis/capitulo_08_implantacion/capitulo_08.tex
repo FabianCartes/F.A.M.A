@@ -1,0 +1,363 @@
+% Capítulo para incorporar a la tesis mediante \input{capitulo_08}.
+% Corte documental: 4 de noviembre de 2026.
+% La capacitación y el despliegue institucional se presentan como planificación.
+\chapter{Implantación y puesta en marcha}
+\label{cap:implantacion-puesta-marcha}
+
+El presente capítulo describe la preparación de los usuarios y las actividades
+necesarias para incorporar F.A.M.A. al trabajo de un entorno de investigación.
+La implantación comprende la configuración de los recursos tecnológicos, la
+disponibilidad de los datos y modelos, la definición de responsabilidades y la
+verificación de las operaciones que se realizarán mediante la plataforma.
+Debido a su arquitectura híbrida, estas actividades deben coordinar el
+almacenamiento centralizado en Google Cloud Platform con el procesamiento
+ejecutado en una estación o servidor local.
+
+En primer lugar, se establece el objetivo del plan de capacitación y se
+organizan las actividades de aprendizaje para investigadores y administradores.
+Posteriormente, se presenta una estrategia gradual de implantación, tomando
+como antecedente la puesta en marcha del nodo local del proyecto. El plan
+formativo se plantea como una propuesta de ejecución; la operación local
+verificada y las condiciones pendientes para el despliegue institucional se
+describen según su alcance.
+
+\section{Objetivo del Plan de Capacitación}
+\label{sec:objetivo-capacitacion}
+
+El objetivo del plan de capacitación es desarrollar las competencias necesarias
+para que los usuarios autorizados operen F.A.M.A. de manera autónoma y
+responsable, comprendiendo el recorrido de los datos desde su incorporación
+hasta la obtención y revisión de una predicción acústica. La formación busca
+que los participantes utilicen la interfaz web, interpreten los estados de las
+operaciones y conserven la trazabilidad de los experimentos.
+
+Para alcanzar este objetivo, se plantean los siguientes resultados de
+aprendizaje:
+
+\begin{enumerate}
+    \item Reconocer la distribución de responsabilidades entre el nodo de
+    procesamiento local, PostgreSQL y Google Cloud Storage.
+    \item Acceder a la plataforma con una cuenta propia y utilizar los recursos
+    disponibles de acuerdo con el rol y las asignaciones del usuario.
+    \item Identificar un conjunto de datos, comprobar su disponibilidad local y
+    preparar las particiones que utilizará un experimento.
+    \item Configurar y supervisar un entrenamiento individual, distinguir su
+    inicio de su finalización y consultar los resultados registrados.
+    \item Realizar predicciones, interpretar sus resultados y registrar
+    validaciones o correcciones con su correspondiente procedencia.
+    \item Reconocer incidentes habituales y aplicar las acciones de consulta,
+    respaldo o derivación que correspondan a cada responsabilidad.
+\end{enumerate}
+
+La capacitación considera dos perfiles de uso de la aplicación. El
+\textbf{investigador} se concentra en los conjuntos de datos asignados, los
+experimentos y la revisión de predicciones. El \textbf{administrador} incorpora
+la gestión de cuentas y asignaciones, la revisión de solicitudes y la
+activación explícita de modelos, además de las operaciones investigativas que
+tenga disponibles.
+
+La preparación de la infraestructura corresponde al \textbf{responsable
+técnico del nodo}. Esta función incluye la configuración de Google Cloud, las
+credenciales técnicas, las migraciones y la continuidad del servicio. Es una
+responsabilidad operacional que puede asumir una persona del equipo o de la
+institución, y no constituye un tercer rol web. Los investigadores que acceden
+únicamente desde el navegador no requieren recibir credenciales de Google
+Cloud ni contraseñas de PostgreSQL.
+
+\section{Fases del Plan de Entrenamiento}
+\label{sec:fases-entrenamiento-usuarios}
+
+En esta sección, el término entrenamiento se refiere a la formación práctica de
+los usuarios de la plataforma. El entrenamiento de redes neuronales se aborda
+como una de las operaciones que los participantes deben aprender a ejecutar y
+supervisar.
+
+Se propone una modalidad guiada que combine demostraciones, ejercicios sobre
+datos controlados y revisión de resultados. El equipo de desarrollo estará a
+cargo de la explicación inicial y del acompañamiento, mientras que el
+responsable técnico preparará las cuentas, los permisos y el entorno de
+práctica. Los materiales de apoyo comprenderán el manual de uso, las guías de
+instalación y recuperación, y un conjunto de audios con etiquetas conocidas.
+
+La Tabla~\ref{tab:plan-capacitacion} presenta una distribución inicial de cinco
+horas. Las duraciones son estimaciones de planificación, sujetas a ajuste según
+la experiencia de los participantes. El tiempo de cómputo de un entrenamiento
+puede exceder el bloque formativo y deberá programarse considerando el equipo
+disponible.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Distribución propuesta del plan de capacitación.}
+    \label{tab:plan-capacitacion}
+    \begingroup
+    \small
+    \renewcommand{\arraystretch}{1.18}
+    \begin{tabular}{p{0.08\linewidth} p{0.39\linewidth} p{0.27\linewidth} p{0.10\linewidth}}
+        \hline
+        \textbf{Fase} & \textbf{Actividad} & \textbf{Participantes} & \textbf{Minutos} \\
+        \hline
+        1 & Inducción y reconocimiento de la plataforma & Investigadores y administradores & 30 \\
+        2 & Acceso y gestión de datos & Investigadores y administradores & 60 \\
+        3 & Entrenamiento y seguimiento de modelos & Investigadores y administradores & 75 \\
+        4 & Inferencia y retroalimentación & Investigadores y administradores & 60 \\
+        5 & Administración y continuidad operacional & Administradores y responsable técnico & 45 \\
+        6 & Ejercicio integrado y evaluación & Participantes, según su responsabilidad & 30 \\
+        \hline
+        \multicolumn{3}{r}{\textbf{Total propuesto}} & \textbf{300} \\
+        \hline
+    \end{tabular}
+    \endgroup
+\end{table}
+
+\subsection{Fase 1: Inducción y reconocimiento de la plataforma}
+
+Se presentará el propósito de F.A.M.A. y su arquitectura híbrida. Los
+participantes reconocerán las vistas de gestión de audios, entrenamiento,
+predicción y consulta de resultados, junto con las funciones administrativas
+que correspondan a su cuenta.
+
+La demostración explicará la diferencia entre un archivo de audio, sus
+metadatos y los pesos de un modelo. También se abordará la separación entre
+almacenamiento cloud y cómputo local. Como resultado, cada participante deberá
+identificar dónde se conservan los datos y qué equipo ejecuta el
+procesamiento.
+
+\subsection{Fase 2: Acceso y gestión de datos}
+
+Se practicará el inicio y cierre de sesión, la consulta de recursos asignados y
+la identificación del conjunto de datos utilizado en el ejercicio. Se
+revisarán las operaciones de carga o sincronización disponibles, sus estados y
+las diferencias entre archivos registrados, archivos presentes en GCS y
+archivos descargados en el nodo.
+
+El ejercicio incluirá la revisión de clases y metadatos, seguida de la
+previsualización de particiones de entrenamiento, validación y prueba. Se
+explicará por qué grabaciones relacionadas deben conservarse dentro de una
+misma partición y por qué añadir audios exige preparar una versión nueva. El
+resultado esperado será reconocer una fuente local utilizable y una
+preparación identificada para el experimento.
+
+\subsection{Fase 3: Entrenamiento y seguimiento de modelos}
+
+Se configurará un entrenamiento individual con un conjunto reducido y
+preparado previamente. La actividad explicará el efecto de la arquitectura,
+las épocas, el tamaño de lote y la tasa de aprendizaje, junto con las
+restricciones impuestas por la memoria y el dispositivo de cómputo.
+
+Los participantes consultarán el progreso, los registros y las métricas, y
+distinguirán entre una solicitud admitida, un trabajo en ejecución y un
+resultado final. Se revisará la detención cooperativa cuando sea aplicable,
+sin interpretarla como una cancelación instantánea ni como una garantía de
+guardar el componente en curso.
+
+El resultado esperado será localizar el modelo registrado y sus evaluaciones
+una vez concluido el trabajo. Se explicará que completar una evaluación
+habilita la revisión del artefacto, mientras que su activación como
+predeterminado requiere una decisión administrativa explícita.
+
+\subsection{Fase 4: Inferencia y retroalimentación}
+
+Se utilizará un modelo disponible para clasificar audios de prueba con
+etiquetas conocidas. El participante revisará el archivo seleccionado, el
+modelo utilizado y la respuesta obtenida. La interpretación incluirá las
+salidas de silencio o ruido y la distinción entre confianza reportada y
+corrección efectiva de la clasificación.
+
+Posteriormente, se registrará una validación o corrección y se revisará su
+estado de incorporación. Se explicará que aprobar un aporte no modifica los
+pesos de un modelo existente: su utilización requiere una preparación posterior
+que lo incluya y un nuevo entrenamiento. La práctica se considerará completada
+cuando el participante pueda relacionar el audio, la predicción y la
+retroalimentación registrada.
+
+\subsection{Fase 5: Administración y continuidad operacional}
+
+El módulo administrativo abordará la gestión de cuentas, la asignación de
+datasets y la selección del modelo predeterminado. El responsable técnico
+demostrará cómo consultar la disponibilidad del nodo, reconocer fallos de
+conexión y localizar los registros operativos.
+
+Se revisarán los procedimientos de respaldo de checkpoints y de recuperación
+de la base de datos, conservando la separación entre credenciales web,
+identidad técnica cloud y usuarios SQL. Las restauraciones de práctica se
+realizarán en destinos de prueba preparados para ese propósito. El resultado
+esperado será que cada responsable identifique qué acciones puede realizar y
+cuáles debe derivar.
+
+\subsection{Fase 6: Ejercicio integrado y evaluación}
+
+La evaluación será práctica y utilizará una lista de verificación acorde con
+el perfil del participante. Se comprobará el acceso con cuenta propia, la
+identificación del dataset y del experimento, la consulta de resultados y el
+registro de una predicción con su revisión. Para los responsables de
+administración se añadirá una tarea de gestión de recursos o de diagnóstico.
+
+Se registrarán las tareas completadas, las dificultades y la asistencia
+requerida. Las operaciones que permanezcan en ejecución se revisarán al
+finalizar su cómputo. Las dificultades que afecten permisos, procedencia de
+datos o interpretación de estados deberán resolverse antes de autorizar el
+uso autónomo del recorrido correspondiente.
+
+La impartición de las sesiones, la asistencia y sus resultados deberán
+documentarse al ejecutar el plan. Las actividades y duraciones propuestas no
+representan una capacitación ya realizada.
+
+\section{Estrategia de Implantación y Puesta en Marcha}
+\label{sec:estrategia-implantacion}
+
+La estrategia considera una implantación gradual: preparación de
+infraestructura, habilitación de un nodo controlado, verificación operacional
+y posterior transferencia al entorno institucional. Esta secuencia permite
+revisar las dependencias de la arquitectura híbrida y preservar los datos
+existentes antes de ampliar el acceso.
+
+El nodo local del proyecto constituye el antecedente de puesta en marcha. El
+paso hacia un servidor de la institución requiere acordar su administración,
+conectividad, continuidad y respaldo. La disponibilidad comprobada en el
+equipo del proyecto no acredita por sí sola esas condiciones en otro destino.
+
+\subsection{Preparación de la infraestructura y las responsabilidades}
+
+La institución deberá designar el equipo que ejecutará el backend y la
+interfaz web, además del responsable de su operación. Los investigadores
+podrán utilizar navegadores como clientes; el procesamiento se realizará en
+el servidor o estación configurada. La ejecución en GPU dependerá de la
+disponibilidad y compatibilidad de CUDA y PyTorch; el recorrido implementado
+también permite ejecución en CPU.
+
+En Google Cloud se deberán identificar el proyecto, la instancia Cloud SQL,
+la base PostgreSQL y el bucket de GCS. Se preparará una identidad técnica
+autorizada para los recursos requeridos y se conservarán separados el usuario
+SQL diario y el usuario que aplica migraciones. La conexión PostgreSQL del
+entorno oficial utiliza Cloud SQL Auth Proxy; el acceso a objetos de GCS se
+realiza mediante las bibliotecas de Google.
+
+Antes del arranque se verificarán las dependencias, el espacio local y la
+conectividad. Cada entorno conservará su perfil privado de instalación y una
+raíz persistente propia para audios, particiones, checkpoints y registros. Las
+credenciales no formarán parte del repositorio ni se distribuirán a los
+investigadores que utilizan exclusivamente el navegador.
+
+\subsection{Instalación, configuración y preparación de datos}
+
+La instalación deberá utilizar una versión identificada del software y un
+esquema SQL compatible. Las migraciones se ejecutarán como una operación
+explícita del responsable autorizado; el servicio diario comprobará el estado
+de la base sin asumir permisos para modificar su estructura.
+
+Para una instalación nueva se utilizará el asistente protegido de
+configuración, que conecta recursos previamente preparados y permite crear la
+primera cuenta administradora. Si el destino contiene historia y una cuenta
+administradora existente, se aplicará el procedimiento de adopción
+correspondiente. Este tratamiento conserva las identidades previas y evita
+repetir el alta inicial.
+
+Los audios, índices y pesos se transferirán mediante una copia controlada o
+recuperación desde GCS. Se comprobarán los tamaños y las huellas de los
+artefactos antes de utilizarlos. Los modelos ya entrenados podrán incorporarse
+al nodo sin repetir su entrenamiento, siempre que se conserven su
+compatibilidad, configuración y clases.
+
+La distribución del código no sustituye esta preparación de archivos. Del
+mismo modo, la existencia de un registro en PostgreSQL no demuestra que el
+checkpoint requerido esté presente en el nuevo equipo.
+
+\subsection{Arranque y verificación operacional}
+
+El arranque comprenderá la conexión cloud, el backend y la interfaz web con
+su comunicación configurada. Se comprobarán por separado la respuesta del
+servicio, la compatibilidad del esquema y el acceso a los recursos. Después se
+verificarán el inicio y cierre de sesión, los permisos, el catálogo y la
+disponibilidad local de los datos y pesos seleccionados.
+
+La aceptación del recorrido funcional deberá incluir:
+
+\begin{enumerate}
+    \item Acceso con cuentas propias y comprobación de los recursos
+    autorizados para cada perfil.
+    \item Consulta de un dataset y verificación de sus archivos locales,
+    metadatos y particiones.
+    \item Entrenamiento individual controlado, comprobación del checkpoint y
+    consulta de las evaluaciones registradas.
+    \item Inferencia con un modelo disponible, registro del resultado y
+    seguimiento de una validación o corrección.
+    \item Reinicio del nodo, conservación de su configuración y recuperación
+    comprobada de los respaldos en un destino separado.
+\end{enumerate}
+
+Las pruebas deberán registrar la versión del código, los artefactos utilizados,
+los resultados y las incidencias. Se emplearán datos de prueba o una selección
+autorizada, evitando alterar conjuntos de evaluación reservados. El éxito de
+un recorrido funcional no sustituye la evaluación científica de la calidad
+del clasificador ni la medición de los requisitos de rendimiento.
+
+\subsection{Puesta en marcha local documentada}
+
+Con corte al 4 de noviembre de 2026, el proyecto dispone de un nodo local
+configurado con PostgreSQL en Cloud SQL, almacenamiento en GCS y archivos
+persistentes propios. La actualización del 25 de octubre aplicó la revisión
+SQL \texttt{0004\_integration}, conservó la historia previa y comprobó el
+acceso, los permisos y el catálogo de modelos. También se restauraron copias
+lógicas anterior y posterior en bases locales separadas, comparando tablas
+y secuencias.
+
+El catálogo verificado en ese mantenimiento incluyó un ensamble de aves como
+predeterminado y cinco modelos individuales. La preparación no acreditó la
+disponibilidad del ensamble industrial, cuyos pesos seguían pendientes. La
+operación local de aves constituye un punto de partida para la implantación y
+no permite extender sus resultados a otros dominios sin comprobaciones propias.
+
+El 1 de noviembre se documentó la reanudación de los servicios y la
+comprobación del acceso administrador. Ese registro no estableció la causa de
+su detención previa ni verificó un mecanismo permanente de arranque. El 4 de
+noviembre se comprobó la cuenta y el permiso técnico de un segundo integrante
+del equipo; el arranque de su nodo Linux permaneció pendiente.
+
+La Tabla~\ref{tab:estado-implantacion} resume el alcance de estos antecedentes.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Estado documentado de la implantación al 4 de noviembre de 2026.}
+    \label{tab:estado-implantacion}
+    \begingroup
+    \small
+    \renewcommand{\arraystretch}{1.18}
+    \begin{tabular}{p{0.22\linewidth} p{0.68\linewidth}}
+        \hline
+        \textbf{Aspecto} & \textbf{Alcance observado o pendiente} \\
+        \hline
+        Nodo local & Configuración oficial, conexiones cloud, acceso y catálogo comprobados en el equipo del proyecto. \\
+        Recuperación SQL & Respaldos lógicos restaurados y contrastados en bases locales separadas. Política externa y recuperación administrada pendientes. \\
+        Segundo equipo & Cuenta web y permiso técnico comprobados; configuración y arranque Linux pendientes de verificación. \\
+        Capacitación & Plan formativo propuesto; ejecución y evaluación con participantes pendientes. \\
+        Entorno institucional & Servidor, acceso HTTPS, servicio permanente y política de continuidad pendientes de preparación y aceptación. \\
+        \hline
+    \end{tabular}
+    \endgroup
+\end{table}
+
+\subsection{Continuidad operacional y transferencia institucional}
+
+La transferencia a la institución deberá formalizar quién administra las
+cuentas, quién resuelve incidentes y quién aplica actualizaciones. Se
+prepararán el origen web autorizado, HTTPS y la supervisión de los procesos,
+incluido su comportamiento después de reiniciar el equipo.
+
+El respaldo deberá considerar la base de datos y los archivos operativos
+necesarios para recuperar el nodo. Se definirán destino, periodicidad,
+retención y responsable de las copias, y se ensayará la restauración en un
+entorno separado. El respaldo de un checkpoint no reemplaza la recuperación
+de los registros SQL ni de los índices de datos.
+
+Antes de una actualización se conservarán una copia verificada de la base y
+la identificación del software y de los artefactos previos. Una reversión
+deberá utilizar código y esquema compatibles; cambiar únicamente la versión
+del repositorio no revierte una migración SQL.
+
+La aceptación institucional se realizará cuando el entorno de destino
+complete el recorrido operacional, el personal designado demuestre las
+competencias correspondientes y se disponga de procedimientos de soporte y
+recuperación comprobados. La importación y exportación ZIP se habilitarán
+únicamente donde estén disponibles Linux/Docker y los workers requeridos.
+Los resultados de esta aceptación deberán incorporarse al registro de puesta
+en marcha cuando se ejecute la transferencia.

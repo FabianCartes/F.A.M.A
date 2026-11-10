@@ -34,6 +34,6 @@ export default function LoginForm({ onLogin }: { onLogin: (email: string, passwo
       {error && <p role="alert" className="auth-error">{error}{cooldown > 0 && ` Espera ${cooldown} segundos.`}</p>}
       <button className="auth-submit" type="submit" disabled={busy || cooldown > 0}>{busy ? "Verificando…" : "Iniciar sesión"}</button>
     </form>
-    <p className="auth-help">¿No puedes acceder?<br />Contacta al administrador para recuperar tu cuenta.</p>
+    <p className="auth-help">¿No puedes acceder?<br />Contacta al administrador para recuperar tu cuenta.<br />Las cuentas son creadas por administradores autorizados.</p>
   </AuthSurface>;
 }

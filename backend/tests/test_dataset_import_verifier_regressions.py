@@ -38,7 +38,9 @@ def test_legacy_colon_name_remains_readable(tmp_path, monkeypatch):
     monkeypatch.setattr(main, "ingestion_service", service)
     client = TestClient(main.app, raise_server_exceptions=False)
     try:
-        response = client.get("/api/ingestion/datasets/Birds%3Afield/files")
+        from tests.http_security import administrator_http
+        with administrator_http(main.app):
+            response = client.get("/api/ingestion/datasets/Birds%3Afield/files")
         assert response.status_code == 200, response.text
         assert response.json()["files"][0]["name"] == "one.wav"
     finally:

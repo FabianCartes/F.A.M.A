@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
+from fastapi import FastAPI
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -11,9 +12,12 @@ if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
 
 from app.database import Base, get_db
-from app.main import app
+from app.routes.auth import router
 from app.models.user import Usuario
-from app.services.auth import hash_password, create_access_token
+from app.services.auth import hash_password
+
+app = FastAPI()
+app.include_router(router)
 
 
 @pytest.fixture
@@ -45,13 +49,16 @@ def test_db():
 
 
 @pytest.fixture
-def client(test_db):
-    with TestClient(app) as test_client:
+def client(test_db, monkeypatch):
+    from tests.http_security import configure_access_limits
+    configure_access_limits(monkeypatch)
+    monkeypatch.setenv("FAMA_WEB_ORIGIN", "https://auth.example.test")
+    with TestClient(app, base_url="https://auth.example.test", headers={"Origin": "https://auth.example.test"}) as test_client:
         yield test_client
 
 
 def test_login_success(client, test_db):
-    """POST /api/auth/login retorna 200 con token JWT y datos de usuario."""
+    """POST /api/auth/login retorna 200 con cookie opaca y datos de usuario."""
     user = Usuario(
         email="ornitologo@fama.cl",
         password_hash=hash_password("Pass1234!"),
@@ -68,8 +75,8 @@ def test_login_success(client, test_db):
     )
     assert res.status_code == 200
     data = res.json()
-    assert "access_token" in data
-    assert data["token_type"] == "bearer"
+    assert "access_token" not in data
+    assert "HttpOnly" in res.headers["set-cookie"]
     assert "user" in data
     assert data["user"]["email"] == "ornitologo@fama.cl"
     assert data["user"]["rol"] == "investigador"
@@ -124,7 +131,7 @@ def test_login_inactive_user(client, test_db):
 
 
 def test_get_current_user_me(client, test_db):
-    """GET /api/auth/me retorna los datos del usuario autenticado vía Bearer token."""
+    """GET /api/auth/me retorna los datos del usuario autenticado por cookie."""
     user = Usuario(
         email="dra_lucia@fama.cl",
         password_hash=hash_password("LuciaSecret!"),
@@ -136,11 +143,8 @@ def test_get_current_user_me(client, test_db):
     test_db.commit()
     test_db.refresh(user)
 
-    token = create_access_token(data={"sub": str(user.id), "email": user.email, "rol": user.rol})
-
-    # Petición autenticada
-    headers = {"Authorization": f"Bearer {token}"}
-    res = client.get("/api/auth/me", headers=headers)
+    assert client.post("/api/auth/login", json={"email": user.email, "password": "LuciaSecret!"}).status_code == 200
+    res = client.get("/api/auth/me")
     assert res.status_code == 200
     data = res.json()
     assert data["email"] == "dra_lucia@fama.cl"
@@ -149,6 +153,7 @@ def test_get_current_user_me(client, test_db):
     assert data["activo"] is True
 
     # Petición sin token
+    client.cookies.clear()
     res_no_auth = client.get("/api/auth/me")
     assert res_no_auth.status_code == 401
 
@@ -159,6 +164,7 @@ def test_get_current_user_me(client, test_db):
 
 def test_register_endpoint(client, test_db):
     """POST /api/auth/register crea un nuevo usuario y retorna 201."""
+    login_administrator(client, test_db)
     payload = {
         "email": "nuevo_investigador@fama.cl",
         "password": "PasswordFuerte2026!",
@@ -182,6 +188,7 @@ def test_register_endpoint(client, test_db):
 
 def test_register_invalid_role(client, test_db):
     """POST /api/auth/register rechaza roles no permitidos según la Tesis."""
+    login_administrator(client, test_db)
     payload = {
         "email": "invalido@fama.cl",
         "password": "PasswordFuerte2026!",
@@ -190,3 +197,10 @@ def test_register_invalid_role(client, test_db):
     }
     res = client.post("/api/auth/register", json=payload)
     assert res.status_code in [400, 422]
+
+
+def login_administrator(client, db):
+    db.add(Usuario(email="admin@example.test", password_hash=hash_password("SyntheticAdministrator!"),
+                   nombre_completo="Synthetic admin", rol="administrador", activo=True))
+    db.commit()
+    assert client.post("/api/auth/login", json={"email": "admin@example.test", "password": "SyntheticAdministrator!"}).status_code == 200

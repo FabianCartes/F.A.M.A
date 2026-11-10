@@ -1,0 +1,117 @@
+{
+  "version": 1,
+  "date": "2026-10-24",
+  "timezone": "America/Santiago",
+  "checked_at": "2026-10-24T04:34:47.492164+00:00",
+  "branch": "fix/afinamiento-integral",
+  "status": "official_ADC_cloud_access_and_own_proxy_verified_profile_pending_operator",
+  "operator_evidence": {
+    "reported_browser_selected_account_and_gcloud_CLI_authentication_success": true,
+    "raw_tokens_or_ADC_contents_shared_in_chat": false
+  },
+  "observed_ADC": {
+    "exists": true,
+    "type": "impersonated_service_account",
+    "source_type": "authorized_user",
+    "target_matches_official_service_account": true,
+    "directory_DACL_protected": true,
+    "directory_unexpected_Allow_rules": 0,
+    "file_unexpected_Allow_rules": 0,
+    "test_source_credentials_copied": false,
+    "contents_or_tokens_printed": false
+  },
+  "observed_cloud_read_checks": {
+    "checked_at": "2026-10-24T04:31:19.844060+00:00",
+    "project": "proyectotesis-fama",
+    "service_account": "fama-oficial-app@proyectotesis-fama.iam.gserviceaccount.com",
+    "ADC_type": "impersonated_service_account",
+    "bucket": "fama-audio-records-2026",
+    "cloud_SQL_instance": "fama-postgres-pruebas",
+    "credential_refresh_ok": true,
+    "bucket_listing_ok": true,
+    "SQL_connect_settings_ok": true,
+    "SQL_or_GCS_data_writes": false,
+    "listed_object_count_bounded_to_one": 1,
+    "SQL_connect_settings_HTTP_status": 200,
+    "code": "official_ADC_cloud_access_verified"
+  },
+  "official_proxy": {
+    "checked_at": "2026-10-24T04:32:31.5589022Z",
+    "code": "official_proxy_ready",
+    "pid": 21152,
+    "port": 5434,
+    "address": "127.0.0.1",
+    "connection_test_passed": true,
+    "loopback_listener_owned_by_proxy": true,
+    "executable_matches": true,
+    "instance_and_official_ADC_arguments_match": true,
+    "prior_port_5433_listener_preserved": true,
+    "SQL_login_attempted": false,
+    "binary_version": "2.26.2",
+    "binary_sha256": "41cfddfe79fdb5eb89a42c8c76149384eb1c564cfcaa7369a3261c95a5338b35",
+    "start_window_style": "Hidden",
+    "arguments_include_explicit_official_ADC_and_connection_name": true,
+    "private_process_record": "backend/credentials/gcloud-oficial/runtime/proxy-process.json",
+    "PID_is_observation_not_permanent_service_identity": true
+  },
+  "profile_handoff": {
+    "configuration_root": "backend/installation/cloud-oficial",
+    "root_exists": false,
+    "database": "fama_oficial",
+    "runtime_SQL_user": "fama_oficial_app",
+    "bucket": "fama-audio-records-2026",
+    "proxy_port": 5434,
+    "web_origin": "http://localhost:3010",
+    "existing_public_CLI": "python -m app.node --config-dir <new-directory> prepare",
+    "installed_CLI_help_checked": true,
+    "SQL_password_entry": "operator_local_hidden_prompt_only",
+    "expected_result": {
+      "code": "configuration_prepared"
+    }
+  },
+  "scope_limits": {
+    "no_new_production_code": true,
+    "new_automated_tests_run": false,
+    "new_SQL_login_attempted": false,
+    "SQL_or_GCS_data_writes": false,
+    "schema_migrations_applied": false,
+    "IAM_modified_this_unit": false,
+    "official_installation_profile_created_or_activated": false,
+    "application_services_restarted_or_stopped": false
+  },
+  "next": "operator_prepares_official_profile_with_hidden_app_SQL_password_then_connections_check",
+  "artifacts": [
+    {
+      "path": "docs/manuales/identidad_tecnica_oficial.md",
+      "sha256": "b4b31ac8c174f135e2a4c8adf9d5d7bb44495ebb6863f25234e5f1b72d911656"
+    },
+    {
+      "path": "docs/manuales/bitacora_acceso_e_instalacion.md",
+      "sha256": "9c853173f0080fa7c87815309d6a15f10e1c3af1480b0a48c6a5b7b4919f6c8d"
+    },
+    {
+      "path": "docs/manuales/preparacion_entorno_oficial.md",
+      "sha256": "38a43d2a84ce1d385aed4ddf41a81bfb9966659afc6929d4a3e3a72b51339b96"
+    },
+    {
+      "path": "docs/manuales/estado_actual_y_pendientes.md",
+      "sha256": "e89cacf381e2fc0226f717acacd31d080ece2250b2b757f75cee8bfce061f25b"
+    },
+    {
+      "path": "docs/KANBAN.md",
+      "sha256": "e28c92f9bd854e635d8595aa48f792d7bacd4e2b1778c162fb7f8b052a289e6f"
+    },
+    {
+      "path": "docs/README.md",
+      "sha256": "a246e685d4884b9d24a5edddb79fdd5a777b12b0f52f5a7fd88f72cb7e51f31f"
+    },
+    {
+      "path": "docs/manuales/plan_instalacion_gcp_y_asistente.md",
+      "sha256": "c9b1f49e70b3906d4f8b424bd1deb415fa139c69937f80d4207c84db2573cacf"
+    },
+    {
+      "path": "docs/manuales/plan_autonomia_investigador_y_catalogo.md",
+      "sha256": "4ae3ff10232baa5dbe57fb9864dd1de39f72d2a147165ca9a69a2865bb3a3392"
+    }
+  ]
+}

@@ -1,0 +1,167 @@
+{
+  "version": 1,
+  "date": "2026-10-24",
+  "timezone": "America/Santiago",
+  "checked_at": "2026-10-24T04:18:51.458953+00:00",
+  "branch": "fix/afinamiento-integral",
+  "status": "operator_SQL_access_result_received_official_IAM_proposal_requires_explicit_user_approval",
+  "SQL_evidence": {
+    "source": "operator_pasted_output_of_local_CLI",
+    "result": {
+      "code": "official_sql_access_verified",
+      "database": "fama_oficial",
+      "host": "127.0.0.1",
+      "port": 5433,
+      "users": [
+        {
+          "database": "fama_oficial",
+          "user": "fama_oficial_migrador",
+          "read_only": true,
+          "superuser": false,
+          "create_database": false,
+          "create_roles": false,
+          "inherits_roles": false,
+          "replication": false,
+          "bypass_rls": false,
+          "connects": true,
+          "database_create": false,
+          "temporary": false,
+          "schema_usage": true,
+          "schema_create": true,
+          "role_memberships": false,
+          "public_tables": 0
+        },
+        {
+          "database": "fama_oficial",
+          "user": "fama_oficial_app",
+          "read_only": true,
+          "superuser": false,
+          "create_database": false,
+          "create_roles": false,
+          "inherits_roles": false,
+          "replication": false,
+          "bypass_rls": false,
+          "connects": true,
+          "database_create": false,
+          "temporary": false,
+          "schema_usage": true,
+          "schema_create": false,
+          "role_memberships": false,
+          "public_tables": 0
+        }
+      ]
+    },
+    "password_values_received_or_saved": false,
+    "direct_SQL_session_opened_by_Codex_this_unit": false,
+    "schema_migrations_or_DML_ready_claim": false
+  },
+  "Google_Cloud_read_observations": {
+    "project": "proyectotesis-fama",
+    "service_accounts": [
+      "fama-orquestador",
+      "fama-pruebas-app"
+    ],
+    "official_bucket": "fama-audio-records-2026",
+    "bucket_policy_before_proposal": "legacy_project_owner_editor_viewer_bindings_only",
+    "proposed_SQL_role_permissions": [
+      "cloudsql.instances.connect",
+      "cloudsql.instances.get"
+    ],
+    "proposed_storage_role_checked_in_live_IAM_definition": true,
+    "active_operator_matches_session": true,
+    "existing_ADC_type": "impersonated_service_account",
+    "existing_ADC_source_type": "authorized_user",
+    "existing_refresh_credentials_copied": false
+  },
+  "IAM_proposal": {
+    "service_account": "fama-oficial-app@proyectotesis-fama.iam.gserviceaccount.com",
+    "display_name": "FAMA - Nodo oficial",
+    "bindings": [
+      {
+        "resource": "project:proyectotesis-fama",
+        "role": "roles/cloudsql.client",
+        "member": "serviceAccount:fama-oficial-app@proyectotesis-fama.iam.gserviceaccount.com"
+      },
+      {
+        "resource": "bucket:fama-audio-records-2026",
+        "role": "roles/storage.objectUser",
+        "member": "serviceAccount:fama-oficial-app@proyectotesis-fama.iam.gserviceaccount.com"
+      },
+      {
+        "resource": "serviceAccount:fama-oficial-app@proyectotesis-fama.iam.gserviceaccount.com",
+        "role": "roles/iam.serviceAccountTokenCreator",
+        "member": "session_human_operator",
+        "operator_email_sha256": "63f49730e3b54e30e534933da6ace0a2c401d77584182d348b4b0251cbc7f6d2"
+      }
+    ],
+    "new_private_key_requested_or_generated": false,
+    "approval_status": "pending_explicit_user_approval"
+  },
+  "automatic_approval_review": {
+    "rejected": true,
+    "process_started": false,
+    "reason": "Persistent service account and IAM grants, including project-level Cloud SQL Client and operator Token Creator, require explicit user authorization for these exact resources and scopes.",
+    "IAM_changes_applied": false,
+    "workaround_or_indirect_retry": false
+  },
+  "unaffected_local_preparation": {
+    "directory": "backend/credentials/gcloud-oficial",
+    "private_proposal_file": "iam-proposal.json",
+    "ACL_protected": true,
+    "unexpected_Allow_rules": 0,
+    "ADC_file_exists": false,
+    "SQL_passwords_saved": false,
+    "official_installation_profile_created": false
+  },
+  "not_performed": [
+    "service_account_creation",
+    "IAM_binding_changes",
+    "Google_ADC_authentication",
+    "source_credential_copy",
+    "private_key_creation",
+    "SQL_or_GCS_data_writes",
+    "schema_migrations",
+    "application_or_proxy_restart",
+    "official_cutover"
+  ],
+  "tests_run_this_unit": false,
+  "next": "explicit_approval_of_service_account_and_three_exact_IAM_bindings_then_standard_Google_ADC_login",
+  "artifacts": [
+    {
+      "path": "backend/scripts/comprobar_acceso_sql_oficial.py",
+      "sha256": "9e37358611b74a6357e02394c70522ff5da446877d887345c21cf222b200ce3f"
+    },
+    {
+      "path": "docs/manuales/identidad_tecnica_oficial.md",
+      "sha256": "3e50c25a1bb79dd4909b001e7eb312913e22058c6bae181606eafd5377d07a84"
+    },
+    {
+      "path": "docs/manuales/preparacion_entorno_oficial.md",
+      "sha256": "8bad2db43f4db9b3a207d10072165c26f78a00efc56eda424d9da9d07b8a441c"
+    },
+    {
+      "path": "docs/manuales/bitacora_acceso_e_instalacion.md",
+      "sha256": "c9bc5aa5d16cf9c410d8eafa0d7338880f8cc9f300e78bff7f910e4aac0c075d"
+    },
+    {
+      "path": "docs/manuales/estado_actual_y_pendientes.md",
+      "sha256": "6d9345db59f2947fee4314373395f4c21b87349583985ae62a5b3a6f78e3ce3d"
+    },
+    {
+      "path": "docs/KANBAN.md",
+      "sha256": "b4a5f9cea6c2ed52cb1d333d9518aa24fbaaf34eafce951fe8763744efc88f22"
+    },
+    {
+      "path": "docs/README.md",
+      "sha256": "119babc332703da5b5facd91db1add1db77777682a2e1c79ebfd3421aad38aa7"
+    },
+    {
+      "path": "docs/manuales/plan_instalacion_gcp_y_asistente.md",
+      "sha256": "72f14d406ad706a9deefd86fb14e24b68f359cf805687679b17c92abff3e9d59"
+    },
+    {
+      "path": "docs/manuales/plan_autonomia_investigador_y_catalogo.md",
+      "sha256": "24982773c2f79e726b02db2c4e77d4a5f46328685a03929dcc65a5d83cc3f5fe"
+    }
+  ]
+}

@@ -46,14 +46,20 @@ def isolated_db(tmp_path, monkeypatch):
     sessions = sessionmaker(bind=engine)
     monkeypatch.setattr(database, "SessionLocal", sessions)
     monkeypatch.setattr(trained_predictor, "TrainedModelPredictor", MetadataPredictor)
-    # Default registration and the activation caller both resolve this temporary root.
-    monkeypatch.setattr(registry_module, "__file__", str(tmp_path / "app/services/registry.py"))
+    # The installed configuration declares the same physical root for startup and activation.
+    from dataclasses import replace
+    from app.configuration import get_configuration, activate_configuration
+    previous = get_configuration()
+    activate_configuration(replace(previous, values=dict(previous.values, FAMA_RUNTIME_DIR=str(tmp_path))))
     checkpoints = tmp_path / "checkpoints"
     checkpoints.mkdir()
     monkeypatch.setattr(registry_module, "_global_model_registry", ModelRegistry())
-    with sessions() as db:
-        yield db, checkpoints
-    engine.dispose()
+    try:
+        with sessions() as db:
+            yield db, checkpoints
+    finally:
+        engine.dispose()
+        activate_configuration(previous, replace_environment=True)
 
 
 @pytest.fixture

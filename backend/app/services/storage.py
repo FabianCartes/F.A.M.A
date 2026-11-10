@@ -1,35 +1,12 @@
-import os
 import re
 import asyncio
 import unicodedata
 from pathlib import Path
 from typing import Optional, Union
-from dotenv import load_dotenv
 from google.cloud import storage
+from app.configuration import get_configuration, storage_bucket
 
-_BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
-_ENV_FILE = _BACKEND_DIR / ".env"
-if _ENV_FILE.exists():
-    load_dotenv(dotenv_path=_ENV_FILE)
-else:
-    load_dotenv()
-
-# Preserve relative credential resolution used by deployed environments.
-_cred_env = os.getenv("GOOGLE_APPLICATION_CREDENTIALS") or os.getenv("GCP_KEY_PATH")
-if _cred_env:
-    _cred_path = Path(_cred_env)
-    if not _cred_path.is_absolute():
-        for _candidate in [
-            _cred_path, _BACKEND_DIR / _cred_path, Path("/app") / _cred_path,
-            Path.cwd() / _cred_path, Path.cwd() / "backend" / _cred_path,
-        ]:
-            if _candidate.exists():
-                _resolved_cred = _candidate.resolve()
-                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(_resolved_cred)
-                os.environ["GCP_KEY_PATH"] = str(_resolved_cred)
-                break
-
-DEFAULT_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME", "fama-audio-records-2026")
+DEFAULT_BUCKET_NAME = get_configuration().bucket_name
 
 
 def validate_path_component(value: str) -> str:
@@ -50,7 +27,8 @@ def resolve_dataset_class(dataset_name: str, label: str) -> str:
     validate_path_component(dataset_name)
     validate_path_component(label)
     prefix = f"datasets/{dataset_name}/"
-    blobs = list(storage.Client().list_blobs(DEFAULT_BUCKET_NAME, prefix=prefix))
+    bucket = storage_bucket()
+    blobs = list(storage.Client().list_blobs(bucket, prefix=prefix))
     if not blobs:
         raise ValueError("Dataset sin catálogo de almacenamiento verificable")
     directories = set()
@@ -72,7 +50,8 @@ def resolve_dataset_class(dataset_name: str, label: str) -> str:
 def _blob(key: str, bucket_name: Optional[str] = None):
     if key.startswith("/") or any(p in ("", ".", "..") for p in key.split("/")):
         raise ValueError("Invalid storage object key")
-    return storage.Client().bucket(bucket_name or os.getenv("GCS_BUCKET_NAME", DEFAULT_BUCKET_NAME)).blob(key)
+    bucket = storage_bucket(bucket_name)
+    return storage.Client().bucket(bucket).blob(key)
 
 
 def download_prediction_audio(source_key: str) -> bytes:

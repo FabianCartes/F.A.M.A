@@ -38,6 +38,18 @@ export async function signOut(signal?: AbortSignal): Promise<void> {
   if (response.status !== 204) throw new AuthError("No se pudo confirmar el cierre de sesión en el servidor.");
 }
 
+export async function resetPassword(token: string, newPassword: string, signal?: AbortSignal): Promise<void> {
+  try {
+    const response = await post("reset-password", { token, new_password: newPassword }, signal);
+    if (response.status !== 204) throw new AuthError("No se pudo confirmar el cambio de contraseña.");
+  } catch (reason) {
+    if (reason instanceof AuthError && reason.status === 400) {
+      throw new AuthError("El enlace de recuperación es inválido, expiró o ya se utilizó. Solicita uno nuevo al administrador.", 400);
+    }
+    throw reason;
+  }
+}
+
 export async function signIn(email: string, password: string, signal?: AbortSignal): Promise<SessionUser> {
   const response = await post("login", { email: email.trim(), password }, signal);
   const parsed = userSchema.safeParse((await response.json())?.user);
@@ -47,11 +59,11 @@ export async function signIn(email: string, password: string, signal?: AbortSign
 
 export function authUrl(path: string): string {
   const base = API_BASE_URL.replace(/\/+$/, "");
-  const url = new URL(`${base}/api/auth/web/${path}`, window.location.origin);
+  const url = new URL(`${base}/api/auth/${path}`, window.location.origin);
   if (url.origin !== window.location.origin || url.username || url.password || url.search || url.hash) {
     throw new AuthError("La API debe usar el mismo origen de la aplicación. Revisa la configuración del proxy.");
   }
-  return `${base}/api/auth/web/${path}`;
+  return `${base}/api/auth/${path}`;
 }
 
 export async function currentUser(signal?: AbortSignal): Promise<SessionUser | null> {

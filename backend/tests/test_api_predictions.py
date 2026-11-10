@@ -6,6 +6,7 @@ import soundfile as sf
 import numpy as np
 
 from app.main import app
+from tests.http_security import administrator_http
 from app.database import get_db
 from app.schemas.prediction import PredictionResult
 from app.services.registry import get_model_registry, ModelRegistry
@@ -81,7 +82,12 @@ def mock_db():
 def client(mock_registry, mock_db):
     app.dependency_overrides[get_model_registry] = lambda: mock_registry
     app.dependency_overrides[get_db] = lambda: mock_db
-    yield TestClient(app)
+    with administrator_http(app):
+        http = TestClient(app, raise_server_exceptions=False)
+        try:
+            yield http
+        finally:
+            http.close()
     app.dependency_overrides.clear()
 
 
@@ -155,7 +161,7 @@ def test_predict_invalid_model_returns_404_and_aborts_gcs(mock_upload, client):
     )
 
     assert response.status_code == 404
-    assert "modelo-fantasma" in response.json()["detail"]
+    assert response.json()["detail"] == "Modelo no encontrado o no asignado."
     # Garantía de seguridad: GCS NUNCA se invoca si el modelo no existe
     mock_upload.assert_not_called()
 

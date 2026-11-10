@@ -12,7 +12,7 @@ const mockModels = [
 ];
 const panel = () => within(screen.getByRole('region', { name: 'Validar resultado' }));
 const choice = (name: string) => panel().getByRole('button', { name });
-const submit = () => panel().getByRole('button', { name: 'Enviar a revisión' });
+const submit = () => panel().getByRole('button', { name: 'Guardar corrección' });
 
 async function preparePrediction({ classes = ['alarm', 'normal'], dbId = 201, dataset = 'maquinaria-canonical' }: { classes?: string[]; dbId?: number | null; dataset?: string | null } = {}) {
   let nextId = dbId;
@@ -152,6 +152,7 @@ describe('PredictionView validation and responsive controls', () => {
     await api.infer();
     expect(api.predictionCalls()).toHaveLength(2);
     expect(screen.getByRole('region', { name: 'Validar resultado' })).toBeDefined();
+
   });
 
   it('offers compact wrapping Check/X buttons with explicit pressed state, separate submit and no default', async () => {
@@ -188,9 +189,9 @@ describe('PredictionView validation and responsive controls', () => {
     expect(incorrect.getAttribute('aria-pressed')).toBe('false');
     expect(api.feedbackCalls()).toHaveLength(0);
     await act(async () => { fireEvent.click(submit()); });
-    expect(JSON.parse(String(api.feedbackCalls()[0][1]?.body))).toEqual({ id_prediccion: 201, fue_correcta: true, etiqueta_corregida: null, id_usuario: 1 });
-    expect(screen.getByText(/Enviado a revisión/)).toBeDefined();
-    expect(panel().queryByRole('button', { name: 'Enviar a revisión' })).toBeNull();
+    expect(JSON.parse(String(api.feedbackCalls()[0][1]?.body))).toEqual({ id_prediccion: 201, fue_correcta: true, etiqueta_corregida: null });
+    expect(screen.getByText(/Corrección guardada/)).toBeDefined();
+    expect(panel().queryByRole('button', { name: 'Guardar corrección' })).toBeNull();
   });
 
   it('shows the executed dataset snapshot and freezes nonbird correction catalog after model changes', async () => {
@@ -207,7 +208,7 @@ describe('PredictionView validation and responsive controls', () => {
     expect(screen.getByText(/Dataset de inferencia/).parentElement?.textContent).toContain('maquinaria-canonical');
     expect(screen.getByText('Modelo ejecutado:').parentElement?.textContent).toContain('No informado por la API');
     await act(async () => { fireEvent.click(submit()); });
-    expect(JSON.parse(String(api.feedbackCalls()[0][1]?.body))).toEqual({ id_prediccion: 201, fue_correcta: false, etiqueta_corregida: 'normal', id_usuario: 1 });
+    expect(JSON.parse(String(api.feedbackCalls()[0][1]?.body))).toEqual({ id_prediccion: 201, fue_correcta: false, etiqueta_corregida: 'normal' });
   });
 
   it.each([null, undefined])('does not infer missing result association (%s) from model, class or filename', async dataset => {
@@ -225,7 +226,7 @@ describe('PredictionView validation and responsive controls', () => {
     let reject!: (reason: Error) => void;
     api.setFeedback(() => new Promise((_, fail) => { reject = fail; }));
     fireEvent.click(submit());
-    fireEvent.click(panel().getByRole('button', { name: 'Enviando a revisión…' }));
+    fireEvent.click(panel().getByRole('button', { name: 'Guardando corrección…' }));
     expect(api.feedbackCalls()).toHaveLength(1);
     expect(choice('Incorrecta').matches(':disabled')).toBe(true);
     expect(choice('Correcta').matches(':disabled')).toBe(true);
@@ -472,7 +473,7 @@ describe("U7IndependentStable", () => {
     await act(async () => { fireEvent.click(submit()); });
     expect(api.predictionCalls()).toHaveLength(2);
     expect(api.feedbackCalls()).toHaveLength(1);
-    expect(JSON.parse(String(api.feedbackCalls()[0][1]?.body))).toEqual({ id_prediccion: 902, fue_correcta: false, etiqueta_corregida: "normal", id_usuario: 1 });
+    expect(JSON.parse(String(api.feedbackCalls()[0][1]?.body))).toEqual({ id_prediccion: 902, fue_correcta: false, etiqueta_corregida: "normal" });
   });
 
   describe('private triad weight revision', () => {

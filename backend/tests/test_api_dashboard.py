@@ -13,6 +13,7 @@ from app.database import get_db
 from app.models.prediction import Prediccion
 from app.services.dashboard import DashboardService
 from tests.test_dashboard_truthful_stats import dashboard_environment
+from tests.http_security import administrator_http
 
 
 @pytest.fixture
@@ -21,7 +22,7 @@ def client(dashboard_environment):
     app = FastAPI()
     app.add_api_route("/api/dashboard/stats", get_dashboard_stats, methods=["GET"])
     app.dependency_overrides[get_db] = lambda: db
-    with TestClient(app) as test_client:
+    with administrator_http(app), TestClient(app) as test_client:
         yield test_client
 
 

@@ -61,7 +61,7 @@ def layout_api(tmp_path, monkeypatch):
         async def send(message):
             messages.append(message)
 
-        scope = {"type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1",
+        scope = {"type": "http", "asgi": {"version": "3.0", "spec_version": "2.4"}, "http_version": "1.1",
             "method": method, "path": path, "raw_path": path.encode(), "query_string": b"",
             "scheme": "http", "server": ("synthetic.test", 80), "client": ("127.0.0.1", 1),
             "headers": [(b"content-type", b"application/json" if body is not None else b"application/zip")]}

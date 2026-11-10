@@ -1,11 +1,87 @@
 """Bounded, structured upload through the agreed HTTP/service interfaces."""
 import io
+import struct
+from pathlib import Path
 
 import pytest
 import soundfile as sf
 
 from tests.test_api_ingestion_validation import client
 from tests.test_ingestion_upload_integrity import upload_environment, synthetic_wav
+from tests.test_ingestion_sync_integrity import BlobFixture
+
+
+def cbr_mp3_with_tags():
+    # Synthetic silence, 40 complete MPEG-1 Layer III frames, no Xing/Info table.
+    # libsndfile/LAME generated at 44.1 kHz, mono, 160 kbps; no field recording.
+    audio = (Path(__file__).parent / "fixtures/audio/cbr_without_seek_table.mp3").read_bytes()
+    return b"ID3\x04\x00\x00\x00\x00\x20\x00" + b"\0" * 4096 + audio
+
+
+def test_complete_mp3_with_estimated_length_uploads_unchanged_and_records_decoded_duration(client, upload_environment):
+    _, _, objects = upload_environment
+    content = cbr_mp3_with_tags()
+
+    response = client.post("/api/ingestion/upload", data={"dataset_name": "AvesChilenas"},
+                           files={"files": ("silence.mp3", content, "audio/mpeg")})
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "completed"
+    assert response.json()["db_persisted"] is True
+    assert objects["datasets/AvesChilenas/General/silence.mp3"] == content
+    audio, = client.get("/api/ingestion/datasets/AvesChilenas/files").json()["files"]
+    assert audio["recorded_metadata"]["duration_seconds"] == pytest.approx(46080 / 44100)
+
+
+def test_incomplete_mp3_frame_rejects_entire_batch_before_transfer(client, upload_environment):
+    _, _, objects = upload_environment
+    response = client.post("/api/ingestion/upload", data={"dataset_name": "AvesChilenas"}, files=[
+        ("files", ("valid.wav", synthetic_wav(), "audio/wav")),
+        ("files", ("cut.mp3", cbr_mp3_with_tags()[:-10], "audio/mpeg")),
+    ])
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Archivo de audio inválido o formato no admitido."
+    assert objects == {}
+    assert client.get("/api/training/datasets").json() == {"datasets": []}
+
+
+def test_mp3_with_ape_and_id3v1_metadata_preserves_original_tags(client, upload_environment):
+    _, _, objects = upload_environment
+    item = struct.pack("<II", 4, 0) + b"Title\0Test"
+    header = struct.pack("<8sIIII8s", b"APETAGEX", 2000, len(item) + 32, 1, 0xA0000000, b"\0" * 8)
+    footer = struct.pack("<8sIIII8s", b"APETAGEX", 2000, len(item) + 32, 1, 0x80000000, b"\0" * 8)
+    content = cbr_mp3_with_tags() + header + item + footer + b"TAG" + b"\0" * 125
+
+    response = client.post("/api/ingestion/upload", data={"dataset_name": "AvesChilenas"},
+                           files={"files": ("tagged.mp3", content, "audio/mpeg")})
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "completed"
+    assert objects["datasets/AvesChilenas/General/tagged.mp3"] == content
+
+
+def test_mp3_with_underestimated_duration_is_read_until_decoder_eof(client):
+    content = (Path(__file__).parent / "fixtures/audio/vbr_without_seek_table.mp3").read_bytes()
+    response = client.post("/api/ingestion/upload", data={"dataset_name": "AvesChilenas"},
+                           files={"files": ("variable.mp3", content, "audio/mpeg")})
+
+    assert response.status_code == 200
+    audio, = client.get("/api/ingestion/datasets/AvesChilenas/files").json()["files"]
+    assert audio["recorded_metadata"]["duration_seconds"] == pytest.approx(46080 / 44100)
+
+
+def test_mp3_download_records_the_same_duration_as_upload(client, monkeypatch):
+    content = (Path(__file__).parent / "fixtures/audio/vbr_without_seek_table.mp3").read_bytes()
+    blob = BlobFixture(content, "datasets/AvesChilenas/General/variable.mp3")
+    monkeypatch.setattr("google.cloud.storage.Client.list_blobs", lambda *args, **kwargs: [blob])
+
+    response = client.post("/api/ingestion/sync", json={"datasets": ["AvesChilenas"]})
+
+    assert response.status_code == 200
+    audio, = client.get("/api/ingestion/datasets/AvesChilenas/files").json()["files"]
+    assert audio["recorded_metadata"]["sample_rate_hz"] == 44100
+    assert audio["recorded_metadata"]["duration_seconds"] == pytest.approx(46080 / 44100)
 
 
 def test_http_rejects_oversized_audio_before_any_transfer(client, upload_environment, monkeypatch):

@@ -1,0 +1,61 @@
+{
+  "code": "official_login_restored_and_verified",
+  "verified_at_utc": "2026-11-01T05:05:01.409130+00:00",
+  "operator_report": {
+    "visible_identity": "admin@fama.test",
+    "message": "No se pudo conectar con el servicio de acceso."
+  },
+  "diagnosis": {
+    "previous_proxy_backend_frontend_processes_absent": true,
+    "previous_local_http_probes_failed": true,
+    "exact_termination_cause_established": false,
+    "official_identity": "admin@fama.cl"
+  },
+  "action": {
+    "mode": "independent-local-processes",
+    "launcher": "Windows CIM Win32_Process.Create; script local de operación excluido de Git",
+    "process_windows": "hidden",
+    "windows_service_installed": false,
+    "scheduled_task_installed": false,
+    "automatic_boot_start_configured": false,
+    "profile": "backend/installation/cloud-oficial/native",
+    "runtime": "runtime/oficial",
+    "frontend_mode": "production-standalone",
+    "url": "http://localhost:3010/",
+    "backend_port": 8010,
+    "proxy_port": 5434,
+    "database": "fama_oficial",
+    "bucket": "fama-audio-records-2026",
+    "source_commit": "a2c67f0e455c8872d530cb9c8a253b005520dd4e",
+    "source_branch": "fix/afinamiento-integral"
+  },
+  "http_checks": [
+    {"name": "web_login", "http_status": 200, "seconds": 2.44},
+    {"name": "backend_health", "http_status": 200, "code": "ok", "seconds": 0.16},
+    {"name": "backend_ready", "http_status": 200, "code": "schema_current", "seconds": 27.69},
+    {"name": "anonymous_session", "http_status": 401}
+  ],
+  "authentication_checks": {
+    "verified_at_utc": "2026-11-01T05:04:31.837866+00:00",
+    "login_http_status": 200,
+    "httponly_cookie_present": true,
+    "session_http_status": 200,
+    "official_identity_confirmed": true,
+    "administrator_confirmed": true,
+    "test_session_logout_http_status": 204,
+    "session_after_logout_http_status": 401,
+    "password_input": "Entrada oculta por getpass; valor mantenido solo en memoria.",
+    "cookie_handling": "CookieJar en memoria; sin guardar ni imprimir cookies."
+  },
+  "credentials_changed": false,
+  "schema_migrated": false,
+  "application_code_changed": false,
+  "limits": [
+    "El recibo del reinicio anterior conserva sus resultados históricos; esta comprobación corresponde al relanzamiento posterior.",
+    "No se identificó la causa exacta de la terminación anterior ni se comprobó continuidad futura tras otro fin de turno o reinicio de Windows.",
+    "No se inició entrenamiento, predicción, actualización IAM o carga de archivos GCS como comprobación.",
+    "El acceso se comprobó por HTTP a través del proxy web; no se completó el formulario del navegador del operador.",
+    "El login de prueba genera sesión y auditoría normales; se cerró únicamente esa sesión."
+  ],
+  "next_step": "Recargar la página de login y utilizar admin@fama.cl; preparar servicio permanente por separado."
+}

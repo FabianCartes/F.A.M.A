@@ -151,7 +151,7 @@ it("keeps session requirements and retries catalogue failures without starting i
   vi.stubGlobal("fetch", fetch);
   const { unmount } = render(<DatasetExportDialog />);
   fireEvent.click(screen.getByRole("button", { name: "Descargar versión como ZIP" }));
-  await screen.findByText(/Inicia sesión para acceder a tus importaciones/);
+  await screen.findByText(/Inicia sesión en F.A.M.A./);
   expect(screen.queryByLabelText("Dataset para exportar")).toBeNull();
   expect(fetch).toHaveBeenCalledTimes(1);
   unmount();

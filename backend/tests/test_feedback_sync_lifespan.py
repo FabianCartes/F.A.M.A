@@ -24,7 +24,9 @@ def test_application_lifespan_recovers_without_blocking_and_awaits_inflight(work
     worker = FeedbackSyncWorker(w.sessions, w.service.raw_data_dir, uploader=upload)
     monkeypatch.setattr(main.ensemble_service, 'load_models', lambda: startup.append('models'))
     monkeypatch.setattr(database, 'SessionLocal', w.sessions)
-    monkeypatch.setattr(auth, 'seed_initial_admin', lambda db: startup.append('seed'))
+    def forbidden_seed(db):
+        raise AssertionError('El arranque funcional no debe crear administradores')
+    monkeypatch.setattr(auth, 'seed_initial_admin', forbidden_seed)
     # Runtime construction seam; no cloud or model startup in tests.
     monkeypatch.setattr(main, 'FeedbackSyncWorker', lambda *a, **k: worker, raising=False)
 
@@ -36,7 +38,7 @@ def test_application_lifespan_recovers_without_blocking_and_awaits_inflight(work
                 break
             await asyncio.sleep(.01)
         assert entered.is_set(), 'Startup must launch an immediate recovery pass'
-        assert startup == ['models', 'seed']
+        assert startup == ['models']
         closing = asyncio.create_task(context.__aexit__(None, None, None))
         await asyncio.sleep(.02)
         assert worker.stopping.is_set()

@@ -3,46 +3,21 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from types import SimpleNamespace
-from sqlalchemy.orm import sessionmaker
-
-from tests.test_api_feedback import test_db, fake_gcs
-
-
-@pytest.fixture
-def workflow(test_db, tmp_path, monkeypatch):
-    """Read-only API checks need no file database or worker thread."""
-    from app.services import storage
-    original_download = storage.download_prediction_audio
-
-    def distinct_audio(source):
-        # Separate predictions must not accidentally exercise duplicate admission.
-        audio = bytearray(original_download(source))
-        audio[44] = ord(source[-5])
-        return bytes(audio)
-
-    monkeypatch.setattr(storage, 'download_prediction_audio', distinct_audio)
-    from app.models import Prediccion
-    from app.services.feedback import FeedbackService
-    sessions = sessionmaker(bind=test_db.get_bind())
-    service = FeedbackService(tmp_path / 'raw')
-    (service.raw_data_dir / 'AvesChilenas/rayadito').mkdir(parents=True)
-    with sessions() as db:
-        pred = Prediccion(ruta_audio_prueba='raw_audios/' + 'a' * 32 + '.wav',
-                          etiqueta_predicha='Rayadito', dataset_name='AvesChilenas', confianza=.9)
-        db.add(pred)
-        db.commit()
-        feedback = service.record_feedback(db, pred.id_prediccion, True)
-        service.approve_feedback(db, feedback.id_retroalimentacion)
-    return SimpleNamespace(sessions=sessions, service=service)
+from tests.test_feedback_sync_worker import workflow
+from app.services.web_sessions import current_web_user
+from app.models.user import Usuario
 
 
-def test_recent_accepted_states_are_bounded_read_only_and_separate_from_curation(workflow):
+def test_recent_accepted_states_are_bounded_read_only_and_separate_from_curation(workflow, monkeypatch):
     from app.main import app
     from app.database import get_db
     from app.models import Prediccion
     from app.services.feedback_sync import FeedbackSyncQueue
+    from app.services import storage
     w = workflow
+    # A second accepted audio must differ from the first: exact duplicates are
+    # deliberately rejected before curation, independent of web authorization.
+    monkeypatch.setattr(storage, "download_prediction_audio", lambda source: w.audio[:-2] + b"\x02\x00")
     with w.sessions() as db:
         pred = Prediccion(ruta_audio_prueba='raw_audios/' + 'b' * 32 + '.wav',
                           etiqueta_predicha='Rayadito', dataset_name='AvesChilenas', confianza=.9)
@@ -65,17 +40,22 @@ def test_recent_accepted_states_are_bounded_read_only_and_separate_from_curation
             yield db
 
     app.dependency_overrides[get_db] = database
+    app.dependency_overrides[current_web_user] = lambda: Usuario(id=1, rol="administrador", activo=True)
     client = TestClient(app)
     try:
         response = client.get('/api/feedback/sync?limit=1')
         assert response.status_code == 200
-        assert response.json() == [{
+        result = response.json()
+        assert result[0]['incorporated_at']
+        assert result == [{
             'id_retroalimentacion': 2, 'id_prediccion': 2,
             'dataset_name': 'AvesChilenas', 'storage_class': 'rayadito',
             'class_label': 'Rayadito', 'local_status': 'incorporated',
             'sync_status': 'synced', 'attempts': 1, 'error_code': None,
             'dataset_display_name': 'AvesChilenas', 'audio_filename': None,
             'incorporated_filename': 'feedback_2.wav',
+            'proposed_by': 1, 'incorporated_by': None, 'incorporated_at': result[0]['incorporated_at'],
+            'db_persisted': True,
         }]
         recent = client.get('/api/feedback/sync').json()
         assert [item['id_retroalimentacion'] for item in recent] == [2, 1]
@@ -96,6 +76,7 @@ def test_recent_accepted_states_are_bounded_read_only_and_separate_from_curation
     finally:
         client.close()
         app.dependency_overrides.pop(get_db, None)
+        app.dependency_overrides.pop(current_web_user, None)
 
 
 def test_sync_schema_rejects_false_milestones_and_provider_messages():

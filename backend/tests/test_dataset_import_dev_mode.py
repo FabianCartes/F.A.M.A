@@ -49,6 +49,7 @@ def local_imports(tmp_path, monkeypatch):
     service._initialize()
     root = service.root / "attempts"
     root.mkdir(mode=0o700)
+    app.state.test_sessions = sessions
     app.state.import_execution = ImportExecution(ImportJobQueue(sessions), service, root)
     with TestClient(app, client=("127.0.0.1", 50000), raise_server_exceptions=False) as client:
         yield client, app
@@ -65,7 +66,7 @@ def test_development_flags_cannot_admit_anonymous_imports(local_imports, monkeyp
     enable_local(monkeypatch)
     response = client.post(BASE, json={"request_key": "anonymous", "name": "Denied"})
     assert response.status_code == 401, response.text
-    assert client.get(BASE + "/access").json() == {"development_mode": False}
+    assert client.get(BASE + "/access").json() == {"available": True, "development_mode": False, "authenticated": False}
     assert client.get(BASE + "/datasets").status_code == 401
     registration = client.post("/api/auth/register", json={"email": "check@example.test",
         "password": "synthetic-password", "nombre_completo": "Check"})
@@ -82,12 +83,12 @@ def test_docker_frontend_cannot_enable_anonymous_imports(local_imports, monkeypa
     enable_local(monkeypatch)
     monkeypatch.setenv("FAMA_IMPORT_DEV_FRONTEND_IP", "172.30.253.10")
     with TestClient(app, client=("172.30.253.10", 50000)) as frontend:
-        assert frontend.get(BASE + "/access").json() == {"development_mode": False}
+        assert frontend.get(BASE + "/access").json() == {"available": True, "development_mode": False, "authenticated": False}
         assert frontend.post(BASE, json={"request_key": "denied", "name": "Denied"}).status_code == 401
         assert frontend.get(BASE + "/datasets").status_code == 401
         assert frontend.get(BASE, headers={"Authorization": "Bearer invalid"}).status_code == 401
         monkeypatch.delenv("FAMA_IMPORT_DEV_MODE")
-        assert frontend.get(BASE + "/access").json() == {"development_mode": False}
+        assert frontend.get(BASE + "/access").json() == {"development_mode": False, "available": True, "authenticated": False}
         assert frontend.get(BASE).status_code == 401
 
 
@@ -114,7 +115,7 @@ def test_frontend_configuration_never_accepts_ranges_or_names(local_imports, mon
 def test_local_mode_requires_login_for_all_import_operations(local_imports, monkeypatch):
     client, _ = local_imports
     enable_local(monkeypatch)
-    assert client.get(BASE + "/access").json() == {"development_mode": False}
+    assert client.get(BASE + "/access").json() == {"available": True, "development_mode": False, "authenticated": False}
     for suffix in ("", "/limits", "/example.zip", "/datasets", "/datasets/" + "a" * 32 + "/files"):
         assert client.get(BASE + suffix).status_code == 401
     assert client.post(BASE, json={"request_key": "denied", "name": "Denied"}).status_code == 401
@@ -128,7 +129,7 @@ def test_auth_is_required_by_default(local_imports, monkeypatch, environment):
     client, _ = local_imports
     if environment:
         monkeypatch.setenv("FAMA_ENV", environment)
-    assert client.get(BASE + "/access").json() == {"development_mode": False}
+    assert client.get(BASE + "/access").json() == {"development_mode": False, "available": True, "authenticated": False}
     assert client.get(BASE).status_code == 401
     assert client.get(BASE + "/limits").status_code == 401
     assert client.post(BASE, json={"request_key": "denied", "name": "No dataset"}).status_code == 401
@@ -140,7 +141,7 @@ def test_opt_in_outside_development_fails_closed(local_imports, monkeypatch, env
     monkeypatch.setenv("FAMA_IMPORT_DEV_MODE", "1")
     if environment:
         monkeypatch.setenv("FAMA_ENV", environment)
-    assert client.get(BASE + "/access").json() == {"development_mode": False}
+    assert client.get(BASE + "/access").json() == {"available": True, "development_mode": False, "authenticated": False}
     assert client.get(BASE + "/limits").status_code == 401
     assert client.post(BASE, json={"request_key": "denied", "name": "No dataset"}).status_code == 401
 
@@ -150,7 +151,7 @@ def test_remote_peers_cannot_use_local_exception_or_spoof_forwarding(local_impor
     enable_local(monkeypatch)
     with TestClient(app, client=("192.0.2.10", 50000)) as remote:
         headers = {"X-Forwarded-For": "127.0.0.1", "Forwarded": "for=127.0.0.1", "Host": "localhost"}
-        assert remote.get(BASE + "/access", headers=headers).json() == {"development_mode": False}
+        assert remote.get(BASE + "/access", headers=headers).json() == {"available": True, "development_mode": False, "authenticated": False}
         assert remote.get(BASE, headers=headers).status_code == 401
 
 
@@ -161,12 +162,15 @@ def test_local_and_authenticated_owners_remain_isolated(local_imports, tmp_path,
         # TestClient's public transport configuration, not proxy-header rewriting.
         client = TestClient(local_imports[1], client=("172.30.253.10", 50000))
         monkeypatch.setenv("FAMA_IMPORT_DEV_FRONTEND_IP", "172.30.253.10")
-    registration = client.post("/api/auth/register", json={"email": "synthetic@example.test",
-        "password": "synthetic-password", "nombre_completo": "Synthetic User"})
-    assert registration.status_code == 201, registration.text
-    login = client.post("/api/auth/login", json={"email": "synthetic@example.test", "password": "synthetic-password"})
+    from app.services.auth import create_user
+    from app.web_settings import settings
+    origin = settings().origin
+    with local_imports[1].state.test_sessions() as db:
+        create_user(db, "synthetic@example.test", "synthetic-password", "Synthetic User")
+    client.headers["Origin"] = origin
+    login = client.post("/api/auth/login", json={"email":"synthetic@example.test", "password":"synthetic-password"})
     assert login.status_code == 200, login.text
-    client.headers["Authorization"] = "Bearer " + login.json()["access_token"]
+    saved_cookies = dict(client.cookies)
     private_job = prepare(client, tmp_path, key="private")
     private_dataset = confirm(client, private_job).json()["dataset_id"]
     private_files = client.get(f"{BASE}/datasets/{private_dataset}/files").json()

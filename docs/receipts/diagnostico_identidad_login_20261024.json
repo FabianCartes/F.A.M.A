@@ -1,0 +1,15 @@
+{
+  "code": "official_login_identity_diagnosed",
+  "checked_at_utc": "2026-10-24T19:00:20.486298+00:00",
+  "database": "fama_oficial",
+  "supplied_email_found": false,
+  "official_account": {
+    "email": "admin@fama.cl",
+    "role": "administrador",
+    "active": true
+  },
+  "password_checked": false,
+  "credentials_changed": false,
+  "database_access": "read_only",
+  "next_step": "Iniciar sesión con la identidad oficial y su contraseña ya configurada."
+}

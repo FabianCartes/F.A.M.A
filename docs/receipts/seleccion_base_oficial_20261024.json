@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "date": "2026-10-24",
+  "timezone": "America/Santiago",
+  "checked_at": "2026-10-24T03:14:16.468917+00:00",
+  "branch": "fix/afinamiento-integral",
+  "status": "official_database_exists_UI_selection_pending",
+  "operator_report": "only_fama_pruebas_visible_UI_surface_not_identified",
+  "observation": {
+    "method": "gcloud_sql_databases_list_read_only",
+    "project": "proyectotesis-fama",
+    "instance": "fama-postgres-pruebas",
+    "databases": [
+      {
+        "name": "postgres",
+        "charset": "UTF8",
+        "collation": "en_US.UTF8"
+      },
+      {
+        "name": "fama_pruebas",
+        "charset": "UTF8",
+        "collation": "en_US.UTF8"
+      },
+      {
+        "name": "fama_oficial",
+        "charset": "UTF8",
+        "collation": "en_US.UTF8"
+      }
+    ]
+  },
+  "documentation": {
+    "source": "https://docs.cloud.google.com/sql/docs/postgres/manage-data-using-studio?hl=es",
+    "verified_fact": "Explorer_displays_objects_of_the_database_selected_during_authentication"
+  },
+  "not_verified": [
+    "which_console_surface_the_operator_is_viewing",
+    "stale_UI_or_different_resource_as_root_cause",
+    "remote_role_script_execution"
+  ],
+  "mutations": {
+    "cloud_resources": false,
+    "SQL_roles_passwords_schema_or_data": false,
+    "application_services": false
+  },
+  "next": "check_instance_Databases_view_refresh_then_select_official_Studio_connection",
+  "tests_run": false,
+  "artifacts": [
+    {
+      "path": "docs/manuales/bitacora_acceso_e_instalacion.md",
+      "sha256": "be2a48e182abc624233066ded5fdd7944e2dde541d1bf1e2c9c1af72514125af"
+    },
+    {
+      "path": "docs/manuales/preparacion_entorno_oficial.md",
+      "sha256": "408adde2d45796cfc6ab1edd865a14f9bb926d1a8ef88bd661578639b15e7859"
+    },
+    {
+      "path": "docs/manuales/estado_actual_y_pendientes.md",
+      "sha256": "41c72f3f534e4a444150d493b267753b9212975580e02cc99326a709ebc9394b"
+    },
+    {
+      "path": "docs/README.md",
+      "sha256": "e40cc61e8bbe0fe28b125d994e7195ace9bf884b1670128048b64fe6eb3a7a16"
+    }
+  ]
+}

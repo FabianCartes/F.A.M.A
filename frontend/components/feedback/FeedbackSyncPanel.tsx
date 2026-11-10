@@ -68,6 +68,7 @@ export default function FeedbackSyncPanel({ refreshKey }: { refreshKey: number }
                 <th className="p-2">Dataset de destino</th>
                 <th className="p-2">Nombre del audio revisado</th>
                 <th className="p-2">Estado local</th>
+                <th className="p-2">Registro y autoría</th>
                 <th className="p-2">Copia cloud</th>
               </tr>
             </thead>
@@ -83,6 +84,7 @@ export default function FeedbackSyncPanel({ refreshKey }: { refreshKey: number }
                     <p><span className="text-gray-400">En el dataset: </span>{record.incorporated_filename || 'Nombre de incorporación no disponible'}</p>
                   </td>
                   <td className="p-2 text-emerald-300">Incorporado localmente</td>
+                  <td className="p-2"><p>{record.db_persisted === true ? "Registrado en PostgreSQL" : "Registro SQL sin confirmar"}</p><p className="text-gray-400 mt-1">Propuesto por {record.proposed_by ? `cuenta #${record.proposed_by}` : "autor sin registrar"} · Incorporado por {record.incorporated_by ? `cuenta #${record.incorporated_by}` : "autor sin registrar"}</p>{record.incorporated_at && <p className="text-gray-500 mt-1">{new Date(record.incorporated_at).toLocaleString()}</p>}</td>
                   <td className="p-2">
                     <p>{record.sync_status === "synced" ? "Copia cloud confirmada" : "Pendiente de copia cloud"}</p>
                   </td>

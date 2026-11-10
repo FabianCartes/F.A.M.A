@@ -22,6 +22,7 @@ from app.schemas.prediction import PredictionResult
 from app.services import registry as registry_module
 from app.services.registry import ModelRegistry, get_model_registry
 from app.services.predictors.base import AudioPredictor, ModelWeightsError
+from tests.http_security import administrator_http
 
 
 class ContractPredictor(AudioPredictor):
@@ -98,7 +99,8 @@ def client(mock_db_session, controlled_registry, monkeypatch, tmp_path):
     app.dependency_overrides[get_model_registry] = lambda: controlled_registry
     test_client = TestClient(app)  # No context manager: do not run production lifespan.
     try:
-        yield test_client
+        with administrator_http(app):
+            yield test_client
     finally:
         test_client.close()
         app.dependency_overrides.clear()
@@ -143,7 +145,7 @@ def test_predict_success_contract(mock_gcp, client, mock_db_session):
     assert data["modelo_id"] == "contract-birds"
     assert data["modelo"] == "HTTP contract fixture"
     assert data["is_fallback"] is False
-    assert isinstance(data["modelos_activos"], list)
+    assert data["modelos_activos"] is None
     assert data["detalles"] == {"is_mock": True, "fixture": "http-contract", "dataset_name": None}
     mock_gcp.assert_awaited_once()
     uploaded_filename = mock_gcp.await_args.kwargs["filename"]
@@ -151,7 +153,9 @@ def test_predict_success_contract(mock_gcp, client, mock_db_session):
     assert uploaded_filename.endswith(".wav")
     assert all(character in "0123456789abcdef" for character in uploaded_filename[:-4])
     assert uploaded_filename != "test_chucao.wav"
-    mock_gcp.assert_awaited_once_with(wav_data, filename=uploaded_filename)
+    assert mock_gcp.await_args.args == (wav_data,)
+    assert mock_gcp.await_args.kwargs["filename"] == uploaded_filename
+    assert callable(mock_gcp.await_args.kwargs["thread_runner"])
     mock_db_session.add.assert_called_once()
     saved = mock_db_session.add.call_args.args[0]
     assert saved.ruta_audio_prueba == f"raw_audios/{uploaded_filename}"
@@ -292,4 +296,3 @@ def test_predict_real_chucao_quality(mock_gcp, client, controlled_registry):
     assert data.get("is_fallback") is False
     assert "detalles" in data
     assert data["detalles"].get("is_mock") is False
-

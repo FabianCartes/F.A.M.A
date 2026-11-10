@@ -1,5 +1,5 @@
 """Intención durable de sincronización, independiente de la curación legacy."""
-from sqlalchemy import CheckConstraint, Column, ForeignKey, Integer, String
+from sqlalchemy import CheckConstraint, Column, ForeignKey, Integer, String, DateTime
 
 from app.database import Base
 
@@ -22,3 +22,6 @@ class FeedbackSync(Base):
     status = Column(String(10), nullable=False, default="pending")
     attempts = Column(Integer, nullable=False, default=0)
     error_code = Column(String(32), nullable=True)
+    # Historical incorporations retain unknown authorship; never infer it from proposer.
+    incorporated_by = Column(Integer, nullable=True)
+    incorporated_at = Column(DateTime(timezone=True), nullable=True)

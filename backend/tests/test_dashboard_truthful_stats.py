@@ -139,7 +139,8 @@ def test_http_dashboard_does_not_load_or_probe_checkpoint_files(dashboard_enviro
     app.add_api_route("/api/dashboard/stats", main.get_dashboard_stats, methods=["GET"])
     app.dependency_overrides[main.get_db] = lambda: db
     probes.clear()
-    with TestClient(app, raise_server_exceptions=False) as client:
+    from tests.http_security import administrator_http
+    with administrator_http(app), TestClient(app, raise_server_exceptions=False) as client:
         response = client.get("/api/dashboard/stats")
 
     assert response.status_code == 200

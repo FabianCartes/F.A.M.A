@@ -1,0 +1,238 @@
+{
+  "version": 1,
+  "date": "2026-10-22",
+  "branch": "fix/afinamiento-integral",
+  "stage": 5,
+  "status": "connections_verified",
+  "implementation": {
+    "commands": [
+      "app.node prepare",
+      "app.node check",
+      "app.node serve",
+      "app.connections"
+    ],
+    "compose_variant": "docker-compose.cloud.yml",
+    "minimum_compose_version": "2.24.4",
+    "selected_configuration_ignores_legacy_connection_environment": true,
+    "prepare_preserves_existing_target_directory": true,
+    "secret_input": "local_terminal_getpass",
+    "windows_directory_acl": "protected_current_user_and_SYSTEM_inheritable",
+    "posix_directory_mode": "0700",
+    "posix_secret_file_mode": "0600",
+    "persists_migrator_password": false,
+    "finalizes_installation": false,
+    "applies_migrations": false,
+    "creates_web_admin": false,
+    "source_sha256": {
+      "backend/app/configuration.py": "f439c1d979cdfcc1d12952a06a53a1fe068b68c86e2702b0aebd486211046350",
+      "backend/app/connections.py": "36331281b5e2c68dd7940bbd83ec9ef8ab593276ac6722643e3131fe6aba3c52",
+      "backend/app/database_connection.py": "b4524cce2d0f1647d1a8e4ebee7a83edb0026e6b872c333f816f0293ec7c4895",
+      "backend/app/entrypoint.py": "0fbaa189f31baeb8af06b27b889bf9084b7c6d317d0f308fab676f3254d3630c",
+      "backend/app/node.py": "ffe628b59896ddbfd9e0bfe429c052ccd94a881cb34080c8e3eced378c062b89",
+      "docker-compose.cloud.yml": "f547bbfd8e5c8cc1bc34659ee699ca690eae6b323b1bbeaa637b5ef23d33781c",
+      "backend/.env.example": "a57f84bcd6b71684b3d744df2491da57e28c089797ce75d63c80057c765f9246"
+    }
+  },
+  "regression": {
+    "test_files": [
+      "backend/tests/test_connection_diagnostics.py",
+      "backend/tests/test_cloud_node.py",
+      "backend/tests/test_installation_compose.py",
+      "backend/tests/test_installation_configuration.py",
+      "backend/tests/test_installation_startup.py",
+      "backend/tests/test_schema_migrations.py",
+      "backend/tests/test_database_url.py",
+      "backend/tests/test_preparacion_roles_pruebas.py"
+    ],
+    "command_prefix": "backend/.venv/Scripts/python.exe -m pytest --noconftest",
+    "command_suffix": "-q -p no:cacheprovider",
+    "environment": {
+      "PYTHONPATH": "<repository>/backend",
+      "PYTHON_DOTENV_DISABLED": "1",
+      "DATABASE_URL": "sqlite://",
+      "TEMP_and_TMP": "<repository>/.pytest_cache",
+      "FAMA_TEST_POSTGRES_URL": "exclusive_ephemeral_local_postgresql",
+      "FAMA_TEST_ROLES_POSTGRES_URL": "same_exclusive_ephemeral_local_postgresql"
+    },
+    "passed": 50,
+    "failed": 0,
+    "skipped": 0,
+    "duration_seconds": 82.09,
+    "global_project_suite": false,
+    "postgresql_version": "16.15",
+    "postgresql_storage": "tmpfs",
+    "postgresql_image_id": "sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea",
+    "test_sha256": {
+      "backend/tests/test_connection_diagnostics.py": "019034b5c1ad848a6413e22a31b9bb3a8522b1127bd11f894183fd8c74750944",
+      "backend/tests/test_cloud_node.py": "11d474d82a9246344e0fd4bb21742aa9e6f630871934078637a5a9bbf15df2a9",
+      "backend/tests/test_installation_compose.py": "26f1042d13d42191963333a9749e179695720c52f2a873d8edea84cbd17d2cbb",
+      "backend/tests/test_installation_configuration.py": "3e2ce8a0e588117f17177f7067322cb8455f157ce1de5552b84230d361086712",
+      "backend/tests/test_installation_startup.py": "5f0cb499e39752e2a79f2dd0839b360bc0fcc29014b28a1bea68f007d478baaa",
+      "backend/tests/test_schema_migrations.py": "27fc4e6a29b9aabe7c86c1210ef468637249bfd7ad74324a2f49d1cd3a0dbc64",
+      "backend/tests/test_database_url.py": "aaf1cf7f1103cb3941c5b6ac7fd34d686d710b7c5a6a83427fc00412f0bfa6d5",
+      "backend/tests/test_preparacion_roles_pruebas.py": "1aa882fbdbbe7af7d3a64625e2ade4d9da2b8f7bdcc3139501c6bc951e4bfc11"
+    },
+    "red_green_observed": [
+      "missing_public_connection_diagnostic",
+      "real_local_postgresql_ping_and_authentication_failure",
+      "independent_sanitized_sql_and_gcs_results",
+      "legacy_relative_credential_path_resolution",
+      "persisted_project_and_explicit_environment_selection",
+      "missing_explicit_cloud_compose_variant",
+      "missing_private_node_preparation_and_selected_check",
+      "native_http_startup_without_loading_ml",
+      "windows_private_directory_acl"
+    ],
+    "external_mocks": [
+      "google_auth_and_storage_sdk_error_cases",
+      "getpass_terminal_boundary_with_synthetic_password"
+    ],
+    "sql_mocked": false
+  },
+  "integration_checks": {
+    "project": "proyectotesis-fama",
+    "bucket": "fama-pruebas",
+    "cloud_sql_connection_name": "proyectotesis-fama:us-central1:fama-postgres-pruebas",
+    "adc_type": "impersonated_service_account",
+    "native_node_check": {
+      "database_target": "exclusive_ephemeral_local_postgresql",
+      "database_code": "database_connected",
+      "storage_target": "real_fama-pruebas_bucket",
+      "storage_code": "storage_read_connected",
+      "gcs_operation": "list_objects_max_results_1",
+      "synthetic_sql_password": true,
+      "exit_code": 0
+    },
+    "linux_node_check": {
+      "database_target": "same_ephemeral_local_postgresql_via_test_network_alias",
+      "network_alias": "cloud-sql-proxy",
+      "database_code": "database_connected",
+      "storage_target": "real_fama-pruebas_bucket",
+      "storage_code": "storage_read_connected",
+      "uid": 10001,
+      "gid": 10001,
+      "root_filesystem_read_only": true,
+      "configuration_and_adc_mounts_read_only": true,
+      "exit_code": 0,
+      "image": "fama-conexiones-etapa5:local",
+      "image_id": "sha256:70ccb2fa896a956187947f113a7d9603294b392303e3d1b1eac2b2b6290348f6",
+      "build_scope": "minimal_public_connection_modules_without_credentials_or_ml_artifacts",
+      "base_image": "python:3.12-slim",
+      "base_image_digest": "sha256:9e01bf1ae5db7649a236da7be1e94ffbbbdd7a93f867dd0d8d5720d9e1f89fab"
+    },
+    "docker_proxy_transport": {
+      "target": "real_cloud_sql_instance",
+      "image": "gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.26.2-alpine",
+      "image_digest": "sha256:4a5cc5bd3a2fe8051b53fc4a508a45aca9148689700529db3b2bc8c348e750b3",
+      "uid": 10001,
+      "gid": 10001,
+      "published_host_ports": [],
+      "adc_mount_read_only": true,
+      "connection_test": "Connection test passed",
+      "readiness": "ok",
+      "sql_password_authentication": "not_tested_here"
+    },
+    "real_native_sql_login": {
+      "evidence": "operator_terminal_screenshot",
+      "database": "fama_pruebas",
+      "users": [
+        "fama_migrador",
+        "fama_app"
+      ],
+      "query": "SELECT current_database(), current_user",
+      "new_node_configuration_used": false
+    },
+    "selected_dependency_versions": {
+      "SQLAlchemy": "2.1.4",
+      "psycopg2-binary": "2.9.13",
+      "google-cloud-storage": "3.17.0",
+      "google-auth": "2.61.0",
+      "requests": "2.34.2",
+      "python-dotenv": "1.2.4",
+      "fastapi": "0.143.0",
+      "uvicorn": "0.54.0",
+      "alembic": "1.20.0",
+      "docker_compose_observed": "5.6.0"
+    },
+    "real_native_node_check": {
+      "database_target": "real_cloud_sql_instance",
+      "database": "fama_pruebas",
+      "user": "fama_app",
+      "configuration": "native",
+      "database_code": "database_connected",
+      "storage_target": "real_fama-pruebas_bucket",
+      "storage_code": "storage_read_connected",
+      "exit_code": 0,
+      "schema_read_preflight": {
+        "code": "schema_empty",
+        "revision": null
+      },
+      "write_operations": false
+    },
+    "real_linux_node_check": {
+      "database_target": "real_cloud_sql_instance_via_temporary_official_proxy",
+      "database": "fama_pruebas",
+      "user": "fama_app",
+      "configuration": "docker",
+      "database_code": "database_connected",
+      "storage_target": "real_fama-pruebas_bucket",
+      "storage_code": "storage_read_connected",
+      "exit_code": 0,
+      "uid": 10001,
+      "gid": 10001,
+      "root_filesystem_read_only": true,
+      "configuration_and_adc_mounts_read_only": true,
+      "gcs_operation": "list_objects_max_results_1",
+      "image": "fama-conexiones-etapa5:local",
+      "image_id": "sha256:70ccb2fa896a956187947f113a7d9603294b392303e3d1b1eac2b2b6290348f6",
+      "proxy_readiness": "ok",
+      "proxy_published_host_ports": [],
+      "write_operations": false
+    },
+    "cloud_compose_service_selection": [
+      "cloud-sql-proxy",
+      "backend",
+      "frontend"
+    ]
+  },
+  "cleanup": {
+    "postgresql_container_id": "cc8dddcec35dabab98cf46dad60469fe80e357630aa8da092de1239cc05915cf",
+    "proxy_container_id": "32dd6430a1745943f2c6bcd796ebe5384438ce3df7c6307fe4cbc52b3a883425",
+    "identity_and_labels_checked_before_stop": true,
+    "temporary_containers_removed": true,
+    "temporary_network_removed": true,
+    "removal_verified_by_label_listing": true,
+    "native_proxy_kept_running": true,
+    "native_proxy_pid_at_final_check": 22380,
+    "native_proxy_listener_at_final_check": "127.0.0.1:5433",
+    "diagnostic_image_retained_for_reuse": true,
+    "global_docker_or_gcloud_configuration_modified": false,
+    "remote_verification": {
+      "proxy_container_id": "77ec9fe25643a83ec7e8756d084662d84b685c08fa5a908950a39551de2ab8e9",
+      "network_id": "296c37aedbb981720e225822333ea55efbc6ca03298c260714021161cecad5f0",
+      "identity_and_labels_checked_before_stop": true,
+      "temporary_proxy_removed": true,
+      "temporary_network_removed": true,
+      "removal_verified_by_label_listing": true
+    }
+  },
+  "pending": [
+    "remote_migrations_and_table_dml_grants",
+    "gcs_test_object_upload_download_delete",
+    "full_ml_backend_image_and_gpu_stack",
+    "protected_installation_wizard_and_first_administrator",
+    "browser_and_full_functional_pipeline",
+    "institutional_https_recovery_and_data_cutover"
+  ],
+  "real_env_file_changed": false,
+  "existing_audio_bucket_modified": false,
+  "remote_ddl_or_data_writes_executed_by_agent": false,
+  "committed_or_pushed": false,
+  "operator_configuration": {
+    "prepare_result": "configuration_prepared",
+    "source": "operator_reported",
+    "runtime_sql_user": "fama_app",
+    "migrator_password_persisted": false,
+    "configuration_directory": "backend/installation/cloud-pruebas"
+  }
+}

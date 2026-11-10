@@ -15,10 +15,11 @@ from tests.test_training_flow import training_env, partitions, register
 
 
 @pytest.fixture
-def persistence_env(training_env, monkeypatch):
+def persistence_env(training_env, monkeypatch, request):
     service, sessions, root, thread = training_env
-    dataset_id = register(sessions, "engine_diagnostics")
-    partitions(root, "engine_diagnostics")
+    dataset_name = getattr(request, "param", "engine_diagnostics")
+    dataset_id = register(sessions, dataset_name)
+    partitions(root, dataset_name)
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
     # External ML library boundaries: no pretrained downloads or real audio input.
     def tiny_model(*args, num_classes, **kwargs):
@@ -76,13 +77,13 @@ def evaluations(sessions, model_id):
                 .filter_by(id_modelo=model_id).order_by(ModelEvaluation.id_evaluation)]
 
 
-def test_main_persists_two_final_reports_before_success_and_activation(persistence_env, request):
+def test_main_persists_two_final_reports_before_explicit_administrator_activation(persistence_env, request):
     service, sessions, _, _ = persistence_env
     registered = []
     publications = []
     def observe_publication(db):
         if any(isinstance(row, Modelo) and row.estado == 'standard_eval_completed'
-               and row.activo for row in db.identity_map.values()):
+               and not row.activo for row in db.identity_map.values()):
             publications.append((service.get_progress()['status'],
                                  [row.status for row in db.query(ModelEvaluation).order_by(ModelEvaluation.id_evaluation)]))
     event.listen(sessions, 'before_commit', observe_publication)
@@ -110,7 +111,7 @@ def test_main_persists_two_final_reports_before_success_and_activation(persisten
     assert pair == {'version': 1, 'sha256': hashlib.sha256(canonical_pair).hexdigest()}
     assert all(a['report']['sample_count'] == 1 for a in attempts)
     assert all(a['report']['rejection']['count'] == 1 for a in attempts)
-    assert entry['active'] is True
+    assert entry['active'] is False
     assert entry['status'] == 'standard_eval_completed'
     assert publications == [('evaluating', ['completed', 'completed'])]
     assert attempts[0]['preprocessing_config']['target_sr'] == 8000
@@ -261,7 +262,7 @@ def test_publication_commit_error_restores_previous_active_and_reports_failure(p
     fired = []
     def reject_publication(db):
         if not fired and any(isinstance(row, Modelo) and row.estado == 'standard_eval_completed'
-                             and row.activo for row in db.identity_map.values()):
+                             and not row.activo for row in db.identity_map.values()):
             fired.append(True)
             raise RuntimeError('publication acknowledgement failed')
     event.listen(sessions, event_name, reject_publication)
@@ -313,7 +314,11 @@ def test_manual_activation_preserves_same_artifact_pair_after_failed_retry(persi
 
         result = service.set_active_model(entry['id'], db)
         assert result['success'] is True, result
-        assert [row.id_modelo for row in db.query(Modelo).filter(Modelo.activo.is_(True))] == active_before
+        assert [row.id_modelo for row in db.query(Modelo).filter(Modelo.activo.is_(True))] == [entry['id']]
+        assert db.get(Modelo, entry['id']).estado == 'standard_eval_completed'
+        assert db.query(ModelEvaluation).filter_by(
+            id_modelo=entry['id'], status='completed'
+        ).count() == 2
 
 
 @pytest.mark.parametrize('fault', ['hash', 'job', 'classes', 'dataset', 'report', 'config'])

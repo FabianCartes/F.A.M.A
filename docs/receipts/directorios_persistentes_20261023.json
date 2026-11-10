@@ -1,0 +1,462 @@
+{
+  "version": 1,
+  "date": "2026-10-23",
+  "checked_at": "2026-10-24T00:36:31.433964+00:00",
+  "branch": "fix/afinamiento-integral",
+  "status": "persistent_native_test_runtime_activated_and_verified",
+  "target": {
+    "project": "proyectotesis-fama",
+    "connection_name": "proyectotesis-fama:us-central1:fama-postgres-pruebas",
+    "database": "fama_pruebas",
+    "bucket": "fama-pruebas",
+    "profile": "backend/installation/cloud-pruebas/native"
+  },
+  "implementation": {
+    "root_selected_in_private_profile": "FAMA_RUNTIME_DIR",
+    "binding": "configured_database_name_bucket_and_cloud_instance_or_driver_host_port_without_secrets",
+    "managed_consumers_use_root_without_repository_fallback": true,
+    "public_interface": "app.node runtime [--directory ABSOLUTE_PATH]",
+    "local_exclusive_lease_held_for_node_lifespan": true,
+    "startup_lost_lease_race_aborts_startup": true,
+    "native_launcher": "backend/scripts/iniciar_nodo.ps1",
+    "sources": [
+      "backend",
+      "frontend"
+    ],
+    "frontend_dist_dir": ".next-3010",
+    "compose": "required_host_FAMA_RUNTIME_DIR_mounted_at_/var/lib/fama_configuration_only"
+  },
+  "TDD": {
+    "surfaces": [
+      "public_CLI",
+      "authenticated_HTTP_and_ASGI_lifespan",
+      "public_consumer_constructors",
+      "Next_configuration",
+      "docker_compose_config"
+    ],
+    "observed_functional_RED": [
+      "runtime_CLI_absent",
+      "consumer_paths_still_use_sources",
+      "two_node_exclusion_absent",
+      "startup_lease_race_did_not_abort",
+      "static_predictor_roots_outside_runtime",
+      "repository_checkpoint_reported_available",
+      "launcher_absent",
+      "invalid_identity_not_sanitized",
+      "relative_SQLite_identity_accepted",
+      "Next_distDir_absent",
+      "Compose_root_absent"
+    ],
+    "test_doubles": "temporary_SQLite_files_and_GCS_for_automated_tests_no_real_cloud_training"
+  },
+  "validation": {
+    "backend_main": {
+      "passed": 226,
+      "skipped": 8,
+      "deselected": 56,
+      "elapsed_cli_seconds": 235.06,
+      "junit": ".pytest_cache/runtime_persistence_final.xml",
+      "junit_sha256": "dcda7ae775e8fde67d128b89ffc122804badc6514868334437c7d550c48648bc",
+      "command": "pytest tests/test_persistent_runtime.py tests/test_installation_configuration.py tests/test_installation_startup.py tests/test_cloud_node.py tests/test_paths.py tests/test_checkpoint_backup.py tests/test_dataset_partitions.py tests/test_api_training.py tests/test_training_persistence.py tests/test_training_flow.py tests/test_feedback_sync_lifespan.py tests/test_ensemble_status_contract.py -k 'not configured_root_alias_is_rejected_by_consumer and not public_dataset_locator_preserves_declared_spelling' -q --tb=short -ra"
+    },
+    "backend_additional_paths": {
+      "passed": 16,
+      "deselected": 50,
+      "elapsed_cli_seconds": 4.18,
+      "selection": "test_paths.py -k public_dataset_locator_preserves_declared_spelling and (physical or missing)",
+      "disjoint_from_main": true,
+      "junit_sha256": "f13d7cff72ab47eadab27bd9159ad80f091caf907cc158381e4bf4118f7b7266"
+    },
+    "backend_compose": {
+      "passed": 2,
+      "elapsed_cli_seconds": 1.82,
+      "disjoint_from_main": true,
+      "containers_started": false
+    },
+    "backend_unique_passed": 244,
+    "backend_skipped": 8,
+    "backend_remaining_unavailable": {
+      "count": 40,
+      "reason": "pre_existing_Windows_symlink_creation_privilege_WinError_1314",
+      "initial_broad_attempt": {
+        "passed": 51,
+        "failed_at_symlink_precondition": 40
+      },
+      "not_a_functional_RED_and_not_counted_as_passed": true
+    },
+    "frontend": {
+      "passed": 43,
+      "files": 3,
+      "elapsed_seconds": 24.08,
+      "scope": [
+        "nextConfig.test.ts",
+        "CheckpointBackup.test.tsx",
+        "TrainingView.test.tsx"
+      ],
+      "TypeScript_exit": 0,
+      "TypeScript_rerun_after_Next_tsconfig_update_exit": 0,
+      "ESLint_config_and_new_test_exit": 0
+    },
+    "global_suite_or_lint_claimed": false
+  },
+  "relocation": {
+    "before": {
+      "checked_at": "2026-10-24T00:18:17.355173+00:00",
+      "SQL": {
+        "audios": 12,
+        "models": 1,
+        "pending_feedback_sync": 0,
+        "schema": "0003_autonomy",
+        "model_sha256": "a905275bdbc974643608580e6d29d5905ced30a8ce53b372fb88280c446f035d",
+        "active": false
+      },
+      "source": ".pytest_cache/stage8-live/backend",
+      "target": "runtime/pruebas",
+      "files": {
+        "data/raw/.feedback_1.json": "962e35f4e82109d8dc621ec17e48ad298ea22d744292089e2328c56799ee009d",
+        "data/raw/.feedback_1.json.lock": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "data/processed/FAMA_Prueba_Aves/Canastero/225288.npy": "a3149caed7e81807510a58bb696a83fdae1c1f8ebbd4d42c6d6d3509ef923ec9",
+        "data/processed/FAMA_Prueba_Aves/Canastero/225290.npy": "0f7509def2ea5bd40b05b52f5498f5b5ffa1ec4398ed91545469aca7fc9e3abb",
+        "data/processed/FAMA_Prueba_Aves/Canastero/381517.npy": "bd80cc1fdf239d0bc93b63c375f36691acf85e31ee5f799cfe711ac2dbb81262",
+        "data/processed/FAMA_Prueba_Aves/Canastero/381518.npy": "c6434ce0ad1d18a0e12bef03a299d140f9dd3a6fa3569d0d3194f99087bb4bf5",
+        "data/processed/FAMA_Prueba_Aves/Canastero/502838.npy": "698a09899f84f22ae7ff4d6c825db5a0a10aee0fcad77d3891de5ec283bf831d",
+        "data/processed/FAMA_Prueba_Aves/Chucao/1036796.npy": "66805bb3b7b4537fbd070b1940bdd47d4dd4fcf768987d90c942418c0551fe33",
+        "data/processed/FAMA_Prueba_Aves/Chucao/1075457.npy": "70ca780d5795fff25d83bb0a9365ba06a64043d178007722eb325bd38ceb8105",
+        "data/processed/FAMA_Prueba_Aves/Chucao/218159.npy": "064ddb30585d2343692b9568e3d13fbf9b8b1fbf0071f5f3c307eca25ea4b6ca",
+        "data/processed/FAMA_Prueba_Aves/Chucao/296132.npy": "bde06d205176b5e2202d42413182ff1fb8622bc744afbf0ffa70dab1bce6918b",
+        "data/processed/FAMA_Prueba_Aves/Chucao/508289.npy": "1d3d4f5abfe0672b7bb8b009bec1e596695fb95e8fae6a3901003f989414ce11",
+        "data/raw/FAMA_Prueba_Aves/.metadata.lock": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "data/raw/FAMA_Prueba_Aves/metadata.csv": "cab6d3f03b149642eaa78dd9fb5ebc6624e4f574e163ceff4c77888011f107c3",
+        "data/raw/FAMA_Prueba_Aves/train.csv": "5bdaecdd9aed65daff101765ec787fd2a4c255f301f6783f3deaedbfbd0ac101",
+        "data/raw/FAMA_Prueba_Aves/val.csv": "2283891f94dc9c53bcfccbfc245b725a44c27349bf825619dd2aac4e9309906c",
+        "data/raw/FAMA_Prueba_Aves/.partitions/2262aaf0364a39b09d0f717573359a366946cbf7a95cdffef2519ebabbf0f33f.json": "465a3f9b0fbdf2a6c1ccd3943286655c50f4ff36932f4b93dfcff66121c930e1",
+        "data/raw/FAMA_Prueba_Aves/Canastero/225288.mp3": "f52f6cc84bc113dae8b00a2d2aa1173570149a6a46691a4265bb727331f1fc63",
+        "data/raw/FAMA_Prueba_Aves/Canastero/225290.mp3": "05ee7231d46c9239f2eca1625d240ab6c30dc016f09d07f2fba1493ed36a9bd1",
+        "data/raw/FAMA_Prueba_Aves/Canastero/381517.mp3": "87d4cee1449470e6f975e1ea19da0d8858b3754ff6c16679d9993bed81e4574f",
+        "data/raw/FAMA_Prueba_Aves/Canastero/381518.mp3": "dfbfffb0a843b5d6c645cde78cdd8297d092e0a89f8028e8ec11e32d3f90aeb9",
+        "data/raw/FAMA_Prueba_Aves/Canastero/502838.mp3": "eafc54719aae0c93a86093b986d613d252b932f43a7874138fa2c9d9cd3279d4",
+        "data/raw/FAMA_Prueba_Aves/Chucao/1036796.mp3": "844a7fb10f8c89a564d2aae48de4dbb0b5de0c70d87b1660cbd71c970eab9945",
+        "data/raw/FAMA_Prueba_Aves/Chucao/1075457.mp3": "55d352db226b74088013e799641794972ee2959b1df69a1ada1c568e4439d8cb",
+        "data/raw/FAMA_Prueba_Aves/Chucao/218159.mp3": "cd4bb13d1cb0eab0b033078188d75d8d74285b2dedc25cd31916cd633f4d4d11",
+        "data/raw/FAMA_Prueba_Aves/Chucao/296132.mp3": "120065c55027db4519cc3ba69c0a0ddab5f985e3d603c456f1e565c0883f53fa",
+        "data/raw/FAMA_Prueba_Aves/Chucao/508289.mp3": "07cd7f0269812574e0d4d7cfee3e557e3df03256d2e444a634739900bf0cdd15",
+        "data/raw/FAMA_Prueba_Aves/Chucao/feedback_1.wav": "11f1970044054337ef76d1e19fdabf6dbe08beb25b0cc7988ad555de10a2ea1a",
+        "checkpoints/fama_5af201b348e8459a9c7e5a094f77a115_best.pt": "a905275bdbc974643608580e6d29d5905ced30a8ce53b372fb88280c446f035d"
+      },
+      "legacy_intent_sha256": "89d6105bf631247e0c8f4447693a6cf50e6122a4fb8341eb80494cb1e5e4670a",
+      "configuration_backup_sha256": "134d531a969702f8fba4486bfebc1370c8f37da6998f5e0871624041a67ac4d7",
+      "checkpoint": {
+        "model_id": 1,
+        "filename": "fama_5af201b348e8459a9c7e5a094f77a115_best.pt",
+        "sha256": "a905275bdbc974643608580e6d29d5905ced30a8ce53b372fb88280c446f035d",
+        "size_bytes": 16318381,
+        "local": "valid",
+        "cloud": "available",
+        "generation": "1792799002816536",
+        "transfer_verified": false
+      },
+      "SQL_writes_by_script": false,
+      "GCS_writes_by_script": false
+    },
+    "copy": {
+      "checked_at": "2026-10-24T00:20:44.071647+00:00",
+      "SQL": {
+        "audios": 12,
+        "models": 1,
+        "pending_feedback_sync": 0,
+        "schema": "0003_autonomy",
+        "model_sha256": "a905275bdbc974643608580e6d29d5905ced30a8ce53b372fb88280c446f035d",
+        "active": false
+      },
+      "runtime": {
+        "code": "runtime_ready",
+        "root": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\runtime\\pruebas",
+        "environment": "f82251ef9f504d82cb7d0e844b6dc58723bf3b57fa494564f075e3872d82ff41",
+        "directories": {
+          "raw": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\runtime\\pruebas\\data\\raw",
+          "processed": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\runtime\\pruebas\\data\\processed",
+          "checkpoints": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\runtime\\pruebas\\checkpoints",
+          "logs": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\runtime\\pruebas\\logs"
+        }
+      },
+      "verified_source_and_destination_files": 29,
+      "originals_preserved": true,
+      "legacy_intent_not_imported": true,
+      "configuration_change_only_runtime_root": true,
+      "checkpoint": {
+        "model_id": 1,
+        "filename": "fama_5af201b348e8459a9c7e5a094f77a115_best.pt",
+        "sha256": "a905275bdbc974643608580e6d29d5905ced30a8ce53b372fb88280c446f035d",
+        "size_bytes": 16318381,
+        "local": "valid",
+        "cloud": "available",
+        "generation": "1792799002816536",
+        "transfer_verified": false
+      },
+      "SQL_writes_by_script": false,
+      "GCS_writes_by_script": false
+    },
+    "after_restart": {
+      "checked_at": "2026-10-24T00:23:42.655791+00:00",
+      "SQL": {
+        "audios": 12,
+        "models": 1,
+        "pending_feedback_sync": 0,
+        "schema": "0003_autonomy",
+        "model_sha256": "a905275bdbc974643608580e6d29d5905ced30a8ce53b372fb88280c446f035d",
+        "active": false
+      },
+      "runtime": {
+        "code": "runtime_ready",
+        "root": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\runtime\\pruebas",
+        "environment": "f82251ef9f504d82cb7d0e844b6dc58723bf3b57fa494564f075e3872d82ff41",
+        "directories": {
+          "raw": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\runtime\\pruebas\\data\\raw",
+          "processed": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\runtime\\pruebas\\data\\processed",
+          "checkpoints": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\runtime\\pruebas\\checkpoints",
+          "logs": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\runtime\\pruebas\\logs"
+        }
+      },
+      "verified_source_and_destination_files": 29,
+      "originals_preserved": true,
+      "legacy_intent_not_imported": true,
+      "configuration_change_only_runtime_root": true,
+      "checkpoint": {
+        "model_id": 1,
+        "filename": "fama_5af201b348e8459a9c7e5a094f77a115_best.pt",
+        "sha256": "a905275bdbc974643608580e6d29d5905ced30a8ce53b372fb88280c446f035d",
+        "size_bytes": 16318381,
+        "local": "valid",
+        "cloud": "available",
+        "generation": "1792799002816536",
+        "transfer_verified": false
+      },
+      "partition_version": "2262aaf0364a39b09d0f717573359a366946cbf7a95cdffef2519ebabbf0f33f",
+      "partition_counts": {
+        "train": 8,
+        "val": 2
+      },
+      "SQL_writes_by_script": false,
+      "GCS_writes_by_script": false
+    },
+    "configuration_backup_is_private_not_an_automatic_rollback": true,
+    "old_source_processes_stopped": [
+      21508,
+      7840,
+      36904,
+      14520
+    ],
+    "source_tree_originals_retained": true,
+    "runtime_root_not_a_backup": true
+  },
+  "running_node": {
+    "launch": {
+      "code": "native_processes_started",
+      "runtime_root": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\runtime\\pruebas",
+      "backend_pid": 21008,
+      "checked_at": "2026-10-24T00:21:40.0542591Z",
+      "frontend_log_prefix": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\runtime\\pruebas\\logs\\frontend-20261024-002139-829",
+      "frontend_port": 3010,
+      "backend_port": 8010,
+      "backend_log_prefix": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\runtime\\pruebas\\logs\\backend-20261024-002139-829",
+      "frontend_pid": 26660,
+      "frontend_dist_dir": ".next-3010"
+    },
+    "backend_listener_pid": 36632,
+    "frontend_listener_pid": 37920,
+    "proxy_pid_preserved": 22380,
+    "ports_preserved": [
+      3000,
+      8000,
+      5433
+    ],
+    "ready_HTTP": 200,
+    "ready_code": "schema_current",
+    "anonymous_frontend_auth_me_HTTP": 401,
+    "exploratory_nonexistent_auth_session_HTTP": 404,
+    "same_root_selection_while_owned": {
+      "exit": 1,
+      "code": "runtime_in_use",
+      "configuration_changed": false
+    }
+  },
+  "browser": {
+    "origin": "http://localhost:3010/",
+    "tab_id": "11",
+    "operator_opened": true,
+    "previous_internal_error_tab_reload_rejected_by_browser_policy": true,
+    "policy_not_bypassed": true,
+    "session_role": "administrador",
+    "session_preserved": true,
+    "dataset_audios_visible": 12,
+    "existing_partition_selected": "2262aaf0364a39b09d0f717573359a366946cbf7a95cdffef2519ebabbf0f33f",
+    "partition_counts": {
+      "train": 8,
+      "val": 2
+    },
+    "copies_visible": [
+      "Copia local íntegra",
+      "Respaldo disponible en GCS"
+    ],
+    "cloud_check_metadata_only_not_repeat_full_download": true,
+    "screenshot": "docs/images/runtime_persistente_pruebas_20261023.png"
+  },
+  "not_performed": [
+    "official_bucket_change",
+    "new_GCS_writes",
+    "new_training_or_inference",
+    "schema_migration",
+    "password_or_role_changes",
+    "container_deployment",
+    "SQL_restoration",
+    "institutional_HTTPS"
+  ],
+  "limitations": [
+    "local_advisory_lock_not_distributed",
+    "binding_is_configured_target_not_database_snapshot_identity",
+    "root_preparation_and_profile_publication_not_one_transaction",
+    "legacy_unconfigured_launch_retains_old_behavior",
+    "unknown_provenance_remains_manual",
+    "historical_Chucao_chucao_not_merged",
+    "no_independent_final_test_partition"
+  ],
+  "next": "PostgreSQL_backup_and_restore_in_separate_target_then_operator_recovery_and_institutional_HTTPS",
+  "artifacts": [
+    {
+      "path": ".gitignore",
+      "sha256": "6c0059dbf01bf9839d8650680b827054004b6c6246226f75240218a2d90ef703"
+    },
+    {
+      "path": "backend/.env.example",
+      "sha256": "bfd9b775e80b9d066a39d0f15169bebb8c5ee4bcc84ed098cd8dc918084723d4"
+    },
+    {
+      "path": "backend/app/runtime.py",
+      "sha256": "485bd8432c6d9e059c535628bf402e06ba23500a2017ffa14b656936865ab44e"
+    },
+    {
+      "path": "backend/app/configuration.py",
+      "sha256": "a55df480d38de92cdbfbdaca38c63a9459ed8177c3517c8c71f8e05519d850d6"
+    },
+    {
+      "path": "backend/app/node.py",
+      "sha256": "2bb29c36bdc0c9cff1000eed5e730190a4aba8177b8f35f50e832c091c2275d4"
+    },
+    {
+      "path": "backend/app/entrypoint.py",
+      "sha256": "caed74e7ae8b7fafa843750a3a66529d717a1217da0b128e5ed52bf26a8e7148"
+    },
+    {
+      "path": "backend/training/paths.py",
+      "sha256": "8ce02e7d8a3651b19e22042d79d24c0ec6cd9b5caa14b730a869d64c296d0c85"
+    },
+    {
+      "path": "backend/app/main.py",
+      "sha256": "b500c4612c5cbbc70dd29bff96ccfa38cf1cb027855a215897c23d8f65d6a97d"
+    },
+    {
+      "path": "backend/app/services/training.py",
+      "sha256": "1893435872fdfd9a647b3b489946f9f62da94ea586e345353a52ad3385540361"
+    },
+    {
+      "path": "backend/app/services/feedback.py",
+      "sha256": "4714c8fc8e4759f270a92e41d7ed2ac652efd11c1a865ba70420757dbff795bd"
+    },
+    {
+      "path": "backend/app/services/registry.py",
+      "sha256": "6ddceacf6c82d9acda785dcb0e674d6db2ad9fcd229c6af920d6eb03feb41262"
+    },
+    {
+      "path": "backend/app/services/predictors/cnn_predictor.py",
+      "sha256": "13ddeab564b071645ab4b2bf5d2f5d434c4aef03bddda79228dc516d30f01cd6"
+    },
+    {
+      "path": "backend/app/services/predictors/ensemble_predictor.py",
+      "sha256": "e1347752690743a679de7df91b0a3d420c9e291039817dd7f497f7923a5f4762"
+    },
+    {
+      "path": "backend/app/services/predictors/engine_ensemble_predictor.py",
+      "sha256": "eec73b0286aa9c63eca5ef608d1a0e1709f93e5d646306e679f8efa9686b7824"
+    },
+    {
+      "path": "backend/scripts/iniciar_nodo.ps1",
+      "sha256": "cd6efbf574d0d71859aa052d260c9685949161d7486100ff28688dfa5f25cc24"
+    },
+    {
+      "path": "backend/tests/test_persistent_runtime.py",
+      "sha256": "af68a77bc7e0257377ed1fa7663a4b0068fe8ca48814d8a0e981bbddfff46593"
+    },
+    {
+      "path": "backend/tests/test_installation_compose.py",
+      "sha256": "f3d67f7642e457c493d6877a4ea21dd6351bf4a4b138070ad49266c19eb4305c"
+    },
+    {
+      "path": "docker-compose.cloud.yml",
+      "sha256": "404b830d06485a57446c13d2d354ba5bbcab32674681278a6f11aea9a929d962"
+    },
+    {
+      "path": "frontend/next.config.ts",
+      "sha256": "bbe532216cca569386d5f1f85fe67268d96e8cbb4eefc19c58c28bd85d72f9b5"
+    },
+    {
+      "path": "frontend/.dockerignore",
+      "sha256": "16cfbced019bb1cee37c74a0a5fc0425b620380a4a2a7dc5ea0938d5f6b77122"
+    },
+    {
+      "path": "frontend/tsconfig.json",
+      "sha256": "a4cca8d6c7a95b5156ccf08d39495bb2609abcf892d67826053e039a41c0670d"
+    },
+    {
+      "path": "frontend/lib/__tests__/nextConfig.test.ts",
+      "sha256": "d8d6fb080b4feba9503bae5264a61759d22f58d8a5e8571bc48e3546292564d4"
+    },
+    {
+      "path": "docs/arquitectura/CONTEXT.md",
+      "sha256": "1962272747ee445e72e0725a956843d59e974787637dfc171947be9ecf47ccbd"
+    },
+    {
+      "path": "docs/adr/0046-almacenamiento-persistente-vinculado-al-entorno.md",
+      "sha256": "b1d2adbe713f2d6865eaad269d46d6f62c8303955c6492504eb31fe47223463d"
+    },
+    {
+      "path": "docs/manuales/directorios_persistentes_por_entorno.md",
+      "sha256": "97e81fe05356e45b5f6ee58e0b42ad79d99bb52d627e5bd2043589f1a062c228"
+    },
+    {
+      "path": "docs/manuales/bitacora_acceso_e_instalacion.md",
+      "sha256": "c26c7f5fb9b337852a650eca56dcdcf983763b3e3c771decfeee0e690022a3ab"
+    },
+    {
+      "path": "docs/manuales/estado_actual_y_pendientes.md",
+      "sha256": "990223044ba164cb15810962f95f924455e9467a49efb27bfbc9c44645ccb781"
+    },
+    {
+      "path": "docs/manuales/plan_instalacion_gcp_y_asistente.md",
+      "sha256": "4c9b5d035b5b38f16ad9294948d5a21dbf1016875e84d8dbd911822c8b590c6b"
+    },
+    {
+      "path": "docs/manuales/plan_autonomia_investigador_y_catalogo.md",
+      "sha256": "c3f72cdc1fd71465381dc9cdb3e525a37b6da82891ccab11485218fd15f14231"
+    },
+    {
+      "path": "docs/manuales/respaldo_y_recuperacion_checkpoints.md",
+      "sha256": "f3407e64179579edb9fd2e4b390d97a6fc1492501b866ba71a4fde710df94f6b"
+    },
+    {
+      "path": "docs/manuales/guia_despliegue_operativo_docker.md",
+      "sha256": "bbc687f12d56dddf42b0431c608a5b2846f086f572bae95b56a8cb1de82b84eb"
+    },
+    {
+      "path": "docs/README.md",
+      "sha256": "edbd6b40fa98d52ab410813761c5909d735997833900c746938fa9c8c4a4b463"
+    },
+    {
+      "path": "docs/KANBAN.md",
+      "sha256": "3dc0b8b90f0f0a87c9343cd0e7c74390abb28f4c178940a427abf486da2bc231"
+    },
+    {
+      "path": "docs/images/runtime_persistente_pruebas_20261023.png",
+      "sha256": "d791e9e391f25546b3e29058485c6437ae436873d220ce87c7d6bf096f228fb2"
+    }
+  ]
+}

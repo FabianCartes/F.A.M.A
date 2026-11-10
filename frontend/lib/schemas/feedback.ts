@@ -12,7 +12,7 @@ export const FeedbackCreateRequestSchema = z
     id_prediccion: z.number().int().positive("El ID de predicción debe ser un entero positivo"),
     fue_correcta: z.boolean(),
     etiqueta_corregida: z.string().nullable().optional(),
-    id_usuario: z.number().int().positive().optional().default(1),
+    id_usuario: z.number().int().positive().optional(),
   })
   .refine(
     (data) => {
@@ -109,6 +109,7 @@ export const ApproveFeedbackResponseSchema = z.object({
   filename: z.string().nullable().optional(),
   local_status: z.literal("incorporated"),
   sync_status: z.enum(["pending", "synced"]),
+  db_persisted: z.boolean().nullable().optional(),
   message: z.string().optional(),
 });
 
@@ -128,6 +129,10 @@ export const FeedbackSyncStateSchema = z.object({
   incorporated_filename: z.string().nullable().optional(),
   attempts: z.number().int().nonnegative(),
   error_code: z.enum(["upload_failed", "integrity_mismatch"]).nullable(),
+  proposed_by: z.number().int().positive().nullable().optional(),
+  incorporated_by: z.number().int().positive().nullable().optional(),
+  incorporated_at: z.string().nullable().optional(),
+  db_persisted: z.boolean().nullable().optional(),
 });
 export type FeedbackSyncState = z.infer<typeof FeedbackSyncStateSchema>;
 export const FeedbackSyncListSchema = z.array(FeedbackSyncStateSchema);

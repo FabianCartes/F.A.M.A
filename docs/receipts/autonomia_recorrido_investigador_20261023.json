@@ -1,0 +1,262 @@
+{
+  "version": 1,
+  "checked_at": "2026-10-23T07:12:55.237785+00:00",
+  "environment": "named_test_Cloud_SQL_and_GCS_with_isolated_local_backend",
+  "dataset": {
+    "nombre": "FAMA_Prueba_Aves",
+    "cantidad_audios": 11,
+    "tamano_total_bytes": 5817921
+  },
+  "prediction": {
+    "id_prediccion": 1,
+    "dataset_name": "FAMA_Prueba_Aves",
+    "modelo_id": "fama_trained_model_1",
+    "etiqueta_predicha": "Ruido / Señal no biológica"
+  },
+  "feedback": {
+    "id_retroalimentacion": 1,
+    "id_prediccion": 1,
+    "id_usuario": 2,
+    "etiqueta_corregida": "Chucao",
+    "fue_correcta": false,
+    "procesado": true
+  },
+  "sync": {
+    "id_retroalimentacion": 1,
+    "dataset_name": "FAMA_Prueba_Aves",
+    "storage_class": "Chucao",
+    "class_label": "Chucao",
+    "object_key": "datasets/FAMA_Prueba_Aves/Chucao/feedback_1.wav",
+    "local_relative_path": "FAMA_Prueba_Aves/Chucao/feedback_1.wav",
+    "sha256": "11f1970044054337ef76d1e19fdabf6dbe08beb25b0cc7988ad555de10a2ea1a",
+    "status": "synced",
+    "attempts": 1,
+    "error_code": null,
+    "incorporated_by": 2,
+    "incorporated_at": "2026-10-23 07:06:20.852828+00:00"
+  },
+  "audio_rows": 11,
+  "remote_dataset_audio_objects": 11,
+  "incorporated_audio_SQL_local_SHA256_matches": true,
+  "incorporated_audio_GCS_MD5_matches": true,
+  "original_ten_sources_and_remote_objects_preserved": true,
+  "legacy_other_environment_intent_preserved": true,
+  "audit_counts": [
+    {
+      "action": "assignment.granted",
+      "outcome": "success",
+      "actor_id": 1,
+      "count": 1
+    },
+    {
+      "action": "dataset.audio_uploaded",
+      "outcome": "success",
+      "actor_id": 1,
+      "count": 2
+    },
+    {
+      "action": "dataset.audio_uploaded",
+      "outcome": "success",
+      "actor_id": 2,
+      "count": 1
+    },
+    {
+      "action": "dataset.request_approved",
+      "outcome": "success",
+      "actor_id": 1,
+      "count": 1
+    },
+    {
+      "action": "dataset.requested",
+      "outcome": "success",
+      "actor_id": 2,
+      "count": 1
+    }
+  ],
+  "operator_approved_assignment": true,
+  "researcher_proposed_and_incorporated": true,
+  "functional_quality_only": true,
+  "derived_audio_is_not_an_independent_observation": true,
+  "training_split_automatically_changed_by_incorporation": false,
+  "verification_SQL_writes": false,
+  "verification_GCS_writes": false,
+  "status": "bounded_researcher_flow_verified_with_known_limits",
+  "model_verification": {
+    "version": 1,
+    "checked_at": "2026-10-23T06:59:04.407299+00:00",
+    "model": {
+      "id_modelo": 1,
+      "id_usuario": 2,
+      "id_conjunto_datos": 1,
+      "epocas": 1,
+      "tamano_lote": 2,
+      "tasa_aprendizaje": 0.001,
+      "activo": false,
+      "estado": "entrenado",
+      "ruta_binario_gcp": "models/fama_5af201b348e8459a9c7e5a094f77a115_best.pt",
+      "hash_binario": "a905275bdbc974643608580e6d29d5905ced30a8ce53b372fb88280c446f035d",
+      "tamano_bytes": 16318381
+    },
+    "metric_rows": 1,
+    "local_checkpoint": "backend/checkpoints/fama_5af201b348e8459a9c7e5a094f77a115_best.pt",
+    "checkpoint_SHA256_verified": true,
+    "SQL_writes": false,
+    "global_model_activated": false
+  },
+  "runtime": {
+    "checked_at": "2026-10-23T07:11:56.5771566Z",
+    "backend_parent_pid": 18332,
+    "backend_directory": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\.pytest_cache\\stage8-live\\backend",
+    "backend_child_pid": 8068,
+    "backend_port": 8010,
+    "frontend_port": 3010,
+    "frontend_parent_pid": 36904,
+    "frontend_child_pid": 14520,
+    "ready_HTTP": 200,
+    "ready_code": "schema_current",
+    "proxy_port": 5433
+  },
+  "isolation": {
+    "code": "sample_backend_files_isolated",
+    "checked_at": "2026-10-23T07:04:39.483883+00:00",
+    "code_file_count": 134,
+    "test_dataset_only": true,
+    "source_data_and_legacy_intent_preserved": true,
+    "legacy_intent_sha256": "89d6105bf631247e0c8f4447693a6cf50e6122a4fb8341eb80494cb1e5e4670a",
+    "copied_dotenv_or_credentials": false,
+    "backend_copy": ".pytest_cache/stage8-live/backend",
+    "production_source_changed_for_isolation": false,
+    "initial_missing_poc_module_repaired_before_ready": true
+  },
+  "download": {
+    "new": 10,
+    "skipped": 0,
+    "errors": 0,
+    "source_hashes_verified": 10
+  },
+  "preprocessing": {
+    "finite_nonempty_tensors": 10,
+    "counter_UI_corrected": true
+  },
+  "partitions_receipt": "docs/receipts/autonomia_particiones_muestra_20261023.json",
+  "training": {
+    "accepted_final_job_epochs": 1,
+    "accepted_final_batch": 2,
+    "loss": "CrossEntropy",
+    "mixup": false,
+    "pitch_shift": false,
+    "first_start_HTTP_404_wrong_UI_dataset_fixed": true,
+    "hidden_defaults_job_requested_epochs": 10,
+    "hidden_defaults_job_requested_batch": 16,
+    "hidden_defaults_job_manually_interrupted_at_epoch": 9,
+    "interrupted_job_registered_model": false,
+    "final_completed_model_id": 1,
+    "checkpoint_uploaded_to_GCS": false
+  },
+  "researcher_repeated_upload": {
+    "uploaded": 0,
+    "skipped_identical": 1,
+    "failed": 0,
+    "SQL_confirmed_UI": true,
+    "final_dataset_audio_count": 11
+  },
+  "verification": {
+    "backend": {
+      "passed": 159,
+      "skipped": 8,
+      "failed": 0,
+      "files": 5,
+      "seconds": 33.99,
+      "files_run": [
+        "test_api_training.py",
+        "test_training_flow.py",
+        "test_training_persistence.py",
+        "test_resource_access.py",
+        "test_training_service.py"
+      ],
+      "skip_reason": "Windows_symlink_creation_privilege_1314"
+    },
+    "frontend": {
+      "passed": 100,
+      "failed": 0,
+      "files": 5,
+      "ingestion_passed": 43,
+      "training_passed": 32,
+      "training_HTTP_contract_passed": 25
+    },
+    "typescript_exit_code": 0,
+    "eslint_ingestion_exit_code": 0,
+    "eslint_training": {
+      "exit_code": 1,
+      "preexisting_explicit_any_errors": 23,
+      "preexisting_unused_import_warnings": 1
+    },
+    "full_backend_or_frontend_suite_rerun": false,
+    "global_diff_check_preexisting_failures": [
+      "backend/dataset_references.py:44",
+      "backend/dataset_references.py:48",
+      "backend/dataset_references.py:52"
+    ],
+    "eslint_training_schema_exit_code": 0
+  },
+  "pending": [
+    "diagnose_and_fix_E8_04_MP3_decode_discrepancy_with_TDD",
+    "fix_E8_11_individual_chart_label",
+    "persistent_exclusive_runtime_directories_per_environment",
+    "checkpoint_backup_restore_and_institutional_operation_stages_9_10"
+  ],
+  "artifacts": [
+    {
+      "path": "backend/app/services/training.py",
+      "sha256": "3d9a291b5b1722744208e29f476ff66fd38aeb1730bb9b8730b735d22f5b073b"
+    },
+    {
+      "path": "backend/tests/test_api_training.py",
+      "sha256": "6787e97f4031795e92db835b165b31727fd2e7768c73cdebd2885c2eb54ed717"
+    },
+    {
+      "path": "backend/tests/test_training_flow.py",
+      "sha256": "369deb0b3f66b3c823410e8c67954016518bcba6678b6ffcd21090dc7f3b1182"
+    },
+    {
+      "path": "backend/tests/test_training_persistence.py",
+      "sha256": "50e036357f69682fd5a3f910a4043ef5c4a1f4e22e0842846175e3deb2117b0e"
+    },
+    {
+      "path": "frontend/components/views/IngestionView.tsx",
+      "sha256": "13bc46ecac4ed019ab581c306dc98aae51423875d762c2df1f5caa05a55f73c3"
+    },
+    {
+      "path": "frontend/components/views/TrainingView.tsx",
+      "sha256": "3592cb8f3a367af39ad1100edf629860277926ef3da908391cef6893bc8bfaec"
+    },
+    {
+      "path": "frontend/components/views/__tests__/IngestionWorkflow.test.tsx",
+      "sha256": "d1aa1176c69dfd6ca0fa641ab6626a6b9f48430fc16414b9ab734e7542da49b5"
+    },
+    {
+      "path": "frontend/components/views/__tests__/TrainingView.test.tsx",
+      "sha256": "0fdbd0ac9be352fabe0888e66c5debc3e3a48ec772ad016c9e0b1121bec2408b"
+    },
+    {
+      "path": "docs/receipts/autonomia_particiones_muestra_20261023.json",
+      "sha256": "78a1c0b7178eb69bc3c31a482e20e8c47d9ba2ee33bcc3444936be655c615142"
+    },
+    {
+      "path": "docs/images/autonomia_entrenamiento_real_20261023.png",
+      "sha256": "c95855cbb3119ed1319e941e901f5f79260276a36d9eda8fb1f5143b7d30dea4"
+    },
+    {
+      "path": "docs/images/autonomia_incorporacion_real_20261023.png",
+      "sha256": "f9429d3b293481c77d3599e37165aa2e1c7a2149ee9e57411ba58d5c355c6ce8"
+    },
+    {
+      "path": "frontend/lib/schemas/training.ts",
+      "sha256": "ab54a58f892eed3072f1fe77ea86696a5ebab095dc0f76bb328df5735ee5b314"
+    },
+    {
+      "path": "docs/images/autonomia_historial_real_20261023.png",
+      "sha256": "4b851b7db5d5266345b070eabc079bb67c6687bb2cc546544a9c1328501b200f"
+    }
+  ]
+}

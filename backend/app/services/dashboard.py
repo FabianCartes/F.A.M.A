@@ -20,6 +20,7 @@ class DashboardService:
         self,
         db: Optional[Session] = None,
         ensemble_status: Optional[Dict[str, Any]] = None,
+        access=None,
     ) -> Dict[str, Any]:
         """
         Retorna la estructura unificada de estadísticas para el Dashboard:
@@ -44,18 +45,20 @@ class DashboardService:
 
         if db is not None:
             try:
+                query = db.query if access is None else access.query
                 # 1. Total de Predicciones y Confianza Promedio
-                pred_count = db.query(Prediccion).count()
+                predictions = query(Prediccion)
+                pred_count = predictions.count()
                 total_predictions = pred_count
 
                 if pred_count > 0:
-                    avg_conf = db.query(func.avg(Prediccion.confianza)).scalar()
+                    avg_conf = predictions.with_entities(func.avg(Prediccion.confianza)).scalar()
                     if avg_conf is not None:
                         avg_confidence = round(float(avg_conf) * 100, 1)
 
                     # Obtener las últimas 4 predicciones para el feed
                     ultimas_predicciones = (
-                        db.query(Prediccion)
+                        predictions
                         .order_by(Prediccion.id_prediccion.desc())
                         .limit(4)
                         .all()
@@ -83,12 +86,12 @@ class DashboardService:
                         })
 
                 # 2. Datasets y Audios en la base de datos
-                total_datasets = db.query(ConjuntoDatos).count()
-                total_audios = db.query(Audio).count()
+                total_datasets = query(ConjuntoDatos).count()
+                total_audios = query(Audio).count()
 
                 # 3. Modelos y Curvas de Entrenamiento
                 ultimo_modelo = (
-                    db.query(Modelo)
+                    query(Modelo)
                     .order_by(Modelo.id_modelo.desc())
                     .first()
                 )

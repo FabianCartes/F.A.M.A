@@ -64,17 +64,24 @@ from app.services.inference_input import InvalidInferenceAudio, validate_audio
 from app.services.storage import upload_audio_to_gcp
 from app.services.ingestion import (
     ingestion_service, IngestionValidationError, IngestionConfigurationError,
-    IngestionPayloadTooLarge, IngestionAudioError,
+    IngestionPayloadTooLarge, IngestionAudioError, IngestionDatasetUnavailable,
 )
 from app.services.training import training_service
 from app.services.dashboard import dashboard_service
 from app.services.feedback import feedback_service
 from app.services.feedback_sync_worker import FeedbackSyncWorker
 from app.services.feedback_sync import FeedbackSyncQueue
-from app.database import Base, engine, get_db
+from app.database import get_db
 from app.models import Prediccion, ConjuntoDatos, Audio, Modelo, MetricaEntrenamiento, Retroalimentacion, Usuario
 from app.routes.auth import router as auth_router
-from app.routes.dataset_imports import router as dataset_import_router
+from app.routes.auth import WebAuthRoute
+from app.routes.access import router as access_router, catalogue_router
+from app.routes.users import router as users_router
+from app.routes.security import router as security_router
+from app.services.web_sessions import current_web_user
+from app.services.access import resource_access, ResourceAccess
+from app.routes.import_capability import zip_router
+
 from app.services.registry import get_model_registry, initialize_model_registry, ModelRegistry, ModelNotFoundError
 from app.services.evaluation_catalogue import read_model_evaluations
 from app.schemas.model_info import ModelListResponse
@@ -103,22 +110,6 @@ ENSEMBLE_WEIGHTS: List[float] = [0.55, 0.30, 0.15]
 
 
 # ============================================================================
-# PERSISTENCIA: INICIALIZACIÓN DE TABLAS EN BASE DE DATOS
-# ============================================================================
-if _APP_STARTUP_POLICY == "normal":
-    try:
-        # Imported provenance is migrated explicitly, even if a maintenance module
-        # registered its ORM table before this entrypoint. Keep legacy bootstrap intact.
-        Base.metadata.create_all(bind=engine, tables=[
-            table for table in Base.metadata.tables.values()
-            if table.name not in {"imported_model_source", "sesion_web", "cuota_acceso", "evento_seguridad"}
-        ])
-        print("[Database] Tablas sincronizadas exitosamente en PostgreSQL.")
-    except Exception as db_init_err:
-        print(f"[Database] Advertencia al sincronizar tablas con PostgreSQL: {db_init_err}")
-
-
-# ============================================================================
 # SERVICIO DE INFERENCIA: SUPER-ENSAMBLE TRI-MODELO HETEROGÉNEO
 # ============================================================================
 class SuperEnsembleService:
@@ -130,7 +121,8 @@ class SuperEnsembleService:
 
     def __init__(self, checkpoints_dir: Optional[Path] = None):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.checkpoints_dir = checkpoints_dir or (_BACKEND_ROOT / "checkpoints")
+        from training.paths import get_checkpoints_dir
+        self.checkpoints_dir = Path(checkpoints_dir) if checkpoints_dir is not None else get_checkpoints_dir()
         self.classes: List[str] = SPECIES_CLASSES
         self.weights: List[float] = ENSEMBLE_WEIGHTS
         self.ensemble: Optional[EnsembleClassifier] = None
@@ -154,7 +146,9 @@ class SuperEnsembleService:
             candidates.extend(extra_dirs)
         if self.checkpoints_dir:
             candidates.append(self.checkpoints_dir)
-        candidates.append(_BACKEND_ROOT.parent / "checkpoints")
+        from app.runtime import runtime_root
+        if runtime_root() is None:
+            candidates.append(_BACKEND_ROOT.parent / "checkpoints")
 
         for d in candidates:
             target = d / filename
@@ -167,7 +161,10 @@ class SuperEnsembleService:
         if not isinstance(route, str) or "://" in route:
             return None
         path = Path(route)
-        roots = [self.checkpoints_dir, _BACKEND_ROOT.parent / "checkpoints"]
+        from app.runtime import runtime_root
+        roots = [self.checkpoints_dir]
+        if runtime_root() is None:
+            roots.append(_BACKEND_ROOT.parent / "checkpoints")
         if not path.is_absolute() and path.parts and path.parts[0] == "models":
             path = Path(*path.parts[1:])
         if path.suffix.lower() != ".pt" or ".." in path.parts:
@@ -268,14 +265,15 @@ class SuperEnsembleService:
             self.is_fallback = True
             print("[SuperEnsemble] AVISO: No se encontraron checkpoints entrenados.")
 
-    def get_status(self, dataset_name: Optional[str] = None, db: Optional[Session] = None) -> dict:
+    def get_status(self, dataset_name: Optional[str] = None, db: Optional[Session] = None, access=None) -> dict:
         """
         Observa el servicio bioacústico legacy sin cargar, activar ni inferir.
         Registro, presencia de archivo y carga en memoria son hechos separados.
         is_ready conserva compatibilidad como alias de carga, no prueba de inferencia.
         """
         # Determinar dataset objetivo
-        available_datasets = training_service.get_available_datasets(db=db)
+        available_datasets = (training_service.get_available_datasets(db=db) if access is None
+                              else training_service.get_available_datasets(db=db, access=access))
         available_domains = [d["id"] for d in available_datasets]
         target_ds = dataset_name or "AvesChilenas"
         domain_supported = target_ds == "AvesChilenas"
@@ -498,13 +496,6 @@ async def lifespan(app_instance: FastAPI):
         ensemble_service.load_models()
     except Exception as init_err:
         print(f"[Startup Warning] Excepción al inicializar SuperEnsemble: {init_err}")
-    try:
-        from app.database import SessionLocal
-        from app.services.auth import seed_initial_admin
-        with SessionLocal() as db_session:
-            seed_initial_admin(db_session)
-    except Exception as seed_err:
-        print(f"[Startup Warning] Excepción al realizar seeding inicial: {seed_err}")
     from app.database import SessionLocal
     _prewarm_model_metadata()
     worker = FeedbackSyncWorker(SessionLocal, feedback_service.raw_data_dir)
@@ -540,11 +531,20 @@ app.add_middleware(
 
 # Inclusión de enrutadores modulares
 app.include_router(auth_router)
-app.include_router(dataset_import_router)
+app.include_router(access_router)
+app.include_router(catalogue_router)
+app.include_router(users_router)
+app.include_router(security_router)
+from app.routes.partitions import router as partitions_router
+app.include_router(partitions_router)
+from app.routes.checkpoints import router as checkpoint_router
+app.include_router(checkpoint_router)
+app.include_router(zip_router())
 from app.routes.imported_training import router as imported_training_router
 app.include_router(imported_training_router)
 from app.routes.prediction_history import router as prediction_history_router
 app.include_router(prediction_history_router)
+
 
 
 # ============================================================================
@@ -562,6 +562,12 @@ def health_check():
     return {"status": "ok"}
 
 
+# Secure by default for every functional route registered below this point.
+# Public liveness and authentication routes above retain their own policies.
+app.router.dependencies.append(Depends(current_web_user))
+app.router.route_class = WebAuthRoute
+
+
 # ============================================================================
 # ENDPOINTS DE INFORMACIÓN Y ESTADO DEL SUPER-ENSAMBLE
 # ============================================================================
@@ -572,9 +578,15 @@ def health_check():
 def get_model_info(
     dataset_name: Optional[str] = None,
     db: Session = Depends(get_db),
+    access: ResourceAccess = Depends(resource_access),
 ):
     """Observación acotada del servicio legacy; no representa activación del catálogo."""
-    return ensemble_service.get_status(dataset_name=dataset_name, db=db)
+    access.require_dataset(dataset_name)
+    result = ensemble_service.get_status(dataset_name=dataset_name, db=db,
+                                         access=None if access.administrator else access)
+    if not access.administrator:
+        result["available_domains"] = [name for name in result.get("available_domains", []) if name in access.names]
+    return result
 
 
 # ============================================================================
@@ -586,13 +598,14 @@ def get_model_info(
 )
 def get_dashboard_stats(
     db: Session = Depends(get_db),
+    access: ResourceAccess = Depends(resource_access),
 ):
     """
     Retorna métricas operativas consolidadas de Ingesta, Entrenamiento y Predicción,
     incluyendo KPIs, curvas de convergencia del último modelo, telemetría y feed reciente.
     """
     # Metrics reads must not trigger checkpoint discovery/loading or activation.
-    return dashboard_service.get_stats(db=db)
+    return dashboard_service.get_stats(db=db, access=access)
 
 
 # ============================================================================
@@ -612,6 +625,7 @@ def list_models(
     include_imported: bool = Query(False, description="Añade solo modelos importados del usuario activo autenticado; no cambia el default global"),
     private_only: bool = Query(False, description="Solo modelos privados propios; exige autenticación y no cambia el default global"),
     credentials=Depends(security_bearer),
+    access: ResourceAccess = Depends(resource_access),
 ):
     """
     Retorna la lista de todos los modelos bioacústicos disponibles en el catálogo,
@@ -641,6 +655,14 @@ def list_models(
     for model in models:
         model.evaluations = evaluations.by_model_id.get(model.id)
     default_id = "" if private_only else registry.get_default_model_id() or ""
+    if not access.administrator:
+        # Owner-scoped imported models were already admitted by the registry.
+        models = [item for item in models
+                  if item.id in registry._imported_owners or access.model_allowed(item.id, item.dataset_name)]
+        visible_ids = {item.id for item in models}
+        default_id = default_id if default_id in visible_ids else ""
+        registered_ids = {f"fama_trained_model_{row.id_modelo}" for row in access.query(Modelo).all()}
+        publication_errors = [item for item in publication_errors if item.get("model_id") in registered_ids]
     return ModelListResponse(
         models=models,
         total=len(models),
@@ -649,6 +671,20 @@ def list_models(
         evaluation_catalogue_status="available" if evaluations.available else "unavailable",
         evaluation_catalogue_error=evaluations.error_code,
     )
+
+
+def _owner_scoped_model(db, registry, model_number):
+    """Imported models and compositions are admitted by owner, not by dataset grant."""
+    row = db.get(Modelo, model_number)
+    if row is None:
+        return False
+    if registry._is_triad(row):
+        return True
+    from sqlalchemy import inspect
+    if not inspect(db.get_bind()).has_table("imported_model_source"):
+        return False
+    from app.models.imported_training_source import ImportedModelSource
+    return db.get(ImportedModelSource, model_number) is not None
 
 
 # ============================================================================
@@ -671,6 +707,7 @@ async def predict_audio(
     dataset_name: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     registry: ModelRegistry = Depends(get_model_registry),
+    access: ResourceAccess = Depends(resource_access),
     request: Request = None,
     response: Response = None,
     credentials=Depends(security_bearer),
@@ -697,8 +734,16 @@ async def predict_audio(
             detail="Formato no válido. Solo se permiten archivos de audio con extensión .wav",
         )
 
-    # Public cached models retain legacy selection without a new DB preflight.
-    # Both initial and owner-scoped resolution share the HTTP error mapping.
+    # 2. Validación y resolución temprana del modelo (evita subir a GCS si el modelo no existe)
+    # Imported models keep owner-scoped admission below, outside dataset grants.
+    requested = model_id if model_id and model_id != "default" else registry.get_default_model_id()
+    if requested and requested.startswith("fama_trained_model_") and not access.administrator:
+        suffix = requested.removeprefix("fama_trained_model_")
+        if (not suffix.isascii() or not suffix.isdecimal() or len(suffix) > 10
+                or not 1 <= int(suffix) <= 2 ** 31 - 1
+                or (access.query(Modelo).filter_by(id_modelo=int(suffix)).first() is None
+                    and not _owner_scoped_model(db, registry, int(suffix)))):
+            raise HTTPException(404, "Modelo no encontrado o no asignado.")
     try:
         try:
             predictor = registry.get(model_id)
@@ -743,9 +788,11 @@ async def predict_audio(
     except ModelNotFoundError as err:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(err),
+            detail="Modelo no encontrado o no asignado.",
         )
     except ModelWeightsError as weights_err:
+        if not access.administrator and not (requested and requested.startswith("fama_trained_model_")):
+            raise HTTPException(404, "Modelo no encontrado o no asignado.") from None
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Modelo no disponible para inferencia: {weights_err}",
@@ -762,6 +809,9 @@ async def predict_audio(
         if not root:
             raise HTTPException(status_code=503, detail="Almacenamiento local de inferencia no disponible.")
         local_store, local_owner = LocalPredictionAudio(root), user.id
+    elif (predictor.model_id not in registry._imported_owners
+          and not access.model_allowed(predictor.model_id, predictor.dataset_name)):
+        raise HTTPException(404, "Modelo no encontrado o no asignado.")
     lease = getattr(request.state, "inference_lease", None) if request is not None else None
     owns_lease = lease is None
     if owns_lease:
@@ -771,6 +821,7 @@ async def predict_audio(
                             headers={"Retry-After": "5"})
 
     total_started, request_outcome = perf_counter(), "ok"
+
     try:
         # Storage availability is separate from architecture compatibility.
         try:
@@ -869,9 +920,11 @@ async def predict_audio(
                     fecha_carga=fecha_carga,
                 )
                 db.add(registro_prediccion)
+                access.record_prediction_origin(registro_prediccion)
                 db.commit()
                 db.refresh(registro_prediccion)
                 db_id = registro_prediccion.id_prediccion
+
         except Exception as db_save_err:
             db.rollback()
             if local_key is not None:
@@ -981,22 +1034,36 @@ class SyncRequest(BaseModel):
 
 
 @app.get("/api/ingestion/status")
-def get_ingestion_status():
+def get_ingestion_status(access: ResourceAccess = Depends(resource_access)):
     """
     Retorna el estado de conexión con Google Cloud Storage, el bucket activo
     y estadísticas globales del Data Lake bioacústico.
     """
+    access.require_administrator()
     return ingestion_service.get_storage_status()
 
 
 @app.get("/api/ingestion/datasets")
-def list_ingestion_datasets():
+def list_ingestion_datasets(access: ResourceAccess = Depends(resource_access)):
     """
     Lista todos los datasets almacenados en GCS bajo el prefijo 'datasets/',
     reportando métricas de archivos, tamaño y estado de sincronización local.
     """
-    datasets = ingestion_service.list_datasets()
-    return {"datasets": datasets}
+    datasets = (ingestion_service.list_datasets() if access.administrator else
+                ingestion_service.list_datasets(dataset_names=access.names))
+    if not access.administrator:
+        observed = {item["name"] for item in datasets}
+        datasets.extend({"id": ds.nombre, "name": ds.nombre,
+                         "file_count": ds.cantidad_audios, "total_size_bytes": ds.tamano_total_bytes,
+                         "source": "database", "gcs_available": None, "is_synced": None,
+                         "local_file_count": None, "gcs_file_count": None}
+                        for ds in access.datasets if ds.nombre not in observed)
+    try:
+        file_limit, batch_limit = ingestion_service.get_upload_limits()
+        limits = {"max_file_bytes": file_limit, "max_batch_bytes": batch_limit}
+    except IngestionConfigurationError:
+        limits = None
+    return {"datasets": datasets, "can_create_dataset": access.administrator, "upload_limits": limits}
 
 
 @app.get("/api/ingestion/datasets/{dataset_name}/files")
@@ -1007,12 +1074,14 @@ def list_ingestion_dataset_files(
     feedback: Optional[bool] = Query(None, description="Filter confirmed incorporated feedback origin."),
     limit: int = Query(50, ge=1, le=200, description="Browse page size; inventory enumeration remains eager."),
     cursor: Optional[str] = Query(None, description="Opaque cursor bound to dataset, filters and inventory snapshot."),
+    access: ResourceAccess = Depends(resource_access),
 ):
     """Legacy full list by default; browse adds full facets and snapshot-bound pages.
 
     Shared rows are read-only. Cursor mismatch is 422; inventory drift is 409.
     No cloud streaming or individual download is provided by browsing.
     """
+    access.require_dataset(dataset_name)
     try:
         validate_ingestion_segment(dataset_name)
         if browse:
@@ -1026,13 +1095,16 @@ def list_ingestion_dataset_files(
 
 
 @app.post("/api/ingestion/sync")
-def sync_ingestion_datasets(req: SyncRequest, db: Session = Depends(get_db)):
+def sync_ingestion_datasets(req: SyncRequest, db: Session = Depends(get_db),
+                           access: ResourceAccess = Depends(resource_access)):
     """
     Ejecuta la sincronización masiva selectiva (RF_02): descarga desde GCS a local
     únicamente archivos nuevos o modificados para los datasets seleccionados.
     Si req.preprocess es True, ejecuta la extracción tensorial Mel (RF_03).
     Persiste metadatos en las tablas 'conjunto_datos' y 'audio' en PostgreSQL (Tablas 6.4 y 6.5).
     """
+    for name in req.datasets:
+        access.require_dataset(name)
     results = []
     total_dl = 0
     total_skip = 0
@@ -1047,6 +1119,8 @@ def sync_ingestion_datasets(req: SyncRequest, db: Session = Depends(get_db)):
     for ds_name in req.datasets:
         try:
             res = ingestion_service.sync_dataset_to_local(ds_name, preprocess=req.preprocess, db=db)
+        except IngestionDatasetUnavailable:
+            raise HTTPException(status_code=409, detail="El dataset no contiene audios descargables en el bucket actual.") from None
         except IngestionValidationError:
             raise HTTPException(status_code=422, detail="Destino de dataset inválido.") from None
         results.append(res)
@@ -1070,18 +1144,41 @@ def sync_ingestion_datasets(req: SyncRequest, db: Session = Depends(get_db)):
     }
 
 
+@app.post("/api/ingestion/preprocess")
+def preprocess_ingestion_datasets(req: SyncRequest, access: ResourceAccess = Depends(resource_access)):
+    """Prepare assigned local audio without downloading or registering cloud data."""
+    if not req.datasets:
+        raise HTTPException(status_code=422, detail="Selecciona al menos un dataset.")
+    for name in req.datasets:
+        access.require_dataset(name)
+    try:
+        ingestion_service.validate_dataset_names(req.datasets)
+    except IngestionValidationError:
+        raise HTTPException(status_code=422, detail="Nombres de dataset inválidos.") from None
+    local = ingestion_service.list_local_datasets(dataset_names=set(req.datasets))
+    if not set(req.datasets).issubset({item["id"] for item in local}):
+        raise HTTPException(status_code=409, detail="La selección contiene un dataset sin audios locales para preprocesar.")
+    results = [ingestion_service.preprocess_dataset_to_tensors(name) for name in req.datasets]
+    failures = sum(item["failed"] for item in results)
+    processed = sum(item["processed"] for item in results)
+    return {"status": ("partial" if processed else "failed") if failures else "completed",
+            "results": results, "total_processed": processed, "total_failed": failures}
+
+
 @app.post("/api/ingestion/upload")
 async def upload_ingestion_files(
     dataset_name: str = Form(...),
     class_label: str = Form("General"),
     files: List[UploadFile] = File(...),
     db: Session = Depends(get_db),
+    access: ResourceAccess = Depends(resource_access),
 ):
     """
     Permite cargar nuevos audios (.wav) directamente a la nube GCS dentro de la jerarquía:
     datasets/{dataset_name}/{class_label}/{filename}
     Registra metadatos en PostgreSQL.
     """
+    access.require_dataset(dataset_name)
     try:
         validate_ingestion_segment(dataset_name)
         validate_ingestion_segment(class_label)
@@ -1104,7 +1201,8 @@ async def upload_ingestion_files(
         prepared_files.append((f.filename, bytes(content)))
 
     try:
-        result = ingestion_service.upload_files_to_gcs(prepared_files, dataset_name, class_label, db=db)
+        result = ingestion_service.upload_files_to_gcs(prepared_files, dataset_name, class_label,
+                                                       db=db, actor_id=access.user.id)
     except IngestionPayloadTooLarge:
         raise HTTPException(status_code=413, detail="La carga supera los límites permitidos.") from None
     except IngestionConfigurationError:
@@ -1132,7 +1230,8 @@ def get_training_hardware():
 
 @app.get("/api/training/datasets")
 def get_training_datasets(request: Request, response: Response, db: Session = Depends(get_db), include_imported: bool = False,
-                          include_unavailable: bool = False, credentials=Depends(security_bearer)):
+                          include_unavailable: bool = False, credentials=Depends(security_bearer),
+                          access: ResourceAccess = Depends(resource_access)):
     """
     Retorna la lista de datasets disponibles para entrenar (CU_INV_02).
     include_imported=true exige usuario activo y añade solo sus fuentes preparadas.
@@ -1140,8 +1239,8 @@ def get_training_datasets(request: Request, response: Response, db: Session = De
     """
     user = imported_user(request, response, credentials, db) if include_imported else None
     # Opt-in projection only; preserve the historical call and response by default.
-    datasets = (training_service.get_available_datasets(db=db, include_unavailable=True)
-                if include_unavailable else training_service.get_available_datasets(db=db))
+    datasets = (training_service.get_available_datasets(db=db, access=access, include_unavailable=True)
+                if include_unavailable else training_service.get_available_datasets(db=db, access=access))
     if include_imported:
         from app.services.imported_training_source import configured_sources
         from app.database import SessionLocal
@@ -1155,7 +1254,7 @@ def get_training_datasets(request: Request, response: Response, db: Session = De
 
 @app.post("/api/training/start")
 def start_training_pipeline(req: StartTrainingRequest, request: Request, response: Response, credentials=Depends(security_bearer),
-                            db: Session = Depends(get_db)):
+                            db: Session = Depends(get_db), access: ResourceAccess = Depends(resource_access)):
     """
     Inicia un entrenamiento en segundo plano utilizando PyTorch (CU_INV_03).
     Legacy soporta modelo individual, Tríada Completa o Ensamble Dinámico.
@@ -1164,8 +1263,11 @@ def start_training_pipeline(req: StartTrainingRequest, request: Request, respons
     started solo acredita admisión; checkpoint_persisted queda pendiente de evaluación.
     """
     owner = imported_user(request, response, credentials, db) if req.imported_dataset_id is not None else None
+    if owner is None:
+        access.require_dataset(req.dataset_name)
     try:
         kwargs = {
+            "user_id": access.user.id,
             "dataset_name": req.dataset_name,
             "architecture": req.architecture,
             "epochs": req.epochs,
@@ -1186,10 +1288,13 @@ def start_training_pipeline(req: StartTrainingRequest, request: Request, respons
             triad_only = ("imported_prepared_version", "audio_config", "windowing_config")
             kwargs["models"] = [m.model_dump(exclude={k for k in triad_only if getattr(m, k) is None})
                                  for m in req.models]
+        if req.partition_version is not None:
+            kwargs["partition_version"] = req.partition_version
         if req.prepared_version is not None:
             kwargs["prepared_version"] = req.prepared_version
         if req.allow_historical_preparation:
             kwargs["allow_historical_preparation"] = True
+
         if req.audio_config is not None:
             kwargs["audio_config"] = req.audio_config.model_dump()
         if req.windowing_config is not None:
@@ -1241,46 +1346,57 @@ def revise_triad_weights(model_id: int, body: TriadWeightsRevisionRequest, reque
 
 
 @app.get("/api/training/progress")
-def get_training_progress(request: Request, response: Response, credentials=Depends(security_bearer), db: Session = Depends(get_db)):
+def get_training_progress(request: Request, response: Response, credentials=Depends(security_bearer), db: Session = Depends(get_db),
+                          access: ResourceAccess = Depends(resource_access)):
     """
     Retorna el progreso en tiempo real, curvas de Loss/Accuracy y logs (IS_02).
     """
     owner = _training_resource_owner(request, response, credentials, db)
     try:
-        return training_service.get_progress(owner_id=owner)
+        return training_service.get_progress(owner_id=owner, user_id=access.user.id,
+                                             administrator=access.administrator, allowed_datasets=access.names)
     except ImportedSourceError:
         raise HTTPException(status_code=404, detail="Recurso de entrenamiento no disponible.")
+    except PermissionError:
+        raise HTTPException(403, "Trabajo no accesible para este usuario.") from None
 
 
 @app.post("/api/training/stop")
-def stop_training_pipeline(request: Request, response: Response, credentials=Depends(security_bearer), db: Session = Depends(get_db)):
+def stop_training_pipeline(request: Request, response: Response, credentials=Depends(security_bearer), db: Session = Depends(get_db),
+                           access: ResourceAccess = Depends(resource_access)):
     """
     Solicita la detención segura del entrenamiento en ejecución (CU_INV_03 Paso 2.a).
     """
     owner = _training_resource_owner(request, response, credentials, db)
     try:
-        return training_service.stop_training(owner_id=owner)
+        return training_service.stop_training(owner_id=owner, user_id=access.user.id,
+                                              administrator=access.administrator, allowed_datasets=access.names)
     except ImportedSourceError:
         raise HTTPException(status_code=404, detail="Recurso de entrenamiento no disponible.")
+    except PermissionError:
+        raise HTTPException(403, "Trabajo no accesible para este usuario.") from None
 
 
 @app.get("/api/training/history")
 def get_training_history(request: Request, response: Response, db: Session = Depends(get_db), include_imported: bool = False,
-                         credentials=Depends(security_bearer)):
+                         credentials=Depends(security_bearer), access: ResourceAccess = Depends(resource_access)):
     """
     Retorna el historial de modelos entrenados desde PostgreSQL (CU_INV_04).
     Por defecto excluye importados; include_imported=true autentica y añade solo los propios.
     """
     user = imported_user(request, response, credentials, db) if include_imported else None
-    history = training_service.get_history(db=db, owner_id=user.id if include_imported and user else None)
+    history = training_service.get_history(db=db, access=access,
+                                           owner_id=user.id if include_imported and user else None)
     return {"history": history}
 
 
 @app.post("/api/training/models/{model_id}/activate")
-def activate_model(model_id: int, request: Request, response: Response, db: Session = Depends(get_db), credentials=Depends(security_bearer)):
+def activate_model(model_id: int, request: Request, response: Response, db: Session = Depends(get_db), credentials=Depends(security_bearer),
+                   access: ResourceAccess = Depends(resource_access)):
     """
     Activa un modelo para inferencias bioacústicas en tiempo real (CU_INV_05).
     """
+    access.require_administrator()
     from sqlalchemy import inspect
     source_owner = None
     if inspect(db.get_bind()).has_table("imported_model_source"):
@@ -1357,18 +1473,24 @@ def _feedback_visible_prediction_ids(db, request, response, credentials):
 
 @app.post("/api/feedback", status_code=status.HTTP_201_CREATED)
 def record_feedback(req: FeedbackCreateRequest, request: Request, response: Response,
-                    db: Session = Depends(get_db), credentials=Depends(security_bearer)):
+                    db: Session = Depends(get_db), credentials=Depends(security_bearer),
+                    access: ResourceAccess = Depends(resource_access)):
     """
     Registra retroalimentación de usuario/experto sobre una inferencia (RF_06, CU_INV_07).
     Si la predicción fue errónea, valida la etiqueta corregida y respalda en GCS.
     """
     user = _feedback_imported_user(db, req.id_prediccion, request, response, credentials)
+    if user is None:
+        access.require_prediction(req.id_prediccion)
+    existing = db.query(Retroalimentacion).filter_by(id_prediccion=req.id_prediccion).with_for_update().first()
+    if existing is not None and not access.administrator and existing.id_usuario != access.user.id:
+        raise HTTPException(403, "No se permite modificar retroalimentación de otro autor.")
     feedback_rec = feedback_service.record_feedback(
         db=db,
         id_prediccion=req.id_prediccion,
         fue_correcta=req.fue_correcta,
         etiqueta_corregida=req.etiqueta_corregida,
-        id_usuario=user.id if user is not None else req.id_usuario or 1,
+        id_usuario=access.user.id,
     )
     return {
         "id_retroalimentacion": feedback_rec.id_retroalimentacion,
@@ -1390,11 +1512,12 @@ def get_feedback_sync_states(
     request: Request, response: Response,
     limit: int = Query(50, ge=1, le=500),
     db: Session = Depends(get_db), credentials=Depends(security_bearer),
+    access: ResourceAccess = Depends(resource_access),
 ):
     """Read recent accepted local milestones; never upload or change outcomes."""
     try:
         visible = _feedback_visible_prediction_ids(db, request, response, credentials)
-        return FeedbackSyncQueue().recent(db, limit=limit, prediction_ids=visible)
+        return FeedbackSyncQueue().recent(db, limit=limit, access=access, prediction_ids=visible)
     except HTTPException:
         raise
     except Exception:
@@ -1406,12 +1529,13 @@ def get_pending_feedback(
     request: Request, response: Response,
     limit: int = Query(50, ge=1, le=500),
     db: Session = Depends(get_db), credentials=Depends(security_bearer),
+    access: ResourceAccess = Depends(resource_access),
 ):
     """
     Retorna la lista de retroalimentaciones pendientes de curación semi-manual (procesado == False).
     """
     visible = _feedback_visible_prediction_ids(db, request, response, credentials)
-    return feedback_service.get_pending_feedback(db=db, limit=limit, prediction_ids=visible)
+    return feedback_service.get_pending_feedback(db=db, limit=limit, access=access, prediction_ids=visible)
 
 
 @app.post("/api/feedback/{id_retroalimentacion}/approve", response_model=ApproveFeedbackResponse)
@@ -1426,6 +1550,7 @@ def approve_feedback(
         description="Compatibilidad legacy: debe coincidir con el destino persistido; no permite cambiarlo.",
     ),
     db: Session = Depends(get_db), credentials=Depends(security_bearer),
+    access: ResourceAccess = Depends(resource_access),
 ):
     """
     Aprueba e incorpora el audio en el destino congelado durante la inferencia,
@@ -1433,7 +1558,9 @@ def approve_feedback(
     """
     user = _feedback_imported_user(db, _feedback_prediction_id(db, id_retroalimentacion),
                                    request, response, credentials)
-    kwargs = {"db": db, "id_retroalimentacion": id_retroalimentacion, "dataset_name": dataset_name}
+    if user is None:
+        access.require_feedback(id_retroalimentacion)
+    kwargs = {"db": db, "id_retroalimentacion": id_retroalimentacion, "dataset_name": dataset_name, "actor_id": access.user.id}
     if user is not None:
         kwargs["owner_id"] = user.id
     if curation_source_id is not None:
@@ -1441,26 +1568,30 @@ def approve_feedback(
     return feedback_service.approve_feedback(**kwargs)
 
 
+
 @app.post("/api/feedback/{id_retroalimentacion}/reject")
 def reject_feedback(
     id_retroalimentacion: int, request: Request, response: Response,
     db: Session = Depends(get_db), credentials=Depends(security_bearer),
+    access: ResourceAccess = Depends(resource_access),
 ):
     """
     Descarta la retroalimentación sin alterar los datasets de entrenamiento,
     marcando el registro como procesado.
     """
-    _feedback_imported_user(db, _feedback_prediction_id(db, id_retroalimentacion),
-                            request, response, credentials)
+    user = _feedback_imported_user(db, _feedback_prediction_id(db, id_retroalimentacion),
+                                   request, response, credentials)
+    if user is None:
+        access.require_feedback(id_retroalimentacion)
     return feedback_service.reject_feedback(db=db, id_retroalimentacion=id_retroalimentacion)
 
 
 @app.get("/api/feedback/stats")
 def get_feedback_stats(request: Request, response: Response, db: Session = Depends(get_db),
-                       credentials=Depends(security_bearer)):
+                       credentials=Depends(security_bearer), access: ResourceAccess = Depends(resource_access)):
     """
     Retorna la telemetría consolidada del bucle de retroalimentación activa (RF_06)
     incluyendo conteo de audios pendientes de curación.
     """
     visible = _feedback_visible_prediction_ids(db, request, response, credentials)
-    return feedback_service.get_feedback_stats(db=db, prediction_ids=visible)
+    return feedback_service.get_feedback_stats(db=db, access=access, prediction_ids=visible)

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, apiFetch as fetch } from "@/lib/api";
 import { TabType } from "../Sidebar";
 
 interface DashboardViewProps {
@@ -104,39 +104,42 @@ function metric(value: number | null | undefined, digits = 0, suffix = ""): stri
 
 export default function DashboardView({ onNavigate }: DashboardViewProps) {
   const [stats, setStats] = useState<DashboardStatsResponse | null>(null);
-  const [statsUnavailable, setStatsUnavailable] = useState(true);
+  const [statsUnavailable, setStatsUnavailable] = useState(false);
+  const [loadingStats, setLoadingStats] = useState(true);
   const [hardware, setHardware] = useState<HardwareTelemetry | null>(null);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [hoveredEpoch, setHoveredEpoch] = useState<number | null>(null);
-  const [revealProgress, setRevealProgress] = useState<number>(0);
 
-  const fetchDashboardData = useCallback(async () => {
-    try {
-      const [resStats, resHw] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/dashboard/stats`).catch(() => null),
-        fetch(`${API_BASE_URL}/api/training/hardware`).catch(() => null),
-      ]);
-
-      if (resStats && resStats.ok) {
-        const data = (await resStats.json()) as DashboardStatsResponse;
+  const fetchDashboardData = useCallback(async (signal?: AbortSignal) => {
+    const loadStats = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/dashboard/stats`, { signal });
+        if (!response.ok) throw new Error("No se pudieron consultar las métricas");
+        const data = (await response.json()) as DashboardStatsResponse;
+        if (signal?.aborted) return;
         setStats(data);
         setStatsUnavailable(false);
-      } else {
-        setStatsUnavailable(true);
+      } catch {
+        if (!signal?.aborted) setStatsUnavailable(true);
+      } finally {
+        if (!signal?.aborted) setLoadingStats(false);
       }
-      if (resHw && resHw.ok) {
-        const hwData = (await resHw.json()) as HardwareTelemetry;
-        setHardware(hwData);
-      } else {
-        setHardware(null);
+    };
+    const loadHardware = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/training/hardware`, { signal });
+        if (!response.ok) throw new Error("Telemetría no disponible");
+        const data = (await response.json()) as HardwareTelemetry;
+        if (!signal?.aborted) setHardware(data);
+      } catch {
+        if (!signal?.aborted) setHardware(null);
       }
-    } catch (err) {
-      setStatsUnavailable(true);
-      console.warn("Aviso al consultar datos del dashboard:", err);
-    }
+    };
+    await Promise.all([loadStats(), loadHardware()]);
   }, []);
 
   const handleManualRefresh = useCallback(async () => {
+    setLoadingStats(true);
     setRefreshing(true);
     try {
       await fetchDashboardData();
@@ -146,76 +149,14 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
   }, [fetchDashboardData]);
 
   useEffect(() => {
-    let isCancelled = false;
-
-    async function loadInitialData() {
-      try {
-        const [resStats, resHw] = await Promise.all([
-          fetch(`${API_BASE_URL}/api/dashboard/stats`).catch(() => null),
-          fetch(`${API_BASE_URL}/api/training/hardware`).catch(() => null),
-        ]);
-
-        if (isCancelled) return;
-
-        if (resStats && resStats.ok) {
-          const data = (await resStats.json()) as DashboardStatsResponse;
-          setStats(data);
-          setStatsUnavailable(false);
-        } else {
-          setStatsUnavailable(true);
-        }
-        if (resHw && resHw.ok) {
-          const hwData = (await resHw.json()) as HardwareTelemetry;
-          setHardware(hwData);
-        } else {
-          setHardware(null);
-        }
-      } catch (err) {
-        if (!isCancelled) setStatsUnavailable(true);
-        console.warn("Aviso al consultar datos del dashboard:", err);
-      }
-    }
-
-    loadInitialData();
-    const interval = setInterval(loadInitialData, 15000);
+    const controller = new AbortController();
+    void fetchDashboardData(controller.signal);
+    const interval = setInterval(() => { void fetchDashboardData(controller.signal); }, 15000);
     return () => {
-      isCancelled = true;
+      controller.abort();
       clearInterval(interval);
     };
-  }, []);
-
-  // Animación progresiva de las líneas del gráfico de izquierda a derecha sin elementos artificiales al frente
-  useEffect(() => {
-    if (!stats?.training_curves || stats.training_curves.length === 0) return;
-
-    const durationMs = 2200; // Velocidad pausada y suave para apreciar el trazado progresivo
-    let startTime: number | null = null;
-    let animId: number;
-
-    const animate = (now: number) => {
-      if (startTime === null) {
-        startTime = now;
-        setRevealProgress(0);
-      }
-      const elapsed = now - startTime;
-      const linear = Math.min(1, elapsed / durationMs);
-      // Easing suave (easeInOutQuad) para un avance fluido y natural de principio a fin
-      const eased =
-        linear < 0.5
-          ? 2 * linear * linear
-          : 1 - Math.pow(-2 * linear + 2, 2) / 2;
-      setRevealProgress(eased);
-
-      if (linear < 1) {
-        animId = requestAnimationFrame(animate);
-      } else {
-        setRevealProgress(1);
-      }
-    };
-
-    animId = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(animId);
-  }, [stats?.training_curves]);
+  }, [fetchDashboardData]);
 
   // Cálculos vectoriales de coordenadas SVG para el gráfico de convergencia con ajuste dinámico
   const chartGeometry = useMemo(() => {
@@ -244,7 +185,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
     const lossMax = Math.max(0.5, Math.ceil(maxLossRaw * 1.15 * 10) / 10);
 
     const coords = pts.map((pt, i) => {
-      const x = padX + (i / Math.max(1, pts.length - 1)) * plotW;
+      const x = padX + (pts.length === 1 ? 0.5 : i / (pts.length - 1)) * plotW;
       const normAcc = Math.max(0, Math.min(1, (pt.accuracy - accMin) / Math.max(1, accMax - accMin)));
       const normLoss = Math.max(0, Math.min(1, (pt.loss - lossMin) / Math.max(0.1, lossMax - lossMin)));
 
@@ -342,14 +283,15 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
         </div>
       </div>
 
-      {statsUnavailable && (
+      {loadingStats && !stats && <p role="status" className="text-xs text-gray-400">Cargando métricas…</p>}
+      {statsUnavailable && !loadingStats && (
         <p role="status" className="text-xs text-amber-300">
           Datos actuales del dashboard no disponibles{stats ? "; se conserva la última lectura." : "."}
         </p>
       )}
 
       {/* Fila 1: 4 KPIs Principales con Datos Dinámicos Reales */}
-      <section aria-label="Métricas registradas" className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+      <section aria-label="Métricas registradas" aria-busy={loadingStats} className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
         {/* KPI 1: Precisión del Modelo Activo */}
         <div className="bg-[#16171b] border border-[#23252e] hover:border-[#2d303b] transition-all rounded-xl p-3.5 flex flex-col justify-between">
           <div className="flex items-center justify-between">
@@ -365,10 +307,10 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
           </div>
           <div className="mt-2">
             <p className="text-2xl font-bold text-white font-mono">
-              {metric(stats?.kpis.accuracy, 2, "%")}
+              {loadingStats && !stats ? "…" : metric(stats?.kpis.accuracy, 2, "%")}
             </p>
             <p className="text-[10px] text-gray-400 mt-0.5 truncate" title={stats?.kpis.latest_model_name ?? undefined}>
-              {stats?.kpis.latest_model_name ?? "No disponible"}
+              {loadingStats && !stats ? "Consultando último modelo" : stats?.kpis.latest_model_name ?? "No disponible"}
             </p>
           </div>
         </div>
@@ -388,7 +330,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
           </div>
           <div className="mt-2">
             <p className="text-2xl font-bold text-blue-400 font-mono">
-              {metric(stats?.kpis.loss, 4)}
+              {loadingStats && !stats ? "…" : metric(stats?.kpis.loss, 4)}
             </p>
             <p className="text-[10px] text-gray-400 mt-0.5">
               Último modelo registrado; no implica activación
@@ -411,10 +353,10 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
           </div>
           <div className="mt-2">
             <p className="text-2xl font-bold text-white font-mono">
-              {stats?.kpis.total_audios != null ? stats.kpis.total_audios.toLocaleString() : "No disponible"}
+              {loadingStats && !stats ? "…" : stats?.kpis.total_audios != null ? stats.kpis.total_audios.toLocaleString() : "No disponible"}
             </p>
             <p className="text-[10px] text-gray-400 mt-0.5">
-              {stats?.kpis.total_datasets != null ? `${stats.kpis.total_datasets} dataset(s) registrados` : "No disponible"}
+              {loadingStats && !stats ? "Consultando datasets" : stats?.kpis.total_datasets != null ? `${stats.kpis.total_datasets} dataset(s) registrados` : "No disponible"}
             </p>
           </div>
         </div>
@@ -434,10 +376,10 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
           </div>
           <div className="mt-2">
             <p className="text-2xl font-bold text-purple-300 font-mono">
-              {stats?.kpis.total_predictions ?? "No disponible"}
+              {loadingStats && !stats ? "…" : stats?.kpis.total_predictions ?? "No disponible"}
             </p>
             <p className="text-[10px] text-gray-400 mt-0.5">
-              Confianza prom.: {metric(stats?.kpis.avg_confidence, 1, "%")}
+              Confianza prom.: {loadingStats && !stats ? "…" : metric(stats?.kpis.avg_confidence, 1, "%")}
             </p>
           </div>
         </div>
@@ -489,7 +431,10 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
 
           {/* Gráfico SVG con escalado proporcional y sin espacios vacíos */}
           <div className="relative bg-[#101114] rounded-lg p-3 border border-[#1f2128]">
-            <svg
+            {chartGeometry?.coords.length === 1 && <p className="text-xs text-gray-400 mb-3">Una época registrada. Se necesitan al menos dos para observar la evolución.</p>}
+            {chartGeometry ? <svg
+              role="img"
+              aria-label="Convergencia del modelo"
               viewBox="0 0 500 160"
               className="w-full h-44 overflow-visible select-none"
               preserveAspectRatio="none"
@@ -503,10 +448,6 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
                   <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.28" />
                   <stop offset="100%" stopColor="#f43f5e" stopOpacity="0.0" />
                 </linearGradient>
-                {/* Máscara de recorte animada de izquierda a derecha */}
-                <clipPath id="chartRevealClip">
-                  <rect x="0" y="0" width={revealProgress * 500} height="160" />
-                </clipPath>
               </defs>
 
               {/* Líneas guía dinámicas */}
@@ -516,20 +457,23 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
                   <line x1={chartGeometry.padX} y1={chartGeometry.padY + chartGeometry.plotH * 0.5} x2="485" y2={chartGeometry.padY + chartGeometry.plotH * 0.5} stroke="#1e2230" strokeWidth="1" strokeDasharray="3 3" />
                   <line x1={chartGeometry.padX} y1={chartGeometry.baseY} x2="485" y2={chartGeometry.baseY} stroke="#252a3a" strokeWidth="1" />
 
-                  {/* Grupo recortado con animación progresiva de izquierda a derecha */}
-                  <g clipPath="url(#chartRevealClip)">
+                  <g>
                     {/* Relleno bajo curvas */}
+                    {chartGeometry.coords.length > 1 && <>
                     <path d={chartGeometry.accAreaD} fill="url(#gradAccDash)" />
                     <path d={chartGeometry.lossAreaD} fill="url(#gradLossDash)" />
 
                     {/* Curvas principales */}
                     <path d={chartGeometry.accPathD} fill="none" stroke="#10b981" strokeWidth="2.4" />
                     <path d={chartGeometry.lossPathD} fill="none" stroke="#f43f5e" strokeWidth="2" strokeDasharray="5 3" />
+                    </>}
 
                     {/* Puntos interactivos de las épocas */}
                     {chartGeometry.coords.map((c) => (
                       <g
                         key={c.epoch}
+                        role="img"
+                        aria-label={`Época ${c.epoch}: precisión ${c.accuracy.toFixed(1)}%, pérdida ${c.loss.toFixed(4)}`}
                         className="cursor-pointer"
                         onMouseEnter={() => setHoveredEpoch(c.epoch)}
                         onMouseLeave={() => setHoveredEpoch(null)}
@@ -537,7 +481,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
                         <circle
                           cx={c.x}
                           cy={c.yAcc}
-                          r={hoveredEpoch === c.epoch ? 5.5 : 4}
+                          r={hoveredEpoch === c.epoch || chartGeometry.coords.length === 1 ? 6 : 4}
                           fill="#10b981"
                           stroke="#064e3b"
                           strokeWidth="1.5"
@@ -546,7 +490,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
                         <circle
                           cx={c.x}
                           cy={c.yLoss}
-                          r={hoveredEpoch === c.epoch ? 5 : 3.5}
+                          r={hoveredEpoch === c.epoch || chartGeometry.coords.length === 1 ? 6 : 3.5}
                           fill="#f43f5e"
                           stroke="#881337"
                           strokeWidth="1.5"
@@ -562,11 +506,11 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
                   <text x="6" y={chartGeometry.baseY + 3} fill="#6b7280" fontSize="9" fontFamily="monospace">{chartGeometry.accMin}%</text>
                 </>
               )}
-            </svg>
+            </svg> : <p className="text-xs text-gray-400 py-12 text-center">{loadingStats && !stats ? "Cargando gráfico…" : statsUnavailable ? "No se pudo consultar el gráfico." : "Sin épocas registradas para mostrar el gráfico."}</p>}
 
             {/* Leyenda y marcas de Épocas */}
             <div className="flex items-center justify-between text-[10px] text-gray-500 font-mono mt-1 px-3 pt-1 border-t border-[#1b1d25]">
-              <span>{stats?.training_curves[0] ? `Época ${stats.training_curves[0].epoch}` : "Sin métricas registradas"}</span>
+              <span>{loadingStats && !stats ? "Consultando épocas" : stats?.training_curves[0] ? `Época ${stats.training_curves[0].epoch}` : statsUnavailable ? "Consulta no disponible" : "Sin métricas registradas"}</span>
               <div className="flex items-center gap-4">
                 <span className="flex items-center gap-1.5 text-emerald-400">
                   <span className="w-2.5 h-0.5 bg-emerald-400 inline-block" />
@@ -577,7 +521,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
                   Pérdida (Loss)
                 </span>
               </div>
-              <span>{activeEpochData ? `Época ${activeEpochData.epoch}` : "No disponible"}</span>
+              <span>{activeEpochData ? `Época ${activeEpochData.epoch}` : "—"}</span>
             </div>
           </div>
         </div>

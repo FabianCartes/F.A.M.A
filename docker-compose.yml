@@ -44,11 +44,18 @@ services:
       start_period: 20s
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-fama_db}
-      - GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-fama-audio-records-2026}
-      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-proyectotesis-fama-de4426cc102e.json}
-      - GCP_KEY_PATH=${GCP_KEY_PATH:-proyectotesis-fama-de4426cc102e.json}
+      - GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-}
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-}
+      - GCP_KEY_PATH=${GCP_KEY_PATH:-}
       - XC_API_KEY=${XC_API_KEY:-}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-}
+      - JWT_SECRET_KEY_FILE=${JWT_SECRET_KEY_FILE:-}
+      - FAMA_RATE_LIMIT_KEY=${FAMA_RATE_LIMIT_KEY:-}
+      - FAMA_RATE_LIMIT_KEY_FILE=${FAMA_RATE_LIMIT_KEY_FILE:-}
+      - FAMA_WEB_ORIGIN=${FAMA_WEB_ORIGIN:-}
+      - FAMA_ALLOW_INSECURE_LOOPBACK=${FAMA_ALLOW_INSECURE_LOOPBACK:-}
+      - FAMA_SESSION_MAX_AGE_SECONDS=${FAMA_SESSION_MAX_AGE_SECONDS:-28800}
+      - FAMA_SESSION_IDLE_SECONDS=${FAMA_SESSION_IDLE_SECONDS:-1800}
       - ADMIN_INITIAL_EMAIL=${ADMIN_INITIAL_EMAIL:-}
       - ADMIN_INITIAL_PASSWORD=${ADMIN_INITIAL_PASSWORD:-}
       - ADMIN_INITIAL_NAME=${ADMIN_INITIAL_NAME:-Administrador F.A.M.A.}
@@ -60,7 +67,7 @@ services:
     volumes:
       - ./backend/checkpoints:/app/checkpoints
       - ./backend/data:/app/data
-      - ./backend/proyectotesis-fama-de4426cc102e.json:/app/proyectotesis-fama-de4426cc102e.json:ro
+      - ${FAMA_CREDENTIALS_DIR:-./backend/credentials}:/run/fama/credentials:ro
     # Aceleración GPU NVIDIA (Configurado para RTX 2050):
     deploy:
       resources:

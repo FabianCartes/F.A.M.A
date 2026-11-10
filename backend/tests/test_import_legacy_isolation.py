@@ -25,7 +25,9 @@ def legacy(tmp_path, monkeypatch):
     from app.database import get_db
     main.app.dependency_overrides[get_db] = lambda: None
     client = TestClient(main.app, raise_server_exceptions=False)
-    yield client
+    from tests.http_security import administrator_http
+    with administrator_http(main.app):
+        yield client
     client.close()
     main.app.dependency_overrides.clear()
     main.app.dependency_overrides.update(with_db)

@@ -1,0 +1,474 @@
+{
+  "version": 1,
+  "checked_at": "2026-10-23T06:15:40.772610+00:00",
+  "status": "bounded_researcher_flow_verified_stage8_open_with_limitations",
+  "branch": "fix/afinamiento-integral",
+  "environment": "local_test_services_connected_to_named_Cloud_SQL_and_test_GCS_bucket",
+  "operator": {
+    "reported_CLI_result": {
+      "code": "autonomy_update_ready",
+      "revision": "0003_autonomy"
+    },
+    "selected_assets": "10_AvesChilenas_audios_in_two_classes_in_separate_dataset",
+    "migration_password_recorded": false
+  },
+  "codex": {
+    "schema_and_permissions_verified_read_only": true,
+    "only_named_test_services_restarted": true,
+    "authorized_sample_uploaded_through_rendered_UI": true,
+    "source_audio_modified": false
+  },
+  "schema": {
+    "code": "schema_current",
+    "revision": "0003_autonomy",
+    "migration_executed_by": "operator"
+  },
+  "permissions_before_upload": {
+    "code": "autonomy_live_permissions_verified",
+    "checked_at": "2026-10-23T05:28:25.335808+00:00",
+    "revision": "0003_autonomy",
+    "application_table_count": 16,
+    "sequence_count": 9,
+    "version_table_read_only": true,
+    "runtime_DDL_allowed": false,
+    "counts": {
+      "usuario": 2,
+      "conjunto_datos": 0,
+      "asignacion_dataset": 0,
+      "solicitud_dataset": 0,
+      "feedback_sync": 0
+    },
+    "SQL_writes": false
+  },
+  "runtime": {
+    "checked_at": "2026-10-23T07:11:56.5771566Z",
+    "backend_parent_pid": 18332,
+    "backend_directory": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\.pytest_cache\\stage8-live\\backend",
+    "backend_child_pid": 8068,
+    "backend_port": 8010,
+    "frontend_port": 3010,
+    "frontend_parent_pid": 36904,
+    "frontend_child_pid": 14520,
+    "ready_HTTP": 200,
+    "ready_code": "schema_current",
+    "proxy_port": 5433
+  },
+  "live_HTTP_and_login_probe": {
+    "code": "live_login_120_second_window_verified",
+    "checked_at": "2026-10-23T05:36:15.400872+00:00",
+    "HTTP_statuses": [
+      401,
+      401,
+      401,
+      401,
+      401,
+      429
+    ],
+    "retry_after_seconds": 111,
+    "synthetic_nonexistent_identity_only": true,
+    "existing_account_budgets_exhausted": false,
+    "accounts_created": false,
+    "credentials_changed": false,
+    "sessions_issued": false,
+    "diagnostic_quota_rows_created": true,
+    "denied_login_audit_events_expected": 5,
+    "quota_rows_or_audit_purged": false,
+    "real_time_120_second_wait_tested": false,
+    "health_HTTP": 200,
+    "ready_HTTP": 200,
+    "ready_code": "schema_current",
+    "installation_status_HTTP": 200,
+    "installation_status": "completed",
+    "installation_state_HTTP": 410
+  },
+  "browser": {
+    "administrator_session_confirmed_after_restart": true,
+    "original_two_collections_local_only_with_zero_cloud_audio": true,
+    "local_only_download_disabled_after_selection": true,
+    "explicit_local_preprocessing_enabled_after_selection": true,
+    "administrator_new_dataset_form_observed": true,
+    "metadata_catalogue_HTTP": 200,
+    "administrative_requests_HTTP": 200,
+    "administrative_requests_initially_empty": true,
+    "both_uploads_reported_5_uploaded_0_skipped_0_failed_and_SQL_confirmed": true,
+    "test_dataset_showed_10_audio_cloud_and_zero_local": true,
+    "cookies_or_tokens_read": false
+  },
+  "sample": {
+    "code": "test_audio_sample_SQL_GCS_verified",
+    "checked_at": "2026-10-23T06:10:14.014610+00:00",
+    "bucket": "fama-pruebas",
+    "dataset": "FAMA_Prueba_Aves",
+    "dataset_id": 1,
+    "audio_count": 10,
+    "class_counts": {
+      "Canastero": 5,
+      "Chucao": 5
+    },
+    "total_bytes": 3849209,
+    "SQL_upload_audit_events": 2,
+    "assignment_count": 0,
+    "source_files_preserved": true,
+    "all_remote_objects_and_SQL_hashes_verified": true,
+    "verification_SQL_writes": false,
+    "verification_GCS_writes": false,
+    "remote_contents_downloaded_during_verification": false,
+    "objects": [
+      {
+        "object": "datasets/FAMA_Prueba_Aves/Canastero/381518.mp3",
+        "generation": "1792735603046281",
+        "bytes": 286926,
+        "remote_MD5_matches_source": true,
+        "SQL_SHA256_matches_source": true
+      },
+      {
+        "object": "datasets/FAMA_Prueba_Aves/Canastero/225290.mp3",
+        "generation": "1792735604138660",
+        "bytes": 331018,
+        "remote_MD5_matches_source": true,
+        "SQL_SHA256_matches_source": true
+      },
+      {
+        "object": "datasets/FAMA_Prueba_Aves/Canastero/381517.mp3",
+        "generation": "1792735605111544",
+        "bytes": 371565,
+        "remote_MD5_matches_source": true,
+        "SQL_SHA256_matches_source": true
+      },
+      {
+        "object": "datasets/FAMA_Prueba_Aves/Canastero/225288.mp3",
+        "generation": "1792735606300745",
+        "bytes": 601444,
+        "remote_MD5_matches_source": true,
+        "SQL_SHA256_matches_source": true
+      },
+      {
+        "object": "datasets/FAMA_Prueba_Aves/Canastero/502838.mp3",
+        "generation": "1792735607664024",
+        "bytes": 735110,
+        "remote_MD5_matches_source": true,
+        "SQL_SHA256_matches_source": true
+      },
+      {
+        "object": "datasets/FAMA_Prueba_Aves/Chucao/218159.mp3",
+        "generation": "1792735706716788",
+        "bytes": 184597,
+        "remote_MD5_matches_source": true,
+        "SQL_SHA256_matches_source": true
+      },
+      {
+        "object": "datasets/FAMA_Prueba_Aves/Chucao/296132.mp3",
+        "generation": "1792735707613318",
+        "bytes": 241266,
+        "remote_MD5_matches_source": true,
+        "SQL_SHA256_matches_source": true
+      },
+      {
+        "object": "datasets/FAMA_Prueba_Aves/Chucao/508289.mp3",
+        "generation": "1792735708529415",
+        "bytes": 316072,
+        "remote_MD5_matches_source": true,
+        "SQL_SHA256_matches_source": true
+      },
+      {
+        "object": "datasets/FAMA_Prueba_Aves/Chucao/1036796.mp3",
+        "generation": "1792735709694722",
+        "bytes": 383934,
+        "remote_MD5_matches_source": true,
+        "SQL_SHA256_matches_source": true
+      },
+      {
+        "object": "datasets/FAMA_Prueba_Aves/Chucao/1075457.mp3",
+        "generation": "1792735711043631",
+        "bytes": 397277,
+        "remote_MD5_matches_source": true,
+        "SQL_SHA256_matches_source": true
+      }
+    ]
+  },
+  "incidents": [
+    {
+      "id": "E8-04",
+      "status": "open_diagnostic_and_TDD_correction_pending",
+      "trigger": "first_MP3_batch_rejected_HTTP_422_before_object_or_SQL_creation",
+      "observation": "in_memory_decoded_frames_less_than_header_while_disk_read_matches",
+      "example": {
+        "source": "backend/data/raw/AvesChilenas/Canastero/50707.mp3",
+        "header_frames": 449720,
+        "in_memory_decoded_frames": 436608
+      },
+      "invalid_original_file_concluded": false,
+      "validation_relaxed": false,
+      "replacement_sample_uses_other_files_of_same_classes_passing_current_policy": true
+    },
+    {
+      "id": "E8-05",
+      "status": "fixed_public_TDD_and_real_training_verified",
+      "detail": "registered_safe_dataset_names_supported_with_canonical_partitions",
+      "test_dataset_training_supported": true,
+      "next": null,
+      "trigger_detail": "training_only_supports_AvesChilenas_and_engine_diagnostics_and_canonical_partitions"
+    },
+    {
+      "id": "E8-06",
+      "status": "fixed",
+      "detail": "explicit_preprocessing_counter_updated_from_confirmed_response"
+    },
+    {
+      "id": "E8-07",
+      "status": "fixed",
+      "detail": "displayed_assigned_dataset_and_submitted_identity_consistent_empty_catalogue_truthful"
+    },
+    {
+      "id": "E8-08",
+      "status": "fixed",
+      "detail": "single_model_payload_uses_visible_hyperparameters",
+      "real_hidden_defaults_job_stopped_at_epoch": 9
+    },
+    {
+      "id": "E8-09",
+      "status": "resolved_for_test_by_runtime_isolation",
+      "detail": "legacy_other_environment_feedback_intent_preserved_without_move_or_overwrite",
+      "product_shared_directory_behavior_changed": false
+    },
+    {
+      "id": "E8-10",
+      "status": "fixed",
+      "detail": "history_display_and_versions_use_associated_dataset_name"
+    },
+    {
+      "id": "E8-11",
+      "status": "open_display_only",
+      "detail": "individual_chart_point_denominator_can_retain_ensemble_default"
+    }
+  ],
+  "source_production_code_changed_this_activation": true,
+  "new_full_test_suites_rerun_during_deployment": false,
+  "existing_isolated_regression_receipt": "docs/receipts/autonomia_datasets_implementacion_20261022.json",
+  "completed_end_to_end_training_or_prediction": true,
+  "pending": [
+    "diagnose_and_fix_E8_04_MP3_decode_discrepancy_with_TDD",
+    "fix_E8_11_individual_chart_label",
+    "persistent_exclusive_runtime_directories_per_environment",
+    "checkpoint_backup_restore_and_institutional_operation_stages_9_10"
+  ],
+  "artifacts": [
+    {
+      "path": "backend/app/services/access_limits.py",
+      "sha256": "183d7e2e8a2702c5f8bd64f2c663b7b8e0cf0e831c4d84efb5e8518ad3640c71"
+    },
+    {
+      "path": "frontend/components/ingestion/DatasetUpload.tsx",
+      "sha256": "a19b864db30d8248e32f1cfaa42f3ad0636779d0cde742441b8f4ef340655a29"
+    },
+    {
+      "path": "frontend/components/ingestion/DatasetInventory.tsx",
+      "sha256": "282616e8ec31ef4e642bcf7938233861d66598468c3300a25011db8a329e803c"
+    },
+    {
+      "path": "frontend/components/ingestion/DatasetCatalogue.tsx",
+      "sha256": "14e17958219df867fe5ea14d278e0afa789e76ec8b9a12caef255aa731b67047"
+    },
+    {
+      "path": "docs/receipts/autonomia_muestra_aves_20261023.json",
+      "sha256": "2c6c83d4e32ded5ed4692e46204a273ff4b03712fa5b06146bfbb9f83adcb475"
+    },
+    {
+      "path": "docs/manuales/autonomia_y_solicitudes_datasets.md",
+      "sha256": "adccc71d7343bdb52657eb4f7e08a149cc07f3e5f06a89ec93d5aef94cb5a390"
+    },
+    {
+      "path": "docs/manuales/plan_autonomia_investigador_y_catalogo.md",
+      "sha256": "211137d80fcf6aff4b5ee081837a309ecd870912c295f39c3c6573e182c584e0"
+    },
+    {
+      "path": "docs/manuales/bitacora_acceso_e_instalacion.md",
+      "sha256": "efe636bb9fa4aad9c518c0ffc1774867e868f66ed05ecc6f253cd5fd2cabc414"
+    },
+    {
+      "path": "docs/manuales/limites_login_y_recuperacion.md",
+      "sha256": "c3fb2864d7c25e81fef110b69fce78f83c948c099711b6b70d719a39f6caed8a"
+    },
+    {
+      "path": "docs/manuales/plan_instalacion_gcp_y_asistente.md",
+      "sha256": "c1697068596525b1218ae5b72f0dba24fcfcfd8c9b134065db5637ecad46041a"
+    },
+    {
+      "path": "docs/manuales/estado_actual_y_pendientes.md",
+      "sha256": "ca79df020494ec3bafeb2169d4dd94914529c651c9237da8f3034c1c89502216"
+    },
+    {
+      "path": "docs/KANBAN.md",
+      "sha256": "7165fce30aab308fd3718af3e695ac46cbff7f3235023e5953c51c3f149783e0"
+    },
+    {
+      "path": "docs/README.md",
+      "sha256": "a5728079da22c7838e40bd49b19a8f64fa1850025baec5996abae65e5b07776a"
+    },
+    {
+      "path": "docs/images/autonomia_inventario_real_20261023.png",
+      "sha256": "f4c7af93c531d2c6d1fa81a762c7fa84a1b44a07f9eaa976236632d8d9b110dc"
+    },
+    {
+      "path": "docs/images/autonomia_solicitudes_real_20261023.png",
+      "sha256": "73a95f5f201ef6d918030b2d995876325d927510ce098ac88cd4a6e645f9bbe7"
+    },
+    {
+      "path": "docs/images/autonomia_muestra_cargada_20261023.png",
+      "sha256": "c4e935a65f9f3952201885d49675ba2973d653ac639edcd30b630d5d124c0e70"
+    },
+    {
+      "path": "docs/images/autonomia_solicitud_investigador_20261023.png",
+      "sha256": "a109f462ba572b6b78f70603dccf61ee5bae2386f7c96aef61bea4beddf50640"
+    },
+    {
+      "path": "backend/app/services/training.py",
+      "sha256": "3d9a291b5b1722744208e29f476ff66fd38aeb1730bb9b8730b735d22f5b073b"
+    },
+    {
+      "path": "backend/tests/test_api_training.py",
+      "sha256": "6787e97f4031795e92db835b165b31727fd2e7768c73cdebd2885c2eb54ed717"
+    },
+    {
+      "path": "backend/tests/test_training_flow.py",
+      "sha256": "369deb0b3f66b3c823410e8c67954016518bcba6678b6ffcd21090dc7f3b1182"
+    },
+    {
+      "path": "backend/tests/test_training_persistence.py",
+      "sha256": "50e036357f69682fd5a3f910a4043ef5c4a1f4e22e0842846175e3deb2117b0e"
+    },
+    {
+      "path": "frontend/components/views/IngestionView.tsx",
+      "sha256": "13bc46ecac4ed019ab581c306dc98aae51423875d762c2df1f5caa05a55f73c3"
+    },
+    {
+      "path": "frontend/components/views/TrainingView.tsx",
+      "sha256": "3592cb8f3a367af39ad1100edf629860277926ef3da908391cef6893bc8bfaec"
+    },
+    {
+      "path": "frontend/components/views/__tests__/IngestionWorkflow.test.tsx",
+      "sha256": "d1aa1176c69dfd6ca0fa641ab6626a6b9f48430fc16414b9ab734e7542da49b5"
+    },
+    {
+      "path": "frontend/components/views/__tests__/TrainingView.test.tsx",
+      "sha256": "0fdbd0ac9be352fabe0888e66c5debc3e3a48ec772ad016c9e0b1121bec2408b"
+    },
+    {
+      "path": "docs/receipts/autonomia_particiones_muestra_20261023.json",
+      "sha256": "78a1c0b7178eb69bc3c31a482e20e8c47d9ba2ee33bcc3444936be655c615142"
+    },
+    {
+      "path": "docs/images/autonomia_entrenamiento_real_20261023.png",
+      "sha256": "c95855cbb3119ed1319e941e901f5f79260276a36d9eda8fb1f5143b7d30dea4"
+    },
+    {
+      "path": "docs/images/autonomia_incorporacion_real_20261023.png",
+      "sha256": "f9429d3b293481c77d3599e37165aa2e1c7a2149ee9e57411ba58d5c355c6ce8"
+    },
+    {
+      "path": "docs/receipts/autonomia_recorrido_investigador_20261023.json",
+      "sha256": "796b1a138b39a45c797429b7c0af6e420094e6b5bf88672d5f69dbc81f8df60d"
+    },
+    {
+      "path": "frontend/lib/schemas/training.ts",
+      "sha256": "ab54a58f892eed3072f1fe77ea86696a5ebab095dc0f76bb328df5735ee5b314"
+    },
+    {
+      "path": "docs/images/autonomia_historial_real_20261023.png",
+      "sha256": "4b851b7db5d5266345b070eabc079bb67c6687bb2cc546544a9c1328501b200f"
+    }
+  ],
+  "updated_at": "2026-10-23T07:16:51.739765+00:00",
+  "researcher_access_flow": {
+    "operator_researcher_login_reported_and_role_observed": true,
+    "before_assignment": {
+      "operational_inventory_empty": true,
+      "upload_disabled": true,
+      "metadata_catalogue_dataset_visible": true,
+      "file_list_HTTP": 404,
+      "administrative_requests_HTTP": 403
+    },
+    "request_submission_HTTP": 200,
+    "pending_UI_observed": true,
+    "pending_SQL_observed_before_operator_approval": true,
+    "assignment_count_before_approval": 0,
+    "operator_approval_reported": true,
+    "latest_SQL_read_only_snapshot": {
+      "code": "live_dataset_request_state_verified",
+      "checked_at": "2026-10-23T06:20:22.237698+00:00",
+      "request": {
+        "id_usuario": 2,
+        "id_conjunto_datos": 1,
+        "status": "approved",
+        "requested_at": 1792736223,
+        "decided_at": 1792736387,
+        "decided_by": 1
+      },
+      "assignment_count": 1,
+      "audit_counts": {
+        "assignment.granted": 1,
+        "dataset.request_approved": 1,
+        "dataset.requested": 1
+      },
+      "SQL_writes": false,
+      "browser_cookie_read": false
+    },
+    "cookie_or_password_read": false,
+    "assignment_granted_directly_by_codex": false,
+    "next_operator_step": "bounded_flow_completed_no_additional_login_required"
+  },
+  "follow_up_source_changes": [
+    "backend/app/services/training.py",
+    "backend/tests/test_api_training.py",
+    "backend/tests/test_training_flow.py",
+    "backend/tests/test_training_persistence.py",
+    "frontend/components/views/IngestionView.tsx",
+    "frontend/components/views/TrainingView.tsx",
+    "frontend/components/views/__tests__/IngestionWorkflow.test.tsx",
+    "frontend/components/views/__tests__/TrainingView.test.tsx",
+    "frontend/lib/schemas/training.ts"
+  ],
+  "follow_up_verification": {
+    "backend": {
+      "passed": 159,
+      "skipped": 8,
+      "failed": 0,
+      "files": 5,
+      "seconds": 33.99,
+      "files_run": [
+        "test_api_training.py",
+        "test_training_flow.py",
+        "test_training_persistence.py",
+        "test_resource_access.py",
+        "test_training_service.py"
+      ],
+      "skip_reason": "Windows_symlink_creation_privilege_1314"
+    },
+    "frontend": {
+      "passed": 100,
+      "failed": 0,
+      "files": 5,
+      "ingestion_passed": 43,
+      "training_passed": 32,
+      "training_HTTP_contract_passed": 25
+    },
+    "typescript_exit_code": 0,
+    "eslint_ingestion_exit_code": 0,
+    "eslint_training": {
+      "exit_code": 1,
+      "preexisting_explicit_any_errors": 23,
+      "preexisting_unused_import_warnings": 1
+    },
+    "full_backend_or_frontend_suite_rerun": false,
+    "global_diff_check_preexisting_failures": [
+      "backend/dataset_references.py:44",
+      "backend/dataset_references.py:48",
+      "backend/dataset_references.py:52"
+    ],
+    "eslint_training_schema_exit_code": 0
+  },
+  "researcher_functional_flow_receipt": "docs/receipts/autonomia_recorrido_investigador_20261023.json",
+  "final_dataset_audio_count": 11,
+  "model_checkpoint_local_only": true,
+  "initial_activation_source_code_changed": false
+}

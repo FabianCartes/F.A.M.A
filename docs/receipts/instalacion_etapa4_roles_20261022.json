@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "date": "2026-10-22",
+  "branch": "fix/afinamiento-integral",
+  "stage": 4,
+  "status": "native_connectivity_confirmed",
+  "sql_script": {
+    "path": "backend/scripts/preparar_roles_pruebas.sql",
+    "sha256": "6140100ad55b18fb7b0558b61df1c99151e9e297f6bc9af25f00ae76bc86610c",
+    "remote_execution": "operator_confirmed_with_result_screenshot",
+    "target_database": "fama_pruebas",
+    "roles": ["fama_migrador", "fama_app"],
+    "passwords_in_script": false,
+    "table_dml_grants": "pending_after_remote_migrations"
+  },
+  "local_validation": {
+    "test_path": "backend/tests/test_preparacion_roles_pruebas.py",
+    "test_sha256": "1aa882fbdbbe7af7d3a64625e2ade4d9da2b8f7bdcc3139501c6bc951e4bfc11",
+    "command": "backend/.venv/Scripts/python.exe -m pytest --noconftest backend/tests/test_preparacion_roles_pruebas.py -q -p no:cacheprovider",
+    "required_environment": ["FAMA_TEST_ROLES_POSTGRES_URL", "PYTHON_DOTENV_DISABLED=1"],
+    "server_scope": "exclusive_ephemeral_loopback_server",
+    "postgresql_version": "16.15",
+    "image": "postgres:16-alpine",
+    "image_id": "sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea",
+    "storage": "tmpfs",
+    "passed": 4,
+    "failed": 0,
+    "duration_seconds": 4.73,
+    "container_removed": true,
+    "checks": [
+      "passwordless_initial_roles_require_operator_password_assignment",
+      "non_superuser_operator_can_prepare_roles",
+      "migrator_applies_0001_core_and_0002_access",
+      "runtime_cannot_create_persistent_tables_or_schemas",
+      "wrong_database_is_rejected_before_role_creation",
+      "existing_data_is_preserved_and_rejected",
+      "role_collision_rolls_back_and_preserves_existing_password"
+    ],
+    "red_green_observed": ["missing_script", "wrong_database_guard", "nonempty_database_guard"]
+  },
+  "gcp_read_checks": {
+    "project_id": "proyectotesis-fama",
+    "project_number": "551538268021",
+    "service_account": "fama-pruebas-app@proyectotesis-fama.iam.gserviceaccount.com",
+    "adc_type": "impersonated_service_account",
+    "impersonation": "ok",
+    "gcs": {"bucket": "fama-pruebas", "operation": "list_objects", "max_results": 1, "ok": true},
+    "cloud_sql": {
+      "connection_name": "proyectotesis-fama:us-central1:fama-postgres-pruebas",
+      "operation": "connect.get",
+      "http_status": 200,
+      "region": "us-central1",
+      "database_version": "POSTGRES_16",
+      "server_ca_mode": "GOOGLE_MANAGED_CAS_CA",
+      "public_ip_present": true
+    }
+  },
+  "proxy_transport": {
+    "version": "2.26.2+windows.amd64",
+    "binary_sha256": "41cfddfe79fdb5eb89a42c8c76149384eb1c564cfcaa7369a3261c95a5338b35",
+    "official_release": "https://github.com/GoogleCloudPlatform/cloud-sql-proxy/releases/tag/v2.26.2",
+    "address": "127.0.0.1",
+    "port": 5433,
+    "pid_at_check": 22380,
+    "credential_type": "impersonated_service_account",
+    "connection_test_flag": "--run-connection-test",
+    "result": "Connection test passed",
+    "sql_authentication": "operator_confirmed_both_users_with_terminal_screenshot",
+    "background_process": true
+  },
+  "operator_reported": {
+    "studio_current_database": "fama_pruebas",
+    "studio_current_user": "postgres",
+    "sql_roles_created": true,
+    "sql_passwords_assigned": true,
+    "native_read_query": {
+      "query": "SELECT current_database(), current_user",
+      "source": "operator_terminal_screenshot",
+      "results": [["fama_pruebas", "fama_migrador"], ["fama_pruebas", "fama_app"]],
+      "write_operations": false
+    },
+    "role_attributes_observed_in_screenshot": [
+      {"name": "fama_app", "login": true, "superuser": false, "createdb": false, "createrole": false, "schema_usage": true, "schema_create": false},
+      {"name": "fama_migrador", "login": true, "superuser": false, "createdb": false, "createrole": false, "schema_usage": true, "schema_create": true}
+    ]
+  },
+  "not_verified": [
+    "remote_schema_migrations",
+    "gcs_upload_download_delete",
+    "docker_sql_password_authentication",
+    "full_backend_or_ml_pipeline"
+  ]
+}

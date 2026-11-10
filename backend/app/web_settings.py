@@ -38,3 +38,4 @@ def settings(values=None) -> WebSessionSettings:
         return WebSessionSettings(origin, secure, lifetime, idle)
     except (KeyError, ValueError):
         raise HTTPException(503, "Sesión web no configurada.") from None
+

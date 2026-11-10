@@ -19,10 +19,16 @@ from app.models.prediction import Prediccion
 from app.models.feedback import Retroalimentacion
 from app.services.feedback import feedback_service
 from app.services import storage
+from tests.http_security import administrator_http
 
 
 @pytest.fixture(autouse=True)
 def fake_gcs(monkeypatch, tmp_path):
+    from dataclasses import replace
+    from app.configuration import get_configuration, activate_configuration
+    previous = get_configuration()
+    activate_configuration(replace(previous, bucket_name="synthetic-test-bucket"))
+    monkeypatch.setenv("GCS_BUCKET_NAME", "synthetic-test-bucket")
     monkeypatch.setattr(feedback_service, "raw_data_dir", tmp_path / "raw")
     class Client:
         def list_blobs(self, bucket_name, prefix):
@@ -40,6 +46,8 @@ def fake_gcs(monkeypatch, tmp_path):
             return stream.getvalue()
         def upload_from_string(self, data, **kwargs): pass
     monkeypatch.setattr(storage.storage, "Client", Client)
+    yield
+    activate_configuration(previous)
 
 
 @pytest.fixture
@@ -76,7 +84,8 @@ def client(test_db):
     # No lifespan: no model discovery, cloud access, seeding or real DB.
     test_client = TestClient(app)
     try:
-        yield test_client
+        with administrator_http(app):
+            yield test_client
     finally:
         test_client.close()
 

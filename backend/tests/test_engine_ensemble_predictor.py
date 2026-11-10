@@ -112,7 +112,7 @@ class StubSubModel(nn.Module):
 
 
 @pytest.fixture
-def isolated_api_dependencies():
+def isolated_api_dependencies(tmp_path):
     """Provide an explicit in-memory registry and SQLite DB for local TestClient calls."""
     test_engine = create_engine(
         "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool,
@@ -122,7 +122,9 @@ def isolated_api_dependencies():
     registry = ModelRegistry()
     probs = torch.zeros(13)
     probs[0] = 1.0
-    predictor = EngineEnsemblePredictor(
+    checkpoint_paths = {name: tmp_path / f"{name}.pt" for name in DEFAULT_ENGINE_ENSEMBLE_WEIGHTS}
+    for path in checkpoint_paths.values(): path.write_bytes(b"synthetic injected-model fixture")
+    predictor = EngineEnsemblePredictor(checkpoint_paths=checkpoint_paths,
         models={name: StubSubModel(probs) for name in DEFAULT_ENGINE_ENSEMBLE_WEIGHTS},
         device=torch.device("cpu"),
     )
@@ -136,7 +138,9 @@ def isolated_api_dependencies():
     app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[get_model_registry] = lambda: registry
     try:
-        yield registry
+        from tests.http_security import administrator_http
+        with administrator_http(app):
+            yield registry
     finally:
         app.dependency_overrides.clear()
         app.dependency_overrides.update(original_overrides)
@@ -444,7 +448,7 @@ def test_fastapi_predict_with_engine_ensemble(mock_upload, tmp_path, isolated_ap
         files={"file": ("motor_sample.wav", wav_bytes, "audio/wav")},
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 200, response.text
     data = response.json()
     assert data["modelo_id"] == "car-engine-diagnostics-super-ensemble"
     assert data["clase"] in CLASS_NAMES_13

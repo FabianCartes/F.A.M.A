@@ -40,16 +40,19 @@ def _stage_root(file_stage: str, roots: Mapping[str, str | Path]) -> Path:
 
 def _absolute_path(value: str | Path, field: str) -> Path:
     if not isinstance(value, (str, Path)):
-        raise ValueError(f"{field} must be an absolute POSIX path")
-    text = str(value)
-    if not text.startswith("/"):
-        raise ValueError(f"{field} must be an absolute POSIX path")
-    try:
-        if text != "/":
-            _relative_path(text[1:])
-    except ValueError:
-        raise ValueError(f"{field} must be a canonical absolute POSIX path") from None
-    return Path(text)
+        raise ValueError(f"{field} must be an absolute path")
+    
+    if isinstance(value, str) and any(part in (".", "..") for part in value.replace("\\", "/").split("/")):
+        raise ValueError(f"{field} must be a canonical absolute path")
+    p = Path(value)
+    if not p.is_absolute():
+        raise ValueError(f"{field} must be an absolute path")
+        
+    for part in p.parts:
+        if part in (".", "..") or any(unicodedata.category(c) == "Cc" for c in part):
+            raise ValueError(f"{field} must be a canonical absolute path")
+            
+    return p
 
 
 def _reject_symlinks(path: Path) -> None:
@@ -103,3 +106,14 @@ def reference_from_path(
         raise ValueError("path must be under its declared stage root") from None
     resolve_reference(relative, file_stage, roots)
     return {"file_path": relative, "file_stage": file_stage}
+
+
+def safe_path_component(value: str) -> bool:
+    if not isinstance(value, str) or not value or value in (".", "..") or value.endswith((".", " ")):
+        return False
+    if any(ord(char) < 32 or char in '/\\:<>"|?*' for char in value):
+        return False
+    stem = value.split(".", 1)[0].upper()
+    reserved = {"CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"}
+    reserved.update(f"{prefix}{number}" for prefix in ("COM", "LPT") for number in "123456789¹²³")
+    return stem not in reserved

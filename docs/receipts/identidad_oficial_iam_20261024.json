@@ -1,0 +1,125 @@
+{
+  "version": 1,
+  "date": "2026-10-24",
+  "timezone": "America/Santiago",
+  "checked_at": "2026-10-24T04:25:17.405186+00:00",
+  "branch": "fix/afinamiento-integral",
+  "status": "official_service_account_and_three_IAM_bindings_verified_ADC_pending_operator",
+  "authorization": {
+    "source": "explicit_human_reply_in_this_conversation",
+    "reply": "Autorizar la configuración propuesta",
+    "question_identified_exact_service_account_project_bucket_operator_and_three_roles": true,
+    "previous_automatic_review_rejection_resolved_by_this_explicit_authorization": true,
+    "workaround_or_indirect_execution": false,
+    "prior_cut": "docs/receipts/acceso_sql_oficial_confirmado_20261024.json"
+  },
+  "Google_Cloud_changes": {
+    "service_account_created": true,
+    "service_account": "fama-oficial-app@proyectotesis-fama.iam.gserviceaccount.com",
+    "display_name": "FAMA - Nodo oficial",
+    "bindings_applied": [
+      {
+        "resource": "project:proyectotesis-fama",
+        "role": "roles/cloudsql.client",
+        "member": "serviceAccount:fama-oficial-app@proyectotesis-fama.iam.gserviceaccount.com"
+      },
+      {
+        "resource": "bucket:fama-audio-records-2026",
+        "role": "roles/storage.objectUser",
+        "member": "serviceAccount:fama-oficial-app@proyectotesis-fama.iam.gserviceaccount.com"
+      },
+      {
+        "resource": "serviceAccount:fama-oficial-app@proyectotesis-fama.iam.gserviceaccount.com",
+        "role": "roles/iam.serviceAccountTokenCreator",
+        "member": "session_human_operator",
+        "operator_email_sha256": "63f49730e3b54e30e534933da6ace0a2c401d77584182d348b4b0251cbc7f6d2"
+      }
+    ],
+    "existing_historical_and_test_accounts_permissions_modified": false,
+    "SQL_or_GCS_data_writes": false
+  },
+  "post_change_observed_verification": {
+    "checked_at": "2026-10-24T04:23:04.4883299Z",
+    "project": "proyectotesis-fama",
+    "service_account": "fama-oficial-app@proyectotesis-fama.iam.gserviceaccount.com",
+    "service_account_enabled": true,
+    "project_roles_for_new_account": [
+      "roles/cloudsql.client"
+    ],
+    "bucket": "fama-audio-records-2026",
+    "bucket_roles_for_new_account": [
+      "roles/storage.objectUser"
+    ],
+    "operator_role_on_new_account": [
+      "roles/iam.serviceAccountTokenCreator"
+    ],
+    "all_three_bindings_verified": true,
+    "user_managed_keys": 0,
+    "official_ADC_exists": false,
+    "official_profile_exists": false,
+    "SQL_or_GCS_data_writes": false
+  },
+  "local_preparation": {
+    "directory": "backend/credentials/gcloud-oficial",
+    "directory_DACL_protected": true,
+    "directory_and_two_metadata_records_unexpected_Allow_rules": 0,
+    "metadata_records_ignored_by_Git": true,
+    "ADC_generated": false,
+    "source_test_refresh_credentials_copied": false,
+    "SQL_passwords_received_or_saved": false,
+    "installed_SDK_help_confirmed_login_flags": [
+      "--impersonate-service-account",
+      "--disable-quota-project",
+      "--project"
+    ]
+  },
+  "scope_limits": {
+    "IAM_policy_queries_observed": true,
+    "official_ADC_authenticated_API_request_observed": false,
+    "schema_or_DML_readiness_verified": false,
+    "official_profile_activated": false,
+    "application_or_proxy_restart": false,
+    "new_production_code_changes": false,
+    "new_automated_tests_run": false,
+    "verification_type": "live_IAM_policy_reads_user_managed_key_listing_and_local_ACL"
+  },
+  "next": "operator_standard_Google_ADC_login_in_protected_official_directory_then_identity_and_read_only_GCS_verification",
+  "sources": [
+    "https://docs.cloud.google.com/docs/authentication/set-up-adc-local-dev-environment",
+    "installed_gcloud_auth_application-default_login_help"
+  ],
+  "artifacts": [
+    {
+      "path": "docs/manuales/identidad_tecnica_oficial.md",
+      "sha256": "7422d4ab9cbc5c1e6fef1a9bfaae257cc81bb35a58437eb61ed5757d8e8a308a"
+    },
+    {
+      "path": "docs/manuales/bitacora_acceso_e_instalacion.md",
+      "sha256": "7b6702eb956303079d135b4d9c666ef003b62b60a363d2e7a9df82a390a9ac7c"
+    },
+    {
+      "path": "docs/manuales/preparacion_entorno_oficial.md",
+      "sha256": "47569f4f20d377544fc6704a85bac0c9564d265508fab0eb0e4f7778332fd62a"
+    },
+    {
+      "path": "docs/manuales/estado_actual_y_pendientes.md",
+      "sha256": "c7acd02c2f557234086c21c0d6e61f34e98b4016bbb4c1a612597609fb8e8f38"
+    },
+    {
+      "path": "docs/KANBAN.md",
+      "sha256": "67b0debc64f16b09a945690eb2f4419d9ecabfd78c7cf2b7a7c01095eb3c09c2"
+    },
+    {
+      "path": "docs/README.md",
+      "sha256": "a49bbdeaf7cf72a8b096f7928503926dbeb479627869dc394dc7394e0c3bd459"
+    },
+    {
+      "path": "docs/manuales/plan_instalacion_gcp_y_asistente.md",
+      "sha256": "d0209aa4feced724e228f96c6ebda66a6acf0a242e5bfb17394c8d8742bdeada"
+    },
+    {
+      "path": "docs/manuales/plan_autonomia_investigador_y_catalogo.md",
+      "sha256": "10918f82dc0c6bc4dcc7d8997c3323afde609e1b5eefc76b20a533da9ac2b1df"
+    }
+  ]
+}

@@ -40,15 +40,19 @@ from poc.preprocess import (
     GPUAudioFrontEnd, GPUSpecAugment, build_gpu_audio_frontend_contract,
 )
 from poc.train import BioacousticModel, AudioCNN, AudioDataset, FocalLoss, apply_mixup
+from poc.split import grouped_stratified_split
 from training.prepare_data import load_prepared_version
 from training.grouping import recording_groups
 from training.paths import (
-    get_raw_data_dir, get_dataset_roots, get_training_raw_read_root,
+    get_raw_data_dir, get_dataset_roots, get_checkpoints_dir, get_training_raw_read_root,
     get_training_prepared_read_dir,
 )
+
 from training.schemas.config import AudioConfig
 from training.pipelines.dataset import GenericAudioDataset
 from dataset_references import resolve_reference
+from app.services.ingestion import ingestion_service, IngestionValidationError
+from app.services.partitions import DatasetPartitions, verify_partition_files
 
 ARCHITECTURE_PRESETS: Dict[str, Dict[str, Any]] = {
     "EfficientNet-B0": {"lr": 0.001, "epochs": 10, "batch": 16},
@@ -60,7 +64,6 @@ ARCHITECTURE_PRESETS: Dict[str, Dict[str, Any]] = {
 
 TRIAD_ARCHITECTURES: List[str] = ["EfficientNet-B0", "ConvNeXt-Nano", "ResNet-34d"]
 ENGINE_TRIAD_ARCHITECTURES: List[str] = ["ResNet-34d", "EfficientNet-B0", "PANNs-CNN14"]
-SUPPORTED_DATASETS = frozenset({"AvesChilenas", "engine_diagnostics"})
 _INTERNAL_ACCESS = object()
 
 
@@ -97,7 +100,7 @@ class TrainingService:
     """
 
     def __init__(self, checkpoints_dir: Optional[Path] = None, process_factory=None):
-        self.checkpoints_dir = Path(checkpoints_dir or (_BACKEND_DIR / "checkpoints"))
+        self.checkpoints_dir = Path(checkpoints_dir) if checkpoints_dir is not None else get_checkpoints_dir()
         self._process_factory = process_factory or TrainingProcess
         self.imported_sources = None
         self.current_source_owner = None
@@ -106,12 +109,15 @@ class TrainingService:
         self._stop_event = None
         self._completion = threading.Event()
         self._completion.set()
+
         self.checkpoints_dir.mkdir(parents=True, exist_ok=True)
 
         # Estado global del entrenamiento
         self._lock = threading.Lock()
         self.status = "idle"  # idle | training | evaluating | completed | failed | stopped
         self.current_job_id: Optional[str] = None
+        self._job_user_id: Optional[int] = None
+        self._job_dataset_name: Optional[str] = None
         self.current_epoch: int = 0
         self.total_epochs: int = 0
         self.current_train_loss: float = 0.0
@@ -283,10 +289,11 @@ class TrainingService:
             "status": "ready" if self.status != "training" else "busy",
         }
 
-    def get_available_datasets(self, db: Optional[Session] = None, *, include_unavailable: bool = False) -> List[Dict[str, Any]]:
+    def get_available_datasets(self, db: Optional[Session] = None, access=None, *,
+                               include_unavailable: bool = False) -> List[Dict[str, Any]]:
         """
         Lista los datasets disponibles para seleccionar como origen de entrenamiento (CU_INV_02).
-        Default: registered, supported identities only, with historical metadata defaults.
+        Registered identities are offered; start still validates their local source.
         Opt-in: all registered legacy identities, with evidence-only class metadata.
         Compatibility is not readiness: start may prepare and always revalidates audio.
         No audio is scanned and registration does not verify local bytes.
@@ -297,9 +304,13 @@ class TrainingService:
         # 1. Consultar base de datos PostgreSQL si está conectada
         if db is not None:
             try:
-                db_datasets = db.query(ConjuntoDatos).all()
+                db_datasets = (db.query(ConjuntoDatos) if access is None else access.query(ConjuntoDatos)).all()
                 for ds in db_datasets:
-                    compatible = ds.nombre in SUPPORTED_DATASETS
+                    try:
+                        ingestion_service.validate_dataset_names([ds.nombre])
+                        compatible = True
+                    except IngestionValidationError:
+                        compatible = False
                     if not compatible and not include_unavailable:
                         continue
                     classes = []
@@ -324,7 +335,7 @@ class TrainingService:
                         "id": ds.nombre,
                         "name": f"{ds.nombre} ({ds.cantidad_audios} audios)",
                         "audio_count": ds.cantidad_audios,
-                        "class_count": (len(classes) or None) if include_unavailable else (len(classes) or 15),
+                        "class_count": (len(classes) or None) if include_unavailable else len(classes),
                         "classes": classes,
                         "size_mb": round((ds.tamano_total_bytes or 0) / (1024 * 1024), 1),
                         "estado": ds.estado,
@@ -344,15 +355,30 @@ class TrainingService:
 
         return datasets
 
-    def get_progress(self, *, owner_id=_INTERNAL_ACCESS) -> Dict[str, Any]:
+    def _authorize_job(self, user_id, administrator, allowed_datasets, owner_id=_INTERNAL_ACCESS):
+        # Called under the same lock as the observation/cancellation. A new job
+        # cannot replace the checked owner between authorization and execution.
+        if self.current_source_owner is not None:
+            # Imported jobs belong to their source owner, outside dataset grants.
+            if owner_id is not _INTERNAL_ACCESS and self.current_source_owner != owner_id:
+                from app.services.imported_training_source import ImportedSourceError
+                raise ImportedSourceError()
+            return
+        if user_id is None or administrator:
+            return  # Trusted internal callers retain the service contract.
+        if self.status == "idle" and self.current_job_id is None:
+            return
+        if (self._job_user_id != user_id or allowed_datasets is None
+                or self._job_dataset_name not in allowed_datasets):
+            raise PermissionError("Job not owned or dataset no longer assigned")
+
+    def get_progress(self, *, owner_id=_INTERNAL_ACCESS, user_id=None, administrator=False,
+                     allowed_datasets=None) -> Dict[str, Any]:
         """
         Retorna una instantánea del progreso del entrenamiento en tiempo real para el sondeo de la UI.
         """
         with self._lock:
-            if (owner_id is not _INTERNAL_ACCESS and self.current_source_owner is not None
-                    and self.current_source_owner != owner_id):
-                from app.services.imported_training_source import ImportedSourceError
-                raise ImportedSourceError()
+            self._authorize_job(user_id, administrator, allowed_datasets, owner_id)
             elapsed = round(time.time() - self.start_timestamp, 1) if self.start_timestamp else 0.0
             return deepcopy({
                 "status": self.status,
@@ -380,15 +406,13 @@ class TrainingService:
                 "error_message": self.error_message,
             })
 
-    def stop_training(self, *, owner_id=_INTERNAL_ACCESS) -> Dict[str, Any]:
+    def stop_training(self, *, owner_id=_INTERNAL_ACCESS, user_id=None, administrator=False,
+                      allowed_datasets=None) -> Dict[str, Any]:
         """
         Solicita la interrupción cooperativa segura del entrenamiento en ejecución (CU_INV_03 Paso 2.a).
         """
         with self._lock:
-            if (owner_id is not _INTERNAL_ACCESS and self.current_source_owner is not None
-                    and self.current_source_owner != owner_id):
-                from app.services.imported_training_source import ImportedSourceError
-                raise ImportedSourceError()
+            self._authorize_job(user_id, administrator, allowed_datasets, owner_id)
             if self.status != "training" and not (
                     self.status == 'evaluating' and self.current_phase == 'joint_evaluation'):
                 return {"status": self.status, "message": "No hay ningún entrenamiento activo para detener."}
@@ -400,6 +424,8 @@ class TrainingService:
     def _prepare_source(self, dataset_name: str, prepared_version=None,
                         allow_historical_preparation=False) -> Dict[str, Any]:
         """Validate and freeze partitions before a job is admitted."""
+        if os.name == "nt":
+            raise ValueError("Las preparaciones CSV requieren Linux. Gestiona particiones desde los audios locales para entrenar en este equipo.")
         roots = get_dataset_roots(dataset_name)
         roots["raw"] = get_training_raw_read_root(dataset_name)
         raw_dir = roots["raw"]
@@ -483,6 +509,8 @@ class TrainingService:
         regularization_config: Optional[Any] = None,
         weight_decay: float = 0.01,
         early_stopping: bool = True,
+        user_id: Optional[int] = None,
+        partition_version: Optional[str] = None,
         seed: int = 42,
         prepared_version: Optional[str] = None,
         allow_historical_preparation: bool = False,
@@ -498,6 +526,8 @@ class TrainingService:
         """
         if type(seed) is not int or not 0 <= seed <= 2**32 - 1:
             raise ValueError("seed debe ser un entero entre 0 y 2**32 - 1.")
+        if partition_version is not None and prepared_version is not None:
+            raise ValueError("Elige una versión de particiones o una preparación CSV, no ambas.")
         if prepared_version is not None and (type(prepared_version) is not str
                 or len(prepared_version) != 64 or any(c not in "0123456789abcdef" for c in prepared_version)):
             raise ValueError("prepared_version must be a lowercase SHA-256 identity")
@@ -571,23 +601,28 @@ class TrainingService:
             if self.status in {"training", "evaluating"} or self._worker_process is not None:
                 raise RuntimeError("Ya existe un proceso de entrenamiento en ejecución.")
 
+            self._job_user_id = user_id
+            self._job_dataset_name = dataset_name
             try:
                 if imported_source is not None:
                     source, dataset_id = imported_source, None
                     dataset_name = "imported:" + imported_dataset_id
                 else:
-                    if dataset_name not in SUPPORTED_DATASETS:
-                        raise ValueError(f"Dataset '{dataset_name}' no soportado para entrenamiento.")
+                    ingestion_service.validate_dataset_names([dataset_name])
                     with SessionLocal() as db:
                         matches = [ds for ds in db.query(ConjuntoDatos).filter_by(nombre=dataset_name).all()
                                    if ds.nombre == dataset_name]
                         if len(matches) != 1:
                             raise ValueError(f"Dataset '{dataset_name}' requiere un registro exacto y único.")
                         dataset_id = matches[0].id_conjunto_datos
-                    source = self._prepare_source(dataset_name, prepared_version, allow_historical_preparation)
+                        if partition_version is not None:
+                            source = DatasetPartitions(matches[0], db).training_source(partition_version)
+                    if partition_version is None:
+                        source = self._prepare_source(dataset_name, prepared_version, allow_historical_preparation)
                 audio_config = _json_config(audio_config)
                 windowing_config = _json_config(windowing_config)
                 regularization_config = _json_config(regularization_config)
+
             except Exception as exc:
                 self.status = "failed"
                 self.current_job_id = None
@@ -595,6 +630,15 @@ class TrainingService:
                 self.start_timestamp = None
                 self.current_epoch = 0
                 self.total_epochs = 0
+                self.current_train_loss = 0.0
+                self.current_val_loss = 0.0
+                self.current_train_acc = 0.0
+                self.current_val_acc = 0.0
+                self.current_architecture = ""
+                self.models_config = []
+                self.is_tri_model = False
+                self.current_model_index = 1
+                self.total_models = 1
                 self.metrics_history = []
                 self.logs = []
                 self._add_log("ERROR", self.error_message)
@@ -651,6 +695,7 @@ class TrainingService:
             self._stop_requested = False
 
         config = {
+            "user_id": user_id,
             "job_id": job_id,
             "dataset_name": dataset_name,
             "dataset_id": dataset_id,
@@ -709,8 +754,10 @@ class TrainingService:
             "status": "started",
             "job_id": job_id,
             "message": msg,
-            "preparation": {"version_id": source["preparation"]["manifest"]["version_id"],
-                            "historical": allow_historical_preparation},
+            **({"partition_version": partition_version} if partition_version else {}),
+            **({"preparation": {"version_id": source["preparation"]["manifest"]["version_id"],
+                                 "historical": allow_historical_preparation}} if source.get("preparation") else {}),
+
         }
 
 
@@ -854,12 +901,9 @@ class TrainingService:
                     target.activo = False
                 elif is_ensemble:
                     target.estado = 'standard_component_evaluated'
-                else:
-                    previous_active_ids = [row.id_modelo for row in publication_db.query(Modelo)
-                                           .filter(Modelo.activo.is_(True), Modelo.id_modelo != model_id)
-                                           .with_for_update().all()]
-                    publication_db.query(Modelo).filter(Modelo.id_modelo != model_id).update({Modelo.activo: False})
-                    target.activo = True
+                # Evaluation makes the artifact eligible. Global activation remains
+                # an explicit administrator operation and preserves the current default.
+                target.activo = False
                 publication_db.commit()
         except Exception as exc:
             try:
@@ -945,6 +989,8 @@ class TrainingService:
                 classes = list(source["classes"])
                 training_audio = dict(source["identity"]["profile"]["audio"])
             else:
+                if source.get("partition_manifest"):
+                    verify_partition_files(source["partition_manifest"], source["roots"])
                 raw_dir = source["raw_dir"]
                 train_df, val_df = source["train_df"], source["val_df"]
                 classes = sorted(train_df["clase"].unique().tolist())
@@ -1302,12 +1348,17 @@ class TrainingService:
 
                 # Guardar el artefacto de pesos real (.pt)
                 saved_state = best_weights if best_weights is not None else {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+                if source.get("partition_manifest"):
+                    verify_partition_files(source["partition_manifest"], source["roots"])
+
                 checkpoint_payload = {
                     "dataset_id": config["dataset_id"],
                     "dataset_name": dataset_name,
                     "job_id": job_id,
                     "source_directory": str(raw_dir),
-                    "preparation": config["source"]["preparation"],
+                    "partition_manifest": source.get("partition_manifest"),
+                    "preparation": config["source"].get("preparation"),
+
                     "model_index": idx + 1,
                     "architecture": arch,
                     "seed": seed,
@@ -1385,6 +1436,7 @@ class TrainingService:
                         if dataset is None or dataset.nombre != dataset_name or config["dataset_id"] is None:
                             raise RuntimeError("El dataset aceptado ya no tiene un registro de origen válido.")
                     nuevo_modelo = Modelo(
+                        id_usuario=config.get("user_id"),
                         id_conjunto_datos=config["dataset_id"],
                         clase_objetivo=f"{len(classes)} Clases ({dataset_name})",
                         arquitectura=arch,
@@ -1398,6 +1450,7 @@ class TrainingService:
                         hash_binario=file_hash,
                         activo=False,
                         estado="standard_eval_pending",
+
                     )
                     if imported:
                         nuevo_modelo.id_usuario = identity["owner_id"]
@@ -1554,7 +1607,7 @@ class TrainingService:
         except Exception:
             return {}, None
 
-    def get_history(self, db: Optional[Session] = None, *, owner_id=None) -> List[Dict[str, Any]]:
+    def get_history(self, db: Optional[Session] = None, access=None, *, owner_id=None) -> List[Dict[str, Any]]:
         """
         Retorna el historial de modelos entrenados enriquecido con la Ficha Técnica (CU_INV_04).
         """
@@ -1564,7 +1617,8 @@ class TrainingService:
         history = []
         if db is not None:
             try:
-                modelos = db.query(Modelo).order_by(Modelo.fecha_entrenamiento.desc()).all()
+                query = db.query(Modelo) if access is None else access.query(Modelo)
+                modelos = query.order_by(Modelo.fecha_entrenamiento.desc()).all()
 
                 names = model_display_names(modelos)
                 from sqlalchemy import inspect
@@ -1572,6 +1626,7 @@ class TrainingService:
                 if inspect(db.get_bind()).has_table("imported_model_source"):
                     from app.models.imported_training_source import ImportedModelSource
                     associations = {r.model_id: r for r in db.query(ImportedModelSource).all()}
+
 
                 for m in modelos:
                     if m.arquitectura == 'ImportedTriad' and m.id_usuario != owner_id:
@@ -1589,7 +1644,9 @@ class TrainingService:
                     is_engine = "engine" in target_lower or "motores" in target_lower
 
                     classes_list = []
-                    if is_birds:
+                    if m.conjunto_datos:
+                        dataset_display = m.conjunto_datos.nombre
+                    elif is_birds:
                         dataset_display = "Aves Chilenas"
                     elif is_engine:
                         dataset_display = "Motores"
@@ -1650,12 +1707,16 @@ class TrainingService:
 
                     history.append({
                         "id": m.id_modelo,
+                        "user_id": m.id_usuario,
                         "name": display["name"],
                         "version": display["version"],
                         "dataset": display["dataset"],
+
                         "dataset_id": m.id_conjunto_datos,
                         "dataset_name": dataset_name,
                         **({"imported_source": association.identity} if association is not None else {}),
+                        "partition_version": (checkpoint["partition_manifest"].get("version")
+                                              if isinstance(checkpoint.get("partition_manifest"), dict) else None),
                         "sha256": m.hash_binario,
                         "metrics": [{"epoca": metric.epoca, "precision": metric.precision,
                                      "perdida": metric.perdida, "tiempo_epoca": metric.tiempo_epoca}

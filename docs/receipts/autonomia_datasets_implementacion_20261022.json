@@ -1,0 +1,445 @@
+{
+  "updated_at": "2026-10-23T07:16:51.739765+00:00",
+  "status": "cloud_test_researcher_flow_verified_with_known_limits",
+  "policy_ADR": "docs/adr/0043-autonomia-investigadora-en-datasets-asignados.md",
+  "scope": "prioritize_steps_1_to_3_then_discovery_and_requests_from_the_accepted_plan",
+  "test_seams": [
+    "authenticated_HTTP_with_temporary_SQLite_and_external_GCS_fake",
+    "rendered_UI_forms_with_simulated_HTTP",
+    "operator_CLI_and_authenticated_HTTP_against_ephemeral_PostgreSQL"
+  ],
+  "production_runtime_updated": true,
+  "real_data_transfers_executed": true,
+  "step_1": {
+    "source_implemented": true,
+    "backend_regression": {
+      "passed": 103,
+      "failed": 0,
+      "files": 4,
+      "duration_seconds": 28.2,
+      "files_run": [
+        "test_api_ingestion_validation.py",
+        "test_resource_access.py",
+        "test_ingestion_service.py",
+        "test_ingestion_sync_integrity.py"
+      ]
+    },
+    "frontend_regression": {
+      "passed": 44,
+      "failed": 0,
+      "files": 3,
+      "duration_seconds": 7.34
+    },
+    "typescript_exit_code_at_step_1": 0,
+    "public_TDD_red_then_green_observed": [
+      "local_inventory_has_zero_cloud_files",
+      "empty_cloud_download_rejected_without_preprocessing_or_registration",
+      "same_counts_do_not_certify_content_sync",
+      "local_only_UI_disables_download",
+      "explicit_local_preprocessing_without_GCS",
+      "UI_preprocess_command_without_download",
+      "scoped_researcher_inventory",
+      "empty_or_missing_local_preprocessing_selection",
+      "researcher_UI_does_not_query_global_bucket_stats"
+    ]
+  },
+  "step_2": {
+    "source_implemented": true,
+    "budgets_and_partial_results": true,
+    "atomic_no_overwrite": true,
+    "identical_retry_confirms_SQL": true,
+    "session_attributed_audit": true
+  },
+  "pending": [
+    "diagnose_and_fix_E8_04_MP3_decode_discrepancy_with_TDD",
+    "fix_E8_11_individual_chart_label",
+    "persistent_exclusive_runtime_directories_per_environment",
+    "checkpoint_backup_restore_and_institutional_operation_stages_9_10"
+  ],
+  "notes": [
+    "existing_dirty_branch_preserved_no_commit_or_push",
+    "initial_sandboxed_backend_test_run_was_stopped_without_output_then_isolated_HTTP_tests_ran_successfully_with_escalation",
+    "no_new_commit_staging_or_push",
+    "preview_is_temporary_and_has_synthetic_metadata_only",
+    "historical_pre_upgrade_live_cut_was_0002_access_now_superseded_by_activation_receipt"
+  ],
+  "schema": {
+    "head": "0003_autonomy",
+    "remote_applied": true,
+    "new_application_table": "solicitud_dataset",
+    "new_nullable_columns": [
+      "feedback_sync.incorporated_by",
+      "feedback_sync.incorporated_at"
+    ],
+    "operator_command": "backend/.venv/Scripts/python.exe -m scripts.actualizar_autonomia_pruebas --apply",
+    "migration_password_stored": false,
+    "operator_working_directory": "backend",
+    "applied_by": "operator"
+  },
+  "verification": {
+    "backend_final": {
+      "status": "passed",
+      "passed": 271,
+      "failed": 0,
+      "skipped": 3,
+      "duration_seconds": 106.35
+    },
+    "postgres_final": {
+      "status": "passed",
+      "passed": 40,
+      "failed": 0,
+      "skipped": 0,
+      "duration_seconds": 143.37
+    },
+    "frontend_complete": {
+      "status": "passed",
+      "passed": 320,
+      "failed": 0,
+      "files": 33,
+      "duration_seconds": 75.62
+    },
+    "typescript_exit_code": 0,
+    "eslint_focused_exit_code": 0,
+    "browser": {
+      "isolated_synthetic_preview": true,
+      "origin": "http://127.0.0.1:3020",
+      "inventory_local_download_disabled_observed": true,
+      "catalogue_request_pending_observed": true,
+      "administrative_inbox_controls_observed": true,
+      "real_GCP_write": false
+    },
+    "post_final_access_contract_regression": {
+      "passed": 4,
+      "failed": 0,
+      "includes_postgresql_concurrency": true
+    },
+    "backend_unique_passed": 311,
+    "backend_unique_skipped": 3
+  },
+  "step_3": {
+    "source_implemented": true,
+    "own_correction_incorporation": true,
+    "Audio_catalogue_and_sync_intent_transaction": true,
+    "proposer_and_incorporator_distinct_fields": true,
+    "GCS_outcome_separate": true
+  },
+  "step_4": {
+    "source_implemented": true,
+    "metadata_only_discovery": true,
+    "persistent_requests": true,
+    "administrative_decision_and_assignment_transaction": true,
+    "concurrent_duplicate_HTTP_checked_in_PostgreSQL": true
+  },
+  "resolved_during_verification": [
+    "legacy_upload_tests_updated_to_no_silent_overwrite_contract",
+    "controlled_storage_fixtures_have_explicit_synthetic_configuration_and_distinct_audio",
+    "Windows_symlink_and_POSIX_only_worker_checks_reported_as_skipped_when_unavailable",
+    "installation_checks_use_current_exact_table_set_instead_of_hardcoded_15",
+    "CLI_permission_script_sent_without_DBAPI_interpolation_of_PostgreSQL_format_percent_I"
+  ],
+  "artifacts": [
+    {
+      "path": "backend/app/main.py",
+      "sha256": "e785a71976458805001f34b5828db789f197a5c23c84cbc20744fbfd178353d9"
+    },
+    {
+      "path": "backend/app/installation.py",
+      "sha256": "d37153eb393664390747bce9cdbbbd04c618235f8c09e76d582440bbd1ee7af2"
+    },
+    {
+      "path": "backend/app/schema.py",
+      "sha256": "96f98b7c52ab09e159f970ec67c7c3e60cbfb5859ff04a8f5cd4ee1f5277c302"
+    },
+    {
+      "path": "backend/app/models/__init__.py",
+      "sha256": "5fb26e76fb198534dcb0ef83d5dcebdd880b2f92595d3366d24b7788e2fcac84"
+    },
+    {
+      "path": "backend/app/models/feedback_sync.py",
+      "sha256": "9696050ccb1b1ce303e5172d0b32a4dbaf40111a74e03203027eef3844e7d209"
+    },
+    {
+      "path": "backend/app/models/dataset_request.py",
+      "sha256": "c2cb6ba1e5c6a2385eeb983f727fa26712e39a48e354612ceedcdcc694fe40d8"
+    },
+    {
+      "path": "backend/app/routes/access.py",
+      "sha256": "fc62766c32fa43c29fe8073f0e1e8dd4aa806acca37e0692d6d0e44afd55356b"
+    },
+    {
+      "path": "backend/app/services/feedback.py",
+      "sha256": "c90155095db880d2a01df07c8541c0a500a4a3ec2353ec083fcf4f8e9081d86a"
+    },
+    {
+      "path": "backend/app/services/feedback_sync.py",
+      "sha256": "7a4917be6e6e3147c9ede2895c729e08b38f0e96469bc148cfbf2fbcbeba7c63"
+    },
+    {
+      "path": "backend/app/services/ingestion.py",
+      "sha256": "3af5e4e62686a1669ab10fd663bf5887a3145edced2953c08db49d149bebdd57"
+    },
+    {
+      "path": "backend/app/services/dataset_catalogue.py",
+      "sha256": "0f3fa181c66698f5ed598d16ecca730d8c19aee1232f20bbf1dbc60f6867d31a"
+    },
+    {
+      "path": "backend/app/services/security_audit.py",
+      "sha256": "6be2815f2dbf6546d17933be51a71236aca8c0f74ecabb6296090113bef0d9eb"
+    },
+    {
+      "path": "backend/app/schemas/feedback.py",
+      "sha256": "95bb7c2d31d790fa510b261151b02ac2a66a18d52485f35c52da7e34e6efacbe"
+    },
+    {
+      "path": "backend/migrations/schema_0003.py",
+      "sha256": "fa3136903ebb23b7f46acd248450a205c7089eb408b44b2b8e2d779d7b91cfb9"
+    },
+    {
+      "path": "backend/migrations/versions/0003_autonomy.py",
+      "sha256": "c99212b7d2e7d4ba58bf3641049b24aee7031aaa0f5a6b47ca77b0609d4e2c9e"
+    },
+    {
+      "path": "backend/scripts/actualizar_autonomia_pruebas.py",
+      "sha256": "bf1e2e6876eacd3aa9057d87d68e823d68f94101936f2f40aa304a358afdf1ae"
+    },
+    {
+      "path": "backend/scripts/permisos_tablas_pruebas.sql",
+      "sha256": "916eff92192ddc627a2d0e84d122fa6f6187bccf1ba17d62f3300f46a28b6527"
+    },
+    {
+      "path": "frontend/app/page.tsx",
+      "sha256": "df13e383f70cc59e67273facc5de6a40fe888095491de2b930957ea69764a974"
+    },
+    {
+      "path": "frontend/components/views/IngestionView.tsx",
+      "sha256": "13bc46ecac4ed019ab581c306dc98aae51423875d762c2df1f5caa05a55f73c3"
+    },
+    {
+      "path": "frontend/components/views/PredictionView.tsx",
+      "sha256": "71734b7475d1583387d2601bb79af4921bcafa70a97751a6dcf590adcaa3a0b9"
+    },
+    {
+      "path": "frontend/components/ingestion/DatasetInventory.tsx",
+      "sha256": "282616e8ec31ef4e642bcf7938233861d66598468c3300a25011db8a329e803c"
+    },
+    {
+      "path": "frontend/components/ingestion/DatasetUpload.tsx",
+      "sha256": "a19b864db30d8248e32f1cfaa42f3ad0636779d0cde742441b8f4ef340655a29"
+    },
+    {
+      "path": "frontend/components/ingestion/DatasetCatalogue.tsx",
+      "sha256": "14e17958219df867fe5ea14d278e0afa789e76ec8b9a12caef255aa731b67047"
+    },
+    {
+      "path": "frontend/components/account/RequestsPanel.tsx",
+      "sha256": "67d821015485732218f193d7b848f66e55dd8aeeafa118fc0da5bf77f6e7cdde"
+    },
+    {
+      "path": "frontend/components/account/AdministrationView.tsx",
+      "sha256": "8b0e3e6c6663c91c8aceead2ced11e54628dc8f2efdb0c2b589c7b2dd53180b7"
+    },
+    {
+      "path": "frontend/components/account/SecurityPanel.tsx",
+      "sha256": "afb7d6fe36a4cdac7bee45fc70d3e67c0315cee7176652510fffe7da2879f34c"
+    },
+    {
+      "path": "frontend/components/feedback/FeedbackSyncPanel.tsx",
+      "sha256": "34977c3ffc1c9d5bd84e434fe9653e932a32937ef7d7082514a8e8a34b178aa8"
+    },
+    {
+      "path": "frontend/lib/api/datasetAccessApi.ts",
+      "sha256": "36027a8f24959d5575c244e6d82f1d58b2aaa4cff6b6b60cc867e9690b9277c4"
+    },
+    {
+      "path": "frontend/lib/schemas/feedback.ts",
+      "sha256": "4536c49e5932e9ddaec5f42bdfa8199f61d012b4b7cd86e647049b04071c6e5c"
+    },
+    {
+      "path": "docs/README.md",
+      "sha256": "a5728079da22c7838e40bd49b19a8f64fa1850025baec5996abae65e5b07776a"
+    },
+    {
+      "path": "docs/KANBAN.md",
+      "sha256": "7165fce30aab308fd3718af3e695ac46cbff7f3235023e5953c51c3f149783e0"
+    },
+    {
+      "path": "docs/manuales/bitacora_acceso_e_instalacion.md",
+      "sha256": "efe636bb9fa4aad9c518c0ffc1774867e868f66ed05ecc6f253cd5fd2cabc414"
+    },
+    {
+      "path": "docs/manuales/estado_actual_y_pendientes.md",
+      "sha256": "ca79df020494ec3bafeb2169d4dd94914529c651c9237da8f3034c1c89502216"
+    },
+    {
+      "path": "docs/manuales/plan_instalacion_gcp_y_asistente.md",
+      "sha256": "c1697068596525b1218ae5b72f0dba24fcfcfd8c9b134065db5637ecad46041a"
+    },
+    {
+      "path": "docs/manuales/plan_autonomia_investigador_y_catalogo.md",
+      "sha256": "211137d80fcf6aff4b5ee081837a309ecd870912c295f39c3c6573e182c584e0"
+    },
+    {
+      "path": "docs/manuales/autonomia_y_solicitudes_datasets.md",
+      "sha256": "adccc71d7343bdb52657eb4f7e08a149cc07f3e5f06a89ec93d5aef94cb5a390"
+    },
+    {
+      "path": "docs/manuales/permisos_aplicacion_postgresql.md",
+      "sha256": "e6d1464cc87ae4f48beb5bb922adf6b9314e4c5dc1410e0e094a7b87a0189dce"
+    },
+    {
+      "path": "docs/manuales/preparacion_instalacion_y_migraciones.md",
+      "sha256": "26402fc5f2b6d8e85fa6d30b58fe19a3a760c8407adb94ce01c2f7535c8d26e4"
+    },
+    {
+      "path": "docs/adr/0043-autonomia-investigadora-en-datasets-asignados.md",
+      "sha256": "49eef53510e9c77808a97b9967e60256ece13fb1a8107668a6d9ebddbe56caed"
+    },
+    {
+      "path": "docs/images/autonomia_inventario_demo_20261023.png",
+      "sha256": "cb7f2f7166fa16cd53ca2ed111d53b52fba1184eede885afe05b580ebab5c0fe"
+    },
+    {
+      "path": "docs/images/autonomia_catalogo_demo_20261023.png",
+      "sha256": "b923d341a318829526d65031ed89c856cf2db74ba26570f24a91a80de79fb00c"
+    },
+    {
+      "path": "docs/images/autonomia_solicitudes_demo_20261023.png",
+      "sha256": "396cdb2116a6dbb0f9a06ccfa88c3699ed324f04c7d6c83e54f4d61b0bee0244"
+    },
+    {
+      "path": "backend/tests/test_api_ingestion_validation.py",
+      "sha256": "c271e5fbd1a8891fb07afe66eae10ae97be1cbd118d12f8c46633c708fb95f4a"
+    },
+    {
+      "path": "backend/tests/test_resource_access.py",
+      "sha256": "fae64fbcb47479e80bd8c502304517e9481f69960166d15af14d4ba2d33a1b05"
+    },
+    {
+      "path": "backend/tests/test_dataset_requests.py",
+      "sha256": "3cb1a5cde9484dce7a63d09c389220d01fe1000628edbcbae8670df977a20027"
+    },
+    {
+      "path": "backend/tests/test_dataset_requests_postgres.py",
+      "sha256": "d19ed5e76fcaf54f5f656675d557dc768d67ee68bf6d00a4c7644bfe1c83614a"
+    },
+    {
+      "path": "backend/tests/test_schema_migrations.py",
+      "sha256": "f02ac66c19eb1ef7d9b565cf2b551dacc5d0ef8aad18b27e1e43709d3029b347"
+    },
+    {
+      "path": "backend/tests/test_permisos_tablas_pruebas.py",
+      "sha256": "4f202bb28ce85aac062ee6a423053a4620f1d0eb0f3e62e25456f0b65064e1b8"
+    },
+    {
+      "path": "backend/tests/test_installation_wizard.py",
+      "sha256": "d3d49ee7c515d47b00631f9759926beeae1f91246ed6659f37ec45cce16cc8eb"
+    },
+    {
+      "path": "frontend/components/views/__tests__/IngestionWorkflow.test.tsx",
+      "sha256": "d1aa1176c69dfd6ca0fa641ab6626a6b9f48430fc16414b9ab734e7542da49b5"
+    },
+    {
+      "path": "frontend/components/ingestion/__tests__/DatasetAccess.test.tsx",
+      "sha256": "49905a2beefa3d6b790ff0af530a0f026eb190905b224814e8b6a629b761829c"
+    },
+    {
+      "path": "backend/app/services/training.py",
+      "sha256": "3d9a291b5b1722744208e29f476ff66fd38aeb1730bb9b8730b735d22f5b073b"
+    },
+    {
+      "path": "backend/tests/test_api_training.py",
+      "sha256": "6787e97f4031795e92db835b165b31727fd2e7768c73cdebd2885c2eb54ed717"
+    },
+    {
+      "path": "backend/tests/test_training_flow.py",
+      "sha256": "369deb0b3f66b3c823410e8c67954016518bcba6678b6ffcd21090dc7f3b1182"
+    },
+    {
+      "path": "backend/tests/test_training_persistence.py",
+      "sha256": "50e036357f69682fd5a3f910a4043ef5c4a1f4e22e0842846175e3deb2117b0e"
+    },
+    {
+      "path": "frontend/components/views/TrainingView.tsx",
+      "sha256": "3592cb8f3a367af39ad1100edf629860277926ef3da908391cef6893bc8bfaec"
+    },
+    {
+      "path": "frontend/components/views/__tests__/TrainingView.test.tsx",
+      "sha256": "0fdbd0ac9be352fabe0888e66c5debc3e3a48ec772ad016c9e0b1121bec2408b"
+    },
+    {
+      "path": "docs/receipts/autonomia_particiones_muestra_20261023.json",
+      "sha256": "78a1c0b7178eb69bc3c31a482e20e8c47d9ba2ee33bcc3444936be655c615142"
+    },
+    {
+      "path": "docs/images/autonomia_entrenamiento_real_20261023.png",
+      "sha256": "c95855cbb3119ed1319e941e901f5f79260276a36d9eda8fb1f5143b7d30dea4"
+    },
+    {
+      "path": "docs/images/autonomia_incorporacion_real_20261023.png",
+      "sha256": "f9429d3b293481c77d3599e37165aa2e1c7a2149ee9e57411ba58d5c355c6ce8"
+    },
+    {
+      "path": "docs/receipts/autonomia_recorrido_investigador_20261023.json",
+      "sha256": "796b1a138b39a45c797429b7c0af6e420094e6b5bf88672d5f69dbc81f8df60d"
+    },
+    {
+      "path": "frontend/lib/schemas/training.ts",
+      "sha256": "ab54a58f892eed3072f1fe77ea86696a5ebab095dc0f76bb328df5735ee5b314"
+    },
+    {
+      "path": "docs/images/autonomia_historial_real_20261023.png",
+      "sha256": "4b851b7db5d5266345b070eabc079bb67c6687bb2cc546544a9c1328501b200f"
+    }
+  ],
+  "live_schema_read_only_check": {
+    "code": "schema_current",
+    "revision": "0003_autonomy",
+    "checked_at": "2026-10-23T05:28:25.335808+00:00",
+    "target": "fama_pruebas_via_loopback_5433",
+    "runtime_user": "fama_app",
+    "SQL_writes": false
+  },
+  "temporary_PostgreSQL_removed_after_tests": true,
+  "runtime_environment": "named_nonproduction_Cloud_SQL_test_profile",
+  "live_activation_receipt": "docs/receipts/autonomia_activacion_real_20261023.json",
+  "follow_up_verification": {
+    "backend": {
+      "passed": 159,
+      "skipped": 8,
+      "failed": 0,
+      "files": 5,
+      "seconds": 33.99,
+      "files_run": [
+        "test_api_training.py",
+        "test_training_flow.py",
+        "test_training_persistence.py",
+        "test_resource_access.py",
+        "test_training_service.py"
+      ],
+      "skip_reason": "Windows_symlink_creation_privilege_1314"
+    },
+    "frontend": {
+      "passed": 100,
+      "failed": 0,
+      "files": 5,
+      "ingestion_passed": 43,
+      "training_passed": 32,
+      "training_HTTP_contract_passed": 25
+    },
+    "typescript_exit_code": 0,
+    "eslint_ingestion_exit_code": 0,
+    "eslint_training": {
+      "exit_code": 1,
+      "preexisting_explicit_any_errors": 23,
+      "preexisting_unused_import_warnings": 1
+    },
+    "full_backend_or_frontend_suite_rerun": false,
+    "global_diff_check_preexisting_failures": [
+      "backend/dataset_references.py:44",
+      "backend/dataset_references.py:48",
+      "backend/dataset_references.py:52"
+    ],
+    "eslint_training_schema_exit_code": 0
+  },
+  "live_functional_receipt": "docs/receipts/autonomia_recorrido_investigador_20261023.json"
+}

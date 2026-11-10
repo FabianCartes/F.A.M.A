@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, type ReactNode } from "react";
 import DatasetConfirmationDialog from "@/components/ingestion/DatasetConfirmationDialog";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL, apiFetch as fetch } from "@/lib/api";
 import { useOptionalWebSession } from "@/components/auth/SessionBoundary";
 import {
   getPendingFeedback,
@@ -11,11 +11,15 @@ import {
 } from "@/lib/api/feedbackApi";
 import { PendingFeedbackItem } from "@/lib/schemas/feedback";
 import FeedbackSyncPanel from "@/components/feedback/FeedbackSyncPanel";
+import DatasetInventory, { type DatasetItem } from "@/components/ingestion/DatasetInventory";
+import DatasetUpload, { type UploadLimits } from "@/components/ingestion/DatasetUpload";
+import DatasetCatalogue from "@/components/ingestion/DatasetCatalogue";
 import DatasetImportPanel from "@/components/ingestion/DatasetImportPanel";
 import DatasetExportDialog from "@/components/ingestion/DatasetExportDialog";
 import DatasetAudioDialog from "@/components/ingestion/DatasetAudioDialog";
 import { importBase, importRequest, catalogPageSchema,
   jobsPageSchema, executionSchema, jsonRequest, deletePrivateDataset, type CatalogDataset } from "@/lib/api/datasetImports";
+
 
 // ============================================================================
 // INTERFACES DEL MODELO DE DOMINIO DE INGESTA (RF_02 / RF_06 / ADR 0013)
@@ -23,6 +27,7 @@ import { importBase, importRequest, catalogPageSchema,
 export interface IngestionViewProps {
   onNavigate?: (view: string) => void;
   sessionToken?: string;
+  administrator?: boolean;
 }
 
 interface StorageStatus {
@@ -31,23 +36,6 @@ interface StorageStatus {
   total_objects: number;
   total_bytes: number;
   error?: string | null;
-}
-
-interface DatasetItem {
-  id: string;
-  name: string;
-  classes?: string[];
-  class_count?: number;
-  file_count: number;
-  total_size_bytes: number;
-  last_modified: string | null;
-  local_file_count: number;
-  gcs_file_count?: number | null;
-  is_synced: boolean;
-  domain?: "bioacoustic" | "industrial";
-  domain_label?: string;
-  source?: "gcs" | "local";
-  gcs_available?: boolean;
 }
 
 interface SyncDatasetResult {
@@ -223,7 +211,7 @@ function PrivateDatasetUpload({ token, datasets, selectedIds, loading, onCatalog
   </>;
 }
 
-export default function IngestionView({ onNavigate, sessionToken = "" }: IngestionViewProps = {}) {
+export default function IngestionView({ onNavigate, administrator = true, sessionToken = "" }: IngestionViewProps = {}) {
   const webUser = useOptionalWebSession();
   const webUserId = webUser?.id;
   const sessionIdentity = sessionToken || (webUserId ? `web:${webUserId}` : "");
@@ -234,7 +222,10 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
   // Lista de datasets en GCS
   const [datasets, setDatasets] = useState<DatasetItem[]>([]);
   const [isLoadingDatasets, setIsLoadingDatasets] = useState<boolean>(true);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [canCreateDataset, setCanCreateDataset] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [showCatalogue, setShowCatalogue] = useState(false);
+  const [uploadLimits, setUploadLimits] = useState<UploadLimits | null | undefined>(undefined);
   const [privateCatalog, setPrivateCatalog] = useState<{ token: string; datasets: CatalogDataset[]; next: string | null; total: number | null }>({ token: sessionIdentity, datasets: [], next: null, total: null });
   const [privateSelection, setPrivateSelection] = useState<{ catalog: typeof privateCatalog; ids: string[] }>({ catalog: privateCatalog, ids: [] });
   const privateSelectedIds = privateSelection.catalog === privateCatalog && privateCatalog.token === sessionIdentity ? privateSelection.ids : [];
@@ -315,8 +306,9 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
     downloaded: number;
     skipped: number;
     failed: number;
+    preprocessed: number;
     total: number;
-  }>({ downloaded: 0, skipped: 0, failed: 0, total: 0 });
+  }>({ downloaded: 0, skipped: 0, failed: 0, preprocessed: 0, total: 0 });
 
   async function removePrivateDataset(dataset: CatalogDataset) {
     if (deletionRequest.current || catalogLoading || isSyncing) return;
@@ -400,6 +392,7 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
 
   // Cargar estado de almacenamiento y datasets
   const fetchStatus = useCallback(async () => {
+    if (!administrator) return;
     setIsLoadingStatus(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/ingestion/status`);
@@ -430,7 +423,7 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
     } finally {
       setIsLoadingStatus(false);
     }
-  }, [addLog]);
+  }, [addLog, administrator]);
 
   const fetchDatasets = useCallback(async () => {
     setIsLoadingDatasets(true);
@@ -439,6 +432,8 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
       if (res.ok) {
         const data = await res.json();
         setDatasets(data.datasets || []);
+        setCanCreateDataset(data.can_create_dataset === true);
+        setUploadLimits(data.upload_limits);
         addLog("INFO", `Se listaron ${data.datasets?.length || 0} dataset(s) disponibles.`);
       } else {
         throw new Error(`HTTP ${res.status}`);
@@ -494,13 +489,13 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
     async function initializeIngestion() {
       try {
         const [statusResult, datasetsResult] = await Promise.allSettled([
-          fetch(`${API_BASE_URL}/api/ingestion/status`),
+          administrator ? fetch(`${API_BASE_URL}/api/ingestion/status`) : Promise.resolve(null),
           fetch(`${API_BASE_URL}/api/ingestion/datasets`),
         ]);
 
         if (isCancelled) return;
 
-        if (statusResult.status === "fulfilled" && statusResult.value.ok) {
+        if (statusResult.status === "fulfilled" && statusResult.value?.ok) {
           const data: StorageStatus = await statusResult.value.json();
           setStorageStatus(data);
           if (data.connected) {
@@ -511,13 +506,13 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
           } else {
             addLog("WARN", `Data Lake operando en modo local (GCS desconectado): ${data.error || "Sin conexión"}`);
           }
-        } else if (
+        } else if (administrator && (
           statusResult.status === "rejected" ||
-          (statusResult.status === "fulfilled" && !statusResult.value.ok)
-        ) {
+          (statusResult.status === "fulfilled" && !statusResult.value?.ok)
+        )) {
           setStorageStatus({
             connected: false,
-            bucket: "fama-audio-records-2026",
+            bucket: "Sin confirmar",
             total_objects: 0,
             total_bytes: 0,
             error: "No fue posible conectar con el servicio de almacenamiento GCS",
@@ -528,6 +523,8 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
         if (datasetsResult.status === "fulfilled" && datasetsResult.value.ok) {
           const dsData = await datasetsResult.value.json();
           setDatasets(dsData.datasets || []);
+          setCanCreateDataset(dsData.can_create_dataset === true);
+          setUploadLimits(dsData.upload_limits);
           addLog("INFO", `Se listaron ${dsData.datasets?.length || 0} dataset(s) disponibles.`);
         } else if (datasetsResult.status === "rejected") {
           addLog("WARN", "Error de red al consultar datasets.");
@@ -551,25 +548,10 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
     return () => {
       isCancelled = true;
     };
-  }, [addLog]);
+  }, [addLog, administrator]);
 
-  // Manejo de Selección de Datasets
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedIds.length === datasets.length) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds(datasets.map((d) => d.id));
-    }
-  };
-
-  // Confirmar la selección antes de iniciar la descarga existente.
-  const handleSync = async () => {
+  // Confirmar la selección del inventario antes de iniciar la descarga GCS → Local (RF_02).
+  const handleSync = async (selectedIds: string[]) => {
     if (selectedIds.length === 0 || isSyncing) return;
     const targets = datasets.filter(dataset => selectedIds.includes(dataset.id));
     if (targets.length === 0) return;
@@ -583,6 +565,7 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
     let totalDownload = 0;
     let totalSkip = 0;
     let totalFail = 0;
+    let totalPrep = 0;
 
     try {
       const res = await fetch(`${API_BASE_URL}/api/ingestion/sync`, {
@@ -602,11 +585,13 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
       totalDownload = data.total_downloaded || 0;
       totalSkip = data.total_skipped || 0;
       totalFail = data.total_failed || 0;
+      totalPrep = data.total_preprocessed || 0;
 
       setSyncProgress({
         downloaded: totalDownload,
         skipped: totalSkip,
         failed: totalFail,
+        preprocessed: totalPrep,
         total: totalDownload + totalSkip + totalFail,
       });
 
@@ -619,6 +604,12 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
           "INFO",
           `Dataset '${item.dataset}': ${item.downloaded} descargados nuevos, ${item.skipped} omitidos (ya actualizados localmente).`
         );
+        if (item.preprocessed > 0) {
+          addLog(
+            "SUCCESS",
+            `Dataset '${item.dataset}': ${item.preprocessed} espectrograma(s) Mel generados en backend/data/processed/.`
+          );
+        }
         if ((item.preprocess_info?.failed || 0) > 0) {
           addLog("ERROR", `Dataset '${item.dataset}': ${item.preprocess_info?.failed} error(es) en preprocesamiento.`);
         }
@@ -641,7 +632,7 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
       const complete = data.status === "completed" && !hasStageErrors;
       const failed = data.status === "failed";
       addLog(failed ? "ERROR" : complete ? "SUCCESS" : "WARN",
-        `Sincronización ${failed ? "fallida" : complete ? "completada" : "parcial"}: ${totalDownload} archivo(s) descargados, ${totalSkip} omitidos, ${totalFail} errores de descarga.`
+        `Sincronización ${failed ? "fallida" : complete ? "completada" : "parcial"}: ${totalDownload} archivo(s) descargados, ${totalSkip} omitidos, ${totalPrep} tensores procesados, ${totalFail} errores de descarga.`
       );
 
       setTransferStatus({ message: `Descarga ${failed ? "fallida" : complete ? "completada" : "parcial"} · GCS → Local: ${targets.map(dataset => dataset.name).join(", ")}. ${totalDownload} descargados, ${totalSkip} omitidos, ${totalFail} errores. Consulta el detalle en la consola.`, error: !complete });
@@ -652,8 +643,30 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
       addLog("ERROR", `Fallo en el proceso de sincronización: ${errMsg}`);
     } finally {
       setIsSyncing(false);
-      setSelectedIds([]);
     }
+  };
+
+  const handlePreprocess = async (names: string[]) => {
+    if (isSyncing || names.length === 0) return;
+    setIsSyncing(true);
+    addLog("INFO", "Preparando los audios locales seleccionados…");
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/ingestion/preprocess`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ datasets: names }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(typeof result.detail === "string" ? result.detail : "No se pudo confirmar el preprocesamiento.");
+      if (Number.isInteger(result.total_processed) && result.total_processed >= 0) {
+        setSyncProgress(previous => ({ ...previous, preprocessed: result.total_processed }));
+      }
+      const complete = result.status === "completed" && result.total_failed === 0;
+      addLog(complete ? "SUCCESS" : "WARN", complete
+        ? `Preprocesamiento completado: ${result.total_processed} audios preparados.`
+        : `Preprocesamiento ${result.status === "failed" ? "fallido" : "parcial"}: ${result.total_processed ?? 0} preparados, ${result.total_failed ?? 0} errores.`);
+    } catch (reason) {
+      addLog("ERROR", reason instanceof Error ? reason.message : "No se pudo confirmar el preprocesamiento.");
+    } finally { setIsSyncing(false); }
   };
 
   // Acciones de Curación Human-in-the-Loop (RF_06 / ADR 0013)
@@ -669,7 +682,7 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
       const res = await approveFeedback(item.id_retroalimentacion);
       addLog(
         "SUCCESS",
-        `Audio incorporado al dataset local '${datasetName}' (Clase: ${res.clase}). ${res.sync_status === "synced" ? "Copia cloud confirmada." : "Copia cloud pendiente; la sincronización automática no bloquea la preparación de entrenamiento."}`
+        `Audio incorporado al dataset local '${datasetName}' (Clase: ${res.clase}). ${res.db_persisted === true ? "Registro SQL confirmado." : "Registro SQL sin confirmar."} ${res.sync_status === "synced" ? "Copia cloud confirmada." : "Copia cloud pendiente; la sincronización automática no bloquea la preparación de entrenamiento."}`
       );
       setPendingFeedbacks(previous => previous.filter(pending => pending.id_retroalimentacion !== item.id_retroalimentacion));
       setSyncRefreshKey(previous => previous + 1);
@@ -707,8 +720,9 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
   };
 
   // Both catalogs use one presentation; shared files remain read-only.
-  const handleInspectDataset = (datasetName: string, trigger: HTMLButtonElement) => {
-    audioTrigger.current = trigger;
+  const handleInspectDataset = (datasetName: string) => {
+    // The inventory reports only the dataset; the pressed button is the focused element.
+    audioTrigger.current = document.activeElement instanceof HTMLButtonElement ? document.activeElement : null;
     setPrivateDetail(null);
     setInspectingDataset({ name: datasetName, identity: sessionIdentity });
   };
@@ -759,7 +773,7 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
             </svg>
           </button>
 
-          {isLoadingStatus ? (
+          {!administrator ? <span className="px-3 py-1 rounded-full border border-[#373a46] text-gray-300 text-xs">Acceso a datasets asignados</span> : isLoadingStatus ? (
             <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#16171b] border border-[#23252e] text-gray-400 text-xs">
               <span className="w-2 h-2 rounded-full bg-gray-500 animate-pulse" />
               Verificando GCS...
@@ -816,7 +830,7 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
       <section aria-label="Catálogo" className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-xl font-bold text-white tracking-tight font-heading">Catálogo datasets privados</h2>
-          <DatasetImportPanel key={sessionIdentity} sessionToken={sessionToken} onCatalogChange={fetchPrivateCatalog} triggerLabel="Importar ZIP" datasetNames={Object.fromEntries(importedDatasets.map(dataset => [dataset.id, dataset.name]))} />
+          <div className="flex flex-wrap gap-3"><DatasetExportDialog /><DatasetImportPanel key={sessionIdentity} sessionToken={sessionToken} onCatalogChange={fetchPrivateCatalog} triggerLabel="Importar ZIP" datasetNames={Object.fromEntries(importedDatasets.map(dataset => [dataset.id, dataset.name]))} /></div>
         </div>
         <p className="text-xs text-gray-400">Importa un ZIP al entorno local y selecciona los datasets para guardar una copia privada en GCS. La copia local se conserva; no se publica en el catálogo compartido.</p>
         <p className="text-[11px] text-gray-400">{collectionTotal === null ? "Catálogo privado pendiente de consulta" : `${collectionTotal} importaciones privadas`}</p>
@@ -877,193 +891,20 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
         </>}
         </PrivateDatasetUpload>
 
-        <h2 className="text-xl font-bold text-white tracking-tight font-heading">Catálogo datasets públicos</h2>
-        <p className="text-xs text-gray-400">Colecciones compartidas en la aplicación, no públicas en Internet. Los conteos reflejan la última consulta, no garantizan disponibilidad en tiempo real.</p>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-sm text-gray-200 font-semibold font-heading">Compartidos en GCS</h3>
-            <span className="text-[10px] px-2 py-0.5 rounded bg-[#1c1e24] text-gray-400 font-mono">
-              {datasets.length} colecciones compartidas
-            </span>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => { void fetchDatasets(); }}
-            disabled={isLoadingDatasets}
-            className="text-[11px] text-gray-400 hover:text-gray-200 transition-colors flex items-center gap-1"
-          >
-            <svg className={`w-3 h-3 ${isLoadingDatasets ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            <span>Actualizar catálogo</span>
-          </button>
-        </div>
-
-        <div className="flex items-center gap-2 text-xs text-gray-300">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    aria-label="Seleccionar todos los datasets compartidos"
-                    checked={datasets.length > 0 && selectedIds.length === datasets.length}
-                    onChange={toggleSelectAll}
-                    disabled={datasets.length === 0}
-                    className="rounded bg-[#121316] border-[#2d303b] text-emerald-600 focus:ring-0 cursor-pointer"
-                  />
-                Seleccionar todos los compartidos</label>
-        </div>
-        <div className="overflow-x-auto">
-          <table aria-label="Catálogo compartido" className="w-full min-w-[760px] text-left text-xs [&_th]:pr-4 [&_td]:pr-4">
-            <thead><tr className="border-b border-[#23252e] text-gray-400">
-              <th className="pb-3" aria-label="Selección" />
-              {['Dataset', 'Ámbito', 'Disponibilidad', 'Clases', 'Archivos en GCS', 'Archivos Locales', 'Tamaño', 'Última Modificación', 'Acción'].map(label => <th key={label} className="pb-3 font-medium">{label}</th>)}
-            </tr></thead>
-            <tbody className="divide-y divide-[#23252e]/60">
-              {isLoadingDatasets ? (
-                <tr>
-                  <td colSpan={10} className="py-8 text-center text-gray-400">
-                    <div className="flex items-center justify-center gap-2">
-                      <svg className="w-4 h-4 animate-spin text-emerald-400" viewBox="0 0 24 24" fill="none">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                      </svg>
-                      <span>Consultando datasets en Google Cloud Storage...</span>
-                    </div>
-                  </td>
-                </tr>
-              ) : datasets.length === 0 ? (
-                <tr>
-                  <td colSpan={10} className="py-8 text-center">
-                    <div className="max-w-md mx-auto space-y-2">
-                      <div className="w-10 h-10 mx-auto rounded-full bg-[#1c1e24] flex items-center justify-center text-gray-500">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                        </svg>
-                      </div>
-                      <p className="text-gray-300 font-medium">
-                        No hay datasets cargados bajo el prefijo &apos;datasets/&apos;
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        Realiza inferencias y valida grabaciones en el clasificador acústico para incorporar audios curados al dataset.
-                      </p>
-                      {onNavigate && (
-                        <button
-                          type="button"
-                          onClick={() => onNavigate("predict")}
-                          className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-400 bg-emerald-950/40 border border-emerald-800/60 hover:bg-emerald-900/50 transition-colors cursor-pointer"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                          </svg>
-                          <span>Ir a Inferencia Acústica</span>
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                datasets.map((d) => (
-                  <tr key={`legacy:${d.id}`} className="hover:bg-[#1c1e24]/40 transition-colors">
-                    <td className="py-2.5">
-                      <input
-                        type="checkbox"
-                        aria-label={`Seleccionar ${d.name}`}
-                        checked={selectedIds.includes(d.id)}
-                        onChange={() => toggleSelect(d.id)}
-                        className="rounded bg-[#121316] border-[#2d303b] text-emerald-600 focus:ring-0 cursor-pointer"
-                      />
-                    </td>
-                    <td className="py-2.5 font-medium text-gray-200">
-                      <div className="flex items-center gap-2">
-                        <DatasetFolderIcon />
-                        <span className="font-semibold">{d.name}</span>
-                      </div>
-                    </td>
-                    <td className="py-2.5 text-gray-300">Compartido</td>
-                    <td className="py-2.5 text-gray-400">{d.local_file_count > 0 ? "Local" : "Sin copia local"} · {d.gcs_available === false || d.gcs_file_count == null ? "GCS desconocido" : d.gcs_file_count === 0 ? "Sin archivos en GCS" : "GCS listado"}</td>
-                    <td className="py-2.5 text-gray-300">
-                      {typeof d.class_count === "number" && Number.isInteger(d.class_count) && d.class_count >= 0
-                        ? `${d.class_count} clase(s)`
-                        : Array.isArray(d.classes) ? `${d.classes.length} clase(s)` : "Desconocido"}
-                    </td>
-                    <td className="py-2.5 text-gray-300 font-mono" title="Conteo del listado remoto; desconocido si no fue posible consultar GCS.">{d.gcs_file_count ?? "Desconocido"}</td>
-                    <td className="py-2.5 text-gray-400 font-mono">
-                      {d.local_file_count}
-                    </td>
-                    <td className="py-2.5 text-gray-400 font-mono">{formatBytes(d.total_size_bytes)}</td>
-                    <td className="py-2.5 text-gray-400 font-mono text-[11px]">
-                      {d.last_modified
-                        ? new Date(d.last_modified).toLocaleDateString("es-CL", {
-                            year: "numeric",
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
-                        : "—"}
-                    </td>
-                    <td className="py-2.5 text-right pr-2">
-                      <button
-                        type="button"
-                        aria-haspopup="dialog"
-                        onClick={event => handleInspectDataset(d.name, event.currentTarget)}
-                        className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded bg-[#1c1e24] hover:bg-[#252830] border border-[#2d303b] transition-colors"
-                      >
-                        Consultar audios
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {transferStatus && <p role={transferStatus.error ? "alert" : "status"} className={`text-xs break-words ${transferStatus.error ? "text-amber-300" : "text-gray-300"}`}>{transferStatus.message}</p>}
-        {/* Descarga explícita GCS → Local. */}
-        <div className="flex flex-col lg:flex-row items-center justify-between gap-3 pt-3 border-t border-[#23252e]/70">
-          <div className="flex items-center gap-3 flex-wrap w-full lg:w-auto justify-between sm:justify-start">
-            <span className="text-xs text-gray-400">
-              {selectedIds.length} dataset(s) seleccionado(s)
-            </span>
-
-            <span className="text-xs text-gray-400 break-words">GCS → Local: {datasets.filter(dataset => selectedIds.includes(dataset.id)).map(dataset => dataset.name).join(", ") || "Sin selección"}</span>
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
-          <button
-            type="button"
-            onClick={handleSync}
-            disabled={isSyncing || selectedIds.length === 0}
-            className="w-full lg:w-auto py-2 px-4 rounded-lg text-xs font-semibold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:from-emerald-700 active:to-teal-700 disabled:opacity-40 disabled:cursor-not-allowed border border-emerald-500/30 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/30"
-          >
-            {isSyncing ? (
-              <>
-                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                </svg>
-                <span>
-                  Descargando desde GCS…
-                </span>
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                </svg>
-                <span>Descargar seleccionados</span>
-              </>
-            )}
-          </button>
-          <DatasetExportDialog />
-
-          </div>
-        </div>
-        <p className="text-[11px] text-gray-400">
-          Guarda los archivos en el entorno donde se ejecuta F.A.M.A.; no inicia el entrenamiento.
-        </p>
       </section>
+
+      {/* Inventario observado por origen y acciones independientes. */}
+      <div className="flex justify-end"><button type="button" aria-expanded={showCatalogue} onClick={() => setShowCatalogue(value => !value)} className="px-4 py-2 text-xs text-blue-300 border border-[#373a46] rounded-lg hover:bg-[#23252e]">{showCatalogue ? "Cerrar catálogo" : "Explorar datasets disponibles"}</button></div>
+      {showCatalogue && <DatasetCatalogue />}
+      <DatasetUpload datasets={datasets} canCreate={administrator && canCreateDataset} busy={isSyncing}
+        onUploaded={fetchDatasets} onBusyChange={setIsUploading} limits={uploadLimits} />
+      <DatasetInventory datasets={datasets} loading={isLoadingDatasets} busy={isSyncing || isUploading}
+        onRefresh={fetchDatasets} onDownload={handleSync} onInspect={handleInspectDataset} onPreprocess={handlePreprocess} />
+      {transferStatus && <p role={transferStatus.error ? "alert" : "status"} className={`text-xs break-words ${transferStatus.error ? "text-amber-300" : "text-gray-300"}`}>{transferStatus.message}</p>}
+      <p className="text-[11px] text-gray-400">
+        Guarda los archivos en el entorno donde se ejecuta F.A.M.A.; no inicia el entrenamiento.
+      </p>
+
 
       {/* ==================================================================== */}
       {/* 3. BANDEJA DE CURACIÓN E INCORPORACIÓN DE AUDIOS AL DATASET (RF_06 / ADR 0013) */}
@@ -1085,7 +926,7 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
                 Revisar audios
               </h2>
               <p className="text-[11px] text-gray-400">
-                Incorporar guarda el audio localmente; puede preparar entrenamiento sin esperar GCS y su copia cloud se sincroniza después. Descartar de la cola no borra físicamente el audio.
+                Puedes revisar e incorporar tus propias correcciones en los datasets asignados. La incorporación guarda el audio localmente y registra sus metadatos en PostgreSQL; la copia a GCS se confirma por separado. Descartar de la cola no borra físicamente el audio.
               </p>
             </div>
           </div>
@@ -1138,7 +979,7 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
                 Cola de curación vacía (0 audios pendientes de incorporación)
               </p>
               <p className="text-[11px] text-gray-400 max-w-lg mx-auto">
-                No hay audios enviados a revisión pendientes. Ejecuta una inferencia, confirma o corrige la clase y pulsa «Enviar a revisión».
+                No hay correcciones pendientes de incorporación. Ejecuta una inferencia, confirma o corrige la clase y pulsa «Guardar corrección».
               </p>
             </div>
             <div>
@@ -1282,7 +1123,7 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
           </span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
           <div className="bg-[#111215] border border-[#1f2128] rounded-lg p-3">
             <span className="text-gray-400 text-[11px] block">Nuevos Descargados</span>
             <span className="text-lg font-bold text-emerald-400 font-mono">
@@ -1293,6 +1134,12 @@ export default function IngestionView({ onNavigate, sessionToken = "" }: Ingesti
             <span className="text-gray-400 text-[11px] block">Omitidos (Ya al día)</span>
             <span className="text-lg font-bold text-blue-400 font-mono">
               {syncProgress.skipped}
+            </span>
+          </div>
+          <div className="bg-[#111215] border border-[#1f2128] rounded-lg p-3">
+            <span className="text-gray-400 text-[11px] block">Tensores Preprocesados</span>
+            <span className="text-lg font-bold text-amber-400 font-mono">
+              {syncProgress.preprocessed}
             </span>
           </div>
           <div className="bg-[#111215] border border-[#1f2128] rounded-lg p-3">

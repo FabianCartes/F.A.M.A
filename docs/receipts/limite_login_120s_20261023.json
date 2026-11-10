@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "checked_at": "2026-10-23T05:10:19.040606+00:00",
+  "status": "source_and_live_120_second_window_verified",
+  "authorization": "explicit_operator_request_to_reduce_login_wait_to_120_seconds",
+  "policy": "login_account",
+  "previous_window_seconds": 900,
+  "new_window_seconds": 120,
+  "limit_unchanged": 5,
+  "fixed_window_anchored_to_first_admitted_attempt": true,
+  "counts_successful_and_failed_admitted_attempts": true,
+  "other_policies_changed": false,
+  "existing_quota_rows_changed": false,
+  "TDD": {
+    "seam": "POST /api/auth/login with isolated SQLite and synthetic credentials",
+    "red": "Retry-After was 900 instead of requested 120",
+    "green": "Retry-After 120, denied at 119, admitted at 120, rejected attempts do not extend expiry"
+  },
+  "verification": {
+    "backend": {
+      "passed": 78,
+      "failed": 0,
+      "duration_seconds": 61.83,
+      "files": [
+        "backend/tests/test_access_limits.py",
+        "backend/tests/test_web_sessions.py",
+        "backend/tests/test_auth_configuration.py"
+      ]
+    },
+    "frontend": {
+      "passed": 100,
+      "failed": 0,
+      "duration_seconds": 5.6,
+      "files": 5,
+      "training_passed": 32,
+      "training_HTTP_contract_passed": 25
+    },
+    "live_read_only_schema": {
+      "code": "schema_outdated",
+      "revision": "0002_access"
+    },
+    "real_login_attempts_executed": false,
+    "live_backend_restarted": false,
+    "live_120_second_policy_activated": false,
+    "migration_applied": false,
+    "eslint_training_schema_exit_code": 0
+  },
+  "activation": {
+    "receipt": "docs/receipts/autonomia_activacion_real_20261023.json",
+    "code": "live_login_120_second_window_verified",
+    "checked_at": "2026-10-23T05:36:15.400872+00:00",
+    "HTTP_statuses": [
+      401,
+      401,
+      401,
+      401,
+      401,
+      429
+    ],
+    "retry_after_seconds": 111,
+    "synthetic_nonexistent_identity_only": true,
+    "existing_account_budgets_exhausted": false,
+    "accounts_created": false,
+    "credentials_changed": false,
+    "sessions_issued": false,
+    "diagnostic_quota_rows_created": true,
+    "denied_login_audit_events_expected": 5,
+    "quota_rows_or_audit_purged": false,
+    "real_time_120_second_wait_tested": false,
+    "health_HTTP": 200,
+    "ready_HTTP": 200,
+    "ready_code": "schema_current",
+    "installation_status_HTTP": 200,
+    "installation_status": "completed",
+    "installation_state_HTTP": 410
+  },
+  "existing_windows": "stored_expiry_is_preserved_until_expiration",
+  "secrets_recorded": false,
+  "artifacts": [
+    {
+      "path": "backend/app/services/access_limits.py",
+      "sha256": "183d7e2e8a2702c5f8bd64f2c663b7b8e0cf0e831c4d84efb5e8518ad3640c71"
+    },
+    {
+      "path": "backend/tests/test_access_limits.py",
+      "sha256": "eb03a1feef30b9d152ef93ebd1d255c94478782379595688dec5e6cdf02627bc"
+    },
+    {
+      "path": "docs/manuales/limites_login_y_recuperacion.md",
+      "sha256": "c3fb2864d7c25e81fef110b69fce78f83c948c099711b6b70d719a39f6caed8a"
+    },
+    {
+      "path": "docs/manuales/bitacora_acceso_e_instalacion.md",
+      "sha256": "efe636bb9fa4aad9c518c0ffc1774867e868f66ed05ecc6f253cd5fd2cabc414"
+    },
+    {
+      "path": "frontend/lib/schemas/training.ts",
+      "sha256": "ab54a58f892eed3072f1fe77ea86696a5ebab095dc0f76bb328df5735ee5b314"
+    },
+    {
+      "path": "docs/images/autonomia_historial_real_20261023.png",
+      "sha256": "4b851b7db5d5266345b070eabc079bb67c6687bb2cc546544a9c1328501b200f"
+    }
+  ],
+  "updated_at": "2026-10-23T06:15:40.772610+00:00",
+  "initial_cut_checked_at": "2026-10-23T05:10:19.040606+00:00"
+}

@@ -191,10 +191,11 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange,
 
   async function initialize() {
     const response = await importRequest(token, `${importBase}/access`);
-    const access = z.object({ development_mode: z.boolean() }).parse(await response.json());
+    const access = z.object({ development_mode: z.boolean(), authenticated: z.boolean().default(false), available: z.boolean().default(true), reason: z.string().optional() }).parse(await response.json());
+    if (!access.available) throw new Error(access.reason ?? "El servicio ZIP no está disponible en este equipo.");
     setDevelopmentMode(access.development_mode);
-    setSessionRequired(!access.development_mode && !token && !webUser);
-    if (!access.development_mode && !token && !webUser) return;
+    setSessionRequired(!access.development_mode && !access.authenticated && !token && !webUser);
+    if (!access.development_mode && !access.authenticated && !token && !webUser) return;
     const configured = await importRequest(token, `${importBase}/limits`);
     const parsed = limitsSchema.parse(await configured.json());
     await refresh();

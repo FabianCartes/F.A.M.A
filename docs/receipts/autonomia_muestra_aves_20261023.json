@@ -1,0 +1,126 @@
+{
+  "version": 1,
+  "checked_at": "2026-10-23T06:06:03.325568+00:00",
+  "authorization": "operator_selected_10_AvesChilenas_audios_in_two_classes_for_separate_test_dataset",
+  "bucket": "fama-pruebas",
+  "dataset_name": "FAMA_Prueba_Aves",
+  "selection": "five_smallest_supported_audios_at_least_five_seconds_per_class_with_matching_in_memory_decoded_frames",
+  "earlier_selection_rejected_HTTP_422": true,
+  "purpose": "functional_integration_only_not_scientific_model_quality",
+  "count": 10,
+  "total_bytes": 3849209,
+  "source_audio_modified": false,
+  "uploaded_at_selection": false,
+  "files": [
+    {
+      "class_label": "Canastero",
+      "source": "backend/data/raw/AvesChilenas/Canastero/381518.mp3",
+      "filename": "381518.mp3",
+      "bytes": 286926,
+      "sha256": "dfbfffb0a843b5d6c645cde78cdd8297d092e0a89f8028e8ec11e32d3f90aeb9",
+      "duration_seconds": 6.971995464852608,
+      "sample_rate": 44100,
+      "channels": 2,
+      "target_object": "datasets/FAMA_Prueba_Aves/Canastero/381518.mp3"
+    },
+    {
+      "class_label": "Canastero",
+      "source": "backend/data/raw/AvesChilenas/Canastero/225290.mp3",
+      "filename": "225290.mp3",
+      "bytes": 331018,
+      "sha256": "05ee7231d46c9239f2eca1625d240ab6c30dc016f09d07f2fba1493ed36a9bd1",
+      "duration_seconds": 20.294784580498867,
+      "sample_rate": 44100,
+      "channels": 2,
+      "target_object": "datasets/FAMA_Prueba_Aves/Canastero/225290.mp3"
+    },
+    {
+      "class_label": "Canastero",
+      "source": "backend/data/raw/AvesChilenas/Canastero/381517.mp3",
+      "filename": "381517.mp3",
+      "bytes": 371565,
+      "sha256": "87d4cee1449470e6f975e1ea19da0d8858b3754ff6c16679d9993bed81e4574f",
+      "duration_seconds": 9.101995464852608,
+      "sample_rate": 44100,
+      "channels": 2,
+      "target_object": "datasets/FAMA_Prueba_Aves/Canastero/381517.mp3"
+    },
+    {
+      "class_label": "Canastero",
+      "source": "backend/data/raw/AvesChilenas/Canastero/225288.mp3",
+      "filename": "225288.mp3",
+      "bytes": 601444,
+      "sha256": "f52f6cc84bc113dae8b00a2d2aa1173570149a6a46691a4265bb727331f1fc63",
+      "duration_seconds": 37.20868480725623,
+      "sample_rate": 44100,
+      "channels": 2,
+      "target_object": "datasets/FAMA_Prueba_Aves/Canastero/225288.mp3"
+    },
+    {
+      "class_label": "Canastero",
+      "source": "backend/data/raw/AvesChilenas/Canastero/502838.mp3",
+      "filename": "502838.mp3",
+      "bytes": 735110,
+      "sha256": "eafc54719aae0c93a86093b986d613d252b932f43a7874138fa2c9d9cd3279d4",
+      "duration_seconds": 18.19251700680272,
+      "sample_rate": 44100,
+      "channels": 2,
+      "target_object": "datasets/FAMA_Prueba_Aves/Canastero/502838.mp3"
+    },
+    {
+      "class_label": "Chucao",
+      "source": "backend/data/raw/AvesChilenas/Chucao/218159.mp3",
+      "filename": "218159.mp3",
+      "bytes": 184597,
+      "sha256": "cd4bb13d1cb0eab0b033078188d75d8d74285b2dedc25cd31916cd633f4d4d11",
+      "duration_seconds": 11.160249433106577,
+      "sample_rate": 44100,
+      "channels": 2,
+      "target_object": "datasets/FAMA_Prueba_Aves/Chucao/218159.mp3"
+    },
+    {
+      "class_label": "Chucao",
+      "source": "backend/data/raw/AvesChilenas/Chucao/296132.mp3",
+      "filename": "296132.mp3",
+      "bytes": 241266,
+      "sha256": "120065c55027db4519cc3ba69c0a0ddab5f985e3d603c456f1e565c0883f53fa",
+      "duration_seconds": 14.728095238095237,
+      "sample_rate": 44100,
+      "channels": 2,
+      "target_object": "datasets/FAMA_Prueba_Aves/Chucao/296132.mp3"
+    },
+    {
+      "class_label": "Chucao",
+      "source": "backend/data/raw/AvesChilenas/Chucao/508289.mp3",
+      "filename": "508289.mp3",
+      "bytes": 316072,
+      "sha256": "07cd7f0269812574e0d4d7cfee3e557e3df03256d2e444a634739900bf0cdd15",
+      "duration_seconds": 19.383333333333333,
+      "sample_rate": 44100,
+      "channels": 2,
+      "target_object": "datasets/FAMA_Prueba_Aves/Chucao/508289.mp3"
+    },
+    {
+      "class_label": "Chucao",
+      "source": "backend/data/raw/AvesChilenas/Chucao/1036796.mp3",
+      "filename": "1036796.mp3",
+      "bytes": 383934,
+      "sha256": "844a7fb10f8c89a564d2aae48de4dbb0b5de0c70d87b1660cbd71c970eab9945",
+      "duration_seconds": 9.410385487528345,
+      "sample_rate": 44100,
+      "channels": 2,
+      "target_object": "datasets/FAMA_Prueba_Aves/Chucao/1036796.mp3"
+    },
+    {
+      "class_label": "Chucao",
+      "source": "backend/data/raw/AvesChilenas/Chucao/1075457.mp3",
+      "filename": "1075457.mp3",
+      "bytes": 397277,
+      "sha256": "55d352db226b74088013e799641794972ee2959b1df69a1ada1c568e4439d8cb",
+      "duration_seconds": 9.762958333333334,
+      "sample_rate": 48000,
+      "channels": 2,
+      "target_object": "datasets/FAMA_Prueba_Aves/Chucao/1075457.mp3"
+    }
+  ]
+}

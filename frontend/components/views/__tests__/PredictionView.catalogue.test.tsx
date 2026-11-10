@@ -959,11 +959,11 @@ describe("U7Independent", () => {
     expect(feedback.queryByRole("option", { name: "low_oil" })).toBeNull();
     fireEvent.change(feedback.getByLabelText("Clase correcta"), { target: { value: "Rayadito" } });
     await focus();
-    await act(async () => { fireEvent.click(feedback.getByRole("button", { name: "Enviar a revisión" })); });
+    await act(async () => { fireEvent.click(feedback.getByRole("button", { name: "Guardar corrección" })); });
     expect(calls("/api/predict")).toHaveLength(1);
     expect(calls("/api/feedback")).toHaveLength(1);
     expect(JSON.parse(String(calls("/api/feedback")[0][1]?.body))).toEqual({
-      id_prediccion: 901, fue_correcta: false, etiqueta_corregida: "Rayadito", id_usuario: 1,
+      id_prediccion: 901, fue_correcta: false, etiqueta_corregida: "Rayadito",
     });
   });
 

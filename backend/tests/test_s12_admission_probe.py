@@ -15,7 +15,7 @@ def test_strict_flag_errors_and_legacy_false_serialization(layout_api):
         before = digest(engine)
         rejected = request("POST", B, body={**payload, "request_key": "bad", "auto_import": value})
         assert rejected.status_code == 422
-        assert rejected.json() == {"detail": [{"type": "bool_type", "loc": ["body", "auto_import"], "msg": "Input should be a valid boolean", "input": value}]}
+        assert rejected.json() == {"detail": "Solicitud de autenticación inválida."}
         assert digest(engine) == before
     reject_unchanged(engine, lambda: request("POST", B, body={**payload, "auto_import": True}), 409, "La solicitud ya existe con otro destino o contenido.")
     assert not worker.run_once()

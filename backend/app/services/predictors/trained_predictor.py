@@ -60,6 +60,23 @@ class ClassVectorUnavailable(ModelWeightsError):
         super().__init__(f'Class probabilities unavailable: {status}')
 
 
+def _checkpoint_architecture(checkpoint: dict):
+    if "architecture" in checkpoint or "model_type" in checkpoint:
+        return checkpoint.get("architecture", checkpoint.get("model_type"))
+    state = checkpoint.get("model_state_dict")
+    classes = checkpoint.get("classes", DEFAULT_CHILEAN_BIRD_CLASSES)
+    if isinstance(state, dict) and isinstance(classes, (list, tuple)) and classes:
+        # The two original CNN files predate architecture metadata. Recognize
+        # their complete tensor layout without allocating a second set of weights.
+        with torch.device("meta"):
+            expected = AudioCNN(num_classes=len(classes)).state_dict()
+        if (set(state) == set(expected) and all(
+                isinstance(state[key], torch.Tensor) and state[key].shape == value.shape
+                for key, value in expected.items())):
+            return "AudioCNN"
+    return "EfficientNet-B0"
+
+
 def _standard_frontend_contract(checkpoint):
     from app.services.imported_training_source import validate_imported_checkpoint, ImportedSourceError
     try:
@@ -74,6 +91,7 @@ def _standard_frontend_contract(checkpoint):
         raise ModelWeightsError(
             "El checkpoint estándar tiene un contrato de preprocessing GPU inválido o no soportado."
         ) from err
+
 
 
 class TrainedModelPredictor(AudioPredictor):
@@ -183,9 +201,9 @@ class TrainedModelPredictor(AudioPredictor):
         checkpoint = self._deserialize_checkpoint(snapshot, map_location="cpu")
         contract = _standard_frontend_contract(checkpoint)
         self.imported_source = checkpoint.get("imported_source")
-        architecture_name = checkpoint.get("architecture", checkpoint.get("model_type", "EfficientNet-B0"))
+        architecture_name = _checkpoint_architecture(checkpoint)
         classes = checkpoint.get("classes", list(DEFAULT_CHILEAN_BIRD_CLASSES))
-        best_val_acc = checkpoint.get("best_val_acc")
+        best_val_acc = checkpoint.get("best_val_acc", checkpoint.get("val_acc"))
 
         if contract is None:
             self._configure_audio(checkpoint)
@@ -193,6 +211,7 @@ class TrainedModelPredictor(AudioPredictor):
         self.architecture_name = architecture_name
         self.classes = classes
         self.best_val_acc = best_val_acc
+
 
     def _configure_audio(self, checkpoint: dict) -> None:
         configuration = checkpoint.get("audio_config")
@@ -253,9 +272,10 @@ class TrainedModelPredictor(AudioPredictor):
                         f"No se encontró state_dict en el checkpoint {self.checkpoint_path}"
                     )
 
-            architecture_name = checkpoint.get("architecture", checkpoint.get("model_type", "EfficientNet-B0"))
+
+            architecture_name = _checkpoint_architecture(checkpoint)
             classes = checkpoint.get("classes", list(DEFAULT_CHILEAN_BIRD_CLASSES))
-            best_val_acc = checkpoint.get("best_val_acc")
+            best_val_acc = checkpoint.get("best_val_acc", checkpoint.get("val_acc"))
             arch_lower = architecture_name.lower().replace("-", "_")
             num_classes = len(classes)
             legacy_poc = "model_type" in checkpoint and "architecture" not in checkpoint

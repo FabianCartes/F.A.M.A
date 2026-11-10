@@ -1,0 +1,217 @@
+{
+  "version": 1,
+  "checked_at": "2026-10-23T17:07:21.889358+00:00",
+  "branch": "fix/afinamiento-integral",
+  "status": "first_pre_official_block_implemented_and_test_runtime_updated",
+  "actors": {
+    "operator": "authorized_start_of_ordered_pre_official_work",
+    "codex": "implementation_tests_documentation_test_runtime_update"
+  },
+  "scope": [
+    "E8-04_MP3_upload_validation_and_duration",
+    "E8-11_individual_training_chart_epoch_total"
+  ],
+  "diagnosis": {
+    "soundfile": "0.14.0",
+    "libsndfile": "1.2.2",
+    "miniaudio": "1.71",
+    "50707_soundfile_frames_announced": 449720,
+    "50707_soundfile_frames_decoded": 436608,
+    "observed_on_both_disk_and_BytesIO": true,
+    "prior_memory_only_hypothesis_corrected": true,
+    "synthetic_VBR_announced_frames": 8202,
+    "synthetic_VBR_decoded_frames_with_miniaudio": 46080,
+    "production_upload_preserves_encoded_bytes": true
+  },
+  "tdd": {
+    "agreed_seams": [
+      "authenticated_HTTP_with_temporary_database_and_fake_GCS",
+      "rendered_TrainingView_with_simulated_HTTP"
+    ],
+    "red_observed": [
+      "complete_MP3_HTTP_422_instead_of_200",
+      "truncated_MP3_HTTP_200_instead_of_422",
+      "MP3_with_APE_ID3v1_HTTP_422_instead_of_200",
+      "VBR_upload_duration_0.185986_instead_of_1.044898",
+      "VBR_sync_duration_0.185986_instead_of_1.044898",
+      "individual_job_missing_Punto_1_1"
+    ],
+    "setup_issues_not_counted_as_red": [
+      "sandbox_temp_directory_access_denied",
+      "initial_zero_tone_fixture_did_not_trigger_underestimate",
+      "manual_SQLite_probe_initially_omitted_model_metadata_import"
+    ],
+    "regression_detected_and_fixed": "checksum_local_variable_overwrote_metadata_tuple_on_identical_retry"
+  },
+  "validation": {
+    "backend": {
+      "passed": 103,
+      "failed": 0,
+      "skipped": 0,
+      "files": [
+        "backend/tests/test_ingestion_upload_validation.py",
+        "backend/tests/test_ingestion_upload_integrity.py",
+        "backend/tests/test_api_ingestion_validation.py"
+      ]
+    },
+    "frontend": {
+      "passed": 46,
+      "failed": 0,
+      "skipped": 0,
+      "files": [
+        "frontend/components/views/__tests__/TrainingView.test.tsx",
+        "frontend/lib/utils/__tests__/trainingChart.test.ts"
+      ]
+    },
+    "typescript": {
+      "exit_code": 0,
+      "incremental": false
+    },
+    "eslint": {
+      "status": "preexisting_findings_remain",
+      "test_errors_before_and_after": 23,
+      "component_warnings_before_and_after": 1,
+      "new_rule_messages": 0
+    },
+    "scoped_diff_check": "passed",
+    "whole_repository_suites_rerun": false
+  },
+  "original_recordings_probe": {
+    "result": "passed",
+    "boundary": "public_upload_service",
+    "database": "temporary_sqlite",
+    "storage": "in_memory_fake",
+    "actual_gcs_requests": 0,
+    "originals_unchanged": true,
+    "uploaded_to_fake": 5,
+    "sources_sha256": {
+      "backend\\data\\raw\\AvesChilenas\\Canastero\\50707.mp3": "75f9116c9a41d06fa99a4ed59e80bc7ad9822b0993c8e2056073c958cc730643",
+      "backend\\data\\raw\\AvesChilenas\\Canastero\\44352.mp3": "5da436d032a20cb3ad5851aabd45a2f2cafe396ccfc9e51fc3503203baa904fe",
+      "backend\\data\\raw\\AvesChilenas\\Canastero\\15290.mp3": "5c8f0aae5dfaf20393f1fbc385d31e6bfae305716223f1924534ff68e8c6f499",
+      "backend\\data\\raw\\AvesChilenas\\Canastero\\59857.mp3": "3d6638b6ea35a674a98f50371a2acd69b36c71e6b7044bc803b6858eddf44a6e",
+      "backend\\data\\raw\\AvesChilenas\\Canastero\\50705.mp3": "baabe233cf3bdcbc030a2542a2c2431b2ee64b514a78183c3bcbe74008fd81b3"
+    }
+  },
+  "runtime": {
+    "proxy_port_preserved": 5433,
+    "code": "test_backend_restarted",
+    "backend_directory": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\.pytest_cache\\stage8-live\\backend",
+    "frontend_port_preserved": 3010,
+    "backend_parent_pid": 29320,
+    "checked_at": "2026-10-23T17:01:30.0938095Z",
+    "backend_child_pid": 34856,
+    "readiness_HTTP": 200,
+    "readiness_code": "schema_current",
+    "frontend_PID": 14520,
+    "proxy_PID": 22380,
+    "source_copies": [
+      {
+        "source": "backend/app/services/ingestion.py",
+        "copy": ".pytest_cache/stage8-live/backend/app/services/ingestion.py",
+        "sha256": "9e396368f63060e043349260795ab775c659d042da45de4e82a709f34884ca28"
+      },
+      {
+        "source": "backend/requirements.txt",
+        "copy": ".pytest_cache/stage8-live/backend/requirements.txt",
+        "sha256": "a57d666a0436b40bf0403e60fef2b27dba3d5c4e17f0847def6d98abd8becb98"
+      },
+      {
+        "source": "frontend/components/views/TrainingView.tsx",
+        "copy": ".pytest_cache/stage8-live/frontend/components/views/TrainingView.tsx",
+        "sha256": "6ebaadab55d91c0ac1015a258943b7eb28aee627d262b52931ce0de6c7f32ef1"
+      }
+    ],
+    "browser_verified_view_loads": true,
+    "browser_account_role": "administrator",
+    "browser_dataset_audio_count": 12,
+    "browser_existing_model_visible": true,
+    "new_training_executed": false,
+    "one_epoch_label_proof": "rendered_UI_with_simulated_progress"
+  },
+  "not_performed": [
+    "GCS_writes",
+    "SQL_schema_migration",
+    "permission_changes",
+    "new_training",
+    "real_original_MP3_upload_to_GCS",
+    "official_bucket_change",
+    "historical_class_merge",
+    "partition_implementation",
+    "checkpoint_GCS_backup_implementation"
+  ],
+  "limitations": [
+    "test_runtime_still_temporary",
+    "no_claim_of_audio_label_or_scientific_quality",
+    "complete_frame_loss_without_original_length_not_certified",
+    "other_training_and_inference_MP3_readers_unchanged",
+    "free_format_and_other_tag_variants_not_certified"
+  ],
+  "next_order": [
+    "versioned_partitions_in_application",
+    "checkpoint_backup_and_recovery",
+    "persistent_runtime_emergency_admin_and_HTTPS",
+    "tested_restore_then_official_inventory_and_cutover"
+  ],
+  "artifacts": [
+    {
+      "path": ".gitignore",
+      "sha256": "a5b6465d3dbf13110744d1e0ce4c9119e074fb9cc74e788119ce590f5a933645"
+    },
+    {
+      "path": "backend/requirements.txt",
+      "sha256": "a57d666a0436b40bf0403e60fef2b27dba3d5c4e17f0847def6d98abd8becb98"
+    },
+    {
+      "path": "backend/app/services/ingestion.py",
+      "sha256": "9e396368f63060e043349260795ab775c659d042da45de4e82a709f34884ca28"
+    },
+    {
+      "path": "backend/tests/test_ingestion_upload_validation.py",
+      "sha256": "cac7e7d680dcdd7c05b9ab80f120114b2fcd82bf287a1da02b4d97db044a4a7e"
+    },
+    {
+      "path": "backend/tests/fixtures/audio/cbr_without_seek_table.mp3",
+      "sha256": "7c86019385657078a446a4661047f6f4164a595987b1954e172cba4968f92a0b"
+    },
+    {
+      "path": "backend/tests/fixtures/audio/vbr_without_seek_table.mp3",
+      "sha256": "c4ca64dd6c9b79688c2542a1b3d04c36e263dd48da17f652798f4175d7e2ca70"
+    },
+    {
+      "path": "frontend/components/views/TrainingView.tsx",
+      "sha256": "6ebaadab55d91c0ac1015a258943b7eb28aee627d262b52931ce0de6c7f32ef1"
+    },
+    {
+      "path": "frontend/components/views/__tests__/TrainingView.test.tsx",
+      "sha256": "ab0a852af49045aa2b57e7007e7a792033c9e724ab76bb4acbac2b9a9f027a90"
+    },
+    {
+      "path": "docs/manuales/validacion_mp3_y_curvas_entrenamiento.md",
+      "sha256": "52a590886640a5ed8005636b7cb57871a32e2d5186fe56a15f9c5cba1b6e1bfa"
+    },
+    {
+      "path": "docs/manuales/bitacora_acceso_e_instalacion.md",
+      "sha256": "f53fe2656a48ec3a43c5a0262e6d375004fa830c1bda6af9e6bb0c3a78c4be5a"
+    },
+    {
+      "path": "docs/manuales/estado_actual_y_pendientes.md",
+      "sha256": "93b17a4520cc7f7ba7fcaabb3a640a18a7f49f453590be2394ae5778a5517132"
+    },
+    {
+      "path": "docs/manuales/plan_autonomia_investigador_y_catalogo.md",
+      "sha256": "9a1f52ea9e7393789d4ed97669ed52c68b2ffc80fc326d57e6d76c9a3c7a4619"
+    },
+    {
+      "path": "docs/manuales/plan_instalacion_gcp_y_asistente.md",
+      "sha256": "5a7c2e43fd06ac173f3df7f4994f4fffb85db19158976adf364a123ab4a41401"
+    },
+    {
+      "path": "docs/KANBAN.md",
+      "sha256": "de9f81b8202f5cb39380ddf424ed755a16d1b69f8458969772e6ecce3c952299"
+    },
+    {
+      "path": "docs/README.md",
+      "sha256": "14000481c19a43335057c0494ed630fbfca5d52655a9d8e451b7c2b931b713eb"
+    }
+  ]
+}

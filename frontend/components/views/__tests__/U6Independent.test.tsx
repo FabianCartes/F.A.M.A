@@ -16,7 +16,7 @@ const stats = () => ({
  accuracy: 91.25, macro_f1: 88, classes_count: 7, source: "historical_reference" } },
 });
 const dataset = { id: "AvesChilenas", name: "AvesChilenas", classes: ["bird"], file_count: 1,
- total_size_bytes: 12, last_modified: null, local_file_count: 0, is_synced: false };
+ total_size_bytes: 12, last_modified: null, local_file_count: 0, is_synced: false, source: "gcs", gcs_available:true, gcs_file_count:1 };
 let currentStats: ReturnType<typeof stats>;
 let datasets: typeof dataset[];
 let failedRefresh: boolean;
@@ -52,14 +52,14 @@ describe("S1/S4 preserved shared consumer seams", () => {
   expect(navigate.mock.calls).toEqual([["ingesta"], ["entrenamiento"], ["prediccion"]]);
  });
  it("keeps ZIP controls operable and session-gated without submitting data", async () => {
-  render(<IngestionView />); await screen.findByText("AvesChilenas");
+  render(<IngestionView />); await screen.findAllByText("AvesChilenas");
   fireEvent.click(screen.getByRole("button", { name: "Importar ZIP" }));
   let dialog = await screen.findByRole("dialog");
   await within(dialog).findByText(/Inicia sesión para acceder a tus importaciones/i);
   fireEvent.click(within(dialog).getByRole("button", { name: /Cerrar importación/ }));
   fireEvent.click(screen.getByRole("button", { name: "Descargar versión como ZIP" }));
   dialog = await screen.findByRole("dialog");
-  await within(dialog).findByText(/Inicia sesión para acceder a tus importaciones/i);
+  await within(dialog).findByText(/Inicia sesión en F.A.M.A./i);
   fireEvent.click(within(dialog).getByRole("button", { name: "Cerrar exportación" }));
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(calls.filter(c => c.method !== "GET")).toEqual([]);
@@ -114,20 +114,20 @@ describe("S1/S4 per-stage persistence completion", () => {
   syncData = { status, total_downloaded: 1, total_skipped: 0, total_failed: downloadFailed, total_preprocessed: 0,
    results: [{ dataset: dataset.id, downloaded: 1, skipped: 0, failed: downloadFailed, preprocessed: 0,
     db_persisted: persisted, preprocess_info: { failed: prepFailed } }] };
-  render(<IngestionView />); await screen.findByText("AvesChilenas");
+  render(<IngestionView />); await screen.findAllByText("AvesChilenas");
   fireEvent.click(screen.getAllByRole("checkbox")[0]);
-  fireEvent.click(screen.getByRole("button", { name: "Descargar seleccionados" }));
-  const exact = `Sincronización ${expected}: 1 archivo(s) descargados, 0 omitidos, ${downloadFailed} errores de descarga.`;
+  fireEvent.click(screen.getByRole("button", { name: "Descargar desde GCS" }));
+  const exact = `Sincronización ${expected}: 1 archivo(s) descargados, 0 omitidos, 0 tensores procesados, ${downloadFailed} errores de descarga.`;
   expect(await screen.findByText(exact)).toBeDefined();
   const request = calls.find(c => c.url.endsWith("/api/ingestion/sync"));
   expect(request?.method).toBe("POST");
   expect(JSON.parse(String(request?.body))).toEqual({ datasets: [dataset.id], preprocess: false });
-  await waitFor(() => expect(screen.getByRole("button", { name: "Descargar seleccionados" }).hasAttribute("disabled")).toBe(true));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Descargar desde GCS" }).hasAttribute("disabled")).toBe(false));
  });
  it("preserves HTTP error text without a completed success", async () => {
-  syncStatus = 503; render(<IngestionView />); await screen.findByText("AvesChilenas");
+  syncStatus = 503; render(<IngestionView />); await screen.findAllByText("AvesChilenas");
   fireEvent.click(screen.getAllByRole("checkbox")[0]);
-  fireEvent.click(screen.getByRole("button", { name: "Descargar seleccionados" }));
+  fireEvent.click(screen.getByRole("button", { name: "Descargar desde GCS" }));
   expect(await screen.findByText("Fallo en el proceso de sincronización: Error en el servidor: HTTP 503")).toBeDefined();
   expect(screen.queryByText(/^Sincronización completada:/)).toBeNull();
  });

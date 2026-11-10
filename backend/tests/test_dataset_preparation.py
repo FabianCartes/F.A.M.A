@@ -420,3 +420,25 @@ def test_versioned_cli_creates_explicit_immutable_version_and_preserves_prior(tm
         main(args)
     assert error.value.code == 2
     assert len(list(versions.iterdir())) == 2
+
+
+def test_custom_dataset_preparation_never_imports_application_services(tmp_path):
+    import subprocess, sys
+    index, roots, _ = fixture_index(tmp_path)
+    program = """
+import sys
+from pathlib import Path
+from importlib.abc import MetaPathFinder
+class NoApplicationServices(MetaPathFinder):
+    def find_spec(self, fullname, path, target=None):
+        if fullname.startswith('app.services') or fullname == 'app.database':
+            raise RuntimeError('Application services must stay dormant during offline preparation')
+sys.meta_path.insert(0, NoApplicationServices())
+from training.prepare_data import prepare_dataset
+result = prepare_dataset(Path(sys.argv[1]), roots={'raw':Path(sys.argv[2])},
+                         dataset_name='Custom_Audio', output_dir=Path(sys.argv[3]))
+assert sum(result['counts'].values()) == 12
+"""
+    result = subprocess.run([sys.executable, '-c', program, str(index), str(roots['raw']), str(tmp_path/'prepared')],
+                            capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr

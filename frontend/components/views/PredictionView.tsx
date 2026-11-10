@@ -6,7 +6,7 @@ import TriadWeightRevision, { triadCompositionWeights } from "@/components/predi
 import InfoTooltip from "@/components/common/InfoTooltip";
 
 import { useState, useEffect, useMemo, useRef, useCallback, ChangeEvent, FormEvent } from "react";
-import { API_BASE_URL, apiSessionRevision, notifyUnauthorized } from "@/lib/api";
+import { API_BASE_URL, apiFetch as fetch } from "@/lib/api";
 import { useOptionalWebSession } from '@/components/auth/SessionBoundary';
 import { ApiConnectionError, sendFeedback } from "@/lib/api/feedbackApi";
 
@@ -438,7 +438,7 @@ function PredictionFeedback({ prediction }: { prediction: CurrentPrediction }) {
       setStatus(finalized ? "finalized" : "error");
       setMessage(finalized
         ? "Conflicto (409): esta predicción ya fue finalizada y no admite nuevos envíos."
-        : `No se pudo enviar a revisión: ${err instanceof Error ? err.message : String(err)}. Puedes reintentar sin perder tu selección.`);
+        : `No se pudo guardar la corrección: ${err instanceof Error ? err.message : String(err)}. Puedes reintentar sin perder tu selección.`);
     } finally {
       sending.current = false;
     }
@@ -447,9 +447,9 @@ function PredictionFeedback({ prediction }: { prediction: CurrentPrediction }) {
   return (
     <section aria-label="Validar resultado" className="pt-3 border-t border-[#23252e] space-y-3 text-xs text-gray-300">
       <h3 className="font-semibold text-white">Validar clase predicha</h3>
-      {!validId && <p role="status">Este resultado no tiene un ID de predicción válido. No se puede enviar a revisión.</p>}
+      {!validId && <p role="status">Este resultado no tiene un ID de predicción válido. No se puede guardar la corrección.</p>}
       {status === "sent" ? (
-        <p role="status" className="text-emerald-400">Enviado a revisión. El audio queda pendiente en Gestión de audios; todavía no se ha incorporado al dataset.</p>
+        <p role="status" className="text-emerald-400">Corrección guardada. Puedes revisar e incorporar el audio en Gestión de audios; todavía no se ha incorporado al dataset.</p>
       ) : (
         <>
           <fieldset disabled={locked || !validId} className="space-y-2">
@@ -492,7 +492,7 @@ function PredictionFeedback({ prediction }: { prediction: CurrentPrediction }) {
           </fieldset>
           {message && <p role="alert" className="text-red-300">{message}</p>}
           <button type="button" onClick={submit} disabled={!canSubmit || locked} className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold disabled:opacity-40 disabled:cursor-not-allowed">
-            {status === "sending" ? "Enviando a revisión…" : "Enviar a revisión"}
+            {status === "sending" ? "Guardando corrección…" : "Guardar corrección"}
           </button>
         </>
       )}
@@ -502,24 +502,24 @@ function PredictionFeedback({ prediction }: { prediction: CurrentPrediction }) {
 
 export default function PredictionView() {
   const user = useOptionalWebSession();
-  const revision = apiSessionRevision();
   // Reset all private state, including evaluation, feedback and history, before paint.
-  return <PrivatePredictionView key={`${user?.id ?? 'anonymous'}:${revision}`} authenticated={!!user} revision={revision} />;
+  return <PrivatePredictionView key={user?.id ?? 'anonymous'} authenticated={!!user} />;
 }
 
 function privateApiSameOrigin() {
   return new URL(API_BASE_URL || '/', window.location.origin).origin === window.location.origin;
 }
 
-function PrivatePredictionView({ authenticated, revision }: { authenticated: boolean; revision: number }) {
+function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
   const mounted = useRef(false);
   useEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
+  // apiFetch reports 401 to the session boundary, which unmounts this view.
   const sessionCurrent = useCallback(
-    () => mounted.current && authenticated && revision === apiSessionRevision(),
-    [authenticated, revision]
+    () => mounted.current && authenticated,
+    [authenticated]
   );
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -658,7 +658,6 @@ function PrivatePredictionView({ authenticated, revision }: { authenticated: boo
         if (!privateApiSameOrigin()) throw new Error('Los recursos privados requieren API del mismo origen.');
         const res = await fetch(`${API_BASE_URL}/api/models?private_only=true`, { credentials: 'same-origin', signal: controller.signal });
         if (request !== generation || !sessionCurrent()) return;
-        if (res.status === 401) notifyUnauthorized(revision);
         if (!res.ok) {
           let databaseUnavailable = false;
           try {
@@ -730,7 +729,7 @@ function PrivatePredictionView({ authenticated, revision }: { authenticated: boo
       window.removeEventListener("focus", fetchModels);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [authenticated, revision, sessionCurrent, catalogueRefresh]);
+  }, [authenticated, sessionCurrent, catalogueRefresh]);
 
   useEffect(() => {
     if (!authenticated || !selectedDomain || !privateApiSameOrigin()) return;
@@ -1076,7 +1075,6 @@ function PrivatePredictionView({ authenticated, revision }: { authenticated: boo
       });
 
       if (!sessionCurrent()) return;
-      if (response.status === 401) notifyUnauthorized(revision);
       let data;
       try {
         data = await response.json();
@@ -1977,7 +1975,7 @@ function PrivatePredictionView({ authenticated, revision }: { authenticated: boo
                 {result.detalles?.dataset_name ? (
                   <p className="font-mono text-emerald-300">{result.detalles.dataset_name}</p>
                 ) : (
-                  <p role="status" className="text-amber-300">Sin dataset de inferencia asociado. El audio puede enviarse a revisión, pero no incorporarse hasta contar con una asociación verificable.</p>
+                  <p role="status" className="text-amber-300">Sin dataset de inferencia asociado. Puedes guardar la corrección; la incorporación requiere una asociación verificable.</p>
                 )}
               </div>
 
@@ -2039,8 +2037,8 @@ function PrivatePredictionView({ authenticated, revision }: { authenticated: boo
       </div>
 
       {/* Fila 3: Historial de Predicciones */}
-      <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4">
-        <span className="text-xs text-gray-300 font-semibold block">Historial de predicciones del modelo seleccionado</span>
+      <section aria-label="Historial de predicciones del modelo seleccionado" className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4">
+        <h2 className="text-xs text-gray-300 font-semibold">Historial de predicciones del modelo seleccionado</h2>
 
         {/* Filtros de Búsqueda y Clases */}
         <div className="flex flex-col sm:flex-row gap-2.5">
@@ -2120,7 +2118,7 @@ function PrivatePredictionView({ authenticated, revision }: { authenticated: boo
             </div>
           ))}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

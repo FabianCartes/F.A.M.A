@@ -31,7 +31,7 @@ async def raw_request(chunks, headers=(), method="POST", path="/api/predict", be
     async def send(message):
         messages.append(message)
 
-    await main.app({"type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1",
+    await main.app({"type": "http", "asgi": {"version": "3.0", "spec_version": "2.4"}, "http_version": "1.1",
                     "method": method, "scheme": "http", "path": path, "raw_path": path.encode(),
                     "query_string": b"", "root_path": "", "server": ("test", 80), "client": ("test", 1),
                     "headers": [(b"content-type", b"multipart/form-data; boundary=test"), *headers]}, receive, send)

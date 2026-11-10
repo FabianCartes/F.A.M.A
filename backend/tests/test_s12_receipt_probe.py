@@ -33,7 +33,7 @@ def test_automatic_receipt_release_and_duplicate_replay(layout_api, tmp_path):
         async def receive(): return {"type": "http.request", "body": data, "more_body": False}
         async def send(message): messages.append(message)
         path = f"{B}/{source}/receipt/chunks/0"
-        scope = {"type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1", "method": "PUT", "path": path, "raw_path": path.encode(), "query_string": b"", "scheme": "http", "server": ("synthetic.test", 80), "client": ("127.0.0.1", 1), "headers": [(b"content-type", b"application/octet-stream"), (b"x-chunk-offset", b"0"), (b"x-chunk-sha256", hashlib.sha256(data).hexdigest().encode())]}
+        scope = {"type": "http", "asgi": {"version": "3.0", "spec_version": "2.4"}, "http_version": "1.1", "method": "PUT", "path": path, "raw_path": path.encode(), "query_string": b"", "scheme": "http", "server": ("synthetic.test", 80), "client": ("127.0.0.1", 1), "headers": [(b"content-type", b"application/octet-stream"), (b"x-chunk-offset", b"0"), (b"x-chunk-sha256", hashlib.sha256(data).hexdigest().encode())]}
         asyncio.run(app(scope, receive, send))
         assert messages[0]["status"] == 200
         assert request("POST", f"{B}/{source}/receipt/finalize").status_code == 200

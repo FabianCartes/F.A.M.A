@@ -14,6 +14,8 @@ from app.schemas.model_info import ModelMetadata
 from app.schemas.prediction import PredictionResult
 from app.services.predictors.base import AudioPredictor
 from tests.test_api_feedback import test_db
+from tests.http_security import administrator_http
+from app.services.registry import ModelRegistry
 from tests.test_inference_input_limits import raw_request, request_body
 
 
@@ -49,11 +51,14 @@ def test_preserved_public_audio_contract(test_db, monkeypatch, audio, status, de
     predictor.expected = hashlib.sha256(audio).hexdigest()
     uploader = AsyncMock(return_value=True)
     monkeypatch.setattr(main, "upload_audio_to_gcp", uploader)
-    main.app.dependency_overrides[main.get_model_registry] = lambda: SimpleNamespace(get=lambda _: predictor)
+    registry = ModelRegistry()
+    registry.register(predictor, is_default=True)
+    main.app.dependency_overrides[main.get_model_registry] = lambda: registry
     connection = test_db.connection().connection.driver_connection
     before = hashlib.sha256(connection.serialize()).hexdigest()
     try:
-        actual, body, _ = asyncio.run(raw_request(request_body(audio)))
+        with administrator_http(main.app):
+            actual, body, _ = asyncio.run(raw_request(request_body(audio)))
         assert actual == status
         if status != 200:
             assert body == {"detail": detail}

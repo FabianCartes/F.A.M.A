@@ -36,8 +36,8 @@ def catalogue(tmp_path, monkeypatch):
             self.expected_checkpoint_sha256 = expected_checkpoint_sha256
 
     monkeypatch.setattr(trained_predictor, "TrainedModelPredictor", MetadataPredictor)
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False},
-                           poolclass=StaticPool)
+    engine = create_engine("sqlite:///" + (tmp_path / "catalogue.sqlite").as_posix(),
+                           connect_args={"check_same_thread": False})
     Base.metadata.create_all(engine)
     sessions = sessionmaker(bind=engine)
     checkpoints_root = tmp_path / "checkpoints"
@@ -74,7 +74,9 @@ def catalogue(tmp_path, monkeypatch):
         return checkpoint
 
     try:
-        yield client, registry, persist, engine
+        from tests.http_security import administrator_http
+        with administrator_http(main.app):
+            yield client, registry, persist, engine
     finally:
         client.close()
         main.app.dependency_overrides.pop(get_db, None)

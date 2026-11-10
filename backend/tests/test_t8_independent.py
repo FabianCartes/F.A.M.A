@@ -76,10 +76,7 @@ def test_all_collections_bound_queries_and_explicit_publication(imports, tmp_pat
                 response = client.get(url, params=params)
                 expected = {"detail": detail}
                 if "limit" in params:
-                    lower = params["limit"] == 0
-                    expected = {"detail": [{"type": "greater_than_equal" if lower else "less_than_equal",
-                        "loc": ["query", "limit"], "msg": "Input should be greater than or equal to 1" if lower else "Input should be less than or equal to 200",
-                        "input": str(params["limit"]), "ctx": {"ge": 1} if lower else {"le": 200}}]}
+                    expected = {"detail": "Solicitud de autenticación inválida."}
                 assert (response.status_code, response.json()) == (422, expected)
                 assert state(sessions) == before
         assert state(sessions) == before

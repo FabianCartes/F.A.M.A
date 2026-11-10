@@ -18,7 +18,8 @@ def _verify_table(conn, table):
         actual = columns[column.name]
         if actual["nullable"] != column.nullable:
             raise JobMigrationError("incompatible_job_nullability")
-        if not isinstance(actual["type"], type(column.type)):
+        effective_type = column.type._variant_mapping.get(conn.dialect.name, column.type)
+        if not isinstance(actual["type"], type(effective_type)):
             raise JobMigrationError("incompatible_job_column_type")
     if inspector.get_pk_constraint(table.name)["constrained_columns"] != [column.name for column in table.primary_key]:
         raise JobMigrationError("incompatible_job_primary_key")

@@ -21,8 +21,10 @@ def external_adapters(test_db, monkeypatch):
         model_id="fake", dataset_name="AvesChilenas", has_weights=True,
         metadata=SimpleNamespace(name="Synthetic inference fixture"),
     )
-    main.app.dependency_overrides[main.get_model_registry] = lambda: SimpleNamespace(get=lambda _: predictor)
-    yield predictor
+    main.app.dependency_overrides[main.get_model_registry] = lambda: SimpleNamespace(get=lambda _: predictor, get_default_model_id=lambda: "fake")
+    from tests.http_security import administrator_http
+    with administrator_http(main.app):
+        yield predictor
     main.app.dependency_overrides.pop(main.get_model_registry, None)
 
 
@@ -50,7 +52,7 @@ class ASGIClient:
         async def send(message):
             messages.append(message)
 
-        await main.app({"type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1",
+        await main.app({"type": "http", "asgi": {"version": "3.0", "spec_version": "2.4"}, "http_version": "1.1",
                         "method": method, "scheme": "http", "path": path, "raw_path": path.encode(),
                         "query_string": b"", "root_path": "", "server": ("test", 80),
                         "client": ("test", 123), "headers": [(b"content-type", b"multipart/form-data; boundary=test")]},

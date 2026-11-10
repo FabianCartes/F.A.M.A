@@ -13,6 +13,11 @@ from fastapi.testclient import TestClient
 from tests.test_api_feedback import test_db
 from app.models.prediction import Prediccion
 import app.main as main
+from tests.test_api_predict import ContractPredictor
+from tests.http_security import administrator_http
+from app.services.registry import ModelRegistry
+from app.services.access import ResourceAccess
+from app.models.user import Usuario
 
 
 def synthetic_wav(frames=1, rate=1, channels=1, sample_width=2):
@@ -42,16 +47,20 @@ def test_public_http_audio_limit_before_external_effects(test_db, monkeypatch, s
 
     monkeypatch.setattr(MultipartUpload, "read", bounded_read)
     uploader = AsyncMock(return_value=True)
-    predictor = SimpleNamespace(model_id="fake-model", dataset_name="AvesChilenas",
-                                predict=Mock(return_value=SimpleNamespace(clase="Chucao", confianza=.9)))
+    predictor = ContractPredictor("fake-model")
+    predictor.metadata.dataset_name = "AvesChilenas"
+    predictor.predict = Mock(wraps=predictor.predict)
+    registry = ModelRegistry()
+    registry.register(predictor, is_default=True)
     monkeypatch.setattr(main, "upload_audio_to_gcp", uploader)
     monkeypatch.setattr(main.ensemble_service, "get_status", lambda **kwargs: {})
-    main.app.dependency_overrides[main.get_model_registry] = lambda: SimpleNamespace(get=lambda _: predictor)
+    main.app.dependency_overrides[main.get_model_registry] = lambda: registry
     try:
         # No context manager: do not run startup/lifespan or discover real models.
         client = TestClient(main.app)
-        response = client.post("/api/predict", files={"file": ("large.wav", payload, "audio/wav")},
-                               headers={"Content-Length": "1"})
+        with administrator_http(main.app):
+            response = client.post("/api/predict", files={"file": ("large.wav", payload, "audio/wav")},
+                                   headers={"Content-Length": "1"})
         assert response.status_code == expected_status
         assert reads
         if expected_status == 413:
@@ -95,12 +104,15 @@ def test_inference_persists_original_name_and_reception_before_read(test_db, mon
     uploaded = AsyncMock(return_value=True)
     monkeypatch.setattr(main, "upload_audio_to_gcp", uploaded)
     monkeypatch.setattr(main.ensemble_service, "get_status", lambda **kwargs: {})
-    predictor = SimpleNamespace(model_id="fake-model", dataset_name="AvesChilenas",
-                                predict=lambda path: SimpleNamespace(clase="Chucao", confianza=.9))
+    predictor = ContractPredictor("fake-model")
+    predictor.metadata.dataset_name = "AvesChilenas"
+    registry = ModelRegistry()
+    registry.register(predictor, is_default=True)
+    access = ResourceAccess(test_db, Usuario(id=1, rol="administrador", activo=True))
     response = asyncio.run(main.predict_audio(
         file=SlowUpload(filename=filename, file=io.BytesIO(synthetic_wav())),
         model_id=None, dataset_name=None, db=test_db,
-        registry=SimpleNamespace(get=lambda model_id: predictor),
+        registry=registry, access=access,
     ))
     test_db.expire_all()
     stored = test_db.get(Prediccion, response["db_id"])

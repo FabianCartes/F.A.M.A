@@ -1,0 +1,42 @@
+{
+  "code": "official_native_restart_verified",
+  "verified_at_utc": "2026-11-01T04:53:36.201272+00:00",
+  "requested_by": "operator",
+  "performed_by": "Codex",
+  "source_commit": "a2c67f0e455c8872d530cb9c8a253b005520dd4e",
+  "source_branch": "fix/afinamiento-integral",
+  "frontend_mode": "production-standalone",
+  "frontend_build_source_commit": "54bdaafb2ee8784262743ecaf77bf14857f042d7",
+  "frontend_rebuilt": false,
+  "url": "http://localhost:3010/",
+  "backend_port": 8010,
+  "proxy_port": 5434,
+  "profile": "backend/installation/cloud-oficial/native",
+  "runtime": "runtime/oficial",
+  "database": "fama_oficial",
+  "bucket": "fama-audio-records-2026",
+  "schema": "0004_integration",
+  "schema_migrated": false,
+  "credentials_changed": false,
+  "connections": {
+    "database": {"ok": true, "code": "database_connected"},
+    "storage": {"ok": true, "code": "storage_read_connected"}
+  },
+  "observed_checks": [
+    {"path": "http://localhost:3010/login", "http_status": 200, "seconds": 2.08},
+    {"path": "http://127.0.0.1:8010/health", "http_status": 200, "code": "ok", "seconds": 0.02},
+    {"path": "http://127.0.0.1:8010/ready", "http_status": 200, "code": "schema_current", "seconds": 28.53},
+    {"path": "http://localhost:3010/api/auth/me", "http_status": 401, "cookies_supplied": false, "seconds": 2.14},
+    {"path": "http://localhost:3010/api/installation/status", "http_status": 200, "status": "completed", "seconds": 2.19}
+  ],
+  "startup_observation": "Application startup complete; Super-Ensamble listo en CPU con tres modelos, según el registro del proceso.",
+  "limits": [
+    "Comprobación operativa del reinicio; no se ejecutó una suite nueva de pruebas.",
+    "No se realizó login autenticado, entrenamiento ni predicción como comprobación.",
+    "No se volvió a comprobar el catálogo completo ni la calidad de los modelos.",
+    "Las verificaciones finales de red se ejecutaron fuera del aislamiento local; las primeras sondas aisladas no acreditaban el estado de los servicios.",
+    "Windows nativo mantiene la limitación de workers ZIP documentada.",
+    "Servicio permanente y despliegue universitario siguen pendientes."
+  ],
+  "next_step": "Acceder al nodo oficial; para preparar el equipo de Kevin siguen pendientes su correo Google, sistema operativo y accesos propios."
+}

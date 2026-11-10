@@ -205,15 +205,15 @@ def _invalid(reason: StandardEvaluationReason, message: str) -> None:
 
 def resolve_training_audio(dataset_name: str, audio_config) -> dict:
     """Rebuild the effective training-audio values from checkpointed inputs."""
+    from dataset_references import safe_path_component
+    if not safe_path_component(dataset_name) or len(dataset_name) > 100:
+        _invalid(StandardEvaluationReason.RUNTIME_CONFIGURATION_INCOMPATIBLE, "Identidad de dataset inválida.")
     if dataset_name == "engine_diagnostics":
         settings = dict(target_sr=32000, duration_seconds=2.0, n_mels=128,
                         n_fft=1024, hop_length=512, f_min=50.0, f_max=16000.0)
-    elif dataset_name == "AvesChilenas":
+    else:
         settings = dict(target_sr=22050, duration_seconds=5.0, n_mels=128,
                         n_fft=2048, hop_length=512, f_min=800.0, f_max=10000.0)
-    else:
-        _invalid(StandardEvaluationReason.RUNTIME_CONFIGURATION_INCOMPATIBLE,
-                 "Dataset estándar no admitido.")
     if audio_config is None:
         return settings
     if isinstance(audio_config, dict):

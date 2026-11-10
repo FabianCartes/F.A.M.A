@@ -40,7 +40,7 @@ def send_chunk(worker, source, data):
         messages.append(message)
 
     path = f"{BASE}/{source}/receipt/chunks/0"
-    scope = {"type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1", "method": "PUT",
+    scope = {"type": "http", "asgi": {"version": "3.0", "spec_version": "2.4"}, "http_version": "1.1", "method": "PUT",
         "path": path, "raw_path": path.encode(), "query_string": b"", "scheme": "http",
         "server": ("synthetic.test", 80), "client": ("127.0.0.1", 1),
         "headers": [(b"content-type", b"application/octet-stream"), (b"x-chunk-offset", b"0"),

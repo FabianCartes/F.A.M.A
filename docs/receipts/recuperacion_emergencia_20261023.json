@@ -1,0 +1,297 @@
+{
+  "version": 1,
+  "date": "2026-10-23",
+  "timezone": "America/Santiago",
+  "checked_at": "2026-10-24T01:58:12.238601+00:00",
+  "branch": "fix/afinamiento-integral",
+  "status": "local_operator_recovery_implemented_and_synthetic_PG_HTTP_verified_current_profile_inspected_read_only",
+  "actors": {
+    "operator": "requested_next_recovery_block_no_real_password_entry",
+    "codex": "implementation_synthetic_verification_documentation_and_read_only_current_profile_check"
+  },
+  "implementation": {
+    "public_CLI": "app.node --config-dir PROFILE recover-admin (--user-id ID | --email EMAIL) [--apply --confirm-database DB] [--reactivate]",
+    "default_read_only": true,
+    "completed_installation_and_current_schema_required": true,
+    "selected_database_checked_on_SQL_connection": true,
+    "ambiguous_email_rejected": true,
+    "existing_administrator_only_no_creation_or_promotion": true,
+    "reactivation_explicit": true,
+    "interactive_terminal_required_for_apply": true,
+    "email_and_two_hidden_password_confirmations": true,
+    "password_policy": "12_to_1024_characters_not_whitespace_only_UTF8_without_normalization",
+    "password_argument_file_or_env_option_added": false,
+    "shared_account_gate_and_post_lock_revalidation": true,
+    "transaction": [
+      "password_hash",
+      "optional_reactivation",
+      "target_session_revocation",
+      "target_recovery_revocation",
+      "security_audit"
+    ],
+    "quotas_and_other_accounts_preserved": true,
+    "audit_action": "account.operator_recovered",
+    "audit_actor_id": null,
+    "UI_label": "Acceso recuperado por el operador",
+    "new_HTTP_recovery_route": false,
+    "input_cancelled_distinct_from_apply_connection_loss": true,
+    "connection_loss_code": "administrator_recovery_outcome_unknown"
+  },
+  "TDD": {
+    "seams": [
+      "operator_CLI",
+      "authenticated_HTTP",
+      "rendered_administrative_UI",
+      "real_local_PostgreSQL_account_gate"
+    ],
+    "functional_RED_observed": [
+      "recover_admin_CLI_absent",
+      "apply_and_database_confirmation_absent",
+      "explicit_reactivation_absent",
+      "URL_database_override_not_rejected",
+      "email_selector_absent",
+      "UI_audit_event_unrecognized",
+      "connection_loss_not_distinguished_from_generic_failure"
+    ],
+    "terminal_hardware_input_substituted_only": true,
+    "internal_application_or_database_mocks": false
+  },
+  "validation": {
+    "backend": {
+      "passed": 85,
+      "failed": 0,
+      "skipped": 0,
+      "files": 4,
+      "new_operator_cases": 20,
+      "elapsed_cli_seconds": 222.55,
+      "command": "python -m pytest --noconftest tests/test_operator_recovery.py tests/test_account_management.py tests/test_security_audit.py tests/test_cloud_node.py -q --tb=short -ra",
+      "working_directory": "backend",
+      "environment": [
+        "FAMA_TEST_RECOVERY_ADMIN_URL_FILE points to exclusive private local PG16 URL",
+        "PYTHON_DOTENV_DISABLED=1",
+        "DATABASE_URL=sqlite:// isolates collection of existing HTTP tests"
+      ],
+      "junit_sha256": "123652b1c1684c0855edff775605cd3dd3edc7553fcc388ff295469c9df6fac2"
+    },
+    "frontend": {
+      "passed": 20,
+      "files": 1,
+      "elapsed_seconds": 13.0,
+      "file": "frontend/app/__tests__/account-administration.test.tsx",
+      "TypeScript_exit": 0,
+      "ESLint_panel_and_test_exit": 0
+    },
+    "global_suite_claimed": false,
+    "concurrent_writer": "command_waited_on_real_PG_gate_then_rejected_after_other_writer_demoted_target",
+    "audit_failure": "real_SQL_INSERT_denial_rolled_back_password_revocations_and_reactivation",
+    "connection_failure": "only_own_disposable_DB_connection_terminated_while_waiting_on_gate",
+    "lost_post_commit_ack_simulated": false,
+    "physical_real_password_typing_tested": false
+  },
+  "current_profile_read_only_inspection": {
+    "checked_at": "2026-10-24T01:53:05.850813+00:00",
+    "code": "current_operator_recovery_inspection_verified_read_only",
+    "command": "app.node --config-dir selected_native_profile recover-admin --user-id 1",
+    "database": "fama_pruebas",
+    "user_id": 1,
+    "role": "administrador",
+    "active": true,
+    "reactivation_required": false,
+    "state_before": {
+      "usuario": {
+        "rows": 2,
+        "sha256": "a83d43d990c026f6fa6ca9e42da167de2723210117c6d8f021951d67e3c43941"
+      },
+      "sesion_web": {
+        "rows": 2,
+        "sha256": "ef93c06e5c221a3bb0526679b75977a7425e829e1d29e7329df7afa9200f25a0"
+      },
+      "recuperacion_cuenta": {
+        "rows": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "control_cuentas": {
+        "rows": 1,
+        "sha256": "043f347c2cdc0d8ce70c38775d24e556c0290acf6d0c87a3a52aa85471cb8d02"
+      },
+      "evento_seguridad": 35,
+      "audio": 12,
+      "conjunto_datos": 1,
+      "modelo": 1,
+      "asignacion_dataset": 1,
+      "revision": "0003_autonomy"
+    },
+    "state_after": {
+      "usuario": {
+        "rows": 2,
+        "sha256": "a83d43d990c026f6fa6ca9e42da167de2723210117c6d8f021951d67e3c43941"
+      },
+      "sesion_web": {
+        "rows": 2,
+        "sha256": "ef93c06e5c221a3bb0526679b75977a7425e829e1d29e7329df7afa9200f25a0"
+      },
+      "recuperacion_cuenta": {
+        "rows": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "control_cuentas": {
+        "rows": 1,
+        "sha256": "043f347c2cdc0d8ce70c38775d24e556c0290acf6d0c87a3a52aa85471cb8d02"
+      },
+      "evento_seguridad": 35,
+      "audio": 12,
+      "conjunto_datos": 1,
+      "modelo": 1,
+      "asignacion_dataset": 1,
+      "revision": "0003_autonomy"
+    },
+    "session_idle_expiration_not_compared_because_live_HTTP_can_touch_it": true,
+    "profile_sha256_unchanged": "2e2891275dbab733499b35132ee272d34740ca4fc539eb5e7069b77b1d5a623e",
+    "runtime_files_preserved": 29,
+    "previous_private_backup_sha256_preserved": "de0cc3fdca7d474142e98d583ffdfafc40da4c83c0ff79ca1d26aa90b854dd52",
+    "password_entered_or_changed": false,
+    "SQL_mutation_applied": false,
+    "GCS_access_or_writes": false,
+    "application_restart_or_new_admin_created": false
+  },
+  "lab": {
+    "image": "postgres:16",
+    "image_id": "sha256:9e2cf6287f25c3151f4c9421ccce2b17f3e60061c111a29165e0d2cdd9ff0a97",
+    "loopback_only": true,
+    "private_credentials": true,
+    "container": "ed5ea9a2f702cb9e8bb92358b653d6ddb0fccc7a75230b0be3199ffb77957ee6",
+    "run": "93677aa61e4c47e79320ad22c3fc39b6"
+  },
+  "temporary_lab_cleanup": {
+    "code": "operator_recovery_lab_removed",
+    "container": "ed5ea9a2f702cb9e8bb92358b653d6ddb0fccc7a75230b0be3199ffb77957ee6",
+    "label_run": "93677aa61e4c47e79320ad22c3fc39b6",
+    "anonymous_volumes_removed": [
+      "3ed4ed2c7cd0822bfe0bebe8e645f90e777f9fb6d9e8bacce84989ca8c42e443"
+    ],
+    "other_containers_preserved": {
+      "ba597577434056dde5864737159a453b796df3e1d8734856d9aba968653d75c8": true,
+      "3b43c7c109004e8bdec81315fc70a86fe25867f246889689a638e6a859a58f2c": true,
+      "c4cef6198258f8995a4b7610754e5d5434ecd0f177741d09e6c51404564b4b86": true,
+      "617b897c028052c253e2763f640aac00795b2b16ffad3e5a6659d64ce495387b": false
+    },
+    "image_retained": true,
+    "current_node_or_proxy_stopped": false
+  },
+  "trust_and_limits": [
+    "server_profile_and_SQL_write_identity_are_operator_authority",
+    "web_roles_do_not_restrict_people_who_control_the_backend_or_SQL_credentials",
+    "operator_event_does_not_certify_personal_OS_identity",
+    "missing_or_demoted_administrators_are_not_promoted",
+    "SQL_IAM_config_schema_or_storage_loss_requires_separate_recovery",
+    "quotas_continue_to_apply",
+    "remote_instance_identity_not_certified_by_database_name_alone",
+    "interrupted_apply_requires_outcome_verification"
+  ],
+  "not_performed": [
+    "real_account_password_or_role_change",
+    "real_session_or_recovery_revocation",
+    "GCS_access_or_writes",
+    "schema_migration",
+    "application_restart",
+    "official_bucket_switch",
+    "new_operator_secret_or_master_password",
+    "production_deployment"
+  ],
+  "next": {
+    "block": "official_environment_and_catalogue_preparation_then_cutover_and_bounded_verification",
+    "final_host_and_access_preference_requested": true,
+    "answer_recorded_in_this_receipt": false,
+    "HTTPS_network_and_backup_policy_to_be_defined_for_final_target": true
+  },
+  "artifacts": [
+    {
+      "path": "backend/app/operator_recovery.py",
+      "sha256": "f78d4055f5d156d3c80ffbb52c51e497ab9c157805de660b606b309d196b65c0"
+    },
+    {
+      "path": "backend/app/node.py",
+      "sha256": "1b7174177500f72e187528c0f3e09075e659934ad367559b74eb04ee7e1d72f1"
+    },
+    {
+      "path": "backend/app/services/security_audit.py",
+      "sha256": "50b8c7807f8d0fc22f6257bed83902b62b844aeac5582f1e03c15d99003de0cb"
+    },
+    {
+      "path": "backend/tests/test_operator_recovery.py",
+      "sha256": "7622c03513b98aeb8892a63f74e79a48a129437a5ae0243b4673fc9093cf159f"
+    },
+    {
+      "path": "backend/tests/test_account_management.py",
+      "sha256": "9357cd843d78f02c828a1dc834ed2221f047d9ce93ee5b035e9c0c7f4c0f5413"
+    },
+    {
+      "path": "backend/tests/test_security_audit.py",
+      "sha256": "f54776fd5424e8ab91967be083f86a7993bbd1252fc76195fd88712826ccb6f3"
+    },
+    {
+      "path": "backend/tests/test_cloud_node.py",
+      "sha256": "11d474d82a9246344e0fd4bb21742aa9e6f630871934078637a5a9bbf15df2a9"
+    },
+    {
+      "path": "frontend/components/account/SecurityPanel.tsx",
+      "sha256": "828e933b8d26cb47ab414ee3025c948117a12525896c5db7593203ae5701d5e5"
+    },
+    {
+      "path": "frontend/app/__tests__/account-administration.test.tsx",
+      "sha256": "dc66c89c7c78c71b8633c7868fef2203bd24190658827d92677d338a0202a3f1"
+    },
+    {
+      "path": "docs/adr/0048-recuperacion-local-de-administradores-existentes.md",
+      "sha256": "2a84b3e5cc82513d24bea884a20b80e462068e63a8f3aaf48a2cca1720006221"
+    },
+    {
+      "path": "docs/arquitectura/CONTEXT.md",
+      "sha256": "aa56fcdece0cba06de52be77d7ba7b6a158c6b231f103e00efb0fc954eabe04a"
+    },
+    {
+      "path": "docs/manuales/recuperacion_emergencia_administrador.md",
+      "sha256": "78ff3092333c7c476b81216a3ced4cfc383e5b012977cbdcb365116c4a9d1713"
+    },
+    {
+      "path": "docs/manuales/auditoria_y_limpieza_seguridad.md",
+      "sha256": "0f9794628d0c9eeadb4292058e67dec92efbeb41266a408faa8c808caf28e1a3"
+    },
+    {
+      "path": "docs/manuales/gestion_cuentas_y_recuperacion.md",
+      "sha256": "758f35fa768049faa06a1d5f643670c0c1d2ca60ba9877d9b8ebc039616b6fbf"
+    },
+    {
+      "path": "docs/manuales/directorios_persistentes_por_entorno.md",
+      "sha256": "48eb24e7af562eda819aafa2190877b080651612a1c363fd9521ee4ab8f11d32"
+    },
+    {
+      "path": "docs/manuales/bitacora_acceso_e_instalacion.md",
+      "sha256": "117d5d5d79a7dc05330a984e489c3da57b055164911d79a733294042ff232618"
+    },
+    {
+      "path": "docs/manuales/estado_actual_y_pendientes.md",
+      "sha256": "1e3a95596229eaf417971677d81612698d09d132c759b6f6a893fd7f29949ffe"
+    },
+    {
+      "path": "docs/manuales/plan_instalacion_gcp_y_asistente.md",
+      "sha256": "bf4257dca82d393ac4bea083b1badf1b62e0019728ac25f09b4ed571e7fb898e"
+    },
+    {
+      "path": "docs/manuales/plan_autonomia_investigador_y_catalogo.md",
+      "sha256": "bf83fa1839666cd86e8a94d511792bebb0ed7e4f35a7efad540db0cb4e988a52"
+    },
+    {
+      "path": "docs/manuales/guia_despliegue_operativo_docker.md",
+      "sha256": "18b8c981e40355ac2e4033cac88248983acbc6e4aed73912b061ea1e21de3099"
+    },
+    {
+      "path": "docs/README.md",
+      "sha256": "8fa363d549b1707f47ae5e7fb3a5438dfbf3b1a9f98222878d965f7a61fade0a"
+    },
+    {
+      "path": "docs/KANBAN.md",
+      "sha256": "559b027ec0f9fb2d468de7ec54385883bcdf45c2bfc803cacf6078f198170d73"
+    }
+  ]
+}

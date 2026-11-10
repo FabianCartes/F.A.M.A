@@ -1,0 +1,339 @@
+{
+  "version": 1,
+  "date": "2026-10-23",
+  "timezone": "America/Santiago",
+  "checked_at": "2026-10-24T01:26:28.348513+00:00",
+  "branch": "fix/afinamiento-integral",
+  "status": "logical_SQL_backup_and_separate_local_restore_verified",
+  "authorization": "operator_requested_to_continue_ordered_preparation_for_official_operation",
+  "target": {
+    "source_connection": "proyectotesis-fama:us-central1:fama-postgres-pruebas",
+    "source_database": "fama_pruebas",
+    "source_user": "fama_app",
+    "source_bucket": "fama-pruebas",
+    "restore_scope": "disposable_local_PostgreSQL_16_not_Cloud_SQL_managed_restore"
+  },
+  "implementation": {
+    "public_CLI": [
+      "app.node --config-dir PROFILE backup --directory ABSOLUTE_NEW_DIRECTORY --pg-bin PG_BIN",
+      "app.node --config-dir PROFILE restore --backup DIRECTORY --target-url-file PRIVATE_FILE --pg-bin PG_BIN"
+    ],
+    "archive_format": "PostgreSQL_custom",
+    "shared_exported_read_only_snapshot": true,
+    "migration_advisory_lock_respected": true,
+    "sequence_changes_prevent_backup_confirmation": true,
+    "same_major_tools_source_and_restore_server_required": true,
+    "restore_requires_empty_database_with_distinct_literal_name": true,
+    "system_databases_rejected": true,
+    "clean_or_create_flags_used": false,
+    "restore_load_single_transaction": true,
+    "restore_owner_and_ACL_not_adopted": true,
+    "verification": [
+      "archive_SHA256_and_size",
+      "all_application_table_row_counts_and_hashes",
+      "all_sequence_states",
+      "schema_structure_and_revision"
+    ],
+    "post_load_verification_failure_keeps_separate_target_for_diagnosis": true,
+    "backup_access": "private_directory_current_OS_user_and_SYSTEM_on_Windows",
+    "password_on_process_command_line": false,
+    "password_temp_removed_on_normal_and_exception_exit": true,
+    "dump_files_excluded_from_Git_and_backend_image": true
+  },
+  "TDD": {
+    "public_seam": "operator_CLI_with_real_disposable_PostgreSQL_and_files",
+    "functional_RED_observed": [
+      "CLI_backup_absent",
+      "schema_only_or_function_only_destination_accepted",
+      "invalid_URL_did_not_return_JSON",
+      "migration_lock_not_respected",
+      "system_database_not_rejected_before_connection",
+      "ambiguous_database_name_not_rejected_before_connection"
+    ],
+    "initial_harness_errors_not_functional_RED": [
+      "CREATE_DATABASE_inside_transaction",
+      "wrong_working_directory_without_app_import"
+    ],
+    "internal_collaborator_mocks_used": false
+  },
+  "tests": {
+    "passed": 27,
+    "failed": 0,
+    "skipped": 0,
+    "files": 3,
+    "elapsed_cli_seconds": 129.21,
+    "database_backup_cases": 14,
+    "existing_profile_and_directory_ACL_regression_cases": 13,
+    "command": "python -m pytest --noconftest tests/test_database_backup.py tests/test_cloud_node.py tests/test_installation_configuration.py -q --tb=short -ra",
+    "working_directory": "backend",
+    "environment": [
+      "FAMA_TEST_BACKUP_ADMIN_URL_FILE points to private local disposable server URL",
+      "FAMA_TEST_BACKUP_PG_BIN points to official PostgreSQL 16.15 tools",
+      "PYTHON_DOTENV_DISABLED=1"
+    ],
+    "junit_sha256": "a18c6b3c43e70cddf52c5c0fa34ee63654235db3e7a0811ed44f35c27bbb4493",
+    "covered_behaviors": [
+      "exact_restore_and_next_ID",
+      "source_and_existing_destination_preserved",
+      "same_size_archive_corruption",
+      "saved_snapshot_after_source_changes",
+      "restore_error_rolls_back",
+      "temporary_password_cleanup",
+      "schema_function_table_destinations_rejected",
+      "migration_exclusion",
+      "system_databases_and_connection_string_names_rejected",
+      "sanitized_invalid_configuration"
+    ],
+    "global_suite_claimed": false,
+    "frontend_changed": false,
+    "real_ML_training_run": false
+  },
+  "real_rehearsal": {
+    "checked_at": "2026-10-24T01:18:13.512949+00:00",
+    "backup": {
+      "code": "database_backup_created",
+      "directory": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\backend\\installation\\cloud-pruebas\\backups\\20261024T011708Z",
+      "sha256": "de0cc3fdca7d474142e98d583ffdfafc40da4c83c0ff79ca1d26aa90b854dd52",
+      "tables": 17,
+      "revision": "0003_autonomy"
+    },
+    "restore": {
+      "code": "database_restore_verified",
+      "database": "fama_restore_20261023_87272708",
+      "tables": 17,
+      "revision": "0003_autonomy",
+      "archive_sha256": "de0cc3fdca7d474142e98d583ffdfafc40da4c83c0ff79ca1d26aa90b854dd52"
+    },
+    "source_counts_before": {
+      "usuario": 2,
+      "conjunto_datos": 1,
+      "audio": 12,
+      "modelo": 1,
+      "asignacion_dataset": 1,
+      "solicitud_dataset": 1,
+      "retroalimentacion": 1,
+      "revision": "0003_autonomy",
+      "model_activation": [
+        false
+      ]
+    },
+    "source_counts_after": {
+      "usuario": 2,
+      "conjunto_datos": 1,
+      "audio": 12,
+      "modelo": 1,
+      "asignacion_dataset": 1,
+      "solicitud_dataset": 1,
+      "retroalimentacion": 1,
+      "revision": "0003_autonomy",
+      "model_activation": [
+        false
+      ]
+    },
+    "restored_counts": {
+      "usuario": 2,
+      "conjunto_datos": 1,
+      "audio": 12,
+      "modelo": 1,
+      "asignacion_dataset": 1,
+      "solicitud_dataset": 1,
+      "retroalimentacion": 1,
+      "revision": "0003_autonomy",
+      "model_activation": [
+        false
+      ]
+    },
+    "all_manifest_table_hashes_and_sequences_verified_by_CLI": true,
+    "tables": 17,
+    "sequences": 9,
+    "dump_bytes": 57187,
+    "dump_sha256": "de0cc3fdca7d474142e98d583ffdfafc40da4c83c0ff79ca1d26aa90b854dd52",
+    "manifest_sha256": "fb0b8cc0d22a7c6bcf6f3e78c1ffae4fd1b8b0fae9aa312acdbb74f332e2cf59",
+    "configuration_sha256_unchanged": "2e2891275dbab733499b35132ee272d34740ca4fc539eb5e7069b77b1d5a623e",
+    "runtime_files_preserved": 29,
+    "runtime_file_hashes": {
+      "data/raw/.feedback_1.json": "962e35f4e82109d8dc621ec17e48ad298ea22d744292089e2328c56799ee009d",
+      "data/raw/.feedback_1.json.lock": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "data/processed/FAMA_Prueba_Aves/Canastero/225288.npy": "a3149caed7e81807510a58bb696a83fdae1c1f8ebbd4d42c6d6d3509ef923ec9",
+      "data/processed/FAMA_Prueba_Aves/Canastero/225290.npy": "0f7509def2ea5bd40b05b52f5498f5b5ffa1ec4398ed91545469aca7fc9e3abb",
+      "data/processed/FAMA_Prueba_Aves/Canastero/381517.npy": "bd80cc1fdf239d0bc93b63c375f36691acf85e31ee5f799cfe711ac2dbb81262",
+      "data/processed/FAMA_Prueba_Aves/Canastero/381518.npy": "c6434ce0ad1d18a0e12bef03a299d140f9dd3a6fa3569d0d3194f99087bb4bf5",
+      "data/processed/FAMA_Prueba_Aves/Canastero/502838.npy": "698a09899f84f22ae7ff4d6c825db5a0a10aee0fcad77d3891de5ec283bf831d",
+      "data/processed/FAMA_Prueba_Aves/Chucao/1036796.npy": "66805bb3b7b4537fbd070b1940bdd47d4dd4fcf768987d90c942418c0551fe33",
+      "data/processed/FAMA_Prueba_Aves/Chucao/1075457.npy": "70ca780d5795fff25d83bb0a9365ba06a64043d178007722eb325bd38ceb8105",
+      "data/processed/FAMA_Prueba_Aves/Chucao/218159.npy": "064ddb30585d2343692b9568e3d13fbf9b8b1fbf0071f5f3c307eca25ea4b6ca",
+      "data/processed/FAMA_Prueba_Aves/Chucao/296132.npy": "bde06d205176b5e2202d42413182ff1fb8622bc744afbf0ffa70dab1bce6918b",
+      "data/processed/FAMA_Prueba_Aves/Chucao/508289.npy": "1d3d4f5abfe0672b7bb8b009bec1e596695fb95e8fae6a3901003f989414ce11",
+      "data/raw/FAMA_Prueba_Aves/.metadata.lock": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "data/raw/FAMA_Prueba_Aves/metadata.csv": "cab6d3f03b149642eaa78dd9fb5ebc6624e4f574e163ceff4c77888011f107c3",
+      "data/raw/FAMA_Prueba_Aves/train.csv": "5bdaecdd9aed65daff101765ec787fd2a4c255f301f6783f3deaedbfbd0ac101",
+      "data/raw/FAMA_Prueba_Aves/val.csv": "2283891f94dc9c53bcfccbfc245b725a44c27349bf825619dd2aac4e9309906c",
+      "data/raw/FAMA_Prueba_Aves/.partitions/2262aaf0364a39b09d0f717573359a366946cbf7a95cdffef2519ebabbf0f33f.json": "465a3f9b0fbdf2a6c1ccd3943286655c50f4ff36932f4b93dfcff66121c930e1",
+      "data/raw/FAMA_Prueba_Aves/Canastero/225288.mp3": "f52f6cc84bc113dae8b00a2d2aa1173570149a6a46691a4265bb727331f1fc63",
+      "data/raw/FAMA_Prueba_Aves/Canastero/225290.mp3": "05ee7231d46c9239f2eca1625d240ab6c30dc016f09d07f2fba1493ed36a9bd1",
+      "data/raw/FAMA_Prueba_Aves/Canastero/381517.mp3": "87d4cee1449470e6f975e1ea19da0d8858b3754ff6c16679d9993bed81e4574f",
+      "data/raw/FAMA_Prueba_Aves/Canastero/381518.mp3": "dfbfffb0a843b5d6c645cde78cdd8297d092e0a89f8028e8ec11e32d3f90aeb9",
+      "data/raw/FAMA_Prueba_Aves/Canastero/502838.mp3": "eafc54719aae0c93a86093b986d613d252b932f43a7874138fa2c9d9cd3279d4",
+      "data/raw/FAMA_Prueba_Aves/Chucao/1036796.mp3": "844a7fb10f8c89a564d2aae48de4dbb0b5de0c70d87b1660cbd71c970eab9945",
+      "data/raw/FAMA_Prueba_Aves/Chucao/1075457.mp3": "55d352db226b74088013e799641794972ee2959b1df69a1ada1c568e4439d8cb",
+      "data/raw/FAMA_Prueba_Aves/Chucao/218159.mp3": "cd4bb13d1cb0eab0b033078188d75d8d74285b2dedc25cd31916cd633f4d4d11",
+      "data/raw/FAMA_Prueba_Aves/Chucao/296132.mp3": "120065c55027db4519cc3ba69c0a0ddab5f985e3d603c456f1e565c0883f53fa",
+      "data/raw/FAMA_Prueba_Aves/Chucao/508289.mp3": "07cd7f0269812574e0d4d7cfee3e557e3df03256d2e444a634739900bf0cdd15",
+      "data/raw/FAMA_Prueba_Aves/Chucao/feedback_1.wav": "11f1970044054337ef76d1e19fdabf6dbe08beb25b0cc7988ad555de10a2ea1a",
+      "checkpoints/fama_5af201b348e8459a9c7e5a094f77a115_best.pt": "a905275bdbc974643608580e6d29d5905ced30a8ce53b372fb88280c446f035d"
+    },
+    "daily_SQL_permissions_checked": true,
+    "restored_app_identity_is_new_local_role_not_source_role": true,
+    "local_lab": {
+      "container": "e8d9314b31fb1e8d22ac00afc3ba6c1946490226eea23b5496d0b5e4096afa70",
+      "name": "fama-backup-lab-978bb8fabe",
+      "run": "978bb8fabe2d41b1bfad05173a7a1ae1",
+      "port": 65417,
+      "image": "sha256:9e2cf6287f25c3151f4c9421ccce2b17f3e60061c111a29165e0d2cdd9ff0a97"
+    },
+    "SQL_source_writes": false,
+    "GCS_writes": false,
+    "web_service_started_on_clone": false,
+    "new_GCP_instance_created": false,
+    "tools": {
+      "version": "16.15",
+      "source": "https://www.enterprisedb.com/download-postgresql-binaries",
+      "download": "https://get.enterprisedb.com/postgresql/postgresql-16.15-5-windows-x64-binaries.zip",
+      "archive_observed_sha256": "43bb45f173a6f08cf1d29a97a6d8deb119e8e8093a24c00d2d1001a0ccaa8281",
+      "vendor_checksum_comparison_performed": false
+    }
+  },
+  "private_backup_acl": {
+    "unexpected_allow_rules": 0,
+    "protected": true,
+    "code": "backup_private_acl_verified"
+  },
+  "temporary_lab_cleanup": {
+    "code": "exclusive_backup_lab_removed",
+    "container": "e8d9314b31fb1e8d22ac00afc3ba6c1946490226eea23b5496d0b5e4096afa70",
+    "anonymous_volumes_removed": [
+      "9fcc346a56ee16bbf2c87e25b28041d5d22606f9b5a44184b7e9e7f1c2485060"
+    ],
+    "other_running_containers_preserved": [
+      "ba5975774340",
+      "3b43c7c10900",
+      "c4cef6198258"
+    ],
+    "private_backup_retained": true,
+    "postgres_image_retained": true
+  },
+  "not_performed": [
+    "SQL_source_data_or_schema_writes",
+    "new_GCS_object_writes",
+    "official_bucket_switch",
+    "new_GCP_instance",
+    "SQL_role_or_password_change_in_Cloud_SQL",
+    "web_service_on_restored_accounts",
+    "managed_Cloud_SQL_PITR_restore",
+    "scheduled_backup_or_retention_configuration",
+    "offsite_copy",
+    "full_node_disaster_recovery"
+  ],
+  "limitations": [
+    "private_dump_and_manifest_must_be_kept_together",
+    "hash_is_not_authenticity_against_replacement_of_both_files",
+    "only_trusted_own_SQL_archives",
+    "SQL_roles_IAM_credentials_and_files_require_separate_recovery",
+    "schema_lock_only_coordinates_project_migrator_not_external_DDL",
+    "sequence_state_is_not_MVCC",
+    "force_kill_can_leave_protected_password_temporary",
+    "recovered_sessions_need_institutional_recovery_policy",
+    "same_disk_backup_not_independent_disaster_protection"
+  ],
+  "next": [
+    "operator_emergency_recovery",
+    "final_host_access_and_backup_policy",
+    "official_database_profile_and_catalogue_preparation",
+    "official_cutover_and_bounded_verification"
+  ],
+  "primary_references": [
+    "https://www.postgresql.org/docs/16/app-pgdump.html",
+    "https://www.postgresql.org/docs/16/app-pgrestore.html",
+    "https://www.postgresql.org/docs/16/functions-admin.html#FUNCTIONS-SNAPSHOT-SYNCHRONIZATION",
+    "https://www.postgresql.org/docs/16/libpq-pgpass.html",
+    "https://www.enterprisedb.com/download-postgresql-binaries"
+  ],
+  "artifacts": [
+    {
+      "path": ".gitignore",
+      "sha256": "b5b509e3d78f051df6dde10fd56f4896610f1a47c049c94cb9a4795ddf1f8994"
+    },
+    {
+      "path": "backend/.dockerignore",
+      "sha256": "f86fe281fadc4b50869f598792e10be76825007eae12ef7746343d692b4416d1"
+    },
+    {
+      "path": "backend/app/database_backup.py",
+      "sha256": "f6bd8a9ab88da01d14ca4f9dff6066b254343e54437b4929d33c65ce47b619c3"
+    },
+    {
+      "path": "backend/app/node.py",
+      "sha256": "8da3f45e8921ee6e4dcb8ba7dcc164307eeb199f6ff4d5ed13dbca5d308d332b"
+    },
+    {
+      "path": "backend/app/configuration.py",
+      "sha256": "9456910a3241a3fbf3460504a7f8e38ac0ba30dd1daed0802740208665ce5174"
+    },
+    {
+      "path": "backend/tests/test_database_backup.py",
+      "sha256": "b3f8e633a794e87b62f1314d4eefe2354d6ca8a563acfa6f5211448554fb9cdd"
+    },
+    {
+      "path": "backend/tests/test_cloud_node.py",
+      "sha256": "11d474d82a9246344e0fd4bb21742aa9e6f630871934078637a5a9bbf15df2a9"
+    },
+    {
+      "path": "backend/tests/test_installation_configuration.py",
+      "sha256": "3e2ce8a0e588117f17177f7067322cb8455f157ce1de5552b84230d361086712"
+    },
+    {
+      "path": "docs/adr/0047-respaldo-logico-y-restauracion-sql-separada.md",
+      "sha256": "8c1cfd08056593279d346eb61eb40ab57ad3656f1bc8ba024101f7cea9ef7c4b"
+    },
+    {
+      "path": "docs/arquitectura/CONTEXT.md",
+      "sha256": "90acfbadce6a871ce09aeed92d2a5cebaddc0460615dd9891bb5695d68ec607b"
+    },
+    {
+      "path": "docs/manuales/respaldo_y_restauracion_postgresql.md",
+      "sha256": "3b066bc80e2b03f0076c74c59f60e1a3649415c0be20dba77df3a4e44d3d13b7"
+    },
+    {
+      "path": "docs/manuales/directorios_persistentes_por_entorno.md",
+      "sha256": "3b8f2a82b9034bf6b372f88ed4eb225a896fb76594fe03720c99337f94f5ba54"
+    },
+    {
+      "path": "docs/manuales/bitacora_acceso_e_instalacion.md",
+      "sha256": "895e4d5d8cd05f6c5fe3e1c52e9b4ff748bd0879153f05b6e75327379d39634a"
+    },
+    {
+      "path": "docs/manuales/estado_actual_y_pendientes.md",
+      "sha256": "5b90b16486caecddd4ef745fcf06b79dd59da0bf338b0798cdefda97baeeaca4"
+    },
+    {
+      "path": "docs/manuales/guia_despliegue_operativo_docker.md",
+      "sha256": "6f16cf5c06dbf2fce498c7081419620a7760393607d3e92e34312993e39c25c2"
+    },
+    {
+      "path": "docs/manuales/plan_instalacion_gcp_y_asistente.md",
+      "sha256": "ff0deabe322bda50ef27e1417b20d559c2239f15045dedbbf3646d5a2dad53d2"
+    },
+    {
+      "path": "docs/manuales/plan_autonomia_investigador_y_catalogo.md",
+      "sha256": "7cf1fd9557840692922403293a73ef91147188f793c5ad51cad44002f88cd626"
+    },
+    {
+      "path": "docs/README.md",
+      "sha256": "0d5980fcf9b8146239a65f4beacc62e398f1319f8aef456e2c7208ed65578566"
+    },
+    {
+      "path": "docs/KANBAN.md",
+      "sha256": "d1663cc7097e9bef8d84974e83947d2dd85d87b12033ee90210ef20886c2b7b0"
+    }
+  ]
+}

@@ -108,10 +108,12 @@ class StartTrainingRequest(BaseModel):
         description="Ready immutable local snapshot belonging to the authenticated imported-dataset owner.")
     imported_prepared_version: Optional[str] = Field(default=None, strict=True, pattern=r"^[0-9a-f]{64}$",
         description="Exact T2 preparation version; pins classes and explicit audio/architecture profile. No implicit latest or legacy re-preparation.")
+    partition_version: Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     prepared_version: Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{64}$",
                                           description="Pin an immutable prepared dataset identity")
     allow_historical_preparation: bool = Field(default=False, strict=True,
                                                description="Use a pinned historical preparation despite source-index changes")
+
     architecture: Optional[str] = "EfficientNet-B0"
     epochs: int = Field(default=10, ge=1, le=1000, description="Épocas de entrenamiento")
     learning_rate: float = 0.001

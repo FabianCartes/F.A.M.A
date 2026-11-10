@@ -1,0 +1,9 @@
+# Configuración persistente y migraciones explícitas antes del arranque funcional
+
+La primera instalación debe arrancar sin PostgreSQL ni pesos, mientras que una instalación terminada debe seguir identificándose como tal durante una caída de servicios. Se adopta una entrada ASGI ligera que lee configuración del servidor y comprueba el esquema antes de importar el backend funcional. El estado persistente contiene valores públicos y referencias a archivos de secretos; las credenciales se suministran por entorno o archivos protegidos por el operador. La interfaz web de instalación se implementará en la etapa 7.
+
+Las tablas se administran mediante revisiones Alembic ejecutadas expresamente por el operador. Se separan una revisión de negocio y otra de acceso para probar actualizaciones con datos. No se ejecuta DDL ni alta de administrador al importar/iniciar la aplicación. Una base no vacía sin revisión conocida se rechaza: su adopción y la migración de datos existentes requieren una operación posterior controlada. Esto evita que `create_all` o un `stamp` automático oculten diferencias históricas.
+
+La aplicación diaria usa permisos DML; el operador de migraciones usa una identidad con DDL. La comprobación de disponibilidad tiene conexión y sentencias acotadas y devuelve códigos sanitizados. El registro de instalación terminada no depende de esa comprobación y nunca se reinicia por un error de conexión.
+
+Se validan las interfaces públicas de configuración/estado persistente, HTTP de arranque y CLI de migraciones, según la etapa 1 del [plan acordado](../manuales/plan_instalacion_gcp_y_asistente.md). Las pruebas usan archivos temporales y PostgreSQL aislado, sin servicios GCP ni datos actuales. Las revisiones conservan su propia definición de tablas; no importan la metadata mutable del ORM para crear el esquema.

@@ -4,7 +4,7 @@ from sqlalchemy.orm import relationship
 from app.database import Base
 
 
-from scripts.migrate_model_evaluations import evaluation_table
+from app.evaluation_table import evaluation_table
 
 
 class ModelEvaluation(Base):

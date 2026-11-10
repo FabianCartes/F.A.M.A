@@ -1,0 +1,33 @@
+{
+  "code": "official_native_restart_verified",
+  "verified_at_utc": "2026-10-24T18:42:59.326620+00:00",
+  "source_commit": "aa53e09a9b935f752b01fe464cbc1a5bd10556c0",
+  "source_branch": "codex/official-runtime-20261024",
+  "url": "http://localhost:3010/",
+  "profile": "backend/installation/cloud-oficial/native",
+  "schema": "0003_autonomy",
+  "schema_migrated": false,
+  "database": "fama_oficial",
+  "bucket": "fama-audio-records-2026",
+  "observed_checks": [
+    {
+      "path": "http://localhost:3010/login",
+      "http_status": 200,
+      "seconds": 2.44
+    },
+    {
+      "path": "http://127.0.0.1:8010/health",
+      "http_status": 200,
+      "code": "ok"
+    },
+    {
+      "path": "http://127.0.0.1:8010/ready",
+      "http_status": 200,
+      "code": "schema_current",
+      "seconds": 18.27
+    }
+  ],
+  "frontend_cold_compilation": "La carga inicial de / tardó 66 segundos; /login respondió en 50 ms según el registro posterior.",
+  "credentials_changed": false,
+  "official_schema_upgrade": "0004_integration permanece pendiente"
+}

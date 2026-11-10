@@ -1,0 +1,282 @@
+{
+  "version": 1,
+  "date": "2026-10-24",
+  "timezone": "America/Santiago",
+  "checked_at": "2026-10-24T05:37:23.289874+00:00",
+  "branch": "fix/afinamiento-integral",
+  "status": "history_transfer_adoption_and_official_schema_command_implemented_and_rehearsed_remote_application_pending",
+  "authorization": "user_requested_continue_remaining_official_transition_work_previously_agreed_CLI_SQL_files_external_GCS_seams",
+  "implementation": {
+    "transfer_interface": "python -m app.history_transfer --source-url-file <private-file> --target-url-file <private-file> plan|apply",
+    "source_snapshot_read_only": true,
+    "source_dotenv_not_loaded": true,
+    "CLI_inherited_libpq_settings_cleared": true,
+    "target_current_empty_schema_required": true,
+    "source_plan_digest_required_to_apply": true,
+    "rows_and_sequence_restarts_atomic": true,
+    "nonempty_target_not_merged_or_overwritten": true,
+    "existing_password_hash_and_known_IDs_relations_preserved": true,
+    "unknown_authorship_NULL_and_access_tables_empty": true,
+    "pending_historical_synchronizations_block_transfer": true,
+    "only_known_legacy_feedback_CASCADE_variant_accepted_target_RESTRICT_retained": true,
+    "source_revision_stamping_or_direct_PG18_dump_restore_to_PG16": false,
+    "adoption_interface": "python -m app.history_adoption --config-dir <profile> --user-id <existing-id> [--apply --confirm-database <name>]",
+    "adoption_requires_existing_active_administrator_runtime_services_schema_and_daily_permissions": true,
+    "adoption_private_intent_account_profile_binding_and_reserved_single_audit_event": true,
+    "adoption_resumes_after_SQL_commit_local_publication_failure_without_duplicate_event": true,
+    "audit_action": "account.operator_adopted",
+    "official_schema_command": "python -m scripts.preparar_esquema_oficial --config-dir <official-native-profile> --apply",
+    "official_schema_command_hidden_local_migrator_password_not_saved": true
+  },
+  "TDD_red_observations": [
+    "missing_transfer_module",
+    "pending_feedback_was_accepted",
+    "no_active_administrator_was_accepted",
+    "inconsistent_sequence_was_accepted",
+    "unknown_procedural_objects_were_accepted",
+    "actual_legacy_CASCADE_variant_rejected_before_specific_support",
+    "missing_adoption_module",
+    "post_commit_local_publication_failure_not_resumable",
+    "missing_official_schema_preparation_module"
+  ],
+  "backend_test_cuts": [
+    {
+      "xml": ".pytest_cache/history_and_schema_regression.xml",
+      "tests": 27,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "files": 2,
+      "seconds": 98.5
+    },
+    {
+      "xml": ".pytest_cache/history_adoption_regression.xml",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "files": 1,
+      "seconds": 55.9
+    },
+    {
+      "xml": ".pytest_cache/official_schema_preparation_regression.xml",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "files": 1,
+      "seconds": 35.27
+    },
+    {
+      "xml": ".pytest_cache/history_access_regression.xml",
+      "tests": 46,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "files": 3,
+      "seconds": 83.19
+    }
+  ],
+  "backend_disjoint_passed_total": 92,
+  "backend_files_total": 7,
+  "frontend": {
+    "account_administration_tests_passed": 20,
+    "files": 1,
+    "duration_seconds": 17.26,
+    "typescript_noEmit_exit": 0,
+    "SecurityPanel_ESLint_exit": 0,
+    "browser_or_server_restart_this_unit": false
+  },
+  "quality": {
+    "edited_code_trailing_whitespace_check": "passed",
+    "global_git_diff_check": "preexisting_trailing_spaces_in_backend_dataset_references_py_untouched_in_this_unit"
+  },
+  "real_backup_rehearsal": {
+    "source": "own_local_PostgreSQL_18_2_restoration_of_verified_18_0_historical_backup",
+    "source_dump_sha256": "78855829efeee7bc16a8e893168f9a0d8649e3907c415f4a1b0929f1f2105a6b",
+    "target": "exclusive_local_PostgreSQL_16_current_schema",
+    "plan": {
+      "code": "history_transfer_ready",
+      "source_database": "legacy_restore",
+      "target_database": "history_rehearsal_b1e919c4d66d",
+      "digest": "922c811f8d90b01f58212613b2ebd913e43ea28555304af366c7e8b97a0afa64",
+      "rows": {
+        "usuario": 1,
+        "conjunto_datos": 1,
+        "audio": 1,
+        "modelo": 5,
+        "prediccion": 31,
+        "retroalimentacion": 1,
+        "feedback_sync": 1,
+        "metrica_entrenamiento": 0
+      },
+      "warnings": {
+        "models_without_dataset": 5,
+        "active_models": 5,
+        "historical_feedback_cascade_replaced_by_restrict": true
+      },
+      "new_permissions_or_authorship_created": false
+    },
+    "transfer": {
+      "code": "history_transferred",
+      "source_database": "legacy_restore",
+      "target_database": "history_rehearsal_b1e919c4d66d",
+      "digest": "922c811f8d90b01f58212613b2ebd913e43ea28555304af366c7e8b97a0afa64",
+      "rows": {
+        "usuario": 1,
+        "conjunto_datos": 1,
+        "audio": 1,
+        "modelo": 5,
+        "prediccion": 31,
+        "retroalimentacion": 1,
+        "feedback_sync": 1,
+        "metrica_entrenamiento": 0
+      },
+      "warnings": {
+        "models_without_dataset": 5,
+        "active_models": 5,
+        "historical_feedback_cascade_replaced_by_restrict": true
+      },
+      "new_permissions_or_authorship_created": false
+    },
+    "adoption": {
+      "plan": {
+        "code": "history_adoption_ready",
+        "database": "history_rehearsal_b1e919c4d66d",
+        "administrator_id": 1,
+        "account_created_or_password_changed": false,
+        "restart_required": false
+      },
+      "adoption": {
+        "code": "history_adopted",
+        "database": "history_rehearsal_b1e919c4d66d",
+        "administrator_id": 1,
+        "account_created_or_password_changed": false,
+        "restart_required": true
+      },
+      "original_account_rows_and_hash_unchanged": true,
+      "new_dataset_assignments": false,
+      "one_adoption_audit_event": true,
+      "real_GCS_read_during_diagnostics": true,
+      "actual_Cloud_SQL_or_original_database_writes": false
+    },
+    "models_loaded_or_audio_transferred": false
+  },
+  "cleanup": {
+    "owned_laboratories_removed": 2,
+    "tmpfs_only": true,
+    "other_containers_preserved": true,
+    "other_containers_count": 4
+  },
+  "actual_environments_final_read": {
+    "checked_at": "2026-10-24T05:34:47.596908+00:00",
+    "official_profile_completed": false,
+    "official_public_tables": 0,
+    "original_public_tables": 8,
+    "original_models": 5,
+    "original_predictions": 31,
+    "original_active_administrators": 1,
+    "original_administrator_hash_format_supported": true
+  },
+  "not_performed": [
+    "actual_Cloud_SQL_schema_migration_or_history_transfer",
+    "actual_profile_adoption_or_activation",
+    "original_database_or_GCS_data_writes",
+    "application_stop_restart_or_model_load",
+    "official_audio_catalogue_reconciliation",
+    "final_quiesced_backup_or_cutover",
+    "offsite_backup_setup"
+  ],
+  "next_operator_action": {
+    "command": "python -m scripts.preparar_esquema_oficial --config-dir C:\\Users\\fabia\\Desktop\\F.A.M.A\\backend\\installation\\cloud-oficial\\native --apply",
+    "secret_entry": "local_hidden_prompt_for_fama_oficial_migrador_only",
+    "expected_code": "official_schema_prepared",
+    "schema_only_no_history_transfer_or_profile_activation": true
+  },
+  "artifacts": [
+    {
+      "path": "backend/app/history_transfer.py",
+      "sha256": "1c20ef17ef157e1cefbc659858b13d456a184a84e3499190d7d775e06899e946"
+    },
+    {
+      "path": "backend/app/history_adoption.py",
+      "sha256": "78891e70697c71797273084b38991839947056b70205d335e58b2ae801811c69"
+    },
+    {
+      "path": "backend/app/schema.py",
+      "sha256": "eefd68fb323ad5c106bd27d2b617354442a939c44b050e0c0f50a305fd121e9d"
+    },
+    {
+      "path": "backend/app/services/security_audit.py",
+      "sha256": "b9f17a90ec512afd3083d7c5b15ff00f48de559ad817ece3e115e519f89bbaa4"
+    },
+    {
+      "path": "backend/scripts/preparar_esquema_oficial.py",
+      "sha256": "16ea8a4e1482dd3985659012ce0382b00095735a50db9788e623b86ee82ebab1"
+    },
+    {
+      "path": "backend/scripts/permisos_tablas_oficial.sql",
+      "sha256": "4692dbf4af0493899f3c09f970fc165a16e30e98a7cdba40237e4c15301c73fa"
+    },
+    {
+      "path": "backend/tests/test_history_transfer.py",
+      "sha256": "0bacc0412f67127a91257fc5428bf9ddb4b5bd317ab43007c29b3a4f07966758"
+    },
+    {
+      "path": "backend/tests/test_history_adoption.py",
+      "sha256": "efd36c1861c1e084b96be861b5df7b630c94aa41b8f57aef99db2382449d5fa4"
+    },
+    {
+      "path": "backend/tests/test_official_schema_preparation.py",
+      "sha256": "844c428c049f3e374dc222ed4f9881dee83b628a2e9dcdc05d0a8ad2615e6d90"
+    },
+    {
+      "path": "frontend/components/account/SecurityPanel.tsx",
+      "sha256": "8ccd1cf288279ac3ff94c6b9cf89991207615f30f901a4453a6aadfdd7aed55b"
+    },
+    {
+      "path": "docs/adr/0049-traslado-explicito-de-historia-y-adopcion-de-cuenta.md",
+      "sha256": "f36f9c4f3194a1cace2db1bda42338c5492f5a7f9e2a702ee9f6b95919d8c2f9"
+    },
+    {
+      "path": "docs/arquitectura/CONTEXT.md",
+      "sha256": "78175b188e119b2d46cc150b5140eee80ab893f5769a3660665942dd0e05cb28"
+    },
+    {
+      "path": "docs/manuales/traslado_historia_y_adopcion.md",
+      "sha256": "3c1e203ccd232e4b971a8aef1858b67c82eb1214a187d0fd0618339acf53e6ed"
+    },
+    {
+      "path": "docs/manuales/identidad_tecnica_oficial.md",
+      "sha256": "698b2f5d5398592841b587070a421066c54e7d0fc57431f2660f405a2c048470"
+    },
+    {
+      "path": "docs/manuales/preparacion_entorno_oficial.md",
+      "sha256": "0cb5749634b26d3db80c61050d9b6c2de151ba2b4a44cf0de01487655f1638b5"
+    },
+    {
+      "path": "docs/manuales/bitacora_acceso_e_instalacion.md",
+      "sha256": "459cc32394f1e9f6ac80faeee3009428ee0c409e266d250dc5d7d04e26da9be9"
+    },
+    {
+      "path": "docs/manuales/estado_actual_y_pendientes.md",
+      "sha256": "46af8e61d2548c665b8fdb0e8986fb664493255f274b97f104ba3cf35992d1aa"
+    },
+    {
+      "path": "docs/manuales/plan_instalacion_gcp_y_asistente.md",
+      "sha256": "a611cbd52f08d9d2d3bb0eb69a800db65cfe6ed80cdcd238d6a52bdba49aec02"
+    },
+    {
+      "path": "docs/manuales/plan_autonomia_investigador_y_catalogo.md",
+      "sha256": "83a0f9a70e8be30e6d4f05962f010415f3fab35d3e4e0edd66f5f9afa90c81c2"
+    },
+    {
+      "path": "docs/KANBAN.md",
+      "sha256": "0796490db6602ef23b79b645965b89e4c7b6e6cd064b5473536da33af13a6f91"
+    },
+    {
+      "path": "docs/README.md",
+      "sha256": "85deeb66e0fb80593140ab0a510eba08543276e536e8ae79df98a0aec5b68c78"
+    }
+  ]
+}

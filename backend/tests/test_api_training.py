@@ -17,6 +17,7 @@ from app.database import get_db
 from app.services import training
 from tests.test_training_flow import training_env, partitions, register
 from tests.test_training_persistence import persistence_env
+from tests.http_security import administrator_http
 
 app = main.app
 
@@ -144,7 +145,8 @@ def client(training_env, monkeypatch):
     # Without the context manager TestClient does not run model loading/admin seeding.
     test_client = TestClient(app, raise_server_exceptions=False)
     try:
-        yield test_client
+        with administrator_http(app):
+            yield test_client
     finally:
         test_client.close()
         app.dependency_overrides.pop(get_db, None)
@@ -164,8 +166,8 @@ def test_start_rejection_is_visible_in_api_progress(client, training_env, name, 
     thread.assert_not_called()
 
 
-@pytest.mark.parametrize("name", ["AvesChilenas", "engine_diagnostics"])
-def test_api_accepts_supported_registered_source(client, training_env, name):
+@pytest.mark.parametrize("name", ["AvesChilenas", "engine_diagnostics", "FAMA_Prueba_Aves"])
+def test_api_accepts_registered_canonical_source(client, training_env, name):
     _, sessions, root, _ = training_env
     register(sessions, name)
     partitions(root, name)
@@ -179,6 +181,57 @@ def test_api_accepts_supported_registered_source(client, training_env, name):
     assert conflict.status_code == 400
     assert client.get("/api/training/progress").json()["status"] == "training"
     assert client.get("/api/training/history").status_code == 200
+
+
+@pytest.mark.parametrize("change_during_training", [False, True])
+def test_versioned_partition_identity_is_preserved_in_checkpoint_and_history(client, persistence_env, monkeypatch, change_during_training):
+    import hashlib
+    import torch
+    from app.models.dataset import Audio
+    from app.routes.partitions import router
+    service, sessions, root, dataset_id = persistence_env
+    client.app.include_router(router)
+    raw = root / "raw" / "engine_diagnostics"
+    from tests.test_ingestion_upload_integrity import synthetic_wav
+    for index, split in enumerate(("train", "val", "test"), 1):
+        (raw / f"fixture/{split}.wav").write_bytes(synthetic_wav(frames=800)[:-2] + index.to_bytes(2,"little"))
+    # No implicit common recording group in this synthetic 3-way partition fixture.
+    (raw / "metadata.csv").unlink()
+    with sessions() as db:
+        for split in ("train", "val", "test"):
+            path = raw / f"fixture/{split}.wav"
+            db.add(Audio(id_conjunto_datos=dataset_id, nombre_archivo=path.name, clase="Fixture",
+                         ruta_gcp=f"datasets/engine_diagnostics/fixture/{split}.wav",
+                         hash_archivo=hashlib.sha256(path.read_bytes()).hexdigest()))
+        db.commit()
+    base = "/api/training/datasets/engine_diagnostics/partitions"
+    preview = client.post(base + "/preview", json={}).json()
+    assert client.post(base, json={"preview_version": preview["version"], "acknowledge_warnings": True}).status_code == 200
+    if change_during_training:
+        import timm
+        build = timm.create_model
+        def changed_recording(*args, **kwargs):
+            (raw / "fixture/train.wav").write_bytes(b"changed after admission")
+            return build(*args, **kwargs)
+        monkeypatch.setattr(timm, "create_model", changed_recording)
+    response = client.post("/api/training/start", json={
+        "dataset_name": "engine_diagnostics", "partition_version": preview["version"], "epochs": 1,
+        "audio_config": {"target_sr": 8000, "duration_seconds": 0.5, "n_mels": 32,
+                         "n_fft": 256, "hop_length": 64, "f_min": 0.0, "f_max": 4000.0},
+        "regularization_config": {"loss_type": "cross_entropy"}, "early_stopping": False})
+
+    assert response.status_code == 200
+    if change_during_training:
+        assert client.get("/api/training/progress").json()["status"] == "failed"
+        assert client.get("/api/training/history").json()["history"] == []
+        assert list(service.checkpoints_dir.iterdir()) == []
+        return
+    assert client.get("/api/training/progress").json()["status"] == "completed"
+    entry, = client.get("/api/training/history").json()["history"]
+    assert entry.get("partition_version") == preview["version"]
+    artifact = torch.load(service.checkpoints_dir / entry["filename"], weights_only=True, map_location="cpu")
+    assert artifact["partition_manifest"]["version"] == preview["version"]
+    assert artifact["partition_manifest"]["counts"] == {"train": 1, "val": 1, "test": 1}
 
 
 @pytest.mark.parametrize("commit_fails", [False, True])
@@ -207,6 +260,8 @@ def test_api_reports_checkpoint_registration_outcome(client, persistence_env, co
         assert progress["status"] == "completed"
         entry, = entries
         assert entry["dataset_id"] == dataset_id
+        assert entry["active"] is False  # Activation requires a separate administrator action.
+        assert entry["user_id"] == 1
         assert len(entry["metrics"]) == 1
         assert (service.checkpoints_dir / entry["filename"]).is_file()
 
@@ -255,6 +310,7 @@ def test_api_completes_training_with_saved_reports_and_available_model(
     response = client.post("/api/training/start", json={
         "dataset_name": "engine_diagnostics", "architecture": "EfficientNet-B0",
         "epochs": 1, "batch_size": 1,
+
         "audio_config": {"target_sr": 8000, "duration_seconds": 0.5, "n_mels": 32,
                          "n_fft": 256, "hop_length": 64, "f_min": 0.0, "f_max": 4000.0},
         "regularization_config": {"loss_type": "cross_entropy"}, "early_stopping": False,
@@ -320,6 +376,7 @@ def test_api_completes_training_with_saved_reports_and_available_model(
     assert client.get("/api/training/history").json() == history_response.json()
 
 
+
 def test_get_training_hardware(client):
     """GET /api/training/hardware retorna telemetría de GPU/CPU y memoria."""
     res = client.get("/api/training/hardware")
@@ -339,70 +396,6 @@ def test_get_training_datasets(client):
     assert "datasets" in data
     assert isinstance(data["datasets"], list)
     assert data["datasets"] == []
-
-
-@pytest.mark.parametrize("interface", ["service", "api"])
-def test_catalog_unsupported_names_never_access_folders(client, training_env, monkeypatch, interface):
-    from pathlib import Path
-    service, sessions, root, _ = training_env
-    raw = root / "raw"
-    outside = root / "outside-registry"
-    (outside / "PrivateClassSentinel").mkdir(parents=True)
-    raw.mkdir()
-    (raw / "linked").symlink_to(outside, target_is_directory=True)
-    names = ["../outside-registry", str(outside), "linked", "medical_cough", "engine_diagnostics"]
-    for name in names:
-        register(sessions, name)
-    (raw / "engine_diagnostics/Motor").mkdir(parents=True)
-    real_is_dir, real_iterdir = Path.is_dir, Path.iterdir
-    forbidden = {raw / name for name in names[:-1]}
-
-    def checked_is_dir(path):
-        if path in forbidden:
-            pytest.fail("Unsupported registered name reached filesystem stat")
-        return real_is_dir(path)
-
-    def checked_iterdir(path):
-        if path in forbidden:
-            pytest.fail("Unsupported registered name reached filesystem enumeration")
-        return real_iterdir(path)
-
-    monkeypatch.setattr(Path, "is_dir", checked_is_dir)
-    monkeypatch.setattr(Path, "iterdir", checked_iterdir)
-    with sessions() as db:
-        default = service.get_available_datasets(db)
-        if interface == "service":
-            entries = service.get_available_datasets(db, include_unavailable=True)
-        else:
-            response = client.get("/api/training/datasets?include_unavailable=true")
-            assert response.status_code == 200, response.text
-            entries = response.json()["datasets"]
-        assert service.get_available_datasets(db, include_unavailable=False) == default
-    assert [entry["id"] for entry in entries] == names
-    for entry in entries[:-1]:
-        assert entry["classes"] == []
-        assert entry["class_count"] is None
-        assert entry["reasons"] == ["incompatible_configuration"]
-    supported = entries[-1]
-    assert supported["classes"] == default[0]["classes"] == ["Motor"]
-    assert supported["class_count"] == default[0]["class_count"] == 1
-    assert client.get("/api/training/datasets").json() == {"datasets": default}
-
-
-def test_catalog_opt_in_preserves_defaults_and_start_rejection(client, training_env):
-    _, sessions, _, thread = training_env
-    registered_id = register(sessions, "medical_cough")
-    assert client.get("/api/training/datasets").json() == {"datasets": []}
-    response = client.get("/api/training/datasets?include_unavailable=true")
-    assert response.status_code == 200
-    entry, = response.json()["datasets"]
-    assert entry["record_id"] == f"legacy:{registered_id}"
-    assert entry["source_type"] == "legacy"
-    assert entry["reasons"] == ["incompatible_configuration"]
-    assert entry["class_count"] is None
-    assert client.get("/api/training/datasets?include_unavailable=false").json() == {"datasets": []}
-    assert client.post("/api/training/start", json={"dataset_name": entry["id"]}).status_code == 400
-    thread.assert_not_called()
 
 
 def test_catalog_opt_in_keeps_imported_auth_and_owner_isolation(client, training_env, monkeypatch):
@@ -441,14 +434,56 @@ def test_catalog_opt_in_keeps_imported_auth_and_owner_isolation(client, training
                             "reasons": ["preparation_required"], "preparations": []}
 
 
-def test_catalog_excludes_unsupported_registered_dataset(client, training_env):
+def test_catalog_includes_new_registered_dataset_for_training(client, training_env):
     _, sessions, root, _ = training_env
-    register(sessions, "medical_cough")
+    register(sessions, "FAMA_Prueba_Aves")
+    partitions(root, "FAMA_Prueba_Aves")
     register(sessions, "engine_diagnostics")
     partitions(root, "engine_diagnostics")
     response = client.get("/api/training/datasets")
     assert response.status_code == 200
-    assert [entry["id"] for entry in response.json()["datasets"]] == ["engine_diagnostics"]
+    assert [entry["id"] for entry in response.json()["datasets"]] == ["FAMA_Prueba_Aves", "engine_diagnostics"]
+
+
+def test_new_empty_dataset_does_not_invent_training_classes(client, training_env):
+    _, sessions, _, _ = training_env
+    register(sessions, "FAMA_Nuevo")
+    response = client.get("/api/training/datasets")
+    assert response.status_code == 200
+    dataset, = response.json()["datasets"]
+    assert dataset["classes"] == []
+    assert dataset["class_count"] == 0
+
+
+@pytest.mark.parametrize("persistence_env", ["FAMA_Prueba_Aves"], indirect=True)
+def test_new_dataset_completes_and_registers_a_model_through_HTTP(client, persistence_env):
+    service, _, _, dataset_id = persistence_env
+    response = client.post("/api/training/start", json={
+        "dataset_name": "FAMA_Prueba_Aves", "architecture": "EfficientNet-B0", "epochs": 1,
+        "audio_config": {"target_sr": 8000, "duration_seconds": 0.5, "n_mels": 32,
+                         "n_fft": 256, "hop_length": 64, "f_min": 0.0, "f_max": 4000.0},
+        "regularization_config": {"loss_type": "cross_entropy"}, "early_stopping": False,
+    })
+    assert response.status_code == 200
+    progress = client.get("/api/training/progress").json()
+    assert progress["status"] == "completed", progress["error_message"]
+    entry, = client.get("/api/training/history").json()["history"]
+    assert entry["dataset_id"] == dataset_id
+    assert entry["dataset"] == "FAMA_Prueba_Aves"
+    assert entry["name"] == "FAMA_Prueba_Aves · EfficientNet-B0 (v1)"
+    assert entry["user_id"] == 1
+    assert entry["active"] is False
+    assert len(entry["metrics"]) == 1
+    assert (service.checkpoints_dir / entry["filename"]).is_file()
+
+
+@pytest.mark.parametrize("name", ["../outside", "CON", "bad/name", "name."])
+def test_catalog_does_not_expose_unsafe_registered_dataset_names(client, training_env, name):
+    _, sessions, _, _ = training_env
+    register(sessions, name)
+    response = client.get("/api/training/datasets")
+    assert response.status_code == 200
+    assert response.json()["datasets"] == []
 
 
 def test_training_lifecycle(client):
@@ -532,6 +567,7 @@ def test_training_lifecycle_triad(client):
         data = res.json()
         assert data["status"] == "started"
         mock_start.assert_called_once_with(
+            user_id=1,
             dataset_name="AvesChilenas",
             architecture="EfficientNet-B0",
             epochs=10,
@@ -569,6 +605,7 @@ def test_training_lifecycle_dynamic_ensemble(client):
         data = res.json()
         assert data["status"] == "started"
         mock_start.assert_called_once_with(
+            user_id=1,
             dataset_name="AvesChilenas",
             architecture="EfficientNet-B0",
             epochs=12,
@@ -683,3 +720,21 @@ def test_start_training_api_passes_model_epochs(client):
         assert "models" in call_kwargs
         assert call_kwargs["models"][0]["epochs"] == 35
         assert call_kwargs["models"][1]["epochs"] == 10
+
+
+def test_failed_new_job_does_not_expose_previous_execution_snapshot(client, persistence_env):
+    response = client.post("/api/training/start", json={
+        "dataset_name": "engine_diagnostics", "architecture": "EfficientNet-B0", "epochs": 1,
+        "audio_config": {"target_sr": 8000, "duration_seconds": 0.5, "n_mels": 32,
+                         "n_fft": 256, "hop_length": 64, "f_min": 0.0, "f_max": 4000.0},
+        "regularization_config": {"loss_type": "cross_entropy"}, "early_stopping": False,
+    })
+    assert response.status_code == 200
+    assert client.get("/api/training/progress").json()["status"] == "completed"
+    assert client.post("/api/training/start", json={"dataset_name": "not-supported"}).status_code == 400
+    progress = client.get("/api/training/progress").json()
+    assert progress["status"] == "failed"
+    assert progress["current_architecture"] == ""
+    assert progress["models_config"] == []
+    assert progress["train_acc"] == 0
+    assert progress["val_acc"] == 0

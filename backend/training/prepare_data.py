@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from dataset_references import resolve_reference
+from dataset_references import resolve_reference, safe_path_component
 from training.paths import get_prepared_data_dir
 from training.pipelines.split import grouped_stratified_split_dataset
 from training.grouping import recording_groups
@@ -31,8 +31,8 @@ def _version_id(record):
 
 
 def _names(dataset_name):
-    if dataset_name not in ("AvesChilenas", "engine_diagnostics"):
-        raise ValueError("Unsupported dataset naming policy")
+    if not safe_path_component(dataset_name) or len(dataset_name) > 100:
+        raise ValueError("Invalid dataset name")
     suffix = "_metadata" if dataset_name == "engine_diagnostics" else ""
     return [f"{split}{suffix}.csv" for split in _SPLITS]
 

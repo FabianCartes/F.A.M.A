@@ -2,7 +2,6 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import Link from "next/link";
 import { useOptionalWebSession } from "@/components/auth/SessionBoundary";
 import { z } from "zod";
 import { datasetsPageSchema, importBase, importRequest, type ImportDataset } from "@/lib/api/datasetImports";
@@ -35,9 +34,10 @@ function ExportDialog({ token, hasWebSession }: { token: string; hasWebSession: 
     async function load() {
       try {
         const response = await importRequest(token, `${importBase}/access`, { signal: controller.signal });
-        const access = z.object({ development_mode: z.boolean() }).parse(await response.json());
+        const access = z.object({ development_mode: z.boolean(), authenticated: z.boolean().default(false), available: z.boolean().default(true), reason: z.string().optional() }).parse(await response.json());
         if (controller.signal.aborted) return;
-        const required = !access.development_mode && !token && !hasWebSession;
+        if (!access.available) throw new Error(access.reason ?? "El servicio ZIP no está disponible en este equipo.");
+        const required = !access.development_mode && !access.authenticated && !token;
         setSessionRequired(required);
         if (required) return;
         const catalog = await importRequest(token, `${importBase}/datasets${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { signal: controller.signal });
@@ -108,7 +108,7 @@ function ExportDialog({ token, hasWebSession }: { token: string; hasWebSession: 
         <div className="p-5 space-y-4">
           <p>Descarga una versión sincronizada a tu equipo. Cerrar esta ventana no cancela la exportación.</p>
           {loading && <p role="status">Consultando datasets…</p>}
-          {sessionRequired && <p role="status">Inicia sesión para acceder a tus importaciones. <Link href="/login" className="underline">Abrir acceso</Link>. El modo de desarrollo local conserva su alcance separado según la guía de importación.</p>}
+          {sessionRequired && <p role="status">Inicia sesión en F.A.M.A. para gestionar tus importaciones y exportaciones ZIP.</p>}
           {error && <p role="alert">{error}</p>}
           {error && <button type="button" className={buttonClass} disabled={loading} onClick={() => {
             setError(""); setLoading(true); setReload(value => value + 1);

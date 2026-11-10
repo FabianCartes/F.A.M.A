@@ -20,7 +20,8 @@ def migrate(engine) -> bool:
             return False
         if not schema.has_table("retroalimentacion"):
             raise ValueError("Existing retroalimentacion table required")
-        connection.execute(text("""CREATE TABLE feedback_sync (
+        timestamp = "TIMESTAMP WITH TIME ZONE" if engine.dialect.name == "postgresql" else "DATETIME"
+        connection.execute(text(f"""CREATE TABLE feedback_sync (
             id_retroalimentacion INTEGER NOT NULL PRIMARY KEY,
             dataset_name VARCHAR(100) NOT NULL,
             storage_class VARCHAR(100) NOT NULL,
@@ -31,6 +32,8 @@ def migrate(engine) -> bool:
             status VARCHAR(10) NOT NULL,
             attempts INTEGER NOT NULL,
             error_code VARCHAR(32),
+            incorporated_by INTEGER,
+            incorporated_at {timestamp},
             UNIQUE (object_key),
             UNIQUE (local_relative_path),
             FOREIGN KEY (id_retroalimentacion)

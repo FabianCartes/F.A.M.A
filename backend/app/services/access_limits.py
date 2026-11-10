@@ -7,7 +7,6 @@ import json
 
 from fastapi import HTTPException
 from sqlalchemy import text
-from app.models.access_quota import CuotaAcceso  # Register the existing quota schema.
 
 
 DEFAULT_RULES = {

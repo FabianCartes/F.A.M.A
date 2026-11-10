@@ -51,7 +51,9 @@ Tradicionalmente, los investigadores se ven forzados a elegir entre dos extremos
 
 ## 2. Modelo de Roles, Permisos y Autenticación
 
-La matriz siguiente describe el modelo de permisos objetivo, no garantías de autorización ya aplicadas. El backend dispone de autenticación JWT y dependencias de roles, pero las rutas sensibles de datos, entrenamiento y feedback aún requieren su integración. No exponer la plataforma como si el RBAC estuviera cerrado.
+La matriz siguiente describe el modelo de permisos objetivo completo, no una certificación de producción. El backend ya integra sesiones web, asignaciones explícitas y controles sobre datos, entrenamiento y feedback; el alcance exacto y los casos históricos restringidos están en [permisos sobre recursos asignados](permisos_recursos_asignados.md). La interfaz de acceso/administración y otros controles operativos siguen pendientes. No exponer la plataforma como si la preparación de producción estuviera cerrada.
+
+La gestión backend de cuentas ya permite crear/listar, suspender/reactivar, cambiar roles/contraseñas y emitir recuperación administrada, sin borrado físico, correo real ni pantallas todavía. Sus contratos e invariantes están en [gestión de cuentas y recuperación](gestion_cuentas_y_recuperacion.md).
 
 ### 2.1. Matriz de Roles y Responsabilidades
 
@@ -73,6 +75,10 @@ La matriz siguiente describe el modelo de permisos objetivo, no garantías de au
 | **Configuración de Google Cloud IAM** (`CU_ADM_03`) | Transparente (No gestiona llaves) | Configuración de credencial JSON |
 
 ### 2.2. Flujo de Acceso Inicial y Asistente de Configuración (Setup Wizard)
+
+**Actualización del 19 de octubre:** ya existen login centrado con SlicedWaves, recuperación por fragmento y entrada protegida por sesión; contratos, configuración y límites en [acceso web](acceso_web_y_sliced_waves.md). Las pantallas de administración y el asistente `/setup` siguen pendientes. Las advertencias históricas siguientes no significan que el acceso visual actual esté ausente, ni su implementación acredita despliegue de producción.
+
+**Actualización backend:** login/me/logout usan sesiones revocables por cookie y el registro requiere administrador autenticado. El segundo bloque aplica asignaciones y protección de rutas; las pantallas y el asistente todavía no están integrados. Configuración y evidencia: [sesiones web y acceso administrado](sesiones_web_y_acceso_administrado.md) y [permisos de recursos](permisos_recursos_asignados.md). Los flujos objetivo siguientes no son una certificación de implementación.
 
 El asistente y las pantallas `/setup`/`/login` que se describen a continuación son una propuesta de producto; no constituyen el flujo web implementado actualmente. Los endpoints de autenticación del backend no sustituyen esas pantallas ni la autorización de todas las rutas.
 

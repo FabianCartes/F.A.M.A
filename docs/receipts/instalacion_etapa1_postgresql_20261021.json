@@ -1,0 +1,67 @@
+{
+  "date": "2026-10-21",
+  "branch": "fix/afinamiento-integral",
+  "base_commit": "51a9015",
+  "source": "working-tree-with-preexisting-changes",
+  "scope": "Etapa 1: configuración, estado persistente, entrada ligera y migraciones explícitas",
+  "runtime": {
+    "python": "3.12.10",
+    "sqlalchemy": "2.1.4",
+    "alembic": "1.20.0",
+    "psycopg2": "2.9.13",
+    "postgresql": "16.15",
+    "image": "postgres:16-alpine",
+    "image_digest": "sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea"
+  },
+  "validation": [
+    {
+      "command": "python -m pytest --noconftest backend/tests/test_installation_configuration.py backend/tests/test_installation_startup.py backend/tests/test_installation_compose.py backend/tests/test_schema_migrations.py backend/tests/test_database_url.py -q",
+      "passed": 34,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 42.24,
+      "environment": "dotenv deshabilitado; DATABASE_URL=sqlite:// para imports; FAMA_TEST_POSTGRES_URL suministrada privadamente hacia PostgreSQL efímero; temporales bajo .pytest_cache",
+      "coverage": [
+        "Configuración sin destinos implícitos, referencias a secretos y persistencia tras reinicio",
+        "Instalación sin ML/GCS, configuración corrupta y SQL inaccesible sin reapertura",
+        "Compose copiado con entorno sintético y configuración Docker aislada",
+        "Migración vacía, actualización con cuenta conservada y repetición segura",
+        "Rechazo de tablas/vistas desconocidas y restricciones de roles ausentes o alteradas",
+        "CLI sin carga .env y con --apply obligatorio; rechazo de SQLite antes de crear archivo",
+        "DML de cuentas con usuario SQL sin CREATE TABLE",
+        "Arranque completo desde copia de código sin pesos/audios; sin alta automática; login/me/logout reales",
+        "Origen, clave JWT heredada insegura y reglas de acceso inválidos bloquean ML"
+      ]
+    },
+    {
+      "command": "python -m pytest backend/tests/test_storage.py backend/tests/test_ingestion_service.py backend/tests/test_ingestion_sync_integrity.py backend/tests/test_ingestion_upload_integrity.py backend/tests/test_feedback_sync_lifespan.py backend/tests/test_auth_configuration.py backend/tests/test_web_sessions.py -q",
+      "passed": 149,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 111.31,
+      "environment": "SQLite y archivos temporales; dotenv deshabilitado; bucket sintético; adaptadores GCS simulados"
+    }
+  ],
+  "final_checks": {
+    "configuration_regression_passed": 8,
+    "configuration_regression_seconds": 0.78,
+    "python_files_parsed": 13,
+    "receipt_json_valid": true,
+    "tracked_diff_check_for_stage_files": "passed; no incluye diferencias preexistentes ajenas"
+  },
+  "cleanup": {
+    "temporary_postgresql_container_removed": true,
+    "identity_label_and_image_verified_before_removal": true,
+    "database_storage": "tmpfs; sin volumen persistente",
+    "temporary_connection_file_removed": true,
+    "other_containers_modified": false
+  },
+  "limits": [
+    "Sin conexión, aprovisionamiento o migración Cloud SQL/GCS",
+    "Sin cambios en .env real, cuentas actuales, datasets o checkpoints",
+    "Sin build ni despliegue de la imagen de aplicación",
+    "Sin asistente visual, prueba de control del nodo o finalización concurrente; etapa 7 pendiente",
+    "Sin prueba de inferencia ni flujo ML integral",
+    "Sin staging, commit ni push"
+  ]
+}

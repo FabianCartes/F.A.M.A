@@ -297,3 +297,19 @@ describe("private dataset import", () => {
     expect(writes[0].endsWith("/working/confirm")).toBe(true);
   });
 });
+
+
+it("uses the existing authenticated cookie session without asking for a bearer token", async () => {
+  const requests: RequestInit[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string, options?: RequestInit) => {
+    requests.push(options ?? {});
+    if (url.endsWith("/access")) return Response.json({available:true,development_mode:false,authenticated:true});
+    if (url.endsWith("/limits")) return Response.json({received_bytes:1024,expanded_bytes:4096,entries:10,depth:12,path_bytes:240,audio_bytes:1024,audio_seconds:600,validation_seconds:60,free_bytes:1,ttl_seconds:86400,concurrent_imports:4});
+    return Response.json({imports:[],total:0,next_cursor:null,snapshot:"empty"});
+  }));
+  render(<DatasetImportPanel />);
+  await openImport();
+  expect(await screen.findByLabelText("Archivo ZIP")).toBeDefined();
+  expect(requests.every(options => options.credentials === "same-origin")).toBe(true);
+  expect(requests.every(options => !new Headers(options.headers).has("Authorization"))).toBe(true);
+});

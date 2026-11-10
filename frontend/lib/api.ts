@@ -1,19 +1,42 @@
 const rawApiUrl = process.env.NEXT_PUBLIC_API_URL;
 
 export const API_BASE_URL =
-  rawApiUrl && rawApiUrl.trim() !== "" ? rawApiUrl.trim() : "";
+  rawApiUrl && rawApiUrl.trim() !== "" ? rawApiUrl.trim().replace(/\/+$/, "") : "";
 
-// Only private API consumers notify this observer; legacy failures stay local.
 const unauthorizedListeners = new Set<() => void>();
-let sessionRevision = 0;
-export function apiSessionRevision() { return sessionRevision; }
-export function confirmApiSession() { sessionRevision += 1; }
-export function onUnauthorized(listener: () => void) {
+let sessionGeneration = 0;
+
+export function sameOriginUrl(url: string): void {
+  const target = new URL(url, window.location.origin);
+  if (target.origin !== window.location.origin || target.username || target.password ||
+      !["https:", "http:"].includes(target.protocol)) {
+    throw new Error("La API debe usar el mismo origen de la aplicación.");
+  }
+}
+
+export function confirmApiSession(): void { sessionGeneration += 1; }
+
+// Owner-scoped views pin the generation of the session that issued a request.
+export function apiSessionRevision(): number { return sessionGeneration; }
+export function notifyUnauthorized(requestRevision: number): void {
+  if (requestRevision !== sessionGeneration) return;
+  sessionGeneration += 1;
+  unauthorizedListeners.forEach((listener) => listener());
+}
+
+export function onUnauthorized(listener: () => void): () => void {
   unauthorizedListeners.add(listener);
   return () => { unauthorizedListeners.delete(listener); };
 }
-export function notifyUnauthorized(requestRevision: number) {
-  if (requestRevision !== sessionRevision) return;
-  sessionRevision += 1;
-  unauthorizedListeners.forEach(listener => listener());
+
+/** Protected application requests: cookies only, same origin, no cached user data. */
+export async function apiFetch(url: string, options?: RequestInit): Promise<Response> {
+  sameOriginUrl(url);
+  const generation = sessionGeneration;
+  const response = await fetch(url, { ...options, credentials: "same-origin", cache: "no-store", redirect: "error" });
+  if (response.status === 401 && generation === sessionGeneration) {
+    sessionGeneration += 1;
+    unauthorizedListeners.forEach((listener) => listener());
+  }
+  return response;
 }
