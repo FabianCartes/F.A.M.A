@@ -2,6 +2,13 @@
 kanban-plugin: basic
 ---
 
+## Integración de afinamiento integral en `mvp` — etapa c: publicación del ZIP
+
+- [x] **C-PUBLICACIÓN:** confirmar un ZIP lo publica en GCS `datasets/{ds}/{clase}/` y en `conjunto_datos`/`audio` reutilizando `upload_files_to_gcs` por lotes, deja la copia en `raw_data_dir` y asigna al importador. Nombre único global (409) y válido (422). Si falla la publicación, la importación sigue local y el trabajo se reintenta sin duplicar; fallos de validación o confirmación local siguen cancelándose solos. Límite por archivo de subida 96 MiB por defecto. [Plan](arquitectura/integracion-mvp-c-publicacion-plan.md).
+- [ ] **C-MANUAL-USUARIO:** `manual_usuario_plataforma.md` aún cita 64 MiB por archivo; está entre los cambios U0 sin commitear.
+- [ ] **C-LAYOUT-HEREDADO:** importaciones por API sin `layout: class_folders` con el mismo nombre de archivo en subcarpetas de una clase no se publican (`already_exists`); la interfaz siempre usa `class_folders`.
+- [ ] **C-PLAZO-PUBLICACIÓN:** una publicación larga comparte el tope de `--execution-seconds` (1800 s); si se agota, el reintento continúa desde lo subido.
+
 ## Integración de afinamiento integral en `mvp` — etapa b: GCS e inventario único
 
 - [x] **B-RETIRO — backend:** retirados la sincronización privada hacia GCS, revisiones/manifiestos, exportación ZIP, reserva física `dataset_storage_*` y `run_local_collection.py`, con sus pruebas exclusivas. Confirmar ya no encola `sync` y `/sync` responde 404. Conservados `ImportedDataset`/`DatasetMember`, worker genérico, sincronización GCS→local y feedback sync; sin migraciones destructivas. Suite de importación 265PASS/31FAIL, los 31 idénticos a la base `6fc4432`; consumidores feedback/importados con el mismo conjunto de fallos que la base. [Plan](arquitectura/integracion-mvp-gcs-unico-plan.md) y [recibo](receipts/integracion-mvp-b.json).

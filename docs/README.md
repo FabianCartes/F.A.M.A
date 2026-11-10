@@ -25,6 +25,7 @@ La documentación está organizada temáticamente en subdirectorios especializad
 
 ## Integración de afinamiento integral en `mvp` — etapa a
 
+- [Etapa c: publicación del ZIP en `conjunto_datos`](./arquitectura/integracion-mvp-c-publicacion-plan.md): publicación por lotes en GCS y catálogo compartido, nombre único global, asignación del importador y reintento sin cancelar la importación local.
 - [Etapa b: GCS e inventario único](./arquitectura/integracion-mvp-gcs-unico-plan.md) y [recibo](./receipts/integracion-mvp-b.json): retiro de sincronización privada, manifiestos, exportación ZIP y reserva física; inventario único local/GCS. ZIP confirmado local hasta la etapa c. Commits locales en `mvp`, sin push ni PR.
 - [Etapa a: consolidación de sesión por cookie](./arquitectura/integracion-mvp-sesion-cookie-plan.md) y [recibo de verificación](./receipts/integracion-mvp-a.json): implementación a1/a2 aplicada y cierre funcional limitado aceptado por el usuario, conservando los problemas de exportación y la prueba independiente parcial. Incluye comparación frontend base/candidato; no equivale a suite global verde ni aprobación técnica integral. Entrega local organizada en commits encadenados sobre `fix/mvp-cookie-session`, sin push ni PR.
 
