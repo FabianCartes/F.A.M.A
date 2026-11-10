@@ -15,7 +15,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 it("enables private import with a confirmed cookie and no Bearer in non-development mode", async () => {
   const request = vi.fn(async (path: string, options?: RequestInit) => {
     expect(new Headers(options?.headers).get("Authorization")).toBeNull();
-    if (path.endsWith("/api/auth/web/me")) return Response.json(user);
+    if (path.endsWith("/api/auth/me")) return Response.json(user);
     if (path.endsWith("/access")) return Response.json({ development_mode: false });
     if (path.endsWith("/limits")) return Response.json({ received_bytes: 1024, expanded_bytes: 4096,
       entries: 10, depth: 12, path_bytes: 240, audio_bytes: 1024, audio_seconds: 600,
@@ -38,7 +38,7 @@ it("enables private import with a confirmed cookie and no Bearer in non-developm
 
 it("loads export collections using the same confirmed cookie outside development mode", async () => {
   const request = vi.fn(async (path: string) => {
-    if (path.endsWith("/api/auth/web/me")) return Response.json(user);
+    if (path.endsWith("/api/auth/me")) return Response.json(user);
     if (path.endsWith("/access")) return Response.json({ development_mode: false });
     if (path.endsWith("/datasets")) return Response.json({ datasets: [], total: 0, next_cursor: null, snapshot: "empty" });
     throw new Error("Unexpected request " + path);

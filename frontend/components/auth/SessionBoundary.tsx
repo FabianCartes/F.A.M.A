@@ -30,6 +30,8 @@ export default function SessionBoundary({ children, mode = "protected" }: { chil
   const [session, setSession] = useState<Session>({ status: "checking" });
   const generation = useRef(0);
   const controller = useRef<AbortController | null>(null);
+  // Private 401s cannot confirm revocation or replace logout recovery.
+  const logoutUnconfirmed = useRef(false);
 
   const invalidate = useCallback(() => {
     generation.current += 1;
@@ -38,6 +40,7 @@ export default function SessionBoundary({ children, mode = "protected" }: { chil
   }, []);
 
   const check = useCallback(async () => {
+    if (logoutUnconfirmed.current) return;
     const version = ++generation.current;
     controller.current?.abort();
     const request = new AbortController();
@@ -62,7 +65,9 @@ export default function SessionBoundary({ children, mode = "protected" }: { chil
   }, []);
 
   useEffect(() => {
-    const unsubscribe = onUnauthorized(invalidate);
+    const unsubscribe = onUnauthorized(() => {
+      if (!logoutUnconfirmed.current) invalidate();
+    });
     let active = true;
     queueMicrotask(() => { if (active) void check(); });
     return () => { active = false; unsubscribe(); generation.current += 1; controller.current?.abort(); };
@@ -103,13 +108,17 @@ export default function SessionBoundary({ children, mode = "protected" }: { chil
   }
 
   async function logout() {
+    logoutUnconfirmed.current = true;
     const version = ++generation.current;
     controller.current?.abort();
     const request = new AbortController(); controller.current = request;
     setSession({ status: "logging-out" });
     try {
       await signOut(request.signal);
-      if (version === generation.current && !request.signal.aborted) invalidate();
+      if (version === generation.current && !request.signal.aborted) {
+        logoutUnconfirmed.current = false;
+        invalidate();
+      }
     } catch {
       if (version === generation.current && !request.signal.aborted) setSession({ status: "error", logout: true,
         message: "No se pudo confirmar el cierre de sesión en el servidor. Reintenta; no se ha confirmado la revocación." });
@@ -117,13 +126,9 @@ export default function SessionBoundary({ children, mode = "protected" }: { chil
   }
 
   if (session.status === "anonymous" && mode === "login") return <LoginForm onLogin={login} />;
-  if (session.status === "authenticated" && mode === "protected") return <WebSession.Provider value={{ user: session.user, refreshSession: check }}><div className="session-workspace">
-    <div className="session-toolbar" aria-label="Sesión actual">
-      <span>{session.user.nombre_completo || session.user.email} <small>· {session.user.rol === "administrador" ? "Administrador" : "Investigador"}</small></span>
-      <button type="button" onClick={() => void logout()}>Cerrar sesión</button>
-    </div>
+  if (session.status === "authenticated" && mode === "protected") return <WebSession.Provider value={{ user: session.user, refreshSession: check }}><WebSessionLogout.Provider value={() => void logout()}><div className="session-workspace">
     <div className="session-content" key={session.user.id}>{children}</div>
-  </div></WebSession.Provider>;
+  </div></WebSessionLogout.Provider></WebSession.Provider>;
   if (session.status === "error") {
     const content = <div className="max-w-md space-y-4 text-center">
       <p role="alert">{session.message}</p>
@@ -131,11 +136,10 @@ export default function SessionBoundary({ children, mode = "protected" }: { chil
         if (session.logout) void logout(); else { setSession({ status: "checking" }); void check(); }
       }}>{session.logout ? "Reintentar cierre de sesión" : "Reintentar comprobación"}</button>
     </div>;
-    return mode === "login" ? <AuthSurface><h1>Acceso a F.A.M.A.</h1><div className="mt-6">{content}</div></AuthSurface> :
-      <main className="min-h-dvh grid place-items-center bg-gray-950 text-gray-200 p-6">{content}</main>;
+    return <AuthSurface><h1>Acceso a F.A.M.A.</h1><div className="mt-6">{content}</div></AuthSurface>;
   }
-  return <main className="min-h-dvh grid place-items-center bg-gray-950 text-gray-200 p-6">
+  return <AuthSurface>
     <p role="status">{session.status === "checking" ? "Comprobando sesión…" :
       session.status === "logging-out" ? "Cerrando sesión…" : session.status === "installation" ? "Abriendo configuración del equipo…" : session.status === "authenticated" ? "Abriendo aplicación…" : "Inicia sesión para continuar…"}</p>
-  </main>;
+  </AuthSurface>;
 }

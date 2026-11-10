@@ -21,8 +21,8 @@ function weight(bytes: number) {
 }
 
 /** One presentation; private and shared adapters retain their existing read/download routes. */
-export default function DatasetAudioDialog({ dataset, token, onClose, returnFocus }: {
-  dataset: AudioDataset; token: string; onClose: () => void; returnFocus: RefObject<HTMLButtonElement | null>;
+export default function DatasetAudioDialog({ dataset, onClose, returnFocus }: {
+  dataset: AudioDataset; onClose: () => void; returnFocus: RefObject<HTMLButtonElement | null>;
 }) {
   const { id, kind, name } = dataset;
   const [request, setRequest] = useState<PageRequest>({ filter: 'all', cursors: [null], attempt: 0 });
@@ -41,7 +41,7 @@ export default function DatasetAudioDialog({ dataset, token, onClose, returnFocu
     const controller = new AbortController();
     lifetime.current = controller;
     return () => controller.abort();
-  }, [token, id, kind]);
+  }, [id, kind]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -50,7 +50,7 @@ export default function DatasetAudioDialog({ dataset, token, onClose, returnFocu
     if (cursor) query.set('cursor', cursor);
     if (request.filter === 'feedback') query.set('feedback', 'true');
     if (request.filter.startsWith('class:')) query.set('class_name', request.filter.slice(6));
-    void importRequest(token, `${endpoint}?${query}`, { signal: controller.signal })
+    void importRequest(`${endpoint}?${query}`, { signal: controller.signal })
       .then(response => response.json())
       .then(raw => {
         if (controller.signal.aborted) return;
@@ -77,7 +77,7 @@ export default function DatasetAudioDialog({ dataset, token, onClose, returnFocu
       })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [token, endpoint, kind, request]);
+  }, [endpoint, kind, request]);
 
   function navigate(next: PageRequest) {
     setLoading(true); setError(''); setDownloadError(''); setRequest(next);
@@ -87,7 +87,7 @@ export default function DatasetAudioDialog({ dataset, token, onClose, returnFocu
     if (kind !== 'private' || !file.sha || downloading || !controller || controller.signal.aborted) return;
     setDownloading(true); setDownloadError('');
     try {
-      const response = await importRequest(token, `${endpoint}/${encodeURIComponent(file.sha)}`, { signal: controller.signal });
+      const response = await importRequest(`${endpoint}/${encodeURIComponent(file.sha)}`, { signal: controller.signal });
       if (!controller.signal.aborted) await saveDownload(response, file.name);
     } catch (reason) {
       if (!controller.signal.aborted) setDownloadError(reason instanceof Error ? reason.message : 'No se pudo descargar el audio.');

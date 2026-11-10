@@ -7,7 +7,7 @@ const folderReason = "Coloca cada audio WAV dentro de una carpeta con el nombre 
 const unavailableReason = "No se pudo consultar la razón del rechazo.";
 
 /** Resolve every diagnostic page without exposing transport details or file paths. */
-export default function RejectedImportReason({ job, token }: { job: ImportJob; token: string }) {
+export default function RejectedImportReason({ job }: { job: ImportJob }) {
   const [result, setResult] = useState<{ reasons: string[] } | null>(null);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -21,7 +21,7 @@ export default function RejectedImportReason({ job, token }: { job: ImportJob; t
       let snapshot: string | number | null | undefined = job.preview_token ?? undefined;
       do {
         const url = `${importBase}/${job.id}/issues${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`;
-        const response = await importRequest(token, url, { signal: controller.signal });
+        const response = await importRequest(url, { signal: controller.signal });
         if (controller.signal.aborted) return;
         const page = issuesPageSchema.parse(await response.json());
         if (controller.signal.aborted) return;
@@ -44,7 +44,7 @@ export default function RejectedImportReason({ job, token }: { job: ImportJob; t
     }
     void load().catch(() => { if (!controller.signal.aborted) setFailed(true); });
     return () => controller.abort();
-  }, [job.id, job.preview_token, token, attempt]);
+  }, [job.id, job.preview_token, attempt]);
 
   return <section aria-label="Razón del rechazo" className="space-y-2">
     {failed ? <><p role="alert">{unavailableReason}</p><button type="button" onClick={() => { setFailed(false); setResult(null); setAttempt(value => value + 1); }}>Reintentar consulta</button></>

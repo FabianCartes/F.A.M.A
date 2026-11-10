@@ -26,9 +26,9 @@ function transport(prefix = 0, history = true) {
   const fetcher = durableFetch(async (input, options) => {
     const url = new URL(input, "http://synthetic.test");
     const path = url.pathname;
-    expect(new Headers(options?.headers).get("Authorization")).toBe("Bearer session");
+    expect(new Headers(options?.headers).get("Authorization")).toBeNull();
     if (options?.method) writes.push(`${options.method} ${path}`);
-    if (path.endsWith("/access")) return Response.json({ development_mode: false });
+    if (path.endsWith("/access")) return Response.json({ development_mode: false, authenticated: true });
     if (path.endsWith("/limits")) return Response.json({ received_bytes: 1024, expanded_bytes: 4096,
       entries: 10, depth: 12, path_bytes: 240, audio_bytes: 1024, audio_seconds: 600,
       validation_seconds: 60, free_bytes: 1, ttl_seconds: 86400, concurrent_imports: 4 });
@@ -64,7 +64,7 @@ function transport(prefix = 0, history = true) {
 }
 
 async function open(history = true, contents = chunks.join("")) {
-  render(<DatasetImportPanel sessionToken="session" />);
+  render(<DatasetImportPanel />);
   fireEvent.click(screen.getByRole("button", { name: "Importar dataset" }));
   const dialog = await screen.findByRole("dialog");
   const start = within(dialog).getByRole("button", { name: "Importar dataset" }) as HTMLButtonElement;

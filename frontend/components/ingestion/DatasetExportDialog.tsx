@@ -9,12 +9,12 @@ import DatasetExportPanel from "./DatasetExportPanel";
 
 const buttonClass = "rounded-lg border border-emerald-800/60 bg-emerald-950/40 px-3 py-2 text-xs font-semibold text-emerald-400 hover:bg-emerald-900/50 transition-colors focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed";
 
-export default function DatasetExportDialog({ sessionToken = "" }: { sessionToken?: string } = {}) {
+export default function DatasetExportDialog() {
   const webUser = useOptionalWebSession();
-  return <ExportDialog key={sessionToken || webUser?.id || "anonymous"} token={sessionToken} hasWebSession={!!webUser} />;
+  return <ExportDialog key={webUser?.id || "anonymous"} hasWebSession={!!webUser} />;
 }
 
-function ExportDialog({ token, hasWebSession }: { token: string; hasWebSession: boolean }) {
+function ExportDialog({ hasWebSession }: { hasWebSession: boolean }) {
   const [open, setOpen] = useState(false);
   const [activated, setActivated] = useState(false);
   const [datasets, setDatasets] = useState<ImportDataset[] | null>(null);
@@ -33,14 +33,14 @@ function ExportDialog({ token, hasWebSession }: { token: string; hasWebSession: 
     const controller = new AbortController();
     async function load() {
       try {
-        const response = await importRequest(token, `${importBase}/access`, { signal: controller.signal });
+        const response = await importRequest(`${importBase}/access`, { signal: controller.signal });
         const access = z.object({ development_mode: z.boolean(), authenticated: z.boolean().default(false), available: z.boolean().default(true), reason: z.string().optional() }).parse(await response.json());
         if (controller.signal.aborted) return;
         if (!access.available) throw new Error(access.reason ?? "El servicio ZIP no está disponible en este equipo.");
-        const required = !access.development_mode && !access.authenticated && !token;
+        const required = !access.development_mode && !access.authenticated && !hasWebSession;
         setSessionRequired(required);
         if (required) return;
-        const catalog = await importRequest(token, `${importBase}/datasets${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { signal: controller.signal });
+        const catalog = await importRequest(`${importBase}/datasets${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { signal: controller.signal });
         const page = datasetsPageSchema.parse(await catalog.json());
         if (!controller.signal.aborted) {
           setDatasets(page.datasets); setNextCursor(page.next_cursor);
@@ -53,7 +53,7 @@ function ExportDialog({ token, hasWebSession }: { token: string; hasWebSession: 
     }
     void load();
     return () => controller.abort();
-  }, [open, token, hasWebSession, reload, cursor]);
+  }, [open, hasWebSession, reload, cursor]);
 
   useEffect(() => {
     if (!open) return;
@@ -122,7 +122,7 @@ function ExportDialog({ token, hasWebSession }: { token: string; hasWebSession: 
                 setError(""); setLoading(true); setCursor(nextCursor);
               }}>Siguiente página de datasets</button>
             </div>
-            <DatasetExportPanel token={token} datasets={datasets} />
+            <DatasetExportPanel datasets={datasets} />
           </>}
         </div>
       </div>

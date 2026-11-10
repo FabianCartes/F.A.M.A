@@ -23,11 +23,11 @@ async function sha256(blob: Blob) {
 }
 
 /** The server receipt, never a browser counter, is the resume authority. */
-export async function uploadImportReceipt(token: string, importId: string, file: File,
+export async function uploadImportReceipt(importId: string, file: File,
   progress: (value: ReceiptProgress) => void) {
   if (!crypto.subtle) throw new Error("La recepción requiere un contexto seguro con SHA-256 disponible.");
   const endpoint = `${importBase}/${importId}/receipt`;
-  const response = await importRequest(token, endpoint, jsonRequest({ name: file.name, size_bytes: file.size }));
+  const response = await importRequest(endpoint, jsonRequest({ name: file.name, size_bytes: file.size }));
   let receipt = receiptSchema.parse(await response.json());
   if (receipt.import_id !== importId || receipt.name !== file.name || receipt.size_bytes !== file.size || receipt.status === "cancelled") {
     throw new Error("El archivo no corresponde a la recepción seleccionada.");
@@ -39,7 +39,7 @@ export async function uploadImportReceipt(token: string, importId: string, file:
   if (receipt.received_bytes > 0) {
     progress({ receipt, phase: "verifying", verified });
     do {
-      const response = await importRequest(token, `${endpoint}/chunks${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
+      const response = await importRequest(`${endpoint}/chunks${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`);
       const page = chunkPageSchema.parse(await response.json());
       if (page.snapshot !== receipt.received_bytes || page.total !== Math.ceil(receipt.received_bytes / receipt.chunk_bytes) || !page.chunks.length) {
         throw new Error("El prefijo de recepción cambió o está incompleto. Consulta su estado y reintenta.");
@@ -65,7 +65,7 @@ export async function uploadImportReceipt(token: string, importId: string, file:
     const end = Math.min(offset + receipt.chunk_bytes, file.size);
     const chunk = file.slice(offset, end);
     const digest = await sha256(chunk);
-    const response = await importRequest(token, `${endpoint}/chunks/${offset / receipt.chunk_bytes}`, {
+    const response = await importRequest(`${endpoint}/chunks/${offset / receipt.chunk_bytes}`, {
       method: "PUT", headers: { "Content-Type": "application/octet-stream",
         "X-Chunk-Offset": String(offset), "X-Chunk-SHA256": digest }, body: chunk,
     });
@@ -79,7 +79,7 @@ export async function uploadImportReceipt(token: string, importId: string, file:
     progress({ receipt, phase: "uploading", verified: 0 });
   }
   progress({ receipt, phase: "sealing", verified: 0 });
-  const finalized = receiptSchema.parse(await (await importRequest(token, `${endpoint}/finalize`, jsonRequest({}))).json());
+  const finalized = receiptSchema.parse(await (await importRequest(`${endpoint}/finalize`, jsonRequest({}))).json());
   if (finalized.import_id !== importId || finalized.size_bytes !== file.size ||
       finalized.received_bytes !== file.size || finalized.status !== "sealed") throw new Error("No se confirmó la recepción completa.");
   progress({ receipt: finalized, phase: "sealed", verified });

@@ -36,7 +36,7 @@ it.each([60, 600])("keeps the rendered review page bounded across %i synthetic f
     throw new Error(`Unexpected ${input}`);
   });
   vi.stubGlobal("fetch", fetcher);
-  render(<DatasetImportPanel sessionToken="synthetic" />);
+  render(<DatasetImportPanel />);
   fireEvent.click(screen.getByRole("button", { name: "Importar dataset" }));
   const start = within(screen.getByRole("dialog")).getByRole("button", { name: "Importar dataset" }) as HTMLButtonElement;
   await waitFor(() => expect(start.disabled).toBe(false));
@@ -137,7 +137,7 @@ it("ignores a delayed page from a previous job and keeps confirmation explicit",
     throw new Error(`Unexpected ${path}`);
   });
   vi.stubGlobal("fetch", fetcher);
-  render(<DatasetImportPanel sessionToken="synthetic" />);
+  render(<DatasetImportPanel />);
   fireEvent.click(screen.getByRole("button", { name: "Importar dataset" }));
   const start = within(screen.getByRole("dialog")).getByRole("button", { name: "Importar dataset" }) as HTMLButtonElement;
   await waitFor(() => expect(start.disabled).toBe(false));

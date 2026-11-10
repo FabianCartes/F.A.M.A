@@ -5,8 +5,8 @@ import { z } from "zod";
 import { importRequest, pageMetadataSchema } from "@/lib/api/datasetImports";
 
 /** One mounted page per collection; never accumulates member arrays. */
-export default function ImportDetailPage<T>({ token, endpoint, collection, label, schema, snapshot, renderItem }: {
-  token: string; endpoint: string; collection: string; label: string; schema: z.ZodType<T>;
+export default function ImportDetailPage<T>({ endpoint, collection, label, schema, snapshot, renderItem }: {
+  endpoint: string; collection: string; label: string; schema: z.ZodType<T>;
   snapshot?: string | null; renderItem: (item: T) => ReactNode;
 }) {
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
@@ -20,7 +20,7 @@ export default function ImportDetailPage<T>({ token, endpoint, collection, label
     const controller = new AbortController();
     async function load() {
       const url = cursor ? `${endpoint}?cursor=${encodeURIComponent(cursor)}` : endpoint;
-      const response = await importRequest(token, url, { signal: controller.signal });
+      const response = await importRequest(url, { signal: controller.signal });
       const raw = await response.json();
       const metadata = pageMetadataSchema.parse(raw);
       const items = z.array(schema).max(200).parse(raw[collection]);
@@ -34,7 +34,7 @@ export default function ImportDetailPage<T>({ token, endpoint, collection, label
       if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "No se pudo cargar la página.");
     });
     return () => controller.abort();
-  }, [token, endpoint, collection, schema, snapshot, cursor, attempt]);
+  }, [endpoint, collection, schema, snapshot, cursor, attempt]);
 
   return <section aria-label={label}>
     <p>{label}: {loaded ? result.total : "cargando…"}</p>

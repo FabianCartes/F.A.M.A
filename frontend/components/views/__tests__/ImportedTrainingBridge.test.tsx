@@ -25,7 +25,7 @@ it('shows the confirmed owner import after navigating to training with blocking 
     const url = new URL(String(input), 'http://synthetic.test');
     const path = url.pathname;
     if (options?.method && options.method !== 'GET') writes.push(path);
-    if (path.endsWith('/auth/web/me')) return Response.json({ id: 1, email: 'owner@example.test',
+    if (path.endsWith('/auth/me')) return Response.json({ id: 1, email: 'owner@example.test',
       nombre_completo: 'Owner', rol: 'investigador', activo: true });
     if (path === '/api/training/datasets' && url.searchParams.get('include_imported') === 'true')
       return Response.json({ datasets: confirmed ? [{ source_type: 'imported', id: 'owner-import',

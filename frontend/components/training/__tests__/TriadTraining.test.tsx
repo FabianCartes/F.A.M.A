@@ -21,7 +21,7 @@ function setup(opts: { preparations?: unknown[]; progress?: () => unknown } = {}
   const transport = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     let data: unknown = {};
-    if (url.includes('/auth/web/me')) data = { id: 1, email: 'owner@example.test', nombre_completo: 'Owner', rol: 'investigador', activo: true };
+    if (url.includes('/auth/me')) data = { id: 1, email: 'owner@example.test', nombre_completo: 'Owner', rol: 'investigador', activo: true };
     else if (url.includes('/history')) data = { history: [] };
     else if (url.includes('/progress')) data = started ? opts.progress?.() : { status: 'idle', logs: [] };
     else if (url.endsWith('/start')) { started = true; data = { status: 'started' }; }

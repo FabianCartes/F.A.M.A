@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useState } from "react";
 import SessionBoundary, { useOptionalWebSession } from "../SessionBoundary";
 import { importRequest } from "@/lib/api/datasetImports";
@@ -16,12 +16,44 @@ function PrivateState() {
   return <><SidebarSession isCollapsed={false} onToggleCollapsed={() => {}} /><p>Workspace content</p>{owner && <label>Private draft<input aria-label="Private draft" value={text} onChange={event => setText(event.target.value)} /></label>}</>;
 }
 
+it("presents a single logout control inside the existing sidebar session", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json(user)));
+  render(<SessionBoundary><PrivateState /></SessionBoundary>);
+  const sidebarSession = await screen.findByRole("region", { name: "Sesión actual" });
+  expect(within(sidebarSession).getByText(user.nombre_completo)).toBeDefined();
+  expect(within(sidebarSession).getByRole("button", { name: "Cerrar sesión" })).toBeDefined();
+  expect(screen.getAllByRole("button", { name: "Cerrar sesión" })).toHaveLength(1);
+});
+
+it("keeps logout pending despite a late private 401, then retains recovery on failure", async () => {
+  let finishPrivate!: (response: Response) => void;
+  let finishLogout!: (response: Response) => void;
+  vi.stubGlobal("fetch", vi.fn(async (path: string) => {
+    if (path.endsWith("/me")) return Response.json(user);
+    return new Promise<Response>(resolve => {
+      if (path.endsWith("/logout")) finishLogout = resolve; else finishPrivate = resolve;
+    });
+  }));
+  render(<SessionBoundary><PrivateState /></SessionBoundary>);
+  await screen.findByText(user.nombre_completo);
+  const pending = importRequest("/api/ingestion/imports/datasets").catch(() => undefined);
+  fireEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+  await act(async () => { finishPrivate(Response.json({}, { status: 401 })); await pending; });
+  expect(screen.getByRole("status").textContent).toBe("Cerrando sesión…");
+  expect(screen.queryByText("Workspace content")).toBeNull();
+  expect(navigation.replace).not.toHaveBeenCalled();
+  await act(async () => { finishLogout(Response.json({}, { status: 503 })); });
+  expect(screen.getByRole("button", { name: "Reintentar cierre de sesión" })).toBeDefined();
+  expect(screen.queryByText("Workspace content")).toBeNull();
+  expect(navigation.replace).not.toHaveBeenCalled();
+});
+
 it("hides the workspace before redirecting on imported HTTP 401", async () => {
   vi.stubGlobal("fetch", vi.fn(async (path: string) => path.endsWith("/me") ? Response.json(user) : Response.json({}, { status: 401 })));
   render(<SessionBoundary><PrivateState /></SessionBoundary>);
   await screen.findByText(user.nombre_completo);
   fireEvent.change(screen.getByLabelText("Private draft"), { target: { value: "private cached data" } });
-  await act(async () => { await importRequest("", "/api/ingestion/imports/datasets").catch(() => undefined); });
+  await act(async () => { await importRequest("/api/ingestion/imports/datasets").catch(() => undefined); });
   expect(screen.queryByLabelText("Private draft")).toBeNull();
   expect(screen.queryByText("Workspace content")).toBeNull();
   expect(navigation.replace).toHaveBeenCalledWith("/login");
@@ -103,7 +135,7 @@ it("preserves failed logout recovery when a pending private request later return
   }));
   render(<SessionBoundary><PrivateState /></SessionBoundary>);
   await screen.findByText(user.nombre_completo);
-  const pending = importRequest("", "/api/ingestion/imports/datasets").catch(() => undefined);
+  const pending = importRequest("/api/ingestion/imports/datasets").catch(() => undefined);
   fireEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
   const warning = (await screen.findByRole("alert")).textContent;
   await act(async () => { finishPrivate(Response.json({}, { status: 401 })); await pending; });
@@ -131,7 +163,7 @@ it("ignores a stale unauthorized response after confirming a different cookie id
   }));
   render(<SessionBoundary><PrivateState /></SessionBoundary>);
   await screen.findByText(user.nombre_completo);
-  const oldRequest = importRequest("", "/api/ingestion/imports/datasets").catch(() => undefined);
+  const oldRequest = importRequest("/api/ingestion/imports/datasets").catch(() => undefined);
   identity = { ...user, id: 2, nombre_completo: "New confirmed identity" };
   fireEvent.focus(window);
   await screen.findByText(identity.nombre_completo);
@@ -151,7 +183,7 @@ it("does not restore an invalidated owner from a late session revalidation", asy
   await screen.findByText(user.nombre_completo);
   refreshing = true;
   await act(async () => { fireEvent.focus(window); });
-  await act(async () => { await importRequest("", "/api/ingestion/imports/datasets").catch(() => undefined); });
+  await act(async () => { await importRequest("/api/ingestion/imports/datasets").catch(() => undefined); });
   expect(screen.queryByText("Workspace content")).toBeNull();
   expect(navigation.replace).toHaveBeenCalledWith("/login");
   await act(async () => { finish(Response.json(user)); });

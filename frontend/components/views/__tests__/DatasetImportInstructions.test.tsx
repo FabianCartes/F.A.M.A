@@ -17,7 +17,7 @@ it.each([
     return Response.json({ imports: [], next_cursor: null, total: 0, snapshot: 'empty' });
   });
   vi.stubGlobal('fetch', fetcher);
-  render(<DatasetImportPanel sessionToken="owner" />);
+  render(<DatasetImportPanel />);
   fireEvent.click(screen.getByRole('button', { name: 'Importar dataset' }));
   const limits = await screen.findByRole('list', { name: 'Límites de peso' });
   expect(within(limits).getAllByRole('listitem').map(item => item.textContent)).toEqual(expected);

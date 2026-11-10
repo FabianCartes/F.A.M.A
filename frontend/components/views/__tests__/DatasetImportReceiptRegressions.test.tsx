@@ -27,9 +27,9 @@ function server(mode = "ok", prefix = 16) {
   vi.stubGlobal("crypto", webcrypto);
   vi.stubGlobal("fetch", vi.fn(async (input: string, options?: RequestInit) => {
     const url = new URL(input, "http://test.invalid"), path = url.pathname;
-    expect(new Headers(options?.headers).get("Authorization")).toBe("Bearer own-session");
+    expect(new Headers(options?.headers).get("Authorization")).toBeNull();
     calls.push(`${options?.method || "GET"} ${path}${url.search}`);
-    if (path.endsWith("/access")) return Response.json({ development_mode: false });
+    if (path.endsWith("/access")) return Response.json({ development_mode: false, authenticated: true });
     if (path.endsWith("/limits")) return Response.json({ received_bytes: 19, expanded_bytes: 80, entries: 10,
       depth: 4, path_bytes: 100, audio_bytes: 40, audio_seconds: 10, validation_seconds: 10,
       free_bytes: 1, ttl_seconds: 100, concurrent_imports: 1 });
@@ -84,7 +84,7 @@ function server(mode = "ok", prefix = 16) {
 }
 
 async function select(contents = data) {
-  render(<DatasetImportPanel sessionToken="own-session" />);
+  render(<DatasetImportPanel />);
   fireEvent.click(screen.getByRole("button", { name: "Importar dataset" }));
   const dialog = await screen.findByRole("dialog");
   const start = within(dialog).getByRole("button", { name: "Importar dataset" }) as HTMLButtonElement;

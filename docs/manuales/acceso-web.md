@@ -6,6 +6,8 @@ El workspace requiere una identidad confirmada por la sesión web. Al abrir la a
 
 En `/login`, introduce el correo electrónico y la contraseña de una cuenta habilitada. La aplicación confirma la cookie antes de abrir el workspace. Una visita a `/login` con sesión ya confirmada vuelve a la aplicación.
 
+La sesión actual y **Cerrar sesión** se muestran en el sidebar. El cierre bloquea el workspace hasta que el servidor confirma la revocación. Si falla, se conserva la advertencia y **Reintentar cierre de sesión**; un 401 de otra petición pendiente no confirma la revocación ni elimina ese reintento. Las importaciones usan la misma cookie, sin tokens Bearer. La invalidación automática por 401 corresponde a clientes que utilizan `apiFetch` o notifican la revisión de sesión; esta etapa no migra todos los `fetch` directos de ingesta, dashboard o predicción.
+
 ## Sesión en la barra lateral
 
 La sesión actual aparece en la parte inferior de la barra lateral, justo encima del aviso de GCP. Con el panel expandido se muestran un icono de usuario, el nombre, el rol registrado y el botón **Cerrar sesión**. El nombre completo puede consultarse al situar el puntero sobre él si no cabe en el espacio disponible. Ya no se duplica la sesión en una barra superior.

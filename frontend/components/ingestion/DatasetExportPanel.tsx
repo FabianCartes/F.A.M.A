@@ -14,7 +14,7 @@ type ExportJob = z.infer<typeof exportSchema>;
 const sessionSchema = z.object({ url: z.url(), expires_at: z.number() });
 const buttonClass = "rounded border border-emerald-800 px-3 py-2 text-emerald-300 disabled:opacity-40";
 
-export default function DatasetExportPanel({ token, datasets }: { token: string; datasets: ImportDataset[] }) {
+export default function DatasetExportPanel({ datasets }: { datasets: ImportDataset[] }) {
   const [dataset, setDataset] = useState("");
   const [revision, setRevision] = useState("");
   const [job, setJob] = useState<ExportJob | null>(null);
@@ -33,7 +33,7 @@ export default function DatasetExportPanel({ token, datasets }: { token: string;
     let timer: ReturnType<typeof setTimeout> | undefined;
     async function poll() {
       try {
-        const response = await importRequest(token, `${importBase}/exports/${jobId}`, { signal: controller.signal });
+        const response = await importRequest(`${importBase}/exports/${jobId}`, { signal: controller.signal });
         const value = exportSchema.parse(await response.json());
         if (controller.signal.aborted) return;
         setJob(current => current?.id === jobId ? value : current);
@@ -47,7 +47,7 @@ export default function DatasetExportPanel({ token, datasets }: { token: string;
     }
     void poll();
     return () => { controller.abort(); if (timer) clearTimeout(timer); };
-  }, [jobId, jobStatus, token]);
+  }, [jobId, jobStatus]);
 
   async function act(operation: (generation: number) => Promise<void>) {
     if (active.current) return;
@@ -63,7 +63,7 @@ export default function DatasetExportPanel({ token, datasets }: { token: string;
   async function admit(generation: number) {
     const signature = JSON.stringify([dataset, revision]);
     if (admission.current.signature !== signature) admission.current = { signature, key: crypto.randomUUID() };
-    const response = await importRequest(token, `${importBase}/datasets/${dataset}/revisions/${revision}/exports`,
+    const response = await importRequest(`${importBase}/datasets/${dataset}/revisions/${revision}/exports`,
       jsonRequest({ request_key: admission.current.key }));
     const value = exportSchema.parse(await response.json());
     if (generation === epoch.current) { setJob(value); setSession(null); }
@@ -72,7 +72,7 @@ export default function DatasetExportPanel({ token, datasets }: { token: string;
 
   async function prepare(generation: number) {
     if (!job) return;
-    const response = await importRequest(token, `${importBase}/exports/${job.id}/sessions`, jsonRequest({}));
+    const response = await importRequest(`${importBase}/exports/${job.id}/sessions`, jsonRequest({}));
     const value = sessionSchema.parse(await response.json());
     const url = new URL(value.url);
     if (url.protocol !== "https:" || url.username || url.password || url.origin === window.location.origin
@@ -96,7 +96,7 @@ export default function DatasetExportPanel({ token, datasets }: { token: string;
     <button className={buttonClass} disabled={busy || !dataset || !/^\d+$/.test(revision) || ["queued", "running"].includes(jobStatus ?? "")}
       onClick={() => void act(admit)}>Descargar versión como ZIP</button>
     <button className={buttonClass} disabled={busy || !dataset} onClick={() => void act(async generation => {
-      const response = await importRequest(token, `${importBase}/datasets/${dataset}/exports`);
+      const response = await importRequest(`${importBase}/datasets/${dataset}/exports`);
       const value = z.object({ exports: z.array(exportSchema).max(20) }).parse(await response.json());
       if (generation === epoch.current) setHistory(value.exports);
     })}>Recuperar exportaciones</button>

@@ -23,13 +23,13 @@ function formatWeightLimit(bytes: number) {
   return `${display.toLocaleString('es', { maximumFractionDigits: 2 })} ${useGigabytes ? 'GB' : 'MB'}`;
 }
 
-function CompletedImportSummary({ job, token, datasetName }: { job: ImportJob; token: string; datasetName?: string }) {
+function CompletedImportSummary({ job, datasetName }: { job: ImportJob; datasetName?: string }) {
   const [classes, setClasses] = useState<string[]>([]);
   const [error, setError] = useState("");
   useEffect(() => {
     const controller = new AbortController();
     async function load() {
-      const response = await importRequest(token, `${importBase}/${job.id}/classes`, { signal: controller.signal });
+      const response = await importRequest(`${importBase}/${job.id}/classes`, { signal: controller.signal });
       const page = classesPageSchema.parse(await response.json());
       if (job.preview_token && page.snapshot !== job.preview_token) throw new Error("Las clases cambiaron. Vuelve a consultar la importación.");
       if (!controller.signal.aborted) setClasses(page.classes);
@@ -38,7 +38,7 @@ function CompletedImportSummary({ job, token, datasetName }: { job: ImportJob; t
       if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "No se pudieron consultar las clases.");
     });
     return () => controller.abort();
-  }, [job.id, job.preview_token, token]);
+  }, [job.id, job.preview_token]);
   return <section aria-label="Resumen de importación" className="space-y-2 rounded-lg border border-[#2d303b] bg-[#111215] p-4">
     <h3 className="font-semibold text-white">{datasetName || "Nombre del dataset no disponible"}</h3>
     <p>Importada localmente: {job.added_count} archivo(s) nuevo(s).</p>
@@ -60,8 +60,8 @@ const statusLabels: Record<string, string> = {
 const inputClass = "mt-1 block w-full rounded-lg border border-[#2d303b] bg-[#111215] px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500";
 const buttonClass = "rounded-lg border border-emerald-800/60 bg-emerald-950/40 px-3 py-2 text-xs font-semibold text-emerald-400 hover:bg-emerald-900/50 transition-colors focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed";
 
-export default function DatasetImportPanel({ sessionToken = "", onCatalogChange, triggerLabel = "Importar dataset", datasetNames = {} }: {
-  sessionToken?: string; onCatalogChange?: () => void; triggerLabel?: string; datasetNames?: Record<string, string>;
+export default function DatasetImportPanel({ onCatalogChange, triggerLabel = "Importar dataset", datasetNames = {} }: {
+  onCatalogChange?: () => void; triggerLabel?: string; datasetNames?: Record<string, string>;
 } = {}) {
   const [open, setOpen] = useState(false);
   const [started, setStarted] = useState(false);
@@ -69,7 +69,6 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange,
   const [sessionRequired, setSessionRequired] = useState(false);
   // Reuse the confirmed opaque session; never embed another login here.
   const webUser = useOptionalWebSession();
-  const token = sessionToken;
   const titleId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -109,7 +108,7 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange,
     const endpoint = `${importBase}/${importId}/jobs/${executionId}`;
     async function poll() {
       try {
-        const response = await importRequest(token, endpoint, { signal: controller.signal });
+        const response = await importRequest(endpoint, { signal: controller.signal });
         const execution = executionSchema.parse(await response.json());
         if (controller.signal.aborted) return;
         if (execution.status === "queued" || execution.status === "running") {
@@ -117,7 +116,7 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange,
             ? { ...current, execution } : current);
           timer = setTimeout(poll, 1000);
         } else {
-          const response = await importRequest(token, `${importBase}/${importId}`, { signal: controller.signal });
+          const response = await importRequest(`${importBase}/${importId}`, { signal: controller.signal });
           const current = jobSchema.parse(await response.json());
           if (!controller.signal.aborted) setJob(previous => previous && previous.id === importId && previous.execution?.id === executionId
             ? current : previous);
@@ -132,7 +131,7 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange,
     }
     void poll();
     return () => { controller.abort(); if (timer) clearTimeout(timer); };
-  }, [importId, executionId, executionStatus, token]);
+  }, [importId, executionId, executionStatus]);
 
   useEffect(() => {
     if (!open) return;
@@ -183,20 +182,20 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange,
     finally { active.current = false; setBusy(""); }
   }
 
-  async function refresh(sessionToken = token) {
-    const jobs = await importRequest(sessionToken, `${importBase}?latest=true`).then(r => r.json());
+  async function refresh() {
+    const jobs = await importRequest(`${importBase}?latest=true`).then(r => r.json());
     const jobPage = jobsPageSchema.parse(jobs);
     setHistory(jobPage.imports.slice(0, 10));
   }
 
   async function initialize() {
-    const response = await importRequest(token, `${importBase}/access`);
+    const response = await importRequest(`${importBase}/access`);
     const access = z.object({ development_mode: z.boolean(), authenticated: z.boolean().default(false), available: z.boolean().default(true), reason: z.string().optional() }).parse(await response.json());
     if (!access.available) throw new Error(access.reason ?? "El servicio ZIP no está disponible en este equipo.");
     setDevelopmentMode(access.development_mode);
-    setSessionRequired(!access.development_mode && !access.authenticated && !token && !webUser);
-    if (!access.development_mode && !access.authenticated && !token && !webUser) return;
-    const configured = await importRequest(token, `${importBase}/limits`);
+    setSessionRequired(!access.development_mode && !access.authenticated && !webUser);
+    if (!access.development_mode && !access.authenticated && !webUser) return;
+    const configured = await importRequest(`${importBase}/limits`);
     const parsed = limitsSchema.parse(await configured.json());
     await refresh();
     setLimits(parsed);
@@ -207,7 +206,7 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange,
     if (!current) {
       if (!file) throw new Error("Selecciona un archivo ZIP.");
       if (!requestKey.current) requestKey.current = crypto.randomUUID();
-      const response = await importRequest(token, importBase, jsonRequest({ request_key: requestKey.current,
+      const response = await importRequest(importBase, jsonRequest({ request_key: requestKey.current,
         name, description, target_id: null, layout: "class_folders", auto_import: true }));
       current = jobSchema.parse(await response.json());
       setJob(current);
@@ -215,8 +214,8 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange,
     }
     if (current.status === "receiving") {
       if (!file) throw new Error("Selecciona el ZIP original para reintentar la recepción.");
-      await uploadImportReceipt(token, current.id, file, setReceiptProgress);
-      const response = await importRequest(token, `${importBase}/${current.id}`);
+      await uploadImportReceipt(current.id, file, setReceiptProgress);
+      const response = await importRequest(`${importBase}/${current.id}`);
       current = jobSchema.parse(await response.json());
       setJob(current);
     }
@@ -228,7 +227,7 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange,
   async function admit(current: ImportJob, suffix: string, body: Record<string, unknown> = {}) {
     const signature = JSON.stringify([current.id, suffix, body]);
     if (operationKey.current.signature !== signature) operationKey.current = { signature, key: crypto.randomUUID() };
-    const response = await importRequest(token, `${importBase}/${current.id}/${suffix}`,
+    const response = await importRequest(`${importBase}/${current.id}/${suffix}`,
       jsonRequest({ ...body, request_key: operationKey.current.key }));
     const execution = executionSchema.parse(await response.json());
     setJob({ ...current, execution });
@@ -238,7 +237,7 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange,
   async function action(suffix: string, body?: Record<string, unknown>) {
     if (!job) return;
     if (suffix !== "cancel") return admit(job, suffix, body);
-    const response = await importRequest(token, `${importBase}/${job.id}/${suffix}`, jsonRequest(body ?? {}));
+    const response = await importRequest(`${importBase}/${job.id}/${suffix}`, jsonRequest(body ?? {}));
     setJob(jobSchema.parse(await response.json()));
     await refresh();
   }
@@ -289,7 +288,7 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange,
             </ul>
           </div>
           <button className={buttonClass} disabled={!!busy} onClick={() => void act("Descargando ejemplo…", async () => {
-            await saveDownload(await importRequest(token, `${importBase}/example.zip`), "dataset-example.zip");
+            await saveDownload(await importRequest(`${importBase}/example.zip`), "dataset-example.zip");
           })}>Descargar ZIP de ejemplo sintético</button>
         </>}
         </>
@@ -322,7 +321,7 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange,
         {job && <div className="space-y-3">
           {job.status === "cancelled" && job.preview.error_count > 0 ? <>
             <p className="font-semibold text-white">ZIP rechazado</p>
-            <RejectedImportReason key={`${token}:${job.id}:${job.preview_token}`} job={job} token={token} />
+            <RejectedImportReason key={`${job.id}:${job.preview_token}`} job={job} />
           </> : <>
           {job.status !== "imported" && <section aria-label="Importación en curso" className="space-y-2 rounded-lg border border-[#2d303b] bg-[#111215] p-4">
             <h3 className="font-semibold text-white">{(job.dataset_id && datasetNames[job.dataset_id]) || (createdImport?.id === job.id ? createdImport.name : job.archive_name) || "Importación de ZIP"}</h3>
@@ -335,11 +334,11 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange,
           </section>}
           {job.execution?.error && <p role="alert">{job.status === "cancelled" ? "La importación falló y quedó cancelada. Crea una nueva importación con el ZIP corregido." : "No se pudo completar la importación. Consulta su estado antes de reintentar."}</p>}
           {job.execution?.status === "queued" && <button className={buttonClass} disabled={!!busy} onClick={() => void act("Cancelando trabajo…", async () => {
-            const response = await importRequest(token, `${importBase}/${job.id}/jobs/${job.execution!.id}/cancel`, jsonRequest({}));
+            const response = await importRequest(`${importBase}/${job.id}/jobs/${job.execution!.id}/cancel`, jsonRequest({}));
             setJob({ ...job, execution: executionSchema.parse(await response.json()) });
           })}>Cancelar trabajo pendiente</button>}
           {job.status !== "cancelled" && job.execution && ["failed", "cancelled"].includes(job.execution.status) && <button className={buttonClass} disabled={!!busy} onClick={() => void act("Admitiendo reintento…", () => admit(job, `jobs/${job.execution!.id}/retry`))}>Reintentar trabajo</button>}
-          {job.status === "imported" ? <CompletedImportSummary key={`${token}:${job.id}:${job.preview_token}`} job={job} token={token} datasetName={publishedDatasetName} /> : !executing && ["ready", "needs_correction", "failed", "cancelled"].includes(job.status) ? <>
+          {job.status === "imported" ? <CompletedImportSummary key={`${job.id}:${job.preview_token}`} job={job} datasetName={publishedDatasetName} /> : !executing && ["ready", "needs_correction", "failed", "cancelled"].includes(job.status) ? <>
           <p>Clases propuestas: {job.preview.class_count} · Archivos: {job.preview.file_count} · Nuevos: {job.preview.new_count ?? 0} · Duplicados internos: {job.preview.duplicate_count ?? 0} · Errores: {job.preview.error_count} · Advertencias: {job.preview.warning_count}</p>
           {job.status === "cancelled" && job.preview.error_count > 0 && <p role="alert">ZIP rechazado: la importación quedó cancelada. Revisa las incidencias y crea una nueva importación con el ZIP corregido. No se publicó contenido de este ZIP.</p>}
           {automatic && job.status === "needs_correction" && <p role="alert">ZIP rechazado: revisa las incidencias, cancela esta solicitud y crea una nueva importación con el ZIP corregido. No se publicó contenido de este ZIP.</p>}
@@ -349,11 +348,11 @@ export default function DatasetImportPanel({ sessionToken = "", onCatalogChange,
             <p>La confirmación vuelve a comprobar la cuota y la revisión del destino.</p>
           </section>}
           {job.preview.duplicate_collection && <p>Colección ya importada: se detectó el mismo contenido y etiquetas.</p>}
-          {job.preview_token && <div key={`${token}:${job.id}:${job.preview_token}`}>
-            <ImportDetailPage token={token} endpoint={`${importBase}/${job.id}/files`} collection="files" label="archivos" schema={audioSchema} snapshot={job.preview_token}
+          {job.preview_token && <div key={`${job.id}:${job.preview_token}`}>
+            <ImportDetailPage endpoint={`${importBase}/${job.id}/files`} collection="files" label="archivos" schema={audioSchema} snapshot={job.preview_token}
               renderItem={f => <>{f.original_path} → {f.class_name}{f.duplicate || f.existing ? " (omitido)" : ""}{f.relative_path !== f.original_path ? ` · Ruta de exportación: ${f.relative_path}` : ""}</>} />
-            <ImportDetailPage token={token} endpoint={`${importBase}/${job.id}/classes`} collection="classes" label="clases" schema={classSchema} snapshot={job.preview_token} renderItem={value => value} />
-            <ImportDetailPage token={token} endpoint={`${importBase}/${job.id}/issues`} collection="issues" label="incidencias" schema={issueSchema} snapshot={job.preview_token}
+            <ImportDetailPage endpoint={`${importBase}/${job.id}/classes`} collection="classes" label="clases" schema={classSchema} snapshot={job.preview_token} renderItem={value => value} />
+            <ImportDetailPage endpoint={`${importBase}/${job.id}/issues`} collection="issues" label="incidencias" schema={issueSchema} snapshot={job.preview_token}
               renderItem={issue => <span role={issue.severity === "error" ? "alert" : undefined}>{issue.severity === "warning" ? "Advertencia: " : ""}{issue.path}: {issue.code}. {issue.action}</span>} />
           </div>}
           </> : null}

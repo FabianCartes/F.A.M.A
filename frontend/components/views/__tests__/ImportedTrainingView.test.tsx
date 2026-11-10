@@ -13,7 +13,7 @@ it('keeps an explicit legacy choice across rerender and same-owner session refre
  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
   const url = String(input);
   let data: unknown = {};
-  if (url.includes('/auth/web/me')) {
+  if (url.includes('/auth/me')) {
    identityReads++;
    data = {id:1,email:'owner@example.test',nombre_completo:'Owner',rol:'investigador',activo:true};
   } else if (url.includes('/datasets')) data = {datasets:[{source_type:'legacy',record_id:'legacy:1',id:'AvesChilenas',name:'AvesChilenas',audio_count:9,class_count:3,eligible:true,eligibility_state:'current_flow_compatible',reasons:[]}]};
@@ -50,8 +50,8 @@ it.each([
  const transport=vi.fn(async(input:RequestInfo|URL)=>{
  const url=String(input);let data:unknown={};
  if(url.endsWith('/start'))return new Promise<Response>(resolve=>{acceptStart=resolve;});
- if(url.includes('/auth/web/logout'))return new Response(null,{status:204});
- if(url.includes('/auth/web/me'))data={id:1,email:'owner@example.test',nombre_completo:'Owner',rol:'investigador',activo:true};
+ if(url.includes('/auth/logout'))return new Response(null,{status:204});
+ if(url.includes('/auth/me'))data={id:1,email:'owner@example.test',nombre_completo:'Owner',rol:'investigador',activo:true};
  else if(url.includes('include_imported=true'))data={datasets:[{source_type:'imported',id:'arbitrary',name:'Arbitrary WAV',eligible:true,reasons:[],preparations:[{snapshot_id:'snapshot',prepared_version:'version',eligible:true,reasons:[],profile,warnings:[]}]}]};
  else if(url.endsWith('/members'))data={snapshot_id:'snapshot',members:[{member_id:'member',class_name:'ants',original_path:'ants/a.wav',size_bytes:44,sha256:'hash'}]};
  else if(url.endsWith('/snapshots'))data={id:'snapshot',dataset_id:'arbitrary',name:'Arbitrary WAV',state:'ready',file_count:1};

@@ -19,7 +19,7 @@ it('lists only ten recent ZIP names and local dates, retaining opaque recovery I
     return Response.json({ imports: rows, next_cursor: 'must-not-be-used', total: 12, snapshot: 'history' });
   });
   vi.stubGlobal('fetch', fetcher);
-  render(<DatasetImportPanel sessionToken="owner" />);
+  render(<DatasetImportPanel />);
   fireEvent.click(screen.getByRole('button', { name: 'Importar dataset' }));
   await screen.findByRole('button', { name: 'Descargar ZIP de ejemplo sintético' });
   fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Importar dataset' }));

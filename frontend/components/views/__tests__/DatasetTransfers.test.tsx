@@ -1,6 +1,9 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import IngestionView from '../IngestionView';
+import SessionBoundary from '@/components/auth/SessionBoundary';
+
+vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn() }) }));
 import DatasetImportPanel from '@/components/ingestion/DatasetImportPanel';
 
 it.each([
@@ -143,13 +146,15 @@ it('uploads only selected private datasets using paginated history and monitors 
   const execution = { id: 'upload', import_id: 'aves-import', kind: 'sync', status: 'queued', stage: 'queued', progress: 0, result: {}, error: null, status_url: `${base}/aves-import/jobs/upload` };
   const posts: { path: string; body: unknown; authorization: string | null }[] = [];
   const historyQueries: string[] = [];
+  let owner = 1;
   global.fetch = vi.fn(async (input, init) => {
     const url = new URL(String(input), 'http://localhost');
     if (init?.method === 'POST') {
       posts.push({ path: url.pathname, body: JSON.parse(String(init.body)), authorization: new Headers(init.headers).get('Authorization') });
       return Response.json(execution, { status: 202 });
     }
-    if (url.pathname.endsWith('/access')) return Response.json({ development_mode: false });
+    if (url.pathname.endsWith('/auth/me')) return Response.json({ id: owner, nombre_completo: 'Propietario', email: 'owner@example.test', rol: 'investigador', activo: true });
+    if (url.pathname.endsWith('/access')) return Response.json({ development_mode: false, authenticated: true });
     if (url.pathname === `${base}/datasets`) return Response.json({ datasets, next_cursor: null, total: 2, snapshot: 'catalog' });
     if (url.pathname === base) {
       historyQueries.push(url.search);
@@ -162,7 +167,7 @@ it('uploads only selected private datasets using paginated history and monitors 
     return Response.json([]);
   });
   const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
-  const view = render(<IngestionView sessionToken="owner" />);
+  const view = render(<SessionBoundary><IngestionView /></SessionBoundary>);
   await screen.findByRole('checkbox', { name: 'Seleccionar dataset privado Aves privadas' });
   const catalog = screen.getByRole('table', { name: 'Catálogo' });
   expect(within(catalog).getByRole('columnheader', { name: 'Ámbito' })).toBeDefined();
@@ -207,21 +212,24 @@ it('uploads only selected private datasets using paginated history and monitors 
   fireEvent.click(upload);
   expect(dialog.getAttribute('aria-modal')).toBe('true');
   expect(view.container.hasAttribute('inert')).toBe(true);
-  view.rerender(<IngestionView sessionToken="temporary-owner" />);
+  owner = 2;
+  await act(async () => { fireEvent.focus(window); });
   expect(screen.queryByRole('dialog')).toBeNull();
   expect(view.container.hasAttribute('inert')).toBe(false);
   expect(historyQueries).toEqual([]);
-  view.rerender(<IngestionView sessionToken="owner" />);
+  owner = 1;
+  await act(async () => { fireEvent.focus(window); });
   await screen.findByRole('checkbox', { name: 'Seleccionar dataset privado Aves privadas' });
   fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar dataset privado Aves privadas' }));
   fireEvent.click(screen.getByRole('button', { name: 'Subir selección a GCS' }));
   fireEvent.click(screen.getByRole('button', { name: 'Confirmar subida' }));
   await screen.findByText(/Aves privadas: Trabajo admitido; pendiente de ejecución/);
-  expect(posts).toEqual([{ path: `${base}/aves-import/sync`, body: { request_key: expect.any(String) }, authorization: 'Bearer owner' }]);
+  expect(posts).toEqual([{ path: `${base}/aves-import/sync`, body: { request_key: expect.any(String) }, authorization: null }]);
   expect(historyQueries).toEqual(['', '?cursor=next%20page']);
   expect(screen.queryByText(/Subida completada/)).toBeNull();
   expect((screen.getByRole('button', { name: 'Subir selección a GCS' }) as HTMLButtonElement).disabled).toBe(true);
-  view.rerender(<IngestionView sessionToken="other-owner" />);
+  owner = 3;
+  await act(async () => { fireEvent.focus(window); });
   await waitFor(() => expect((screen.getByRole('button', { name: 'Subir selección a GCS' }) as HTMLButtonElement).disabled).toBe(true));
   expect(screen.queryByText('Local → GCS: Aves privadas')).toBeNull();
   expect(screen.queryByText(/Aves privadas: Trabajo admitido/)).toBeNull();

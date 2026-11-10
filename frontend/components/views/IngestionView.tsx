@@ -26,7 +26,6 @@ import { importBase, importRequest, catalogPageSchema,
 // ============================================================================
 export interface IngestionViewProps {
   onNavigate?: (view: string) => void;
-  sessionToken?: string;
   administrator?: boolean;
 }
 
@@ -84,8 +83,8 @@ type PrivateUpload = { name: string; execution: UploadExecution };
 
 // Keyed by session in the view: abort reads/admissions and discard all private
 // selection/monitoring state when ownership changes. The server owns execution.
-function PrivateDatasetUpload({ token, datasets, selectedIds, loading, onCatalogChange, children }: {
-  token: string; datasets: CatalogDataset[]; selectedIds: string[]; loading: boolean;
+function PrivateDatasetUpload({ datasets, selectedIds, loading, onCatalogChange, children }: {
+  datasets: CatalogDataset[]; selectedIds: string[]; loading: boolean;
   onCatalogChange: () => void; children: (busy: boolean) => ReactNode;
 }) {
   const [confirmation, setConfirmation] = useState<{ datasets: CatalogDataset[]; ids: string[] } | null>(null);
@@ -120,7 +119,7 @@ function PrivateDatasetUpload({ token, datasets, selectedIds, loading, onCatalog
         const updates = await Promise.all(uploads.map(async upload => {
           const current = upload.execution;
           if (!["queued", "running"].includes(current.status)) return upload;
-          const response = await importRequest(token, `${importBase}/${encodeURIComponent(current.import_id)}/jobs/${encodeURIComponent(current.id)}`, { signal: controller.signal });
+          const response = await importRequest(`${importBase}/${encodeURIComponent(current.import_id)}/jobs/${encodeURIComponent(current.id)}`, { signal: controller.signal });
           return { ...upload, execution: executionSchema.parse(await response.json()) };
         }));
         if (controller.signal.aborted) return;
@@ -135,7 +134,7 @@ function PrivateDatasetUpload({ token, datasets, selectedIds, loading, onCatalog
     }
     timer = setTimeout(poll, 1000);
     return () => { controller.abort(); clearTimeout(timer); };
-  }, [uploads, executing, token, onCatalogChange]);
+  }, [uploads, executing, onCatalogChange]);
 
   async function uploadSelection() {
     if (active.current || busy || !selected.length || !dialogOpen) return;
@@ -151,7 +150,7 @@ function PrivateDatasetUpload({ token, datasets, selectedIds, loading, onCatalog
       const cursors = new Set<string>();
       let cursor: string | null = null;
       do {
-        const response = await importRequest(token, `${importBase}${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { signal: controller.signal });
+        const response = await importRequest(`${importBase}${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { signal: controller.signal });
         const page = jobsPageSchema.parse(await response.json());
         if (controller.signal.aborted) return;
         for (const source of page.imports) {
@@ -173,7 +172,7 @@ function PrivateDatasetUpload({ token, datasets, selectedIds, loading, onCatalog
           operations.current.set(signature, operation);
         }
         if (!operation.execution) {
-          const response = await importRequest(token, `${importBase}/${encodeURIComponent(operation.source)}/sync`, { ...jsonRequest({ request_key: operation.key }), signal: controller.signal });
+          const response = await importRequest(`${importBase}/${encodeURIComponent(operation.source)}/sync`, { ...jsonRequest({ request_key: operation.key }), signal: controller.signal });
           const execution = executionSchema.parse(await response.json());
           if (controller.signal.aborted) return;
           operation.execution = execution;
@@ -211,10 +210,10 @@ function PrivateDatasetUpload({ token, datasets, selectedIds, loading, onCatalog
   </>;
 }
 
-export default function IngestionView({ onNavigate, administrator = true, sessionToken = "" }: IngestionViewProps = {}) {
+export default function IngestionView({ onNavigate, administrator = true }: IngestionViewProps = {}) {
   const webUser = useOptionalWebSession();
   const webUserId = webUser?.id;
-  const sessionIdentity = sessionToken || (webUserId ? `web:${webUserId}` : "");
+  const sessionIdentity = webUserId ? `web:${webUserId}` : "";
   // Estado de almacenamiento GCS
   const [storageStatus, setStorageStatus] = useState<StorageStatus | null>(null);
   const [isLoadingStatus, setIsLoadingStatus] = useState<boolean>(true);
@@ -252,14 +251,14 @@ export default function IngestionView({ onNavigate, administrator = true, sessio
     catalogRequest.current?.abort();
     const controller = new AbortController();
     catalogRequest.current = controller;
-    return importRequest(sessionToken, `${importBase}/access`, { signal: controller.signal })
+    return importRequest(`${importBase}/access`, { signal: controller.signal })
       .then(response => response.json())
       .then(access => {
         if (controller.signal.aborted) return;
-        if (access.development_mode !== true && !sessionToken && !webUserId) {
+        if (access.development_mode !== true && access.authenticated !== true && !webUserId) {
           throw new Error("Inicia sesión para consultar el catálogo privado de importaciones.");
         }
-        return importRequest(sessionToken, `${importBase}/datasets${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { signal: controller.signal })
+        return importRequest(`${importBase}/datasets${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { signal: controller.signal })
           .then(response => response.json())
           .then(raw => {
             const page = catalogPageSchema.parse(raw);
@@ -282,7 +281,7 @@ export default function IngestionView({ onNavigate, administrator = true, sessio
       .finally(() => {
         if (!controller.signal.aborted) setCatalogLoading(false);
       });
-  }, [sessionToken, sessionIdentity, webUserId]);
+  }, [sessionIdentity, webUserId]);
 
   // User events clear the previous page immediately; effects need no synchronous reset.
   const fetchPrivateCatalog = useCallback((cursor: string | null = null) => {
@@ -317,7 +316,7 @@ export default function IngestionView({ onNavigate, administrator = true, sessio
     deletionRequest.current = controller;
     setDeletion({ identity: sessionIdentity, pending: true, message: "Archivando dataset…", error: false });
     try {
-      await deletePrivateDataset(sessionToken, dataset, controller.signal);
+      await deletePrivateDataset(dataset, controller.signal);
       if (controller.signal.aborted) return;
       const catalog = { ...privateCatalog, datasets: importedDatasets.filter(item => item.id !== dataset.id), total: null };
       const ids = privateSelectedIds.filter(id => id !== dataset.id);
@@ -830,12 +829,12 @@ export default function IngestionView({ onNavigate, administrator = true, sessio
       <section aria-label="Catálogo" className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-xl font-bold text-white tracking-tight font-heading">Catálogo datasets privados</h2>
-          <div className="flex flex-wrap gap-3"><DatasetExportDialog /><DatasetImportPanel key={sessionIdentity} sessionToken={sessionToken} onCatalogChange={fetchPrivateCatalog} triggerLabel="Importar ZIP" datasetNames={Object.fromEntries(importedDatasets.map(dataset => [dataset.id, dataset.name]))} /></div>
+          <div className="flex flex-wrap gap-3"><DatasetExportDialog /><DatasetImportPanel key={sessionIdentity} onCatalogChange={fetchPrivateCatalog} triggerLabel="Importar ZIP" datasetNames={Object.fromEntries(importedDatasets.map(dataset => [dataset.id, dataset.name]))} /></div>
         </div>
         <p className="text-xs text-gray-400">Importa un ZIP al entorno local y selecciona los datasets para guardar una copia privada en GCS. La copia local se conserva; no se publica en el catálogo compartido.</p>
         <p className="text-[11px] text-gray-400">{collectionTotal === null ? "Catálogo privado pendiente de consulta" : `${collectionTotal} importaciones privadas`}</p>
         <button type="button" className="text-xs text-gray-300 hover:text-white focus-visible:outline-2 focus-visible:outline-emerald-300" disabled={catalogLoading || deleting} onClick={() => void fetchPrivateCatalog()}>Actualizar estados</button>
-        <PrivateDatasetUpload key={sessionIdentity} token={sessionToken} datasets={importedDatasets} selectedIds={privateSelectedIds} loading={catalogLoading || deleting} onCatalogChange={fetchPrivateCatalog}>
+        <PrivateDatasetUpload key={sessionIdentity} datasets={importedDatasets} selectedIds={privateSelectedIds} loading={catalogLoading || deleting} onCatalogChange={fetchPrivateCatalog}>
         {uploadBusy => <>
         <div className="overflow-x-auto">
           {archiveConfirmation && archiveConfirmation.catalog === privateCatalog && catalogMatchesSession && !catalogLoading && !deleting && !uploadBusy && !isSyncing &&
@@ -1108,7 +1107,7 @@ export default function IngestionView({ onNavigate, administrator = true, sessio
       {/* ==================================================================== */}
       {audioDataset && !archiveConfirmation && !deleting && <DatasetAudioDialog
         key={`${sessionIdentity}:${audioDataset.kind}:${audioDataset.id}`} dataset={audioDataset}
-        token={sessionToken} onClose={closeAudioDialog} returnFocus={audioTrigger} />}
+        onClose={closeAudioDialog} returnFocus={audioTrigger} />}
 
       {/* ==================================================================== */}
       {/* 5. TARJETA: MÉTRICAS DE SINCRONIZACIÓN (RF_02) Y TENSORES (RF_03) */}

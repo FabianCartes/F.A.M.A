@@ -26,7 +26,7 @@ function mockHttp(read?: (kind: Kind, url: URL, init?: RequestInit) => Promise<R
       return read ? read(kind, url, init) : Response.json(page(kind));
     }
     if (url.pathname === `${privateBase}/hash`) { downloads.push(url.pathname); return new Response('audio'); }
-    if (url.pathname.endsWith('/access')) return Response.json({ development_mode: false });
+    if (url.pathname.endsWith('/access')) return Response.json({ development_mode: false, authenticated: true });
     if (url.pathname.endsWith('/imports/datasets')) return Response.json({ datasets: [{ id: 'private-id', name: 'Colección privada', description: null, revision: 7, file_count: 51, class_count: 3, total_size_bytes: 10, synced_file_count: 0 }], next_cursor: null, total: 1, snapshot: 'catalog' });
     if (url.pathname.endsWith('/datasets')) return Response.json({ datasets: [{ id: 'shared-id', name: 'Compartido', file_count: 51, local_file_count: 0, total_size_bytes: 10, is_synced: false }] });
     if (url.pathname.endsWith('/status')) return Response.json({ connected: false, bucket: '', total_objects: 0, total_bytes: 0 });
@@ -45,7 +45,7 @@ async function open(kind: Kind) {
 
 it.each<Kind>(['private', 'shared'])('closes the audio consultation from the upper-right header for %s', async kind => {
   mockHttp();
-  render(<IngestionView sessionToken="owner" />);
+  render(<IngestionView />);
   const { dialog, trigger } = await open(kind);
   const close = within(dialog).getByRole('button', { name: 'Cerrar consulta' });
   const header = within(dialog).getByRole('heading', { level: 2 }).parentElement!;
@@ -66,7 +66,7 @@ it.each<Kind>(['private', 'shared'])('uses one styled modal and filtered server 
   const { reads } = mockHttp(async (source, url) => Response.json(page(source, url.searchParams.has('class_name')
     ? { total: 1, next_cursor: null }
     : url.searchParams.has('cursor') ? { files: [row(source, 'segundo.wav', 'Motor')], next_cursor: null } : {})));
-  render(<IngestionView sessionToken="owner" />);
+  render(<IngestionView />);
   const { dialog, trigger } = await open(kind);
   expect(dialog.getAttribute('aria-modal')).toBe('true');
   expect(dialog.className).toContain('bg-[#16171b]');
@@ -104,7 +104,7 @@ it('separates the virtual feedback group from a real identically named class', a
     files: [row(kind, 'incorporado.wav', 'Aves')], total: 1, next_cursor: null,
     has_feedback: url.searchParams.get('class_name') !== 'Motor',
   })));
-  render(<IngestionView sessionToken="owner" />);
+  render(<IngestionView />);
   const { dialog } = await open('private');
   const selector = within(dialog).getByRole('combobox', { name: 'Clase' });
   const virtual = within(selector).getByRole('option', { name: 'Retroalimentación (audios incorporados)' }) as HTMLOptionElement;
@@ -122,13 +122,13 @@ it('downloads private filenames through the existing SHA route, never shared row
   const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:audio');
   const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
   const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
-  render(<IngestionView sessionToken="owner" />);
+  render(<IngestionView />);
   const { dialog } = await open('private');
   fireEvent.click(within(dialog).getByRole('button', { name: 'Descargar canto.wav' }));
   await waitFor(() => expect(click).toHaveBeenCalledOnce());
   expect(downloads).toEqual([`${privateBase}/hash`]); expect(create).toHaveBeenCalledOnce(); expect(revoke).toHaveBeenCalledWith('blob:audio');
   const [, options] = vi.mocked(global.fetch).mock.calls.find(([url]) => String(url).endsWith('/hash'))!;
-  expect(new Headers(options?.headers).get('Authorization')).toBe('Bearer owner');
+  expect(new Headers(options?.headers).get('Authorization')).toBeNull();
   fireEvent.click(within(dialog).getByRole('button', { name: 'Cerrar consulta' }));
   const shared = await open('shared');
   expect(within(shared.dialog).queryByRole('button', { name: /Descargar/ })).toBeNull();
@@ -142,7 +142,7 @@ it('reports read failure, retries, distinguishes empty results and omits unknown
   mockHttp(async kind => failed
     ? Response.json({ detail: 'Listado temporalmente no disponible.' }, { status: 503 })
     : Response.json(page(kind, { files: [], classes: ['Aves'], has_feedback: false, total: 0, next_cursor: null })));
-  render(<IngestionView sessionToken="owner" />);
+  render(<IngestionView />);
   const trigger = within((await screen.findByText('Colección privada')).closest('tr')!).getByRole('button', { name: 'Consultar audios' });
   fireEvent.click(trigger);
   const dialog = await screen.findByRole('dialog');
@@ -159,7 +159,7 @@ it('shows private download errors without removing audio or retrying automatical
   mockHttp(); const fallback = global.fetch;
   global.fetch = vi.fn(async (input, init) => String(input).endsWith('/hash')
     ? Response.json({ detail: 'Audio local no disponible.' }, { status: 404 }) : fallback(input, init));
-  render(<IngestionView sessionToken="owner" />);
+  render(<IngestionView />);
   const { dialog } = await open('private');
   fireEvent.click(within(dialog).getByRole('button', { name: 'Descargar canto.wav' }));
   await within(dialog).findByText(/Audio local no disponible/);
@@ -170,7 +170,7 @@ it('shows private download errors without removing audio or retrying automatical
 it('ignores a late page response after close and releases the inert background', async () => {
   let finish!: (value: Response) => void;
   mockHttp(() => new Promise(resolve => { finish = resolve; }));
-  const view = render(<IngestionView sessionToken="owner" />);
+  const view = render(<IngestionView />);
   fireEvent.click(within((await screen.findByText('Colección privada')).closest('tr')!).getByRole('button', { name: 'Consultar audios' }));
   const dialog = await screen.findByRole('dialog');
   await waitFor(() => expect(finish).toBeTypeOf('function'));

@@ -18,7 +18,7 @@ it.each(['focus', 'visibilitychange'])('keeps the selected private model while %
   let finishSession!: (response: Response) => void;
   const catalogues: ((response: Response) => void)[] = [];
   vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-    if (url.endsWith('/api/auth/web/me')) return refreshing
+    if (url.endsWith('/api/auth/me')) return refreshing
       ? new Promise<Response>(resolve => { finishSession = resolve; }) : Response.json(user);
     if (url.includes('/api/models')) return refreshing
       ? new Promise<Response>(resolve => { catalogues.push(resolve); }) : Response.json({ models: [model] });
@@ -43,8 +43,8 @@ it.each(['other-owner', 'unauthorized', 'logout'])('clears the private selection
   let finishSession!: (response: Response) => void;
   const catalogues: ((response: Response) => void)[] = [];
   vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-    if (url.endsWith('/api/auth/web/logout')) return new Response(null, { status: 204 });
-    if (url.endsWith('/api/auth/web/me')) return refreshing
+    if (url.endsWith('/api/auth/logout')) return new Response(null, { status: 204 });
+    if (url.endsWith('/api/auth/me')) return refreshing
       ? new Promise<Response>(resolve => { finishSession = resolve; }) : Response.json(user);
     if (url.includes('/api/models')) return refreshing
       ? new Promise<Response>(resolve => { catalogues.push(resolve); }) : Response.json({ models: [model] });

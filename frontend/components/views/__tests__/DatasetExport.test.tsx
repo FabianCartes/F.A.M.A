@@ -64,11 +64,11 @@ it("offers a native direct download only after export completion, and renews wit
     const path = new URL(input, "https://ui.example.test").pathname;
     calls.push(path);
     expect(input).not.toContain("downloads.example.test");
-    if (path.endsWith("/access")) return Response.json({ development_mode: false });
+    if (path.endsWith("/access")) return Response.json({ development_mode: false, authenticated: true });
     if (path.endsWith("/datasets")) return page("datasets", [{ id: "dataset", name: "Birds", file_count: 1, revision: 2 }]);
     if (path === `${base}/datasets/dataset/exports`) return Response.json({ exports: [] });
     if (path.endsWith("/revisions/2/exports")) {
-      expect(new Headers(options?.headers).get("Authorization")).toBe("Bearer synthetic-session");
+      expect(new Headers(options?.headers).get("Authorization")).toBeNull();
       return Response.json(job, { status: 202 });
     }
     if (path === job.status_url) return new Promise<Response>(resolve => { settle = resolve; });
@@ -77,7 +77,7 @@ it("offers a native direct download only after export completion, and renews wit
   }));
   const blob = vi.fn(() => { throw new Error("Blob is forbidden for exports"); });
   vi.stubGlobal("URL", class extends URL { static createObjectURL = blob; });
-  render(<DatasetExportDialog sessionToken="synthetic-session" />);
+  render(<DatasetExportDialog />);
   expect(calls).toEqual([]);
   const trigger = screen.getByRole("button", { name: "Descargar versión como ZIP" });
   fireEvent.click(trigger);

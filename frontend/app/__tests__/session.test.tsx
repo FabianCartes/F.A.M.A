@@ -71,12 +71,13 @@ describe("protected home", () => {
       if (url.endsWith("/auth/me")) return new Response(JSON.stringify({
         id: 2, email: "researcher@example.test", nombre_completo: "Investigadora", rol: "investigador", activo: true,
       }));
-      if (url.endsWith("/api/models") && ++models === 1) return new Promise<Response>((resolve) => { oldRequest = resolve; });
+      if (url.startsWith("/api/models?") && ++models === 1) return new Promise<Response>((resolve) => { oldRequest = resolve; });
       return new Response(JSON.stringify({ models: [], triad_status: [] }));
     });
     vi.stubGlobal("fetch", request);
     render(<Home />);
     await screen.findByRole("button", { name: "Cerrar sesión" });
+    await waitFor(() => expect(oldRequest).toBeTypeOf("function"));
     fireEvent.focus(window);
     await waitFor(() => expect(request.mock.calls.filter(([url]) => url.endsWith("/auth/me"))).toHaveLength(2));
     await screen.findByRole("button", { name: "Cerrar sesión" });

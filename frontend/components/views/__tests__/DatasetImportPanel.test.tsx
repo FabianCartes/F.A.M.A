@@ -220,17 +220,17 @@ describe("private dataset import", () => {
     await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled());
   });
 
-  it("uses an existing session supplied by the dedicated access view without a local login", async () => {
+  it("uses the server-confirmed cookie session without a local login", async () => {
     const configured = { received_bytes: 1024, expanded_bytes: 4096, entries: 10, depth: 12, path_bytes: 240,
       audio_bytes: 1024, audio_seconds: 600, validation_seconds: 60, free_bytes: 1, ttl_seconds: 86400, concurrent_imports: 4 };
     vi.stubGlobal("fetch", durableFetch(async (input: string, options?: RequestInit) => {
-      expect(new Headers(options?.headers).get("Authorization")).toBe("Bearer supplied-session");
-      if (input.endsWith("/access")) return Response.json({ development_mode: false });
+      expect(new Headers(options?.headers).get("Authorization")).toBeNull();
+      if (input.endsWith("/access")) return Response.json({ development_mode: false, authenticated: true });
       if (input.endsWith("/limits")) return Response.json(configured);
       if (input.endsWith("/datasets")) return collectionResponse("datasets", [], "catalog");
       return collectionResponse("imports", [], "history");
     }));
-    render(<DatasetImportPanel sessionToken="supplied-session" />);
+    render(<DatasetImportPanel />);
     await openImport();
     expect(screen.getByLabelText("Archivo ZIP")).toBeDefined();
     expect(screen.queryByLabelText("Contraseña")).toBeNull();

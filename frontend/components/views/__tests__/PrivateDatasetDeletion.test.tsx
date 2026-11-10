@@ -1,6 +1,9 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import IngestionView from '../IngestionView';
+import SessionBoundary from '@/components/auth/SessionBoundary';
+
+vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn() }) }));
 
 const originalFetch = global.fetch;
 afterEach(() => { cleanup(); global.fetch = originalFetch; vi.restoreAllMocks(); });
@@ -10,12 +13,13 @@ const owned = ['Aves privadas', 'Motor privado'].map((name, index) => ({
   file_count: 1, total_size_bytes: 20, synced_file_count: 1,
 }));
 
-function mockHttp(options: { remove?: () => Promise<Response>; reload?: () => Response } = {}) {
+function mockHttp(options: { remove?: () => Promise<Response>; reload?: () => Response; owner?: () => number } = {}) {
   const deletes: RequestInit[] = [];
   global.fetch = vi.fn(async (input, init) => {
     const path = new URL(String(input), 'http://localhost').pathname;
     if (init?.method === 'DELETE') { deletes.push(init); return options.remove ? options.remove() : new Response(null, { status: 204 }); }
-    if (path.endsWith('/access')) return Response.json({ development_mode: false });
+    if (path.endsWith('/auth/me')) return Response.json({ id: options.owner?.() ?? 1, nombre_completo: 'Propietario', email: 'owner@example.test', rol: 'investigador', activo: true });
+    if (path.endsWith('/access')) return Response.json({ development_mode: false, authenticated: true });
     if (path.endsWith('/files')) return Response.json({ files: [{ id: 'audio', relative_path: 'bird/call.wav', original_path: 'bird/call.wav', class_name: 'bird', sha256: 'hash', size_bytes: 20, duplicate: false, is_feedback: false }], classes: ['bird'], has_feedback: false, next_cursor: null, total: 1, snapshot: 'files' });
     if (path === `${base}/datasets`) return deletes.length && options.reload ? options.reload() : Response.json({ datasets: deletes.length ? owned.slice(1) : owned, next_cursor: null, total: deletes.length ? 1 : 2, snapshot: 'catalog' });
     if (path.endsWith('/datasets')) return Response.json({ datasets: [{ id: 'shared', name: 'Compartido', file_count: 1, local_file_count: 0, total_size_bytes: 20, is_synced: false }] });
@@ -28,7 +32,7 @@ function mockHttp(options: { remove?: () => Promise<Response>; reload?: () => Re
 it('offers deletion only on private rows and cancellation sends no DELETE', async () => {
   const deletes = mockHttp();
   const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
-  render(<IngestionView sessionToken="owner" />);
+  render(<IngestionView />);
   const remove = await screen.findByRole('button', { name: 'Eliminar Aves privadas' });
   expect(within(screen.getByRole('table', { name: 'Catálogo compartido' })).queryByRole('button', { name: /Eliminar/ })).toBeNull();
   expect(screen.getAllByRole('button', { name: /^Eliminar / })).toHaveLength(2);
@@ -55,7 +59,7 @@ it('offers deletion only on private rows and cancellation sends no DELETE', asyn
 it('blocks duplicate actions while DELETE is pending, then refreshes and preserves other selections', async () => {
   let finish!: (response: Response) => void;
   const deletes = mockHttp({ remove: () => new Promise(resolve => { finish = resolve; }) });
-  render(<IngestionView sessionToken="owner" />);
+  render(<IngestionView />);
   const remove = await screen.findByRole('button', { name: 'Eliminar Aves privadas' });
   fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar todos los datasets privados' }));
   const shared = within(screen.getByRole('table', { name: 'Catálogo compartido' })).getByRole('checkbox');
@@ -74,14 +78,14 @@ it('blocks duplicate actions while DELETE is pending, then refreshes and preserv
   expect(screen.getByText('Local → GCS: Motor privado')).toBeDefined();
   expect(screen.queryByText('Local → GCS: Aves privadas, Motor privado')).toBeNull();
   expect(JSON.parse(String(deletes[0].body))).toEqual({ revision: 7 });
-  expect(new Headers(deletes[0].headers).get('Authorization')).toBe('Bearer owner');
+  expect(new Headers(deletes[0].headers).get('Authorization')).toBeNull();
   const catalogReads = vi.mocked(global.fetch).mock.calls.filter(([url, init]) => String(url).endsWith(`${base}/datasets`) && !init?.method);
   expect(catalogReads).toHaveLength(2);
 });
 
 it.each([404, 409, 503])('keeps the row, selection and audio preview after server rejection %s', async status => {
   const deletes = mockHttp({ remove: async () => Response.json({ detail: 'No se puede eliminar en este estado.' }, { status }) });
-  render(<IngestionView sessionToken="owner" />);
+  render(<IngestionView />);
   const remove = await screen.findByRole('button', { name: 'Eliminar Aves privadas' });
   fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar dataset privado Aves privadas' }));
   fireEvent.click(within(remove.closest('tr')!).getByRole('button', { name: 'Consultar audios' }));
@@ -98,7 +102,7 @@ it.each([404, 409, 503])('keeps the row, selection and audio preview after serve
 
 it.each(['Aves privadas', 'Motor privado'])('clears only the deleted audio preview, preserving preview for %s when unrelated', async name => {
   mockHttp();
-  render(<IngestionView sessionToken="owner" />);
+  render(<IngestionView />);
   const previewRow = (await screen.findByRole('button', { name: `Eliminar ${name}` })).closest('tr')!;
   fireEvent.click(within(previewRow).getByRole('button', { name: 'Consultar audios' }));
   await screen.findByRole('button', { name: 'Descargar call.wav' });
@@ -115,7 +119,7 @@ it.each(['Aves privadas', 'Motor privado'])('clears only the deleted audio previ
 
 it('reports refresh failure honestly after confirmed deletion without restoring stale actions', async () => {
   mockHttp({ reload: () => Response.json({ detail: 'Catálogo temporalmente inaccesible.' }, { status: 503 }) });
-  render(<IngestionView sessionToken="owner" />);
+  render(<IngestionView />);
   const remove = await screen.findByRole('button', { name: 'Eliminar Aves privadas' });
   fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar todos los datasets privados' }));
   fireEvent.click(remove);
@@ -136,7 +140,7 @@ it('disables deletion during a known private upload without stopping its admitte
     if (path.endsWith('/sync') || path === execution.status_url) return Response.json(execution);
     return fallback(input, init);
   });
-  render(<IngestionView sessionToken="owner" />);
+  render(<IngestionView />);
   const remove = await screen.findByRole('button', { name: 'Eliminar Aves privadas' });
   fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar dataset privado Aves privadas' }));
   fireEvent.click(screen.getByRole('button', { name: 'Subir selección a GCS' }));
@@ -150,11 +154,13 @@ it('disables deletion during a known private upload without stopping its admitte
 
 it('ignores a late deletion response after the owner changes', async () => {
   let finish!: (response: Response) => void;
-  mockHttp({ remove: () => new Promise(resolve => { finish = resolve; }) });
-  const view = render(<IngestionView sessionToken="first-owner" />);
+  let owner = 1;
+  mockHttp({ owner: () => owner, remove: () => new Promise(resolve => { finish = resolve; }) });
+  render(<SessionBoundary><IngestionView /></SessionBoundary>);
   fireEvent.click(await screen.findByRole('button', { name: 'Eliminar Aves privadas' }));
   fireEvent.click(screen.getByRole('button', { name: 'Confirmar archivado' }));
-  view.rerender(<IngestionView sessionToken="second-owner" />);
+  owner = 2;
+  await act(async () => { fireEvent.focus(window); });
   await screen.findByRole('button', { name: 'Eliminar Motor privado' });
   await act(async () => { finish(new Response(null, { status: 204 })); });
   expect(screen.queryByText(/«Aves privadas» archivado/)).toBeNull();

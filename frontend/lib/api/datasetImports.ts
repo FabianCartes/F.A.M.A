@@ -61,10 +61,8 @@ export type ImportJob = z.infer<typeof jobSchema>;
 export type ImportDataset = z.infer<typeof datasetSchema>;
 export type ImportLimits = z.infer<typeof limitsSchema>;
 
-export async function importRequest(token: string, path: string, options: RequestInit = {}): Promise<Response> {
-  const headers = new Headers(options.headers);
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-  const response = await apiFetch(`${API_BASE_URL}${path}`, { ...options, headers, cache: "no-store" });
+export async function importRequest(path: string, options: RequestInit = {}): Promise<Response> {
+  const response = await apiFetch(`${API_BASE_URL}${path}`, { ...options, cache: "no-store" });
   if (!response.ok) {
     const data: unknown = await response.json().catch(() => null);
     const detail = typeof data === "object" && data !== null && "detail" in data && typeof data.detail === "string"
@@ -80,8 +78,8 @@ export function jsonRequest(body: unknown): RequestInit {
 
 export const importBase = "/api/ingestion/imports";
 
-export async function deletePrivateDataset(token: string, dataset: Pick<CatalogDataset, "id" | "revision">, signal?: AbortSignal): Promise<void> {
-  const response = await importRequest(token, `${importBase}/datasets/${encodeURIComponent(dataset.id)}`, {
+export async function deletePrivateDataset(dataset: Pick<CatalogDataset, "id" | "revision">, signal?: AbortSignal): Promise<void> {
+  const response = await importRequest(`${importBase}/datasets/${encodeURIComponent(dataset.id)}`, {
     ...jsonRequest({ revision: dataset.revision }), method: "DELETE", signal,
   });
   if (response.status !== 204) throw new Error("No se confirmó la eliminación local. Actualiza el catálogo antes de reintentar.");
