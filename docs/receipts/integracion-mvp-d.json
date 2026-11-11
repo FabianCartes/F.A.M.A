@@ -298,8 +298,9 @@
     "commits": {
       "T1": "c1c7b2f86600ba1324c109dd84f218f472f3297d",
       "T2": "49e7ebb351406634e3c407998de804a5ac59e8a4",
-      "T3": "26a2d6f318a36b5543d68a845e9c4c6820eb37d3"
+      "T3": "26a2d6f318a36b5543d68a845e9c4c6820eb37d3",
+      "T4": "930210728ce6cf6cfbf39837a1bfc612d4c22057"
     },
-    "documentation_closure": "separate local docs commit after backend49e7ebb"
+    "documentation_closure": "9302107 records final evidence; subsequent metadata-only closure records that observed commit identity."
   }
 }
