@@ -8,7 +8,7 @@ kanban-plugin: basic
 
 ## Integración de afinamiento integral en `mvp` — etapa h: documentación
 
-- [ ] **H-DOCUMENTACIÓN:** planificada para una sesión nueva. Renumerar los 7 ADR de mvp duplicados (0052–0058 → 0071–0077), ADR 0078 de GCS como fuente única, notas de sustitución en 4 manuales e índice. [Plan](arquitectura/integracion-mvp-h-documentacion-plan.md).
+- [x] **H-DOCUMENTACIÓN:** cerrada en `mvp` (`8879e77`, `56fa2cf`, `a56f402` y el commit de índices). ADR de mvp duplicados renumerados de 0052–0058 a 0071–0077 con enlaces y referencias actualizados (los recibos JSON conservan las rutas anteriores); [ADR 0078](adr/0078-gcs-como-fuente-unica-y-publicacion-del-zip.md) de GCS como fuente única, que sustituye los ADR 0027 y 0073 (el 0044 sigue vigente: trata la sincronización GCS→local en uso); notas de sustitución en los 4 manuales del catálogo privado; índice del README con 0070–0078. Comprobación estructural: numeración 0001–0078 sin duplicados y ningún enlace roto nuevo (93 preexistentes, ajenos a h). [Plan](arquitectura/integracion-mvp-h-documentacion-plan.md).
 
 ## Integración de afinamiento integral en `mvp` — etapa g: base de datos de integración
 

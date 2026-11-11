@@ -29,7 +29,7 @@ Objetivo: dejar la documentación coherente con lo integrado en `mvp` (U0, a–f
 - T1 | S1,S5 | inline | done (commit de T1) | Renumerar con `git mv` los 7 ADR de mvp y actualizar todos los enlaces y referencias; comprobar que no queden números duplicados ni enlaces rotos.
 - T2 | S1 | inline | done (commit de T2) | Escribir el ADR 0078 y marcar los ADR sustituidos.
 - T3 | S3 | inline | done (commit de T3) | Notas de sustitución en los 4 manuales.
-- T4 | S2,S4,S6 | inline | pending | Índice de `docs/README.md` y KANBAN (h cerrada, g bloqueada por acceso), recibo breve si corresponde.
+- T4 | S2,S4,S6 | inline | done (commit de T4) | Índice de `docs/README.md` y KANBAN (h cerrada, g bloqueada por acceso), recibo breve si corresponde.
 
 ## Comprobaciones
 - Ningún prefijo de 4 dígitos repetido en `docs/adr/`.
@@ -42,3 +42,4 @@ Objetivo: dejar la documentación coherente con lo integrado en `mvp` (U0, a–f
 - L3 — T1: 7 ADR renumerados con `git mv` (0071–0077, encabezados de 0071 y 0072 corregidos); enlaces y referencias en texto («ADR0053», «ADR0056», etc.) actualizados en KANBAN, README, manuales, planes y `backend/app/services/checkpoint_digest.py`. Se conservan las del compañero (0060, 0067, bitácora, `administracion_visual.md`) y los recibos JSON, como en `integracion_dev_20261024`. Comprobado: ningún prefijo repetido en `docs/adr/`; sin nombres antiguos fuera de recibos y de este plan; enlaces rotos de `docs/` 93 antes y 93 después (preexistentes, rutas `./adr/` desde `docs/modelos/`, ajenos a h).
 - L4 — T2: ADR 0078 escrito; 0027 y 0073 marcados «sustituido por 0078» en su línea de estado, sin reescribirlos. Desvío del plan: el 0044 no se marca, porque solo describe la sincronización GCS→local (`sync_dataset_to_local` en `backend/app/services/ingestion.py`), que sigue en uso; el 0078 lo deja vigente y lo explica. También se registra que el entrenamiento quedó sobre `partition_version` y no sobre snapshots (etapas d y f). Comprobado en código: sin `create_access_token`, `security_bearer`, `HTTPBearer` ni `private-imports/` en `backend/app`.
 - L5 — T3: nota de sustitución al inicio de los 4 manuales, con enlace al ADR 0078 y a `importacion-datasets-zip.md` como flujo vigente. Sus cuerpos ya se habían actualizado en b y d; no se reescribieron.
+- L6 — T4: README (sección de etapas a–h, entrada de h cerrada, índice de ADR con 0070–0078, 0027 y 0073 marcados como sustituidos, los 4 ADR de mvp movidos desde la sección de arquitectura al índice de ADR) y KANBAN (h cerrada; g sigue bloqueada por el acceso a `fama-pruebas`). Sin recibo: cambio solo documental, con la evidencia en este Log. Preexistentes y fuera de h: 93 enlaces rotos y los ADR 0001–0014 sin enlace en el README.
