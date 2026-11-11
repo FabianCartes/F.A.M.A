@@ -1,5 +1,7 @@
 # Transferencias de datasets
 
+> **Nota de sustitución (2026-11-11):** la sincronización privada y la exportación ZIP fueron retiradas; GCS es la fuente única y se mantiene la sincronización GCS→local. Ver [ADR 0078](../adr/0078-gcs-como-fuente-unica-y-publicacion-del-zip.md) y [Importar datasets ZIP](importacion-datasets-zip.md).
+
 ## Un inventario compartido
 
 En **Gestión de audios**, el inventario compartido conserva los conteos de

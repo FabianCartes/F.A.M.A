@@ -1,5 +1,7 @@
 # Importar datasets ZIP
 
+> **Nota de sustitución (2026-11-11):** el catálogo privado local-first (copia en `private-imports/`, revisiones, exportación ZIP y reserva de disco) fue sustituido por GCS como fuente única; ver [ADR 0078](../adr/0078-gcs-como-fuente-unica-y-publicacion-del-zip.md). Este manual describe el flujo vigente; las menciones al catálogo privado son históricas.
+
 ## Alcance vigente del MVP
 
 **Importar ZIP** valida el archivo, conserva una copia persistente local y, al

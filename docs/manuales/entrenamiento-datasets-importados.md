@@ -1,5 +1,7 @@
 # Entrenamiento de ZIP publicados y lectura de modelos importados históricos
 
+> **Nota de sustitución (2026-11-11):** el entrenamiento desde el catálogo privado fue sustituido por el catálogo estándar con `partition_version`; ver [ADR 0078](../adr/0078-gcs-como-fuente-unica-y-publicacion-del-zip.md). Para importar y publicar el ZIP, ver [Importar datasets ZIP](importacion-datasets-zip.md).
+
 **Estado vigente — integración MVP d:** la entrada paralela de entrenamiento importado está retirada. Los nuevos entrenamientos usan el dataset publicado en el catálogo estándar y una `partition_version`. No se crean snapshots ni preparaciones importadas desde HTTP o desde el servicio de entrenamiento. **Los modelos y artefactos históricos se conservan para lectura; no se borran tablas, filas, checkpoints ni almacenes.**
 
 ## Camino vigente para nuevos entrenamientos

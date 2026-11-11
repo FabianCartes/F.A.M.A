@@ -1,5 +1,7 @@
 # Worker local de importación ZIP — entorno principal del MVP
 
+> **Nota de sustitución (2026-11-11):** el worker privado de sincronización a `private-imports/` fue retirado; al confirmar, el ZIP se publica en GCS `datasets/`. Ver [ADR 0078](../adr/0078-gcs-como-fuente-unica-y-publicacion-del-zip.md) y [Importar datasets ZIP](importacion-datasets-zip.md).
+
 ## Propósito y límite de seguridad
 
 La API admite trabajos; un proceso separado ejecuta la vista previa y la confirmación. Una subida completa con `queued · 0%` no demuestra validación de audios.
