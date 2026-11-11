@@ -2633,7 +2633,7 @@ export default function TrainingView() {
               Historial de Modelos Guardados
             </span>
             <p className="text-[11px] text-gray-500">
-              Modelos registrados. «Sincronizar» comprueba las copias del checkpoint y respalda o recupera la que falte en GCS o en este equipo.
+              Modelos registrados. «Sincronizar en GCS» comprueba las copias del checkpoint y respalda o recupera la que falte en GCS o en este equipo.
             </p>
           </div>
 

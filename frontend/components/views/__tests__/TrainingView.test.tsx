@@ -24,7 +24,7 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
       return existing(input, options);
     });
     await act(async () => { render(<TrainingView />); });
-    fireEvent.click((await screen.findAllByRole("button", { name: "Sincronizar" }))[0]);
+    fireEvent.click((await screen.findAllByRole("button", { name: "Sincronizar en GCS" }))[0]);
     expect(await screen.findByRole("dialog", { name: "Checkpoint sincronizado" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Cerrar" }));
     expect((await screen.findAllByRole("button", { name: "Sincronizado" })).length).toBeGreaterThan(0);

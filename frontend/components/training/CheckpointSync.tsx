@@ -25,7 +25,7 @@ const FALLBACK = "No se pudo sincronizar el checkpoint. Revisa GCS, la conexión
 
 /**
  * Batch "synced" flags for the listed models. The flag only means both copies exist with the
- * registered size; when GCS cannot be queried every model keeps the "Sincronizar" label.
+ * registered size; when GCS cannot be queried every model keeps the "Sincronizar en GCS" label.
  */
 export function useCheckpointSyncStatus(modelIds: number[]) {
   const key = modelIds.join(",");
@@ -100,7 +100,7 @@ export function CheckpointSyncButton({ modelId, synced, onSynced }: {
     <button ref={trigger} type="button" disabled={busy} onClick={() => void synchronize()}
       title={synced ? "Ambas copias registradas; presiona para verificarlas de nuevo." : "Comprueba las copias y sincroniza el checkpoint con GCS."}
       className={`text-[11px] px-2.5 py-1 rounded border transition-colors disabled:opacity-50 disabled:cursor-wait ${style}`}>
-      {busy ? "Sincronizando…" : synced ? "Sincronizado" : "Sincronizar"}
+      {busy ? "Sincronizando…" : synced ? "Sincronizado" : "Sincronizar en GCS"}
     </button>
     {outcome && <DatasetConfirmationDialog title={outcome.ok ? "Checkpoint sincronizado" : "No se pudo sincronizar"}
       onClose={close} returnFocus={trigger}>

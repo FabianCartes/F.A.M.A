@@ -25,7 +25,7 @@ describe('Sincronizar checkpoint', () => {
       return new Response(JSON.stringify(result(action)));
     });
     const onSynced = renderButton();
-    fireEvent.click(screen.getByRole('button', { name: 'Sincronizar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sincronizar en GCS' }));
     const dialog = await screen.findByRole('dialog', { name: 'Checkpoint sincronizado' });
     expect(dialog.textContent).toMatch(message);
     expect(requests).toEqual([expect.stringMatching(/^POST .*\/api\/training\/models\/1\/checkpoint\/sync$/)]);
@@ -38,7 +38,7 @@ describe('Sincronizar checkpoint', () => {
     global.fetch = vi.fn(async () => new Response(JSON.stringify({
       detail: 'No hay copia local ni respaldo en GCS de este checkpoint; no se puede sincronizar.' }), { status: 409 }));
     const onSynced = renderButton();
-    fireEvent.click(screen.getByRole('button', { name: 'Sincronizar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sincronizar en GCS' }));
     const dialog = await screen.findByRole('dialog', { name: 'No se pudo sincronizar' });
     expect(dialog.textContent).toContain('No hay copia local ni respaldo en GCS de este checkpoint; no se puede sincronizar.');
     expect(onSynced).not.toHaveBeenCalled();
@@ -47,7 +47,7 @@ describe('Sincronizar checkpoint', () => {
   it('no confirma una respuesta sin transferencia verificada', async () => {
     global.fetch = vi.fn(async () => new Response(JSON.stringify({ ...result('uploaded'), transfer_verified: false })));
     const onSynced = renderButton();
-    fireEvent.click(screen.getByRole('button', { name: 'Sincronizar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sincronizar en GCS' }));
     expect(await screen.findByRole('dialog', { name: 'No se pudo sincronizar' })).toBeTruthy();
     expect(onSynced).not.toHaveBeenCalled();
   });

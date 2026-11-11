@@ -6,7 +6,7 @@ Implementación del 23 de octubre de 2026 en `fix/afinamiento-integral`. Disponi
 
 Desde el 11 de noviembre de 2026 las copias se gestionan con un único botón por modelo; la sección «Copias del checkpoint» de la ficha técnica se retiró.
 
-1. Abre **Entrenamiento → Historial de Modelos Guardados**. Cada fila muestra **Sincronizar** o **Sincronizado**. El rótulo sale de una consulta por lotes (`GET /api/training/models/checkpoints/sync-status`): un listado del prefijo `models/checkpoints/sha256/` en GCS y el tamaño del archivo local, sin calcular hashes. **Sincronizado** solo indica que ambas copias existen con el tamaño registrado; si GCS no responde, todas las filas quedan en **Sincronizar**.
+1. Abre **Entrenamiento → Historial de Modelos Guardados**. Cada fila muestra **Sincronizar en GCS** o **Sincronizado**. El rótulo sale de una consulta por lotes (`GET /api/training/models/checkpoints/sync-status`): un listado del prefijo `models/checkpoints/sha256/` en GCS y el tamaño del archivo local, sin calcular hashes. **Sincronizado** solo indica que ambas copias existen con el tamaño registrado; si GCS no responde, todas las filas quedan en **Sincronizar en GCS**.
 2. Pulsa el botón (`POST /api/training/models/{id}/checkpoint/sync`). La aplicación comprueba las dos copias y actúa:
    - copia local íntegra y sin respaldo: respalda en GCS con la verificación descrita abajo;
    - sin copia local y con respaldo: recupera en este equipo y valida la descarga antes de publicar el archivo;
