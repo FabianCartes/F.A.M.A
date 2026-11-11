@@ -1,6 +1,6 @@
 # ADR 0070: Revisión 0005 y composición versionada de tríadas estándar
 
-Fecha: 2026-11-11. Estado: aceptado por Kevin en la etapa f de la integración `mvp` (decisiones 1–3). Verificado en SQLite en memoria; PostgreSQL no verificado.
+Fecha: 2026-11-11. Estado: aceptado en la etapa f de la integración `mvp` (decisiones 1–3). Verificado en SQLite en memoria; PostgreSQL no verificado.
 
 ## Contexto
 
@@ -32,5 +32,5 @@ La tríada estándar se entrena como tres `Modelo` independientes. Su peso solo 
 
 - Las bases en `0004_integration` se actualizan con `python -m app.schema upgrade --apply`. La instalación y la transferencia de historial usan el esquema 0005.
 - Los scripts de permisos deben incluir `triad_composition` y aceptar la revisión 0005 (etapa f, T3).
-- Las restricciones `CHECK` y los tipos en PostgreSQL 16 no se verificaron en esta etapa, porque Kevin eligió verificar solo con SQLite.
+- Las restricciones `CHECK` y los tipos en PostgreSQL 16 no se verificaron en esta etapa, porque la verificación se limitó a SQLite.
 - Las tríadas importadas existentes no se recuperan; sus filas se conservan.

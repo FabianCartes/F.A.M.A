@@ -1,12 +1,12 @@
 # 20. Modelo de Producto, Estrategia de Despliegue, Concurrencia y Arquitectura Operativa de F.A.M.A.
 
-* **Fecha de Registro:** Septiembre 2026  
-* **Área:** Ingeniería de Software, Arquitectura de Sistemas, MLOps On-Premise / Híbrido, Estrategia de Producto y Despliegue  
-* **Proyecto:** Framework MLOps Híbrido para Clasificación Bioacústica (F.A.M.A.)  
-* **Documentos Base de Referencia:**  
-  * Tesis de Grado: [`docs/VIDA_01_CINF_FINAL_PT_2026_1_CARTES.md`](./VIDA_01_CINF_FINAL_PT_2026_1_CARTES.md)  
-  * Análisis de Objetivos: [`docs/analisis_objetivos_fama.md`](./analisis_objetivos_fama.md)  
-  * Arquitectura del Super-Ensamble: [`docs/17_arquitectura_super_ensamble_y_modelos_preentrenados.md`](./17_arquitectura_super_ensamble_y_modelos_preentrenados.md)  
+* **Fecha de Registro:** Septiembre 2026
+* **Área:** Ingeniería de Software, Arquitectura de Sistemas, MLOps On-Premise / Híbrido, Estrategia de Producto y Despliegue
+* **Proyecto:** Framework MLOps Híbrido para Clasificación Bioacústica (F.A.M.A.)
+* **Documentos Base de Referencia:**
+  * Tesis de Grado: [`docs/memoria_proyecto_titulo_2026_1.md`](../tesis/)
+  * Análisis de Objetivos: [`docs/analisis_objetivos_fama.md`](../tesis/analisis_objetivos_fama.md)
+  * Arquitectura del Super-Ensamble: [`docs/17_arquitectura_super_ensamble_y_modelos_preentrenados.md`](./17_arquitectura_super_ensamble_y_modelos_preentrenados.md)
 
 ---
 
@@ -17,11 +17,11 @@
 Como producto de software, se define como una plataforma **Self-Hosted (Auto-alojada) de Arquitectura Híbrida**, diseñada específicamente para **instituciones académicas, laboratorios científicos y centros de investigación**.
 
 ### El Dilema que Resuelve el Producto
-1. **Soluciones 100% Cloud (AWS SageMaker, Google Vertex AI):**  
+1. **Soluciones 100% Cloud (AWS SageMaker, Google Vertex AI):**
    Cobran cientos de dólares por hora de GPU remota, resultando financieramente inviables para los presupuestos estándar de departamentos universitarios o tesistas.
-2. **Soluciones 100% Locales (Scripts en laptops):**  
+2. **Soluciones 100% Locales (Scripts en laptops):**
    Saturan el hardware personal, provocan desbordamientos de memoria (`CUDA OOM`), no tienen base de datos, carecen de respaldo y no permiten compartir datasets entre investigadores.
-3. **El Punto de Equilibrio F.A.M.A.:**  
+3. **El Punto de Equilibrio F.A.M.A.:**
    La **nube (Google Cloud Platform)** se usa únicamente como almacén estático y base de datos (costo marginal de centavos de dólar al mes), mientras que el **cómputo pesado (PyTorch con aceleración GPU)** se ejecuta de forma gratuita en el hardware local de la institución. La interfaz web democratiza el acceso para que cualquier usuario interactúe sin saber de terminales ni de infraestructura.
 
 ```text
@@ -56,14 +56,14 @@ F.A.M.A. se adapta a la política de infraestructura de cada institución, sopor
 
 ### Modalidad A: Red Interna de Laboratorio / Campus (Intranet)
 * **Dónde corre:** En un computador de escritorio con tarjeta gráfica NVIDIA (o servidor en rack) ubicado físicamente en las dependencias de la universidad (ej. Laboratorio de Sistemas de Información, UBB).
-* **Cómo acceden los usuarios:**  
+* **Cómo acceden los usuarios:**
   Cualquier estudiante, docente o tesista conectado a la red Wi-Fi universitaria (o mediante VPN institucional) abre su navegador e ingresa a una dirección local interna:
   * `http://fama.ciencias.ubiobio.cl` o bien `http://192.168.1.100:3000`.
 * **Ventaja:** Máxima seguridad y latencia cero para transferencia masiva dentro de la red local.
 
 ### Modalidad B: Acceso Público en Internet (Con Dominio Institucional)
 * **Configuración:** La universidad asigna una IP pública fija con certificado SSL o configura un túnel seguro (e.g., Cloudflare Tunnel / Nginx Proxy) hacia el puerto del frontend de la máquina local.
-* **Cómo acceden los usuarios:**  
+* **Cómo acceden los usuarios:**
   Cualquier persona autorizada puede ingresar desde cualquier parte del mundo ingresando a la URL pública (ej. `https://fama.ubiobio.cl`).
 * **Uso en Terreno:** Un biólogo recolectando audios en un parque nacional o zona rural puede abrir la web desde su teléfono móvil y clasificar muestras acústicas en vivo mientras el servidor de la universidad realiza la inferencia en milisegundos.
 
@@ -78,7 +78,7 @@ Para garantizar una experiencia de nivel profesional, F.A.M.A. adopta el estánd
 ### ¿Qué generamos nosotros como equipo desarrollador?
 1. **`backend/Dockerfile`**: Empaqueta la imagen de Linux con Python 3.12, librerías bioacústicas (Librosa, soundfile), PyTorch y soporte para controladores CUDA NVIDIA.
 2. **`frontend/Dockerfile`**: Empaqueta la imagen optimizada de producción de Next.js.
-3. **Imágenes Publicadas en Registro Seguro:** Las imágenes compiladas se suben a un registro de contenedores (Docker Hub institucional o GitHub Container Registry: `ghcr.io/fabiancartes/fama:latest`).
+3. **Imágenes Publicadas en Registro Seguro:** Las imágenes compiladas se suben a un registro de contenedores (Docker Hub institucional o GitHub Container Registry: `<registro>/<organización>/fama:latest`).
 
 ### ¿Qué se le entrega al cliente (Profesor o Encargado de TI)?
 Al cliente **NO se le entregan miles de archivos de código ni repositorios desarmados**. Únicamente se le entrega:
@@ -106,22 +106,22 @@ graph TD
     A[Usuario abre http://localhost:3000] --> B{¿Sistema Inicializado?}
     B -- No (Primera vez) --> C[Redirección automática a /setup]
     B -- Sí (Instalación lista) --> D[Redirección a /login]
-    
+
     subgraph SetupWizard["Asistente de Bienvenida (Setup Wizard)"]
         C --> S1["Paso 1: Credenciales Cloud<br/>Arrastrar archivo JSON de GCP + Nombre de Bucket"]
         S1 --> S2["Paso 2: Administrador Principal<br/>Crear correo y contraseña del Administrador TI"]
         S2 --> S3["Paso 3: Validación Automática<br/>Verificación de conexión con GCS y PostgreSQL"]
     end
-    
+
     S3 --> E[Guardado seguro interno de credenciales]
     E --> D
 ```
 
-1. **Paso 1 (Almacenamiento Cloud):**  
+1. **Paso 1 (Almacenamiento Cloud):**
    Una interfaz gráfica limpia solicita: *"Para conectar el almacenamiento masivo, arrastra aquí tu archivo de credenciales de Google Cloud (`.json`) y escribe el nombre de tu bucket"*. Al soltar el archivo, el backend lo almacena en un directorio seguro y privado del contenedor.
-2. **Paso 2 (Cuenta de Administrador Principal):**  
+2. **Paso 2 (Cuenta de Administrador Principal):**
    Solicita el correo y contraseña de la persona responsable del nodo (el técnico del laboratorio o el profesor a cargo).
-3. **Paso 3 (Finalización):**  
+3. **Paso 3 (Finalización):**
    El sistema escribe su configuración interna, inicializa las tablas maestras de PostgreSQL y redirige a la pantalla estándar de inicio de sesión (`/login`).
 
 ---
@@ -158,7 +158,7 @@ Esa otra universidad simply completa el Asistente Inicial con su propio archivo 
 
 ### Caso C: Múltiples Solicitudes de Entrenamiento (El Cuello de Botella Físico)
 * **Riesgo:** A diferencia de la inferencia, el entrenamiento de redes neuronales profundas (EfficientNet-B0, ConvNeXt-Nano, ResNet-34d) demanda el **100% de la capacidad de cómputo de la GPU y gigabytes continuos de VRAM** para calcular gradientes y retropropagación (*backpropagation*). Si dos entrenamientos corrieran a la vez en la misma GPU física, el sistema colapsaría con un error fatal de memoria (`CUDA Out of Memory`).
-* **Solución de F.A.M.A.: Cola de Trabajos Secuencial (Job Queue FIFO):**  
+* **Solución de F.A.M.A.: Cola de Trabajos Secuencial (Job Queue FIFO):**
   F.A.M.A. implementa un control de estado en el backend:
   1. Si el *Usuario A* inicia un entrenamiento, el sistema pasa a estado `entrenando` y bloquea la GPU para esa tarea.
   2. Si el *Usuario B* intenta iniciar otro entrenamiento simultáneamente, la interfaz no rompe el sistema ni arroja un error técnico; en su lugar, despliega un aviso claro:
@@ -182,19 +182,19 @@ Para proteger la integridad del sistema sin complicar a los usuarios, se definen
 
 Este componente es el corazón del concepto de **MLOps continuo** en la tesis de F.A.M.A.:
 
-1. **Inferencia en Predicción:**  
-   Un investigador sube un audio grabado en campo. El Tri-Modelo predice, por ejemplo:  
+1. **Inferencia en Predicción:**
+   Un investigador sube un audio grabado en campo. El Tri-Modelo predice, por ejemplo:
    *`"Clasificación: Turca (Confianza: 68.4%)"`*.
-2. **Juicio Experto del Investigador:**  
+2. **Juicio Experto del Investigador:**
    El ornitólogo o biólogo escucha el audio en el reproductor integrado y sabe que en realidad se trata de un *`Chucao`* (una especie que suele solaparse acústicamente con la Turca).
-3. **Mecanismo de Telemetría Activa (En Pantalla):**  
+3. **Mecanismo de Telemetría Activa (En Pantalla):**
    Bajo el resultado aparecen dos botones interactivos:
    * **[Confirmar Acierto]** (Verde)
    * **[Corregir Clasificación]** (Naranja/Rojo)
-4. **Captura y Cierre del Ciclo:**  
+4. **Captura y Cierre del Ciclo:**
    Al presionar "Corregir Clasificación", se abre un menú desplegable con el catálogo de especies. El usuario selecciona *Chucao* y presiona confirmar.
-5. **Persistencia Dual Automatizada:**  
-   * En **PostgreSQL (Tabla `retroalimentacion`)**, se inserta un registro:  
+5. **Persistencia Dual Automatizada:**
+   * En **PostgreSQL (Tabla `retroalimentacion`)**, se inserta un registro:
      `id_prediccion = X`, `fue_correcta = False`, `etiqueta_corregida = 'Chucao'`.
    * En **Google Cloud Storage**, el backend copia de inmediato el archivo de audio dentro de una carpeta especial de retroalimentación (`gs://mi-bucket/feedback/chucao/...`).
    * **Resultado:** El dataset crece con datos curados por humanos en terreno, listos para que en el siguiente re-entrenamiento el modelo aprenda a corregir su error histórico.

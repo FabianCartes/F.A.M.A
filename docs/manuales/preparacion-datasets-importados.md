@@ -186,7 +186,7 @@ SQLite memoria, red bloqueada y hashes de sus 30 rutas protegidas.
 Comando exacto, desde `backend/`:
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /home/kevin/Work/fama/.venv/bin/python tests/run_isolated_training_checks.py tests/test_imported_dataset_preparation.py tests/test_dataset_preparation.py tests/test_training_snapshots.py -k 'not test_engine_cli_explicit_fixture'
+PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /workspace/fama/.venv/bin/python tests/run_isolated_training_checks.py tests/test_imported_dataset_preparation.py tests/test_dataset_preparation.py tests/test_training_snapshots.py -k 'not test_engine_cli_explicit_fixture'
 ```
 
 Se rechaza expresamente `test_dataset_preparation.py::test_engine_cli_explicit_fixture`
@@ -226,6 +226,6 @@ El padre sustituyó únicamente la barrera dependiente de scheduling por un inte
 - Suite final poscorrección job-3: **exit 0, 141 passed, 1 deselected in 24.69s**; 99 conexiones SQLite memoria, 30 rutas protegidas intactas y cleanup PASS. Mismo comando combinado anterior y misma exclusión CLI explícita. [Log final](../receipts/imported-training-t2-final-combined.log). La suite 138 PASS anterior corresponde al código previo al fix.
 - Recheck independiente limitado del mismo verificador, tarea `mw1euouo-a-9bvm`: **unavailable**, error del agente `assistant reported an error`; consulta de resultado no recuperó más evidencia. No hay nuevo veredicto independiente ni resultado de tests atribuible a ese recheck. No se relanza, no se cambia de modelo y no se interpreta el fallo del agente como defecto de código ni aprobación.
 
-**Disposición humana recibida:** el usuario respondió «Acepto» a continuar cierre y commit local con la limitación del recheck independiente documentada. T2 se cierra como módulo callable probado en estado sintético; no como aprobación independiente posterior al fix ni como review nativa. No se inicia más verificación, T3 ni operaciones reales por esta aceptación. Evidencia consolidada: [recibo T2](../receipts/imported-training-t2-verification.json). Commit de unidad: `73526d6f4ab0c52bc9bc7a16d43994155692794a`.
+**Disposición:** se continúa con el cierre y el commit local con la limitación del recheck independiente documentada. T2 se cierra como módulo callable probado en estado sintético; no como aprobación independiente posterior al fix ni como review nativa. No se inicia más verificación, T3 ni operaciones reales por este cierre. Evidencia consolidada: [recibo T2](../receipts/imported-training-t2-verification.json). Commit de unidad: `73526d6f4ab0c52bc9bc7a16d43994155692794a`.
 
 ASSESS del rango comprometido exacto contra `e1f3a31c0b216f300fd9fbb9f83cbc84832d264e` quedó unavailable por archivos no rastreados ajenos; nativeRisk unassessable, escalación item2high y sin `reviewDue` ni continuación de revisión. No se inició review ni hubo aprobación nativa. El `diff --cached --check` completo devolvió exit2 por espacios finales originales en logs crudos de pytest; se conservaron sin alteración. La comprobación de código/documentación excluyendo esos logs aprobó con exit0. Ocho rutas ajenas/protegidas coinciden con baseline.

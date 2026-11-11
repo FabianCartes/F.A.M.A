@@ -4,7 +4,7 @@
 
 **Estado:** Aceptado. **Fecha:** 17 de octubre de 2026.
 
-El estado de ensambles cargaba pesos al consultarse, trataba registros BD como readiness y añadía métricas inventadas para modelos cargados. El usuario confirmó corregir `SuperEnsembleService.get_status`, la ruta real GET `/api/model-info` y su presentación, sin modificar `registry.py` ni activación. La ruta `/api/ensemble/status` mencionada inicialmente no existe y no se añade.
+El estado de ensambles cargaba pesos al consultarse, trataba registros BD como readiness y añadía métricas inventadas para modelos cargados. Se decidió corregir `SuperEnsembleService.get_status`, la ruta real GET `/api/model-info` y su presentación, sin modificar `registry.py` ni activación. La ruta `/api/ensemble/status` mencionada inicialmente no existe y no se añade.
 
 ## Hechos separados, con alcance explícito
 

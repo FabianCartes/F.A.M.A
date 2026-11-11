@@ -80,7 +80,7 @@ Se ejecutó la suite de pruebas completa del repositorio para verificar la inter
 ```text
 ============================= test session starts ==============================
 platform linux -- Python 3.14.7, pytest-9.1.1, pluggy-1.6.0
-rootdir: /home/kevin/Work/fama
+rootdir: /workspace/fama
 plugins: anyio-4.15.1
 collected 89 items
 

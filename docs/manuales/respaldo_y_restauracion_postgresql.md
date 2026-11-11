@@ -11,13 +11,13 @@ Para esta CLI, el nombre de base empieza con una letra ASCII o `_`, continúa co
 ```powershell
 & .\.venv\Scripts\python.exe -m app.node `
     --config-dir installation/cloud-pruebas/native backup `
-    --directory 'C:\Users\fabia\Desktop\F.A.M.A\backend\installation\cloud-pruebas\backups\copia-nueva' `
-    --pg-bin 'C:\Users\fabia\Desktop\F.A.M.A\backend\credentials\tools\postgresql-16.15-5\pgsql\bin'
+    --directory 'C:\Users\local-user\Desktop\F.A.M.A\backend\installation\cloud-pruebas\backups\copia-nueva' `
+    --pg-bin 'C:\Users\local-user\Desktop\F.A.M.A\backend\credentials\tools\postgresql-16.15-5\pgsql\bin'
 ```
 
 Elegir un nombre nuevo para cada copia. No sobrescribir una carpeta existente. El resultado `database_backup_created` significa que se produjeron `database.dump` y `manifest.json`. El manifiesto contiene revisión, tamaño/SHA-256 del archivo, recuentos/huellas por tabla y estado de las secuencias; no incluye las filas, las contraseñas ni la URL privada de conexión.
 
-El archivo custom sí contiene información privada de la base: cuentas, hashes de contraseña, sesiones y datos de investigación. La carpeta se protege antes de escribir: modo 0700 en POSIX o ACL Windows limitada al usuario actual y SYSTEM. Los archivos heredan esa protección. Se conservan bajo `backend/installation/`, excluidos de Git y de la imagen backend; también se excluyen globalmente los archivos `*.dump`. No compartir ni adjuntar el dump a recibos o conversaciones. El temporal `PGPASSFILE` se elimina al terminar normalmente o propagar errores; tras un cierre forzado del proceso, revisar los temporales privados conservados. La contraseña no se incorpora a los argumentos de los procesos.
+El archivo custom sí contiene información privada de la base: cuentas, hashes de contraseña, sesiones y datos de investigación. La carpeta se protege antes de escribir: modo 0700 en POSIX o ACL Windows limitada al usuario actual y SYSTEM. Los archivos heredan esa protección. Se conservan bajo `backend/installation/`, excluidos de Git y de la imagen backend; también se excluyen globalmente los archivos `*.dump`. No compartir ni adjuntar el dump a recibos u otros documentos. El temporal `PGPASSFILE` se elimina al terminar normalmente o propagar errores; tras un cierre forzado del proceso, revisar los temporales privados conservados. La contraseña no se incorpora a los argumentos de los procesos.
 
 Se utiliza una transacción de solo lectura con instantánea exportada: `pg_dump` y las huellas ven las mismas filas. El bloqueo de migración del proyecto impide coincidir con su CLI de actualización de esquema. No evita DDL de herramientas externas que ignoren ese bloqueo: usar una ventana sin mantenimiento de estructura. Las secuencias de PostgreSQL no son MVCC; si se observa que cambian durante el dump, se devuelve `backup_sequences_changed` y hay que repetir sin altas concurrentes. No se da esa carpeta por completada. La aplicación puede seguir operando; la copia representa un momento concreto, no el estado de todas las escrituras posteriores.
 
@@ -34,7 +34,7 @@ La URL del destino se guarda localmente en un archivo privado absoluto, con perm
     --config-dir installation/cloud-pruebas/native restore `
     --backup '<carpeta-absoluta-de-la-copia>' `
     --target-url-file '<archivo-privado-absoluto-con-la-URL-del-destino>' `
-    --pg-bin 'C:\Users\fabia\Desktop\F.A.M.A\backend\credentials\tools\postgresql-16.15-5\pgsql\bin'
+    --pg-bin 'C:\Users\local-user\Desktop\F.A.M.A\backend\credentials\tools\postgresql-16.15-5\pgsql\bin'
 ```
 
 El comando verifica el hash/tamaño antes de restaurar. `pg_restore --single-transaction --exit-on-error` revierte la carga si falla una sentencia SQL. Después compara las tablas/secuencias con el manifiesto del respaldo y ejecuta la comprobación pública de esquema de F.A.M.A. Solo confirma `database_restore_verified` cuando esas comprobaciones coinciden. Si la verificación posterior falla, el contenido restaurado queda para diagnóstico en el destino separado y no se debe poner en servicio; el origen se conserva.

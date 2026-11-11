@@ -1,6 +1,6 @@
 # Nombres de modelos en entrenamiento y predicción
 
-Los modelos persistidos comparten el rótulo `Dataset · Arquitectura (vN)` en el historial de entrenamiento, catálogo, activación, resultado y registro de sesión de predicción. Seguimiento: [issue #2](https://github.com/FabianCartes/F.A.M.A/issues/2) y [KANBAN](../KANBAN.md#nombres-coherentes-de-modelos--issue-2).
+Los modelos persistidos comparten el rótulo `Dataset · Arquitectura (vN)` en el historial de entrenamiento, catálogo, activación, resultado y registro de sesión de predicción. Seguimiento: issue #2 del repositorio configurado y [KANBAN](../KANBAN.md#nombres-coherentes-de-modelos--issue-2).
 
 ## Interpretación
 
@@ -27,7 +27,7 @@ npx tsc --noEmit --incremental false
 
 Evidencia y límites en el [recibo](../receipts/model-names.json). Las pruebas focales usan SQLite en memoria, adaptadores ML/GCS sintéticos y jsdom; por sí solas no acreditan el despliegue o calidad ML. La reproducción histórica de `main` evalúa sus expresiones fuente inmutables.
 
-La integración posterior del commit `89590d0` en `dev` se comprobó desde `/home/kevin/Work/fama`: reconstrucción con `./iniciar_fama.sh --build`, API directa/proxy y Chromium real. El modelo #14 muestra `Aves Chilenas · EfficientNet-B0 (v1)` en ambas vistas y `Versión v1` en predicción. Se preservaron ID, relación de dataset, hash de checkpoint y contenedor/volumen PostgreSQL. Esta comprobación visual no ejecutó inferencia ni entrenamiento y no acredita calidad ML.
+La integración posterior del commit `89590d0` en `dev` se comprobó desde `/workspace/fama`: reconstrucción con `./iniciar_fama.sh --build`, API directa/proxy y Chromium real. El modelo #14 muestra `Aves Chilenas · EfficientNet-B0 (v1)` en ambas vistas y `Versión v1` en predicción. Se preservaron ID, relación de dataset, hash de checkpoint y contenedor/volumen PostgreSQL. Esta comprobación visual no ejecutó inferencia ni entrenamiento y no acredita calidad ML.
 
 ## Reversión
 

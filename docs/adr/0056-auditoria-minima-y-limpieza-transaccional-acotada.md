@@ -4,7 +4,7 @@
 
 ## Decisión y alternativas
 
-El usuario confirmó auditoría administrativa sin secretos y limpieza explícita de expirados, con retención inicial de noventa días configurable y lotes de quinientos registros por tabla, máximo mil. Se incorpora un registro de aplicación en BD, no un archivo de cuerpos HTTP, un servicio externo ni un log universal de todas las rutas.
+Se estableció auditoría administrativa sin secretos y limpieza explícita de expirados, con retención inicial de noventa días configurable y lotes de quinientos registros por tabla, máximo mil. Se incorpora un registro de aplicación en BD, no un archivo de cuerpos HTTP, un servicio externo ni un log universal de todas las rutas.
 
 Los eventos usan un vocabulario cerrado, fecha UTC en segundos Unix, resultado e IDs de actor/cuenta/dataset. No admiten texto libre, mensajes de error, emails, IP, contraseñas, hashes de credenciales, tokens, enlaces ni cuerpos de petición. Los IDs siguen siendo información identificable y requieren controles de acceso/retención. El actor se obtiene de la sesión validada; el consumo de recuperación usa el token como capacidad y no atribuye al consumidor la identidad del administrador que lo emitió.
 

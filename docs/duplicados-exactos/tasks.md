@@ -33,7 +33,7 @@ Unidad de trabajo aislada en `fix/feedback-exact-duplicates`. La revisión y el 
 Comando ejecutado desde la raíz del repositorio, sin bytecode ni caché de pytest:
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 /home/kevin/Work/fama/.venv/bin/python -m pytest backend/tests/test_feedback_local_approval.py -q -rs -p no:cacheprovider
+PYTHONDONTWRITEBYTECODE=1 /workspace/fama/.venv/bin/python -m pytest backend/tests/test_feedback_local_approval.py -q -rs -p no:cacheprovider
 ```
 
 | Etapa | Resultado observado |

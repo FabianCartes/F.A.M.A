@@ -4,7 +4,7 @@
 
 ## Contexto y alternativas
 
-El usuario confirmó acceso exclusivamente web, investigadores limitados a recursos asignados y formulario centrado con SlicedWaves. PostgreSQL será Cloud SQL en producción, sin impedir desarrollar primero con PostgreSQL local. Mantener JWT en el navegador simplificaría la transición, pero complicaría revocación y agregaría un flujo Bearer innecesario para este producto.
+Se estableció acceso exclusivamente web, investigadores limitados a recursos asignados y formulario centrado con SlicedWaves. PostgreSQL será Cloud SQL en producción, sin impedir desarrollar primero con PostgreSQL local. Mantener JWT en el navegador simplificaría la transición, pero complicaría revocación y agregaría un flujo Bearer innecesario para este producto.
 
 ## Decisión
 

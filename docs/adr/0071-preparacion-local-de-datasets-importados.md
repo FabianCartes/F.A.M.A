@@ -16,7 +16,7 @@ Una importación local válida no acredita particiones independientes. Los miemb
 
 ## Alternativas y consecuencias
 
-Asumir independencia por archivo permitiría avanzar sin metadatos, pero no sostendría una afirmación de particiones sin fuga. Permitir clases ausentes en val/test simplifica datasets pequeños a costa de evaluación incompleta; el usuario eligió cobertura en las tres particiones. Reutilizar `complete` remoto para bytes locales evitaría otro ciclo de snapshot, pero confundiría dos garantías distintas.
+Asumir independencia por archivo permitiría avanzar sin metadatos, pero no sostendría una afirmación de particiones sin fuga. Permitir clases ausentes en val/test simplifica datasets pequeños a costa de evaluación incompleta; se adoptó cobertura en las tres particiones. Reutilizar `complete` remoto para bytes locales evitaría otro ciclo de snapshot, pero confundiría dos garantías distintas.
 
 La copia privada aumenta almacenamiento e I/O y requiere presupuesto, limpieza de staging propio y retención de snapshots referenciados; no se introduce borrado de originales ni un recolector automático. Un mapa explícito puede requerir trabajo de anotación y no garantiza calidad estadística. Cambiar la predicción pública a cloud-free sería otro alcance, no efecto implícito de entrenar localmente.
 

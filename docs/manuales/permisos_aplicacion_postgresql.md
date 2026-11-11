@@ -25,7 +25,7 @@ Las comprobaciones y cambios de permisos están dentro de un único bloque `DO`;
 Copiar el bloque completo en PowerShell. La conexión del comando apunta al destino de pruebas por el proxy nativo; no carga `.env`.
 
 ```powershell
-Set-Location 'C:\Users\fabia\Desktop\F.A.M.A\backend'
+Set-Location 'C:\Users\local-user\Desktop\F.A.M.A\backend'
 $famaPermisos = @'
 import getpass, json
 from pathlib import Path

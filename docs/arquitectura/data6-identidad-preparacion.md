@@ -3,10 +3,10 @@ Objetivo: implementar el plan aprobado de DATA-6 sin operar sobre datasets reale
 Rama: `feat/data6-preparation-identity`; entrega: ask-on-risk; runner: comprobaciones aisladas de backend. Previsión: 900–1400 líneas autorales; la estrategia de cadena seguía pendiente antes del primer commit.
 
 ## Especificaciones
-- S1: «los audios incorporados no entran a los entrenamientos nuevos. Faltan feedback_13/17/20 frente al preparado congelado del 8 de octubre.» Detectar cambios del índice de origen antes del entrenamiento ordinario; nunca regenerar datos reales en silencio.
-- S2: «recordist="human_feedback" colapsa toda la curación humana en un grupo indivisible que hoy vive entero en test.csv, así que ni un rebalanceo lo arregla.» Preservar la protección antifuga; no inferir grabaciones independientes a partir de identificadores de feedback.
-- S3: «Necesita decisión humana previa (política de versión + granularidad de agrupación).» El usuario aprobó el plan propuesto con «Procede»: preparaciones inmutables de selección explícita, rechazo ordinario por desfase, selección histórica deliberada, agrupación por origen verificado, procedencia desconocida conservadora y tratamiento explícito de lo heredado.
-- S4: «Haz la planificacion» seguido de «Procede». Ejecutar las seis etapas planificadas: política, preparación identificable, procedencia y agrupación del feedback, admisión y checkpoint, preparación operativa explícita, verificación integrada. No se autoriza preparación, entrenamiento, mutación de dataset, despliegue ni operación remota reales.
+- S1: Los audios incorporados no entran a los entrenamientos nuevos: faltan feedback_13/17/20 frente al preparado congelado del 8 de octubre. Detectar cambios del índice de origen antes del entrenamiento ordinario; nunca regenerar datos reales en silencio.
+- S2: `recordist="human_feedback"` colapsa toda la curación humana en un grupo indivisible que hoy vive entero en test.csv, así que ni un rebalanceo lo arregla. Preservar la protección antifuga; no inferir grabaciones independientes a partir de identificadores de feedback.
+- S3: Requiere una decisión previa (política de versión + granularidad de agrupación). Plan aprobado: preparaciones inmutables de selección explícita, rechazo ordinario por desfase, selección histórica deliberada, agrupación por origen verificado, procedencia desconocida conservadora y tratamiento explícito de lo heredado.
+- S4: Planificar y ejecutar las seis etapas: política, preparación identificable, procedencia y agrupación del feedback, admisión y checkpoint, preparación operativa explícita, verificación integrada. No se autoriza preparación, entrenamiento, mutación de dataset, despliegue ni operación remota reales.
 - S5: La aceptación distingue cobertura global de clases de cobertura solo curada. Las fixtures sintéticas con grupos independientes suficientes demuestran distribución; no se promete pertenencia de los cinco registros históricos de feedback a todas las particiones.
 
 ## Tareas
@@ -18,15 +18,11 @@ Rama: `feat/data6-preparation-identity`; entrega: ask-on-risk; runner: comprobac
 - T6 [S1–S5] verificación independiente — la verificación funcional pasó tras una corrección acotada; la evaluación de riesgo y la revisión nativas, y la entrega/commit, seguían pendientes. Activador: contratos persistidos y comportamiento antifuga.
 
 ## Registro
-- L1 Petición del usuario: «Se debe resolver este cambio:
-  DATA-6 (docs/KANBAN.md:192) — el más grave: los audios incorporados no entran a los entrenamientos nuevos. Faltan feedback_13/17/20 frente al preparado congelado del 8 de octubre. Y recordist="human_feedback" colapsa toda la curación humana en un grupo indivisible que hoy vive entero en test.csv, así que ni un rebalanceo lo arregla. Necesita decisión humana previa (política de versión + granularidad de agrupación).
-  Delega la investigacion a varios @exploracion-luna  Use the above message and context to generate a prompt and call the task tool with subagent: exploracion-luna . Invoked by user; guaranteed to exist.»
-- L2 Continuación del usuario: «Haz la planificacion». Se presentó un plan de seis etapas; entonces no se implementó nada.
-- L3 Autorización del usuario: «Procede».
+- L2 Se presentó un plan de seis etapas; entonces no se implementó nada.
 - L4 Tres trabajadores de exploración confirmaron 1211 filas indexadas frente a 1208 preparadas; faltan feedback13/17/20. El `.complete` schema1 acredita integridad de las particiones, no frescura de la entrada ni fecha de preparación. La procedencia curada actual no puede demostrar independencia. No se autoriza mutación actual del dataset.
 - L5 Checkout inicial limpio en `855c112`; rama creada. Un mapeador de integración de solo lectura localizó schema→ruta→admisión→spawn→reenvío al checkpoint y fixtures públicas. Los contratos compartidos implican implementación secuencial, no escritores en paralelo.
-- L6 El seguimiento vive bajo `docs/arquitectura/` según la política del repositorio; tema espejo en Engram `odd/data6-preparation-identity/tasks`. No se crea un directorio `odd/` paralelo.
-- L7 Continuación del usuario: «Procede a implementar el plan». La implementación continuó localmente; la estrategia de cadena seguía sin respuesta y no hubo commit, push, PR ni merge.
+- L6 El seguimiento vive bajo `docs/arquitectura/` según la política del repositorio; tema espejo en registro documental. No se crea un directorio `odd/` paralelo.
+- L7 La implementación continuó localmente; la estrategia de cadena seguía sin respuesta y no hubo commit, push, PR ni merge.
 - L8 Interfaces públicas bajo prueba: prepare_dataset/load_prepared_version, CLI main(argv), POST /api/training/start, servicio y consulta de aprobación, y checkpoint persistido cargado con torch.load. La forma de retorno del loader de bajo nivel permanece sin cambios.
 - L9 Trabajador de regresión solo por comandos: runner aislado sobre preparación, aprobación local, flujo/servicio/persistencia/API/esquemas de entrenamiento y API de feedback: 358 PASS, 0 fallos/skips, 1 deseleccionado (subproceso CLI de engine), 30,91 s. Dos warnings sintéticos cortos de FFT. Las 30 entradas protegidas sin cambios durante las comprobaciones y scratch privado eliminado. No es una suite completa de backend ni un veredicto independiente.
 - L10 Las referencias de origen son afirmaciones del curador sobre grabaciones canónicas originales, validadas en el servidor. No son verificación acústica automatizada, no infieren grupos independientes a partir de hashes o identificadores de feedback y no se rellenan en datos históricos. No se preparó ni entrenó ningún dato real.

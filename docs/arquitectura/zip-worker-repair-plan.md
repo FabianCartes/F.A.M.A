@@ -4,10 +4,10 @@ Repair the execution of ZIP validation in the existing connected MVP. Keep the p
 
 ## Specs
 
-- **S1 — Investigate and plan.** User: «Arreglemosla, haz el plan e identifica bien la causa».
-- **S2 — Implement the agreed repair.** User: «Procede con el arreglo». The agreed plan is a dedicated local-only worker, the same connected database and storage, preservation of the queued job, and no disabled validation/sandbox, privileged container, unconfined seccomp, `CAP_SYS_ADMIN`, automatic GCS synchronization or training.
-- **S3 — Preserve the reported work.** User: «Bytes reconocidos por el servidor: 368 de 368. Recepción completa; la validación de audios es un trabajo separado.»; «Trabajo admitido; pendiente de ejecución: queued · 0%»; «Importación 47a3ab3adec64dbea026dbd456959dbc: validando». Do not cancel or readmit the import to make progress appear successful. A rejection of an invalid archive is not proof of successful dataset publication.
-- **S4 — Keep the selected environment.** User: «Despliega los cambios, ya no hay tiempo para utilizar entornos de prueba, todo se debe iterar sobre el entorno principal»; target clarification: «vamos con la que ya esta conectada». Use `fama_training_dev_20261105153618`; preserve `fama-db`, existing credentials, unrelated work and recovery artifacts. Synthetic sandbox readiness is not another application environment or database.
+- **S1 — Investigate and plan.** Plan the repair and identify the cause precisely.
+- **S2 — Implement the agreed repair.** The agreed plan is a dedicated local-only worker, the same connected database and storage, preservation of the queued job, and no disabled validation/sandbox, privileged container, unconfined seccomp, `CAP_SYS_ADMIN`, automatic GCS synchronization or training.
+- **S3 — Preserve the reported work.** Reported interface states: «Bytes reconocidos por el servidor: 368 de 368. Recepción completa; la validación de audios es un trabajo separado.»; «Trabajo admitido; pendiente de ejecución: queued · 0%»; «Importación 47a3ab3adec64dbea026dbd456959dbc: validando». Do not cancel or readmit the import to make progress appear successful. A rejection of an invalid archive is not proof of successful dataset publication.
+- **S4 — Keep the selected environment.** Deploy the changes and iterate on the main environment, not on test environments; use the already connected one. Use `fama_training_dev_20261105153618`; preserve `fama-db`, existing credentials, unrelated work and recovery artifacts. Synthetic sandbox readiness is not another application environment or database.
 
 ## Tasks
 
@@ -19,7 +19,6 @@ Repair the execution of ZIP validation in the existing connected MVP. Keep the p
 
 ## Log
 
-- **L1 — Original repair authorization:** «Procede con el arreglo» after the preceding plan and causal investigation. Previous request: «Arreglemosla, haz el plan e identifica bien la causa».
 - **L2 — Established cause:** the current import has `preview/queued`, progress0, attempt0, no heartbeat/lease and JSON-null error. The API is healthy but no import-worker process/container is deployed. Separately, historical sandbox readiness in Docker failed with namespace permission denied; exact kernel/filter attribution remains unproven. Current base contains bwrap/prlimit/libseccomp; absence of bwrap is an obsolete earlier diagnosis.
 - **L3 — Execution boundary:** evaluate an unprivileged host worker using the existing project `.venv` and host bwrap/prlimit. This is a material alternative to the failed Docker execution, not disabling the inner sandbox or changing Docker policy. Actual production-validator readiness is required before any queued work is claimed. No new dependency installation, system configuration, Docker policy change or new database is included.
 - **L4 — Routing and ownership:** parent owns runtime changes and proof. Scoped explorer `mw3zocwx-1g-rqbc` reads only queue/execution/storage code to identify concrete grants and persisted-path constraints; it does not run another readiness probe. Existing index and unrelated source edits must remain untouched. Risk: item2 (trusted worker boundary/credentials), item5 (deployment).

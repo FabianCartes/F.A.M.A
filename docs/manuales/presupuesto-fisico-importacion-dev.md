@@ -112,11 +112,11 @@ públicas bajo el destino SSD ext4 aprobado, con el runner existente sin cambios
 El helper pertenece al padre, no es un CLI nuevo del producto:
 
 ```sh
-/home/kevin/Work/fama/.venv/bin/python /home/kevin/Work/fama/.git/agent-scratch/run_storage_budget_on_ssd.py tests/test_dataset_storage_budget.py
+/workspace/fama/.venv/bin/python /workspace/fama/.git/agent-scratch/run_storage_budget_on_ssd.py tests/test_dataset_storage_budget.py
 ```
 
 Cada ejecución conserva `snapshot-manifest.json`, `result.json`, `stdout.log` y
-`stderr.log` bajo `/run/media/kevin/FAMA_P2/fama-dev-large-zip/`. Todos los nombres
+`stderr.log` bajo `/run/media/local-user/FAMA_P2/fama-dev-large-zip/`. Todos los nombres
 de la tabla llevan el prefijo `storage-budget-check-`:
 
 | Sufijo del snapshot | Exit | Resultado observado |
@@ -143,7 +143,7 @@ concesiones para decidir el resultado esperado.
 Cierre obligatorio, con los seis módulos ejecutados:
 
 ```sh
-/home/kevin/Work/fama/.venv/bin/python /home/kevin/Work/fama/.git/agent-scratch/run_storage_budget_on_ssd.py tests/test_dataset_storage_budget.py tests/test_dataset_import_receipts.py tests/test_dataset_import_chunks.py tests/test_dataset_import_cleanup.py tests/test_dataset_import_quotas.py tests/test_dataset_import_worker_cli.py
+/workspace/fama/.venv/bin/python /workspace/fama/.git/agent-scratch/run_storage_budget_on_ssd.py tests/test_dataset_storage_budget.py tests/test_dataset_import_receipts.py tests/test_dataset_import_chunks.py tests/test_dataset_import_cleanup.py tests/test_dataset_import_quotas.py tests/test_dataset_import_worker_cli.py
 ```
 
 Snapshot `storage-budget-check-peq90f7t`: **exit 0, 102 PASS en 18.82 s**;
@@ -173,7 +173,7 @@ después, HTTP507 al pedir un byte adicional: el rechazo no pierde el cargo.
 Comando focal ejecutado tres veces, sin alterar el runner ni su `-x`:
 
 ```sh
-/home/kevin/Work/fama/.venv/bin/python /home/kevin/Work/fama/.git/agent-scratch/run_storage_budget_on_ssd.py tests/test_dataset_storage_budget.py -k separate_sessions
+/workspace/fama/.venv/bin/python /workspace/fama/.git/agent-scratch/run_storage_budget_on_ssd.py tests/test_dataset_storage_budget.py -k separate_sessions
 ```
 
 - `storage-budget-check-7u2g6eex`: exit 1; RED de `require`, `DID NOT RAISE
@@ -247,7 +247,7 @@ Todos los snapshots siguientes usan el prefijo `storage-budget-check-` bajo el
 SSD autorizado y conservan stdout/stderr/result/manifest. La ejecución focal usa:
 
 ```sh
-/home/kevin/Work/fama/.venv/bin/python /home/kevin/Work/fama/.git/agent-scratch/run_storage_budget_on_ssd.py tests/test_dataset_import_physical_lifecycle.py
+/workspace/fama/.venv/bin/python /workspace/fama/.git/agent-scratch/run_storage_budget_on_ssd.py tests/test_dataset_import_physical_lifecycle.py
 ```
 
 | Snapshot | Evidencia observada |
@@ -301,9 +301,9 @@ externo de 25 s del helper (bash foreground 30 s; guarda interna original 30 s).
 No hubo timeout, retry, background ni cambio del runner/guarda.
 
 ```sh
-/home/kevin/Work/fama/.venv/bin/python /home/kevin/Work/fama/.git/agent-scratch/run_storage_budget_on_ssd.py tests/test_dataset_storage_budget.py tests/test_dataset_import_physical_lifecycle.py tests/test_dataset_storage_migration.py tests/test_dataset_import_receipts.py tests/test_dataset_import_chunks.py tests/test_dataset_import_cleanup.py
-/home/kevin/Work/fama/.venv/bin/python /home/kevin/Work/fama/.git/agent-scratch/run_storage_budget_on_ssd.py tests/test_dataset_import_execution.py tests/test_dataset_import_quotas.py tests/test_dataset_import_worker_cli.py tests/test_dataset_import_manifests.py
-/home/kevin/Work/fama/.venv/bin/python /home/kevin/Work/fama/.git/agent-scratch/run_storage_lifecycle_differential.py
+/workspace/fama/.venv/bin/python /workspace/fama/.git/agent-scratch/run_storage_budget_on_ssd.py tests/test_dataset_storage_budget.py tests/test_dataset_import_physical_lifecycle.py tests/test_dataset_storage_migration.py tests/test_dataset_import_receipts.py tests/test_dataset_import_chunks.py tests/test_dataset_import_cleanup.py
+/workspace/fama/.venv/bin/python /workspace/fama/.git/agent-scratch/run_storage_budget_on_ssd.py tests/test_dataset_import_execution.py tests/test_dataset_import_quotas.py tests/test_dataset_import_worker_cli.py tests/test_dataset_import_manifests.py
+/workspace/fama/.venv/bin/python /workspace/fama/.git/agent-scratch/run_storage_lifecycle_differential.py
 ```
 
 - Primera partición: `storage-budget-check-u3ic6z5r`, **exit 0, 94 PASS en

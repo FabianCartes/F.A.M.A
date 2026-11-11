@@ -90,10 +90,10 @@ La instancia quedó **detenida**, no instalada como servicio. Para iniciarla
 manualmente con el mismo checkout e intérprete ya comprobados:
 
 ```bash
-cd /home/kevin/Work/fama/.git/agent-worktrees/unified-import-catalog
-/home/kevin/Work/fama/.venv/bin/python -B backend/scripts/run_local_collection.py \
-  --root /run/media/kevin/FAMA_P2/fama-dev-large-zip/local-instance \
-  --frontend-root /run/media/kevin/FAMA_P2/fama-dev-large-zip/local-instance/ui
+cd /workspace/fama/.git/agent-worktrees/unified-import-catalog
+/workspace/fama/.venv/bin/python -B backend/scripts/run_local_collection.py \
+  --root /run/media/local-user/FAMA_P2/fama-dev-large-zip/local-instance \
+  --frontend-root /run/media/local-user/FAMA_P2/fama-dev-large-zip/local-instance/ui
 ```
 
 Abrir `http://127.0.0.1:3000` solo después de READY; detener con Ctrl-C y esperar

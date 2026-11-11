@@ -3,11 +3,11 @@
 **Estado actual: implementado, verificado y aplicado al frontend local con autorización. Commit local autorizado; sin push.** El lint de `PredictionView.tsx` conserva diagnósticos preexistentes, detallados abajo; no hay aprobación global de lint.
 Se conserva el catálogo, la disponibilidad y los efectos de selección. Las secciones siguientes registran la investigación y las comprobaciones de cada etapa; sus referencias a aplicación o commit pendientes describen ese momento, no el estado actual. No afecta al plan de tríada.
 
-## Solicitud
+## Objetivo
 
-> Ahora si se requiere ya un ultimo cambio en el frontend, es en la parte de predicciones. Se debe agregar el mismo selector con busqueda que esta presente al seleccionar la arquitectura en la vista de entrenamiento. Con todas sus funciones de buscar y al pasar el mouse por encima se resalte la opcion. Haz la investigacion, y a partir de esta el plan de correcion
+Agregar en la vista de Predicciones el mismo selector con búsqueda presente al seleccionar la arquitectura en la vista de Entrenamiento, con todas sus funciones de búsqueda y resaltado de la opción al pasar el mouse. Investigación y, a partir de ella, plan de corrección.
 
-Autorizaciones del usuario, en orden: **«Procede con la implementacion»**, **«Aplica los cambios en la aplicacion»** y **«Haz el commit de esos cambios»**. Cubren implementación, aplicación al frontend local y commit de estas mejoras; no autorizan push, PR ni despliegue de backend.
+Etapas, en orden: implementación, aplicación de los cambios a la aplicación local y commit de los cambios. Cubren implementación, aplicación al frontend local y commit de estas mejoras; no autorizan push, PR ni despliegue de backend.
 
 ## Hallazgo y referencia real
 
@@ -75,7 +75,7 @@ Los logs, códigos de salida, comandos exactos y manifiestos privados están en 
 
 ## Ajuste posterior de la tarjeta de modelo seleccionado
 
-Solicitud del usuario, acompañada de captura: «Falta un ajuste en el bloque de modelo seleccionado en cuanto a la disposicion, se ve cortado hacia la izquierda el nombre:».
+Ajuste solicitado, acompañado de captura: la disposición del bloque de modelo seleccionado deja el nombre cortado hacia la izquierda.
 
 La cabecera distribuía nombre/descripción y etiquetas de dispositivo/versión en una misma fila. El bloque de etiquetas usaba `shrink-0`, comprimiendo el texto en una columna estrecha. Se cambian únicamente clases de disposición en `PredictionView.tsx`: nombre y descripción ocupan una fila completa con `min-w-0`, `w-full` y `break-words`; las etiquetas quedan debajo en una fila con `flex-wrap`. La tarjeta y su primera fila también admiten ancho reducido y ajuste de línea. No se cambian textos, selección, métricas, checkpoint, consultas ni inferencia.
 
@@ -99,7 +99,7 @@ Cada intento y cada informe muestra una sola fecha: finalización si es válida;
 
 Se elimina la lista numérica sin nombres de «Soporte por clase». La tabla por clase conserva los recuentos bajo «Audios evaluados», con `InfoTooltip`, el mismo componente usado en Entrenamiento, para explicar que son cantidades de audios reales y no puntuaciones. Otro tooltip explica que cobertura completa significa presencia de todas las clases, no precisión perfecta. Los rechazos mantienen cantidad y porcentaje sin etiqueta interna; su columna en la matriz se presenta como «Rechazo».
 
-La solicitud autoriza presentación, no cambios de entrenamiento, datasets, cálculos, publicación ni credenciales. Comprobaciones y evidencia privada de este ajuste: `.private-local-delete-work/prediction-evaluation-summary/`. No se modifica el componente común de tooltip ni se instala ninguna dependencia.
+El ajuste cubre presentación, no cambios de entrenamiento, datasets, cálculos, publicación ni credenciales. Comprobaciones y evidencia privada de este ajuste: `.private-local-delete-work/prediction-evaluation-summary/`. No se modifica el componente común de tooltip ni se instala ninguna dependencia.
 
 Verificación observada del resumen: RED por presencia de bloque técnico; GREEN de 66 pruebas focales y 580 pruebas completas en 67 archivos. Lint de las pruebas aprobado; lint de la vista conserva exactamente 2 errores y 1 advertencia de base, sin aprobación global. El primer build detectó un tipo de entrada demasiado restrictivo del formateador de fechas: se corrigió la firma a `unknown` para validar los valores recibidos antes de formatearlos. Tras esa corrección exclusivamente de tipo y limpieza de espacios, build Webpack, TypeScript y las 66 pruebas focales volvieron a pasar; no se repitió la suite completa porque no cambió el comportamiento. No se ejecutó inferencia real ni navegador automatizado.
 

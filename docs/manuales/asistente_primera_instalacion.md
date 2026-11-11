@@ -9,7 +9,7 @@ El asistente conecta recursos existentes. La instancia, el proxy, ADC y las migr
 1. Mantener disponible el proxy y seleccionar el directorio persistente de esta instalación al iniciar el backend. Para el perfil nativo de pruebas preparado en este equipo:
 
    ```powershell
-   Set-Location 'C:\Users\fabia\Desktop\F.A.M.A\backend'
+   Set-Location 'C:\Users\local-user\Desktop\F.A.M.A\backend'
    & .\.venv\Scripts\python.exe -m app.node --config-dir "$PWD\installation\cloud-pruebas\native" serve --port 8000
    ```
 
@@ -17,11 +17,11 @@ El asistente conecta recursos existentes. La instancia, el proxy, ADC y las migr
 3. En otro terminal del equipo, generar la autorización:
 
    ```powershell
-   Set-Location 'C:\Users\fabia\Desktop\F.A.M.A\backend'
+   Set-Location 'C:\Users\local-user\Desktop\F.A.M.A\backend'
    & .\.venv\Scripts\python.exe -m app.node --config-dir "$PWD\installation\cloud-pruebas\native" setup-code --web-origin http://localhost:3000
    ```
 
-4. Introducir localmente el campo `authorization_token` de la respuesta en **Código de autorización**. No compartirlo por chat ni añadirlo a la URL. Caduca a los 15 minutos; generar otro invalida el anterior. El origen debe coincidir exactamente: `localhost` y `127.0.0.1`, o puertos diferentes, son orígenes distintos. HTTP se admite únicamente en loopback; otros destinos necesitan HTTPS.
+4. Introducir localmente el campo `authorization_token` de la respuesta en **Código de autorización**. No divulgarlo ni añadirlo a la URL. Caduca a los 15 minutos; generar otro invalida el anterior. El origen debe coincidir exactamente: `localhost` y `127.0.0.1`, o puertos diferentes, son orígenes distintos. HTTP se admite únicamente en loopback; otros destinos necesitan HTTPS.
 
 La CLI protege el directorio para el usuario del equipo y SYSTEM en Windows, o mediante permisos privados en POSIX. El proceso del backend debe ejecutarse con una identidad que pueda leerlo. Una instalación cerrada rechaza generar un nuevo código. El código se muestra solo en el terminal del operador; el servidor conserva su digest y el navegador lo mantiene en memoria. Recargar exige autorizar de nuevo.
 

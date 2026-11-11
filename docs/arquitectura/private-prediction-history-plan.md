@@ -4,12 +4,12 @@ Implementación autorizada para modelos importados privados. Sin migraciones, nu
 
 ## Specs
 
-- S1: «Confirmo» la propuesta: «esta primera versión cubriría tus modelos importados privados y sus predicciones locales verificables». Filtrar por sesión, asociación durable del modelo/dataset y referencia local canónica vinculada al mismo propietario. No basta el propietario del modelo. Excluir legacy y referencias ambiguas.
+- S1: Cubrir modelos importados privados y sus predicciones locales verificables. Filtrar por sesión, asociación durable del modelo/dataset y referencia local canónica vinculada al mismo propietario. No basta el propietario del modelo. Excluir legacy y referencias ambiguas.
 - S2: «solo hacer que muestre el historial». Mostrar fecha, archivo, clase y confianza del modelo exacto; páginas de 20, recientes primero; sin audio, rutas internas, feedback ni estados de incorporación.
 - S3: «historial persistente de las predicciones del modelo seleccionado». Cargar al entrar/cambiar modelo, actualizar tras inferencia, impedir resultados obsoletos entre modelos/sesiones y conservar diseño/filtros. Los filtros existentes afectan los registros cargados.
-- S4: «No he cambiado código ni datos. ¿Confirmas que implementemos esta primera versión para los modelos importados privados?» — «Confirmo». Implementación/pruebas autorizadas. Sin inferencia/entrenamiento real, GCS, browser automatizado, mutaciones operativas ni publicación Git.
+- S4: Implementar y probar la primera versión para modelos importados privados. Implementación/pruebas autorizadas. Sin inferencia/entrenamiento real, GCS, browser automatizado, mutaciones operativas ni publicación Git.
 
-- S5: «Autorizo para el despliege». Desplegar API y vista en el entorno conectado con respaldo validado y conservación de datos, checkpoints, configuración y recuperación. Sin ejecutar predicciones/entrenamientos nuevos ni GCS.
+- S5: Desplegar API y vista en el entorno conectado con respaldo validado y conservación de datos, checkpoints, configuración y recuperación. Sin ejecutar predicciones/entrenamientos nuevos ni GCS.
 
 ## Tasks
 
@@ -21,8 +21,8 @@ Implementación autorizada para modelos importados privados. Sin migraciones, nu
 
 ## Log
 
-- L1: «Confirmo».
-- L2: Alcance previamente confirmado: «sigamos con el plan anterior mejor, solo hacer que muestre el historial»; investigación solicitada: «Procede con la investigacion y arma el plan».
+- L1: Alcance de historial privado definido en S1.
+- L2: Alcance limitado a mostrar el historial, previa investigación.
 - L3: Investigación: PredictionView historial useState; Prediccion no tiene autor explícito. La escritura local de inferencia importada vincula el usuario autenticado a una referencia canónica; usar esa evidencia junto con asociación durable coherente, no atribuir filas legacy ni modelos públicos.
 - L4: Rutas de prueba: HTTP autenticado de consulta + vista React; SQLite/CPU sintético, red/DB real bloqueadas mediante runner existente. No ampliar retención ni comprobar bytes de audios para listar metadatos históricos.
 
@@ -33,7 +33,7 @@ Implementación autorizada para modelos importados privados. Sin migraciones, nu
 
 - L9: Revalidación independiente mw5b8kh7-k-6r74: S2 y brecha S3 cerrados, 9PASS/2 archivos/tipos exit0, sin nuevo barrido backend. Spot check del padre: mismas 9PASS/tipos0/diffcheck0. Implementación y verificación completadas; no desplegada. Detalles y hashes: docs/receipts/private-prediction-history.json.
 
-- L10: «Autorizo para el despliege». Baselines comprobadas byte a byte: main.py activo coincide con respaldo previo a la tarea, PredictionView servido también; hashes del recibo verificado intactos. API vigente5b6a1f4f/image57cd822; despliegue limitado a main.py+nueva ruta y PredictionView+nuevo cliente.
+- L10: Baselines comprobadas byte a byte: main.py activo coincide con respaldo previo a la tarea, PredictionView servido también; hashes del recibo verificado intactos. API vigente5b6a1f4f/image57cd822; despliegue limitado a main.py+nueva ruta y PredictionView+nuevo cliente.
 
 - L11: Despliegue autorizado: build offline job43 y preflight job45 PASS, dump catálogo validado SHA301967cbcf418e30089e7a431b4767dc16b4d28bacadc977e89e8415b320fe6a. Job44 falló en comprobación aislada al usar UID predeterminado de imagen10001 en lugar del UID efectivo1000; única recuperación acotada cambió solo el UID del probe, sin permisos nuevos. Job46 reemplazó API y sirvió vista/cliente, pero el smoke web devolvió401. No se repitió ese despliegue.
 - L12: Causa de401 reproducida por HTTP público sintético: la ruta usaba autenticación Bearer exclusiva; la sesión de navegador usa cookie. Corrección limitada a la nueva ruta para reutilizar imported_user existente, sin modificar helpers globales, proxy, origen ni reglas de credenciales conflictivas. RED cookie401 → GREEN job48 101PASS, independiente mw5d1nan-m-x2lk 29PASS y spot del padre13PASS. Advertencias de arranque SQLite por tabla usuario ausente conservadas en logs; sin acceso a DB real durante pruebas.

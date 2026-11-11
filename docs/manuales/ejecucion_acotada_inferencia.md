@@ -21,7 +21,7 @@ La revisión `review-7ba32d8c47dbb57b` aprobó únicamente BEXEC-1/2. La revisi�
 
 ## Objetivo y contrato aprobado
 
-Corregir el corte de inferencia a los 30 segundos sin ampliar la espera de forma ilimitada ni multiplicar el trabajo concurrente. El usuario autorizó los controles de recursos y eligió un máximo de **300 segundos de audio**, rechazando excedentes sin recorte silencioso. Se mantienen **100 MiB por archivo** y **110 MiB por solicitud multipart**.
+Corregir el corte de inferencia a los 30 segundos sin ampliar la espera de forma ilimitada ni multiplicar el trabajo concurrente. El alcance incluye los controles de recursos y eligió un máximo de **300 segundos de audio**, rechazando excedentes sin recorte silencioso. Se mantienen **100 MiB por archivo** y **110 MiB por solicitud multipart**.
 
 La duración del audio no equivale al tiempo de procesamiento. La espera HTTP tendrá un presupuesto explícito y margen para responder desde el backend; no se promete detener un hilo de Python/PyTorch por cancelar un request.
 
@@ -88,7 +88,7 @@ En cada ejecución aparecen advertencias de `sys.prefix` y `sys.exec_prefix` por
 
 ### Transición histórica después de BEXEC-1/2
 
-En ese corte el usuario autorizó BEXEC-3: timeout GCS opt-in de 60 s por intento, sin retries del SDK en inferencia; conservar el cupo mientras la subida real trabaje y registrar tiempos sanitizados. Esa implementación y las comprobaciones BEXEC-4/5 ya se completaron; no es el próximo paso actual. Se mantienen los límites: no es deadline total de transferencia y no se autorizan commits nuevos, autenticación ni despliegue.
+En ese corte BEXEC-3 comprende: timeout GCS opt-in de 60 s por intento, sin retries del SDK en inferencia; conservar el cupo mientras la subida real trabaje y registrar tiempos sanitizados. Esa implementación y las comprobaciones BEXEC-4/5 ya se completaron; no es el próximo paso actual. Se mantienen los límites: no es deadline total de transferencia y no se autorizan commits nuevos, autenticación ni despliegue.
 
 
 ### Verificación independiente de BEXEC-1
@@ -133,7 +133,7 @@ La triangulación cubre límite exacto del cuerpo, headers ausentes/duplicados, 
 
 El verificador ejecutó el mismo comando de tres suites desde `backend`: **40 aprobadas en 1,34 s**. `git diff --check` sin errores; hashes SHA-256 de los seis archivos vigilados idénticos antes/después. Dos advertencias conocidas de `sys.prefix`/`sys.exec_prefix`, sin skips ni errores del runner. No detectó un defecto concreto en la ruta candidata. Validó admisión temprana, contador ASGI y 413 único, cierre de spool, límites inclusivos, CORS, WAV/duración antes de efectos externos y ownership del worker. No realizó cambios.
 
-El usuario pidió cerrar únicamente BEXEC-2. Queda cerrado funcionalmente con estas comprobaciones, sin afirmar transporte real de 100/110 MiB, GCS/modelos/BD/auth reales, memoria decodificada acotada, deadlines, cancelación dura ni apagado garantizado. Revisión nativa aprobada sobre el corte BEXEC-1/2, no sobre toda la rama histórica: `review-7ba32d8c47dbb57b`, tier medio y lente `review-reliability`. La captura final aprobó; el reconocimiento nativo devolvió `native-approved-acknowledgement-completed`, autoridad consumida (`burned`). Identidad congelada: `sha256:fd6f52562192f44ee68e6e4f03e4bd07d8055faf52701e9a506203859cd2b9cd`. Este registro administrativo se agregó después del reconocimiento; no se modificaron código ni pruebas después de la revisión. No se realizaron commits Git ni despliegue. Los pasos BEXEC-3 a BEXEC-6 continúan pendientes según el alcance global de cada uno.
+El alcance de cierre se limita a BEXEC-2. Queda cerrado funcionalmente con estas comprobaciones, sin afirmar transporte real de 100/110 MiB, GCS/modelos/BD/auth reales, memoria decodificada acotada, deadlines, cancelación dura ni apagado garantizado. Revisión nativa aprobada sobre el corte BEXEC-1/2, no sobre toda la rama histórica: `review-7ba32d8c47dbb57b`, tier medio y lente `review-reliability`. La captura final aprobó; el reconocimiento nativo devolvió `native-approved-acknowledgement-completed`, autoridad consumida (`burned`). Identidad congelada: `sha256:fd6f52562192f44ee68e6e4f03e4bd07d8055faf52701e9a506203859cd2b9cd`. Este registro administrativo se agregó después del reconocimiento; no se modificaron código ni pruebas después de la revisión. No se realizaron commits Git ni despliegue. Los pasos BEXEC-3 a BEXEC-6 continúan pendientes según el alcance global de cada uno.
 
 ## Evidencia observada de BEXEC-3
 
@@ -190,7 +190,7 @@ Starlette instalado captura `BaseException` en `MultiPartParser.parse` y cierra 
 Backend, cuatro ejecuciones exactas:
 
 ```sh
-cd /home/kevin/Work/fama/backend && DATABASE_URL=sqlite:// /home/kevin/Work/fama/.venv/bin/python -m pytest -p no:cacheprovider tests/test_prediction_audio_metadata.py tests/test_inference_execution.py tests/test_inference_input_limits.py tests/test_storage.py tests/test_inference_storage_timing.py tests/test_inference_deadlines.py
+cd /workspace/fama/backend && DATABASE_URL=sqlite:// /workspace/fama/.venv/bin/python -m pytest -p no:cacheprovider tests/test_prediction_audio_metadata.py tests/test_inference_execution.py tests/test_inference_input_limits.py tests/test_storage.py tests/test_inference_storage_timing.py tests/test_inference_deadlines.py
 ```
 
 - RED: **63 pasan, 1 falla**; multipart parcial seguía esperando y el watchdog externo terminaba con TimeoutError, sin 504.
@@ -202,7 +202,7 @@ Frontend configura `experimental.proxyTimeout: 300000` junto al buffer de 110 Mi
 Frontend, dos ejecuciones exactas:
 
 ```sh
-cd /home/kevin/Work/fama/frontend && node --test tests/proxy-timeout.test.mjs
+cd /workspace/fama/frontend && node --test tests/proxy-timeout.test.mjs
 ```
 
 - RED real: **0 pasan, 1 falla**, ~30,08 s: config sin timeout hacía que los dos destinos configurados devolvieran 500 en lugar de 200; control default también abortó.
@@ -232,8 +232,8 @@ Se reutilizó el RED observado por BEXEC-5A: 19 archivos aprobados, 2 fallidos; 
 Comandos exactos y resultados de esta corrección:
 
 ```sh
-set -o pipefail; cd /home/kevin/Work/fama/frontend && npm test -- --reporter=dot 2>&1 | tail -n 65
-cd /home/kevin/Work/fama/frontend && node --test tests/proxy-timeout.test.mjs
+set -o pipefail; cd /workspace/fama/frontend && npm test -- --reporter=dot 2>&1 | tail -n 65
+cd /workspace/fama/frontend && node --test tests/proxy-timeout.test.mjs
 git diff --check -- frontend/vitest.config.mts docs/manuales/ejecucion_acotada_inferencia.md
 ```
 
@@ -273,7 +273,7 @@ Pendientes: tamaños reales backend bajo aislamiento válido, guard de archivo s
 
 ### Autorización de reanudación aislada
 
-El usuario autorizó repetir únicamente las verificaciones pendientes bajo el aislamiento corregido propuesto. No autoriza borrar el perfil residual, commits ni despliegue. Backend mediante cliente HTTP ASGI raw sin lifespan y barreras fail-closed antes de importación: startup, carga real de modelos y servicios externos deben abortar si se invocan. No repetir el harness contaminado. Navegador solo si se establece bloqueo efectivo de tráfico externo antes de lanzarlo; flags/CDP por sí solos no prueban aislamiento de procesos de fondo. Si no hay aislamiento disponible sin cambios del sistema ni instalación, declarar navegador pendiente y no ejecutarlo.
+Se previó repetir las verificaciones pendientes bajo el aislamiento corregido. No autoriza borrar el perfil residual, commits ni despliegue. Backend mediante cliente HTTP ASGI raw sin lifespan y barreras fail-closed antes de importación: startup, carga real de modelos y servicios externos deben abortar si se invocan. No repetir el harness contaminado. Navegador solo si se establece bloqueo efectivo de tráfico externo antes de lanzarlo; flags/CDP por sí solos no prueban aislamiento de procesos de fondo. Si no hay aislamiento disponible sin cambios del sistema ni instalación, declarar navegador pendiente y no ejecutarlo.
 
 
 ### Preflight corregido y diseño de harness temporal
@@ -361,7 +361,7 @@ La aprobación nativa es evidencia del snapshot indicado; esta anotación de cie
 
 ### Corrección posterior autorizada: IngestionSync
 
-Después del cierre BEXEC, el usuario autorizó corregir la omisión de IDs y eligió mostrarlos **solo en el panel de sincronización**, no en la cola de curación. `FeedbackSyncPanel.tsx` ahora muestra los IDs persistidos de feedback/predicción; `IngestionView.test.tsx` comprueba ausencia de IDs en la región de la cola, presencia de ambos en sincronización y mantiene la exclusión global de UUIDs técnicos. El contrato ya estaba documentado en el manual de revisión de audios; no se cambió el backend ni auth.
+Después del cierre BEXEC, se corrigió la omisión de IDs para mostrarlos **solo en el panel de sincronización**, no en la cola de curación. `FeedbackSyncPanel.tsx` ahora muestra los IDs persistidos de feedback/predicción; `IngestionView.test.tsx` comprueba ausencia de IDs en la región de la cola, presencia de ambos en sincronización y mantiene la exclusión global de UUIDs técnicos. El contrato ya estaba documentado en el manual de revisión de audios; no se cambió el backend ni auth.
 
 RED/GREEN observado: IngestionSync pasó de 1 fallo / 6 aprobadas a 7/7; la prueba de ingesta pasó de 27/28 a 28/28 al acotar correctamente sus assertions por región. Verificación independiente final: **35/35 enfocadas en 5,30 s**, **235/235 frontend en 7,18 s** y TypeScript aprobado (`tsc --noEmit --incremental false`). Comandos ejecutados con bwrap, raíz read-only, red aislada y cache npm privada en tmpfs. Advertencia informativa de rendimiento jsdom; ninguna prueba falló. No se repitió build ni navegador para esta corrección; la evidencia funcional nueva es DOM renderizado.
 
@@ -370,7 +370,7 @@ Revisión nativa `review-551468b6b8114f9d` aprobada y reconocida, autoridad burn
 
 ### Commits autorizados posteriores al cierre
 
-El usuario autorizó guardar los cambios anteriores antes de investigar Colilarga. Rama: fix/limite-audio-inferencia.
+El alcance previo contempla guardar los cambios antes de investigar Colilarga. Rama: fix/limite-audio-inferencia.
 
 - e8a8f55ac36c83fbcb54127dc0c24dd8bad41b21: ejecución acotada, pruebas, proxy y documentación.
 - 0d7d5af6c5dbab036943f180eb7688ab01653d38: IDs de sincronización y regresión de privacidad de la cola.

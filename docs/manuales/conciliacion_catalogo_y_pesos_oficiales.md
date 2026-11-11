@@ -6,7 +6,7 @@
 
 ## Decisiones y ejecución
 
-El operador confirmó usar el Super-Ensamble de aves como predeterminado y conservar tanto las cinco versiones remotas como las cinco históricas de audios diferentes. Codex publicó los cinco históricos con nombres `_historico_<sha16>.mp3`, precondición de generación cero y descarga posterior con SHA-256 idéntico. Son 149569020 bytes añadidos; no se reemplazó ni borró ningún objeto anterior.
+El operador confirmó usar el Super-Ensamble de aves como predeterminado y conservar tanto las cinco versiones remotas como las cinco históricas de audios diferentes. se publicó los cinco históricos con nombres `_historico_<sha16>.mp3`, precondición de generación cero y descarga posterior con SHA-256 idéntico. Son 149569020 bytes añadidos; no se reemplazó ni borró ningún objeto anterior.
 
 Los 1205 audios indexados se copiaron al runtime oficial y verificaron por SHA-256. Su `metadata.csv` conserva orden y catorce campos originales, incluidos etiquetas, licencias y origen; añade `file_path` y `file_stage` para referencias canónicas. No se añadieron los seis audios locales ajenos al índice histórico. Huella del índice activo: `64f258de5c3b35853c09eb6b3b18c029ed22567f735d1edcd36db6275c8fc768`.
 

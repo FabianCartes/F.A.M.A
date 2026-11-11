@@ -8,7 +8,7 @@
 
 ## Políticas vigentes en código
 
-**Activado posteriormente el mismo 23 de octubre:** migración `0003_autonomy` aplicada por el operador y backend 8010 reiniciado por Codex. Una identidad sintética inexistente recibió cinco 401 y después 429 con 111 segundos restantes. No se agotaron cuotas de cuentas reales ni se borraron presupuestos previos. [Activación real](../receipts/autonomia_activacion_real_20261023.json); el párrafo anterior conserva el corte previo al reinicio.
+**Activado posteriormente el mismo 23 de octubre:** migración `0003_autonomy` aplicada por el operador y backend 8010 reiniciado . Una identidad sintética inexistente recibió cinco 401 y después 429 con 111 segundos restantes. No se agotaron cuotas de cuentas reales ni se borraron presupuestos previos. [Activación real](../receipts/autonomia_activacion_real_20261023.json); el párrafo anterior conserva el corte previo al reinicio.
 
 | Operación | Clave de política | Presupuesto |
 | --- | --- | --- |

@@ -9,10 +9,10 @@
 
 ## 1. Contexto y Problema Detectado
 
-En el subsistema de inferencia acústica ([`PredictionView.tsx`](file:///home/kevin/Work/fama/frontend/components/views/PredictionView.tsx)), el sistema permite actualmente subir grabaciones de audio mediante un selector de archivos (`<input type="file" accept=".wav,audio/wav">`). Al evaluar la habilitación de captura directa en vivo a través del micrófono del usuario en el navegador web, surge una incompatibilidad arquitectural fundamental entre las restricciones del backend y los estándares de audio web.
+En el subsistema de inferencia acústica ([`PredictionView.tsx`](../../frontend/components/views/PredictionView.tsx)), el sistema permite actualmente subir grabaciones de audio mediante un selector de archivos (`<input type="file" accept=".wav,audio/wav">`). Al evaluar la habilitación de captura directa en vivo a través del micrófono del usuario en el navegador web, surge una incompatibilidad arquitectural fundamental entre las restricciones del backend y los estándares de audio web.
 
 ### 1.1 Restricción Estricta en el Backend (FastAPI)
-En [`backend/app/main.py`](file:///home/kevin/Work/fama/backend/app/main.py#L506), el endpoint de inferencia impone un control estricto de extensión y formato de contenedor:
+En [`backend/app/main.py`](../../backend/app/main.py#L506), el endpoint de inferencia impone un control estricto de extensión y formato de contenedor:
 
 ```python
 # backend/app/main.py
@@ -41,9 +41,9 @@ La exigencia de formato `.wav` en F.A.M.A. no es un capricho de implementación,
 1. **Degradación Espectral de Códecs con Pérdida (Lossy Compression)**:
    Los códecs como Opus o AAC aplican algoritmos psicoacústicos diseñados para voz humana, aplicando filtros pasa-altos agresivos y eliminando componentes de alta frecuencia o transientes de baja potencia.
 2. **Distorsión en Separación HPSS (Armónico-Percusivo)**:
-   El Super-Ensamble de motores ([`EngineEnsemblePredictor`](file:///home/kevin/Work/fama/backend/app/services/predictors/engine_ensemble_predictor.py)) utiliza un frontend HPSS de 3 canales a 32 kHz. Los artefactos de cuantización temporal de Opus alteran las matrices de fase del STFT, degradando la separación armónica de rodamientos y correas.
+   El Super-Ensamble de motores ([`EngineEnsemblePredictor`](../../backend/app/services/predictors/engine_ensemble_predictor.py)) utiliza un frontend HPSS de 3 canales a 32 kHz. Los artefactos de cuantización temporal de Opus alteran las matrices de fase del STFT, degradando la separación armónica de rodamientos y correas.
 3. **Fidelidad del Banco de Filtros Mel en GPU**:
-   [`GPUAudioFrontEnd`](file:///home/kevin/Work/fama/backend/poc/preprocess.py) asume tensores crudos con amplitud lineal para calcular densidades espectrales normalizadas (dB) con `f_min` y `f_max` calibrados. El contenedor PCM WAV de 16 bits sin compresión preserva la integridad física de la señal acústica original.
+   [`GPUAudioFrontEnd`](../../backend/poc/preprocess.py) asume tensores crudos con amplitud lineal para calcular densidades espectrales normalizadas (dB) con `f_min` y `f_max` calibrados. El contenedor PCM WAV de 16 bits sin compresión preserva la integridad física de la señal acústica original.
 
 ---
 
@@ -98,4 +98,4 @@ flowchart TD
 Se adopta formalmente la **Opción A (Transcodificación PCM WAV en el Cliente)** como la solución arquitectónicamente superior:
 
 1. **Desacoplamiento MLOps**: Mantiene la API de predicción rápida, determinista y orientada exclusivamente a tensores acústicos de alta fidelidad.
-2. **Implementación en Frontend**: Cuando se incorpore la funcionalidad de grabación por micrófono en [`PredictionView.tsx`](file:///home/kevin/Work/fama/frontend/components/views/PredictionView.tsx), se integrará una utilidad de serialización WAV (`frontend/lib/audio/wavEncoder.ts`) que transforme el stream del micrófono directamente a un `Blob` de tipo `audio/wav` con nombre canónico `microfono_captura.wav`.
+2. **Implementación en Frontend**: Cuando se incorpore la funcionalidad de grabación por micrófono en [`PredictionView.tsx`](../../frontend/components/views/PredictionView.tsx), se integrará una utilidad de serialización WAV (`frontend/lib/audio/wavEncoder.ts`) que transforme el stream del micrófono directamente a un `Blob` de tipo `audio/wav` con nombre canónico `microfono_captura.wav`.

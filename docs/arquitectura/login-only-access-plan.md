@@ -4,12 +4,12 @@ Verificación: TDD en interfaz pública de sesión/solicitudes HTTP; suite front
 
 ## Specs
 
-- S1. «Otro cambio que se debe realizar, es que si un usuario no esta autenticado, que este solo pueda navegar en la pantalla de login». El workspace no se monta ni se muestra durante comprobación inicial ni sin identidad confirmada; anónimo confirmado se dirige a /login mediante replace, sin excepción legacy.
-- S2. «con el mensaje anterior, busca la manera mas sencilla de implementarlo». Reutilizar SessionBoundary y estados actuales; sin middleware, dependencias, guardias por vista ni cambios de backend. Preservar acceso autenticado, revalidación del mismo propietario y preparación/entrenamiento/inferencia.
-- S3. Plan aceptado: «Si falla la comprobación o el cierre de sesión, se bloquea el workspace y se conserva el mensaje y la opción de reintentar». No confundir error de comprobación con anónimo confirmado, no afirmar revocación no confirmada ni permitir reaparición del workspace durante logout fallido; mantener pantalla de acceso segura con reintento, evitando bucles.
-- S4. Plan aceptado: «Al invalidarse la sesión, desaparecen las vistas privadas y se vuelve al login». Preservar disciplina de generaciones/cancelación para no restaurar sesiones inválidas por respuestas tardías; login correcto y visita autenticada a /login permiten acceso habitual.
-- S5. Plan aceptado: «Respaldar y actualizar solo los archivos necesarios en la copia activa del frontend». No reiniciar DB/workers, no transferencias ni entrenamiento reales; comprobación en navegador de entrada anónima, acceso correcto, logout e invalidación, usando fixtures aislados si no es posible autenticación segura. Distinguir evidencia sintética de backend real.
-- S6. «Vamos con esta solucion, haz el plan» y «Procede con la implementacion.». Actualizar documentación del acceso, evidencia breve y commit acotado sin push/PR. «Finalmente todavia no se pueden eliminar, asi que sigamos.»: preservar todos los no rastreados; no limpieza en esta unidad.
+- S1. Si un usuario no está autenticado, solo puede navegar en la pantalla de login. El workspace no se monta ni se muestra durante comprobación inicial ni sin identidad confirmada; anónimo confirmado se dirige a /login mediante replace, sin excepción legacy.
+- S2. Implementación lo más sencilla posible: reutilizar SessionBoundary y estados actuales; sin middleware, dependencias, guardias por vista ni cambios de backend. Preservar acceso autenticado, revalidación del mismo propietario y preparación/entrenamiento/inferencia.
+- S3. Si falla la comprobación o el cierre de sesión, se bloquea el workspace y se conserva el mensaje y la opción de reintentar. No confundir error de comprobación con anónimo confirmado, no afirmar revocación no confirmada ni permitir reaparición del workspace durante logout fallido; mantener pantalla de acceso segura con reintento, evitando bucles.
+- S4. Al invalidarse la sesión, desaparecen las vistas privadas y se vuelve al login. Preservar disciplina de generaciones/cancelación para no restaurar sesiones inválidas por respuestas tardías; login correcto y visita autenticada a /login permiten acceso habitual.
+- S5. Respaldar y actualizar solo los archivos necesarios en la copia activa del frontend. No reiniciar DB/workers, no transferencias ni entrenamiento reales; comprobación en navegador de entrada anónima, acceso correcto, logout e invalidación, usando fixtures aislados si no es posible autenticación segura. Distinguir evidencia sintética de backend real.
+- S6. Actualizar documentación del acceso, evidencia breve y commit acotado sin push/PR. Preservar todos los no rastreados; no limpieza en esta unidad.
 
 ## Tasks
 
@@ -21,11 +21,9 @@ Unidad de cierre: `feat(auth): exigir sesión para acceder al workspace`, hijo d
 
 ## Log
 
-- L1. Usuario: «Finalmente todavia no se pueden eliminar, asi que sigamos. Otro cambio que se debe realizar, es que si un usuario no esta autenticado, que este solo pueda navegar en la pantalla de login».
-- L2. Usuario: «con el mensaje anterior, busca la manera mas sencilla de implementarlo».
 - L3. Exploración mw6m4600-4-iuc2 y spot-check padre: SessionBoundary workspace renderiza children siempre; currentUser inicial, onUnauthorized y logout existentes. Logout quita propietario antes de revocación y ofrece reintento al fallar; conservar esa garantía sin excepción legacy. Error de comprobación debe fallar cerrado. Solo guardia frontend, no sustituye permisos de API. La copia real es .training-manual-44938bc83ad0184c/frontend; búsquedas que ignoran ocultos no demuestran ausencia.
-- L4. Usuario: «Vamos con esta solucion, haz el plan». Plan de cinco pasos aceptado: pruebas públicas, guardia central, compatibilidad y revisión independiente, copia real y navegador, documentación/commit sin limpieza ni publicación.
-- L5. Usuario: «Procede con la implementacion.». Baseline rastreado limpio en6b37e18; privados/no rastreados preservados. Entorno previo levantado en127.0.0.1:3000, API/DB/ZIP activos; consumidor consulta cola pero healthcheck HTTP heredado es incorrecto, fuera de alcance. Global lint previo5errores4warnings en ImportedTrainingPanel/PredictionView/trainingHistoryApi; no corregirlos ni afirmar lint global aprobado.
+- L4. Plan de cinco pasos aceptado: pruebas públicas, guardia central, compatibilidad y revisión independiente, copia real y navegador, documentación/commit sin limpieza ni publicación.
+- L5. Baseline rastreado limpio en6b37e18; privados/no rastreados preservados. Entorno previo levantado en127.0.0.1:3000, API/DB/ZIP activos; consumidor consulta cola pero healthcheck HTTP heredado es incorrecto, fuera de alcance. Global lint previo5errores4warnings en ImportedTrainingPanel/PredictionView/trainingHistoryApi; no corregirlos ni afirmar lint global aprobado.
 
 - L6. Padre reproduce RED funcional en copia real antes del cambio: /auth/web/me interceptado y pendiente, texto Comprobando sesión… visible, pero navegación del workspace montada. Helper aislado .login-only-access-6b37e18/browser-audit.js, APIs sintéticas y contexto cerrado; resultado browser-before.json. Boundary original de copia dev coincide con base6b37e18 y queda respaldado; no se cambió el entorno. Worker de helper mw6mghfp-6-uks3 solo preparó/syntax-check, ejecución y evidencia son del padre.
 

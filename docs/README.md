@@ -5,7 +5,9 @@
 
 **Reinicio oficial del 1 de noviembre:** [recibo operativo](./receipts/reinicio_oficial_20261101.json) de web, backend, PostgreSQL y GCS con perfil completado y esquema 0004; sin migraciones ni cambio de credenciales.
 
-**Entrega a Kevin, 4 de noviembre:** [guía con preparación nativa Linux](./manuales/entrega_a_kevin.md), [recibo de alta y permiso técnico](./receipts/alta_kevin_administrador_20261104.json). Cuenta administradora y política IAM comprobadas; autenticación/configuración y arranque en su equipo todavía pendientes. Guía y recibo sin contraseñas.
+**Nodo secundario, 4 de noviembre:** [guía con preparación nativa Linux](./manuales/instalacion_segundo_nodo.md), [recibo de alta y permiso técnico](./receipts/). Cuenta administradora y política IAM comprobadas; autenticación/configuración y arranque en el segundo nodo todavía pendientes. Guía y recibo sin contraseñas.
+
+Los recibos históricos son representaciones sanitizadas que conservan comandos y resultados; no corresponden a ejecuciones nuevas ni a capturas idénticas byte a byte de los originales.
 
 **Nodo oficial actualizado a 0004, 25 de octubre:** [mantenimiento aplicado y recuperación](./manuales/actualizacion_oficial_0004_20261025.md), [recibo actual](./receipts/actualizacion_oficial_0004_20261025.json). Código integrado activo en la carpeta habitual, seis modelos disponibles y copias anterior/posterior restauradas en laboratorio.
 
@@ -151,7 +153,7 @@ docs/
 * [`docs/duplicados-exactos/tasks.md`](./duplicados-exactos/tasks.md): Alcance, decisiones locales, checklist y evidencia TDD de aprobación de feedback sin duplicados SHA-256; revisión y commit pendientes del orquestador.
 
 ### 1. [`docs/tesis/`](./tesis/) — Tesis y Objetivos de Grado
-* [`VIDA_01_CINF_FINAL_PT_2026_1_CARTES.md`](./tesis/VIDA_01_CINF_FINAL_PT_2026_1_CARTES.md) / [`.pdf`](./tesis/VIDA_01_CINF_FINAL_PT_2026_1_CARTES.pdf): Memoria formal de proyecto de título.
+* [`memoria_proyecto_titulo_2026_1.md`](./tesis/) / [`.pdf`](./tesis/): Memoria formal de proyecto de título.
 * [`analisis_objetivos_fama.md`](./tesis/analisis_objetivos_fama.md): Matriz de objetivos/RF/RNF con actualización acotada del 15 de octubre de 2026; distingue correcciones comprobadas, antecedentes históricos y objetivos operativos aún no acreditados.
 * [`capitulo_08_implantacion/capitulo_08.tex`](./tesis/capitulo_08_implantacion/capitulo_08.tex): Borrador LaTeX de implantación y puesta en marcha, con plan de capacitación propuesto y alcance operacional documentado al 4 de noviembre de 2026. Incluye [vista previa independiente](./tesis/capitulo_08_implantacion/main.tex) y [notas para Overleaf y fuentes](./tesis/capitulo_08_implantacion/notas_integracion.md).
 
@@ -210,7 +212,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`prueba-manual-local-sin-gcs.md`](./manuales/prueba-manual-local-sin-gcs.md): Alcance y evidencia de la prueba local parcial en copia privada FAMA_P2; excluye predicción y operaciones GCS.
 * [`p5-manual-review-slices-historical.md`](./manuales/p5-manual-review-slices-historical.md): Archivo histórico de procedencia de revisiones P5, preservado al retirar sus worktrees; no acredita autoridad ni preparación operacional vigente.
 * [`presupuesto-fisico-importacion-dev.md`](./manuales/presupuesto-fisico-importacion-dev.md): Política física T6.1, ciclo opt-in T6.2 y builder compartido T6.3; perfil numérico candidato, activación explícita solo de laboratorio vacío y obligaciones SSD/procesos pendientes (sin activación operativa ni prueba grande).
-* [`bitacora_acceso_e_instalacion.md`](./manuales/bitacora_acceso_e_instalacion.md): Registro vivo del trabajo del operador y Codex: acceso/administración, preparación GCP y etapas 1–8, con evidencia, límites y siguiente paso. Se actualiza durante el recorrido guiado.
+* [`bitacora_acceso_e_instalacion.md`](./manuales/bitacora_acceso_e_instalacion.md): Registro vivo de acceso/administración, preparación GCP y etapas 1–8, con evidencia, límites y siguiente paso. Se actualiza durante el recorrido guiado.
 * [`preparacion_instalacion_y_migraciones.md`](./manuales/preparacion_instalacion_y_migraciones.md): Etapa 1; configuración persistente del servidor, entrada previa a SQL/ML, CLI Alembic explícita y validación aislada con PostgreSQL.
 * [`usuarios_postgresql_pruebas.md`](./manuales/usuarios_postgresql_pruebas.md): Etapa 4; creación atómica de usuarios SQL separados para migración y aplicación, contraseñas mediante consola y cuatro comprobaciones locales de permisos/preservación.
 * [`conexiones_cloud_sql_y_gcs.md`](./manuales/conexiones_cloud_sql_y_gcs.md): Etapa 5; configuración privada y conexiones SQL/GCS reales comprobadas desde Windows/Docker, alcance de las 50 pruebas y comando del operador para iniciar las migraciones de etapa 6.

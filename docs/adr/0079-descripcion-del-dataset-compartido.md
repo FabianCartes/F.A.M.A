@@ -1,6 +1,6 @@
 # ADR 0079: Descripción del dataset compartido (revisión 0006)
 
-Fecha: 2026-11-11. Estado: aceptado por Kevin en el [plan de importación ZIP](../arquitectura/importacion-zip-progreso-e-inventario-plan.md) (S3, T5).
+Fecha: 2026-11-11. Estado: aceptado en el [plan de importación ZIP](../arquitectura/importacion-zip-progreso-e-inventario-plan.md) (S3, T5).
 
 ## Contexto
 

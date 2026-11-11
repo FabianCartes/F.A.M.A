@@ -2,7 +2,7 @@
 
 **Estado:** Aceptado. **Fecha:** 15 de octubre de 2026.
 
-El usuario confirmó conservar WAV/MP3/FLAC/OGG en la subida y límites iniciales configurables de 64 MiB por archivo y 256 MiB por lote. Se valida el lote completo antes de contactar GCS: nombres, tamaños, contenedor compatible con extensión y decodificación por bloques. Se descartan las alternativas de aceptar cualquier binario o comprobar solo una cabecera: un FLAC truncado puede conservar cabecera legible pero fallar al decodificar.
+Se estableció conservar WAV/MP3/FLAC/OGG en la subida y límites iniciales configurables de 64 MiB por archivo y 256 MiB por lote. Se valida el lote completo antes de contactar GCS: nombres, tamaños, contenedor compatible con extensión y decodificación por bloques. Se descartan las alternativas de aceptar cualquier binario o comprobar solo una cabecera: un FLAC truncado puede conservar cabecera legible pero fallar al decodificar.
 
 ## Contrato
 

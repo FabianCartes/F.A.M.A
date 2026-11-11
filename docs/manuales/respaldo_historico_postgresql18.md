@@ -39,7 +39,7 @@ Los dos laboratorios usaron almacenamiento tmpfs, sin montajes del origen ni vol
 
 ## Alcance y continuación
 
-**Avance posterior:** el operador aplicó la copia y Codex comprobó igualdad de todos los campos históricos y siguientes secuencias. También se respaldó el destino PostgreSQL 16 y se verificó su recuperación aislada: [catálogo/pesos y respaldo posterior](conciliacion_catalogo_y_pesos_oficiales.md). El dump 18 original de este manual se conserva como origen; no se restauró directamente sobre Cloud SQL 16.
+**Avance posterior:** el operador aplicó la copia y se comprobó de forma independiente igualdad de todos los campos históricos y siguientes secuencias. También se respaldó el destino PostgreSQL 16 y se verificó su recuperación aislada: [catálogo/pesos y respaldo posterior](conciliacion_catalogo_y_pesos_oficiales.md). El dump 18 original de este manual se conserva como origen; no se restauró directamente sobre Cloud SQL 16.
 
 La carpeta privada conserva dump, manifiestos de origen/recuperación, listado del archivo, diagnósticos y comprobaciones de los laboratorios. El [recibo público](../receipts/perfil_oficial_y_respaldo_historico_20261024.json) contiene agregados y huellas, sin filas o credenciales.
 

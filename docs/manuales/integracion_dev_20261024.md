@@ -2,11 +2,11 @@
 
 **Aplicación posterior, 25 de octubre:** la migración pendiente ya se aplicó a la base oficial y el código integrado está activo en el checkout original. [Ejecución, comprobaciones y recuperación](actualizacion_oficial_0004_20261025.md). Los párrafos del corte del 24 describen su estado histórico previo al mantenimiento.
 
-Corte: 24 de octubre de 2026. Integración comprobada y publicada en `fix/afinamiento-integral`, commit [`e86415b`](https://github.com/FabianCartes/F.A.M.A/commit/e86415bc1202db6ccd96052617b6a8f19b378568). Se verificó el SHA remoto y `dev` continúa en `adecb01`. Este cierre documental es posterior al commit de integración. El nodo oficial conserva su código y esquema anteriores.
+Corte: 24 de octubre de 2026. Integración comprobada y publicada en `fix/afinamiento-integral`, commit `e86415bc1202db6ccd96052617b6a8f19b378568` en el repositorio configurado. Se verificó el SHA remoto y `dev` continúa en `adecb01`. Este cierre documental es posterior al commit de integración. El nodo oficial conserva su código y esquema anteriores.
 
 ## Origen y decisiones
 
-El operador pidió integrar los avances del compañero antes de subir nuestra rama y confirmó usar entrenamiento, validación y prueba independientes. El punto de recuperación `aa53e09a9b935f752b01fe464cbc1a5bd10556c0` conserva nuestros avances; se integra `origin/dev` en `adecb01868940421fb44ca56194439908f10b585`, con base común `49f6bd50e88892a8f49abf9909f88c6ca3676aa3`. La rama remota `dev` se conserva.
+La integración utiliza particiones independientes de entrenamiento, validación y prueba. El punto de recuperación `aa53e09a9b935f752b01fe464cbc1a5bd10556c0` conserva nuestros avances; se integra `origin/dev` en `adecb01868940421fb44ca56194439908f10b585`, con base común `49f6bd50e88892a8f49abf9909f88c6ca3676aa3`. La rama remota `dev` se conserva.
 
 Se resolvieron 19 conflictos iniciales y diferencias de comportamiento que no producían conflictos textuales. Permanecen las sesiones HttpOnly revocables, asignaciones, propiedad de trabajos, autonomía investigadora y activación explícita por el administrador. La importación/exportación ZIP usa esas sesiones. Se mantienen la inferencia con límites, identidad de checkpoints, entrenamiento en procesos y evaluación independiente de dev. Los repartos nuevos tienen tres grupos sin compartir grabaciones/grupos conocidos; los manifiestos 80/20 se conservan como historia.
 
@@ -45,7 +45,7 @@ Estas comprobaciones no acreditan un nuevo recorrido visual en navegador, entren
 
 ## Checkout y servicio oficial
 
-La integración se prepara en `C:/Users/fabia/.codex/worktrees/dev-integration/F.A.M.A`. El checkout original `C:/Users/fabia/Desktop/F.A.M.A` conserva `aa53e09` bajo `codex/official-runtime-20261024` para que los procesos oficiales sigan leyendo los mismos archivos. La rama local y remota `fix/afinamiento-integral` se vincula al commit integrado desde el worktree. Esa separación permite publicar el código comprobado sin sustituir archivos del servicio activo ni migrar su base durante una operación de Git.
+La integración se prepara en `<directorio-de-trabajo>/dev-integration/F.A.M.A`. El checkout original `C:/Users/local-user/Desktop/F.A.M.A` conserva `aa53e09` bajo `codex/official-runtime-20261024` para que los procesos oficiales sigan leyendo los mismos archivos. La rama local y remota `fix/afinamiento-integral` se vincula al commit integrado desde el worktree. Esa separación permite publicar el código comprobado sin sustituir archivos del servicio activo ni migrar su base durante una operación de Git.
 
 El nodo de los puertos 3010/8010 conserva `fama_oficial`, el bucket oficial y `runtime/oficial`, con `0003_autonomy`. Las cuentas, contraseñas, perfiles y objetos GCS se conservan. El checkout integrado aún no debe arrancarse contra esa base con el esquema anterior.
 

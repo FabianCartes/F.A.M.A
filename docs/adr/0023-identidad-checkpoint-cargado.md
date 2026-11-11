@@ -4,7 +4,7 @@ La comparación entre el hash del archivo registrado y el del informe de evaluac
 
 ## Política estricta para modelos persistidos
 
-El usuario eligió bloquear la predicción cuando el modelo persistido no tiene hash esperado, en lugar de conservar inferencia histórica con garantía limitada. Un registro sin `hash_binario` válido requiere regularización explícita; no se calcula ni persiste un valor automáticamente como parte de este cambio. Si la instancia cargada no corresponde a la identidad esperada, no puede usarse silenciosamente para ese registro.
+Se decidió bloquear la predicción cuando el modelo persistido no tiene hash esperado, en lugar de conservar inferencia histórica con garantía limitada. Un registro sin `hash_binario` válido requiere regularización explícita; no se calcula ni persiste un valor automáticamente como parte de este cambio. Si la instancia cargada no corresponde a la identidad esperada, no puede usarse silenciosamente para ese registro.
 
 ## Consecuencias y límites
 

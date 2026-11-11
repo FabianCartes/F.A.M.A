@@ -5,7 +5,7 @@
 **Rama:** `feat/backend-multi-model-support`  
 **Metodología:** Strict TDD + RDD (*Receipt-Driven Development*)  
 **Conjunto de Prueba Congelado:** N = 207 audios a 32 kHz / 44.1 kHz  
-**Integridad Criptográfica del Test Set:** SHA-256 `9d587189434b41b27d55de43aa86f50312f0b5d300d437b03cc3ecae52c153d2` (Verificado por [`backend/training/pipelines/test_guard.py`](file:///home/kevin/Work/fama/backend/training/pipelines/test_guard.py))
+**Integridad Criptográfica del Test Set:** SHA-256 `9d587189434b41b27d55de43aa86f50312f0b5d300d437b03cc3ecae52c153d2` (Verificado por [`backend/training/pipelines/test_guard.py`](../../backend/training/pipelines/test_guard.py))
 
 ---
 
@@ -52,7 +52,7 @@ El sistema con mayor exactitud, robustez física y capacidad de discriminación 
 * **Exactitud Global (Test Accuracy):** **81.16%** *(+11.59 pp sobre la línea base)*
 * **Macro F1:** **80.33% – 81.21%** *(+12.21 pp sobre la línea base)*
 * **Error de Calibración Esperado (ECE):** **0.0547 – 0.0669** *(Reducción del error de calibración en más del 50%)*
-* **Recibo RDD:** [`docs/receipts/fase11_super_ensemble_all_rms_balanced_receipt.json`](file:///home/kevin/Work/fama/docs/receipts/fase11_super_ensemble_all_rms_balanced_receipt.json)
+* **Recibo RDD:** [`docs/receipts/fase11_super_ensemble_all_rms_balanced_receipt.json`](../receipts/fase11_super_ensemble_all_rms_balanced_receipt.json)
 
 ### Desempeño por Clase en Test Ciego del Modelo Campeón
 
@@ -81,13 +81,13 @@ Todo el desarrollo se rigió bajo **Cero Fuga en Test Set** (*Zero Test Leakage*
 
 | Hito | Arquitectura / Innovación | Accuracy | Macro F1 | Delta F1 vs Base | ECE | Recibo Técnico |
 | :--- | :--- | :---: | :---: | :---: | :---: | :--- |
-| **Fase 0** | Línea Base (ResNet34d + EfficientNet-B0 monovista) | 69.57% | 69.00% | Ref | 0.1246 | [`fase0_higiene_receipt.json`](file:///home/kevin/Work/fama/docs/receipts/fase0_higiene_receipt.json) |
-| **Fase 1** | Frontend HPSS 3ch + Multi-Task Head (ResNet34d) | 73.91% | 72.80% | +3.80 pp | 0.0892 | [`fase1_multitask_hpss_receipt.json`](file:///home/kevin/Work/fama/docs/receipts/fase1_multitask_hpss_receipt.json) |
-| **Fases 2-3**| Tri-Ensamble Calibrado (+ PANNs CNN14 AudioSet) | 76.33% | 75.31% | +6.31 pp | 0.0715 | [`fase2_3_tri_ensemble_receipt.json`](file:///home/kevin/Work/fama/docs/receipts/fase2_3_tri_ensemble_receipt.json) |
-| **Fase 4** | Síntesis Aditiva Física (`AdditiveCompoundSampler`) | 78.26% | 77.97% | +8.97 pp | 0.0688 | [`fase4_additive_mixing_receipt.json`](file:///home/kevin/Work/fama/docs/receipts/fase4_additive_mixing_receipt.json) |
-| **Fase 5** | Super-Ensamble Dual-Aditivo (ResNet + EffNet) | 80.19% | 80.63% | +11.63 pp | 0.0685 | [`fase5_super_ensemble_receipt.json`](file:///home/kevin/Work/fama/docs/receipts/fase5_super_ensemble_receipt.json) |
-| **Fase 6** | Homogeneización All-Additive (PANNs MultiTask) | 80.68% | 81.21% | +12.21 pp | 0.0547 | [`fase6_all_additive_super_ensemble_receipt.json`](file:///home/kevin/Work/fama/docs/receipts/fase6_all_additive_super_ensemble_receipt.json) |
-| **Fase 11**| **All-RMS-Balanced Super Ensemble (Campeón)** | **81.16%** | **80.33%** | **+11.33 pp** | **0.0669** | [`fase11_super_ensemble_all_rms_balanced_receipt.json`](file:///home/kevin/Work/fama/docs/receipts/fase11_super_ensemble_all_rms_balanced_receipt.json) |
+| **Fase 0** | Línea Base (ResNet34d + EfficientNet-B0 monovista) | 69.57% | 69.00% | Ref | 0.1246 | [`fase0_higiene_receipt.json`](../receipts/fase0_higiene_receipt.json) |
+| **Fase 1** | Frontend HPSS 3ch + Multi-Task Head (ResNet34d) | 73.91% | 72.80% | +3.80 pp | 0.0892 | [`fase1_multitask_hpss_receipt.json`](../receipts/fase1_multitask_hpss_receipt.json) |
+| **Fases 2-3**| Tri-Ensamble Calibrado (+ PANNs CNN14 AudioSet) | 76.33% | 75.31% | +6.31 pp | 0.0715 | [`fase2_3_tri_ensemble_receipt.json`](../receipts/fase2_3_tri_ensemble_receipt.json) |
+| **Fase 4** | Síntesis Aditiva Física (`AdditiveCompoundSampler`) | 78.26% | 77.97% | +8.97 pp | 0.0688 | [`fase4_additive_mixing_receipt.json`](../receipts/fase4_additive_mixing_receipt.json) |
+| **Fase 5** | Super-Ensamble Dual-Aditivo (ResNet + EffNet) | 80.19% | 80.63% | +11.63 pp | 0.0685 | [`fase5_super_ensemble_receipt.json`](../receipts/fase5_super_ensemble_receipt.json) |
+| **Fase 6** | Homogeneización All-Additive (PANNs MultiTask) | 80.68% | 81.21% | +12.21 pp | 0.0547 | [`fase6_all_additive_super_ensemble_receipt.json`](../receipts/fase6_all_additive_super_ensemble_receipt.json) |
+| **Fase 11**| **All-RMS-Balanced Super Ensemble (Campeón)** | **81.16%** | **80.33%** | **+11.33 pp** | **0.0669** | [`fase11_super_ensemble_all_rms_balanced_receipt.json`](../receipts/fase11_super_ensemble_all_rms_balanced_receipt.json) |
 
 ---
 
@@ -98,7 +98,7 @@ En fallas compuestas vehiculares colisionan dos naturalezas acústicas opuestas:
 * **Señales Tonales Armónicas:** Silbido de correa (`serpentine_belt`) y zumbido hidráulico (`power_steering`). Tienen energía continua horizontal en el espectrograma.
 * **Señales Transitorias Percusivas:** Golpeteo metálico por falta de aceite (`low_oil`) y explosiones de encendido (`bad_ignition`). Tienen pulsos de banda ancha verticales.
 
-El módulo [`HPSSAudioFrontEnd`](file:///home/kevin/Work/fama/backend/training/pipelines/hpss_frontend.py) implementa filtros de mediana ortogonales y máscaras blandas estilo Wiener en GPU:
+El módulo [`HPSSAudioFrontEnd`](../../backend/training/pipelines/hpss_frontend.py) implementa filtros de mediana ortogonales y máscaras blandas estilo Wiener en GPU:
 $$\text{Canal 0} = \text{Mel}(\text{Mag}_{\text{total}}), \quad \text{Canal 1} = \text{Mel}(\text{Mag}_{\text{harm}}), \quad \text{Canal 2} = \text{Mel}(\text{Mag}_{\text{perc}})$$
 Permite a los extractores convolucionales 2D desacoplar de forma independiente los tonos armónicos de los impactos percusivos.
 
@@ -106,7 +106,7 @@ Permite a los extractores convolucionales 2D desacoplar de forma independiente l
 Las fallas multi-falla compuestas contaban con muy pocas grabaciones reales en el dataset (16 muestras en train).
 Basándonos en la física acústica de la superposición lineal de ondas de presión sonora:
 $$x_{\text{compuesto}}(t) = x_A(t) + \alpha \cdot x_B(t)$$
-Implementamos [`AdditiveCompoundSampler`](file:///home/kevin/Work/fama/backend/training/pipelines/additive_mixing.py), que combina estocásticamente en tiempo de ejecución formas de onda unitarias aisladas con desplazamiento temporal independiente y prevención de recorte (*clipping* digital).
+Implementamos [`AdditiveCompoundSampler`](../../backend/training/pipelines/additive_mixing.py), que combina estocásticamente en tiempo de ejecución formas de onda unitarias aisladas con desplazamiento temporal independiente y prevención de recorte (*clipping* digital).
 
 ### 3. Balanceo de Potencia Acústica RMS (*RMS Power Balancing*)
 El análisis acústico empírico reveló una severa disparidad energética:
@@ -161,10 +161,10 @@ Siguiendo el rigor de *CONCEPTS > CODE*, documentamos con evidencia matemática 
 
 ## 5. Ubicación de Checkpoints y Artefactos
 
-Los pesos ganadores del Super-Ensamble Campeón se encuentran almacenados y versionados en:
-* **ResNet34d RMS-Balanced:** [`backend/checkpoints/car-engine-diagnostics-resnet34d-multitask-hpss-rms-balanced/weights.pt`](file:///home/kevin/Work/fama/backend/checkpoints/car-engine-diagnostics-resnet34d-multitask-hpss-rms-balanced/weights.pt)
-* **EfficientNet-B0 RMS-Balanced:** [`backend/checkpoints/car-engine-diagnostics-efficientnet-b0-multitask-hpss-additive/weights.pt`](file:///home/kevin/Work/fama/backend/checkpoints/car-engine-diagnostics-efficientnet-b0-multitask-hpss-additive/weights.pt)
-* **PANNs CNN14 RMS-Balanced:** [`backend/checkpoints/car-engine-diagnostics-panns-cnn14-hpss-additive/weights.pt`](file:///home/kevin/Work/fama/backend/checkpoints/car-engine-diagnostics-panns-cnn14-hpss-additive/weights.pt)
+Rutas históricas de los pesos del superensamble; su presencia no está verificada en este checkout:
+* **ResNet34d RMS-Balanced:** `backend/checkpoints/car-engine-diagnostics-resnet34d-multitask-hpss-rms-balanced/weights.pt`
+* **EfficientNet-B0 RMS-Balanced:** `backend/checkpoints/car-engine-diagnostics-efficientnet-b0-multitask-hpss-additive/weights.pt`
+* **PANNs CNN14 RMS-Balanced:** `backend/checkpoints/car-engine-diagnostics-panns-cnn14-hpss-additive/weights.pt`
 
 ### Comprobación Automatizada de la Suite de Pruebas
 ```bash

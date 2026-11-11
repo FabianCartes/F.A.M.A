@@ -22,7 +22,7 @@ La implementación autorizada admite archivos WAV de hasta **100 MiB (104.857.60
 
 Diagnóstico: Next.js 16.3.4 registra límite de 10 MiB y `ECONNRESET`; la interfaz intentaba leer JSON antes de comprobar HTTP. `Colilarga.wav` pesa 51.125.318 bytes y dura 177,518313 segundos.
 
-La implementación, las pruebas enfocadas, el build y el recorrido real del proxy se describen abajo. El fallo preexistente de ingesta queda separado del alcance; la revisión nativa fue aprobada y reconocida. El usuario autorizó commits locales de este alcance; no hay despliegue. La comprobación con el audio real requiere autorización aparte.
+La implementación, las pruebas enfocadas, el build y el recorrido real del proxy se describen abajo. El fallo preexistente de ingesta queda separado del alcance; la revisión nativa fue aprobada y reconocida. El el alcance incluía commits locales de este alcance; no hay despliegue. La comprobación con el audio real requiere autorización aparte.
 
 ## Uso y límites operativos
 

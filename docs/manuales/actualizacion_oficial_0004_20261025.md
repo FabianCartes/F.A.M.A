@@ -1,12 +1,12 @@
 # Actualización oficial a 0004 — 25 de octubre de 2026
 
-Estado: aplicada y comprobada. F.A.M.A. funciona en `http://localhost:3010/`, con backend 8010, proxy Cloud SQL 5434, base `fama_oficial`, bucket `fama-audio-records-2026` y runtime existente. El código de aplicación es `54bdaaf`, rama `fix/afinamiento-integral`, en la carpeta habitual `C:/Users/fabia/Desktop/F.A.M.A`. La copia de integración deja de ser el checkout de trabajo. [Recibo de esta operación](../receipts/actualizacion_oficial_0004_20261025.json).
+Estado: aplicada y comprobada. F.A.M.A. funciona en `http://localhost:3010/`, con backend 8010, proxy Cloud SQL 5434, base `fama_oficial`, bucket `fama-audio-records-2026` y runtime existente. El código de aplicación es `54bdaaf`, rama `fix/afinamiento-integral`, en la carpeta habitual `C:/Users/local-user/Desktop/F.A.M.A`. La copia de integración deja de ser el checkout de trabajo. [Recibo de esta operación](../receipts/actualizacion_oficial_0004_20261025.json).
 
-## Trabajo del operador y de Codex
+## Operación y verificación
 
-El operador pidió aplicar el paso pendiente y facilitó la entrada para autenticar al usuario SQL migrador. Se comprobó la identidad exacta `fama_oficial_migrador` en `fama_oficial`; la contraseña se introdujo por terminal sin eco y quedó solo en memoria. No se guardó ni se cambiaron contraseñas.
+La operación utilizó autenticación del usuario SQL migrador. Se comprobó la identidad exacta `fama_oficial_migrador` en `fama_oficial`; la contraseña se introdujo por terminal sin eco y quedó solo en memoria. No se guardó ni se cambiaron contraseñas.
 
-Codex preparó un primer respaldo y copia privada del perfil, secretos e índices; calculó huellas de los cinco checkpoints. Verificó los procesos que atendían 3010/8010 y los detuvo, conservando el proxy y los servicios ajenos. Tomó entonces el respaldo final sin escritores y comparó todos los registros y secuencias antes de aplicar la actualización.
+Se preparó un primer respaldo y copia privada del perfil, secretos e índices; calculó huellas de los cinco checkpoints. Verificó los procesos que atendían 3010/8010 y los detuvo, conservando el proxy y los servicios ajenos. Tomó entonces el respaldo final sin escritores y comparó todos los registros y secuencias antes de aplicar la actualización.
 
 Se aplicó una sola vez `0003_autonomy → 0004_integration`, con la función pública de migración y sus comprobaciones de estructura. Añadió 21 tablas; la base queda con 37 tablas de negocio, `alembic_version` y 14 secuencias. Las tablas nuevas de control contienen sus tres filas iniciales. Todas las filas y secuencias previas coincidieron con el respaldo al terminar la migración.
 
@@ -52,4 +52,4 @@ El registro privado `runtime/oficial/run-last.json` identifica los procesos, log
 
 El lanzador público `backend/scripts/iniciar_nodo.ps1` sigue siendo una alternativa de arranque nativo con frontend en desarrollo; no utiliza por defecto esta salida de producción. Antes de reconstruir o iniciar otra versión, comprobar que corresponde al esquema y que no existe otro propietario de los mismos puertos/runtime.
 
-Para Kevin, código integrado y base oficial ya están alineados en 0004. Su equipo sigue necesitando permisos Google, credenciales SQL de aplicación, cuenta web propia, perfil/runtime y archivos; esas piezas no se transfieren mediante GitHub. Windows nativo no habilita los workers ZIP. El despliegue universitario, HTTPS/red y servicio permanente se preparan aparte.
+Para un equipo de desarrollo adicional, código integrado y base oficial ya están alineados en 0004. Ese equipo sigue necesitando permisos Google, credenciales SQL de aplicación, cuenta web propia, perfil/runtime y archivos; esas piezas no se transfieren mediante GitHub. Windows nativo no habilita los workers ZIP. El despliegue universitario, HTTPS/red y servicio permanente se preparan aparte.

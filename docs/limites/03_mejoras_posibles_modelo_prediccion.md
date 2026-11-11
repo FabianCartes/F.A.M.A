@@ -184,7 +184,7 @@ Para soportar esta variabilidad sin mutar el worker central de entrenamiento (`_
 
 En una prueba del endpoint local `POST /api/predict` con `model_id=fama_trained_model_7` (EfficientNet-B0, «Entrenado #7»), se obtuvieron los siguientes resultados:
 
-| Archivo | Duración aproximada | Etiqueta esperada según el usuario | Predicción devuelta | Confianza devuelta |
+| Archivo | Duración aproximada | Etiqueta de referencia no verificada | Predicción devuelta | Confianza devuelta |
 |:---|:---:|:---|:---|:---:|
 | `chucao.wav` | 18.02 s | Chucao | Fío-fío | 1.0 |
 | `canastero.wav` | 5.62 s | Canastero | Churrín de la Mocha | 1.0 |

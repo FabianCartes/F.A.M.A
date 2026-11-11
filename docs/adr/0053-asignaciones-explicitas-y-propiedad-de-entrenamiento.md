@@ -4,7 +4,7 @@
 
 ## Contexto y decisión
 
-El usuario confirmó que los investigadores solo operarán sobre recursos asignados, con acceso exclusivamente web. Ocultar recursos en el frontend o reutilizar el cargador histórico no basta: los cargadores no son una lista de permisos y existen registros con `id_usuario=1`, nombres descriptivos o asociaciones desconocidas.
+Se estableció que los investigadores solo operarán sobre recursos asignados, con acceso exclusivamente web. Ocultar recursos en el frontend o reutilizar el cargador histórico no basta: los cargadores no son una lista de permisos y existen registros con `id_usuario=1`, nombres descriptivos o asociaciones desconocidas.
 
 Se conserva la sesión de ADR 0052 como identidad y se agrega una asignación muchos-a-muchos explícita entre usuario y dataset. Los administradores conceden/revocan esa asignación por ID persistido. Modelos y audios heredan acceso de su FK de dataset; los modelos catalogados deben declarar un destino canónico y los publicados desde BD también deben conservar una FK autorizada vigente, aunque la metadata en memoria sea antigua. No se modifica la política de construcción/publicación del registro global.
 

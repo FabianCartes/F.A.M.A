@@ -2,7 +2,7 @@
 
 **Estado:** Sustituido por [ADR 0078](0078-gcs-como-fuente-unica-y-publicacion-del-zip.md) (2026-11-11): la vía Bearer se eliminó y la sesión es solo por cookie.
 
-Se reutiliza la sesión opaca revocable de `aa53e09a9b935f752b01fe464cbc1a5bd10556c0` mediante `/api/auth/web/*`, sin reemplazar `/api/auth/login` ni `/api/auth/me`: sus contratos Bearer ya tienen consumidores. El usuario autorizó esta integración acotada en L33 del [plan](../arquitectura/entrenamiento-datasets-importados-plan.md), manteniendo S10 y el acceso legacy.
+Se reutiliza la sesión opaca revocable de `aa53e09a9b935f752b01fe464cbc1a5bd10556c0` mediante `/api/auth/web/*`, sin reemplazar `/api/auth/login` ni `/api/auth/me`: sus contratos Bearer ya tienen consumidores. Esta integración acotada se registra en L33 del [plan](../arquitectura/entrenamiento-datasets-importados-plan.md), manteniendo S10 y el acceso legacy.
 
 ## Decisión
 

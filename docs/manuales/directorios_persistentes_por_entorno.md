@@ -1,6 +1,6 @@
 # Directorios persistentes por entorno
 
-Implementado y activado el 23 de octubre de 2026 en `fix/afinamiento-integral`. El nodo de pruebas ya ejecuta el código del repositorio original y conserva sus archivos en `C:\Users\fabia\Desktop\F.A.M.A\runtime\pruebas`. La copia ejecutable de `.pytest_cache/stage8-live` quedó detenida y sus archivos originales se conservaron. Se mantiene `fama-pruebas`; el bucket oficial no cambió.
+Implementado y activado el 23 de octubre de 2026 en `fix/afinamiento-integral`. El nodo de pruebas ya ejecuta el código del repositorio original y conserva sus archivos en `C:\Users\local-user\Desktop\F.A.M.A\runtime\pruebas`. La copia ejecutable de `.pytest_cache/stage8-live` quedó detenida y sus archivos originales se conservaron. Se mantiene `fama-pruebas`; el bucket oficial no cambió.
 
 ## Qué conserva la carpeta
 
@@ -40,7 +40,7 @@ Para iniciar los dos procesos desde las fuentes originales, cuando 8010 y 3010 e
     -BackendPort 8010 -FrontendPort 3010
 ```
 
-El lanzador requiere Python y dependencias del backend, Node y `frontend/node_modules` ya instalados. Usa `node` del PATH; si no está disponible, se indica su ejecutable con `-NodeExecutable`. En este equipo se utilizó `C:\Users\fabia\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe`. `-ValidateOnly` comprueba dependencias, puertos y perfil sin iniciar procesos. El origen web del perfil debe coincidir con `http://localhost:3010`; cambiar el puerto del lanzador no reconfigura ese origen.
+El lanzador requiere Python y dependencias del backend, Node y `frontend/node_modules` ya instalados. Usa `node` del PATH; si no está disponible, se indica su ejecutable con `-NodeExecutable`. En este equipo se utilizó una ruta local configurable al ejecutable de Node. `-ValidateOnly` comprueba dependencias, puertos y perfil sin iniciar procesos. El origen web del perfil debe coincidir con `http://localhost:3010`; cambiar el puerto del lanzador no reconfigura ese origen.
 
 `native_processes_started` acredita la creación de procesos, no que sus servicios estén listos. Revisar los logs y esperar HTTP 200 en `http://127.0.0.1:8010/ready`, luego abrir [F.A.M.A.](http://localhost:3010/). `run-last.json` ayuda a localizar los procesos; antes de detenerlos, comprobar su identidad y el propietario de los puertos. No detener servicios de 3000/8000 ni el proxy como efecto del cierre de las pruebas.
 

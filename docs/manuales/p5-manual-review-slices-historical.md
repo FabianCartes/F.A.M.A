@@ -1,6 +1,6 @@
 # Archivo histórico de revisiones P5
 
-> Conservado durante el retiro autorizado de worktrees. Procedencia original: /home/kevin/Work/fama-worktrees/p5-manual-review-slices/docs/manuales/p5-manual-review-slices.md
+> Conservado durante el retiro autorizado de worktrees. Procedencia original: /workspace/fama-worktrees/p5-manual-review-slices/docs/manuales/p5-manual-review-slices.md
 > SHA-256 del contenido original: `574432d5ca9a58cbfcfae94b3b1cbd5fc57934f3ecfe66e3c37e154e08642d6d`.
 > Este archivo preserva únicamente procedencia histórica. Sus afirmaciones de revisión no se han revalidado; la preparación operacional registrada está vencida y no constituye autoridad vigente ni autorización de operación o integración. No se adapta ni incorpora código legacy. Las rutas relativas del texto original pertenecen al checkout histórico, no son instrucciones vigentes.
 
@@ -12,7 +12,7 @@ Delivery: local feature-branch chain only, no push/PR or runtime. Verification: 
 
 ## Specs
 
-- **S1:** User: «Entonces crea la nueva rama temporal para no interferir con esta, haz la division». Create a new temporary branch/worktree; leave `feat/p5-manual-campaign`, its commit4e5673b, its two dirty passive documents and the original human checkout/index unchanged. Do not reset, amend or rewrite the preserved branch.
+- **S1:** Create a new temporary branch/worktree; leave `feat/p5-manual-campaign`, its commit4e5673b, its two dirty passive documents and the original human checkout/index unchanged. Do not reset, amend or rewrite the preserved branch.
 - **S2:** The accepted proposal was «una cadena de commits más pequeños en una rama nueva, conservando intacto `4e5673b`, sin quitar pruebas ni cambiar el resultado final del código, para revisar cada tramo». Recompose behaviors with their tests and relevant documentation, not source-only followed by test-only commits. Preserve every final target production/test byte and mode. Supplemental focused regression tests and this review-chain log may be added; final documentary differences must be enumerated, never hidden as source equivalence.
 - **S3:** Preserve all manual-feature requirements and synthetic proof in the target's `docs/manuales/p5-manual-campaign-implementation.md`, S1–S5. Do not change functionality, guards, limits, native identity or final output to make a review fit. No stubbed success, omitted test, truncated reviewer evidence, automatic import, service start, large fixture, pool/firewall operation or actual campaign. Historical failed attempts and acknowledged reviews stay untouched.
 - **S4:** One honest dependency slicing pass. Approximately400 authored changed lines is advisory for these local units; keep the smallest coherent behavior and its proof if it naturally exceeds that. Report actual sizes and any remaining review-context uncertainty. The native refusal of the whole target created no authority; never retry that unchanged target or claim these new slices reviewed before their own disposition.
@@ -134,7 +134,7 @@ was intentionally absent at U5, without retroactively changing U5's disposition.
 ### Separately authorized inert operational package
 
 The four-file package at
-`/run/media/kevin/FAMA_P2/fama-p2/p5-manual-01-package/` was created privately
+`/run/media/local-user/FAMA_P2/fama-p2/p5-manual-01-package/` was created privately
 (`0700` directory, owned single-link regular `0600` files). This new configuration
 is not covered by the earlier source-review acknowledgements. Own and independent
 static checks passed; no installation, manager reload, start, pool/firewall change,
@@ -163,7 +163,7 @@ diff and all four hashes, and confirmed the manual unit still `not-found`/PID 0.
 ## Log
 
 - **L1:** User request verbatim: «Entonces crea la nueva rama temporal para no interferir con esta, haz la division».
-- **L2:** Source worktree `/home/kevin/Work/fama-worktrees/p5-final-operational-proof` remains on `feat/p5-manual-campaign` at4e5673b with exactly two pre-existing dirty documents: implementation tracking and operator guide. New worktree `/home/kevin/Work/fama-worktrees/p5-manual-review-slices` starts at9571538. Existing whole-feature synthetic verification and its limited blocker recheck are preserved evidence, not fresh executions in this chain.
+- **L2:** Source worktree `/workspace/fama-worktrees/p5-final-operational-proof` remains on `feat/p5-manual-campaign` at4e5673b with exactly two pre-existing dirty documents: implementation tracking and operator guide. New worktree `/workspace/fama-worktrees/p5-manual-review-slices` starts at9571538. Existing whole-feature synthetic verification and its limited blocker recheck are preserved evidence, not fresh executions in this chain.
 - **L3:** Read-only dependency mapping found capture and reconciliation can be introduced before wiring public execution, using lazy imports, but the session and connected33-operation test are coupled. Each assembled boundary must actually import and pass its focused check. No missing function may be replaced by a temporary successful stub. The final comparison against the preserved commit, not the mapper's line estimates, proves byte equivalence.
 - **L4:** Initial log/index commit3cdbd6e has29additions and no source changes. Preserved original source-worktree branch/HEAD are `feat/p5-manual-campaign`/4e5673b2799176752de840dd09f74bad5c401dd7; raw index hash73e03808e49826bccabbd6cbd3d74c185bec4608 and hash of its two-file passive diff6c30222b44333507671448c2f8a7279e60a8df45 were captured for final comparison. No original branch switch, file edit, index edit or history rewrite occurred.
 - **L5:** U1 materialized the target public-import helper byte-for-byte (SHAb0b19755b98c34b481fc21a55a520f53a44e56b694a4d4af6b676e19214811e7), original two explicit-phase/default-contract tests and an honest partial library guide. Focused synthetic check8PASS3.67s, `git diff --check` passed; no new RED was invented for previously verified source recomposition. No later manual module or unfinished CLI was exposed. Worker scratch `/tmp/opencode/p5-slices-u1-sHXFFq` retained. Parent adds only the required documentation index and this log before committing the behavior with its tests.

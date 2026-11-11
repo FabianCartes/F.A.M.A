@@ -12,7 +12,7 @@
 
 En la Iteración 7 se comprobó la hipótesis formulada en el informe técnico anterior: **Mixup aditivo espectral en GPU es un regularizador continuo de alta exigencia que requiere un régimen de entrenamiento extendido para converger plenamente**.
 
-Al incrementar el entrenamiento de 15 a **35 épocas** (3 épocas de calentamiento con backbone congelado + 32 épocas de fine-tuning completo con AdamW y `FocalLoss`), el modelo [`BioacousticEfficientNet`](file:///home/kevin/Work/fama/backend/poc/train.py#L297-L350) alcanzó un salto cuantitativo y cualitativo definitivo en el conjunto de prueba independiente (**154 muestras con estricto *Zero Recordist Leakage***):
+Al incrementar el entrenamiento de 15 a **35 épocas** (3 épocas de calentamiento con backbone congelado + 32 épocas de fine-tuning completo con AdamW y `FocalLoss`), el modelo [`BioacousticEfficientNet`](../../backend/poc/train.py#L297-L350) alcanzó un salto cuantitativo y cualitativo definitivo en el conjunto de prueba independiente (**154 muestras con estricto *Zero Recordist Leakage***):
 
 * **Accuracy en Test Set:** **81.82%** (+27.14 pp vs baseline histórico `AudioCNN`).
 * **Macro F1-Score:** **82.07%** (+26.25 pp vs baseline histórico `AudioCNN`).
@@ -53,7 +53,7 @@ En la Iteración 6, Mixup evaluado a 15 épocas había mostrado un rendimiento d
 
 ## 3. Desglose Especie por Especie en el Conjunto de Prueba (154 Muestras)
 
-La siguiente tabla refleja la consolidación en el conjunto de prueba, evaluado con el checkpoint oficial [`checkpoints/efficientnet_mixup_35e_best.pt`](file:///home/kevin/Work/fama/checkpoints/efficientnet_mixup_35e_best.pt):
+La siguiente tabla refleja la consolidación en el conjunto de prueba, evaluado con el checkpoint oficial [`checkpoints/efficientnet_mixup_35e_best.pt`](../../checkpoints/efficientnet_mixup_35e_best.pt):
 
 | Especie | Muestras Test | Baseline `AudioCNN` F1 | Iteración 5 Base F1 | **Iteración 7 (Mixup 35e) F1** | Aciertos Test (Hits) | Precisión | Recall | Diagnóstico y Comportamiento |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
@@ -112,5 +112,5 @@ La siguiente tabla refleja la consolidación en el conjunto de prueba, evaluado 
 ## 7. Conclusiones y Estado del Proyecto
 
 1. **Maduración Científica Exitosa:** El paso a 35 épocas confirmó la teoría de regularización en variedades continuas de Mixup, desbloqueando el mayor salto de precisión del proyecto.
-2. **Modelo Oficial de Producción:** Se establece [`checkpoints/efficientnet_mixup_35e_best.pt`](file:///home/kevin/Work/fama/checkpoints/efficientnet_mixup_35e_best.pt) como el checkpoint canónico de F.A.M.A.
+2. **Modelo Oficial de Producción:** Se establece [`checkpoints/efficientnet_mixup_35e_best.pt`](../../checkpoints/efficientnet_mixup_35e_best.pt) como el checkpoint canónico de F.A.M.A.
 3. **Cierre de Brecha con SOTA Internacional:** Con **82.07% de F1 Macro** y **85.39% de Precisión** en 15 especies complejas de campo, el framework alcanza paridad con los benchmarks internacionales de referencia (**BirdSet / BirdCLEF**) para datasets focales de bioacústica aviar.

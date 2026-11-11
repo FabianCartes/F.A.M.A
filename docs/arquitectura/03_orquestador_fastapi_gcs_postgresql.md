@@ -4,8 +4,6 @@
 **Fecha:** Septiembre 2026  
 **Fase:** Fase 3 - Orquestación de Servicios y Persistencia Híbrida (Minimum Viable Pipeline)  
 **Dominio:** Bioacústica de Aves de Chile (15 Especies - Dataset Xeno-canto v3)  
-**Autores:** Fabián Cartes Oliva, Kevin Cárdenas Sepúlveda  
-**Profesor Guía:** Christian Vidal Castro  
 **Institución:** Departamento de Sistemas de Información, Universidad del Bío-Bío  
 
 ---
@@ -207,12 +205,12 @@ La inicialización del servidor ejecuta automáticamente `Base.metadata.create_a
 
 ## 7. Aseguramiento de Calidad y Pruebas Automatizadas (TDD)
 
-Bajo las directrices de desarrollo definidas en [`AGENTS.md`](file:///c:/Users/fabia/Desktop/F.A.M.A/AGENTS.md), la totalidad del código fue probado mediante pruebas unitarias e integración con `pytest`:
+Bajo las directrices de desarrollo definidas en [`AGENTS.md`](../../AGENTS.md), la totalidad del código fue probado mediante pruebas unitarias e integración con `pytest`:
 
 ```text
 ============================= test session starts =============================
 platform win32 -- Python 3.12.10, pytest-9.1.1
-rootdir: C:\Users\fabia\Desktop\F.A.M.A
+rootdir: C:\Users\local-user\Desktop\F.A.M.A
 
 backend/tests/test_download.py::test_compute_file_sha256 PASSED          [  4%]
 backend/tests/test_download.py::test_create_metadata_row PASSED          [  9%]

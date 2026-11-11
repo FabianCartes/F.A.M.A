@@ -2,7 +2,7 @@
 
 * **Fecha:** 2026-09-06  
 * **Metodología:** ADR + TDD + RDD  
-* **ADR de Referencia:** [ADR 0010: Super-Ensamble Tri-Modelo Heterogéneo con ResNet34d, ConvNeXt-Nano y EfficientNet-B0](file:///home/kevin/Work/fama/docs/adr/0010_tri_modelo_heterogeneo_resnet34d.md)  
+* **ADR de Referencia:** [ADR 0010: Super-Ensamble Tri-Modelo Heterogéneo con ResNet34d, ConvNeXt-Nano y EfficientNet-B0](../adr/0010_tri_modelo_heterogeneo_resnet34d.md)
 * **Conjunto de Prueba:** `data/test.csv` (154 muestras de campo de 15 especies de aves chilenas)
 
 ---

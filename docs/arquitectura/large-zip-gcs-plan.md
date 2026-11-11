@@ -6,7 +6,7 @@ Estado: plan consolidado para implementar en otra sesión. No representa funcion
 
 ## 1. Objetivo y alcance
 
-Permitir que el usuario:
+Funciones disponibles:
 1. Seleccione un único ZIP con su dataset.
 2. Lo suba mediante fragmentos y reintentos transparentes.
 3. Revise una vista previa con errores, duplicados y capacidad proyectada.

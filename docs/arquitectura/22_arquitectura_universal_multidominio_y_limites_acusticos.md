@@ -1,14 +1,14 @@
 # 22. Arquitectura Universal Multi-Dominio sin Código y Límites Físico-Computacionales de F.A.M.A.
 
-* **Fecha de Registro:** Septiembre 2026  
-* **Área:** Arquitectura de Software, MLOps Híbrido, Procesamiento Digital de Señales Acústicas y Aprendizaje Estadístico  
-* **Proyecto:** Framework MLOps Híbrido para Clasificación Acústica Multi-Dominio (F.A.M.A.)  
-* **Documentos Base de Referencia:**  
-  * Tesis de Grado: [`docs/VIDA_01_CINF_FINAL_PT_2026_1_CARTES.md`](./VIDA_01_CINF_FINAL_PT_2026_1_CARTES.md)  
-  * Análisis de Objetivos: [`docs/analisis_objetivos_fama.md`](./analisis_objetivos_fama.md)  
-  * Subsistema Modular de Entrenamiento: [`docs/19_subsistema_entrenamiento_modular_rdd.md`](./19_subsistema_entrenamiento_modular_rdd.md)  
-  * Modelo de Producto y Operación: [`docs/20_modelo_de_producto_despliegue_y_arquitectura_operativa.md`](./20_modelo_de_producto_despliegue_y_arquitectura_operativa.md)  
-  * Problema Conocido 02 (Límites de Generalización): [`docs/problemas_conocidos/02_limites_generalizacion_universal_y_conjunto_abierto.md`](./problemas_conocidos/02_limites_generalizacion_universal_y_conjunto_abierto.md)  
+* **Fecha de Registro:** Septiembre 2026
+* **Área:** Arquitectura de Software, MLOps Híbrido, Procesamiento Digital de Señales Acústicas y Aprendizaje Estadístico
+* **Proyecto:** Framework MLOps Híbrido para Clasificación Acústica Multi-Dominio (F.A.M.A.)
+* **Documentos Base de Referencia:**
+  * Tesis de Grado: [`docs/memoria_proyecto_titulo_2026_1.md`](../tesis/)
+  * Análisis de Objetivos: [`docs/analisis_objetivos_fama.md`](../tesis/analisis_objetivos_fama.md)
+  * Subsistema Modular de Entrenamiento: [`docs/19_subsistema_entrenamiento_modular_rdd.md`](./19_subsistema_entrenamiento_modular_rdd.md)
+  * Modelo de Producto y Operación: [`docs/20_modelo_de_producto_despliegue_y_arquitectura_operativa.md`](./20_modelo_de_producto_despliegue_y_arquitectura_operativa.md)
+  * Problema Conocido 02 (Límites de Generalización): [`docs/problemas_conocidos/02_limites_generalizacion_universal_y_conjunto_abierto.md`](./problemas_conocidos/02_limites_generalizacion_universal_y_conjunto_abierto.md)
 
 ---
 
@@ -109,12 +109,12 @@ El enfoque de representar audio como una imagen de tiempo-frecuencia (espectrogr
 Al contrastar la interfaz web y el backend en el estado actual del repositorio, se identifican las capacidades presentes y las brechas para soportar nuevos dominios sin tocar código:
 
 ### 4.1 Lo que SÍ está implementado
-1. **Interfaz de Hiperparámetros de Aprendizaje:** En [`TrainingView.tsx`](file:///home/kevin/Work/fama/frontend/components/views/TrainingView.tsx), el usuario puede seleccionar épocas, learning rate, batch size, arquitectura y alternar entre modelo individual o tríada de ensamble.
+1. **Interfaz de Hiperparámetros de Aprendizaje:** En [`TrainingView.tsx`](../../frontend/components/views/TrainingView.tsx), el usuario puede seleccionar épocas, learning rate, batch size, arquitectura y alternar entre modelo individual o tríada de ensamble.
 2. **Descubrimiento de Datasets:** El endpoint `GET /api/training/datasets` detecta automáticamente qué colecciones existen en la base de datos o en el almacenamiento local.
-3. **Persistencia y Despliegue Dinámico:** Al concluir un entrenamiento, el modelo se empaqueta como bundle desacoplado (`weights.pt` + `manifest.json`) y se registra en tiempo de ejecución en el [`ModelRegistry`](file:///home/kevin/Work/fama/backend/app/services/registry.py) sin reiniciar el servidor.
+3. **Persistencia y Despliegue Dinámico:** Al concluir un entrenamiento, el modelo se empaqueta como bundle desacoplado (`weights.pt` + `manifest.json`) y se registra en tiempo de ejecución en el [`ModelRegistry`](../../backend/app/services/registry.py) sin reiniciar el servidor.
 
 ### 4.2 Lo que FALTA para la operación "Zero-Touch"
-Actualmente existe un acoplamiento implícito en [`backend/app/services/training.py`](file:///home/kevin/Work/fama/backend/app/services/training.py):
+Actualmente existe un acoplamiento implícito en [`backend/app/services/training.py`](../../backend/app/services/training.py):
 * Si el dataset seleccionado tiene por nombre `engine_diagnostics`, el backend inyecta los parámetros de motores automotrices ($f_s = 32\text{ kHz}$, ventana de 2.0 s, $f_{\text{min}} = 50\text{ Hz}$, $f_{\text{max}} = 16.000\text{ Hz}$).
 * Para **cualquier otro nombre de dataset**, el backend asume por defecto los parámetros de **Aves Chilenas** ($f_s = 22.05\text{ kHz}$, ventana de 5.0 s, $f_{\text{min}} = 800\text{ Hz}$, $f_{\text{max}} = 10.000\text{ Hz}$).
 

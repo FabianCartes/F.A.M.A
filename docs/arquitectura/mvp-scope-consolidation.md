@@ -5,8 +5,8 @@ Base: `a76b2bf5c95ee8491ecc2c01866c08504aebadf5`, rama `feat/local-mvp`. No es u
 
 ## Specs
 
-- S1. Solicitud original: «con este cambio creo que ya estamos preparados para definir bien el area del mvp y que sea reproducible en otros equipos, haz la investigacion correspondiente y que cosas se deben commitear para que todo lo necesario este en github. esto como prepaso a produccion».
-- S2. Autorización acotada: «hagamos hasta el 2. por ahora». Comprende el alcance del MVP y la consolidación de cambios locales; no la preparación de la receta portable, la prueba desde un clon limpio ni el despliegue.
+- S1. Definir el área del MVP e identificar qué debe commitearse para que sea reproducible en otros equipos y todo lo necesario esté en GitHub, como paso previo a producción.
+- S2. Alcance acotado a los pasos 1–2. Comprende el alcance del MVP y la consolidación de cambios locales; no la preparación de la receta portable, la prueba desde un clon limpio ni el despliegue.
 
 ### Alcance aprobado por referencia a los pasos 1–2
 
@@ -50,8 +50,7 @@ Base: `a76b2bf5c95ee8491ecc2c01866c08504aebadf5`, rama `feat/local-mvp`. No es u
 
 ## Log
 
-L1. Solicitud original: «con este cambio creo que ya estamos preparados para definir bien el area del mvp y que sea reproducible en otros equipos, haz la investigacion correspondiente y que cosas se deben commitear para que todo lo necesario este en github. esto como prepaso a produccion».
-L2. Autorización posterior: «hagamos hasta el 2. por ahora». El informe previo enumeraba 1) cerrar alcance, 2) consolidar cambios locales, 3) receta portable, 4) clon limpio, 5) recorrido funcional y 6) producción; solo 1–2 están autorizados.
+L2. Alcance acotado: el informe previo enumeraba 1) cerrar alcance, 2) consolidar cambios locales, 3) receta portable, 4) clon limpio, 5) recorrido funcional y 6) producción; solo se ejecutan 1–2.
 L3. Preflight: HEAD `a76b2bf5c95ee8491ecc2c01866c08504aebadf5`, rama `feat/local-mvp`, índice vacío y 36 fuentes/pruebas/manuales rastreados modificados; once archivos nuevos de código/pruebas candidatos ya inventariados. No se han commiteado cambios en esta fase. Plantilla env previamente bloqueada permanece sin inspeccionar; no se vuelve a intentar. Documentación nueva bajo `docs/` conforme a las reglas del proyecto; no se crea otro directorio `odd/`.
 L4. Documento de alcance creado con seis tareas e índice actualizado. No hay RED significativo para esta documentación pasiva; se verifica estructura, enlace existente y límites explícitos. Manifiesto privado initial-source-manifest.json: 36 archivos rastreados y nueve fuentes/pruebas nuevas a consolidar; proxy GCS y su prueba excluidos de esta etapa, no borrados. Diff exacto de 1764 líneas preservado en existing-source.diff; explorer mw8hgrdr-19-716m asigna únicamente esos cambios a cortes y no redescubre portabilidad. No se altera ninguna fuente de aplicación.
 L5. Primer mapa del explorer rechazado: no leyó spec/diff y utilizó CodeGraph prohibido. Una única reparación del mismo agente leyó los archivos exactos; mapa corregido mw8hitwz-1a-rb3b aceptado con spot-check padre. No se delega escritura ni se cambia el código para repartirlo. Cortes: U1 sesión/sidebar (incluye solo primer hunk del test ImportedTrainingView), U2 cierre de consulta, U3 fecha (dos hunks finales de IngestionView y primer hunk de su test), U4 UX ZIP completo y pruebas asociadas, U5 selector/preparación/dominios, U6 mensajes/feedback (primer hunk IngestionView y restantes hunks de su test). El manual de transferencias se reparte por tema; sus dos inserciones históricas de mantenimiento de archivado y healthcheck CLI quedan locales, no se atribuyen a nuevas fuentes ni se publican en este alcance.

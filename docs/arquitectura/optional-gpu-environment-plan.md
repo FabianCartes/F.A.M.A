@@ -3,11 +3,11 @@ Objective: enable optional GPU access in the existing local API while retaining 
 Branch: `feat/local-mvp`. Delivery: one scoped operational/documentation unit; no push. Checks: real isolated CUDA/PANNs probe, public API checks, independent deployment verification.
 
 ## Specs
-S1. Authorization: «Procede con la implementacion entonces». Apply the GPU environment plan accepted immediately before this instruction; no real training, activation, data migration, host installation or Docker daemon restart.
-S2. Preserve the run: «Dejemos ese entrenamiento fucionando y que termine para despues probar con la GPU, haz el plan para dejar listo el entorno». Check training and evaluation completion and preserved checkpoint identity before service replacement.
-S3. CPU behavior: «al incluir la GPU, si esta no esta disponible, se seguiria ejecutando con CPU?» Retain the current CPU configuration. The application already selects CPU when CUDA is unavailable; this does not imply a GPU-requesting container starts without compatible hardware/runtime, or that CUDA failures resume on CPU.
-S4. Scope and preservation: «Porque se debe respaldar el entorno vigente? este cambio ni hace un cambio grande al entorno actual cierto?» Preserve the exact running image/configuration, persistent mounts, security guards and artifact identities. Do not copy datasets or change database schemas for GPU enablement.
-S5. Production boundary: «si se introduce este cambio no traera problemas para produccion despues?» Keep GPU optional, local hardware identifiers private and CPU operation documented. Qualification is for this local environment, not production readiness or all batch sizes.
+S1. Apply the accepted GPU environment plan; no real training, activation, data migration, host installation or Docker daemon restart.
+S2. Preserve the run: let the training finish before testing with the GPU. Check training and evaluation completion and preserved checkpoint identity before service replacement.
+S3. CPU behavior: retain the current CPU configuration. The application already selects CPU when CUDA is unavailable; this does not imply a GPU-requesting container starts without compatible hardware/runtime, or that CUDA failures resume on CPU.
+S4. Scope and preservation: preserve the exact running image/configuration, persistent mounts, security guards and artifact identities. Do not copy datasets or change database schemas for GPU enablement.
+S5. Production boundary: keep GPU optional, local hardware identifiers private and CPU operation documented. Qualification is for this local environment, not production readiness or all batch sizes.
 
 ## Tasks
 T1 | S1,S2,S4 | inline | done | Model #5 standard_eval_completed/inactive; checkpoint hash/size verified; private CPU inspection saved and round-trip validated; isolated CUDA/PANNs/Adam step exit0 | commit: pending.
@@ -16,9 +16,8 @@ T3 | S1,S4,S5 | independent verification + inline docs | done | Explicitly autho
 
 ## Log
 L9. Independent final outcome: PASS with limits for S1-S5; three exact commands once each, exit0, no stderr. Configuration/security/mount comparisons,8981 persisted entries and checkpoint hashes, recorded history equality, deployed CUDA32x32 operation, UI/API200 and anonymous private catalog401. No full large-WAV hashes, independent database consistency, actual rollback, full GPU training, performance benchmark or production qualification. Public receipt preserves the initial incomplete attempt.
-L8. Human decision verbatim: «Autorizo». A new verification was explicitly authorized after disclosure of the missing proof; exact commands supplied to continuation mw5nkmvy-c-u2tf. No automatic retry; the earlier incomplete attempt remains recorded.
-L7. Independent verification incomplete: zero shell commands; exact parent-approved vectors required. Documentary reads are not runtime verification. No retry, replacement or escalation launched. GPU remains active with parent checks passed; human disposition required. No commit or publishing.
-L1. User authorization verbatim: «Procede con la implementacion entonces».
+L8. A new verification was explicitly authorized after disclosure of the missing proof; exact commands supplied to continuation mw5nkmvy-c-u2tf. No automatic retry; the earlier incomplete attempt remains recorded.
+L7. Independent verification incomplete: zero shell commands; exact parent-approved vectors required. Documentary reads are not runtime verification. No retry, replacement or escalation launched. GPU remains active with parent checks passed; disposition pending. No commit or publishing.
 L2. Host RTX 2050 /4GiB is detected; NVIDIA Container Toolkit executables and Docker `nvidia` runtime already exist. No installation or daemon change has been made.
 L3. Public authenticated progress returned `completed`, with final successful pipeline log after checkpoint/model #5 PANNs-CNN14 persistence. Checkpoint name `fama_d61df5a480994f9f837e197d203b85cb_best.pt`,319088572bytes. Evaluation/catalog metadata still to be reconciled. CPU API currently has no GPU request and explicitly empty `CUDA_VISIBLE_DEVICES`.
 L4. Existing dirty UI/docs changes are unrelated and must remain uncommitted/unmodified by this unit. Operational private records will not be committed. Login checks can update the test account's last-access timestamp; they are not model/data mutations.

@@ -1,9 +1,9 @@
 # ADR 0061: Autonomía investigadora en datasets asignados
 
-**Estado:** decisión aceptada por el operador; implementada en código, pendiente activación y recorrido remoto.
+**Estado:** decisión aceptada; implementada en código, pendiente activación y recorrido remoto.
 **Fecha:** 22 de octubre de 2026.
 
-El operador define que un investigador con un dataset asignado puede descargar, preprocesar, entrenar, predecir, subir audios, corregir predicciones e incorporar aportes al dataset validado sin aprobación administrativa. La asignación concede ese alcance completo; no se añade un permiso separado de curador ni otro rol global. El administrador decide las solicitudes de acceso y mantiene sus responsabilidades de cuentas e infraestructura.
+Se define que un investigador con un dataset asignado puede descargar, preprocesar, entrenar, predecir, subir audios, corregir predicciones e incorporar aportes al dataset validado sin aprobación administrativa. La asignación concede ese alcance completo; no se añade un permiso separado de curador ni otro rol global. El administrador decide las solicitudes de acceso y mantiene sus responsabilidades de cuentas e infraestructura.
 
 La incorporación sigue siendo una decisión humana explícita y puede ejecutarla el mismo investigador que propuso la corrección. Se conserva la distinción entre proponer e incorporar de [ADR 0013](0013_bucle_retroalimentacion_curacion_semi_manual_mlops.md), junto al alcance por recursos de [ADR 0035](0053-asignaciones-explicitas-y-propiedad-de-entrenamiento.md). Ver metadatos en un catálogo no permite acceder a audios, modelos o predicciones sin asignación.
 

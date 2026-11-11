@@ -27,7 +27,7 @@ lectura y la política actual de activación.
 Respaldo local independiente del checkout:
 
 ```text
-/home/kevin/Work/fama-preservation/20261015T151502Z/
+/workspace/fama-preservation/20261015T151502Z/
 ├── manifest.json
 ├── refs.bundle
 ├── <número>-<worktree>/
@@ -124,7 +124,7 @@ texto sobre ausencia de selector de semilla ya no describe la UI actual.
 ### Respaldo adicional y entornos CUDA
 
 ```text
-/home/kevin/Work/fama-preservation/20261015T163827Z-remaining/
+/workspace/fama-preservation/20261015T163827Z-remaining/
 ```
 
 Contiene un bundle de refs, inventario completo por ruta, parches staged/unstaged,
@@ -193,7 +193,7 @@ Desde `backend/`, con el intérprete local Python 3.14 validado:
 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// CUDA_VISIBLE_DEVICES= \
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONDONTWRITEBYTECODE=1 \
 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
-/home/kevin/Work/fama/.venv/bin/python tests/run_isolated_training_checks.py \
+/workspace/fama/.venv/bin/python tests/run_isolated_training_checks.py \
   tests/test_training_flow.py tests/test_training_service.py \
   tests/test_training_persistence.py tests/test_api_training.py \
   tests/test_training_schemas.py tests/test_loaded_checkpoint_identity.py \

@@ -8,7 +8,7 @@
 
 ## Copia de la historia: paso ya realizado
 
-**Resultado posterior:** el operador ejecutó la copia y compartió `history_transferred`; Codex comprobó igualdad completa de los campos históricos y secuencias. El comando inferior conserva el procedimiento realizado; el destino ocupado rechaza repetirlo. [Recibo posterior](../receipts/traslado_historia_confirmado_y_pesos_20261024.json).
+**Resultado posterior:** el operador ejecutó la copia y compartió `history_transferred`; se comprobó de forma independiente igualdad completa de los campos históricos y secuencias. El comando inferior conserva el procedimiento realizado; el destino ocupado rechaza repetirlo. [Recibo posterior](../receipts/traslado_historia_confirmado_y_pesos_20261024.json).
 
 El operador compartió `official_schema_prepared`. La comprobación independiente de SQL/GCS y del perfil confirmó las seis comprobaciones correctas. La vista previa del traslado reconoce una cuenta administradora, un dataset, un audio, cinco modelos, 31 predicciones, una corrección y una sincronización; no hay métricas históricas.
 
@@ -17,8 +17,8 @@ La huella de filas y siguientes valores de secuencias es `922c811f8d90b01f582126
 En PowerShell del operador:
 
 ```powershell
-Set-Location 'C:\Users\fabia\Desktop\F.A.M.A\backend'
-& .\.venv\Scripts\python.exe -m scripts.trasladar_historia_oficial --config-dir 'C:\Users\fabia\Desktop\F.A.M.A\backend\installation\cloud-oficial\native' --source-env-file 'C:\Users\fabia\Desktop\F.A.M.A\backend\.env' apply --apply --confirm-source fama_db --confirm-target fama_oficial --expect-digest 922c811f8d90b01f58212613b2ebd913e43ea28555304af366c7e8b97a0afa64
+Set-Location 'C:\Users\local-user\Desktop\F.A.M.A\backend'
+& .\.venv\Scripts\python.exe -m scripts.trasladar_historia_oficial --config-dir 'C:\Users\local-user\Desktop\F.A.M.A\backend\installation\cloud-oficial\native' --source-env-file 'C:\Users\local-user\Desktop\F.A.M.A\backend\.env' apply --apply --confirm-source fama_db --confirm-target fama_oficial --expect-digest 922c811f8d90b01f58212613b2ebd913e43ea28555304af366c7e8b97a0afa64
 ```
 
 Solicita la misma contraseña SQL de `fama_oficial_migrador` utilizada al preparar el esquema, con entrada oculta y solo en memoria. El origen se obtiene del archivo elegido expresamente; no se carga dotenv implícitamente ni se interpolan sus valores. Se ignoran variables `PG*` heredadas. La previsualización puede repetirse con los mismos dos argumentos iniciales y `plan`, sin contraseña del migrador y con transacciones de lectura.
@@ -68,8 +68,8 @@ El comando siguiente ya fue probado con los roles restringidos correspondientes.
 **Aplicación real confirmada el 24 de octubre:** el operador obtuvo `official_schema_prepared`; la lectura independiente confirmó 17 tablas, nueve secuencias, todas las tablas de negocio vacías y `completed=false`.
 
 ```powershell
-Set-Location 'C:\Users\fabia\Desktop\F.A.M.A\backend'
-& .\.venv\Scripts\python.exe -m scripts.preparar_esquema_oficial --config-dir 'C:\Users\fabia\Desktop\F.A.M.A\backend\installation\cloud-oficial\native' --apply
+Set-Location 'C:\Users\local-user\Desktop\F.A.M.A\backend'
+& .\.venv\Scripts\python.exe -m scripts.preparar_esquema_oficial --config-dir 'C:\Users\local-user\Desktop\F.A.M.A\backend\installation\cloud-oficial\native' --apply
 ```
 
 Salida correcta: `code: official_schema_prepared`, `revision: 0003_autonomy`, `runtime_permissions_ready: true`. Compartir solo el JSON final. El comando crea estructura y concede permisos; no traslada historia, crea cuentas web ni activa el perfil. Errores de contraseña, cancelación o entrada no oculta no crean tablas. Un esquema no versionado ocupado se conserva y devuelve `official_schema_not_prepared`; no se fuerza `stamp` ni se elimina contenido. Repetir una preparación sobre el esquema vigente conserva las filas existentes. Si falla una comprobación posterior, conservar la salida para revisar el estado antes de continuar.

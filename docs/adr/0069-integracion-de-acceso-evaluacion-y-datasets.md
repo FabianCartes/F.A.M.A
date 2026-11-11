@@ -1,6 +1,6 @@
 # ADR 0069: Integrar acceso, evaluación y datasets entre ramas
 
-Fecha: 2026-10-24. Estado: aceptado por el operador para el reparto de tres grupos; integración comprobada en laboratorio sintético; despliegue pendiente.
+Fecha: 2026-10-24. Estado: aceptado para el reparto de tres grupos; integración comprobada en laboratorio sintético; despliegue pendiente.
 
 ## Contexto
 
@@ -12,7 +12,7 @@ Crear `0004_integration` como revisión aditiva y congelada, conservando las ant
 
 Las funciones ZIP del navegador usan la sesión HttpOnly existente y verifican el origen de las escrituras. Se conservan consumidores Bearer explícitos y el modo de desarrollo local de dev, con identidad reservada y condiciones originales. Las importaciones privadas siguen separadas del registro compartido de entrenamiento; no se inventan asignaciones ni migraciones de contenido.
 
-Las nuevas particiones SQL/locales tienen entrenamiento, validación y prueba sin compartir grupos conocidos. El operador eligió este criterio. Las versiones 80/20 se pueden consultar, pero no se admiten como entrenamiento nuevo con evaluación estándar. Se conservan las preparaciones CSV verificadas de dev en Linux y se admite identidad de datasets propios. La evaluación final mantiene el modelo inactivo hasta una activación explícita del administrador, como en el flujo de acceso existente.
+Las nuevas particiones SQL/locales tienen entrenamiento, validación y prueba sin compartir grupos conocidos. Se eligió este criterio. Las versiones 80/20 se pueden consultar, pero no se admiten como entrenamiento nuevo con evaluación estándar. Se conservan las preparaciones CSV verificadas de dev en Linux y se admite identidad de datasets propios. La evaluación final mantiene el modelo inactivo hasta una activación explícita del administrador, como en el flujo de acceso existente.
 
 Los workers y el confinamiento ZIP requieren POSIX. Windows comunica esa capacidad como no disponible y conserva las rutas de audio, GCS, predicción y particiones locales. No se sustituyen sus bloqueos y protecciones por implementaciones vacías.
 

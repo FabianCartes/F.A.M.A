@@ -125,7 +125,7 @@ La vista se organizará modularmente en 4 secciones accesibles mediante navegaci
 ## 3. Plan de Implementación (Backlog)
 
 * **Tarea 1:** Crear `frontend/components/views/HelpView.tsx` siguiendo diseño modular con subnavegación por tabs.
-* **Tarea 2:** Integrar opción `Ayuda` en [`Sidebar.tsx`](file:///home/kevin/Work/fama/frontend/components/Sidebar.tsx) y conectar estado de vista en [`AppShell.tsx`](file:///home/kevin/Work/fama/frontend/components/shell/AppShell.tsx) / [`page.tsx`](file:///home/kevin/Work/fama/frontend/app/page.tsx).
+* **Tarea 2:** Integrar opción `Ayuda` en [`Sidebar.tsx`](../../frontend/components/Sidebar.tsx) y conectar estado de vista en [`AppShell.tsx`](../../frontend/components/shell/AppShell.tsx) / [`page.tsx`](../../frontend/app/page.tsx).
 * **Tarea 3:** Desarrollar suite de pruebas TDD en `frontend/components/views/__tests__/HelpView.test.tsx` (asegurando renderizado de las 4 secciones y navegación sin errores).
 * **Tarea 4:** Validar accesibilidad (`aria-selected`, navegación por teclado) y diseño responsivo móvil/escritorio.
 * **Tarea 5:** Implementar componente de ayuda contextual (`TooltipHelp` / icono `?`) junto a cada parámetro del panel de Física de Audio en `TrainingView.tsx`, con explicación concisa en hover y enlace al Centro de Ayuda.

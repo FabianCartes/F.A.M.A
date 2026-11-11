@@ -12,7 +12,7 @@ La etapa 5 del [plan de instalación](plan_instalacion_gcp_y_asistente.md) prepa
 | Usuario de migraciones | `fama_migrador`; su contraseña se conserva aparte. |
 | Bucket de pruebas | `fama-pruebas` |
 | Identidad técnica | `fama-pruebas-app@proyectotesis-fama.iam.gserviceaccount.com` |
-| ADC local | `C:\Users\fabia\Desktop\F.A.M.A\backend\credentials\gcloud-pruebas\application_default_credentials.json` |
+| ADC local | `C:\Users\local-user\Desktop\F.A.M.A\backend\credentials\gcloud-pruebas\application_default_credentials.json` |
 | Proxy nativo | `127.0.0.1:5433`, Cloud SQL Auth Proxy 2.26.2. |
 
 El bucket `fama-audio-records-2026` queda fuera de estas comprobaciones. La cuenta de servicio autoriza el transporte y GCS; el usuario SQL autoriza las operaciones de base de datos; las cuentas web se crearán en una etapa posterior.
@@ -22,7 +22,7 @@ El bucket `fama-audio-records-2026` queda fuera de estas comprobaciones. La cuen
 Desde PowerShell, en este equipo y con el entorno virtual existente:
 
 ```powershell
-Set-Location 'C:\Users\fabia\Desktop\F.A.M.A\backend'
+Set-Location 'C:\Users\local-user\Desktop\F.A.M.A\backend'
 $famaNodeArguments = @(
     '-m', 'app.node',
     '--config-dir', "$PWD\installation\cloud-pruebas",
@@ -37,7 +37,7 @@ $famaNodeArguments = @(
 & .\.venv\Scripts\python.exe @famaNodeArguments
 ```
 
-Introducir la contraseña de **`fama_app`** cuando se solicite; la entrada queda oculta. La salida esperada es `{"code": "configuration_prepared"}`. La contraseña no aparece como argumento ni se solicita en el chat. El directorio de destino debe ser nuevo: si ya existe, devuelve `configuration_directory_exists` y conserva su contenido. Un intento parcialmente interrumpido requiere revisar el directorio antes de elegir cómo reintentarlo; el comando no lo elimina ni sobrescribe automáticamente.
+Introducir la contraseña de **`fama_app`** cuando se solicite; la entrada queda oculta. La salida esperada es `{"code": "configuration_prepared"}`. La contraseña no aparece como argumento ni se divulga. El directorio de destino debe ser nuevo: si ya existe, devuelve `configuration_directory_exists` y conserva su contenido. Un intento parcialmente interrumpido requiere revisar el directorio antes de elegir cómo reintentarlo; el comando no lo elimina ni sobrescribe automáticamente.
 
 Se generan estas ubicaciones bajo `backend/installation/cloud-pruebas/`, excluidas de Git y del contexto de la imagen:
 
@@ -145,7 +145,7 @@ Los contenedores y la red temporales fueron retirados. La imagen mínima de diag
 El siguiente paso crea las tablas en la base de pruebas vacía mediante las migraciones existentes. Se ejecuta en el terminal del operador con la contraseña de **`fama_migrador`**, distinta de la guardada para la aplicación. El proxy nativo debe seguir disponible en `127.0.0.1:5433`.
 
 ```powershell
-Set-Location 'C:\Users\fabia\Desktop\F.A.M.A\backend'
+Set-Location 'C:\Users\local-user\Desktop\F.A.M.A\backend'
 $famaMigracion = @'
 import getpass, os, sys
 from sqlalchemy.engine import URL

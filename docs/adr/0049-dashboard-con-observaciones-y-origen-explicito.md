@@ -2,7 +2,7 @@
 
 **Estado:** Aceptado. **Fecha:** 15 de octubre de 2026.
 
-El dashboard mezclaba datos de referencia con telemetría actual, convertía ceros/ausencias en cifras de ejemplo y podía buscar/cargar pesos al consultar métricas. El usuario confirmó probar módulo, GET `/api/dashboard/stats` y vista renderizada, y mantener métricas del último registro de entrenamiento sin atribuirle activación. Se elige una lectura pasiva con desconocidos explícitos, no añadir probes cloud ni cambiar catálogo/activación.
+El dashboard mezclaba datos de referencia con telemetría actual, convertía ceros/ausencias en cifras de ejemplo y podía buscar/cargar pesos al consultar métricas. Se decidió probar módulo, GET `/api/dashboard/stats` y vista renderizada, y mantener métricas del último registro de entrenamiento sin atribuirle activación. Se elige una lectura pasiva con desconocidos explícitos, no añadir probes cloud ni cambiar catálogo/activación.
 
 ## Contrato
 

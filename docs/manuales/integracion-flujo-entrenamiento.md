@@ -3,7 +3,7 @@
 > Actualización del 15 de octubre de 2026: la [consolidación de worktrees](consolidacion-worktrees.md)
 > incorpora selector de semilla UI/API, ejecución spawn y runner autocontenido. Los registros de
 > integración que siguen describen sus árboles históricos, no la verificación actual.
-Destino: `/home/kevin/Work/fama`, rama `fix/prediction-view-truthfulness`, HEAD inicial `d9c374fa3467fea4307b54ed6bdb644839c45dcc`. Origen: `283bf212e94bea21826b45badd457e2fe22a0d2e`.
+Destino: `/workspace/fama`, rama `fix/prediction-view-truthfulness`, HEAD inicial `d9c374fa3467fea4307b54ed6bdb644839c45dcc`. Origen: `283bf212e94bea21826b45badd457e2fe22a0d2e`.
 Entrega local sin commits por instrucción explícita; runner aislado con intérprete del origen y módulos del destino. Seguimiento activo enlazado desde docs/KANBAN.md.
 
 ## Specs
@@ -67,12 +67,12 @@ Límites: comprobado con pruebas sintéticas en CPU y SQLite en memoria; no acre
 
 ### Reproducir comprobaciones aisladas
 
-Desde `/home/kevin/Work/fama/backend`, con el intérprete validado del checkout principal:
+Desde `/workspace/fama/backend`, con el intérprete validado del checkout principal:
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// \
 CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
-/home/kevin/Work/fama/.venv/bin/python \
+/workspace/fama/.venv/bin/python \
   tests/run_isolated_training_checks.py <selectores pytest>
 ```
 
@@ -94,7 +94,7 @@ Actualización del 15 de octubre de 2026 sobre HEAD `95cae81fe2d06f10c8ddbf02932
 ```bash
 PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// \
 CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
-/home/kevin/Work/fama/.venv/bin/python tests/run_isolated_training_checks.py \
+/workspace/fama/.venv/bin/python tests/run_isolated_training_checks.py \
   tests/test_trained_predictor.py tests/test_model_reevaluation.py tests/test_preprocess.py \
   -k 'not test_cli_and_reevaluation_imports_do_not_initialize_ambient_database_runtime and not test_trained_predictor_lazy_loading_defers_model_instantiation and not test_trained_predictor_infers_real_audio and not test_trained_predictor_fails_fast_when_audio_missing and not test_trained_predictor_detects_silence'
 ```
@@ -114,8 +114,8 @@ Los reportes originales de 12 FAIL / 5 SKIP y 26 FAIL / 1493 PASS / 5 SKIP no se
 - L18: Suite sintética final job4exit0/wall25:344PASS5deselected2FFTwarnings20.70s, nonpassing_reports[],memory260,guardantesall/hash/cleanupPASS.5exclusiones expresas segúnmanual:1payloadimportsPASSaparte+4realartifactfueraalcance. CLIrequiredargsstderr es caso negativo esperado. T3checkspropioscerrados, T4independientefinalnext, no commit autorizado. La corrección runnerexceptcode1 observó éxito normal; falta faultprobeindependiente para confirmar propagaciónfallo tras code0.
 - L17: ASSESS con RDDon es unassessable por untracked; plan independientehigh requerido; no se inventó reviewDue ni se inició revisión. Job3 wrapperexit0/wall26:344PASS4SKIP1deselected2FFTwarnings21.15s/memory260/SHAcleanup; AssertionError proof allpassed capturado con code0 es BUG DEL RUNNER, no certificado de cierre. Corregido exceptcode1 para failclosed.4SKIP son tests dependientes checkpoint histórico/audio real ausente fueraCPUsynthetic, se deseleccionan explícitamente junto wrapperimports verificadoaparte. Nueva suite después cambio concreto failclosed+scope sintético; no importar datos ni alterar4tests.
 - L16: S10: fixture reevaluación previa bajo guarda RED1ERROR0.22s (SQLitefile denegado); adaptada a memory+StaticPool. Preflight+CLI GREEN2PASS0.61s/exit0/memory2. Ambient-import-probe separadoexit0/wall2.3s, payloadSHA5cda26f98317e107ac026ff1555cec748aff24e79f43d5228eb51d253c0755d1,0SQLite/sourceguardSHA/privatecleanupPASS. Payload original no modificado. Nueva suite se repite por cambios de fixture+procedimiento concretos, con una deselección explícita del wrapper subprocess y sin ampliar guarda. Diffcheckexit0.
-- L15 (usuario): «Autorizo». Autoriza servicio SQLite en memoria y probe imports en proceso fresco separado con guarda original, no permiso subprocess en runner. Adaptación test-only, sin modificar producción/activo.
-- L1: Solicitud inicial «Plan de integración»: comparación de origen validado y destino, traslado mínimo de entrenamiento/evaluación/publicación, conservación de cambios locales, exclusiones de datos/credenciales/evidencia histórica, verificación aislada del destino y cierre sin Docker ni entrenamiento real. El texto completo original está en la conversación y en continuidad Engram 2504/2505.
+- L15: Alcance: servicio SQLite en memoria y probe imports en proceso fresco separado con guarda original, no permiso subprocess en runner. Adaptación test-only, sin modificar producción/activo.
+- L1: Solicitud inicial «Plan de integración»: comparación de origen validado y destino, traslado mínimo de entrenamiento/evaluación/publicación, conservación de cambios locales, exclusiones de datos/credenciales/evidencia histórica, verificación aislada del destino y cierre sin Docker ni entrenamiento real.
 - L2 (usuario): «Se supone que desde el frontend uno entrena y el backend automaticamente deberia hacer todo el flujo para que se publiquen pesos y metricas, para que quede listo para hacer inferenicias».
 - L3 (usuario): «Dejemos para despues el tema de modelo activo».
 - L4 (usuario): «Aplico, unifica a la carpeta principal ~/Work/fama».
@@ -125,7 +125,7 @@ Los reportes originales de 12 FAIL / 5 SKIP y 26 FAIL / 1493 PASS / 5 SKIP no se
 - L13: Integridad final:352/360rutas idénticas,8modificadas dentro allowlist,0missing/0unexpected, HEADd9c374f e índice vacío conservados. training.py actual difiere de origen SOLO en3hunks de activación/compensación conservados. Predictor/schema/guard/preprocess, persistencia local, tests consumidores y frontend fuera de traslado intactos. Diffcheckfinalexit0 después de normalizar EOF (los2intentos parciales anteriores todavía devolvían2; no eran aprobación).
 - L11: Primera suite9archivos job-1 exit1: 11PASS/1FAIL1.07s; guard bloqueó mkdir backend/data/raw/Fixture desde test_paths que descubría checkout real por fallback. Corrección3fixtures: tmp_path/.git privado, sin cambiar localizador/guarda ni crear datos reales. test_paths70PASS0.16s, guard/hashes/cleanupPASS. Diffcheck mostró EOF vacío exit2; normalizado antes de nueva suite. Comando suite ahora se repite porque cambió esa fixture, no por inercia.
 - L10: Hilo externo RED1FAIL0.80s→GREEN1PASS0.76s; rutas RED6FAIL0.27s→GREEN6PASS0.16s; seed RED11FAIL0.42s→GREEN11PASS1.19s; no-fallback RED1FAIL0.16s→GREEN1PASS0.14s; API integral adaptada1PASS1.26s(call0.444). Todos exits RED1/GREEN0, memory/guard/hash/cleanup/denynet comprobados. API ya satisfecha al añadir prueba: no se fabricó RED. Edición exacta service tests inicialmente rechazada por anchor inexistente (sin mutación), recuperada con anchor único; intento de leer store tras script fallido no disponible, sin comandos de prueba ni mutación.
-- L9: Probe independiente corregido mv64uthf-3-7wi8 exit0/stderr vacío: sintaxis, privado/modo0600/lectura/escapes/O_NOFOLLOW/fd cerrado/hashes/limpieza PASS. Parent comparó adaptador exactamente con original (1322). Habilita RED/GREEN, no certifica flujo ni imports. Comando de pruebas: cd /home/kevin/Work/fama/backend && PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /home/kevin/Work/fama-review-new-model-flow/.venv-cuda/bin/python tests/run_isolated_training_checks.py <selectores pytest>.
-- L8: Verificador mv64rp38-2-02kd bloqueado: comando relativo .venv-cuda/bin/python inexistente en destino, exit127 antes de Python, stdout vacío. Parent comprobó ruta absoluta /home/kevin/Work/fama-review-new-model-flow/.venv-cuda/bin/python ejecutable (exit0), y relativa destino ausente (exit1). Incidente de ruta, no prueba fallida del adaptador; autorizada una corrección acotada de invocación, sin instalaciones ni pytest.
+- L9: Probe independiente corregido mv64uthf-3-7wi8 exit0/stderr vacío: sintaxis, privado/modo0600/lectura/escapes/O_NOFOLLOW/fd cerrado/hashes/limpieza PASS. Parent comparó adaptador exactamente con original (1322). Habilita RED/GREEN, no certifica flujo ni imports. Comando de pruebas: cd /workspace/fama/backend && PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /workspace/fama-review-new-model-flow/.venv-cuda/bin/python tests/run_isolated_training_checks.py <selectores pytest>.
+- L8: Verificador mv64rp38-2-02kd bloqueado: comando relativo .venv-cuda/bin/python inexistente en destino, exit127 antes de Python, stdout vacío. Parent comprobó ruta absoluta /workspace/fama-review-new-model-flow/.venv-cuda/bin/python ejecutable (exit0), y relativa destino ausente (exit1). Incidente de ruta, no prueba fallida del adaptador; autorizada una corrección acotada de invocación, sin instalaciones ni pytest.
 - L7: Runner adaptado en backend/tests/run_isolated_training_checks.py. Primer chequeo AST falló por nota de truncamiento incluida accidentalmente desde read; retirada la nota y AST PASS. Verificador previo mv64rp38-2-02kd revisa adaptación y probe sintético stdlib antes de pytest. Ninguna prueba del destino ejecutada aún.
 - L6: Baseline reproducible en docs/receipts/training-integration-baseline.json (hashes de 360 rutas, no datos/credenciales/recibos históricos). Runner original recuperado del store de sesión previa; no se ejecutó su invocación contra el origen.

@@ -2,7 +2,7 @@
 
 > **Nota de vigencia:** el contenido siguiente preserva el estado histórico descrito durante aquella integración. Las recetas YAML, el entrenador genérico y los scripts CLI de entrenamiento mencionados aquí fueron retirados por T1; sus comandos quedan retirados y no son el flujo operativo vigente. El flujo actual para entrenar parte de la UI y llega a `POST /api/training/start`. `backend/poc/train.py` y `backend/poc/benchmark.py` siguen siendo módulos importables para compatibilidad compartida, no CLIs soportadas. Esta nota no modifica la evidencia histórica del informe.
 
-Este documento detalla todas las nuevas implementaciones, cambios arquitectónicos y correcciones aplicadas al integrar los 16 commits remotos de **Kevin Cárdenas** en la rama principal de F.A.M.A.
+Este documento detalla todas las nuevas implementaciones, cambios arquitectónicos y correcciones aplicadas al integrar los 16 commits remotos de un compañero de equipo en la rama principal de F.A.M.A.
 
 ---
 

@@ -4,7 +4,7 @@
 
 ## Decisión y alternativas
 
-Antes de incorporar pantallas públicas, el usuario confirmó límites temporales configurables para login y recuperación, sin suspensión automática de cuentas. Los contadores en memoria se descartan porque reinicios y varios procesos permitirían multiplicar el presupuesto. No se incorpora Redis ni otro servicio real: las reservas se persisten en la misma BD mediante UPSERT condicional, compatible con PostgreSQL y SQLite con `RETURNING`.
+Antes de incorporar pantallas públicas, se definieron límites temporales configurables para login y recuperación, sin suspensión automática de cuentas. Los contadores en memoria se descartan porque reinicios y varios procesos permitirían multiplicar el presupuesto. No se incorpora Redis ni otro servicio real: las reservas se persisten en la misma BD mediante UPSERT condicional, compatible con PostgreSQL y SQLite con `RETURNING`.
 
 Cada operación reserva todas sus cuotas en una transacción y ordena sus claves para evitar inversión de locks entre esas reservas. Si una cuota está agotada se revierten las reservas de las demás y se responde 429 con `Retry-After`; el rechazo no prolonga la ventana. Una admisión se confirma antes de verificar credenciales o modificar recuperación: los intentos admitidos correctos e incorrectos cuentan, y un error posterior no devuelve el presupuesto. El fallo de configuración/BD no habilita fallback local ni acceso abierto.
 

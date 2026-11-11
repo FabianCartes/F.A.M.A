@@ -10,7 +10,7 @@ El operador ya compartió el resultado correcto del comprobador SQL: ambas ident
 
 ## Alcance autorizado y verificado
 
-El operador autorizó explícitamente crear `fama-oficial-app@proyectotesis-fama.iam.gserviceaccount.com`, nombre visible **FAMA - Nodo oficial**, y las tres vinculaciones siguientes. Codex creó la cuenta y verificó las políticas guardadas mediante consultas posteriores. Es la identidad de transporte y archivos prevista para el nodo; los usuarios SQL y las cuentas web conservan sus funciones distintas.
+Se creó `fama-oficial-app@proyectotesis-fama.iam.gserviceaccount.com`, nombre visible **FAMA - Nodo oficial**, y las tres vinculaciones siguientes. se creó la cuenta y verificó las políticas guardadas mediante consultas posteriores. Es la identidad de transporte y archivos prevista para el nodo; los usuarios SQL y las cuentas web conservan sus funciones distintas.
 
 | Destinatario | Permiso aplicado | Recurso exacto y alcance |
 | --- | --- | --- |
@@ -30,13 +30,13 @@ La carpeta `backend/credentials/gcloud-oficial/` del equipo tiene DACL protegida
 
 ## Inicio de sesión Google completado
 
-El operador informó que eligió su correo y el navegador confirmó la autenticación de gcloud. Codex observó el ADC local de tipo `impersonated_service_account`, origen `authorized_user` y destino exacto `fama-oficial-app`. Se verificaron los accesos de lectura indicados arriba. Las instrucciones siguientes conservan el procedimiento realizado; no hay que repetirlo ahora.
+El operador informó que eligió su correo y el navegador confirmó la autenticación de gcloud. se observó de forma independiente el ADC local de tipo `impersonated_service_account`, origen `authorized_user` y destino exacto `fama-oficial-app`. Se verificaron los accesos de lectura indicados arriba. Las instrucciones siguientes conservan el procedimiento realizado; no hay que repetirlo ahora.
 
 Abrir PowerShell en este equipo y ejecutar las dos instrucciones siguientes. La primera elige la carpeta oficial solo para ese terminal; no cambia el perfil que usa la aplicación en ejecución. El comando de inicio de sesión y sus opciones se contrastaron con la ayuda de la versión instalada de Google Cloud SDK.
 
 ```powershell
-$env:CLOUDSDK_CONFIG = 'C:\Users\fabia\Desktop\F.A.M.A\backend\credentials\gcloud-oficial'
-& 'C:\Users\fabia\AppData\Local\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd' auth application-default login --impersonate-service-account=fama-oficial-app@proyectotesis-fama.iam.gserviceaccount.com --disable-quota-project --project=proyectotesis-fama
+$env:CLOUDSDK_CONFIG = 'C:\Users\local-user\Desktop\F.A.M.A\backend\credentials\gcloud-oficial'
+& 'C:\Users\local-user\AppData\Local\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd' auth application-default login --impersonate-service-account=fama-oficial-app@proyectotesis-fama.iam.gserviceaccount.com --disable-quota-project --project=proyectotesis-fama
 ```
 
 En el navegador, elegir la cuenta Google operadora autorizada, completar el consentimiento y volver a PowerShell. El SDK debe informar que guardó credenciales en `backend/credentials/gcloud-oficial/application_default_credentials.json`. No abrir ni pegar ese archivo; basta confirmar que el comando terminó correctamente. No introducir las contraseñas SQL en este paso. `--disable-quota-project` evita añadir un proyecto de cuota al ADC; no desactiva la facturación de los recursos.
@@ -45,20 +45,20 @@ La credencial contiene la autenticación local del operador que permite obtener 
 
 ## Perfil local preparado y comprobado
 
-El operador confirmó la ejecución del comando siguiente. Codex observó perfiles nativo/Docker, secretos presentes y `completed=false`; el perfil nativo utiliza `fama_oficial_app`, `fama_oficial`, `127.0.0.1:5434` y el bucket oficial. `app.node check` devolvió `database_connected` y `storage_read_connected`. Otra consulta de solo lectura confirmó identidad, puerto y cero tablas públicas. El procedimiento siguiente conserva cómo se preparó el perfil; ya no es un paso pendiente.
+El operador confirmó la ejecución del comando siguiente. se observó de forma independiente perfiles nativo/Docker, secretos presentes y `completed=false`; el perfil nativo utiliza `fama_oficial_app`, `fama_oficial`, `127.0.0.1:5434` y el bucket oficial. `app.node check` devolvió `database_connected` y `storage_read_connected`. Otra consulta de solo lectura confirmó identidad, puerto y cero tablas públicas. El procedimiento siguiente conserva cómo se preparó el perfil; ya no es un paso pendiente.
 
 La inspección Windows encontró que `mkdir(mode=0o700)` creaba las carpetas hijas con su propia DACL de usuario/administradores/Owner Rights, distinta de la DACL explícita usuario/SYSTEM del directorio superior. La CLI ahora protege también `secrets`, `native` y `docker` antes de escribir; prueba pública extendida a todo el árbol. Rojo funcional por regla Allow adicional y verde final **13 PASS / dos archivos**. En el perfil ya creado se corrigieron únicamente ACL: siete archivos conservaron exactamente su contenido. Verificación posterior de perfil y respaldo: 25 entradas, cero reglas Allow ajenas y cero directorios sin protección de herencia.
 
-Codex inició un segundo proxy con ADC oficial, binario 2.26.2 observado y huella `41cfddfe79fdb5eb89a42c8c76149384eb1c564cfcaa7369a3261c95a5338b35`. Su prueba informó `Connection test passed`; proceso, ejecutable, argumentos de instancia/credencial y propietario del listener `127.0.0.1:5434` coinciden. PID observado: 21152; no es una identidad permanente del servicio. El listener anterior de pruebas en 5433 conserva el mismo propietario. No se inició sesión SQL por el nuevo proxy todavía. Registros y logs quedan en la carpeta privada `backend/credentials/gcloud-oficial/runtime/`.
+se inició un segundo proxy con ADC oficial, binario 2.26.2 observado y huella `41cfddfe79fdb5eb89a42c8c76149384eb1c564cfcaa7369a3261c95a5338b35`. Su prueba informó `Connection test passed`; proceso, ejecutable, argumentos de instancia/credencial y propietario del listener `127.0.0.1:5434` coinciden. PID observado: 21152; no es una identidad permanente del servicio. El listener anterior de pruebas en 5433 conserva el mismo propietario. No se inició sesión SQL por el nuevo proxy todavía. Registros y logs quedan en la carpeta privada `backend/credentials/gcloud-oficial/runtime/`.
 
 En un PowerShell interactivo del operador:
 
 ```powershell
-Set-Location 'C:\Users\fabia\Desktop\F.A.M.A\backend'
-& .\.venv\Scripts\python.exe -m app.node --config-dir 'C:\Users\fabia\Desktop\F.A.M.A\backend\installation\cloud-oficial' prepare `
+Set-Location 'C:\Users\local-user\Desktop\F.A.M.A\backend'
+& .\.venv\Scripts\python.exe -m app.node --config-dir 'C:\Users\local-user\Desktop\F.A.M.A\backend\installation\cloud-oficial' prepare `
   --project proyectotesis-fama `
   --bucket fama-audio-records-2026 `
-  --credentials-file 'C:\Users\fabia\Desktop\F.A.M.A\backend\credentials\gcloud-oficial\application_default_credentials.json' `
+  --credentials-file 'C:\Users\local-user\Desktop\F.A.M.A\backend\credentials\gcloud-oficial\application_default_credentials.json' `
   --connection-name proyectotesis-fama:us-central1:fama-postgres-pruebas `
   --database fama_oficial `
   --user fama_oficial_app `

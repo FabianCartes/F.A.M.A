@@ -3,8 +3,6 @@
 **Proyecto:** Framework MLOps Híbrido para Clasificación de Audio (F.A.M.A.)  
 **Fecha:** Septiembre 2026  
 **Dominio Piloto:** Bioacústica de Aves de Chile  
-**Autores:** Fabián Cartes Oliva, Kevin Cárdenas Sepúlveda  
-**Profesor Guía:** Christian Vidal Castro  
 **Institución:** Departamento de Sistemas de Información, Universidad del Bío-Bío  
 
 ---
@@ -114,4 +112,4 @@ checkpoints/
 
 1. **Viabilidad del Núcleo ML Comprobada:** Se valida que un espectrograma Mel estandarizado (22.050 Hz, 5 segundos, 64 bancos Mel en escala dB) alimentando una arquitectura CNN compacta es capaz de discriminar efectivamente las especies piloto.
 2. **Eficiencia en Hardware Local:** La estrategia de caché tensorial en memoria redujo los tiempos de entrenamiento a menos de 2 segundos por época en CPU, demostrando que los nodos locales no requieren infraestructura masiva para ciclos de experimentación rápidos.
-3. **Paso Siguiente en la Planificación:** Con el pipeline acústico y el esquema de metadatos completamente verificados, el framework está listo para dar el siguiente paso de la arquitectura descrita en `VIDA_01_CINF_FINAL_PT_2026_1_CARTES.md`: encapsular la ingesta y predicción en la API REST de FastAPI y conectar el almacenamiento con Cloud SQL y Google Cloud Storage.
+3. **Paso Siguiente en la Planificación:** Con el pipeline acústico y el esquema de metadatos completamente verificados, el framework está listo para dar el siguiente paso de la arquitectura descrita en [`memoria_proyecto_titulo_2026_1.md`](../tesis/): encapsular la ingesta y predicción en la API REST de FastAPI y conectar el almacenamiento con Cloud SQL y Google Cloud Storage.
