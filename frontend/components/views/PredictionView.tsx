@@ -2,6 +2,7 @@
 
 import { getPredictionHistory } from "@/lib/api/predictionHistory";
 import PredictionModelSelector, { TriadModelBadges, triadModelDetails } from "@/components/prediction/PredictionModelSelector";
+import TriadCompositionPanel from "@/components/prediction/TriadCompositionPanel";
 import InfoTooltip from "@/components/common/InfoTooltip";
 
 import { useState, useEffect, useMemo, useRef, useCallback, ChangeEvent, FormEvent } from "react";
@@ -550,6 +551,16 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
   const evaluationDialogCloseRef = useRef<HTMLButtonElement | null>(null);
   const evaluationDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const inferenceSequence = useRef(0);
+  const refreshCatalogue = useRef<(() => Promise<RegisteredModel[] | null>) | null>(null);
+  // After a triad weight revision: reload the catalogue, then select the new version if it is selectable.
+  const selectRevisedTriad = useCallback(async (newModelId: string): Promise<string | null> => {
+    const models = await refreshCatalogue.current?.();
+    if (!models?.some((m) => m.id === newModelId && m.has_weights === true)) {
+      return "La nueva versión se creó, pero aún no está disponible en el catálogo de modelos.";
+    }
+    setSelectionState((state) => ({ ...state, modelId: newModelId, evaluationDialogOpen: false, evaluationDialogModelId: null }));
+    return null;
+  }, []);
 
   const selectedModel = useMemo(() => {
     return availableModels.find((m) => m.id === selectedModelId);
@@ -645,15 +656,15 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
     let generation = 0;
     let controller: AbortController | undefined;
     let previousModels: RegisteredModel[] = [];
-    async function fetchModels() {
+    async function fetchModels(): Promise<RegisteredModel[] | null> {
       const request = ++generation;
       controller?.abort();
       controller = new AbortController();
       try {
-        if (!sessionCurrent()) return;
+        if (!sessionCurrent()) return null;
         if (!privateApiSameOrigin()) throw new Error('Los recursos privados requieren API del mismo origen.');
         const res = await fetch(`${API_BASE_URL}/api/models`, { credentials: 'same-origin', signal: controller.signal });
-        if (request !== generation || !sessionCurrent()) return;
+        if (request !== generation || !sessionCurrent()) return null;
         if (!res.ok) {
           let databaseUnavailable = false;
           try {
@@ -666,7 +677,7 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
           throw new Error(`HTTP ${res.status}${databaseUnavailable ? " database_unavailable" : ""}`);
         }
         const data = await res.json();
-        if (request !== generation || !sessionCurrent()) return;
+        if (request !== generation || !sessionCurrent()) return null;
         if (!Array.isArray(data.models)) throw new Error("invalid_catalogue");
         setCatalogueError(null);
         setCatalogueLoaded(true);
@@ -702,15 +713,18 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
             evaluationDialogModelId: null,
           };
         });
+        return models;
       } catch (err) {
-        if (request !== generation || !sessionCurrent()) return;
+        if (request !== generation || !sessionCurrent()) return null;
         const errorMessage = err instanceof Error ? err.message : "";
         const statusMatch = errorMessage.match(/^HTTP (\d{3})(?: database_unavailable)?$/);
         const status = statusMatch ? ` (HTTP ${statusMatch[1]})` : "";
         const databaseUnavailable = errorMessage.endsWith(" database_unavailable");
         setCatalogueError(`No se pudo actualizar el catálogo de modelos${status}${databaseUnavailable ? ": la base de datos no está disponible" : ""}. Se conserva el último catálogo disponible; vuelve a esta ventana para reintentar.`);
+        return null;
       }
     }
+    refreshCatalogue.current = fetchModels;
     const onVisible = () => { if (document.visibilityState === "visible") void fetchModels(); };
     void fetchModels();
     window.addEventListener("focus", fetchModels);
@@ -1465,6 +1479,8 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
               </div>
             </div>
           </div>
+
+          {selectedModel && <TriadCompositionPanel modelId={selectedModel.id} onRevised={selectRevisedTriad} />}
 
           <section aria-label="Evaluaciones finales del modelo seleccionado" className="mt-5 border-t border-[#23252e]/70 pt-4 space-y-3">
             <div>
