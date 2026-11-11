@@ -63,3 +63,54 @@ def test_published_pages_and_summaries_do_not_select_legacy_collections(imports,
     finally:
         event.remove(engine, "before_cursor_execute", capture)
     assert not any(re.search(r"(?:dataset_import\.preview|imported_dataset\.files)(?:\s|,)", sql) for sql in statements)
+
+
+def test_page_configuration_empty_pages_and_malformed_cursors_are_explicit(imports, tmp_path, monkeypatch):
+    client, _, _, _ = imports
+    monkeypatch.setenv("FAMA_IMPORT_PAGE_SIZE", "1")
+    monkeypatch.setenv("FAMA_IMPORT_PAGE_MAX", "2")
+    for index in range(3):
+        assert client.post("/api/ingestion/imports", json={"request_key": str(index), "name": str(index)}).status_code == 200
+    first = client.get("/api/ingestion/imports").json()
+    second = client.get("/api/ingestion/imports", params={"cursor": first["next_cursor"]}).json()
+    assert len(first["imports"]) == len(second["imports"]) == 1
+    assert first["imports"][0]["id"] != second["imports"][0]["id"]
+    assert client.get("/api/ingestion/imports?limit=3").status_code == 422
+    assert client.get("/api/ingestion/imports?cursor=malformed").status_code == 422
+    empty = client.get(f"/api/ingestion/imports/{first['imports'][0]['id']}/files").json()
+    assert empty["files"] == [] and empty["total"] == 0 and empty["next_cursor"] is None
+
+
+def test_canonical_path_collision_is_visible_before_confirmation_and_stale_member_pages_are_rejected(imports, tmp_path):
+    client, _, _, _ = imports
+    initial = confirm(client, prepare(client, tmp_path)).json()
+    target = initial["dataset_id"]
+    before = client.get(f"/api/ingestion/imports/datasets/{target}/files").json()
+    extension = prepare(client, tmp_path, key="collision", target_id=target, sample=2)
+    candidate = client.get(f"/api/ingestion/imports/{extension['id']}/files").json()["files"][0]
+    assert candidate["original_path"] == "birds/a.wav"
+    assert candidate["relative_path"] == f"birds/a-{candidate['sha256']}-1.wav"
+    assert confirm(client, extension).json()["added_count"] == 1
+    published = client.get(f"/api/ingestion/imports/datasets/{target}/files?limit=1").json()
+    cursor = published["next_cursor"]
+    added = prepare(client, tmp_path, key="next", target_id=target, sample=3)
+    assert confirm(client, added).json()["added_count"] == 1
+    assert client.get(f"/api/ingestion/imports/datasets/{target}/files", params={"cursor": cursor}).status_code == 409
+    assert before["total"] == 1
+
+
+@pytest.mark.parametrize("endpoint", ["files", "classes", "issues", "members", "history", "catalog"])
+def test_explicit_empty_cursor_is_rejected_without_changing_any_persisted_data(imports, tmp_path, endpoint):
+    client, _, _, sessions = imports
+    job = prepare(client, tmp_path)
+    target = confirm(client, job).json()["dataset_id"]
+    base = "/api/ingestion/imports"
+    url = {"members": f"{base}/datasets/{target}/files", "history": base,
+           "catalog": f"{base}/datasets"}.get(endpoint, f"{base}/{job['id']}/{endpoint}")
+    def digest():
+        with sessions.kw["bind"].connect() as conn:
+            return hashlib.sha256("\n".join(conn.connection.driver_connection.iterdump()).encode()).hexdigest()
+    before = digest()
+    response = client.get(url, params={"cursor": ""})
+    assert digest() == before
+    assert (response.status_code, response.json()) == (422, {"detail": "Cursor de página no válido."})
