@@ -19,6 +19,17 @@ from app.services.dataset_imports import _canonical_path, _durable_directory, di
 from app.services.dataset_zip_sandbox import validate_zip
 
 
+def _publication_progress(report):
+    """Map uploaded/total audios onto the job's monotonic 1..99 progress."""
+    if report is None:
+        return None
+
+    def publishing(uploaded, total):
+        report(stage="publishing", progress=1 + (98 * uploaded // total if total else 98),
+               uploaded=uploaded, total=total)
+    return publishing
+
+
 class ImportExecution:
     """One public worker operation with an injected durable queue and storage.
 
@@ -71,9 +82,9 @@ class ImportExecution:
             persisted = db.get(ImportJob, attempt["id"])
             attempt = dict(attempt, owner_id=persisted.owner_id)
         report(stage={"preview": "validating", "confirm": "verifying"}[attempt["kind"]], progress=1)
-        return {"preview": self.preview, "confirm": self.confirm}[attempt["kind"]](attempt, staging)
+        return {"preview": self.preview, "confirm": self.confirm}[attempt["kind"]](attempt, staging, report)
 
-    def preview(self, attempt, staging):
+    def preview(self, attempt, staging, report=None):
         with self.queue.sessions() as db:
             source = self._source(db, attempt)
             automatic = source.request.get("auto_import") is True
@@ -90,7 +101,7 @@ class ImportExecution:
             layout = source.request.get("layout")
         if recovering:
             # Never replace the reviewed token or staging identity of a journal.
-            return self.confirm(dict(attempt, parameters={"preview_token": token}), staging)
+            return self.confirm(dict(attempt, parameters={"preview_token": token}), staging, report)
         if digest_file(archive) != expected:
             reject(409, "El archivo recibido cambió. Crea una nueva importación.")
         with self.queue.publication(attempt):
@@ -159,7 +170,7 @@ class ImportExecution:
                 self.queue.complete_publication(db, job, {})
         if publish:
             # Preserve the running preview lease and immutable queue parameters.
-            return self.confirm(dict(attempt, parameters={"preview_token": token}), staging)
+            return self.confirm(dict(attempt, parameters={"preview_token": token}), staging, report)
         return {}
 
     def _confirmation(self, db, attempt):
@@ -200,14 +211,15 @@ class ImportExecution:
                     reject(409, "El destino cambió. Genera y revisa una nueva vista previa.")
         return source, target, preview
 
-    def confirm(self, attempt, staging):
+    def confirm(self, attempt, staging, report=None):
         result = self._confirm_local(attempt, staging)
         # Network work happens after the local commit; a failure leaves the
         # import confirmed and the job failed, and a retry replays the imported
         # branch above, republishing only what is missing.
         if self.publisher is not None:
             from app.services.dataset_import_publication import publish_import
-            publish_import(self.publisher, self.queue.sessions, self.service.root, attempt["import_id"])
+            publish_import(self.publisher, self.queue.sessions, self.service.root, attempt["import_id"],
+                           progress=_publication_progress(report))
         with self.queue.publication(attempt) as (db, job):
             self.queue.complete_publication(db, job, result)
         return result

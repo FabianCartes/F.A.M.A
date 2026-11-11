@@ -263,3 +263,31 @@ def test_published_zip_trains_through_a_partition_version_and_rejects_changed_lo
     assert len(config["models"]) == (3 if is_tri_model else 1)
     assert client.get("/api/training/history", headers=headers).json() == {"history": []}
     assert client.post("/api/training/stop", headers=headers).status_code == 200
+
+
+def test_publication_reports_uploaded_audios_per_batch_until_terminal_result(published, tmp_path, monkeypatch):
+    from app.models.dataset_import_job import ImportJob
+    from app.services import ingestion
+    entries = [("birds/a.wav", wav_bytes(1)), ("birds/b.wav", wav_bytes(2)), ("frogs/c.wav", wav_bytes(3))]
+    size = str(max(len(content) for _, content in entries))
+    monkeypatch.setenv("FAMA_UPLOAD_MAX_FILE_BYTES", size)
+    monkeypatch.setenv("FAMA_UPLOAD_MAX_BATCH_BYTES", size)
+    original = ingestion.IngestionService.upload_files_to_gcs
+    seen = []
+
+    def observed(self, files, *args, **kwargs):
+        with published.sessions() as db:
+            row = db.query(ImportJob).filter_by(status="running").one()
+            seen.append((row.stage, row.progress, dict(row.result)))
+        return original(self, files, *args, **kwargs)
+
+    monkeypatch.setattr(ingestion.IngestionService, "upload_files_to_gcs", observed)
+    client = published.client
+    result = confirm(client, prepare(client, tmp_path, name="Aves", entries=entries))
+    execution = result.json()["execution"]
+    assert (result.json()["status"], execution["status"]) == ("imported", "succeeded")
+    assert [(stage, counts) for stage, _, counts in seen] == [
+        ("publishing", {"uploaded": done, "total": 3}) for done in range(3)]
+    progress = [value for _, value, _ in seen]
+    assert progress == sorted(progress) and all(1 <= value <= 99 for value in progress)
+    assert execution["result"] == {"dataset_id": result.json()["dataset_id"], "added_count": 3}

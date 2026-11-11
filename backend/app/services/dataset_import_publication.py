@@ -21,7 +21,8 @@ class PublicationFailed(RuntimeError):
     """The import stays confirmed locally; retrying the confirm job republishes."""
 
 
-def publish_import(ingestion, sessions, import_root, import_id):
+def publish_import(ingestion, sessions, import_root, import_id, *, progress=None):
+    """Upload the confirmed files by class and batch; ``progress(uploaded, total)`` follows each batch."""
     with sessions() as db:
         source = db.get(DatasetImport, import_id)
         if not source.dataset_id:
@@ -34,16 +35,23 @@ def publish_import(ingestion, sessions, import_root, import_id):
     _claim(ingestion, sessions, name, owner)
     objects = Path(import_root) / "objects" / import_id
     _, batch_limit = ingestion.get_upload_limits()
+    report = progress or (lambda uploaded, total: None)
+    uploaded = 0
+    report(uploaded, len(files))
     for class_name, group in groupby(files, key=lambda item: item[0]):
         batch, size = [], 0
         for item in group:
             if batch and size + item[4] > batch_limit:
                 _upload(ingestion, sessions, objects, name, class_name, owner, batch)
+                uploaded += len(batch)
+                report(uploaded, len(files))
                 batch, size = [], 0
             batch.append(item)
             size += item[4]
         if batch:
             _upload(ingestion, sessions, objects, name, class_name, owner, batch)
+            uploaded += len(batch)
+            report(uploaded, len(files))
     for class_name, filename, stored_name, sha256, _ in files:
         _copy_local(objects / stored_name, ingestion.local_base_dir / name / class_name / filename, sha256)
 

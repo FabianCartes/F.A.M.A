@@ -213,3 +213,24 @@ def test_default_clock_and_rejected_output_are_fail_closed(imports):
         with pytest.raises(ValueError):
             operation()
         assert recovered.get(1, queued["id"]) == before
+
+
+def test_publishing_progress_exposes_uploaded_counts_and_rejects_invalid_counts(imports):
+    queue, source = queue_fixture(imports)
+    job = queue.admit(1, source, "preview", "one", {"root": ""})
+    attempt = queue.claim(lease_seconds=60)
+    queue.progress(attempt, stage="validating", progress=1)
+    queue.progress(attempt, stage="publishing", progress=34, uploaded=1, total=3)
+    state = queue.get(1, job["id"])
+    assert (state["stage"], state["progress"], state["result"]) == (
+        "publishing", 34, {"uploaded": 1, "total": 3})
+    for values in (dict(stage="publishing", progress=40),
+                   dict(stage="publishing", progress=40, uploaded=4, total=3),
+                   dict(stage="publishing", progress=40, uploaded=-1, total=3),
+                   dict(stage="publishing", progress=40, uploaded=True, total=3),
+                   dict(stage="validating", progress=40, uploaded=1, total=3)):
+        with pytest.raises(ValueError):
+            queue.progress(attempt, **values)
+        assert queue.get(1, job["id"]) == state
+    queue.finish(attempt, result={"added_count": 3})
+    assert queue.get(1, job["id"])["result"] == {"added_count": 3}

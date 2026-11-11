@@ -179,16 +179,28 @@ class ImportJobQueue:
             row.lease_until = max(row.lease_until, now + duration)
             row.heartbeat_at, row.updated_at = now, now
 
-    def progress(self, attempt, *, stage, progress):
-        if stage not in ("running", "validating", "verifying", "prepared"):
+    def progress(self, attempt, *, stage, progress, uploaded=None, total=None):
+        """Record a running stage; ``publishing`` also carries uploaded/total audio counts.
+
+        The counts live in ``result`` only while publishing; terminal states
+        replace them with the execution result (or ``{}`` on failure).
+        """
+        if stage not in ("running", "validating", "verifying", "publishing", "prepared"):
             raise ValueError("Invalid execution stage")
         if type(progress) is not int or not 0 <= progress <= 99:
             raise ValueError("Invalid execution progress")
+        counted = stage == "publishing"
+        if counted and not (type(uploaded) is int and type(total) is int and 0 <= uploaded <= total <= 2**31 - 1):
+            raise ValueError("Invalid publication counts")
+        if not counted and (uploaded is not None or total is not None):
+            raise ValueError("Counts are only valid while publishing")
         with self.sessions() as db, db.begin():
             row, now = self._current(db, attempt)
             if progress < row.progress:
                 raise ValueError("Progress must not decrease")
             row.stage, row.progress, row.updated_at = stage, progress, now
+            if counted:
+                row.result = {"uploaded": uploaded, "total": total}
 
     def finish(self, attempt, *, result=None, error=None, import_service=None):
         if error not in (None, "execution_failed", "execution_timeout", "staging_failed"):
