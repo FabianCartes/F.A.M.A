@@ -1,6 +1,6 @@
 # ADR 0027: Private local-first ZIP dataset imports
 
-Status: accepted for local implementation; deployment not authorized.
+Status: superseded by [ADR 0078](0078-gcs-como-fuente-unica-y-publicacion-del-zip.md) (2026-11-11): GCS is the single source; the private catalogue and `private-imports/` were retired. Originally: accepted for local implementation; deployment not authorized.
 
 ## Context
 
