@@ -193,3 +193,28 @@ def test_foreign_dataset_created_during_publication_receives_no_rows_and_no_gran
         assert db.query(Audio).count() == 0
     assert names_for(published.sessions, 1) == set()
     assert published.bucket.objects == {}
+
+
+def test_published_zip_trains_through_a_partition_version_and_rejects_changed_local_copy(published, tmp_path, monkeypatch):
+    from app.models.dataset import ConjuntoDatos
+    from app.services.partitions import DatasetPartitions, PartitionError
+    from training import paths
+    monkeypatch.setattr(paths, "get_raw_data_dir", lambda name=None: published.raw / (name or ""))
+    monkeypatch.setattr(paths, "get_processed_data_dir", lambda name=None: tmp_path / "processed" / (name or ""))
+    entries = [(f"{label}/{index}.wav", wav_bytes(index + 1)) for index in range(10)
+               for label in ["Chucao" if index < 5 else "Canastero"]]
+    client = published.client
+    assert confirm(client, prepare(client, tmp_path, name="Bosque", entries=entries)).json()["status"] == "imported"
+
+    with published.sessions() as db:
+        partitions = DatasetPartitions(db.query(ConjuntoDatos).filter_by(nombre="Bosque").one(), db)
+        preview = partitions.preview(validation_percent=20, seed=42, test_percent=20)
+        saved = partitions.save(20, 42, preview["version"], True, actor_id=1, test_percent=20)
+        source = partitions.training_source(saved["version"])
+        assert all(source["recordings"][split] for split in ("train", "val", "test"))
+        assert sum(len(source["recordings"][split]) for split in ("train", "val", "test")) == 10
+        assert {e["hash_sha256"] for e in saved["entries"]} == {hashlib.sha256(c).hexdigest() for _, c in entries}
+
+        (published.raw / "Bosque" / "Chucao" / "0.wav").write_bytes(b"changed")
+        with pytest.raises(PartitionError, match="contenido local"):
+            partitions.training_source(saved["version"])

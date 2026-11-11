@@ -281,3 +281,16 @@ def test_new_partitions_have_independent_test_groups_and_legacy_versions_stay_re
         "dataset_name": "Sample", "partition_version": identity})
     assert response.status_code == 400
     assert "histórica" in response.json()["detail"]
+
+
+def test_triad_training_uses_the_saved_partition_version(partition_http):
+    client, _, _ = partition_http
+    saved = save_version(client)
+
+    response = client.post("/api/training/start", headers={"Origin": ORIGIN}, json={
+        "dataset_name": "Sample", "partition_version": saved["version"], "is_tri_model": True, "epochs": 1})
+
+    assert response.status_code == 200, response.text
+    assert response.json()["partition_version"] == saved["version"]
+    progress = client.get("/api/training/progress").json()
+    assert (progress["status"], progress["total_models"]) == ("training", 3)
