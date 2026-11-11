@@ -14,6 +14,7 @@ import DatasetInventory, { type DatasetItem, withCloudCount } from "@/components
 import DatasetUpload, { type UploadLimits } from "@/components/ingestion/DatasetUpload";
 import DatasetCatalogue from "@/components/ingestion/DatasetCatalogue";
 import DatasetImportPanel from "@/components/ingestion/DatasetImportPanel";
+import DatasetConfirmationDialog from "@/components/ingestion/DatasetConfirmationDialog";
 
 import DatasetAudioDialog from "@/components/ingestion/DatasetAudioDialog";
 
@@ -81,6 +82,8 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
   // Lista de datasets en GCS
   const [datasets, setDatasets] = useState<DatasetItem[]>([]);
   const [publishingDataset, setPublishingDataset] = useState<string | null>(null);
+  const [pendingSync, setPendingSync] = useState<{ targets: DatasetItem[]; estimatedSize: string } | null>(null);
+  const syncTrigger = useRef<HTMLButtonElement | null>(null);
   const [isLoadingDatasets, setIsLoadingDatasets] = useState<boolean>(true);
   const [canCreateDataset, setCanCreateDataset] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -330,13 +333,19 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
   }, [addLog, administrator]);
 
   // Confirmar la selección del inventario antes de iniciar la descarga GCS → Local (RF_02).
-  const handleSync = async (selectedIds: string[]) => {
+  const handleSync = (selectedIds: string[]) => {
     if (selectedIds.length === 0 || isSyncing) return;
     const targets = datasets.filter(dataset => selectedIds.includes(dataset.id));
     if (targets.length === 0) return;
     const hasEstimate = targets.every(dataset => Number.isFinite(dataset.total_size_bytes) && dataset.total_size_bytes >= 0);
     const estimatedSize = hasEstimate ? formatBytes(targets.reduce((total, dataset) => total + dataset.total_size_bytes, 0)) : "no disponible";
-    if (!window.confirm(`Descargar de GCS al entorno local: ${targets.map(dataset => `${dataset.name} (${dataset.id})`).join(", ")}. Tamaño estimado: ${estimatedSize}; los archivos ya presentes pueden omitirse. No inicia entrenamiento. ¿Continuar?`)) return;
+    syncTrigger.current = document.activeElement instanceof HTMLButtonElement ? document.activeElement : null;
+    setPendingSync({ targets, estimatedSize });
+  };
+  const closeSyncDialog = useCallback(() => setPendingSync(null), []);
+
+  const startSync = async (targets: DatasetItem[]) => {
+    setPendingSync(null);
     setIsSyncing(true);
     setTransferStatus({ message: `Descarga en curso · GCS → Local: ${targets.map(dataset => dataset.name).join(", ")}. Esperando respuesta del servidor.`, error: false });
     addLog("INFO", `Descargando [GCS → Local]: ${targets.map(dataset => dataset.name).join(", ")}.`);
@@ -586,6 +595,14 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
         onUploaded={fetchDatasets} onBusyChange={setIsUploading} limits={uploadLimits} />
       <DatasetInventory datasets={datasets} loading={isLoadingDatasets} busy={isSyncing || isUploading}
         onRefresh={fetchDatasets} onDownload={handleSync} onInspect={handleInspectDataset} />
+      {pendingSync && <DatasetConfirmationDialog title="Descargar desde GCS" onClose={closeSyncDialog} returnFocus={syncTrigger}>
+        <p>Se descargarán al entorno local: <strong className="text-white">{pendingSync.targets.map(dataset => dataset.name).join(", ")}</strong>.</p>
+        <p>Tamaño estimado: {pendingSync.estimatedSize}. Los archivos que ya estén en este equipo pueden omitirse. No inicia ningún entrenamiento.</p>
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={closeSyncDialog} className="px-3 py-2 rounded-lg border border-[#373a46] text-xs text-gray-200 hover:bg-[#23252e]">Cancelar</button>
+          <button type="button" onClick={() => void startSync(pendingSync.targets)} className="px-3 py-2 rounded-lg bg-emerald-600 text-xs font-semibold text-white hover:bg-emerald-500">Descargar</button>
+        </div>
+      </DatasetConfirmationDialog>}
       {transferStatus && <p role={transferStatus.error ? "alert" : "status"} className={`text-xs break-words ${transferStatus.error ? "text-amber-300" : "text-gray-300"}`}>{transferStatus.message}</p>}
       <p className="text-[11px] text-gray-400">
         Guarda los archivos en el entorno donde se ejecuta F.A.M.A.; no inicia el entrenamiento.

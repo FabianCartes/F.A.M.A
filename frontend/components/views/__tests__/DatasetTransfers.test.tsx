@@ -51,7 +51,7 @@ it('refreshes without transfer and downloads only confirmed selections without p
       : { status: 'completed', total_downloaded: 2, total_skipped: 0, total_failed: 0, results: [] };
     return Response.json(body);
   });
-  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+  const confirm = vi.spyOn(window, 'confirm');
   render(<IngestionView />);
   await within(await screen.findByRole('table')).findByText('Aves');
   const download = screen.getByRole('button', { name: 'Descargar desde GCS' }) as HTMLButtonElement;
@@ -61,10 +61,16 @@ it('refreshes without transfer and downloads only confirmed selections without p
   expect(posts).toEqual([]);
   fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar Aves' }));
   fireEvent.click(download);
-  expect(confirm).toHaveBeenLastCalledWith(expect.stringContaining('Aves'));
+  const dialog = within(screen.getByRole('dialog', { name: 'Descargar desde GCS' }));
+  expect(dialog.getByText(/Aves/)).toBeDefined();
+  expect(dialog.getByText(/Tamaño estimado:/)).toBeDefined();
+  fireEvent.click(dialog.getByRole('button', { name: 'Cancelar' }));
+  expect(screen.queryByRole('dialog')).toBeNull();
   expect(posts).toEqual([]);
-  confirm.mockReturnValue(true);
   fireEvent.click(download);
+  fireEvent.click(within(screen.getByRole('dialog', { name: 'Descargar desde GCS' })).getByRole('button', { name: 'Descargar' }));
   await waitFor(() => expect(posts).toEqual([JSON.stringify({ datasets: ['Aves'], preprocess: false })]));
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(confirm).not.toHaveBeenCalled();
   await screen.findByText(/Descarga completada · GCS → Local: Aves/);
 });

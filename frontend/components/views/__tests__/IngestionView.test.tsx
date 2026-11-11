@@ -22,7 +22,6 @@ describe('IngestionView persisted inference dataset and curation', () => {
   const originalFetch = global.fetch;
   beforeEach(() => {
     vi.resetAllMocks();
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     vi.mocked(feedbackApi.getPendingFeedback).mockResolvedValue([]);
     vi.mocked(feedbackApi.getFeedbackSync).mockResolvedValue([]);
     vi.mocked(feedbackApi.approveFeedback).mockResolvedValue({ status: 'approved', local_status: 'incorporated', sync_status: 'pending', id_retroalimentacion: 42, destination_path: 'datasets/AvesChilenas/Chucao/test.wav', clase: 'Chucao', filename: 'test.wav' });
@@ -99,6 +98,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
     fireEvent.click(screen.getAllByRole('checkbox')[1]);
     await act(async () => { fireEvent.click(download); });
+    await act(async () => { fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Descargar' })); });
     const sync = vi.mocked(global.fetch).mock.calls.find(([url, options]) => String(url).endsWith('/api/ingestion/sync') && options?.method === 'POST');
     expect(sync).toBeDefined();
     expect(JSON.parse(String(sync?.[1]?.body))).toEqual({ datasets: ['AvesChilenas'], preprocess: false });
@@ -428,6 +428,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
     await open();
     await act(async () => { fireEvent.click(within(screen.getByRole('table')).getAllByRole('checkbox')[0]); });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Descargar desde GCS' })); });
+    await act(async () => { fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Descargar' })); });
 
 
     expect(screen.getByText(/Sincronización parcial:/)).toBeDefined();
@@ -449,6 +450,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
     await open();
     await act(async () => { fireEvent.click(within(screen.getByRole('table')).getAllByRole('checkbox')[0]); });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Descargar desde GCS' })); });
+    await act(async () => { fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Descargar' })); });
 
 
     expect(screen.getByText(sample.summary)).toBeDefined();
@@ -466,6 +468,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
     await open();
     await act(async () => { fireEvent.click(within(screen.getByRole('table')).getAllByRole('checkbox')[0]); });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Descargar desde GCS' })); });
+    await act(async () => { fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Descargar' })); });
 
 
     expect(screen.getByText(/limpieza de temporales pendiente/)).toBeDefined();
@@ -481,6 +484,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
     await open();
     await act(async () => { fireEvent.click(within(screen.getByRole('table')).getAllByRole('checkbox')[0]); });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Descargar desde GCS' })); });
+    await act(async () => { fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Descargar' })); });
 
 
     expect(screen.getByText(/Sincronización completada:/)).toBeDefined();

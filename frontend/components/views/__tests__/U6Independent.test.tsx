@@ -24,7 +24,6 @@ let syncStatus: number;
 let syncData: unknown;
 let calls: { url: string; method: string; body: unknown }[];
 beforeEach(() => {
- vi.spyOn(window, "confirm").mockReturnValue(true);
  currentStats = stats(); datasets = [dataset]; failedRefresh = false; syncStatus = 200;
  syncData = {}; calls = [];
  vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
@@ -114,6 +113,7 @@ describe("S1/S4 per-stage persistence completion", () => {
   render(<IngestionView />); await screen.findAllByText("AvesChilenas");
   fireEvent.click(screen.getAllByRole("checkbox")[0]);
   fireEvent.click(screen.getByRole("button", { name: "Descargar desde GCS" }));
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Descargar" }));
   const exact = `Sincronización ${expected}: 1 archivo(s) descargados, 0 omitidos, 0 tensores procesados, ${downloadFailed} errores de descarga.`;
   expect(await screen.findByText(exact)).toBeDefined();
   const request = calls.find(c => c.url.endsWith("/api/ingestion/sync"));
@@ -125,6 +125,7 @@ describe("S1/S4 per-stage persistence completion", () => {
   syncStatus = 503; render(<IngestionView />); await screen.findAllByText("AvesChilenas");
   fireEvent.click(screen.getAllByRole("checkbox")[0]);
   fireEvent.click(screen.getByRole("button", { name: "Descargar desde GCS" }));
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Descargar" }));
   expect(await screen.findByText("Fallo en el proceso de sincronización: Error en el servidor: HTTP 503")).toBeDefined();
   expect(screen.queryByText(/^Sincronización completada:/)).toBeNull();
  });
