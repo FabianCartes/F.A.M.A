@@ -65,7 +65,7 @@ def test_researcher_previews_then_saves_an_immutable_version_without_replacing_l
     preview = response.json()
     assert preview["counts"] == {"train": 6, "val": 2, "test": 2}
     assert len(preview["version"]) == 64
-    assert preview["warnings"]  # Recordist provenance is unknown in this fixture.
+    assert preview["warnings"] == []  # Unknown recordists no longer produce a warning.
     assert client.get(BASE).json()["versions"] == []
     saved = client.post(BASE, headers={"Origin": ORIGIN}, json={
         **POLICY, "preview_version": preview["version"], "acknowledge_warnings": True})
@@ -285,7 +285,8 @@ def test_damaged_manifest_is_reported_as_unavailable_without_fallback(partition_
 
 
 def test_unreviewed_warnings_and_foreign_origin_cannot_publish(partition_http):
-    client, _, _ = partition_http
+    client, _, raw = partition_http
+    (raw / "Chucao/4.wav").unlink()  # A real warning: one audio without a local copy.
     preview = client.post(BASE + "/preview", headers={"Origin": ORIGIN}, json=POLICY).json()
     body = {**POLICY, "preview_version": preview["version"]}
     assert client.post(BASE, headers={"Origin": ORIGIN}, json=body).status_code == 409

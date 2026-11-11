@@ -22,6 +22,6 @@ Una versión de particiones es un manifiesto inmutable que fija los audios y su 
 
 ## Consecuencias
 
-- Las versiones nuevas sin base se calculan igual que antes: una comparación diferencial de `_split` contra la implementación anterior dio el mismo reparto en 300 casos aleatorios. Las versiones guardadas no cambian.
+- Las versiones nuevas sin base se calculan igual que antes: una comparación diferencial de `_split` contra la implementación anterior dio el mismo reparto en 300 casos aleatorios. Las versiones guardadas no cambian. A pedido de Kevin se retiró la advertencia «Falta procedencia de grabador…»: las vistas previas nuevas ya no la incluyen, por lo que su identificador difiere del que habrían tenido antes aunque el reparto sea el mismo.
 - Las versiones nuevas pueden incluir más audios que antes (la retroalimentación), y sus entradas pueden traer el campo `origin`.
 - Un reparto incremental repetido puede alejar los porcentajes reales de los objetivos, porque nunca mueve lo ya asignado; cuando importe el equilibrio, conviene una versión desde cero.

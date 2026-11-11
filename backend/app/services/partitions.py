@@ -238,8 +238,6 @@ class DatasetPartitions:
         if base is not None and len(inherited) < len(base["entries"]):
             warnings.append(f"{len(base['entries']) - len(inherited)} audios de la versión base cambiaron o ya no están "
                             "disponibles y no se incluyen.")
-        if any(not entry["recordist"] for entry in entries):
-            warnings.append("Falta procedencia de grabador; no se garantiza independencia entre grabadores o derivados sin relación registrada.")
         reasons = Counter(entry["reason"] for entry in excluded)
         if reasons["not_local"]:
             warnings.append(f"Se excluyen {reasons['not_local']} audios sin copia local.")
