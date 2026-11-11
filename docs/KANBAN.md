@@ -6,6 +6,10 @@ kanban-plugin: basic
 
 - [x] **E-PREDICCIÓN:** predicción, historial (con audio local o en la nube) y feedback autorizados por `ResourceAccess` según la asignación al dataset, sin excepciones por dueño de importación; se conservan catálogo `metadata_only`, ensambles declarados, prewarm y caché de hashes. `PredictionView` usa `/api/models` y el historial persistido; se retiró la revisión de pesos de tríadas importadas. Regresión de 16 módulos sin fallos exclusivos del candidato; frontend 620 PASS, tipos y build correctos, lint con los 2 errores previos; verificador independiente S1–S7 PASS sin bloqueantes. [Plan](arquitectura/integracion-mvp-e-prediccion-plan.md), [manual](manuales/prediccion-feedback-mvp.md) y [recibo](receipts/integracion-mvp-e.json). Commits locales 2f67a26/3c7dfa1, sin push ni PR. Sin datos borrados.
 
+## Integración de afinamiento integral en `mvp` — etapa f: migración 0005
+
+- [ ] **F-MIGRACIÓN:** planificada, no iniciada; se ejecuta en una sesión nueva. Esquema congelado 0005 aditivo con paridad frente al ORM, `HEAD`, instalación y permisos actualizados, y retiro de `migrate_*.py`, `grant_training_snapshot_updates.sql` y `create_all` propios de mvp. Incluye la tríada estándar combinada. Decidir al inicio: tablas de snapshots/`imported_model_source` sin consumidores, hallazgo de `imported_dataset.archived` (columna usada por la ruta ZIP y ausente en 0004) y persistencia de la composición. [Plan](arquitectura/integracion-mvp-f-migracion-plan.md).
+
 ## Integración de afinamiento integral en `mvp` — tríada estándar combinada (etapa f)
 
 - [ ] **TRIADA-ESTANDAR (etapa f):** planificada, no iniciada; Kevin la asignó a la etapa f. Publicar la tríada estándar entrenada como un solo modelo combinado, autorizado por asignación, con revisión de pesos versionada y la interfaz de pesos en `PredictionView`. Hoy se registran tres modelos independientes y `ensemble_weight` no se usa al predecir. Decidir antes cómo se persiste la composición (recomendado: tabla nueva en la migración aditiva 0005 de f, con ADR). [Plan](arquitectura/integracion-mvp-triada-estandar-plan.md).
