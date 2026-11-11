@@ -205,9 +205,11 @@ def seed_standard_model(catalogue, model_id, *, state="standard_eval_completed",
 
     client, _, persist, engine = catalogue
     with Session(engine, expire_on_commit=False) as db:
-        dataset = ConjuntoDatos(nombre="engine_diagnostics", ruta_gcp="datasets/engine_diagnostics")
-        db.add(dataset)
-        db.commit()
+        dataset = db.query(ConjuntoDatos).filter_by(nombre="engine_diagnostics").one_or_none()
+        if dataset is None:  # Several seeded models (a triad) share one dataset.
+            dataset = ConjuntoDatos(nombre="engine_diagnostics", ruta_gcp="datasets/engine_diagnostics")
+            db.add(dataset)
+            db.commit()
         dataset_id, dataset_name = dataset.id_conjunto_datos, dataset.nombre
         db.expunge(dataset)
     checkpoint = persist(model_id, dataset=dataset, active=active)
@@ -334,14 +336,13 @@ def install_torch_metadata_adapter(monkeypatch):
 
 
 @pytest.mark.parametrize("fault", [
-    "pending", "failed", "component", "missing_test", "wrong_hash", "wrong_classes",
+    "pending", "failed", "missing_test", "wrong_hash", "wrong_classes",
     "wrong_config", "coherent_wrong_config", "wrong_architecture", "wrong_job", "wrong_dataset",
     "wrong_schema", "wrong_evaluator", "missing_pair_identity", "tampered_pair_identity",
 ])
 def test_catalogue_rejects_unverified_standard_models_before_publication(catalogue, monkeypatch, fault):
     states = {
         "pending": "standard_eval_pending", "failed": "standard_eval_failed",
-        "component": "standard_component_evaluated",
     }
     state = states.get(fault, "standard_eval_completed")
     client, _, _, _ = seed_standard_model(
@@ -353,7 +354,7 @@ def test_catalogue_rejects_unverified_standard_models_before_publication(catalog
     assert response.status_code == 200
     expected_reasons = {
         "pending": "model_state_incomplete", "failed": "model_state_incomplete",
-        "component": "model_state_incomplete", "missing_test": "evaluation_pair_incomplete",
+        "missing_test": "evaluation_pair_incomplete",
         "wrong_hash": "evaluation_pair_incomplete", "wrong_classes": "evaluation_pair_incomplete",
         "wrong_config": "runtime_configuration_incompatible",
         "coherent_wrong_config": "runtime_configuration_incompatible",
@@ -372,6 +373,53 @@ def test_catalogue_rejects_unverified_standard_models_before_publication(catalog
     }]
     assert "/private/synthetic/path" not in response.text
     assert "synthetic-secret-marker" not in response.text
+
+
+def test_evaluated_triad_component_is_not_listed_alone_nor_reported_as_an_error(catalogue, monkeypatch):
+    client, _, _, _ = seed_standard_model(catalogue, 402, state="standard_component_evaluated")
+    install_torch_metadata_adapter(monkeypatch)
+
+    payload = client.get("/api/models").json()
+
+    assert all(model["id"] != "fama_trained_model_402" for model in payload["models"])
+    assert payload["publication_errors"] == []
+
+
+def test_triad_component_without_a_complete_evaluation_is_still_rejected(catalogue, monkeypatch):
+    client, _, _, _ = seed_standard_model(catalogue, 403, state="standard_component_evaluated", fault="missing_test")
+    install_torch_metadata_adapter(monkeypatch)
+
+    payload = client.get("/api/models").json()
+
+    assert payload["publication_errors"] == [{"model_id": "fama_trained_model_403",
+                                              "code": "standard_evaluation_invalid",
+                                              "reason": "evaluation_pair_incomplete"}]
+
+
+def test_triad_trained_with_evaluated_components_is_published_as_one_model(catalogue, monkeypatch):
+    from app.services.triad_compositions import create_initial_composition
+    client, _, _, engine = catalogue
+    for model_id in (411, 412, 413):
+        seed_standard_model(catalogue, model_id, state="standard_component_evaluated")
+    install_torch_metadata_adapter(monkeypatch)
+    from app.services.predictors import trained_predictor, triad_predictor
+    # The metadata adapter stands in for trained components; the triad checks that type.
+    monkeypatch.setattr(triad_predictor, "TrainedModelPredictor", trained_predictor.TrainedModelPredictor)
+    monkeypatch.setattr(trained_predictor.TrainedModelPredictor, "classes",
+                        property(lambda self: self._meta.classes), raising=False)
+    with Session(engine) as db:
+        dataset_id = db.get(Modelo, 411).id_conjunto_datos
+        for model_id in (412, 413):
+            db.get(Modelo, model_id).id_conjunto_datos = dataset_id
+        db.commit()
+        composition = create_initial_composition(db, job_id="job-triad", dataset_id=dataset_id, partition_version=None,
+                                                 components=[(411, 0.5), (412, 0.3), (413, 0.2)], author_id=None)
+        key = f"fama_triad_{composition.id}"
+
+    payload = client.get("/api/models").json()
+
+    assert payload["publication_errors"] == []
+    assert [model["id"] for model in payload["models"] if model["id"].startswith("fama_")] == [key]
 
 
 def test_catalogue_exposes_sanitized_reason_for_incompatible_runtime_configuration(catalogue, monkeypatch):

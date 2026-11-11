@@ -319,7 +319,7 @@ def require_standard_reports(target, db, checkpoints_root: Path) -> None:
 
 
 def select_admitted_standard_pair(
-    target, db, checkpoints_root: Path,
+    target, db, checkpoints_root: Path, *, triad_component: bool = False,
 ) -> AdmittedStandardEvaluationPair | None:
     """Return the exact coherent val/test pair admitted for a standard artifact.
 
@@ -331,7 +331,9 @@ def select_admitted_standard_pair(
     state = target.estado or ""
     if not state.startswith("standard_"):
         return None
-    if state != "standard_eval_completed":
+    # A triad component passed the same val/test evaluation; only triad publication admits it.
+    admitted_states = {"standard_eval_completed"} | ({"standard_component_evaluated"} if triad_component else set())
+    if state not in admitted_states:
         _invalid(StandardEvaluationReason.MODEL_STATE_INCOMPLETE,
                  "Modelo nuevo sin evaluación estándar val/test completada; activación/publicación bloqueada.")
 

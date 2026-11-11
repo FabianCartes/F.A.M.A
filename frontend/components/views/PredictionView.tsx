@@ -1205,6 +1205,9 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
                 checkpoint_outside_root: "archivo de pesos fuera de la ubicación permitida",
                 database_unavailable: "base de datos no disponible",
                 standard_evaluation_invalid: "evaluación estándar inválida",
+                triad_component_blocked: "uno de los tres modelos de la tríada no está disponible o no pasó su evaluación",
+                triad_invalid: "los modelos de la tríada no son compatibles entre sí (dataset o clases distintos)",
+                triad_compositions_unavailable: "no se pudieron leer las tríadas registradas",
               };
               const reasons: Record<string, string> = {
                 runtime_configuration_incompatible: "runtime del predictor incompatible con los informes; revisar configuración y solicitar reevaluación explícita",

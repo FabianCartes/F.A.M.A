@@ -48,6 +48,10 @@ def _persisted_checkpoint_hash(model) -> tuple[Optional[str], Optional[str]]:
     return value.lower(), None
 
 
+
+def _is_triad_component(model: Any) -> bool:
+    return getattr(model, "estado", None) == "standard_component_evaluated"
+
 class ModelRegistry:
     """
     Catálogo y gestor de ciclo de vida de modelos en memoria.
@@ -432,7 +436,8 @@ class ModelRegistry:
                             errors.append(publication_error)
                             continue
                         try:
-                            select_admitted_standard_pair(model, db, root)
+                            select_admitted_standard_pair(model, db, root,
+                                                          triad_component=_is_triad_component(model))
                         except StandardEvaluationError as guard_error:
                             if guard_error.reason is not None:
                                 publication_error["reason"] = guard_error.reason.value
@@ -459,7 +464,8 @@ class ModelRegistry:
                         errors.append({"model_id": key, "code": "standard_evaluation_invalid"})
                         continue
                     try:
-                        admitted_pair = select_admitted_standard_pair(model, db, root)
+                        admitted_pair = select_admitted_standard_pair(
+                            model, db, root, triad_component=_is_triad_component(model))
                     except StandardEvaluationError as err:
                         self._discard_invalid_standard_predictor(key)
                         publication_error = {
@@ -473,6 +479,15 @@ class ModelRegistry:
                         self._discard_invalid_standard_predictor(key)
                         errors.append({"model_id": key, "code": "standard_evaluation_invalid"})
                         continue
+                if _is_triad_component(model):
+                    # Verified like any standard model, but only reachable through its triad:
+                    # kept out of the selectable catalogue, its aliases and the default.
+                    cached = self._db_predictors.get(key)
+                    if cached is None or getattr(cached, "expected_checkpoint_sha256", None) != expected_hash:
+                        self._discard_invalid_standard_predictor(key)
+                        self._apply_display_name(pred, names[model.id_modelo])
+                        self._db_predictors[key] = pred
+                    continue
                 cached = self._db_predictors.get(key)
                 if cached is not None and self.has_model(key):
                     if getattr(cached, "expected_checkpoint_sha256", None) == expected_hash:

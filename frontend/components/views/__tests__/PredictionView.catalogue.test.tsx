@@ -693,6 +693,14 @@ describe("Catálogo público de Predicción", () => {
     expect(screen.getByRole("status", { name: "Publicación de modelos" }).textContent).toContain("fama_trained_model_11: archivo de pesos ausente");
     expect(screen.getByRole("status", { name: "Publicación de modelos" }).textContent).toContain("Modelo sin identificador: archivo de pesos inválido");
     expect(screen.getByRole("status", { name: "Publicación de modelos" }).textContent).toContain("engine-v3: error de publicación");
+    catalogue = async () => response([bird], bird.id, [
+      { model_id: "fama_triad_1", code: "triad_component_blocked" },
+      { model_id: "fama_triad_2", code: "triad_invalid" },
+    ]);
+    await focus();
+    const triads = screen.getByRole("status", { name: "Publicación de modelos" }).textContent;
+    expect(triads).toContain("fama_triad_1: uno de los tres modelos de la tríada no está disponible o no pasó su evaluación");
+    expect(triads).toContain("fama_triad_2: los modelos de la tríada no son compatibles entre sí (dataset o clases distintos)");
     catalogue = async () => response([bird, model11]);
     await focus();
     expect(screen.queryByRole("status", { name: "Publicación de modelos" })).toBeNull();
