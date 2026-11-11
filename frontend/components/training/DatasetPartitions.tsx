@@ -118,13 +118,23 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect, w
 
   // Versions arrive newest first; number them from the oldest so a name stays stable.
   const versionName = (item: Summary) => `Versión ${versions.length - versions.indexOf(item)}`;
-  const versionLabel = (item: Summary) => {
+  // The chosen policy names the version; versions without one show their actual shares.
+  const shares = (item: Summary) => {
     const total = item.counts.train + item.counts.val + (item.counts.test ?? 0);
-    // The chosen policy names the version; versions without one show their actual shares.
     const val = item.policy?.validation_percent ?? Math.round(item.counts.val * 100 / total);
     const test = item.counts.test ? item.policy?.test_percent ?? Math.round(item.counts.test * 100 / total) : 0;
-    return `${versionName(item)} · ${100 - val - test} % entrenamiento / ${val} % validación${test ? ` / ${test} % prueba` : ""}`
-      + ` · ${total} audios${item.created_at ? ` · ${new Date(item.created_at).toLocaleString("es-CL")}` : ""}`;
+    return { total, train: 100 - val - test, val, test };
+  };
+  // Short enough for a phone's native picker; the selected version is detailed below it.
+  const versionLabel = (item: Summary) => {
+    const { train, val, test } = shares(item);
+    return `${versionName(item)} · ${[train, val, ...(test ? [test] : [])].join("/")} %`
+      + `${item.created_at ? ` · ${new Date(item.created_at).toLocaleDateString("es-CL")}` : ""}`;
+  };
+  const versionDetail = (item: Summary) => {
+    const { total, train, val, test } = shares(item);
+    return `${train} % entrenamiento / ${val} % validación${test ? ` / ${test} % prueba` : ""} · ${total} audios`
+      + `${item.created_at ? ` · creada el ${new Date(item.created_at).toLocaleString("es-CL")}` : ""}`;
   };
   const selectedVersion = versions.find(item => item.version === selected);
   const classes = [...new Set(preview?.entries.map(entry => entry.clase) ?? [])].sort();
@@ -152,6 +162,7 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect, w
             {versions.map(item => <option key={item.version} value={item.version} disabled={item.format !== 2 || !item.counts.test}>{item.format !== 2 || !item.counts.test ? "Histórica 80/20 · " : ""}{versionLabel(item)}</option>)}
           </select>
         </label>
+        {selectedVersion && <p className="text-xs text-gray-300 break-words">{versionDetail(selectedVersion)}</p>}
         {selectedVersion?.format === 2 && selectedVersion.freshness && (selectedVersion.freshness.new > 0 || selectedVersion.freshness.changed > 0) &&
           <div className="text-xs text-amber-200 bg-amber-950/20 border border-amber-900/50 rounded-lg p-3 space-y-2">
             {selectedVersion.freshness.new > 0 && <p>{selectedVersion.freshness.new === 1 ? "Hay 1 audio nuevo desde esta versión." : `Hay ${selectedVersion.freshness.new} audios nuevos desde esta versión.`}</p>}
