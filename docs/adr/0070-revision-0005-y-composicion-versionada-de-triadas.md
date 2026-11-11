@@ -19,6 +19,7 @@ La tríada estándar se entrena como tres `Modelo` independientes. Su peso solo 
   - Una revisión de pesos es una fila nueva: `version` + 1, con `previous_id` apuntando a la anterior. Nunca se edita una fila existente.
   - La restricción única `(job_id, version)` impide dos versiones iniciales o dos revisiones concurrentes que partan de la misma versión.
   - Las restricciones `CHECK` exigen pesos no negativos y tres modelos distintos. La suma igual a 1 la valida el servicio.
+  - La columna booleana `activo` (por defecto falso) marca la composición activa como modelo por defecto: solo puede haber una entrada activa entre `modelo` y `triad_composition`, activarla exige un administrador y una revisión de pesos de la composición activa transfiere `activo` a la nueva versión en la misma transacción.
 - El esquema de HEAD es igual al ORM más las cuatro tablas retiradas del código en la etapa b, que se conservan en la base. `tests/test_schema_head.py` lo comprueba.
 
 ## Alternativas consideradas

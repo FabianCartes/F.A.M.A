@@ -3,8 +3,8 @@
 A weight revision is a new row (``version`` + 1, ``previous_id``); rows are never
 edited in place, so prediction history and feedback keep the version they used.
 """
-from sqlalchemy import (CheckConstraint, Column, DateTime, Float, ForeignKey, Integer, String,
-                        UniqueConstraint)
+from sqlalchemy import (Boolean, CheckConstraint, Column, DateTime, Float, ForeignKey, Integer, String,
+                        UniqueConstraint, false)
 
 from app.database import Base
 
@@ -35,3 +35,5 @@ class TriadComposition(Base):
     third_weight = Column(Float, nullable=False)
     author_id = Column(Integer, ForeignKey("usuario.id_usuario", ondelete="RESTRICT"), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False)
+    # Default-model flag; at most one of ``modelo.activo`` / ``triad_composition.activo`` is true.
+    activo = Column(Boolean, nullable=False, default=False, server_default=false())

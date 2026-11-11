@@ -93,6 +93,25 @@ def is_latest(db, composition: TriadComposition) -> bool:
     return composition.version == _latest_version(db, composition.job_id)
 
 
+def activate_composition(db, composition: TriadComposition) -> TriadComposition:
+    """Make the latest version of a composition the single active default model.
+
+    Every ``modelo`` and every other composition is deactivated in the same transaction.
+    Raises ``TriadCompositionConflict`` when the composition is not the latest version.
+    """
+    if not is_latest(db, composition):
+        raise TriadCompositionConflict("Solo la última versión de la composición puede activarse.")
+    try:
+        db.query(Modelo).update({Modelo.activo: False})
+        db.query(TriadComposition).update({TriadComposition.activo: False})
+        composition.activo = True
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return composition
+
+
 def create_initial_composition(db, *, job_id: str, dataset_id: int, partition_version: Optional[str],
                                components: Sequence, author_id: Optional[int] = None) -> TriadComposition:
     """Register version 1 of a job from its three ordered ``(id_modelo, weight)`` pairs.
@@ -140,6 +159,7 @@ def revise_weights(db, composition: TriadComposition, weights: Sequence,
 
     Raises ``TriadCompositionError`` for invalid weights and ``TriadCompositionConflict``
     when the composition is not the latest version or another revision won the race.
+    A revision of the active composition becomes the active one.
     """
     new_weights = validate_weights(weights)
     if not is_latest(db, composition):
@@ -150,7 +170,11 @@ def revise_weights(db, composition: TriadComposition, weights: Sequence,
         first_model_id=composition.first_model_id, second_model_id=composition.second_model_id,
         third_model_id=composition.third_model_id,
         first_weight=new_weights[0], second_weight=new_weights[1], third_weight=new_weights[2],
-        author_id=author_id, created_at=datetime.now(timezone.utc))
+        author_id=author_id, created_at=datetime.now(timezone.utc),
+        activo=bool(composition.activo))
+    # The default never silently disappears from the catalogue: a revision of the active
+    # composition inherits the activation in the same commit, so one entry stays active.
+    composition.activo = False
     db.add(revision)
     try:
         db.commit()

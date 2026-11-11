@@ -343,3 +343,112 @@ def test_a_non_administrator_cannot_activate_models(triad_env):
     assert response.status_code == 403
     with env.sessions() as db:
         assert db.query(Modelo).filter_by(activo=True).count() == 0
+
+
+def activate_triad(env, composition_id=TRIAD_ID):
+    return env.client.post(f"/api/triad-compositions/{composition_id}/activate", headers={"Origin": ORIGIN})
+
+
+def active_flags(env):
+    with env.sessions() as db:
+        return ([m.id_modelo for m in db.query(Modelo).filter_by(activo=True)],
+                [c.id for c in db.query(TriadComposition).filter_by(activo=True)])
+
+
+def test_an_administrator_activates_the_composition_as_the_default_model(triad_env):
+    env = triad_env
+    with env.sessions() as db:
+        db.get(Modelo, 1).activo = True
+        db.commit()
+    assert login(env.client, "administrador").status_code == 200
+    response = activate_triad(env)
+    assert response.status_code == 200, response.text
+    assert response.json()["model_id"] == triad_key() and response.json()["active"] is True
+    assert active_flags(env) == ([], [TRIAD_ID])
+    body = catalogue(env)
+    assert body["default_model_id"] == triad_key()
+    assert {m["id"]: m["is_default"] for m in body["models"]}[triad_key()] is True
+    assert env.registry.get_default_model_id() == triad_key()
+
+
+def test_activating_a_model_afterwards_deactivates_the_composition(triad_env):
+    env = triad_env
+    assert login(env.client, "administrador").status_code == 200
+    assert activate_triad(env).status_code == 200
+    response = env.client.post("/api/training/models/2/activate", headers={"Origin": ORIGIN})
+    assert response.status_code == 200 and response.json()["success"] is True, response.text
+    assert active_flags(env) == ([2], [])
+
+
+def test_a_non_administrator_cannot_activate_a_composition(triad_env):
+    env = triad_env
+    assign(env.client)
+    response = activate_triad(env)
+    assert response.status_code == 403
+    assert active_flags(env) == ([], [])
+
+
+def test_only_the_latest_version_can_be_activated(triad_env):
+    env = triad_env
+    assert login(env.client, "administrador").status_code == 200
+    assert revise(env, V2_WEIGHTS).status_code == 201
+    response = activate_triad(env, 1)
+    assert response.status_code == 409, response.text
+    assert active_flags(env) == ([], [])
+    assert activate_triad(env, 99).status_code == 404
+
+
+def test_a_weight_revision_transfers_the_activation_keeping_one_active_entry(triad_env):
+    env = triad_env
+    assert login(env.client, "administrador").status_code == 200
+    assert activate_triad(env).status_code == 200
+    assert revise(env, V2_WEIGHTS).status_code == 201
+    assert active_flags(env) == ([], [2])
+    assert catalogue(env)["default_model_id"] == triad_key(2)
+
+
+def test_a_revision_of_an_inactive_composition_stays_inactive(triad_env):
+    env = triad_env
+    with env.sessions() as db:
+        db.get(Modelo, 3).activo = True
+        db.commit()
+    assert login(env.client, "administrador").status_code == 200
+    assert revise(env, V2_WEIGHTS).status_code == 201
+    assert active_flags(env) == ([3], [])
+
+
+def test_the_active_composition_is_the_default_of_a_fresh_registry(triad_env):
+    env = triad_env
+    assert login(env.client, "administrador").status_code == 200
+    assert activate_triad(env).status_code == 200
+    fresh = ModelRegistry()
+    with env.sessions() as db:
+        fresh.register_from_db(db, checkpoints_root=main.training_service.checkpoints_dir)
+    assert fresh.get_default_model_id() == triad_key()
+    assert fresh.get().model_id == triad_key()
+
+
+def test_a_blocked_active_composition_blocks_the_default_like_a_blocked_model(triad_env):
+    env = triad_env
+    assert login(env.client, "administrador").status_code == 200
+    assert activate_triad(env).status_code == 200
+    env.checkpoints[2].write_bytes(env.checkpoints[2].read_bytes() + b"changed")
+    fresh = ModelRegistry()
+    with env.sessions() as db:
+        fresh.register_from_db(db, checkpoints_root=main.training_service.checkpoints_dir)
+    with pytest.raises(Exception) as blocked:
+        fresh.get()
+    assert type(blocked.value).__name__ == "ModelWeightsError"
+
+
+def test_single_model_activation_keeps_its_previous_behaviour(triad_env):
+    env = triad_env
+    assert login(env.client, "administrador").status_code == 200
+    first = env.client.post("/api/training/models/1/activate", headers={"Origin": ORIGIN})
+    assert first.status_code == 200 and first.json()["success"] is True
+    assert first.json()["active_model_id"] == 1
+    assert env.client.post("/api/training/models/3/activate", headers={"Origin": ORIGIN}).json()["success"] is True
+    assert active_flags(env) == ([3], [])
+    assert env.client.post("/api/training/models/999/activate", headers={"Origin": ORIGIN}).json() == {
+        "success": False, "error": "Modelo inexistente"}
+    assert active_flags(env) == ([3], [])

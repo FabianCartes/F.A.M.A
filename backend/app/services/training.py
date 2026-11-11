@@ -1581,7 +1581,10 @@ class TrainingService:
                     return {"success": False, "error": "Los modelos importados no pueden activarse globalmente."}
                 self._require_standard_reports(target, db)
                 if target:
+                    from app.models.triad_composition import TriadComposition
                     db.query(Modelo).update({Modelo.activo: False})
+                    # A single default across models and triad compositions.
+                    db.query(TriadComposition).update({TriadComposition.activo: False})
                     target.activo = True
                     db.commit()
 

@@ -20,6 +20,7 @@ class TriadCompositionResponse(BaseModel):
     version: int
     previous_id: Optional[int] = None
     latest: bool
+    active: bool
     components: List[TriadComponent]
     author_id: Optional[int] = None
     created_at: datetime

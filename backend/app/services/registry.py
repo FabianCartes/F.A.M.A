@@ -557,6 +557,21 @@ class ModelRegistry:
             self._discard_triad(key)
             self._predictors[key] = predictor
             self._triad_predictors[key] = predictor
+        self._apply_active_triad(compositions, access)
+
+    def _apply_active_triad(self, compositions: List[Any], access: Any) -> None:
+        """Make the persisted active composition the default, or block the default if it is unavailable."""
+        from app.services.triad_compositions import triad_model_key
+        active = next((composition for composition in compositions if composition.activo), None)
+        if active is None:
+            return
+        key = triad_model_key(active.id)
+        if access is not None and not access.administrator and active.dataset_id not in access.ids:
+            return  # Not visible to this caller's publication; an earlier one keeps its state.
+        if key in self._triad_predictors and key in self._predictors:
+            self.set_default_model(key)
+        else:
+            self._blocked_default_error = self._blocked_db_aliases.get(key, "Modelo persistido no disponible.")
 
     @staticmethod
     def _apply_display_name(predictor, display):
@@ -670,7 +685,13 @@ class ModelRegistry:
                         else:
                             self._discard_invalid_standard_predictor(model_key)
 
-            return active_predictor
+            # The active default may be a triad composition (never together with an active model).
+            self._publish_triads(db, None, [])
+            return active_predictor or self._active_triad_predictor()
+
+    def _active_triad_predictor(self) -> Optional[AudioPredictor]:
+        default = self._triad_predictors.get(self._default_model_id)
+        return default if default is not None and self._predictors.get(self._default_model_id) is default else None
 
 
 def discover_and_register_checkpoints(
