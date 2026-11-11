@@ -66,12 +66,12 @@ describe("protected home", () => {
 
   it("ignores an old request's late 401 after a new session verification", async () => {
     let oldRequest!: (response: Response) => void;
-    let models = 0;
+    let stats = 0;
     const request = vi.fn(async (url: string) => {
       if (url.endsWith("/auth/me")) return new Response(JSON.stringify({
         id: 2, email: "researcher@example.test", nombre_completo: "Investigadora", rol: "investigador", activo: true,
       }));
-      if (url === "/api/models" && ++models === 1) return new Promise<Response>((resolve) => { oldRequest = resolve; });
+      if (url === "/api/dashboard/stats" && ++stats === 1) return new Promise<Response>((resolve) => { oldRequest = resolve; });
       return new Response(JSON.stringify({ models: [], triad_status: [] }));
     });
     vi.stubGlobal("fetch", request);

@@ -102,6 +102,14 @@ function metric(value: number | null | undefined, digits = 0, suffix = ""): stri
     ? `${value.toFixed(digits)}${suffix}` : "No disponible";
 }
 
+const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
+
+/** Guards the fields the view dereferences; an unrecognised payload is shown as "unavailable", never crashes. */
+function isStatsResponse(value: unknown): value is DashboardStatsResponse {
+  return isObject(value) && isObject(value.kpis) && isObject(value.system_health) && isObject(value.super_ensemble)
+    && Array.isArray(value.training_curves) && Array.isArray(value.recent_activity);
+}
+
 export default function DashboardView({ onNavigate }: DashboardViewProps) {
   const [stats, setStats] = useState<DashboardStatsResponse | null>(null);
   const [statsUnavailable, setStatsUnavailable] = useState(false);
@@ -115,7 +123,8 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
       try {
         const response = await fetch(`${API_BASE_URL}/api/dashboard/stats`, { signal });
         if (!response.ok) throw new Error("No se pudieron consultar las métricas");
-        const data = (await response.json()) as DashboardStatsResponse;
+        const data: unknown = await response.json();
+        if (!isStatsResponse(data)) throw new Error("Respuesta de métricas no reconocida");
         if (signal?.aborted) return;
         setStats(data);
         setStatsUnavailable(false);

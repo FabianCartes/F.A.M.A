@@ -17,7 +17,7 @@ export default function Home() {
 
 function Workspace() {
   const { user } = useWebSession();
-  const [activeTab, setActiveTab] = useState<TabType>("prediccion");
+  const [activeTab, setActiveTab] = useState<TabType>("dashboard");
 
   return (
     <AppShell
