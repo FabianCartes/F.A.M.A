@@ -7,7 +7,7 @@ import { confirmApiSession } from '@/lib/api';
 const session = vi.hoisted(() => ({ user: { id: 1 } as { id: number } | null }));
 vi.mock('@/components/auth/SessionBoundary', () => ({ useOptionalWebSession: () => session.user }));
 const models = [301, 302].map(id => ({ id: `fama_trained_model_${id}`, name: `Birds v${id}`,
-  classes: ['bird'], dataset_name: 'imported:' + 'a'.repeat(32), has_weights: true }));
+  classes: ['bird'], dataset_name: 'AvesChilenas', has_weights: true }));
 const item = (id: number, model = 301) => ({ id, filename: `saved-${id}.wav`,
   timestamp: '2026-01-01T12:00:00Z', clase: 'bird', confianza: .8, modelo_id: `fama_trained_model_${model}` });
 beforeEach(() => { session.user = { id: 1 }; vi.restoreAllMocks();
@@ -29,6 +29,8 @@ it('loads saved records after mounting and remounting, paginates, and separates 
   const request = vi.mocked(fetch).mock.calls.find(([url]) => String(url).includes('/api/inference/history'))!;
   expect(String(request[0])).toContain('model_id=fama_trained_model_301');
   expect(request[1]?.credentials).toBe('same-origin');
+  const catalogue = vi.mocked(fetch).mock.calls.find(([url]) => String(url).includes('/api/models'))!;
+  expect(String(catalogue[0])).toMatch(/\/api\/models$/);
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Cargar más predicciones' })); });
   expect(screen.getByText('saved-19.wav')).toBeDefined();
   await chooseModel(models[1].name);
@@ -123,4 +125,30 @@ it.each([[302, false, false], [301, false, false], [301, true, true]] as const)(
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Ejecutar inferencia/ })); });
   expect(screen.queryByText('ID de predicción: 99')).toBeNull();
   expect(screen.getByText('saved-20.wav')).toBeDefined();
+});
+
+
+it('refreshes persisted history for a declared standard model after inference', async () => {
+  const declared = { id: 'declared-birds', name: 'Birds declared', classes: ['bird'],
+    dataset_name: 'AvesChilenas', has_weights: true };
+  const saved = { ...item(40), modelo_id: declared.id };
+  let historyRequests = 0;
+  global.fetch = vi.fn(async input => {
+    const url = String(input);
+    if (url.includes('/api/models')) return Response.json({ models: [declared], default_model_id: declared.id });
+    if (url.includes('/api/inference/history')) {
+      historyRequests += 1;
+      return Response.json({ items: historyRequests > 1 ? [saved] : [], next_cursor: null });
+    }
+    if (url.includes('/api/predict?')) return Response.json({ filename: 'optimistic.wav', db_id: 40,
+      modelo_id: declared.id, clase: 'bird', confianza: .8, gcp_upload: false, local_audio_saved: true });
+    return Response.json({});
+  });
+  const view = render(<PredictionView />); await act(async () => {});
+  await act(async () => { fireEvent.change(view.container.querySelector('input[type="file"]')!,
+    { target: { files: [new File(['wav'], 'upload.wav')] } }); });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Ejecutar inferencia/ })); });
+  expect(historyRequests).toBe(2);
+  expect(screen.getByText('saved-40.wav')).toBeDefined();
+  expect(screen.queryByText('optimistic.wav')).toBeNull();
 });

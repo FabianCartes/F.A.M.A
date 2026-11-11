@@ -41,19 +41,19 @@ async function preparePrediction({ classes = ['alarm', 'normal'], dbId = 201, da
 describe('PredictionView validation and responsive controls', () => {
   beforeEach(() => { vi.resetAllMocks(); global.fetch = vi.fn(async (input) => String(input).includes('/api/models') ? { ok: true, json: async () => ({ models: mockModels }) } as Response : { ok: false } as Response); });
 
-  it('shows response identity, uncalibrated score and real history IDs without synthetic badges', async () => {
+  it('shows response identity and uncalibrated score without optimistic history rows or synthetic badges', async () => {
     const api = await preparePrediction();
     api.setPrediction(async () => Response.json({ filename: 'actual.wav', db_id: 305, modelo_id: 'machine-model', modelo: 'Executed CNN', clase: 'alarm', confianza: 0.8, gcp_upload: false }));
     await api.infer();
     expect(screen.getByText('Modelo ejecutado:').parentElement?.textContent).toContain('Executed CNN');
     expect(screen.queryByText(/Tiempo total de solicitud:/)).toBeNull();
     expect(screen.getByText('Puntuación del modelo (sin calibración acreditada):')).toBeDefined();
-    expect(screen.getByText('ID de predicción: 305')).toBeDefined();
+    expect(screen.queryByText('ID de predicción: 305')).toBeNull();
     expect(screen.queryByText(/AVE-|ENG-/)).toBeNull();
     api.setPrediction(async () => Response.json({ filename: 'unpersisted.wav', db_id: null, clase: 'alarm', confianza: 0.7, gcp_upload: false }));
     await api.infer();
     expect(screen.getByText('Modelo ejecutado:').parentElement?.textContent).toContain('No informado por la API');
-    expect(screen.getByText('ID de predicción no disponible')).toBeDefined();
+    expect(screen.queryByText('ID de predicción no disponible')).toBeNull();
   });
 
   it('warns when executed identity differs from the request snapshot, not the current selection', async () => {
@@ -476,32 +476,10 @@ describe("U7IndependentStable", () => {
     expect(JSON.parse(String(api.feedbackCalls()[0][1]?.body))).toEqual({ id_prediccion: 902, fue_correcta: false, etiqueta_corregida: "normal" });
   });
 
-  describe('private triad weight revision', () => {
-    const triad = { id: 'fama_trained_model_4', name: 'Tríada importada', architecture: 'ImportedTriad', description: 'Composición', target_sr: 22050, duration_seconds: 5, classes: ['a', 'b'], is_default: false, has_weights: true, metrics: { weights: [0.1, 0.4, 0.5] } };
+  describe('retired triad weight revision', () => {
     afterEach(cleanup);
-    const revised = { ...triad, id: 'fama_trained_model_9', metrics: { weights: [0.7, 0.2, 0.1] } };
 
-    it('offers the form only for a selected composition, then selects the new version', async () => {
-      let models: unknown[] = [triad];
-      const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit): Promise<Response> => {
-        const url = String(input);
-        if (url.includes('/api/models')) return { ok: true, json: async () => ({ models }) } as Response;
-        if (url.endsWith('/triad-weights')) { models = [triad, revised]; return Response.json({ id: revised.id, name: revised.name, weights: [0.7, 0.2, 0.1] }); }
-        return { ok: false } as Response;
-      });
-      global.fetch = fetchMock;
-      await act(async () => { render(<PredictionView />); });
-      expect(screen.getByRole('form', { name: 'Ajustar pesos de la tríada' })).toBeDefined();
-      expect(screen.getByText(/Pesos actuales: 10 % · 40 % · 50 %/)).toBeDefined();
-      for (const [i, v] of ['70', '20', '10'].entries()) fireEvent.change(screen.getByLabelText(`Porcentaje del componente ${i + 1}`), { target: { value: v } });
-      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Evaluar nuevos pesos' })); });
-      const post = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/api/training/models/4/triad-weights'))!;
-      expect(JSON.parse(String(post[1]?.body))).toEqual({ weights: [0.7, 0.2, 0.1] });
-      expect(screen.getByText(/Pesos actuales: 70 % · 20 % · 10 %/)).toBeDefined();
-      expect(screen.getByText('ID: fama_trained_model_9')).toBeDefined();
-    });
-
-    it('shows nothing new for an individual model', async () => {
+    it('offers no weight revision form', async () => {
       global.fetch = vi.fn(async (input: RequestInfo | URL) => String(input).includes('/api/models')
         ? { ok: true, json: async () => ({ models: mockModels }) } as Response : { ok: false } as Response);
       await act(async () => { render(<PredictionView />); });

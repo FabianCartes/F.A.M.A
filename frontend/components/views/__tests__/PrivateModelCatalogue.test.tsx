@@ -21,7 +21,7 @@ it('does not request a private catalogue or infer anonymously; login lists arbit
   expect(screen.getByRole('group', { name: 'Mis modelos' })).toBeDefined();
   expect((screen.getByLabelText('Modelo:') as HTMLButtonElement).value).toBe(model.id);
   const call = (fetcher.mock.calls as unknown as [string, RequestInit][]).find(([url]) => url.includes('/api/models'))!;
-  expect(call[0]).toContain('private_only=true');
+  expect(call[0]).toMatch(/\/api\/models$/);
   expect(call[1].credentials).toBe('same-origin');
   session.user = null; confirmApiSession();
   await act(async () => { view.rerender(<PredictionView />); });
@@ -36,12 +36,19 @@ it('clears private prediction/history on owner switch and ignores an in-flight p
   session.user = { id: 1 };
   let finish!: (data: unknown) => void;
   let pending = false;
+  let saved = false;
   const prediction = { filename: 'private.wav', db_id: 99, clase: 'ants', confianza: 0.9, gcp_upload: true };
   global.fetch = vi.fn(async (url) => {
     if (String(url).includes('/api/models')) return Response.json({ models: [model] });
-    if (String(url).includes('/api/predict')) return pending
-      ? { ok: true, json: () => new Promise(resolve => { finish = resolve; }) } as Response
-      : Response.json(prediction);
+    if (String(url).includes('/api/inference/history')) return Response.json({ next_cursor: null,
+      items: session.user?.id === 1 && saved ? [{ id: 99, filename: 'private.wav', timestamp: '2026-01-01T12:00:00Z',
+        clase: 'ants', confianza: 0.9, modelo_id: model.id }] : [] });
+    if (String(url).includes('/api/predict')) {
+      saved = true;
+      return pending
+        ? { ok: true, json: () => new Promise(resolve => { finish = resolve; }) } as Response
+        : Response.json(prediction);
+    }
     return Response.json({});
   });
   const view = render(<PredictionView />);

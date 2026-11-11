@@ -71,7 +71,7 @@ describe("protected home", () => {
       if (url.endsWith("/auth/me")) return new Response(JSON.stringify({
         id: 2, email: "researcher@example.test", nombre_completo: "Investigadora", rol: "investigador", activo: true,
       }));
-      if (url.startsWith("/api/models?") && ++models === 1) return new Promise<Response>((resolve) => { oldRequest = resolve; });
+      if (url === "/api/models" && ++models === 1) return new Promise<Response>((resolve) => { oldRequest = resolve; });
       return new Response(JSON.stringify({ models: [], triad_status: [] }));
     });
     vi.stubGlobal("fetch", request);

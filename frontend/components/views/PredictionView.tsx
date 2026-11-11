@@ -2,7 +2,6 @@
 
 import { getPredictionHistory } from "@/lib/api/predictionHistory";
 import PredictionModelSelector, { TriadModelBadges, triadModelDetails } from "@/components/prediction/PredictionModelSelector";
-import TriadWeightRevision, { triadCompositionWeights } from "@/components/prediction/TriadWeightRevision";
 import InfoTooltip from "@/components/common/InfoTooltip";
 
 import { useState, useEffect, useMemo, useRef, useCallback, ChangeEvent, FormEvent } from "react";
@@ -533,8 +532,6 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
   const selectedModelId = selectionState.modelId;
   const historySelectedModel = useRef(selectedModelId);
   historySelectedModel.current = selectedModelId;
-  const [catalogueRefresh, setCatalogueRefresh] = useState(0);
-  const preferredModelId = useRef<string | null>(null);
   const [catalogueError, setCatalogueError] = useState<string | null>(null);
   const [catalogueLoaded, setCatalogueLoaded] = useState(false);
   const [evaluationCatalogueStatus, setEvaluationCatalogueStatus] = useState<"available" | "unavailable" | "legacy">("legacy");
@@ -557,7 +554,6 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
   const selectedModel = useMemo(() => {
     return availableModels.find((m) => m.id === selectedModelId);
   }, [availableModels, selectedModelId]);
-  const triadWeights = triadCompositionWeights(selectedModel);
   const selectedModelHasWeights = selectedModel?.has_weights === true;
   const hasUnavailableModels = availableModels.some((model) => model.has_weights !== true);
 
@@ -656,7 +652,7 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
       try {
         if (!sessionCurrent()) return;
         if (!privateApiSameOrigin()) throw new Error('Los recursos privados requieren API del mismo origen.');
-        const res = await fetch(`${API_BASE_URL}/api/models?private_only=true`, { credentials: 'same-origin', signal: controller.signal });
+        const res = await fetch(`${API_BASE_URL}/api/models`, { credentials: 'same-origin', signal: controller.signal });
         if (request !== generation || !sessionCurrent()) return;
         if (!res.ok) {
           let databaseUnavailable = false;
@@ -689,13 +685,9 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
         const priorCatalogue = previousModels;
         previousModels = models;
         setAvailableModels(models);
-        const wanted = preferredModelId.current;
-        const wantedListed = wanted !== null && models.some((m) => m.id === wanted && m.has_weights === true);
-        if (wantedListed) preferredModelId.current = null;
         setSelectionState((state) => {
           const current = state.modelId;
           const selectable = models.filter((m) => m.has_weights === true);
-          if (wantedListed && wanted) return { ...state, modelId: wanted, evaluationDialogOpen: false, evaluationDialogModelId: null };
           if (selectable.some((m) => m.id === current)) return state;
           const defaultModel = selectable.find((m) => m.id === data.default_model_id);
           const domain = resolveModelDomain(priorCatalogue.find((m) => m.id === current), current);
@@ -729,7 +721,7 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
       window.removeEventListener("focus", fetchModels);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [authenticated, sessionCurrent, catalogueRefresh]);
+  }, [authenticated, sessionCurrent]);
 
   useEffect(() => {
     if (!authenticated || !selectedDomain || !privateApiSameOrigin()) return;
@@ -1110,32 +1102,10 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
         : Boolean(predData.modelo && predData.modelo !== inferenceModel && predData.modelo !== inferenceModelId);
       setResult({ ...predData, inferenceClasses, inferenceModel, inferenceModelId, modelMismatch, inferenceDomain: selectedDomain, inferenceEnsemble: isEnsemble, inferenceRegisteredCheckpointHash, sequence });
 
-      const isEngine =
-        isEngineModel ||
-        Boolean(ENGINE_FAULT_LABELS[predData.clase]);
-
-      // Agregar al inicio del historial de predicciones con badge code y modelo utilizado
-      const newItem: HistoryItem = {
-        id: typeof predData.db_id === "number" && Number.isInteger(predData.db_id) && predData.db_id > 0 ? predData.db_id : null,
-        filename: predData.filename,
-        timestamp: new Date().toLocaleString(),
-        clase: predData.clase,
-
-        confianza: predData.confianza,
-        modelo: predData.modelo || "No informado por la API",
-        domain: isEngine ? "engine_diagnostics" : selectedDomain,
-      };
-
       if (historySelectedModel.current === inferenceModelId) {
-        if (/^fama_trained_model_[1-9][0-9]*$/.test(inferenceModelId)) {
-          // Imported history is authoritative server metadata, never an optimistic
-          // inference response (which may be unpersisted or identify another model).
-          void loadHistory();
-        } else if (!modelMismatch) {
-          // Preserve the existing ephemeral legacy view outside imported history.
-          setHistory((prev) => [newItem, ...prev.filter(item => newItem.id === null || item.id !== newItem.id)]);
-          setHistoryModel(inferenceModelId);
-        }
+        // Persisted history is authoritative server metadata, never an optimistic
+        // inference response (which may be unpersisted or identify another model).
+        void loadHistory();
       }
     } catch (err: unknown) {
       if (!sessionCurrent() || sequence !== inferenceSequence.current) return;
@@ -1421,11 +1391,6 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
               </span>
             </div>
           </div>
-
-          {triadWeights && selectedModel && (
-            <TriadWeightRevision key={selectedModel.id} modelId={selectedModel.id} weights={triadWeights}
-              onRevised={(newId) => { preferredModelId.current = newId; setCatalogueRefresh((n) => n + 1); }} />
-          )}
 
           {/* Tarjetas de Especificaciones Individuales */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
