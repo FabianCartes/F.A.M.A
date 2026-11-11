@@ -95,7 +95,7 @@ export function CheckpointSyncButton({ modelId, synced, onSynced }: {
 
   const style = synced
     ? "bg-emerald-950/60 text-emerald-300 border-emerald-800/60 hover:border-emerald-600"
-    : "bg-[#1c1e24] text-gray-200 border-[#2d303b] hover:bg-[#252832]";
+    : "bg-emerald-600 text-white font-semibold border-emerald-600 hover:bg-emerald-500";
   return <>
     <button ref={trigger} type="button" disabled={busy} onClick={() => void synchronize()}
       title={synced ? "Ambas copias registradas; presiona para verificarlas de nuevo." : "Comprueba las copias y sincroniza el checkpoint con GCS."}
