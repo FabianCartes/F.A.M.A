@@ -17,6 +17,7 @@ import DatasetPartitions from "@/components/training/DatasetPartitions";
 import { usePartitionNames } from "@/components/training/usePartitionNames";
 import { CheckpointSyncButton, useCheckpointSyncStatus } from "@/components/training/CheckpointSync";
 import { SheetRows, audioPhysicsRows, hyperparameterRows } from "@/components/training/TechnicalSheetRows";
+import DatasetConfirmationDialog from "@/components/ingestion/DatasetConfirmationDialog";
 import { PARAMETER_EXPLANATIONS } from "@/lib/constants/parameterExplanations";
 
 // ============================================================================
@@ -554,6 +555,9 @@ export default function TrainingView() {
   const [startingRevision, setStartingRevision] = useState<number | null>(null);
   const isStarting = startingRevision === sessionRevision;
   const startInFlight = useRef<AbortController | null>(null);
+  const startButton = useRef<HTMLButtonElement>(null);
+  const [startError, setStartError] = useState<string | null>(null);
+  const closeStartError = useCallback(() => setStartError(null), []);
   useEffect(() => () => {
     startInFlight.current?.abort();
     startInFlight.current = null;
@@ -1164,7 +1168,7 @@ export default function TrainingView() {
     } catch (err: unknown) {
       if(!mounted.current || requestRevision!==apiSessionRevision() || startInFlight.current!==startController)return;
       const msg = err instanceof TypeError ? 'Resultado incierto. Compruebe el estado del recurso antes de iniciar otra vez; no se reintentó.' : err instanceof Error ? err.message : String(err);
-      alert(`No fue posible iniciar el entrenamiento: ${msg}`);
+      setStartError(msg);
     } finally {
       if(startInFlight.current===startController) {
         startInFlight.current=null;
@@ -2315,8 +2319,16 @@ export default function TrainingView() {
 
 
         {/* Botones de Acción (Entrenar / Detener) */}
+        {startError && <DatasetConfirmationDialog title="No se pudo iniciar el entrenamiento" onClose={closeStartError} returnFocus={startButton}>
+          <p role="alert" className="text-red-300">{startError}</p>
+          <div className="flex justify-end">
+            <button type="button" onClick={closeStartError}
+              className="text-xs px-3 py-2 rounded-lg border border-[#2d303b] bg-[#1c1e24] text-gray-200 hover:bg-[#252832]">Entendido</button>
+          </div>
+        </DatasetConfirmationDialog>}
         <div className="flex items-center gap-3 pt-1">
           <button
+            ref={startButton}
             type="button"
             onClick={handleStartTraining}
             disabled={!progressKnown || isTraining || isStarting || datasetBlocked || !currentDataset}

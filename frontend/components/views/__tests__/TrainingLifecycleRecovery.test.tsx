@@ -54,7 +54,8 @@ it.each(['http','network'])('releases pending admission after %s failure without
  expect(screen.getByRole('button',{name:'Preparando inicio…'})).toBeTruthy();
  await act(async()=>{if(mode==='network')reject(new TypeError('Failed to fetch'));else resolve(Response.json({detail:'Admission denied'},{status:409}));});
  await waitFor(()=>expect(start().disabled).toBe(false));
- expect(alert).toHaveBeenCalledWith(expect.stringContaining(mode==='network'?'Resultado incierto':'Admission denied'));
+ expect((await screen.findByRole('dialog',{name:'No se pudo iniciar el entrenamiento'})).textContent).toContain(mode==='network'?'Resultado incierto':'Admission denied');
+ expect(alert).not.toHaveBeenCalled();
  expect(screen.queryByRole('button',{name:'Detener'})).toBeNull();
  expect(fetcher.mock.calls.filter(c=>String(c[0]).endsWith('/start'))).toHaveLength(1);
 });

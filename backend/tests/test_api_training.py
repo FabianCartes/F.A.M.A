@@ -43,7 +43,8 @@ def test_api_reports_stale_preparation_and_requires_deliberate_history(client, t
         assert config["source"]["preparation"]["manifest"]["version_id"] == version
     else:
         assert response.status_code == 400
-        assert "Stale prepared dataset" in response.json()["detail"]
+        assert "ya no coincide con los audios actuales" in response.json()["detail"]
+        assert "Stale" not in response.json()["detail"] and "/" not in response.json()["detail"]
         thread.assert_not_called()
         with sessions() as db:
             assert service.get_history(db) == []

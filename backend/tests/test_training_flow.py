@@ -122,7 +122,7 @@ def test_catalog_opt_in_lists_registered_legacy_without_claiming_audio_readiness
     assert blocked["reasons"] == ["incompatible_configuration"]
     assert blocked["classes"] == []
     assert blocked["class_count"] is None
-    with pytest.raises(ValueError, match="preparación ausente"):
+    with pytest.raises(ValueError, match="no tiene una partición preparada"):
         service.start_training(candidate["id"])
     assert service.get_progress()["status"] == "failed"
     with pytest.raises(ValueError, match="Invalid dataset name"):
@@ -224,7 +224,7 @@ def test_invalid_or_unprepared_identity_is_rejected_before_scheduling(training_e
 
     service, sessions, _, thread = training_env
     register(sessions, name)
-    with pytest.raises(ValueError, match="Invalid dataset name" if name.startswith("../") else "preparación ausente"):
+    with pytest.raises(ValueError, match="Invalid dataset name" if name.startswith("../") else "no tiene una partición preparada"):
         service.start_training(name)
     progress = service.get_progress()
     assert progress["status"] == "failed"
@@ -452,7 +452,7 @@ def test_bird_legacy_metadata_requires_offline_conversion(training_env, metadata
             csv = raw / f"{split}.csv"
             pd.read_csv(csv).drop(columns="file_path").to_csv(csv, index=False)
     (root / "prepared/AvesChilenas/.complete").write_text("malformed")
-    with pytest.raises(ValueError, match="preparación"):
+    with pytest.raises(ValueError, match="no se puede usar: está incompleta"):
         service.start_training("AvesChilenas")
     assert service.get_progress()["status"] == "failed"
     thread.assert_not_called()
@@ -474,7 +474,7 @@ def test_canonical_metadata_only_source_preserves_rows_without_rewriting_indices
     for split in ("train", "val"):
         (raw / f"{split}.csv").rename(raw / f"{split}.unused")
     (root / "prepared/AvesChilenas").rename(root / "prepared/unused")
-    with pytest.raises(ValueError, match="preparación"):
+    with pytest.raises(ValueError, match="no tiene una partición preparada"):
         service.start_training("AvesChilenas")
     assert service.get_progress()["status"] == "failed"
     assert metadata_csv.read_bytes() == before
@@ -599,3 +599,15 @@ def test_training_catalog_offers_registered_identities_and_no_implicit_local_dat
     assert [entry["id"] for entry in catalog] == ["medical_cough", "engine_diagnostics"]
     assert catalog[1]["db_id"] == supported_id
     assert service.get_available_datasets() == []
+
+
+def test_missing_preparation_is_explained_in_plain_language_without_internal_paths(training_env):
+    service, sessions, _, _ = training_env
+    register(sessions, "AvesChilenas")
+    with pytest.raises(ValueError) as error:
+        service.start_training("AvesChilenas")
+    assert str(error.value) == (
+        "El dataset «AvesChilenas» todavía no tiene una partición preparada para entrenar. "
+        "En «Particiones de entrenamiento», crea o selecciona una partición guardada y vuelve a iniciar el entrenamiento.")
+    assert service.get_progress()["status"] == "failed"
+    assert service.get_progress()["error_message"] == str(error.value)

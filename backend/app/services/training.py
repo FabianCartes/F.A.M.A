@@ -1,3 +1,4 @@
+import logging
 import os
 import random
 import sys
@@ -88,6 +89,10 @@ class _AcceptedAudioDataset(AudioDataset):
         return resolve_reference(row["file_path"], row["file_stage"], self.roots)
 
 
+
+
+class TrainingAdmissionError(ValueError):
+    """A start rejection already worded for the person who requested it."""
 
 def _recorded(value, kind):
     """Return a checkpoint value only when it has the expected type; never guess defaults."""
@@ -442,8 +447,17 @@ class TrainingService:
                 allow_historical=allow_historical_preparation)
             train_df, val_df, test_df = parts
         except (ValueError, OSError) as exc:
-            raise ValueError(
-                f"Dataset '{dataset_name}': preparación ausente o inválida en {prepared_dir}: {exc}"
+            # The internal path and OS error stay in the server log; the user gets the next step.
+            logging.getLogger(__name__).warning(
+                "Dataset %r: preparación ausente o inválida en %s: %s", dataset_name, prepared_dir, exc)
+            if isinstance(exc, FileNotFoundError) or not prepared_dir.exists():
+                raise TrainingAdmissionError(
+                    f"El dataset «{dataset_name}» todavía no tiene una partición preparada para entrenar. "
+                    "En «Particiones de entrenamiento», crea o selecciona una partición guardada y vuelve a iniciar el entrenamiento."
+                ) from exc
+            raise TrainingAdmissionError(
+                f"La partición preparada del dataset «{dataset_name}» no se puede usar: está incompleta o ya no coincide "
+                "con los audios actuales. Crea una partición nueva en «Particiones de entrenamiento» y vuelve a intentarlo."
             ) from exc
 
         groups = recording_groups(pd.concat(parts, ignore_index=True), dataset_name)
@@ -567,7 +581,8 @@ class TrainingService:
             except Exception as exc:
                 self.status = "failed"
                 self.current_job_id = None
-                self.error_message = f"Dataset '{dataset_name}': {exc}"
+                self.error_message = (str(exc) if isinstance(exc, TrainingAdmissionError)
+                                      else f"Dataset '{dataset_name}': {exc}")
                 self.start_timestamp = None
                 self.current_epoch = 0
                 self.total_epochs = 0

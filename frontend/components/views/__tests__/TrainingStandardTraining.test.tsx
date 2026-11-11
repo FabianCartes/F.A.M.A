@@ -42,3 +42,34 @@ it('entrena un ZIP publicado con sesión por el catálogo y las particiones est�
   expect(transport.mock.calls.some(([url]) => String(url).endsWith('/api/training/history'))).toBe(true);
   expect(transport.mock.calls.some(([url]) => String(url).includes('include_imported'))).toBe(false);
 });
+
+it('explica en una ventana modal por qué no se pudo iniciar el entrenamiento, sin alertas del navegador', async () => {
+  const version = 'a'.repeat(64);
+  const reason = 'El dataset «ZIP_Publicado» todavía no tiene una partición preparada para entrenar. En «Particiones de entrenamiento», crea o selecciona una partición guardada y vuelve a iniciar el entrenamiento.';
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.endsWith('/api/auth/me')) return Response.json({ id: 1, email: 'owner@example.test', nombre_completo: 'Owner', rol: 'investigador', activo: true });
+    if (url.includes('/history')) return Response.json({ history: [] });
+    if (url.includes('/datasets') && !url.includes('/partitions')) return Response.json({ datasets: [{ id: 'ZIP_Publicado', name: 'ZIP publicado', record_id: 'legacy:7', source_type: 'legacy', audio_count: 9, class_count: 3, eligible: true, eligibility_state: 'current_flow_compatible', reasons: [] }] });
+    if (url.endsWith('/partitions')) return Response.json({ versions: [{ version, counts: { train: 6, val: 2, test: 1 }, warnings: [] }] });
+    if (url.endsWith('/progress')) return Response.json({ status: 'idle' });
+    if (url.endsWith('/start')) return Response.json({ detail: reason }, { status: 400 });
+    return Response.json({});
+  }));
+  const browserAlert = vi.fn();
+  vi.stubGlobal('alert', browserAlert);
+  render(<SessionBoundary><TrainingView /></SessionBoundary>);
+  fireEvent.click(await screen.findByRole('combobox', { name: 'Dataset para entrenamiento' }));
+  fireEvent.click(await screen.findByRole('option', { name: 'ZIP publicado' }));
+  await screen.findByRole('option', { name: /Versión 1 ·/ });
+  fireEvent.change(screen.getByLabelText('Versión para entrenar'), { target: { value: version } });
+  const start = screen.getByRole('button', { name: 'Iniciar Entrenamiento Local (1 Modelo)' });
+  await waitFor(() => expect((start as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(start);
+
+  const dialog = await screen.findByRole('dialog', { name: 'No se pudo iniciar el entrenamiento' });
+  expect(dialog.textContent).toContain(reason);
+  expect(browserAlert).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Entendido' }));
+  expect(screen.queryByRole('dialog')).toBeNull();
+});
