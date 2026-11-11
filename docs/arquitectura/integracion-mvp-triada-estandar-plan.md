@@ -1,6 +1,12 @@
 # Integración MVP — unidad posterior: tríada estándar combinada con ajuste de pesos
 
-Estado: **planificada, no iniciada**. Se ejecuta después de cerrar la etapa e y antes o junto con la etapa f (migración 0005); requiere autorización explícita de Kevin para implementar. Rama `mvp`, sin push ni PR.
+Estado: **planificada, no iniciada; asignada a la etapa f**. Kevin, 2026-11-11: «Guardemoslos para la estapa f». Se aborda dentro de la etapa f (migración 0005), y su implementación requiere la autorización de esa etapa. Rama `mvp`, sin push ni PR.
+
+Pendientes que se trasladan a f:
+- Predecir con los tres modelos combinados: hoy no funciona; `ensemble_weight` se guarda en cada checkpoint, pero ningún predictor lo usa.
+- Ajustar los pesos después de entrenar: hoy no funciona; solo existía para la tríada importada, retirada en d/e con el endpoint `triad-weights` y `TriadWeightRevision`.
+- Tríadas importadas existentes: sus datos se conservan en la base, pero no aparecen en el catálogo ni sirven para predecir; no se recuperan (ver «Fuera de alcance»).
+- Decidir al iniciar f dónde se persiste la composición (recomendado: tabla nueva en la migración aditiva 0005, con ADR).
 
 ## Problema
 
