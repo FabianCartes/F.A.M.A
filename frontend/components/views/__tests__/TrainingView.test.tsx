@@ -316,7 +316,6 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
       return defaultFetch(url, init);
     });
     await act(async () => { render(<TrainingView />); });
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Gestionar particiones" })); });
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Previsualizar reparto" })); });
     expect(screen.getByText("6 para entrenamiento · 2 para validación · 2 para prueba")).toBeDefined();
     const save = screen.getByRole("button", { name: "Guardar versión y seleccionarla" });
@@ -345,7 +344,6 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
       return defaultFetch(url, init);
     });
     await act(async () => { render(<TrainingView />); });
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Gestionar particiones" })); });
     await act(async () => { fireEvent.change(screen.getByLabelText("Versión para entrenar"), { target: { value: version } }); });
     fireEvent.click(screen.getByRole('combobox', { name: 'Dataset para entrenamiento' }));
     fireEvent.click(await screen.findByRole('option', { name: 'Other' }));
@@ -369,7 +367,6 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
       return defaultFetch(url, init);
     });
     await act(async () => { render(<TrainingView />); });
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Gestionar particiones" })); });
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Previsualizar reparto" })); });
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Guardar versión y seleccionarla" })); });
     expect(screen.getByRole("alert").textContent).toContain("No se pudo guardar la versión");
@@ -391,7 +388,6 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
       return defaultFetch(url, init);
     });
     await act(async () => { render(<TrainingView />); });
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Gestionar particiones" })); });
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Previsualizar reparto" })); });
     expect(screen.getByText(/Chucao\/feedback_1.wav/)).toBeDefined();
     expect(screen.getByText(/corrección sin grupo de origen registrado/)).toBeDefined();

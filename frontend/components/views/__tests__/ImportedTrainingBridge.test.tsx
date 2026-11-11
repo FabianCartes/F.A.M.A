@@ -27,7 +27,8 @@ it('al navegar a entrenamiento muestra el ZIP publicado como dataset registrado 
   expect(selector.textContent).toBe('Buscar o seleccionar dataset…');
   fireEvent.click(selector);
   fireEvent.click(await screen.findByRole('option', { name: 'ZIP publicado' }));
-  expect(screen.getByRole('button', { name: 'Gestionar particiones' })).toBeTruthy();
+  expect(screen.getByRole('region', { name: 'Particiones de entrenamiento' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Gestionar particiones' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Preparar dataset' })).toBeNull();
   const start = screen.getByRole('button', { name: 'Iniciar Entrenamiento Local (1 Modelo)' });
   await waitFor(() => expect((start as HTMLButtonElement).disabled).toBe(false));

@@ -29,8 +29,7 @@ it('conserva la tríada estándar y los parámetros por modelo para un ZIP publi
   fireEvent.change(screen.getByLabelText('Épocas del Modelo #1'), { target: { value: '7' } });
   fireEvent.change(screen.getByLabelText('Learning Rate del Modelo #1'), { target: { value: '0.003' } });
   fireEvent.change(screen.getByLabelText('Batch Size del Modelo #1'), { target: { value: '4' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Gestionar particiones' }));
-  await screen.findByRole('option', { name: /bbbbbbbbbbbb/ });
+  await screen.findByRole('option', { name: /Versión 1 ·/ });
   fireEvent.change(screen.getByLabelText('Versión para entrenar'), { target: { value: version } });
   expect(screen.queryByRole('button', { name: 'Preparar dataset' })).toBeNull();
   const start = screen.getByRole('button', { name: 'Iniciar Pipeline de Tri Ensamble (3 Modelos)' });

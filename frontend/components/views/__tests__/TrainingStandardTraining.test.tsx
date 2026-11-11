@@ -27,8 +27,7 @@ it('entrena un ZIP publicado con sesión por el catálogo y las particiones est�
   fireEvent.click(await screen.findByRole('option', { name: 'ZIP publicado' }));
   expect(screen.queryByText(/Privado|Compartido|Legacy predeterminado/)).toBeNull();
   expect(screen.queryByRole('button', { name: 'Preparar dataset' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Gestionar particiones' }));
-  await screen.findByRole('option', { name: /aaaaaaaaaaaa/ });
+  await screen.findByRole('option', { name: /Versión 1 ·/ });
   fireEvent.change(screen.getByLabelText('Versión para entrenar'), { target: { value: version } });
   await waitFor(() => expect((start as HTMLButtonElement).disabled).toBe(false));
   fireEvent.click(start);

@@ -40,7 +40,7 @@ it('shows blocked registered sources with an incompatibility reason and never st
  fireEvent.click(await screen.findByRole('option',{name:/Invalid registered source/}));
  expect(await screen.findByText(/Configuración incompatible/)).toBeTruthy();
  expect(screen.queryByRole('button',{name:'Preparar dataset'})).toBeNull();
- expect(screen.queryByRole('button',{name:'Gestionar particiones'})).toBeNull();
+ expect(screen.queryByRole('region',{name:'Particiones de entrenamiento'})).toBeNull();
  const start=screen.getByRole('button',{name:'Iniciar Entrenamiento Local (1 Modelo)'}) as HTMLButtonElement;
  await waitFor(()=>expect(start.disabled).toBe(true));fireEvent.click(start);
  expect(transport.mock.calls.some(call=>String(call[0]).endsWith('/start'))).toBe(false);

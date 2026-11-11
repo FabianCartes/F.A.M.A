@@ -13,7 +13,6 @@ it("reserves test recordings and keeps legacy 80/20 versions visible as history"
   }));
   const select = vi.fn();
   render(<DatasetPartitions dataset="Sample" selected="" busy={false} onSelect={select} />);
-  fireEvent.click(screen.getByRole("button",{name:"Gestionar particiones"}));
   const legacy = await screen.findByRole("option",{name:/Histórica 80\/20/});
   expect((legacy as HTMLOptionElement).disabled).toBe(true);
   expect(screen.getByLabelText("Prueba (%)")).toBeDefined();
@@ -22,4 +21,21 @@ it("reserves test recordings and keeps legacy 80/20 versions visible as history"
   expect(JSON.parse(String(calls.find(call=>call.method === "POST")?.body))).toEqual({validation_percent:20,test_percent:20,seed:42});
   fireEvent.click(screen.getByRole("button",{name:"Guardar versión y seleccionarla"}));
   await waitFor(() => expect(select).toHaveBeenCalledWith(version));
+});
+
+
+it("opens with the dataset and names versions by number and date without their hash", async () => {
+  const newer = { format: 2, version: "c".repeat(64), counts: { train: 6, val: 2, test: 2 }, warnings: [],
+    created_at: "2026-11-11T18:00:00Z", policy: { validation_percent: 20, test_percent: 20, seed: 42 } };
+  const older = { format: 2, version: "d".repeat(64), counts: { train: 5, val: 2, test: 2 }, warnings: [],
+    created_at: "2026-11-10T18:00:00Z", policy: { validation_percent: 20, test_percent: 20, seed: 7 } };
+  vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ versions: [newer, older] }) })));
+  render(<DatasetPartitions dataset="Sample" selected={newer.version} busy={false} onSelect={vi.fn()} />);
+  expect(screen.queryByRole("button", { name: /particiones/ })).toBeNull();
+  const option = await screen.findByRole("option", { name: /^Versión 2 · 6 entrenamiento \/ 2 validación \/ 2 prueba/ });
+  expect(option.textContent).toContain(new Date(newer.created_at).toLocaleString("es-CL"));
+  expect(screen.getByRole("option", { name: /^Versión 1 · 5 entrenamiento/ })).toBeDefined();
+  const section = screen.getByRole("region", { name: "Particiones de entrenamiento" });
+  expect(section.textContent).toContain("Versión seleccionada: Versión 2");
+  expect(section.textContent).not.toMatch(/[0-9a-f]{12}/);
 });

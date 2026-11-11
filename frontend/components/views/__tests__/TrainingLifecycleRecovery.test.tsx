@@ -13,6 +13,7 @@ function transport(progress: () => Promise<Response>, stop = async () => Respons
    eligible:true,eligibility_state:'current_flow_compatible',reasons:[],
   }]});
   if(url.endsWith('/history'))return Response.json({history:[]});
+  if(url.endsWith('/partitions'))return Response.json({versions:[]});
   return Response.json({});
  });
  vi.stubGlobal('fetch',fetcher);return fetcher;

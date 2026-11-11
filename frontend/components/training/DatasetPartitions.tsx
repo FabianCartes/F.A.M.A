@@ -9,6 +9,7 @@ const summarySchema = z.object({
   version: z.string().regex(/^[0-9a-f]{64}$/),
   counts: z.object({ train: z.number().int().positive(), val: z.number().int().positive(), test: z.number().int().positive().optional() }),
   warnings: z.array(z.string()).default([]), created_at: z.string().optional(), created_by: z.number().optional(),
+  policy: z.object({ validation_percent: z.number(), test_percent: z.number().optional(), seed: z.number() }).partial().optional(),
 });
 const previewSchema = summarySchema.extend({
   entries: z.array(z.object({ clase: z.string(), split: z.enum(["train", "val", "test"]) })),
@@ -28,8 +29,7 @@ async function request(url: string, options: RequestInit) {
 interface Props { dataset: string; busy: boolean; selected: string; onSelect: (version: string) => void; }
 
 export default function DatasetPartitions({ dataset, busy, selected, onSelect }: Props) {
-  const [open, setOpen] = useState(false);
-  const [phase, setPhase] = useState<"idle" | "loading" | "preview" | "saving">("idle");
+  const [phase, setPhase] = useState<"idle" | "loading" | "preview" | "saving">("loading");
   const [versions, setVersions] = useState<Summary[]>([]);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [validation, setValidation] = useState("20");
@@ -43,7 +43,7 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect }:
   const locked = busy || phase !== "idle";
 
   useEffect(() => {
-    if (!open || !dataset) return;
+    if (!dataset) return;
     const controller = new AbortController();
     active.current = controller;
     void request(base, { signal: controller.signal }).then(data => {
@@ -55,7 +55,7 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect }:
       if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : "No se pudieron consultar las versiones.");
     }).finally(() => { if (!controller.signal.aborted) setPhase("idle"); });
     return () => { controller.abort(); active.current?.abort(); };
-  }, [open, dataset, base]);
+  }, [dataset, base]);
 
   function changePolicy(value: string, field: "validation" | "test" | "seed") {
     if (field === "validation") setValidation(value); else if (field === "test") setTest(value); else setSeed(value);
@@ -100,6 +100,11 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect }:
     } finally { if (!controller.signal.aborted) setPhase("idle"); }
   }
 
+  // Versions arrive newest first; number them from the oldest so a name stays stable.
+  const versionName = (item: Summary) => `Versión ${versions.length - versions.indexOf(item)}`;
+  const versionLabel = (item: Summary) => `${versionName(item)} · ${item.counts.train} entrenamiento / ${item.counts.val} validación${
+    item.counts.test ? ` / ${item.counts.test} prueba` : ""}${item.created_at ? ` · ${new Date(item.created_at).toLocaleString("es-CL")}` : ""}`;
+  const selectedVersion = versions.find(item => item.version === selected);
   const classes = [...new Set(preview?.entries.map(entry => entry.clase) ?? [])].sort();
   const fieldClass = "w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-emerald-600 disabled:opacity-50";
   return (
@@ -107,15 +112,10 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect }:
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-gray-200">Particiones de entrenamiento</h2>
-          <p className="text-xs text-gray-400 mt-1">{selected ? `Versión seleccionada: ${selected.slice(0, 12)}` : "CSV existentes o una versión preparada desde tus audios locales."}</p>
+          <p className="text-xs text-gray-400 mt-1">{selected ? `Versión seleccionada: ${selectedVersion ? versionName(selectedVersion) : "guardada en este equipo"}` : "CSV existentes o una versión preparada desde tus audios locales."}</p>
         </div>
-        <button type="button" disabled={locked || !dataset} aria-expanded={open} onClick={() => {
-          setError(""); if (!open) setPhase("loading"); setOpen(!open);
-        }} className="px-3 py-2 text-xs font-semibold bg-[#1c1e24] border border-[#30333e] rounded-lg text-gray-300 disabled:opacity-50 hover:border-emerald-700">
-          {open ? "Cerrar particiones" : "Gestionar particiones"}
-        </button>
       </div>
-      {open && <>
+      <>
         <p className="text-xs text-gray-400 leading-relaxed">Entrenamiento enseña al modelo; validación ayuda a ajustar el entrenamiento; prueba evalúa el resultado final con audios independientes. Una versión fija los archivos y su reparto. Añadir audios después no cambia las versiones guardadas. Las versiones históricas 80/20 se conservan para consulta; los entrenamientos nuevos requieren los tres grupos.</p>
         {error && <p role="alert" className="text-xs text-rose-300 bg-rose-950/30 border border-rose-900 rounded-lg p-3">{error}</p>}
         {message && <p role="status" className="text-xs text-emerald-300">{message}</p>}
@@ -123,8 +123,8 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect }:
         <label className="block text-xs text-gray-400">Versión para entrenar
           <select aria-label="Versión para entrenar" value={selected} disabled={locked} onChange={event => onSelect(event.target.value)} className={`${fieldClass} mt-1`}>
             <option value="">Usar CSV existentes (requiere particiones preparadas)</option>
-            {selected && !versions.some(item => item.version === selected) && <option value={selected}>Versión seleccionada {selected.slice(0, 12)}</option>}
-            {versions.map(item => <option key={item.version} value={item.version} disabled={item.format !== 2 || !item.counts.test}>{item.format !== 2 || !item.counts.test ? "Histórica 80/20 · " : ""}{item.version.slice(0, 12)} · {item.counts.train} entrenamiento / {item.counts.val} validación{item.counts.test ? ` / ${item.counts.test} prueba` : ""}{item.created_at ? ` · ${new Date(item.created_at).toLocaleString("es-CL")}` : ""}</option>)}
+            {selected && !selectedVersion && <option value={selected}>Versión seleccionada</option>}
+            {versions.map(item => <option key={item.version} value={item.version} disabled={item.format !== 2 || !item.counts.test}>{item.format !== 2 || !item.counts.test ? "Histórica 80/20 · " : ""}{versionLabel(item)}</option>)}
           </select>
         </label>
         <div className="border-t border-[#23252e] pt-4 space-y-3">
@@ -160,7 +160,7 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect }:
             <button type="button" disabled={locked || preview.warnings.length > 0 && !acknowledged} onClick={() => void prepare(true)} className="px-4 py-2 rounded-lg text-xs font-semibold bg-emerald-700 text-white hover:bg-emerald-600 disabled:opacity-40">{phase === "saving" ? "Guardando versión…" : "Guardar versión y seleccionarla"}</button>
           </div>}
         </div>
-      </>}
+      </>
     </section>
   );
 }
