@@ -76,4 +76,34 @@ describe("Ficha técnica del historial", () => {
     expect(sheet.getByText("0.0000")).toBeDefined();
     expect(sheet.getByText("Precisión (Val Acc):")).toBeDefined();
   });
+
+  it("muestra todos los hiperparámetros y la física del audio registrados", async () => {
+    const sheet = await openSheet({
+      ...historicalModel,
+      hyperparameters: { learning_rate: 0.002, batch_size: 8, optimizer: "AdamW", loss_type: "Focal Loss",
+        weight_decay: 0.05, early_stopping: true, early_stopping_patience: 5, focal_gamma: 2, mixup_enabled: true,
+        mixup_alpha: 0.2, pitch_shift_enabled: false, seed: 7, initialization_mode: "pretrained_constructor",
+        checkpoint_epoch: 4, ensemble_weight: 0.5 },
+      audio_specs: { target_sr: 16000, duration_seconds: 2, n_mels: 80, n_fft: 512, hop_length: 128, fmin: 0, fmax: 7000 },
+      windowing: { hop_seconds: 0.5, aggregation_mode: "mean", gem_p: 3, vad_threshold: 0.1 },
+    });
+
+    for (const [label, value] of [
+      ["Weight Decay:", "0.05"], ["Early Stopping:", "Activo (paciencia 5 épocas)"], ["Focal Gamma:", "2"],
+      ["Mixup:", "Activo (α 0.2)"], ["Pitch Shift:", "Desactivado"], ["Semilla:", "7"],
+      ["Inicialización:", "Preentrenado"], ["Época del checkpoint:", "4"], ["Peso en la tríada:", "0.5"],
+      ["Hop Length:", "128 muestras"], ["Salto entre ventanas:", "0.5 s"], ["Agregación temporal:", "mean (GeM p 3)"],
+      ["Umbral VAD:", "0.1"],
+    ]) {
+      const row = sheet.getByText(label).parentElement!;
+      expect(within(row).getByText(value)).toBeDefined();
+    }
+  });
+
+  it("indica los parámetros que un checkpoint antiguo no registró", async () => {
+    const sheet = await openSheet(historicalModel);
+    for (const label of ["Weight Decay:", "Early Stopping:", "Semilla:", "Hop Length:", "Salto entre ventanas:"]) {
+      expect(within(sheet.getByText(label).parentElement!).getByText("No registrado")).toBeDefined();
+    }
+  });
 });

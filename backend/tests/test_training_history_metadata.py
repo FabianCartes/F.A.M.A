@@ -118,3 +118,50 @@ def test_history_preserves_database_bytes_for_local_artifact_metadata(training_e
         assert entry["classes_count"] is None
         assert entry["audio_specs"] is None
         assert entry["file_size_bytes"] == (None if outside_root else artifact.stat().st_size)
+
+
+def test_history_exposes_every_recorded_training_parameter(persistence_env):
+    service, sessions, _, _ = persistence_env
+    start(service, weight_decay=0.05, seed=7,
+          windowing_config={"hop_seconds": 0.5, "aggregation_mode": "mean", "gem_p": 4.0, "vad_threshold": 0.1})
+    assert service.get_progress()["status"] == "completed"
+
+    entry, = history(service, sessions)
+
+    hyperparameters = entry["hyperparameters"]
+    assert hyperparameters["weight_decay"] == 0.05
+    assert hyperparameters["early_stopping"] is False
+    assert hyperparameters["early_stopping_patience"] is None
+    assert hyperparameters["focal_gamma"] == 2.0
+    assert hyperparameters["mixup_enabled"] is False
+    assert hyperparameters["mixup_alpha"] == 0.2
+    assert hyperparameters["seed"] == 7
+    assert hyperparameters["checkpoint_epoch"] == 1
+    assert isinstance(hyperparameters["initialization_mode"], str)
+    assert "ensemble_weight" in hyperparameters
+    assert entry["windowing"] == {"hop_seconds": 0.5, "aggregation_mode": "mean", "gem_p": 4.0, "vad_threshold": 0.1}
+
+
+def test_history_marks_parameters_older_checkpoints_never_recorded(training_env):
+    service, sessions, _, _ = training_env
+    torch.save({"hyperparameters": {"optimizer": "AdamW", "loss_type": "Focal Loss"},
+                "regularization_config": {"loss_type": "focal", "focal_gamma": 1.5, "mixup_enabled": True,
+                                          "mixup_alpha": "bad", "pitch_shift_enabled": True},
+                "windowing_config": None, "seed": 42, "epochs": 10},
+               service.checkpoints_dir / "older.pt")
+    with sessions() as db:
+        db.add(Modelo(arquitectura="EfficientNet-B0", epocas=10, tasa_aprendizaje=0.002, tamano_lote=8,
+                      ruta_binario_gcp="models/older.pt", tamano_bytes=0))
+        db.commit()
+        entry, = service.get_history(db)
+
+    hyperparameters = entry["hyperparameters"]
+    assert hyperparameters["weight_decay"] is None
+    assert hyperparameters["early_stopping"] is None
+    assert hyperparameters["focal_gamma"] == 1.5
+    assert hyperparameters["mixup_enabled"] is True
+    assert hyperparameters["mixup_alpha"] is None
+    assert hyperparameters["pitch_shift_enabled"] is True
+    assert hyperparameters["seed"] == 42
+    assert hyperparameters["checkpoint_epoch"] is None
+    assert entry["windowing"] is None

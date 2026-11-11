@@ -16,6 +16,7 @@ import InfoTooltip from "@/components/common/InfoTooltip";
 import DatasetPartitions from "@/components/training/DatasetPartitions";
 import { usePartitionNames } from "@/components/training/usePartitionNames";
 import { CheckpointSyncButton, useCheckpointSyncStatus } from "@/components/training/CheckpointSync";
+import { SheetRows, audioPhysicsRows, hyperparameterRows } from "@/components/training/TechnicalSheetRows";
 import { PARAMETER_EXPLANATIONS } from "@/lib/constants/parameterExplanations";
 
 // ============================================================================
@@ -2814,6 +2815,7 @@ export default function TrainingView() {
                          {selectedModelModal.loss != null ? selectedModelModal.loss.toFixed(4) : "No disponible"}
                       </span>
                     </div>
+                    <SheetRows rows={hyperparameterRows(selectedModelModal)} />
                   </div>
                 </div>
 
@@ -2856,6 +2858,7 @@ export default function TrainingView() {
                            : "No disponible"}
                       </span>
                     </div>
+                    <SheetRows rows={audioPhysicsRows(selectedModelModal)} />
                   </div>
                 </div>
 

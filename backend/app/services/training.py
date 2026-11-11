@@ -88,6 +88,19 @@ class _AcceptedAudioDataset(AudioDataset):
         return resolve_reference(row["file_path"], row["file_stage"], self.roots)
 
 
+
+def _recorded(value, kind):
+    """Return a checkpoint value only when it has the expected type; never guess defaults."""
+    if kind is bool:
+        return value if isinstance(value, bool) else None
+    if isinstance(value, bool):
+        return None
+    if kind is int:
+        return value if isinstance(value, int) else None
+    if kind is float:
+        return float(value) if isinstance(value, (int, float)) and math.isfinite(value) else None
+    return value if isinstance(value, str) and value.strip() else None
+
 class TrainingService:
     """
     Servicio profundo de orquestación del ciclo de entrenamiento bioacústico (RF_04).
@@ -1286,6 +1299,12 @@ class TrainingService:
                     "hyperparameters": {
                         "optimizer": "AdamW",
                         "loss_type": "CrossEntropy" if loss_type == "cross_entropy" else "Focal Loss",
+                        "weight_decay": weight_decay,
+                        "early_stopping": early_stopping_enabled,
+                        "early_stopping_patience": patience if early_stopping_enabled else None,
+                        "focal_gamma": focal_gamma,
+                        "mixup_enabled": mixup_enabled,
+                        "mixup_alpha": mixup_alpha,
                     },
                     "state_dict": saved_state,
                     "created_at": datetime.now(timezone.utc).isoformat(),
@@ -1504,6 +1523,25 @@ class TrainingService:
                             if isinstance(value, str) and value.strip():
                                 hyperparameters[key] = value
 
+                    recorded = recorded_hyperparameters if isinstance(recorded_hyperparameters, dict) else {}
+                    regularization = checkpoint.get("regularization_config")
+                    regularization = regularization if isinstance(regularization, dict) else {}
+                    for key, kind in (("weight_decay", float), ("early_stopping", bool),
+                                      ("early_stopping_patience", int)):
+                        hyperparameters[key] = _recorded(recorded.get(key), kind)
+                    for key, kind in (("focal_gamma", float), ("mixup_enabled", bool), ("mixup_alpha", float)):
+                        value = _recorded(recorded.get(key), kind)
+                        hyperparameters[key] = value if value is not None else _recorded(regularization.get(key), kind)
+                    hyperparameters["pitch_shift_enabled"] = _recorded(regularization.get("pitch_shift_enabled"), bool)
+                    for key, kind in (("seed", int), ("initialization_mode", str),
+                                      ("checkpoint_epoch", int), ("ensemble_weight", float)):
+                        hyperparameters[key] = _recorded(checkpoint.get(key), kind)
+                    windowing_config = checkpoint.get("windowing_config")
+                    windowing = None
+                    if isinstance(windowing_config, dict):
+                        windowing = {key: _recorded(windowing_config.get(key), kind) for key, kind in (
+                            ("hop_seconds", float), ("aggregation_mode", str), ("gem_p", float), ("vad_threshold", float))}
+
                     audio_specs = None
                     labels = checkpoint.get("classes")
                     if (isinstance(labels, list) and labels
@@ -1554,6 +1592,7 @@ class TrainingService:
                         "filename": filename,
                         "hyperparameters": hyperparameters,
                         "audio_specs": audio_specs,
+                        "windowing": windowing,
                         "classes": classes_list,
                         "classes_count": len(classes_list) if classes_list else None,
                         "file_size_bytes": file_size,
