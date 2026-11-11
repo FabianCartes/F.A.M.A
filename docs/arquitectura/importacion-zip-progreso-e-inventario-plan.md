@@ -1,0 +1,38 @@
+# Importación ZIP: progreso de la subida e inventario de datasets
+
+Objetivo: que el modal de importación muestre el avance real de la subida a GCS y que la tabla «Datasets locales y en GCS» sea más clara (columnas, descripción, sin preprocesado) y se actualice mientras un dataset sube. Origen: hallazgo 4 de la etapa g ([plan de g](integracion-mvp-g-base-integracion-plan.md), L12). Rama `mvp`, sin push ni PR; commits locales por unidad. Runner backend: `backend/tests/run_isolated_training_checks.py`; frontend: Vitest, `tsc`, lint y build.
+
+## Specs
+- S1 — Flujo de importación. Kevin, 2026-11-11: «Sobre el cambio 1, mantengamos el formato actual, pero en el modal de subida, una vez termine de validar, muestre el progreso de audios subidos a GCS.» Se mantiene validar y publicar en un mismo trabajo (ADR 0078). Tras la validación, el modal muestra cuántos audios van subidos a GCS sobre el total (por ejemplo «Subiendo a GCS: 120 de 276 audios»), actualizado durante la publicación.
+- S2 — Quitar la columna «Disponibilidad» de la tabla. El aviso «Contenido sin comparar» que hoy vive en esa celda se conserva en otro lugar visible (Kevin aceptó el cambio: «El resto de cambios es correcto»).
+- S3 — Agregar la columna «Descripción», con la descripción que se ingresa en Importar ZIP.
+- S4 — Quitar el botón «Preprocesar audios locales».
+- S5 — «la tabla se deberia actualizar periodicamente mientras se sube un dataset, esto para proporcionar el feedback de que esta avanzando el numero de audios en GCS».
+- S6 — «La columna de Datasets/clases se deberia separar en una por cada elemento, es decir, una columna para "Datasets" y otra para "clases".»
+
+## Estado verificado al planificar (`a0f05f2`, exploración de solo lectura)
+- Un solo trabajo `preview` con `auto_import` valida y llama a `confirm()`, que publica tras el commit local (`dataset_import_execution.py:157-162`, `:208-210`). El único reporte de avance es `report(stage="validating"|"verifying", progress=1)` (`:73`). `ImportJobQueue.progress` solo acepta las etapas `running`, `validating`, `verifying` y `prepared`, exige progreso monótono y como máximo 99 (`dataset_import_jobs.py:182-191`). El panel no muestra `progress` (`DatasetImportPanel.tsx:331-334`), aunque el esquema lo recibe (`frontend/lib/api/datasetImports.ts:32`).
+- La publicación sube por clase y en lotes, y cada lote confirma filas `audio` y actualiza `conjunto_datos.cantidad_audios` (`dataset_import_publication.py:37-46`; `ingestion.py`, zona `:1010-1035`).
+- La tabla (`frontend/components/ingestion/DatasetInventory.tsx`) viene de `/api/ingestion/datasets`, que lista todos los objetos de `datasets/` del bucket en cada consulta (`ingestion.py:196-199`). No hay polling; `DatasetImportPanel` se monta sin `onCatalogChange` (`IngestionView.tsx:582`), así que la tabla no se actualiza al terminar una importación.
+- «Disponibilidad» (`DatasetInventory.tsx:84`, `:106-107`) se deriva de los conteos (`state()`, `:30-47`).
+- La descripción se acepta (máx. 2000) y se guarda en `DatasetImport.description` e `ImportedDataset.description`, pero `conjunto_datos` no tiene columna para ella y `_claim` no la copia (`dataset_import_publication.py:61-62`). `finalidad` no sirve: significa propósito.
+- «Preprocesar audios locales» (`DatasetInventory.tsx:117` → `IngestionView.tsx:413-430` → `POST /api/ingestion/preprocess`) escribe `.npy` que ningún entrenamiento ni partición consume.
+- Migración nueva: `0006` exige actualizar las referencias fijas a 0005 en `app/schema.py`, `app/installation.py` (importa `schema_0005`), `app/history_transfer.py`, `scripts/permisos_tablas_pruebas.sql` y `scripts/permisos_tablas_oficial.sql`, y 5 archivos de prueba.
+
+## Decisiones abiertas
+1. Antes de T1: cómo expone el trabajo el conteo de subida. Recomendado: una etapa nueva `publishing` en `ImportJobQueue.progress`, con `progress` proporcional (máx. 99) y el conteo `{uploaded, total}` en un campo del estado del trabajo que la API ya devuelve; el frontend lo muestra solo en esa etapa. Alternativa: reutilizar `verifying` sin etapa nueva (menos explícito).
+2. Antes de T4: retirar también el endpoint `POST /api/ingestion/preprocess` y su servicio, o solo el botón. Recomendado: solo el botón ahora (el endpoint también se alcanza por `SyncRequest.preprocess`); retirarlo después con su propio análisis.
+3. Antes de T3: la tabla se actualiza consultando `/api/ingestion/datasets` (lista el bucket completo) o un conteo liviano desde `conjunto_datos.cantidad_audios`. Recomendado: el conteo liviano mientras haya datasets en estado `subiendo`, y una consulta completa al terminar.
+
+## Tasks
+- T1 | S1 | pending | Backend: reportar el avance de la publicación por lote (etapa y conteo subidos/total) desde `publish_import` hasta el trabajo; pruebas por la interfaz pública del worker/cola. Risk: item 3 (contrato del estado del trabajo que consume el frontend).
+- T2 | S1 | pending | Frontend: el modal muestra «Subiendo a GCS: X de N audios» tras validar; pruebas Vitest.
+- T3 | S5 | pending | Actualización de la tabla durante la subida y al terminar la importación (`onCatalogChange`); según la decisión 3, endpoint o campo liviano de conteo.
+- T4 | S2,S4,S6 | pending | Tabla: quitar «Disponibilidad» (reubicar el aviso), separar «Dataset» y «Clases», quitar el botón de preprocesar; actualizar sus pruebas.
+- T5 | S3 | pending | Migración `0006` aditiva (`conjunto_datos.descripcion`, nula), esquema congelado, referencias fijas a HEAD (preferir derivarlas de `HEAD` donde sea posible), scripts de permisos, copia de la descripción al publicar, respuesta del inventario y columna en la tabla; pruebas de esquema en SQLite y PostgreSQL (contenedor de pruebas de g). ADR corto de la columna. Risk: item 1 (migración).
+- T6 | S1-S6 | pending | Verificación: suite backend afectada, PostgreSQL con el contenedor desechable, Vitest/`tsc`/lint/build; prueba manual en `fama_pruebas` (migrar a 0006 y repetir una importación pequeña). Verificador independiente por los items 1 y 3.
+
+## Log
+- L1 — Kevin, 2026-11-11: «Vamos primero con los [hallazgos anotados] … Veamos primero el de importacion del zip, segun mi criterio el flujo ideal seria que el zip primero se valida y quede por asi decirlo "local" y despues en la tabla de "Datasets locales y en GCS" este la opcion para sincronizarlo. La columna de Disponibilidad quiza se podria eliminar, debido a que por la cantidad de audios se deduce si ya estan todos. Se tendria que agregar a la tabla la columna descripcion, que esta disponible en importar zip. Tambien eliminar el boton de preprocesar audios locales, creo que al final en el flujo actual no tiene mucha relevancia. Tambien la tabla se deberia actualizar periodicamente mientras se sube un dataset, esto para proporcionar el feedback de que esta avanzando el numero de audios en GCS. La columna de Datasets/clases se deberia separar en una por cada elemento, es decir, una columna para "Datasets" y otra para "clases". Haz la investigacion para determinar cual de estos cambios se pueden realizar y si conviene hacerlos. Primero informame, y despues hacemos el plan».
+- L2 — Investigación de solo lectura (explorador) con comprobación del padre en `dataset_import_execution.py:73`, ADR 0078 y `ingestion.py:199`. Separar validar y sincronizar contradice el ADR 0078 y dejaría el dataset invisible para entrenamiento y particiones hasta sincronizarlo.
+- L3 — Kevin: «Sobre el cambio 1, mantengamos el formato actual, pero en el modal de subida, una vez termine de validar, muestre el progreso de audios subidos a GCS. El resto de cambios es correcto».
