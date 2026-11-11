@@ -24,7 +24,7 @@ def _check_expression(expression: str) -> str:
     # PostgreSQL refleja IN como = ANY (ARRAY[...]) y añade casts de tipos.
     parts = re.split(r"('(?:[^']|'')*')", expression)
     for index in range(0, len(parts), 2):
-        normalized = re.sub(r"::(?:character varying|text|bigint|integer)(?:\[\])?", "", parts[index].lower())
+        normalized = re.sub(r"::(?:character varying|text|bigint|integer|double precision)(?:\[\])?", "", parts[index].lower())
         normalized = re.sub(r"=\s*any\s*\(\s*array\[", " in (", normalized)
         parts[index] = re.sub(r"[\s\[\]()]", "", normalized.replace("!=", "<>"))
     return "".join(parts)

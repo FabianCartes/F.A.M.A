@@ -250,7 +250,7 @@ class Installation:
                     valid = (set(row[0] for row in business) == set(metadata.tables)
                         and all(tuple(row[1:]) == (False,True,True,True,True,False,False,False,False) for row in business)
                         and len(version) == 1 and tuple(version[0][1:]) == (False,True,False,False,False,False,False,False,False)
-                        and len(sequences) == 14 and all(tuple(row) == (True,True,False) for row in sequences) and not any(role))
+                        and len(sequences) == sum(table.autoincrement_column is not None for table in metadata.tables.values()) and all(tuple(row) == (True,True,False) for row in sequences) and not any(role))
                     checks["permissions"] = {"ok": valid, "code": "database_runtime_permissions_ready" if valid else "database_runtime_permissions_invalid"}
                     occupied = any(db.exec_driver_sql(f'SELECT 1 FROM public."{name}" LIMIT 1').first()
                                    for name in metadata.tables if name not in BOOTSTRAP_TABLES)

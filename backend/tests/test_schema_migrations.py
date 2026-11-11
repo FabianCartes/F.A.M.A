@@ -285,8 +285,11 @@ def test_dev_upgrade_preserves_access_schema_and_matches_all_runtime_models(data
     engine = create_engine(database_url)
     with engine.connect() as connection:
         from sqlalchemy import MetaData
+        from migrations.schema_0004 import metadata as previous
+        from tests.test_schema_head import RETAINED_TABLES
         expected = MetaData()
         for table in Base.metadata.sorted_tables: table.to_metadata(expected)
+        for name in sorted(RETAINED_TABLES): previous.tables[name].to_metadata(expected)
         assert matches_schema(connection, expected)
         assert {"model_evaluation", "dataset_import", "sesion_web"}.issubset(inspect(connection).get_table_names())
     engine.dispose()
