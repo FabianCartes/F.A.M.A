@@ -420,7 +420,7 @@ def test_versions_report_audios_added_or_changed_since_they_were_saved(partition
     assert "entries" not in listed
 
 
-def test_review_summarizes_missing_duplicates_small_classes_and_atypical_durations(partition_http):
+def test_review_summarizes_missing_duplicates_small_classes_and_durations_against_the_window(partition_http):
     client, sessions, raw = partition_http
     (raw / "Chucao/4.wav").unlink()
     content = (raw / "Canastero/5.wav").read_bytes()
@@ -429,9 +429,7 @@ def test_review_summarizes_missing_duplicates_small_classes_and_atypical_duratio
         rows = {row.ruta_gcp.rsplit("Sample/", 1)[1]: row for row in db.query(Audio).filter_by(id_conjunto_datos=10)}
         rows["Canastero/6.wav"].hash_archivo = rows["Canastero/5.wav"].hash_archivo
         for path, row in rows.items():
-            row.duracion_segundos = 2.0
-        rows["Chucao/0.wav"].duracion_segundos = 0.5
-        rows["Canastero/9.wav"].duracion_segundos = 9.0
+            row.duracion_segundos = 8.0 if row.clase == "Chucao" else 2.0
         rows["Chucao/1.wav"].duracion_segundos = None
         db.commit()
 
@@ -444,10 +442,35 @@ def test_review_summarizes_missing_duplicates_small_classes_and_atypical_duratio
     assert review["not_local"] == {"count": 1, "files": ["Chucao/4.wav"]}
     assert review["duplicates"] == {"count": 1, "groups": [["Canastero/5.wav", "Canastero/6.wav"]]}
     assert review["small_classes"] == [{"clase": "Canastero", "count": 5}, {"clase": "Chucao", "count": 5}]
-    assert review["atypical_durations"] == {"count": 2, "files": [
-        {"file_path": "Canastero/9.wav", "clase": "Canastero", "duration_seconds": 9.0, "class_median_seconds": 2.0},
-        {"file_path": "Chucao/0.wav", "clase": "Chucao", "duration_seconds": 0.5, "class_median_seconds": 2.0}]}
+    assert review["window_seconds"] == 5.0
+    assert review["short_audios"] == {"count": 5, "threshold_seconds": 2.5,
+                                      "files": [f"Canastero/{index}.wav" for index in range(5, 10)]}
+    assert review["long_audios"] == {"count": 4, "files": ["Chucao/0.wav", "Chucao/2.wav", "Chucao/3.wav", "Chucao/4.wav"]}
+    assert review["class_median_seconds"] == {"Canastero": 2.0, "Chucao": 8.0}
+    assert review["duration_imbalance"] is True
     assert review["unknown_durations"] == 1
+    assert "atypical_durations" not in review
+
+    wide = client.get(BASE + "/review?window_seconds=10").json()
+    assert (wide["window_seconds"], wide["short_audios"]["count"], wide["short_audios"]["threshold_seconds"],
+            wide["long_audios"]["count"]) == (10.0, 5, 5.0, 0)
+
+
+@pytest.mark.parametrize("window", ["0.1", "31", "x"])
+def test_review_rejects_an_invalid_window(partition_http, window):
+    client, _, _ = partition_http
+    assert client.get(BASE + f"/review?window_seconds={window}").status_code == 422
+
+
+def test_review_reports_balanced_durations_without_imbalance(partition_http):
+    client, sessions, _ = partition_http
+    with sessions() as db:
+        for row in db.query(Audio).filter_by(id_conjunto_datos=10):
+            row.duracion_segundos = 5.0 if row.clase == "Chucao" else 4.0
+        db.commit()
+    review = client.get(BASE + "/review").json()
+    assert review["duration_imbalance"] is False
+    assert (review["short_audios"]["count"], review["long_audios"]["count"]) == (0, 0)
 
 
 def test_review_requires_a_session(partition_http):

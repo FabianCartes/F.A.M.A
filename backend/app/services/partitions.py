@@ -275,8 +275,12 @@ class DatasetPartitions:
         except (ValueError, KeyError, TypeError, AttributeError):
             raise PartitionError("La versión de particiones está dañada o pertenece a otro dataset.") from None
 
-    def review(self):
-        """Read-only summary before partitioning (thresholds: decision 3 of the partitions plan)."""
+    def review(self, window_seconds=5.0):
+        """Read-only summary before partitioning (thresholds: partitions plan, decision 3 and L8).
+
+        Durations are measured against the training analysis window: shorter audios
+        are padded with silence and longer ones keep only their most active stretch.
+        """
         from statistics import median
         self._safe_directory()
         prefix = self.dataset.ruta_gcp.rstrip("/") + "/"
@@ -293,17 +297,21 @@ class DatasetPartitions:
         for row in rows:
             if row.duracion_segundos:
                 durations[row.clase].append(row.duracion_segundos)
-        medians = {label: median(values) for label, values in durations.items()}
-        atypical = [{"file_path": relative[row.id_audio], "clase": row.clase, "duration_seconds": row.duracion_segundos,
-                     "class_median_seconds": medians[row.clase]}
-                    for row in rows if row.duracion_segundos and not
-                    0.5 * medians[row.clase] <= row.duracion_segundos <= 3 * medians[row.clase]]
+        medians = {label: median(values) for label, values in sorted(durations.items())}
+        threshold = window_seconds / 2
+        short = [relative[row.id_audio] for row in rows if row.duracion_segundos and row.duracion_segundos < threshold]
+        long = [relative[row.id_audio] for row in rows if row.duracion_segundos and row.duracion_segundos > window_seconds]
+        # Classes whose typical length differs at least twofold can be told apart by padding alone.
+        imbalance = len(medians) > 1 and max(medians.values()) >= 2 * min(medians.values())
         limit = 50
         return {"total": len(rows), "classes": dict(sorted(classes.items())),
                 "not_local": {"count": len(missing), "files": missing[:limit]},
                 "duplicates": {"count": len(duplicates), "groups": duplicates[:limit]},
                 "small_classes": [{"clase": label, "count": count} for label, count in sorted(classes.items()) if count < 10],
-                "atypical_durations": {"count": len(atypical), "files": atypical[:limit]},
+                "window_seconds": float(window_seconds),
+                "short_audios": {"count": len(short), "threshold_seconds": threshold, "files": short[:limit]},
+                "long_audios": {"count": len(long), "files": long[:limit]},
+                "class_median_seconds": medians, "duration_imbalance": imbalance,
                 "unknown_durations": sum(not row.duracion_segundos for row in rows)}
 
     def versions(self):

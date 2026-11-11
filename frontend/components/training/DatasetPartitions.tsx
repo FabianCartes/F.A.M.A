@@ -29,9 +29,11 @@ async function request(url: string, options: RequestInit) {
   return data;
 }
 
-interface Props { dataset: string; busy: boolean; selected: string; onSelect: (version: string) => void; }
+interface Props { dataset: string; busy: boolean; selected: string; onSelect: (version: string) => void;
+  /** Training analysis window in seconds, used by the dataset review. */
+  windowSeconds?: number; }
 
-export default function DatasetPartitions({ dataset, busy, selected, onSelect }: Props) {
+export default function DatasetPartitions({ dataset, busy, selected, onSelect, windowSeconds = 5 }: Props) {
   const [phase, setPhase] = useState<"idle" | "loading" | "preview" | "saving">("loading");
   const [versions, setVersions] = useState<Summary[]>([]);
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -150,7 +152,7 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect }:
           </div>}
         <div className="border-t border-[#23252e] pt-4 space-y-3">
           <h3 className="text-xs font-semibold text-gray-200">Preparar una nueva versión</h3>
-          <DatasetReview dataset={dataset} />
+          <DatasetReview dataset={dataset} windowSeconds={windowSeconds} />
           <p className="text-xs text-gray-400">Solo se incluyen audios registrados y disponibles en este equipo. Se conservan juntos los duplicados y grupos de origen o grabador conocidos. El porcentaje puede variar para respetar esos grupos.</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
             <label className="text-xs text-gray-400">Validación (%)<input aria-label="Validación (%)" type="number" min={10} max={40} step={1} value={validation} disabled={locked} onChange={event => changePolicy(event.target.value, "validation")} className={`${fieldClass} mt-1`} /></label>

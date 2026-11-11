@@ -1,5 +1,5 @@
 """Dataset-scoped preview, publication and retrieval of partition versions."""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
@@ -66,8 +66,9 @@ def save_partitions(policy: SavePartition, store: DatasetPartitions = Depends(pa
 
 
 @router.get("/review")
-def review_partitions(store: DatasetPartitions = Depends(partitions)):
-    return run(store.review)
+def review_partitions(window_seconds: float = Query(5.0, ge=0.5, le=30.0),
+                      store: DatasetPartitions = Depends(partitions)):
+    return run(lambda: store.review(window_seconds))
 
 
 @router.get("/{version}")

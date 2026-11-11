@@ -43,14 +43,15 @@ it("opens with the dataset and names versions by number and date without their h
 const reviewBody = { total: 10, classes: { Canastero: 5, Chucao: 5 },
   not_local: { count: 1, files: ["Chucao/4.wav"] }, duplicates: { count: 1, groups: [["Canastero/5.wav", "Canastero/6.wav"]] },
   small_classes: [{ clase: "Canastero", count: 5 }, { clase: "Chucao", count: 5 }],
-  atypical_durations: { count: 1, files: [{ file_path: "Canastero/9.wav", clase: "Canastero", duration_seconds: 9, class_median_seconds: 2 }] },
-  unknown_durations: 0 };
+  window_seconds: 5, short_audios: { count: 2, threshold_seconds: 2.5, files: ["Canastero/7.wav", "Canastero/8.wav"] },
+  long_audios: { count: 3, files: ["Chucao/0.wav", "Chucao/1.wav", "Chucao/2.wav"] },
+  class_median_seconds: { Canastero: 3.85, Chucao: 10.5 }, duration_imbalance: true, unknown_durations: 0 };
 
 function partitionsTransport(versions: unknown[], calls: { url: string; body?: unknown }[] = []) {
   return vi.fn(async (input: string, options?: RequestInit) => {
     const url = String(input);
     calls.push({ url, body: options?.body ? JSON.parse(String(options.body)) : undefined });
-    if (url.endsWith("/review")) return { ok: true, status: 200, json: async () => reviewBody };
+    if (url.includes("/review")) return { ok: true, status: 200, json: async () => reviewBody };
     if (url.endsWith("/preview")) return { ok: true, status: 200, json: async () => ({ format: 2, version: "f".repeat(64),
       counts: { train: 8, val: 2, test: 2 }, warnings: [], entries: [], excluded: [] }) };
     return { ok: true, status: 200, json: async () => ({ versions }) };
@@ -93,6 +94,16 @@ it("summarizes the dataset review before partitioning", async () => {
   expect(review.getByText("1 audio no está descargado en este equipo.")).toBeDefined();
   expect(review.getByText("1 grupo de audios duplicados.")).toBeDefined();
   expect(review.getByText("Clases con pocos audios (menos de 10): Canastero (5), Chucao (5).")).toBeDefined();
-  expect(review.getByText("1 audio con duración atípica para su clase.")).toBeDefined();
-  expect(review.getByText("Canastero/9.wav · 9 s (mediana de la clase: 2 s)")).toBeDefined();
+  expect(review.getByText("2 audios duran menos de 2,5 s (la mitad de la ventana de 5 s) y se completarán con silencio.")).toBeDefined();
+  expect(review.getByText("3 audios duran más de 5 s; se usa su tramo más activo.")).toBeDefined();
+  expect(review.getByText("Las clases tienen duraciones muy distintas (Canastero 3,85 s, Chucao 10,5 s); el modelo podría aprender la duración en vez del sonido.")).toBeDefined();
+  expect(review.queryByText(/atípica/)).toBeNull();
+});
+
+it("asks the review for the training analysis window", async () => {
+  const calls: { url: string }[] = [];
+  vi.stubGlobal("fetch", partitionsTransport([], calls));
+  render(<DatasetPartitions dataset="Sample" selected="" busy={false} onSelect={vi.fn()} windowSeconds={8} />);
+  await screen.findByRole("region", { name: "Revisión del dataset" });
+  expect(calls.some(call => call.url.endsWith("/partitions/review?window_seconds=8"))).toBe(true);
 });

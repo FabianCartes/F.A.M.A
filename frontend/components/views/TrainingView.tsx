@@ -165,6 +165,9 @@ export default function TrainingView() {
   const [domainPreset, setDomainPreset] = useState<AudioDomainPresetKey>("bioacoustics");
   const [targetSr, setTargetSr] = useState<number | string>(22050);
   const [durationSeconds, setDurationSeconds] = useState<number | string>(5.0);
+  const parsedWindow = typeof durationSeconds === "number" ? durationSeconds : parseFloat(String(durationSeconds));
+  // The dataset review measures durations against a valid analysis window only.
+  const reviewWindow = Number.isFinite(parsedWindow) && parsedWindow >= 0.5 && parsedWindow <= 30 ? parsedWindow : 5;
   const [fMin, setFMin] = useState<number | string>(800);
   const [fMax, setFMax] = useState<number | string>(10000);
   const [nMels, setNMels] = useState<number | string>(128);
@@ -1354,7 +1357,8 @@ export default function TrainingView() {
       {/* 2.5. PANEL DE FÍSICA DE AUDIO Y ADAPTACIÓN AL DOMINIO */}
       {/* ==================================================================== */}
       {selectedDataset && !datasetBlocked && <DatasetPartitions key={selectedDataset} dataset={selectedDataset} busy={isTraining}
-        selected={partitionVersion} onSelect={version => setPartitionSelection({ dataset: selectedDataset, version })} />}
+        selected={partitionVersion} onSelect={version => setPartitionSelection({ dataset: selectedDataset, version })}
+        windowSeconds={reviewWindow} />}
       <fieldset disabled={isTraining} className="bg-[#16171b] border border-[#23252e] rounded-xl shadow-sm transition-all">
         {/* Encabezado colapsable */}
         <button
