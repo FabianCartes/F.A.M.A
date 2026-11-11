@@ -7,7 +7,7 @@ import re
 import stat
 import uuid
 
-from app.services.training_snapshots import _root_directory
+from app.services.local_storage import root_directory
 
 MAX_BYTES = 100 * 1024 * 1024
 _PATTERN = re.compile(r'local_predictions/([1-9][0-9]{0,18})/([0-9a-f]{32})/([0-9a-f]{64})/([1-9][0-9]{0,8})\.wav')
@@ -30,7 +30,7 @@ class LocalPredictionAudio:
         # Keep every directory open; a renamed ancestor cannot redirect an I/O.
         if not self.root.is_dir():
             raise FileNotFoundError('Prediction root unavailable')
-        with _root_directory(self.root) as root_fd, ExitStack() as stack:
+        with root_directory(self.root) as root_fd, ExitStack() as stack:
             fd = root_fd
             for part in parts:
                 if create:

@@ -4,9 +4,7 @@ from unittest.mock import AsyncMock
 from app import main
 from app.models.training import Modelo
 from app.models.dataset_import import ImportedDataset
-from app.models.imported_training_source import ImportedModelSource
 from app.models.prediction import Prediccion
-from app.models.training_snapshot import TrainingSnapshot
 from app.routes.prediction_history import router as prediction_history_router
 from app.services.registry import ModelRegistry, get_model_registry
 from tests.test_api_predict import ContractPredictor, create_dummy_wav_bytes
@@ -69,17 +67,12 @@ def test_assigned_standard_model_prediction_has_local_audio_and_visible_history(
 
 def test_import_owner_without_dataset_assignment_cannot_submit_feedback(functional):
     client, sessions = functional
-    dataset_id, snapshot_id = "a" * 32, "b" * 32
+    dataset_id = "a" * 32
     with sessions() as db:
         db.add(ImportedDataset(id=dataset_id, owner_id=2, name="Synthetic private", revision=1))
-        db.add(TrainingSnapshot(id=snapshot_id, owner_id=2, dataset_id=dataset_id,
-                                dataset_revision=1, name="Synthetic", description="",
-                                state="ready", file_count=1, total_size_bytes=44, classes=["Chucao"]))
         db.add(Modelo(id_modelo=301, arquitectura="AudioCNN", epocas=1,
                       tasa_aprendizaje=0.001, tamano_lote=1, ruta_binario_gcp="models/synthetic.pt"))
         db.flush()
-        db.add(ImportedModelSource(model_id=301, owner_id=2, dataset_id=dataset_id,
-                                   snapshot_id=snapshot_id, identity={"owner_id": 2}))
         db.add(Prediccion(id_prediccion=501, modelo_id="fama_trained_model_301",
                           dataset_name="imported:" + dataset_id, etiqueta_predicha="Chucao",
                           confianza=0.9, ruta_audio_prueba="raw_audios/synthetic.wav"))

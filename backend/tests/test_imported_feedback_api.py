@@ -3,9 +3,6 @@ import pytest
 from tests.http_security import cookie_headers, cookie_security
 
 from tests.test_api_feedback import client as legacy_client, test_db, fake_gcs
-# Register the complete additive source schema before the shared fixture creates it.
-from app.models.training_snapshot import TrainingSnapshot
-from app.models.imported_training_source import ImportedModelSource
 
 
 @pytest.fixture
@@ -58,14 +55,9 @@ def owners(test_db, monkeypatch):
     test_db.add_all([Usuario(id=identity, email=f"owner{identity}@example.test",
                             nombre_completo=f"Owner {identity}", password_hash="unused",
                             rol="investigador", activo=True) for identity in (1, 2)])
-    test_db.add(TrainingSnapshot(id="b" * 32, owner_id=1, dataset_id="a" * 32,
-                                dataset_revision=1, name="Synthetic", description="",
-                                state="ready", file_count=1, total_size_bytes=44, classes=["Synthetic class"]))
     test_db.add(Modelo(id_modelo=301, arquitectura="AudioCNN", epocas=1,
                       tasa_aprendizaje=0.001, tamano_lote=1, ruta_binario_gcp="local.pt"))
     test_db.flush()
-    test_db.add(ImportedModelSource(model_id=301, owner_id=1, dataset_id="a" * 32,
-                                   snapshot_id="b" * 32, identity={"owner_id": 1, "dataset_id": "a" * 32}))
     test_db.commit()
     from sqlalchemy.orm import sessionmaker
     sessions = sessionmaker(bind=test_db.get_bind())
@@ -119,8 +111,6 @@ def test_pending_limit_applies_after_owner_visibility(client, test_db, private_p
     assert created.status_code == 201, created.text
     test_db.add(Modelo(id_modelo=302, arquitectura='AudioCNN', epocas=1,
                       tasa_aprendizaje=.001, tamano_lote=1, ruta_binario_gcp='foreign-local.pt'))
-    test_db.add(ImportedModelSource(model_id=302, owner_id=2, dataset_id='c' * 32,
-                                   snapshot_id='b' * 32, identity={'owner_id': 2}))
     pred = Prediccion(modelo_id='302', dataset_name='imported:' + 'c' * 32,
                       etiqueta_predicha='Foreign class', confianza=.9, ruta_audio_prueba='foreign.wav')
     test_db.add(pred)
