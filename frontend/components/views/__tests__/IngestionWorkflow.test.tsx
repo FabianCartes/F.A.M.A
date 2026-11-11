@@ -13,6 +13,7 @@ let datasets: Record<string, unknown>[];
 let requests: { url: string; options?: RequestInit }[];
 let limits: { max_file_bytes: number; max_batch_bytes: number };
 let uploadResult: Record<string, unknown>;
+let uploadReply: (() => Promise<Response>) | null;
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
   status, headers: { 'Content-Type': 'application/json' },
 });
@@ -23,10 +24,11 @@ describe('Gestión de audios mediante formularios y HTTP', () => {
     requests = [];
     limits = { max_file_bytes: 64 * 1024 * 1024, max_batch_bytes: 256 * 1024 * 1024 };
     uploadResult = { status: 'completed', uploaded: 1, skipped: 0, failed: 0, db_persisted: true, files: ['canto.wav'], errors: [] };
+    uploadReply = null;
     vi.stubGlobal('fetch', vi.fn(async (input, options) => {
       const url = String(input);
       requests.push({ url, options });
-      if (url.includes('/api/ingestion/upload')) return json(uploadResult);
+      if (url.includes('/api/ingestion/upload')) return uploadReply ? uploadReply() : json(uploadResult);
       if (url.includes('/api/ingestion/preprocess')) return json({ status: 'completed', total_processed: 2, total_failed: 0, results: [] });
       if (url.includes('/api/ingestion/status')) return json({ connected: true, bucket: 'fama-pruebas', total_objects: 0, total_bytes: 0 });
       if (url.includes('/api/ingestion/datasets')) return json({ datasets, can_create_dataset: true, upload_limits: limits });
@@ -158,8 +160,8 @@ describe('Gestión de audios mediante formularios y HTTP', () => {
     expect(body.get('class_label')).toBe('Chucao');
     expect((body.get('files') as File).name).toBe('canto.wav');
     const upload = within(screen.getByRole('region', { name: 'Subir audios' }));
-    expect(upload.getByRole('status').textContent).toContain('1 archivo(s) subido(s)');
-    expect(upload.getByRole('status').textContent).toContain('Registro en la base de datos confirmado');
+    expect(upload.getByRole('status').textContent).toBe('Fue subido correctamente.');
+    expect(upload.queryByRole('alert')).toBeNull();
   });
 
   it('rechaza antes del envío un archivo que excede el límite informado por el servidor', async () => {
@@ -171,7 +173,8 @@ describe('Gestión de audios mediante formularios y HTTP', () => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Subir audios a GCS' })); });
 
     expect(requests.some(request => request.url.endsWith('/api/ingestion/upload'))).toBe(false);
-    expect(within(screen.getByRole('region', { name: 'Subir audios' })).getByRole('alert').textContent).toContain('límite por archivo');
+    expect(within(screen.getByRole('region', { name: 'Subir audios' })).getByRole('alert').textContent).toBe(
+      'No se pudo subir debido a que uno de los audios supera el límite por archivo.');
   });
 
   it('rechaza un envío cuyo total excede el límite aunque cada audio sea pequeño', async () => {
@@ -183,7 +186,8 @@ describe('Gestión de audios mediante formularios y HTTP', () => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Subir audios a GCS' })); });
 
     expect(requests.some(request => request.url.endsWith('/api/ingestion/upload'))).toBe(false);
-    expect(within(screen.getByRole('region', { name: 'Subir audios' })).getByRole('alert').textContent).toContain('límite total');
+    expect(within(screen.getByRole('region', { name: 'Subir audios' })).getByRole('alert').textContent).toBe(
+      'No se pudo subir debido a que la selección supera el límite total del envío.');
   });
 
   it('explica una colisión y conserva solo los audios fallidos después de una subida parcial', async () => {
@@ -196,10 +200,10 @@ describe('Gestión de audios mediante formularios y HTTP', () => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Subir audios a GCS' })); });
 
     const upload = within(screen.getByRole('region', { name: 'Subir audios' }));
-    expect(upload.getByRole('alert').textContent).toContain('dos.wav');
-    expect(upload.getByRole('alert').textContent).toContain('no se ha reemplazado');
+    expect(upload.getByRole('alert').textContent).toBe(
+      'No se pudo subir debido a que dos.wav no se subió (Ya existe un audio con ese nombre y clase; no se ha reemplazado).');
     expect(upload.getByText('1 archivo(s) seleccionado(s): dos.wav')).toBeDefined();
-    expect(upload.getByRole('status').textContent).toContain('1 con error');
+    expect(upload.queryByRole('status')).toBeNull();
   });
 
   it('conserva la selección ante una respuesta inválida y permite reintentar la misma carga', async () => {
@@ -210,12 +214,33 @@ describe('Gestión de audios mediante formularios y HTTP', () => {
     fireEvent.change(screen.getByLabelText('Audios'), { target: { files: [new File(['one'], 'uno.wav')] } });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Subir audios a GCS' })); });
     const upload = within(screen.getByRole('region', { name: 'Subir audios' }));
-    expect(upload.getByRole('alert').textContent).toContain('No se pudo confirmar');
+    expect(upload.getByRole('alert').textContent).toBe('No se pudo subir debido a que el servidor no confirmó el resultado.');
     expect(upload.getByText('1 archivo(s) seleccionado(s): uno.wav')).toBeDefined();
     uploadResult = { status: 'completed', uploaded: 0, skipped: 1, failed: 0, db_persisted: true, files: ['uno.wav'], errors: [] };
     await act(async () => { fireEvent.click(upload.getByRole('button', { name: 'Subir audios a GCS' })); });
-    expect(upload.getByRole('status').textContent).toContain('1 ya existente(s)');
+    expect(upload.getByRole('status').textContent).toBe('Fue subido correctamente.');
     expect(upload.queryByText('1 archivo(s) seleccionado(s): uno.wav')).toBeNull();
     expect(requests.filter(item => item.url.endsWith('/api/ingestion/upload'))).toHaveLength(2);
+  });
+
+  it.each([
+    ['sin conexión', () => Promise.reject(new TypeError('Failed to fetch')), 'que no hay conexión con el servidor'],
+    ['carga demasiado grande', () => Promise.resolve(json({ detail: 'La carga supera los límites permitidos.' }, 413)), 'que la carga supera los límites permitidos'],
+    ['dataset no asignado', () => Promise.resolve(json({ detail: 'Recurso no encontrado o no asignado.' }, 404)), 'que no tienes acceso a ese dataset'],
+    ['almacenamiento caído', () => Promise.resolve(json({ detail: 'Configuración de carga no disponible.' }, 503)), 'que el almacenamiento no está disponible'],
+    ['error inesperado', () => Promise.resolve(json({ detail: 'x' }, 500)), 'un error del servidor (HTTP 500)'],
+    ['registro sin confirmar', () => Promise.resolve(json({ status: 'completed', uploaded: 1, skipped: 0, failed: 0, db_persisted: false, files: ['uno.wav'], errors: [] })),
+      'que no se confirmó el registro en la base de datos'],
+  ])('resume el motivo cuando la subida falla por %s y conserva la selección', async (_, reply, reason) => {
+    uploadReply = reply;
+    await act(async () => { render(<IngestionView />); });
+    fireEvent.change(screen.getByLabelText('Dataset de destino'), { target: { value: 'AvesChilenas' } });
+    fireEvent.change(screen.getByLabelText('Clase de los audios'), { target: { value: 'Chucao' } });
+    fireEvent.change(screen.getByLabelText('Audios'), { target: { files: [new File(['one'], 'uno.wav')] } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Subir audios a GCS' })); });
+    const upload = within(screen.getByRole('region', { name: 'Subir audios' }));
+    expect(upload.getByRole('alert').textContent).toBe(`No se pudo subir debido a ${reason}.`);
+    expect(upload.queryByRole('status')).toBeNull();
+    expect(upload.getByText('1 archivo(s) seleccionado(s): uno.wav')).toBeDefined();
   });
 });

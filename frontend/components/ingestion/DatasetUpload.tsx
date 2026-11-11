@@ -23,6 +23,28 @@ interface Props {
   limits?: UploadLimits | null;
 }
 
+/** A summarized reason, phrased to follow «No se pudo subir debido a …». */
+class UploadFailure extends Error {}
+
+function failureMessage(reason: string) {
+  return `No se pudo subir debido a ${reason}.`;
+}
+
+function statusReason(status: number) {
+  if (status === 401) return "que la sesión expiró; vuelve a iniciar sesión";
+  if (status === 403 || status === 404) return "que no tienes acceso a ese dataset";
+  if (status === 413) return "que la carga supera los límites permitidos";
+  if (status === 422) return "que el dataset, la clase o los archivos no son válidos";
+  if (status === 503) return "que el almacenamiento no está disponible";
+  return `un error del servidor (HTTP ${status})`;
+}
+
+function failedFilesReason(failures: { filename?: string; error?: string }[]) {
+  if (!failures.length) return "que algunos audios no se pudieron confirmar";
+  const detail = failures.map(item => `${item.filename ?? "un audio"} no se subió (${(item.error ?? "sin detalle").replace(/\.$/, "")})`);
+  return `que ${detail.join("; ")}`;
+}
+
 export default function DatasetUpload({ datasets, canCreate, busy, onUploaded, onBusyChange, limits }: Props) {
   const [target, setTarget] = useState("");
   const [newName, setNewName] = useState("");
@@ -50,11 +72,11 @@ export default function DatasetUpload({ datasets, canCreate, busy, onUploaded, o
     event.preventDefault();
     if (submitting.current || busy || !allowed || !dataset || !classLabel || files.length === 0) return;
     if (limits && files.some(file => file.size > limits.max_file_bytes)) {
-      setError("Uno de los audios supera el límite por archivo. Elige archivos más pequeños.");
+      setMessage(""); setError(failureMessage("que uno de los audios supera el límite por archivo"));
       return;
     }
     if (limits && files.reduce((total, file) => total + file.size, 0) > limits.max_batch_bytes) {
-      setError("La selección supera el límite total del envío. Divide los audios en varios envíos.");
+      setMessage(""); setError(failureMessage("que la selección supera el límite total del envío"));
       return;
     }
     const body = new FormData();
@@ -66,28 +88,34 @@ export default function DatasetUpload({ datasets, canCreate, busy, onUploaded, o
     const controller = new AbortController();
     request.current = controller;
     try {
-      const response = await apiFetch(`${API_BASE_URL}/api/ingestion/upload`, { method: "POST", body, signal: controller.signal });
+      let response: Response;
+      try {
+        response = await apiFetch(`${API_BASE_URL}/api/ingestion/upload`, { method: "POST", body, signal: controller.signal });
+      } catch (reason) {
+        if (controller.signal.aborted) return;
+        throw new UploadFailure(reason instanceof TypeError ? "que no hay conexión con el servidor" : "un error inesperado");
+      }
       const value = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(value && typeof value.detail === "string" ? value.detail : "No se pudo confirmar la subida.");
+      if (!response.ok) throw new UploadFailure(statusReason(response.status));
       const decoded = uploadResultSchema.safeParse(value);
-      if (!decoded.success) throw new Error("No se pudo confirmar la subida. Actualiza el inventario antes de reintentar.");
+      if (!decoded.success) throw new UploadFailure("que el servidor no confirmó el resultado");
       const result = decoded.data;
       if (controller.signal.aborted) return;
-      const summary = `${result.uploaded ?? 0} archivo(s) subido(s), ${result.skipped ?? 0} ya existente(s), ${result.failed ?? 0} con error.`;
-      const persisted = result.db_persisted === true;
-      setMessage(`${summary} ${persisted ? "Registro en la base de datos confirmado." : "Registro en la base de datos sin confirmar; revisa el resultado antes de reintentar."}`);
       const failures: { filename?: string; error?: string }[] = Array.isArray(result.errors) ? result.errors : [];
-      if (failures.length) setError(failures.map(item => `${item.filename ?? "Audio"}: ${item.error ?? "No se pudo confirmar su subida."}`).join(" "));
-      if (result.status === "completed" && persisted && result.failed === 0) {
+      if (result.db_persisted !== true) {
+        setError(failureMessage("que no se confirmó el registro en la base de datos"));
+      } else if (failures.length || (result.failed ?? 0) > 0 || result.status !== "completed") {
+        setError(failureMessage(failedFilesReason(failures)));
+        const rejected = new Set(failures.map(item => item.filename));
+        if (failures.length) setFiles(files.filter(file => rejected.has(file.name)));
+      } else {
+        setMessage("Fue subido correctamente.");
         setFiles([]);
         if (fileInput.current) fileInput.current.value = "";
-      } else if (persisted && failures.length) {
-        const rejected = new Set(failures.map(item => item.filename));
-        setFiles(files.filter(file => rejected.has(file.name)));
       }
       await onUploaded();
     } catch (reason) {
-      if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "No se pudo confirmar la subida. Revisa el inventario antes de reintentar.");
+      if (!controller.signal.aborted) setError(failureMessage(reason instanceof UploadFailure ? reason.message : "un error inesperado"));
     } finally {
       submitting.current = false;
       if (!controller.signal.aborted) { setUploading(false); onBusyChange(false); }
