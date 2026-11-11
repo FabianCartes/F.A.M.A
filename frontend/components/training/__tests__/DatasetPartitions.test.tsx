@@ -98,6 +98,8 @@ it("summarizes the dataset review before partitioning", async () => {
   expect(review.getByText("3 audios duran más de 5 s; se usa su tramo más activo.")).toBeDefined();
   expect(review.getByText("Las clases tienen duraciones muy distintas (Canastero 3,85 s, Chucao 10,5 s); el modelo podría aprender la duración en vez del sonido.")).toBeDefined();
   expect(review.queryByText(/atípica/)).toBeNull();
+  expect(review.queryByText(/\.wav/)).toBeNull();
+  expect(screen.getByRole("region", { name: "Revisión del dataset" }).querySelector("details")).toBeNull();
 });
 
 it("asks the review for the training analysis window", async () => {

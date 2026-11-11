@@ -303,14 +303,13 @@ class DatasetPartitions:
         long = [relative[row.id_audio] for row in rows if row.duracion_segundos and row.duracion_segundos > window_seconds]
         # Classes whose typical length differs at least twofold can be told apart by padding alone.
         imbalance = len(medians) > 1 and max(medians.values()) >= 2 * min(medians.values())
-        limit = 50
         return {"total": len(rows), "classes": dict(sorted(classes.items())),
-                "not_local": {"count": len(missing), "files": missing[:limit]},
-                "duplicates": {"count": len(duplicates), "groups": duplicates[:limit]},
+                "not_local": {"count": len(missing)},
+                "duplicates": {"count": len(duplicates)},
                 "small_classes": [{"clase": label, "count": count} for label, count in sorted(classes.items()) if count < 10],
                 "window_seconds": float(window_seconds),
-                "short_audios": {"count": len(short), "threshold_seconds": threshold, "files": short[:limit]},
-                "long_audios": {"count": len(long), "files": long[:limit]},
+                "short_audios": {"count": len(short), "threshold_seconds": threshold},
+                "long_audios": {"count": len(long)},
                 "class_median_seconds": medians, "duration_imbalance": imbalance,
                 "unknown_durations": sum(not row.duracion_segundos for row in rows)}
 

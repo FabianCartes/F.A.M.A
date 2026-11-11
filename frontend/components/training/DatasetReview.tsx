@@ -7,12 +7,12 @@ import { API_BASE_URL, apiFetch } from "@/lib/api";
 const reviewSchema = z.object({
   total: z.number().int().nonnegative(),
   classes: z.record(z.string(), z.number().int().nonnegative()),
-  not_local: z.object({ count: z.number().int().nonnegative(), files: z.array(z.string()) }),
-  duplicates: z.object({ count: z.number().int().nonnegative(), groups: z.array(z.array(z.string())) }),
+  not_local: z.object({ count: z.number().int().nonnegative() }),
+  duplicates: z.object({ count: z.number().int().nonnegative() }),
   small_classes: z.array(z.object({ clase: z.string(), count: z.number().int().nonnegative() })),
   window_seconds: z.number().positive(),
-  short_audios: z.object({ count: z.number().int().nonnegative(), threshold_seconds: z.number(), files: z.array(z.string()) }),
-  long_audios: z.object({ count: z.number().int().nonnegative(), files: z.array(z.string()) }),
+  short_audios: z.object({ count: z.number().int().nonnegative(), threshold_seconds: z.number() }),
+  long_audios: z.object({ count: z.number().int().nonnegative() }),
   class_median_seconds: z.record(z.string(), z.number()),
   duration_imbalance: z.boolean(),
   unknown_durations: z.number().int().nonnegative(),
@@ -51,23 +51,11 @@ export default function DatasetReview({ dataset, windowSeconds = 5 }: { dataset:
       <h3 className="font-semibold text-gray-200">Revisión del dataset</h3>
       <p>{plural(review.total, "audio registrado", "audios registrados")} en {plural(classCount, "clase", "clases")}.</p>
       {clean && <p className="text-emerald-300">Sin observaciones.</p>}
-      {review.not_local.count > 0 && <details>
-        <summary className="cursor-pointer text-amber-200">{review.not_local.count === 1 ? "1 audio no está descargado en este equipo." : `${review.not_local.count} audios no están descargados en este equipo.`}</summary>
-        <ul className="mt-1 space-y-1 font-mono break-words text-gray-400">{review.not_local.files.map(path => <li key={path}>{path}</li>)}</ul>
-      </details>}
-      {review.duplicates.count > 0 && <details>
-        <summary className="cursor-pointer text-amber-200">{plural(review.duplicates.count, "grupo", "grupos")} de audios duplicados.</summary>
-        <ul className="mt-1 space-y-1 font-mono break-words text-gray-400">{review.duplicates.groups.map(group => <li key={group.join("|")}>{group.join(" = ")}</li>)}</ul>
-      </details>}
+      {review.not_local.count > 0 && <p className="text-amber-200">{review.not_local.count === 1 ? "1 audio no está descargado en este equipo." : `${review.not_local.count} audios no están descargados en este equipo.`}</p>}
+      {review.duplicates.count > 0 && <p className="text-amber-200">{plural(review.duplicates.count, "grupo", "grupos")} de audios duplicados.</p>}
       {review.small_classes.length > 0 && <p className="text-amber-200">Clases con pocos audios (menos de 10): {review.small_classes.map(item => `${item.clase} (${item.count})`).join(", ")}.</p>}
-      {review.short_audios.count > 0 && <details>
-        <summary className="cursor-pointer text-amber-200">{`${review.short_audios.count === 1 ? "1 audio dura" : `${review.short_audios.count} audios duran`} menos de ${seconds(review.short_audios.threshold_seconds)} (la mitad de la ventana de ${windowText}) y se completarán con silencio.`}</summary>
-        <ul className="mt-1 space-y-1 font-mono break-words text-gray-400">{review.short_audios.files.map(path => <li key={path}>{path}</li>)}</ul>
-      </details>}
-      {review.long_audios.count > 0 && <details>
-        <summary className="cursor-pointer text-gray-300">{`${review.long_audios.count === 1 ? "1 audio dura" : `${review.long_audios.count} audios duran`} más de ${windowText}; se usa su tramo más activo.`}</summary>
-        <ul className="mt-1 space-y-1 font-mono break-words text-gray-400">{review.long_audios.files.map(path => <li key={path}>{path}</li>)}</ul>
-      </details>}
+      {review.short_audios.count > 0 && <p className="text-amber-200">{`${review.short_audios.count === 1 ? "1 audio dura" : `${review.short_audios.count} audios duran`} menos de ${seconds(review.short_audios.threshold_seconds)} (la mitad de la ventana de ${windowText}) y se completarán con silencio.`}</p>}
+      {review.long_audios.count > 0 && <p>{`${review.long_audios.count === 1 ? "1 audio dura" : `${review.long_audios.count} audios duran`} más de ${windowText}; se usa su tramo más activo.`}</p>}
       {review.duration_imbalance && <p className="text-amber-200">{`Las clases tienen duraciones muy distintas (${Object.entries(review.class_median_seconds)
         .map(([label, value]) => `${label} ${seconds(value)}`).join(", ")}); el modelo podría aprender la duración en vez del sonido.`}</p>}
       {review.unknown_durations > 0 && <p className="text-gray-500">{plural(review.unknown_durations, "audio", "audios")} sin duración registrada.</p>}

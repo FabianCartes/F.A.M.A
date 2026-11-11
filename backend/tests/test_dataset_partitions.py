@@ -439,13 +439,12 @@ def test_review_summarizes_missing_duplicates_small_classes_and_durations_agains
     review = response.json()
     assert review["total"] == 10
     assert review["classes"] == {"Canastero": 5, "Chucao": 5}
-    assert review["not_local"] == {"count": 1, "files": ["Chucao/4.wav"]}
-    assert review["duplicates"] == {"count": 1, "groups": [["Canastero/5.wav", "Canastero/6.wav"]]}
+    assert review["not_local"] == {"count": 1}
+    assert review["duplicates"] == {"count": 1}
     assert review["small_classes"] == [{"clase": "Canastero", "count": 5}, {"clase": "Chucao", "count": 5}]
     assert review["window_seconds"] == 5.0
-    assert review["short_audios"] == {"count": 5, "threshold_seconds": 2.5,
-                                      "files": [f"Canastero/{index}.wav" for index in range(5, 10)]}
-    assert review["long_audios"] == {"count": 4, "files": ["Chucao/0.wav", "Chucao/2.wav", "Chucao/3.wav", "Chucao/4.wav"]}
+    assert review["short_audios"] == {"count": 5, "threshold_seconds": 2.5}
+    assert review["long_audios"] == {"count": 4}
     assert review["class_median_seconds"] == {"Canastero": 2.0, "Chucao": 8.0}
     assert review["duration_imbalance"] is True
     assert review["unknown_durations"] == 1
