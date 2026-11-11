@@ -17,6 +17,8 @@ class PartitionPolicy(BaseModel):
     validation_percent: int = Field(default=20, ge=10, le=40, strict=True)
     test_percent: int = Field(default=20, ge=10, le=40, strict=True)
     seed: int = Field(default=42, ge=0, le=2**31 - 1, strict=True)
+    # Updated version: keep the splits of this saved version and assign only new audios.
+    base_version: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
 
 class SavePartition(PartitionPolicy):
@@ -54,13 +56,13 @@ def list_partitions(store: DatasetPartitions = Depends(partitions)):
 
 @router.post("/preview")
 def preview_partitions(policy: PartitionPolicy, store: DatasetPartitions = Depends(partitions)):
-    return run(lambda: store.preview(policy.validation_percent, policy.seed, policy.test_percent))
+    return run(lambda: store.preview(policy.validation_percent, policy.seed, policy.test_percent, policy.base_version))
 
 
 @router.post("")
 def save_partitions(policy: SavePartition, store: DatasetPartitions = Depends(partitions), access: ResourceAccess = Depends(resource_access)):
     return run(lambda: store.save(policy.validation_percent, policy.seed, policy.preview_version,
-                                 policy.acknowledge_warnings, access.user.id, policy.test_percent))
+                                 policy.acknowledge_warnings, access.user.id, policy.test_percent, policy.base_version))
 
 
 @router.get("/{version}")

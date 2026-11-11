@@ -330,3 +330,90 @@ def test_triad_training_uses_the_saved_partition_version(partition_http):
     assert response.json()["partition_version"] == saved["version"]
     progress = client.get("/api/training/progress").json()
     assert (progress["status"], progress["total_models"]) == ("training", 3)
+
+
+def add_audio(sessions, raw, path, label, content):
+    (raw / path).parent.mkdir(exist_ok=True)
+    (raw / path).write_bytes(content)
+    with sessions() as db:
+        db.add(Audio(id_conjunto_datos=10, nombre_archivo=Path(path).name, clase=label,
+                     ruta_gcp=f"gs://fixture/datasets/Sample/{path}", tamano_bytes=len(content),
+                     hash_archivo=hashlib.sha256(content).hexdigest()))
+        db.commit()
+
+
+def saved_base(client):
+    preview = client.post(BASE + "/preview", headers={"Origin": ORIGIN}, json=POLICY).json()
+    saved = client.post(BASE, headers={"Origin": ORIGIN}, json={
+        **POLICY, "preview_version": preview["version"], "acknowledge_warnings": True})
+    assert saved.status_code == 200, saved.text
+    return client.get(BASE + "/" + preview["version"]).json()
+
+
+def test_updated_version_keeps_previous_splits_and_only_assigns_new_audios(partition_http):
+    client, sessions, raw = partition_http
+    base = saved_base(client)
+    for index in range(10, 18):
+        label = "Chucao" if index % 2 else "Canastero"
+        add_audio(sessions, raw, f"{label}/{index}.wav", label, synthetic_wav(frames=800)[:-2] + index.to_bytes(2, "little"))
+
+    response = client.post(BASE + "/preview", headers={"Origin": ORIGIN}, json={**POLICY, "base_version": base["version"]})
+
+    assert response.status_code == 200, response.text
+    update = response.json()
+    previous = {entry["file_path"]: entry["split"] for entry in base["entries"]}
+    current = {entry["file_path"]: entry["split"] for entry in update["entries"]}
+    assert {path: current[path] for path in previous} == previous
+    assert len(current) == 18
+    assert update["policy"]["base_version"] == base["version"]
+    assert update["policy"]["algorithm"] == "grouped-incremental-v1"
+    assert sum(update["counts"].values()) == 18
+    assert update["version"] != base["version"]
+    saved = client.post(BASE, headers={"Origin": ORIGIN}, json={
+        **POLICY, "base_version": base["version"], "preview_version": update["version"], "acknowledge_warnings": True})
+    assert saved.status_code == 200, saved.text
+    assert client.get(BASE + "/" + update["version"]).json()["policy"]["base_version"] == base["version"]
+
+
+def test_new_exact_duplicate_inherits_the_split_of_its_original(partition_http):
+    client, sessions, raw = partition_http
+    base = saved_base(client)
+    original = next(entry for entry in base["entries"] if entry["split"] != "train")
+    add_audio(sessions, raw, f"{original['clase']}/copy.wav", original["clase"], (raw / original["file_path"]).read_bytes())
+    update = client.post(BASE + "/preview", headers={"Origin": ORIGIN}, json={**POLICY, "base_version": base["version"]}).json()
+    copy, = [entry for entry in update["entries"] if entry["file_path"].endswith("copy.wav")]
+    assert copy["split"] == original["split"]
+
+
+@pytest.mark.parametrize("change", [{"seed": 7}, {"validation_percent": 25}, {"test_percent": 15}])
+def test_updated_version_requires_the_base_policy(partition_http, change):
+    client, _, _ = partition_http
+    base = saved_base(client)
+    response = client.post(BASE + "/preview", headers={"Origin": ORIGIN},
+                           json={**POLICY, **change, "base_version": base["version"]})
+    assert response.status_code == 409
+    assert "semilla y los porcentajes" in response.json()["detail"]
+
+
+def test_updated_version_requires_an_existing_base(partition_http):
+    client, _, _ = partition_http
+    response = client.post(BASE + "/preview", headers={"Origin": ORIGIN}, json={**POLICY, "base_version": "e" * 64})
+    assert response.status_code == 409
+    assert "no está disponible" in response.json()["detail"]
+
+
+def test_versions_report_audios_added_or_changed_since_they_were_saved(partition_http):
+    client, sessions, raw = partition_http
+    base = saved_base(client)
+    listed, = client.get(BASE).json()["versions"]
+    assert listed["freshness"] == {"new": 0, "changed": 0}
+    for index in range(10, 13):
+        add_audio(sessions, raw, f"Chucao/{index}.wav", "Chucao", synthetic_wav(frames=800)[:-2] + index.to_bytes(2, "little"))
+    with sessions() as db:
+        changed = db.query(Audio).filter_by(ruta_gcp="gs://fixture/datasets/Sample/Canastero/9.wav").one()
+        changed.hash_archivo = "f" * 64
+        db.commit()
+    listed, = client.get(BASE).json()["versions"]
+    assert listed["version"] == base["version"]
+    assert listed["freshness"] == {"new": 3, "changed": 1}
+    assert "entries" not in listed
