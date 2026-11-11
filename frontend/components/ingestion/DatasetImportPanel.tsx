@@ -101,6 +101,9 @@ export default function DatasetImportPanel({ onCatalogChange, triggerLabel = "Im
   const executionStatus = job?.execution?.status;
   const importId = job?.id;
   const executing = executionStatus === "queued" || executionStatus === "running";
+  const executionResult = job?.execution?.result;
+  const publishingCounts = job?.execution?.stage === "publishing" && executionResult?.uploaded !== undefined
+    && executionResult.total !== undefined ? { uploaded: executionResult.uploaded, total: executionResult.total } : null;
   const automatic = !job || job.preview.auto_import === true;
   const quota = job?.preview.quota;
   const quotaExceeded = quota && (quota.projected_bytes > quota.limit_bytes || quota.projected_files > quota.limit_files);
@@ -330,7 +333,8 @@ export default function DatasetImportPanel({ onCatalogChange, triggerLabel = "Im
           {job.status !== "imported" && <section aria-label="Importación en curso" className="space-y-2 rounded-lg border border-[#2d303b] bg-[#111215] p-4">
             <h3 className="font-semibold text-white">{(job.dataset_id && datasetNames[job.dataset_id]) || (createdImport?.id === job.id ? createdImport.name : job.archive_name) || "Importación de ZIP"}</h3>
             <p role="status">{executionStatus === "queued" ? "En espera para importar" : executionStatus === "running"
-              ? (job.execution?.kind === "confirm" ? "Guardando el dataset…" : "Validando los audios…")
+              ? (publishingCounts ? `Subiendo a GCS: ${publishingCounts.uploaded} de ${publishingCounts.total} audios`
+                : job.execution?.kind === "confirm" ? "Guardando el dataset…" : "Validando los audios…")
               : job.status === "receiving" ? "Subiendo el ZIP…" : job.status === "validating" ? "Validando los audios…"
                 : job.status === "committing" ? "Guardando el dataset…" : `Estado: ${statusLabels[job.status] || "pendiente de consulta"}`}</p>
             {job.preview.file_count > 0 && <p>Audios: {job.preview.file_count} · Clases: {job.preview.class_count}</p>}

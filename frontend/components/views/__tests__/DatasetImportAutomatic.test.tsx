@@ -135,3 +135,37 @@ it.each(["ready", "committing", "needs_correction"])("recovers automatic %s with
     expect(writes).toEqual([execution.status_url + "/retry"]);
   }
 });
+
+it("shows uploaded GCS audios after validation while the automatic job publishes", async () => {
+  vi.stubGlobal("crypto", webcrypto);
+  const publishing = { ...execution, stage: "publishing", progress: 43, result: { uploaded: 120, total: 276 } };
+  let polls = 0;
+  vi.stubGlobal("fetch", vi.fn(async (input: string, options?: RequestInit) => {
+    const path = new URL(input, "http://synthetic.test").pathname;
+    if (path.endsWith("/access")) return Response.json({ development_mode: true });
+    if (path.endsWith("/limits")) return Response.json(limits);
+    if (path === base) return options?.method ? Response.json({ ...source, status: "receiving", execution: null }) : page("imports", []);
+    if (path.endsWith("/receipt")) return Response.json({ import_id: source.id, name: "birds.zip", size_bytes: 3,
+      received_bytes: 0, reserved_bytes: 4099, chunk_bytes: 16 * 1024 ** 2, status: "receiving" });
+    if (path.endsWith("/chunks/0") || path.endsWith("/finalize")) return Response.json({ import_id: source.id,
+      name: "birds.zip", size_bytes: 3, received_bytes: 3, reserved_bytes: 4099, chunk_bytes: 16 * 1024 ** 2,
+      status: path.endsWith("/finalize") ? "sealed" : "receiving" });
+    if (path === base + "/source") return Response.json({ ...source, status: "validating", execution: null });
+    if (path.endsWith("/preview")) return Response.json(execution, { status: 202 });
+    if (path === execution.status_url) {
+      polls += 1;
+      return polls === 1 ? Response.json(publishing) : new Promise<Response>(() => undefined);
+    }
+    if (path.endsWith("/files")) return page("files", []);
+    if (path.endsWith("/classes")) return page("classes", ["bird"]);
+    if (path.endsWith("/issues")) return page("issues", []);
+    throw new Error(`Unexpected ${options?.method || "GET"} ${path}`);
+  }));
+  render(<DatasetImportPanel />);
+  await open();
+  fireEvent.change(screen.getByLabelText("Nombre del dataset"), { target: { value: "Birds" } });
+  fireEvent.change(screen.getByLabelText("Archivo ZIP"), { target: { files: [new File(["zip"], "birds.zip")] } });
+  fireEvent.click(screen.getByRole("button", { name: /^(Importar|Validar) ZIP$/ }));
+  expect(await screen.findByText("Subiendo a GCS: 120 de 276 audios")).toBeDefined();
+  expect(screen.queryByText("Validando los audios…")).toBeNull();
+});

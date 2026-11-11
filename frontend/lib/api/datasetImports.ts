@@ -30,7 +30,9 @@ export const executionSchema = z.object({
   id: z.string(), import_id: z.string(), kind: z.enum(["preview", "confirm"]),
   status: z.enum(["queued", "running", "succeeded", "failed", "cancelled"]),
   stage: z.string(), progress: z.number().int().min(0).max(100),
-  result: z.object({ dataset_id: z.string().optional(), added_count: z.number().optional() }),
+  result: z.object({ dataset_id: z.string().optional(), added_count: z.number().optional(),
+    // Present only while stage is "publishing": audios uploaded to GCS so far.
+    uploaded: z.number().int().nonnegative().optional(), total: z.number().int().nonnegative().optional() }),
   error: z.object({ code: z.string() }).nullable(), status_url: z.string(),
 });
 export const jobSchema = z.object({
