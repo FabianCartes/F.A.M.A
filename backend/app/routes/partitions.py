@@ -65,6 +65,11 @@ def save_partitions(policy: SavePartition, store: DatasetPartitions = Depends(pa
                                  policy.acknowledge_warnings, access.user.id, policy.test_percent, policy.base_version))
 
 
+@router.get("/review")
+def review_partitions(store: DatasetPartitions = Depends(partitions)):
+    return run(store.review)
+
+
 @router.get("/{version}")
 def read_partition(version: str, store: DatasetPartitions = Depends(partitions)):
     return run(lambda: store.read(version))

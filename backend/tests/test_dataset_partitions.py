@@ -417,3 +417,39 @@ def test_versions_report_audios_added_or_changed_since_they_were_saved(partition
     assert listed["version"] == base["version"]
     assert listed["freshness"] == {"new": 3, "changed": 1}
     assert "entries" not in listed
+
+
+def test_review_summarizes_missing_duplicates_small_classes_and_atypical_durations(partition_http):
+    client, sessions, raw = partition_http
+    (raw / "Chucao/4.wav").unlink()
+    content = (raw / "Canastero/5.wav").read_bytes()
+    (raw / "Canastero/6.wav").write_bytes(content)
+    with sessions() as db:
+        rows = {row.ruta_gcp.rsplit("Sample/", 1)[1]: row for row in db.query(Audio).filter_by(id_conjunto_datos=10)}
+        rows["Canastero/6.wav"].hash_archivo = rows["Canastero/5.wav"].hash_archivo
+        for path, row in rows.items():
+            row.duracion_segundos = 2.0
+        rows["Chucao/0.wav"].duracion_segundos = 0.5
+        rows["Canastero/9.wav"].duracion_segundos = 9.0
+        rows["Chucao/1.wav"].duracion_segundos = None
+        db.commit()
+
+    response = client.get(BASE + "/review")
+
+    assert response.status_code == 200, response.text
+    review = response.json()
+    assert review["total"] == 10
+    assert review["classes"] == {"Canastero": 5, "Chucao": 5}
+    assert review["not_local"] == {"count": 1, "files": ["Chucao/4.wav"]}
+    assert review["duplicates"] == {"count": 1, "groups": [["Canastero/5.wav", "Canastero/6.wav"]]}
+    assert review["small_classes"] == [{"clase": "Canastero", "count": 5}, {"clase": "Chucao", "count": 5}]
+    assert review["atypical_durations"] == {"count": 2, "files": [
+        {"file_path": "Canastero/9.wav", "clase": "Canastero", "duration_seconds": 9.0, "class_median_seconds": 2.0},
+        {"file_path": "Chucao/0.wav", "clase": "Chucao", "duration_seconds": 0.5, "class_median_seconds": 2.0}]}
+    assert review["unknown_durations"] == 1
+
+
+def test_review_requires_a_session(partition_http):
+    client, _, _ = partition_http
+    client.cookies.clear()
+    assert client.get(BASE + "/review").status_code == 401
