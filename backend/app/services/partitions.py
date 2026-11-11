@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from collections import Counter, defaultdict
 
 from app.models.dataset import Audio
+from app.models.feedback import Retroalimentacion
 from app.models.feedback_sync import FeedbackSync
 from dataset_references import resolve_reference
 from training.paths import get_dataset_roots
@@ -102,7 +103,7 @@ class DatasetPartitions:
 
         identities = {}
         for index, entry in enumerate(entries):
-            for kind in ("hash_sha256", "source_group", "recordist"):
+            for kind in ("hash_sha256", "source_group", "recordist", "origin"):
                 identity = entry.get(kind)
                 if not identity:
                     continue
@@ -162,8 +163,14 @@ class DatasetPartitions:
             raise PartitionError("Esta preparación admite hasta 10000 audios registrados por dataset.")
         entries, excluded = [], []
         provenance = self._provenance()
-        feedback_paths = {row.local_relative_path.removeprefix(self.dataset.nombre + "/")
-                          for row in self.db.query(FeedbackSync).filter_by(dataset_name=self.dataset.nombre).all()}
+        # Accepted feedback carries no recordist; its origin comes from the database:
+        # the prediction it came from, or the dataset recording it corrects (ADR 0080).
+        feedback_origins = {sync.local_relative_path.removeprefix(self.dataset.nombre + "/"): feedback.id_prediccion
+                            for sync, feedback in self.db.query(FeedbackSync, Retroalimentacion)
+                            .join(Retroalimentacion, Retroalimentacion.id_retroalimentacion == FeedbackSync.id_retroalimentacion)
+                            .filter(FeedbackSync.dataset_name == self.dataset.nombre).all()}
+        corrected = {_identity(row.get("curation_source_id")) for path, row in provenance.items()
+                     if path in feedback_origins} - {""}
         for row in rows:
             if not row.ruta_gcp.startswith(prefix):
                 raise PartitionError("Hay audios cuya ruta no coincide con el dataset registrado.")
@@ -181,15 +188,24 @@ class DatasetPartitions:
                     or row.hash_archivo and row.hash_archivo != digest):
                 raise PartitionError("Un audio local no coincide con su registro; vuelve a sincronizarlo.")
             observed = provenance.get(relative, {})
-            if relative in feedback_paths and not _identity(observed.get("source_group")):
-                excluded.append({"file_path": relative, "reason": "feedback_without_source_group"})
-                continue
+            origin = ""
+            if relative in feedback_origins:
+                source = _identity(observed.get("curation_source_id"))
+                origin = f"recording:{source}" if source else (
+                    f"prediction:{feedback_origins[relative]}" if feedback_origins[relative] else "")
+                if not origin and not _identity(observed.get("source_group")):
+                    excluded.append({"file_path": relative, "reason": "feedback_without_source_group"})
+                    continue
+            elif _identity(observed.get("xc_id")) in corrected:
+                origin = f"recording:{_identity(observed.get('xc_id'))}"
             entries.append({"audio_id": row.id_audio, "file_path": relative, "file_stage": "raw", "clase": row.clase,
                             "hash_sha256": digest, "size_bytes": path.stat().st_size})
             if observed.get("clase") and observed["clase"] != row.clase:
                 raise PartitionError("La clase de los metadatos no coincide con el registro del audio.")
             for field in ("source_group", "recordist"):
                 entries[-1][field] = _identity(observed.get(field))
+            if origin:
+                entries[-1]["origin"] = origin
         self._split(entries, validation_percent, seed, test_percent)
         warnings = []
         if any(not entry["recordist"] for entry in entries):

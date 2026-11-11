@@ -105,19 +105,26 @@ def test_exact_duplicates_and_known_source_groups_never_cross_partitions(partiti
     assert len({entry["split"] for entry in entries if entry["file_path"] in {"Canastero/5.wav", "Canastero/6.wav"}}) == 1
 
 
-@pytest.mark.parametrize("placeholder", ["", "unknown", "human_feedback"])
-def test_feedback_without_traceable_source_is_excluded_and_recordists_stay_together(partition_http, placeholder):
-    client, sessions, raw = partition_http
-    content = (raw / "Canastero/9.wav").read_bytes()
+def add_feedback(sessions, raw, feedback_id, prediction_id, path, label):
+    content = (raw / path).read_bytes()
     with sessions() as db:
-        db.add(Prediccion(id_prediccion=1, ruta_audio_prueba="raw_audios/source.wav", etiqueta_predicha="Canastero", confianza=0.7))
+        if db.get(Prediccion, prediction_id) is None:
+            db.add(Prediccion(id_prediccion=prediction_id, ruta_audio_prueba=f"raw_audios/{prediction_id}.wav",
+                              etiqueta_predicha=label, confianza=0.7))
+            db.flush()
+        db.add(Retroalimentacion(id_retroalimentacion=feedback_id, id_prediccion=prediction_id, id_usuario=2,
+                                 fue_correcta=True, procesado=True))
         db.flush()
-        db.add(Retroalimentacion(id_retroalimentacion=1, id_prediccion=1, id_usuario=2, fue_correcta=True, procesado=True))
-        db.flush()
-        db.add(FeedbackSync(id_retroalimentacion=1, dataset_name="Sample", storage_class="Canastero", class_label="Canastero",
-                            object_key="datasets/Sample/Canastero/9.wav", local_relative_path="Sample/Canastero/9.wav",
+        db.add(FeedbackSync(id_retroalimentacion=feedback_id, dataset_name="Sample", storage_class=label, class_label=label,
+                            object_key=f"datasets/Sample/{path}", local_relative_path=f"Sample/{path}",
                             sha256=hashlib.sha256(content).hexdigest()))
         db.commit()
+
+
+@pytest.mark.parametrize("placeholder", ["", "unknown", "human_feedback"])
+def test_feedback_enters_with_its_prediction_as_origin_and_recordists_stay_together(partition_http, placeholder):
+    client, sessions, raw = partition_http
+    add_feedback(sessions, raw, 1, 1, "Canastero/9.wav", "Canastero")
     (raw / "metadata.csv").write_text(
         "file_path,file_stage,clase,recordist,source_group\n"
         "Chucao/0.wav,raw,Chucao,Recorder A,\n"
@@ -127,10 +134,39 @@ def test_feedback_without_traceable_source_is_excluded_and_recordists_stay_toget
     response = client.post(BASE + "/preview", headers={"Origin": ORIGIN}, json=POLICY)
 
     assert response.status_code == 200
-    assert {"file_path": "Canastero/9.wav", "reason": "feedback_without_source_group"} in response.json()["excluded"]
+    assert response.json()["excluded"] == []
+    assert not any("corrección" in warning for warning in response.json()["warnings"])
     entries = response.json()["entries"]
-    assert len(entries) == 9
+    assert len(entries) == 10
+    feedback, = [entry for entry in entries if entry["file_path"] == "Canastero/9.wav"]
+    assert feedback["origin"] == "prediction:1"
     assert len({entry["split"] for entry in entries if entry["recordist"] == "Recorder A"}) == 1
+
+
+def test_each_feedback_takes_the_origin_of_its_own_prediction(partition_http):
+    client, sessions, raw = partition_http
+    add_feedback(sessions, raw, 1, 1, "Canastero/5.wav", "Canastero")
+    add_feedback(sessions, raw, 2, 7, "Canastero/6.wav", "Canastero")
+    response = client.post(BASE + "/preview", headers={"Origin": ORIGIN}, json=POLICY)
+    assert response.status_code == 200, response.text
+    origins = {entry["file_path"]: entry.get("origin") for entry in response.json()["entries"]}
+    assert (origins["Canastero/5.wav"], origins["Canastero/6.wav"]) == ("prediction:1", "prediction:7")
+    assert origins["Canastero/7.wav"] is None
+
+
+def test_curated_correction_stays_with_the_recording_it_corrects(partition_http):
+    client, sessions, raw = partition_http
+    add_feedback(sessions, raw, 1, 1, "Chucao/1.wav", "Chucao")
+    (raw / "metadata.csv").write_text(
+        "file_path,file_stage,clase,xc_id,recordist,curation_source_id\n"
+        "Chucao/0.wav,raw,Chucao,XC1,Recorder A,\n"
+        "Chucao/1.wav,raw,Chucao,feedback_1,human_feedback,XC1\n", encoding="utf-8")
+    for seed in range(8):
+        response = client.post(BASE + "/preview", headers={"Origin": ORIGIN}, json={**POLICY, "seed": seed})
+        assert response.status_code == 200, response.text
+        entries = {entry["file_path"]: entry for entry in response.json()["entries"]}
+        assert entries["Chucao/1.wav"]["split"] == entries["Chucao/0.wav"]["split"]
+        assert entries["Chucao/0.wav"]["origin"] == entries["Chucao/1.wav"]["origin"] == "recording:XC1"
 
 
 def test_same_recording_with_conflicting_labels_requires_review(partition_http):

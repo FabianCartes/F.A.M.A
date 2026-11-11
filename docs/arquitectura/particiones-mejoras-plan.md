@@ -1,0 +1,31 @@
+# Particiones: versiones desactualizadas, retroalimentación, reparto incremental y revisión previa
+
+Objetivo: que las particiones de entrenamiento avisen cuando quedaron atrás, incluyan los audios aceptados desde retroalimentación, permitan una versión nueva que conserve el reparto anterior y muestren una revisión del dataset antes de partir. Rama `mvp`, sin push ni PR; commits locales por unidad. Runner backend: `backend/tests/run_isolated_training_checks.py`; frontend: Vitest, `tsc`, ESLint y build.
+
+## Specs
+- S1 — «Avisar cuando una versión quedó atrás. Comparar los audios de la versión con los registrados ahora y mostrar «Hay 12 audios nuevos desde esta versión» con un botón para crear una versión actualizada con la misma semilla y porcentajes. Es barato: el backend ya tiene los dos conjuntos.»
+- S2 — «Que la retroalimentación pueda entrar a las particiones. Al aceptar un audio, registrar su grupo de origen (por ejemplo, la predicción de la que salió). Así no queda excluido sin que nadie se entere y se mantiene la separación entre entrenamiento y prueba.»
+- S3 — «Versión nueva que no mueve los audios ya repartidos. Que los audios ya asignados queden donde estaban y solo los nuevos se repartan. Las métricas entre versiones seguirían siendo comparables.»
+- S4 — «Revisar el dataset antes de partir. Un resumen previo con los audios no descargados, los duplicados, las clases con muy pocos audios y las duraciones atípicas. Hoy eso aparece disperso en las advertencias.»
+
+## Estado verificado al planificar (`633ff38`)
+- `DatasetPartitions.preview` (`backend/app/services/partitions.py:153-211`) toma los audios registrados con copia local, agrupa por `hash_sha256`, `source_group` y `recordist` (unión de conjuntos, `:88-115`) y reparte grupos de forma determinista por `sha256(seed:grupo)` y metas por clase (`:116-152`). Agregar audios recalcula todo el reparto: grupos existentes pueden cambiar de split.
+- Las versiones son manifiestos inmutables `raw/{dataset}/.partitions/{sha256}.json` con `policy`, `counts`, `entries` (con `audio_id` y `hash_sha256`), `excluded` y `warnings` (`:205-211`). `versions()` lista hasta 50 por fecha de archivo (`:233-237`). `training_source` solo falla si un audio incluido cambió o falta (`:239-249`); no informa audios nuevos.
+- La retroalimentación aceptada se escribe en `metadata.csv` con `recordist=human_feedback` y sin `source_group` (`backend/app/services/feedback.py:344-381`). `_identity` ignora `human_feedback` (`partitions.py:33-35`) y `preview` excluye esos audios como `feedback_without_source_group` (`:184-187`). La base sí guarda su origen: `feedback_sync` → `retroalimentacion.id_prediccion`, y `curation_source_id` cuando corrige una grabación del dataset.
+- `audio.duracion_segundos` y `audio.hash_archivo` están en la base; la revisión previa no necesita decodificar audios.
+
+## Decisiones (aprobadas por Kevin el 2026-11-11, L2)
+1. S2 — dónde nace el grupo de origen. Recomendado: derivarlo al preparar la partición desde la base (`prediction:{id_prediccion}`; si corrige una grabación del dataset, el grupo de esa grabación), sin reescribir `metadata.csv`. Cubre también los aportes ya aceptados (por ejemplo `feedback_1` de «gatos y perros»). Alternativa: escribir `source_group` al aceptar; obliga a reescribir filas existentes para los aportes anteriores.
+2. S1+S3 — qué hace el botón «Crear versión actualizada». Recomendado: usar el reparto incremental de S3 sobre la versión desactualizada (mismos porcentajes y semilla, sin mover los audios ya repartidos). Alternativa: recalcular desde cero con la misma semilla (puede mover audios).
+3. S4 — umbrales de la revisión. Recomendado: clase con menos de 10 audios = «pocos audios»; duración atípica = menos de la mitad o más del triple de la mediana de su clase; duplicado = mismo `hash_archivo` en más de una fila. Se muestran como resumen antes de «Previsualizar reparto» y no bloquean.
+
+## Tasks
+- T1 | S2 | pending | inline | Backend: grupo de origen derivado para la retroalimentación en `preview`; deja de excluirse si tiene predicción u origen trazable; pruebas por la interfaz pública de `DatasetPartitions`/API. Risk: item 1 (cambia qué audios entran en versiones nuevas).
+- T2 | S3 | pending | inline | Backend: preview y guardado con `base_version`: conserva el split de los audios de la base que siguen iguales, reparte solo los nuevos respetando sus grupos, registra `policy.base_version` y algoritmo; frontend: acción en el bloque. ADR del reparto incremental. Risk: item 1 (formato persistido del manifiesto, aditivo).
+- T3 | S1 | pending | inline | Backend: `versions()` informa por versión audios nuevos, quitados y cambiados respecto del registro actual; frontend: aviso «Hay N audios nuevos desde esta versión» en la versión seleccionada y botón «Crear versión actualizada» (T2).
+- T4 | S4 | pending | inline | Backend: `GET …/partitions/review` con no descargados, duplicados, clases con pocos audios y duraciones atípicas; frontend: resumen previo en el bloque.
+- T5 | S1-S4 | pending | inline | Verificación: suites de particiones y entrenamiento, Vitest/`tsc`/lint/build; prueba manual en `fama_pruebas` con «gatos y perros» (277 audios, `feedback_1`). Verificador independiente por el item 1.
+
+## Log
+- L1 — Kevin, 2026-11-11: «Incluyamos estas tambien:» con las mejoras 1–4 citadas en S1–S4 (respuesta a «Como se podria mejorar el sistema de particiones y la preparacion del dataset?»).
+- L2 — Kevin aprueba las 3 recomendaciones (grupo derivado de la base; botón con reparto incremental; umbrales de revisión <10 audios, <0,5× o >3× la mediana, duplicado por hash).
