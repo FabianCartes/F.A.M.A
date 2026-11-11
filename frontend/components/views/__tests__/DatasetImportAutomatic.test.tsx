@@ -117,8 +117,6 @@ it.each(["ready", "committing", "needs_correction"])("recovers automatic %s with
     expect(screen.getByText(/ZIP rechazado/)).toBeDefined();
     expect(screen.queryByText(/Trabajo completado/)).toBeNull();
   } else expect(screen.getByRole("button", { name: "Reintentar trabajo" })).toBeDefined();
-  fireEvent.click(screen.getByRole("button", { name: "Actualizar importaciones" }));
-  await waitFor(() => expect((screen.getByRole("button", { name: "Actualizar importaciones" }) as HTMLButtonElement).disabled).toBe(false));
   expect(writes).toEqual([]);
   first.unmount();
   render(<DatasetImportPanel />);
@@ -172,4 +170,53 @@ it("shows uploaded GCS audios after validation while the automatic job publishes
   expect(onPublishingChange).toHaveBeenLastCalledWith("Birds");
   cleanup();
   expect(onPublishingChange).toHaveBeenLastCalledWith(null);
+});
+
+it("reloads previous imports when the modal reopens and when the running job ends, without a manual button", async () => {
+  vi.stubGlobal("crypto", webcrypto);
+  let status = "ready";
+  let polls = 0;
+  const listed = () => fetcher.mock.calls.filter(([url, options]) => !options?.method
+    && new URL(url, "http://synthetic.test").pathname === base).length;
+  const fetcher = vi.fn(async (input: string, options?: RequestInit) => {
+    const path = new URL(input, "http://synthetic.test").pathname;
+    if (path.endsWith("/access")) return Response.json({ development_mode: true });
+    if (path.endsWith("/limits")) return Response.json(limits);
+    if (path === base) return options?.method ? Response.json({ ...source, status: "receiving", execution: null })
+      : page("imports", [{ ...source, status, execution: null }]);
+    if (path.endsWith("/receipt")) return Response.json({ import_id: source.id, name: "birds.zip", size_bytes: 3,
+      received_bytes: 0, reserved_bytes: 4099, chunk_bytes: 16 * 1024 ** 2, status: "receiving" });
+    if (path.endsWith("/chunks/0") || path.endsWith("/finalize")) return Response.json({ import_id: source.id,
+      name: "birds.zip", size_bytes: 3, received_bytes: 3, reserved_bytes: 4099, chunk_bytes: 16 * 1024 ** 2,
+      status: path.endsWith("/finalize") ? "sealed" : "receiving" });
+    if (path === base + "/source") return Response.json(polls > 1
+      ? { ...source, status: "imported", dataset_id: "dataset", added_count: 1,
+        execution: { ...execution, status: "succeeded", stage: "succeeded", progress: 100, result: { added_count: 1 } } }
+      : { ...source, status: "validating", execution: null });
+    if (path.endsWith("/preview")) return Response.json(execution, { status: 202 });
+    if (path === execution.status_url) {
+      polls += 1;
+      return Response.json(polls === 1 ? execution
+        : { ...execution, status: "succeeded", stage: "succeeded", progress: 100, result: { added_count: 1 } });
+    }
+    if (path.endsWith("/files")) return page("files", []);
+    if (path.endsWith("/classes")) return page("classes", ["bird"]);
+    if (path.endsWith("/issues")) return page("issues", []);
+    throw new Error(`Unexpected ${options?.method || "GET"} ${path}`);
+  });
+  vi.stubGlobal("fetch", fetcher);
+  render(<DatasetImportPanel />);
+  await open();
+  expect(await screen.findByRole("button", { name: /source.zip — .* — lista para confirmar/ })).toBeDefined();
+  expect(screen.queryByRole("button", { name: "Actualizar importaciones" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Cerrar importación" }));
+  status = "imported";
+  fireEvent.click(screen.getByRole("button", { name: "Importar dataset" }));
+  expect(await screen.findByRole("button", { name: /source.zip — .* — importada/ })).toBeDefined();
+  const beforeJob = listed();
+  fireEvent.change(screen.getByLabelText("Nombre del dataset"), { target: { value: "Birds" } });
+  fireEvent.change(screen.getByLabelText("Archivo ZIP"), { target: { files: [new File(["zip"], "birds.zip")] } });
+  fireEvent.click(screen.getByRole("button", { name: /^(Importar|Validar) ZIP$/ }));
+  await screen.findByText(/Importada localmente: 1 archivo/, undefined, { timeout: 3000 });
+  await waitFor(() => expect(listed()).toBeGreaterThan(beforeJob));
 });

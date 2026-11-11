@@ -35,14 +35,12 @@ it.each([undefined, false, true])("remount preserves explicit authorization %s w
     expect(Boolean(screen.queryByRole("button", { name: "Confirmar importación local" }))).toBe(auto_import !== true);
     expect(screen.queryByRole("button", { name: "Sincronizar con GCS" })).toBeNull();
     expect(screen.queryByText(/Importada localmente/)).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Actualizar importaciones" }));
-    await waitFor(() => expect((screen.getByRole("button", { name: "Actualizar importaciones" }) as HTMLButtonElement).disabled).toBe(false));
   }
   const first = render(<DatasetImportPanel />);
   await inspect();
   first.unmount();
   render(<DatasetImportPanel />);
   await inspect();
-  expect(reads.filter(path => path === B).length).toBeGreaterThanOrEqual(4);
+  expect(reads.filter(path => path === B).length).toBeGreaterThanOrEqual(2);
   expect(writes).toEqual([]);
 });

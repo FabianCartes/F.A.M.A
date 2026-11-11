@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useOptionalWebSession } from "@/components/auth/SessionBoundary";
@@ -94,6 +94,11 @@ export default function DatasetImportPanel({ onCatalogChange, onPublishingChange
   const active = useRef(false);
   const requestKey = useRef("");
   const operationKey = useRef({ signature: "", key: "" });
+  const refresh = useCallback(async () => {
+    const jobs = await importRequest(`${importBase}?latest=true`).then(r => r.json());
+    const jobPage = jobsPageSchema.parse(jobs);
+    setHistory(jobPage.imports.slice(0, 10));
+  }, []);
   const localDataset = job?.status === "imported" ? job.dataset_id : null;
   const localDatasetName = localDataset ? datasetNames[localDataset] : undefined;
   useEffect(() => {
@@ -135,6 +140,8 @@ export default function DatasetImportPanel({ onCatalogChange, onPublishingChange
           const current = jobSchema.parse(await response.json());
           if (!controller.signal.aborted) setJob(previous => previous && previous.id === importId && previous.execution?.id === executionId
             ? current : previous);
+          // The finished job changes its row in previous imports.
+          if (!controller.signal.aborted) await refresh().catch(() => undefined);
         }
       } catch (reason) {
         if (!controller.signal.aborted) {
@@ -146,7 +153,7 @@ export default function DatasetImportPanel({ onCatalogChange, onPublishingChange
     }
     void poll();
     return () => { controller.abort(); if (timer) clearTimeout(timer); };
-  }, [importId, executionId, executionStatus]);
+  }, [importId, executionId, executionStatus, refresh]);
 
   useEffect(() => {
     if (!open) return;
@@ -197,11 +204,6 @@ export default function DatasetImportPanel({ onCatalogChange, onPublishingChange
     finally { active.current = false; setBusy(""); }
   }
 
-  async function refresh() {
-    const jobs = await importRequest(`${importBase}?latest=true`).then(r => r.json());
-    const jobPage = jobsPageSchema.parse(jobs);
-    setHistory(jobPage.imports.slice(0, 10));
-  }
 
   async function initialize() {
     const response = await importRequest(`${importBase}/access`);
@@ -264,7 +266,10 @@ export default function DatasetImportPanel({ onCatalogChange, onPublishingChange
   return <>
     <button ref={triggerRef} className={buttonClass + " w-full sm:w-auto inline-flex items-center justify-center gap-2"} type="button" onClick={() => {
       setOpen(true);
+      // The first open loads limits and previous imports; reopening reloads
+      // previous imports as a background read that never blocks the form.
       if (!limits) void act("Consultando configuración…", initialize);
+      else void refresh().catch(() => undefined);
     }} aria-haspopup="dialog" aria-expanded={open}>
       <svg aria-hidden="true" className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M12 16V4m-4 4l4-4 4 4" /></svg>
       {triggerLabel}
@@ -308,7 +313,6 @@ export default function DatasetImportPanel({ onCatalogChange, onPublishingChange
         </>}
         </>
         {!started ? <div className="border-t border-[#23252e] pt-4"><button className={buttonClass} disabled={!!busy || !limits} onClick={() => setStarted(true)}>Importar dataset</button></div> : <div className="space-y-4 border-t border-[#23252e] pt-4">
-          <button className={buttonClass} disabled={!!busy} onClick={() => void act("Actualizando…", () => refresh())}>Actualizar importaciones</button>
           {limits && <>
           {!job && <div className="grid gap-3 sm:grid-cols-2">
             <label>Nombre del dataset<input className={inputClass} value={name} onChange={e => setName(e.target.value)} maxLength={100} disabled={!!busy} /></label>
