@@ -1443,23 +1443,13 @@ class TrainingService:
                 modelos = query.order_by(Modelo.fecha_entrenamiento.desc()).all()
 
                 names = model_display_names(modelos)
-                from sqlalchemy import inspect
-                associations = {}
-                if inspect(db.get_bind()).has_table("imported_model_source"):
-                    from app.models.imported_training_source import ImportedModelSource
-                    associations = {r.model_id: r for r in db.query(ImportedModelSource).all()}
-
-
                 for m in modelos:
-                    if m.arquitectura == 'ImportedTriad' and m.id_usuario != owner_id:
-                        continue
-                    association = associations.get(m.id_modelo)
-                    if association is not None and association.owner_id != owner_id:
+                    if m.arquitectura == 'ImportedTriad':
                         continue
                     filename = Path(m.ruta_binario_gcp).name if m.ruta_binario_gcp else f"modelo_{m.id_modelo}.pt"
                     checkpoint, local_file_size = self._history_checkpoint(filename)
-                    if checkpoint.get("imported_source") and association is None:
-                        continue  # Fail closed if durable provenance is unavailable.
+                    if checkpoint.get("imported_source") is not None:
+                        continue
                     target_lower = (m.clase_objetivo or "").lower()
 
                     is_birds = "aves" in target_lower or "chilenas" in target_lower
@@ -1477,15 +1467,6 @@ class TrainingService:
 
                     display = names[m.id_modelo]
                     dataset_name = m.conjunto_datos.nombre if m.conjunto_datos else None
-                    if association is not None:
-                        from app.models.dataset_import import ImportedDataset
-                        imported_dataset = db.query(ImportedDataset).filter_by(
-                            id=association.dataset_id, owner_id=owner_id).first()
-                        if imported_dataset is not None:
-                            dataset_name = imported_dataset.name
-                            display = dict(display, dataset=dataset_name,
-                                name=f"{dataset_name} · {m.arquitectura} (v{display['version']})")
-
                     lr_val = float(m.tasa_aprendizaje) if m.tasa_aprendizaje is not None else None
                     batch_val = int(m.tamano_lote) if m.tamano_lote is not None else None
                     hyperparameters = {
@@ -1536,7 +1517,6 @@ class TrainingService:
 
                         "dataset_id": m.id_conjunto_datos,
                         "dataset_name": dataset_name,
-                        **({"imported_source": association.identity} if association is not None else {}),
                         "partition_version": (checkpoint["partition_manifest"].get("version")
                                               if isinstance(checkpoint.get("partition_manifest"), dict) else None),
                         "sha256": m.hash_binario,
@@ -1573,12 +1553,10 @@ class TrainingService:
                 target = db.query(Modelo).filter_by(id_modelo=model_id).with_for_update().first()
                 if target is None:
                     return {"success": False, "error": "Modelo inexistente"}
-                from sqlalchemy import inspect
-                if inspect(db.get_bind()).has_table("imported_model_source"):
-                    from app.models.imported_training_source import ImportedModelSource
-                    if db.get(ImportedModelSource, model_id) is not None:
-                        return {"success": False,
-                                "error": "Los modelos importados no pueden activarse globalmente."}
+                filename = Path(target.ruta_binario_gcp).name if target.ruta_binario_gcp else ""
+                checkpoint, _ = self._history_checkpoint(filename)
+                if target.arquitectura == 'ImportedTriad' or checkpoint.get("imported_source") is not None:
+                    return {"success": False, "error": "Los modelos importados no pueden activarse globalmente."}
                 self._require_standard_reports(target, db)
                 if target:
                     db.query(Modelo).update({Modelo.activo: False})

@@ -71,84 +71,9 @@ class ModelRegistry:
 
     def _is_triad(self, model):
         key = f"fama_trained_model_{model.id_modelo}"
-        return (model.arquitectura == 'ImportedTriad'
-                or str(model.estado or '').startswith('imported_triad_')
-                or str(model.ruta_binario_gcp or '').endswith('.json')
+        return (getattr(model, 'arquitectura', None) == 'ImportedTriad'
+                or str(getattr(model, 'estado', None) or '').startswith('imported_triad_')
                 or getattr(self._db_predictors.get(key), 'composition_admission', None) is not None)
-
-    def _triad_service(self, checkpoints_root):
-        if self.triad_records is None:
-            from app.database import SessionLocal
-            from app.services.imported_training_source import configured_sources
-            from app.services.imported_triad_manifests import ImportedTriadManifests
-            from app.services.imported_triad_evaluation import ImportedTriadEvaluation
-            from app.services.imported_triad_records import ImportedTriadRecords
-            sources = configured_sources(SessionLocal)
-            # Confined child of the existing explicit private preparation root.
-            # Readers never create roots or descriptors.
-            manifest_root = sources.preparations.root / 'triad-manifests'
-            if not manifest_root.is_dir():
-                raise ModelWeightsError('Composición importada no disponible.')
-            manifests = ImportedTriadManifests(manifest_root)
-            self.triad_records = ImportedTriadRecords(SessionLocal, manifests,
-                ImportedTriadEvaluation(SessionLocal, manifests, sources, checkpoints_root))
-        return self.triad_records
-
-    def readmit_composition(self, predictor, owner_id, checkpoints_root):
-        """Fresh authority, same immutable SHA/pair; retain a valid cached instance."""
-        admission = predictor.composition_admission
-        try:
-            fresh = self._triad_service(checkpoints_root).read_admitted(owner_id, admission['model_id'])
-            expected = (admission['sha256'], admission['pair_ids'], admission['provenance'])
-            actual = (fresh['model'].hash_binario, fresh['pair_ids'], fresh['provenance'])
-            if expected != actual or owner_id != admission['owner_id']:
-                raise ValueError()
-        except Exception:
-            with self._publication_lock:
-                self._discard_invalid_standard_predictor(predictor.model_id)
-            raise ModelWeightsError('Composición importada no disponible.') from None
-        return predictor
-
-    def _publish_triad(self, model, owner_id, root, admitted_pair_ids, presentation=None):
-        key = f'fama_trained_model_{model.id_modelo}'
-        self._hide_model_aliases(model)
-        # Row ownership can deny visibility, never authorize publication.
-        self._imported_owners[key] = model.id_usuario or -1
-        cached = self._db_predictors.get(key)
-        if (cached is not None and getattr(cached, 'composition_admission', {}).get('owner_id')
-                != model.id_usuario):
-            self._discard_invalid_standard_predictor(key)
-        if type(owner_id) is not int or owner_id <= 0 or owner_id != model.id_usuario:
-            return
-        try:
-            fresh = self._triad_service(root).read_admitted(owner_id, model.id_modelo)
-            admission = dict(owner_id=owner_id, model_id=model.id_modelo,
-                sha256=fresh['model'].hash_binario, pair_ids=fresh['pair_ids'],
-                provenance=fresh['provenance'])
-            cached = self._db_predictors.get(key)
-            if cached is not None and getattr(cached, 'composition_admission', None) == admission:
-                pred = cached
-            else:
-                self._discard_invalid_standard_predictor(key)
-                pred = fresh['predictor']
-                pred.composition_admission = admission
-                pred.imported_source = dict(owner_id=owner_id,
-                    dataset_id=fresh['manifest']['cohort']['dataset_id'])
-            # Refresh presentation even on a retained predictor: a now-unreadable
-            # preceding reservation must not leave stale version claims cached.
-            presentation = presentation or {}
-            pred.metadata.name = presentation.get('name', 'Tríada importada')
-            pred.metadata.architecture = 'ImportedTriad'
-            pred.metadata.checkpoint_sha256 = admission['sha256']
-            pred.metadata.metrics = dict(composition_sha256=admission['sha256'],
-                components=fresh['manifest']['components'], weights=fresh['manifest']['weights'],
-                **presentation.get('metrics', {}))
-            self._predictors[key] = pred
-            self._db_predictors[key] = pred
-            if admitted_pair_ids is not None:
-                admitted_pair_ids[key] = fresh['pair_ids']
-        except Exception:
-            self._discard_invalid_standard_predictor(key)
 
     def _hide_model_aliases(self, model):
         route = urlparse(model.ruta_binario_gcp)
@@ -159,23 +84,6 @@ class ModelRegistry:
     def _visible(self, predictor, owner_id=None):
         owner = self._imported_owners.get(predictor.model_id)
         return owner is None or (type(owner_id) is int and owner_id > 0 and owner_id == owner)
-
-    def _source_owner(self, db, model):
-        from sqlalchemy import inspect
-        has_sources = inspect(db.get_bind()).has_table("imported_model_source")
-        if not has_sources:
-            return None, False
-        from app.models.imported_training_source import ImportedModelSource
-        source = db.get(ImportedModelSource, model.id_modelo)
-        if source is None:
-            return None, has_sources
-        identity = source.identity
-        if (type(source.owner_id) is not int or source.owner_id <= 0 or
-                not isinstance(identity, dict) or identity.get("owner_id") != source.owner_id or
-                identity.get("dataset_id") != source.dataset_id or
-                identity.get("snapshot_id") != source.snapshot_id):
-            raise ValueError("Invalid imported association")
-        return source.owner_id, has_sources
 
     def _legacy_rejection_identity(self, model, root, expected_hash, source_owner):
         """Prove a public legacy identity for rejection only, never publication."""
@@ -189,7 +97,7 @@ class ModelRegistry:
         if (type(dataset_id) is int and dataset_id > 0 and dataset is not None and
                 dataset.id_conjunto_datos == dataset_id):
             return True
-        if str(model.estado or "").startswith("standard_"):
+        if str(getattr(model, 'estado', None) or '').startswith('standard_'):
             from app.services.standard_evaluation_guard import inspect_checkpoint
             route = urlparse(model.ruta_binario_gcp)
             basename = Path(unquote(route.path) if route.scheme else model.ruta_binario_gcp).name
@@ -197,7 +105,7 @@ class ModelRegistry:
                 inspection = inspect_checkpoint(root, Path(root) / basename, expected_hash)
             except Exception:
                 return False
-            return inspection.payload.get("imported_source") is None
+            return inspection.payload.get('imported_source') is None
         return False
 
     def _metadata_candidate(self, model, root, display, expected_hash):
@@ -232,12 +140,10 @@ class ModelRegistry:
         )
 
     def prewarm_from_db(self, db: Any, checkpoints_root: Optional[Path] = None) -> int:
-        """Cache private checkpoint metadata without publication or admission.
+        """Cache standard checkpoint metadata without publishing or loading inference.
 
-        Returns an aggregate failure count, never private diagnostics. Callers
-        retain session ownership; this method performs no database writes.
-        Lazy metadata construction may deserialize a checkpoint, not inference.
-        Publication must still verify ownership, file SHA and evaluation reports.
+        Returns an aggregate failure count. Publication still verifies checkpoint
+        identity and evaluation reports. No database writes are performed.
         """
         from app.models.training import Modelo
         from app.services.model_names import model_display_names
@@ -251,11 +157,6 @@ class ModelRegistry:
             for model in models:
                 try:
                     if self._is_triad(model):
-                        self._hide_model_aliases(model)
-                        self._imported_owners[f'fama_trained_model_{model.id_modelo}'] = model.id_usuario or -1
-                        continue
-                    owner, _ = self._source_owner(db, model)
-                    if owner is None:
                         continue
                     expected_hash, error = _persisted_checkpoint_hash(model)
                     if error:
@@ -264,9 +165,6 @@ class ModelRegistry:
                     candidate = self._metadata_candidate(
                         model, root, names[model.id_modelo], expected_hash)
                     self._db_predictors[candidate.model_id] = candidate
-                    # Keep trusted provenance even for legacy checkpoint payloads
-                    # without an imported_source marker. This publishes nothing.
-                    self._imported_owners[candidate.model_id] = owner
                 except Exception:
                     failures += 1
         return failures
@@ -286,10 +184,11 @@ class ModelRegistry:
             is_default: Si es True, designa a este modelo como el fallback por defecto.
         """
         model_id = predictor.model_id
-        from app.services.predictors.imported_triad_predictor import ImportedTriadPredictor
-        if (isinstance(predictor, ImportedTriadPredictor) or model_id in self._imported_owners
+        if (getattr(predictor, "composition_admission", None) is not None
+                or type(predictor).__name__ == "ImportedTriadPredictor"
+                or model_id in self._imported_owners
                 or getattr(predictor, "imported_source", None) is not None):
-            raise ValueError("Imported predictors require owner-scoped publication")
+            raise ValueError("Imported predictors are not supported by the standard registry")
         self._predictors[model_id] = predictor
         if is_default or self._default_model_id is None:
             self.set_default_model(model_id)
@@ -450,7 +349,7 @@ class ModelRegistry:
     def publish_from_db(
         self, db: Any, checkpoints_root: Optional[Path] = None,
         admitted_pair_ids: Optional[Dict[str, tuple[int, int]]] = None,
-        *, owner_id=None,
+        *, owner_id=None, access=None,
     ) -> List[Dict[str, Any]]:
         """Reconcile and publish persisted predictors without activation or DB writes.
 
@@ -473,50 +372,14 @@ class ModelRegistry:
             names = model_display_names(models)
             self._reconcile_db_models(models)
             self._reset_db_identity_errors(models)
-            triad_versions = {}
-            if (type(owner_id) is int and owner_id > 0
-                    and any(m.id_usuario == owner_id and self._is_triad(m) for m in models)):
-                try:
-                    triad_versions = self._triad_service(root).catalogue_versions(owner_id)
-                except Exception:
-                    pass  # Availability never authorizes guessed version metadata.
             for model in models:
                 key = f"fama_trained_model_{model.id_modelo}"
+                if access is not None and not access.administrator and model.id_conjunto_datos not in access.ids:
+                    continue
                 if self._is_triad(model):
-                    self._publish_triad(model, owner_id, root, admitted_pair_ids,
-                        triad_versions.get(model.id_modelo))
+                    self._discard_invalid_standard_predictor(key)
                     continue
-                try:
-                    source_owner, has_sources = self._source_owner(db, model)
-                except Exception:
-                    self._hide_unknown_identity(model)
-                    continue
-                if source_owner is None and key in self._imported_owners:
-                    # A lost association cannot turn known private metadata into
-                    # legacy metadata. Reject before any public cache fast path;
-                    # diagnostics must not identify the private model.
-                    self._hide_unknown_identity(model)
-                    errors.append({"model_id": "", "code": "checkpoint_invalid"})
-                    continue
-                if source_owner is not None:
-                    self._hide_model_aliases(model)
-                    self._imported_owners[key] = source_owner
-                    if type(owner_id) is not int or owner_id <= 0 or owner_id != source_owner:
-                        continue
-                    # Imported provenance is separate from the legacy dataset FK.
-                    # Resolve presentation only after association/owner admission;
-                    # never infer an imported name from labels or checkpoint data.
-                    from app.models.imported_training_source import ImportedModelSource
-                    from app.models.dataset_import import ImportedDataset
-                    source = db.get(ImportedModelSource, model.id_modelo)
-                    dataset = db.query(ImportedDataset).filter(
-                        ImportedDataset.id == source.dataset_id,
-                        ImportedDataset.owner_id == source_owner,
-                    ).one_or_none()
-                    if dataset is not None and dataset.name:
-                        display = names[model.id_modelo]
-                        names[model.id_modelo] = {**display, "dataset": dataset.name,
-                            "name": f"{dataset.name} · {display['architecture']} (v{display['version']})"}
+                source_owner = None
                 uri = urlparse(model.ruta_binario_gcp)
                 basename = Path(unquote(uri.path) if uri.scheme else model.ruta_binario_gcp).name
                 expected_hash, hash_error = _persisted_checkpoint_hash(model)
@@ -529,8 +392,8 @@ class ModelRegistry:
                     errors.append({"model_id": key, "code": hash_error})
                     continue
                 cached = self._db_predictors.get(key)
-                if (cached is not None and source_owner is None and
-                        not str(model.estado or "").startswith("standard_") and
+                if (cached is not None and self.has_model(key) and source_owner is None and
+                        not str(getattr(model, 'estado', None) or "").startswith("standard_") and
                         key not in self._imported_owners and
                         getattr(cached, "imported_source", None) is None and
                         cached.expected_checkpoint_sha256 == expected_hash and
@@ -554,7 +417,7 @@ class ModelRegistry:
                     } else ("checkpoint_unreadable" if isinstance(err, PermissionError) else "checkpoint_invalid")
                     if bool(model.activo):
                         self._blocked_default_error = "Modelo persistido no disponible."
-                    if verified_legacy and str(model.estado or "").startswith("standard_"):
+                    if verified_legacy and str(getattr(model, 'estado', None) or "").startswith("standard_"):
                         # Preserve rejection precedence, never guard success as
                         # permission to publish a predictor the adapter rejected.
                         publication_error = {"model_id": key, "code": "standard_evaluation_invalid"}
@@ -583,7 +446,7 @@ class ModelRegistry:
                     self._hide_unknown_identity(model)
                     continue
                 admitted_pair = None
-                if source_owner is not None or str(model.estado or "").startswith("standard_"):
+                if source_owner is not None or str(getattr(model, 'estado', None) or "").startswith("standard_"):
                     try:
                         from app.services.standard_evaluation_guard import (
                             StandardEvaluationError, select_admitted_standard_pair,
@@ -674,15 +537,7 @@ class ModelRegistry:
                     self._hide_model_aliases(m)
                     self._imported_owners[model_key] = m.id_usuario or -1
                     continue
-                try:
-                    source_owner, has_sources = self._source_owner(db, m)
-                except Exception:
-                    self._hide_unknown_identity(m)
-                    continue
-                if source_owner is not None:
-                    self._hide_model_aliases(m)
-                    self._imported_owners[model_key] = source_owner
-                    continue
+                has_sources = True
                 uri = urlparse(m.ruta_binario_gcp)
                 ckpt_name = Path(unquote(uri.path) if uri.scheme else m.ruta_binario_gcp).name
                 expected_hash, hash_error = _persisted_checkpoint_hash(m)
@@ -722,7 +577,7 @@ class ModelRegistry:
 
                 is_active = bool(m.activo)
                 cached = self._db_predictors.get(model_key)
-                if cached is not None:
+                if cached is not None and self.has_model(model_key):
                     if getattr(cached, "expected_checkpoint_sha256", None) == expected_hash:
                         self._apply_display_name(cached, names[m.id_modelo])
                         if is_active:

@@ -400,10 +400,6 @@ class FeedbackService:
                     or not curation_source_id.strip() or len(curation_source_id) > 200):
                 raise ValueError("curation_source_id must name an original canonical recording")
             pred = feedback.prediccion
-            from app.services.imported_feedback import source_for_prediction, approve
-            if source_for_prediction(db, pred) is not None:
-                return approve(self, db, feedback, owner_id=owner_id,
-                               dataset_name=dataset_name, curation_source_id=curation_source_id)
             existing = queue.get(db, id_retroalimentacion)
             if feedback.procesado and existing is None:
                 raise HTTPException(status_code=409, detail="La retroalimentación ya fue finalizada.")
@@ -461,6 +457,14 @@ class FeedbackService:
                 digest = existing.sha256 if existing else recorded.get("sha256")
                 if digest and destination.exists():
                     audio = destination.read_bytes()
+                elif pred.ruta_audio_prueba.startswith("local_predictions/"):
+                    from app.models.prediction_access import AccesoPrediccion
+                    from app.services.local_prediction_audio import LocalPredictionAudio
+                    origin = db.get(AccesoPrediccion, pred.id_prediccion)
+                    root = self.import_root or os.environ.get("FAMA_IMPORT_ROOT")
+                    if origin is None or not root:
+                        raise ValueError("Origen local de predicción no verificable")
+                    audio = LocalPredictionAudio(root).read(origin.id_usuario, pred.ruta_audio_prueba)
                 else:
                     audio = storage.download_prediction_audio(pred.ruta_audio_prueba)
                 actual = hashlib.sha256(audio).hexdigest()

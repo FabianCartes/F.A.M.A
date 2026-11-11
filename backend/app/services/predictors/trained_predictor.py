@@ -78,11 +78,8 @@ def _checkpoint_architecture(checkpoint: dict):
 
 
 def _standard_frontend_contract(checkpoint):
-    from app.services.imported_training_source import validate_imported_checkpoint, ImportedSourceError
-    try:
-        validate_imported_checkpoint(checkpoint)
-    except ImportedSourceError as error:
-        raise ModelWeightsError(str(error)) from error
+    if checkpoint.get("imported_source") is not None:
+        raise ModelWeightsError("Checkpoint importado no admitido en el flujo estándar.")
     if "job_id" not in checkpoint:
         return None
     try:

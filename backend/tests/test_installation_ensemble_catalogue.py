@@ -5,6 +5,29 @@ from pathlib import Path
 import subprocess
 import sys
 
+from tests.test_api_model_catalogue import catalogue
+
+
+def test_metadata_only_declared_catalogue_uses_memory_without_inference(catalogue, monkeypatch):
+    from types import SimpleNamespace
+    from sqlalchemy.orm import Session
+    from app import database, configuration
+    from app.services.predictors.ensemble_predictor import ChileanBirdsEnsemblePredictor
+    from app.services.registry import build_default_registry
+
+    _, _, _, engine = catalogue
+    values = {"FAMA_ENSEMBLES_JSON": json.dumps({"version": 1,
+        "enabled": ["chilean-birds-ensemble"], "default": "chilean-birds-ensemble"})}
+    monkeypatch.setattr(configuration, "get_configuration", lambda: SimpleNamespace(values=values))
+    monkeypatch.setattr(database, "SessionLocal", lambda: Session(engine))
+    def forbidden(*args, **kwargs):
+        raise AssertionError("metadata-only catalogue must not load inference")
+    monkeypatch.setattr(ChileanBirdsEnsemblePredictor, "_ensure_loaded", forbidden)
+    registry = build_default_registry(metadata_only=True)
+    models = registry.list_models()
+    assert [model.id for model in models] == ["chilean-birds-ensemble"]
+    assert registry.get_default_model_id() == "chilean-birds-ensemble"
+
 
 def test_declared_catalogue_survives_restart_and_persisted_activation(tmp_path):
     from app.configuration import InstallationStore

@@ -40,25 +40,7 @@ def _validate_component(value):
 
 def _dataset_display_name(db, row, prediction):
     """Resolve display metadata only after the caller's visibility/limit filter."""
-    if not row.dataset_name.startswith("imported:"):
-        return row.dataset_name
-    if prediction is None or prediction.dataset_name != row.dataset_name:
-        return None
-    from sqlalchemy import inspect
-    from app.models.dataset_import import ImportedDataset
-    from app.models.imported_training_source import ImportedModelSource
-    from app.services.imported_feedback import imported_model_id
-    model_id = imported_model_id(prediction.modelo_id)
-    if model_id is None or not all(inspect(db.get_bind()).has_table(table) for table in
-                                  ("imported_model_source", "imported_dataset")):
-        return None
-    source = db.get(ImportedModelSource, model_id)
-    if source is None or row.dataset_name != "imported:" + source.dataset_id:
-        return None
-    # A matching ID alone is not enough: never attach another owner's name to
-    # an inconsistent historical association. Missing metadata stays unnamed.
-    return db.query(ImportedDataset.name).filter_by(
-        id=source.dataset_id, owner_id=source.owner_id).scalar()
+    return row.dataset_name
 
 
 class FeedbackSyncQueue:

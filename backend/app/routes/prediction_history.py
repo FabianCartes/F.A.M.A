@@ -1,18 +1,16 @@
-"""Read-only history of attributable local predictions for private imported models."""
+"""Read-only history of dataset-authorized predictions."""
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import inspect
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models.dataset_import import ImportedDataset
-from app.models.imported_training_source import ImportedModelSource
 from app.models.prediction import Prediccion
-from app.services.web_sessions import web_identity
-from app.routes.auth import WebAuthRoute
-from app.services.imported_feedback import imported_model_id
-from app.services.local_prediction_audio import LocalPredictionAudio
+from app.models.prediction_access import AccesoPrediccion
+from app.models.training import Modelo
 from app.services.registry import get_model_registry
+from app.services.access import ResourceAccess, resource_access
+from app.routes.auth import WebAuthRoute
+from app.services.local_prediction_audio import LocalPredictionAudio
 
 router = APIRouter(prefix='/api/inference', tags=['Predicciones'], route_class=WebAuthRoute)
 
@@ -32,8 +30,8 @@ class HistoryPage(BaseModel):
 
 
 @router.get('/history', response_model=HistoryPage,
-    summary='Consultar el historial privado del modelo importado seleccionado',
-    description='Solo referencias locales atribuibles a la sesión; sin audio ni rutas. '
+    summary='Consultar el historial del modelo seleccionado',
+    description='Solo predicciones del dataset asignado; sin audio ni rutas. '
                 'Hasta 20 registros por página, orden de creación descendente. '
                 'El cursor continúa el recorrido incluso si una página no contiene registros visibles.')
 def prediction_history(request: Request, response: Response,
@@ -41,47 +39,44 @@ def prediction_history(request: Request, response: Response,
         limit: int = Query(default=20, ge=1, le=20),
         cursor: int | None = Query(default=None, gt=0),
         db: Session = Depends(get_db),
+        access: ResourceAccess = Depends(resource_access),
         registry=Depends(get_model_registry)):
-    user = web_identity(request, response, db)
     response.headers['Cache-Control'] = 'no-store'
-    numeric = imported_model_id(model_id)
-    source = (db.get(ImportedModelSource, numeric) if numeric
-              and inspect(db.get_bind()).has_table('imported_model_source') else None)
-    if source is not None:
-        if source.owner_id != user.id:
+    prefix = 'fama_trained_model_'
+    numeric = model_id[len(prefix):] if model_id.startswith(prefix) else model_id
+    canonical = model_id
+    if model_id.startswith(prefix) or numeric.isascii() and numeric.isdecimal():
+        if (not numeric.isascii() or not numeric.isdecimal() or len(numeric) > 10
+                or not 1 <= int(numeric) <= 2 ** 31 - 1):
             raise HTTPException(404, 'Modelo no disponible.')
-        dataset_id = source.dataset_id
-    else:
-        # Deny unknown/foreign/non-triad rows before configuring a private store.
-        from app.models.training import Modelo
-        model = db.get(Modelo, numeric) if numeric else None
-        if model is None or model.id_usuario != user.id or model.arquitectura != 'ImportedTriad':
+        model = access.query(Modelo).filter_by(id_modelo=int(numeric)).first()
+        if model is None or model.conjunto_datos is None:
             raise HTTPException(404, 'Modelo no disponible.')
-        try:
-            from app.services.training import training_service
-            manifest = registry._triad_service(training_service.checkpoints_dir).read_manifest(user.id, numeric)
-            dataset_id = manifest['cohort']['dataset_id']
-        except Exception:
-            raise HTTPException(404, 'Modelo no disponible.') from None
-    dataset = db.get(ImportedDataset, dataset_id)
-    if dataset is None or dataset.owner_id != user.id:
+        canonical = f'fama_trained_model_{model.id_modelo}'
+    metadata = next((item for item in registry.list_models() if item.id == canonical), None)
+    if metadata is None or not metadata.dataset_name or not access.model_allowed(canonical, metadata.dataset_name):
         raise HTTPException(404, 'Modelo no disponible.')
-    canonical = f'fama_trained_model_{numeric}'
-    query = db.query(Prediccion).filter(
-        Prediccion.modelo_id.in_([str(numeric), canonical]),
-        Prediccion.dataset_name == 'imported:' + dataset_id,
-        Prediccion.ruta_audio_prueba.startswith(f'local_predictions/{user.id}/'))
+    from app.models.dataset import ConjuntoDatos
+    dataset = db.query(ConjuntoDatos).filter_by(nombre=metadata.dataset_name).first()
+    if dataset is None or dataset.nombre != metadata.dataset_name:
+        raise HTTPException(404, 'Modelo no disponible.')
+    query = (access.query(Prediccion)
+             .join(AccesoPrediccion, AccesoPrediccion.id_prediccion == Prediccion.id_prediccion)
+             .add_entity(AccesoPrediccion)
+             .filter(Prediccion.modelo_id == canonical,
+                     Prediccion.dataset_name == dataset.nombre,
+                     AccesoPrediccion.id_conjunto_datos == dataset.id_conjunto_datos))
     if cursor is not None:
         query = query.filter(Prediccion.id_prediccion < cursor)
     # Bound metadata work. Invalid legacy references never exhaust memory or cause
     # audio I/O; the raw scan cursor allows the client to pass a sparse window.
     rows = query.order_by(Prediccion.id_prediccion.desc()).limit(200).all()
     items = []
-    for row in rows:
+    for row, origin in rows:
         try:
-            # This is the exact identity grammar used by the authenticated writer,
-            # not a prefix/filename ownership heuristic. History does not read audio.
-            LocalPredictionAudio._identity(user.id, row.ruta_audio_prueba)
+            # The persisted origin identifies the writer; access is dataset-scoped.
+            if row.ruta_audio_prueba.startswith('local_predictions/'):
+                LocalPredictionAudio._identity(origin.id_usuario, row.ruta_audio_prueba)
         except ValueError:
             continue
         if len(items) == limit:
@@ -92,4 +87,4 @@ def prediction_history(request: Request, response: Response,
         items.append(HistoryItem(id=row.id_prediccion,
             filename=row.nombre_original or 'Archivo sin nombre', timestamp=timestamp,
             clase=row.etiqueta_predicha, confianza=row.confianza, modelo_id=canonical))
-    return HistoryPage(items=items, next_cursor=rows[-1].id_prediccion if len(rows) == 200 else None)
+    return HistoryPage(items=items, next_cursor=rows[-1][0].id_prediccion if len(rows) == 200 else None)

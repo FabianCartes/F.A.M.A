@@ -16,7 +16,6 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Form, Query, Request, Response, status
-from app.services.web_sessions import web_identity
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
@@ -619,22 +618,23 @@ def list_models(
     only_available: bool = Query(False, description="Si es True, retorna solo modelos con pesos físicos verificados en disco"),
     registry: ModelRegistry = Depends(get_model_registry),
     db: Session = Depends(get_db),
-    include_imported: bool = Query(False, description="Añade solo modelos importados del usuario activo autenticado; no cambia el default global"),
-    private_only: bool = Query(False, description="Solo modelos privados propios; exige autenticación y no cambia el default global"),
+    include_imported: bool = Query(False, description="Opción retirada; true se rechaza."),
+    private_only: bool = Query(False, description="Opción retirada; true se rechaza."),
     access: ResourceAccess = Depends(resource_access),
 ):
     """
     Retorna la lista de todos los modelos bioacústicos disponibles en el catálogo,
     sus especificaciones técnicas, clases soportadas, disponibilidad de pesos y el modelo por defecto.
-    Por defecto conserva el catálogo público legacy. include_imported=true exige
-    identidad activa por cookie y añade solo los importados de ese propietario.
+    El catálogo filtra por el acceso vigente al dataset; las opciones privadas retiradas se rechazan.
     """
-    user = web_identity(request, response, db) if include_imported or private_only else None
-    owner_scope = {"owner_id": user.id} if user is not None else {}
+    if include_imported or private_only:
+        raise HTTPException(422, "El catálogo privado importado fue retirado.")
+    owner_scope = {}
     admitted_pair_ids = {}
     publication_errors = registry.publish_from_db(
         db, checkpoints_root=training_service.checkpoints_dir,
         admitted_pair_ids=admitted_pair_ids,
+        access=access,
         **owner_scope,
     )
     if any(error["code"] == "database_unavailable" for error in publication_errors):
@@ -647,18 +647,17 @@ def list_models(
         # Publication also checks public rows; none of their diagnostics belong
         # to this private catalogue (including unpublished/unknown identities).
         publication_errors = []
-    evaluations = read_model_evaluations(db, models, admitted_pair_ids)
-    for model in models:
-        model.evaluations = evaluations.by_model_id.get(model.id)
     default_id = "" if private_only else registry.get_default_model_id() or ""
     if not access.administrator:
         # Owner-scoped imported models were already admitted by the registry.
-        models = [item for item in models
-                  if item.id in getattr(registry, "_imported_owners", ()) or access.model_allowed(item.id, item.dataset_name)]
+        models = [item for item in models if access.model_allowed(item.id, item.dataset_name)]
         visible_ids = {item.id for item in models}
         default_id = default_id if default_id in visible_ids else ""
         registered_ids = {f"fama_trained_model_{row.id_modelo}" for row in access.query(Modelo).all()}
         publication_errors = [item for item in publication_errors if item.get("model_id") in registered_ids]
+    evaluations = read_model_evaluations(db, models, admitted_pair_ids)
+    for model in models:
+        model.evaluations = evaluations.by_model_id.get(model.id)
     return ModelListResponse(
         models=models,
         total=len(models),
@@ -667,20 +666,6 @@ def list_models(
         evaluation_catalogue_status="available" if evaluations.available else "unavailable",
         evaluation_catalogue_error=evaluations.error_code,
     )
-
-
-def _owner_scoped_model(db, registry, model_number):
-    """Imported models and compositions are admitted by owner, not by dataset grant."""
-    row = db.get(Modelo, model_number)
-    if row is None:
-        return False
-    if registry._is_triad(row):
-        return True
-    from sqlalchemy import inspect
-    if not inspect(db.get_bind()).has_table("imported_model_source"):
-        return False
-    from app.models.imported_training_source import ImportedModelSource
-    return db.get(ImportedModelSource, model_number) is not None
 
 
 # ============================================================================
@@ -698,7 +683,7 @@ async def predict_audio(
     file: UploadFile = File(...),
     model_id: Optional[str] = Query(
         None,
-        description="ID o alias exacto del modelo; los importados requieren su propietario autenticado. Omitirlo conserva el default público.",
+        description="ID o alias exacto de un modelo autorizado; omitirlo selecciona el default.",
     ),
     dataset_name: Optional[str] = Form(None),
     db: Session = Depends(get_db),
@@ -711,10 +696,10 @@ async def predict_audio(
     Recibe un archivo de audio por HTTP multipart/form-data.
     1. Valida que la extensión sea estrictamente .wav.
     2. Resuelve y valida el modelo solicitado en el ModelRegistry (falla rápido 404 si no existe).
-    3. Para modelos importados conserva audio local privado; el flujo legacy conserva GCS.
+    3. Conserva audio local privado cuando está configurado; de otro modo usa GCS.
     4. Ejecuta la inferencia bioacústica a través del AudioPredictor correspondiente.
     5. Inserta el registro histórico en la tabla 'prediccion' de PostgreSQL (incluyendo modelo_id).
-    6. Retorna persistencia local/cloud veraz; no sincroniza GCS para modelos importados.
+    6. Retorna el estado real de persistencia local o cloud.
     """
     fecha_carga = datetime.now(timezone.utc)
     # Browser names may contain POSIX or Windows paths; retain only bounded metadata.
@@ -736,8 +721,7 @@ async def predict_audio(
         suffix = requested.removeprefix("fama_trained_model_")
         if (not suffix.isascii() or not suffix.isdecimal() or len(suffix) > 10
                 or not 1 <= int(suffix) <= 2 ** 31 - 1
-                or (access.query(Modelo).filter_by(id_modelo=int(suffix)).first() is None
-                    and not _owner_scoped_model(db, registry, int(suffix)))):
+                or access.query(Modelo).filter_by(id_modelo=int(suffix)).first() is None):
             raise HTTPException(404, "Modelo no encontrado o no asignado.")
     try:
         try:
@@ -745,41 +729,7 @@ async def predict_audio(
         except ModelNotFoundError:
             if not model_id or model_id == "default":
                 raise
-            from sqlalchemy import inspect
-            from sqlalchemy.exc import SQLAlchemyError
-            from urllib.parse import urlparse, unquote
-            owner_id, private_key = None, None
-            try:
-                # Compositions have their own owner/JSON identity, never the
-                # association of a component. Only their canonical DB key resolves.
-                matches = [(f'fama_trained_model_{row.id_modelo}', row.id_usuario)
-                    for row in db.query(Modelo).all()
-                    if registry._is_triad(row)
-                    and model_id == f'fama_trained_model_{row.id_modelo}']
-                if inspect(db.get_bind()).has_table("imported_model_source"):
-                    from app.models.imported_training_source import ImportedModelSource
-                    for model, source in db.query(Modelo, ImportedModelSource).join(
-                            ImportedModelSource, ImportedModelSource.model_id == Modelo.id_modelo).all():
-                        if registry._is_triad(model):
-                            continue
-                        route = urlparse(model.ruta_binario_gcp)
-                        basename = Path(unquote(route.path) if route.scheme else model.ruta_binario_gcp).name
-                        key = f"fama_trained_model_{model.id_modelo}"
-                        if model_id in (key, str(model.id_modelo), basename, Path(basename).stem):
-                            matches.append((key, source.owner_id))
-                if matches:
-                    user = web_identity(request, response, db)
-                    if len(matches) != 1 or user.id != matches[0][1]:
-                        raise HTTPException(status_code=404, detail="Modelo no disponible.")
-                    private_key, owner_id = matches[0][0], user.id
-                    registry.publish_from_db(db, checkpoints_root=training_service.checkpoints_dir,
-                                             owner_id=owner_id)
-            except SQLAlchemyError:
-                db.rollback()
-                raise HTTPException(status_code=503, detail="Catálogo de modelos temporalmente no disponible.") from None
-            if private_key is None:
-                raise
-            predictor = registry.get(private_key, owner_id=owner_id)
+            raise
     except ModelNotFoundError as err:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -793,20 +743,13 @@ async def predict_audio(
             detail=f"Modelo no disponible para inferencia: {weights_err}",
         )
     local_store, local_owner, local_key = None, None, None
-    imported_identity = getattr(predictor, "imported_source", None)
-    if imported_identity is not None:
-        user = web_identity(request, response, db)
-        if not isinstance(imported_identity, dict) or imported_identity.get("owner_id") != user.id:
-            raise HTTPException(status_code=404, detail="Modelo no disponible.")
-        import os
-        from app.services.local_prediction_audio import LocalPredictionAudio
-        root = feedback_service.import_root or os.environ.get("FAMA_IMPORT_ROOT")
-        if not root:
-            raise HTTPException(status_code=503, detail="Almacenamiento local de inferencia no disponible.")
-        local_store, local_owner = LocalPredictionAudio(root), user.id
-    elif (predictor.model_id not in getattr(registry, "_imported_owners", ())
-          and not access.model_allowed(predictor.model_id, predictor.dataset_name)):
+    if not access.model_allowed(predictor.model_id, predictor.dataset_name):
         raise HTTPException(404, "Modelo no encontrado o no asignado.")
+    import os
+    from app.services.local_prediction_audio import LocalPredictionAudio
+    root = feedback_service.import_root or os.environ.get("FAMA_IMPORT_ROOT")
+    if root:
+        local_store, local_owner = LocalPredictionAudio(root), access.user.id
     lease = getattr(request.state, "inference_lease", None) if request is not None else None
     owns_lease = lease is None
     if owns_lease:
@@ -870,15 +813,7 @@ async def predict_audio(
 
         # 4. Keep synchronous inference off the event loop; never pass db to its thread.
         try:
-            composition = getattr(predictor, 'composition_admission', None)
-            if composition is not None:
-                pred_result = await lease.predict(predictor, audio_bytes,
-                    admission=partial(registry.readmit_composition, predictor, local_owner,
-                                      training_service.checkpoints_dir))
-                pred_result.detalles.update(composition_sha256=composition['sha256'],
-                    admitted_pair_ids=list(composition['pair_ids']))
-            else:
-                pred_result = await lease.predict(predictor, audio_bytes)
+            pred_result = await lease.predict(predictor, audio_bytes)
             clase = pred_result.clase
             confianza = float(pred_result.confianza)
         except MalformedAudioError:
@@ -887,9 +822,6 @@ async def predict_audio(
                 detail="Audio inválido o no soportado. Proporcione un archivo WAV válido.",
             )
         except ModelWeightsError as weights_err:
-            if getattr(predictor, 'composition_admission', None) is not None:
-                raise HTTPException(status_code=503,
-                    detail='Composición importada no disponible.') from None
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=f"Modelo '{predictor.model_id}' no disponible para inferencia: {weights_err}",
@@ -909,8 +841,7 @@ async def predict_audio(
                     etiqueta_predicha=clase,
                     confianza=confianza,
                     modelo_id=predictor.model_id,
-                    dataset_name=("imported:" + imported_identity["dataset_id"]
-                                  if local_store is not None else predictor.dataset_name),
+                    dataset_name=predictor.dataset_name,
                     nombre_original=nombre_original,
                     fecha_carga=fecha_carga,
                 )
@@ -991,9 +922,6 @@ async def predict_audio(
         )
     except Exception as err:
         request_outcome = "error"
-        if getattr(predictor, 'composition_admission', None) is not None:
-            raise HTTPException(status_code=500,
-                detail='Composición importada no disponible.') from None
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error durante el procesamiento del audio: {str(err)}",
@@ -1211,7 +1139,7 @@ async def upload_ingestion_files(
 
 # ============================================================================
 # ENDPOINTS DE ENTRENAMIENTO Y MÉTRICAS (RF_04, CU_INV_03, CU_INV_04, CU_INV_05)
-from app.schemas.training import StartTrainingRequest, TriadWeightsRevisionRequest
+from app.schemas.training import StartTrainingRequest
 
 
 @app.get("/api/training/hardware")
@@ -1286,32 +1214,6 @@ def start_training_pipeline(req: StartTrainingRequest, request: Request, respons
 
 
 
-@app.post("/api/training/models/{model_id}/triad-weights")
-def revise_triad_weights(model_id: int, body: TriadWeightsRevisionRequest, request: Request, response: Response,
-                         registry: ModelRegistry = Depends(get_model_registry),
-                         db: Session = Depends(get_db)):
-    """Crea (o devuelve) una versión evaluada de una composición propia con nuevos pesos.
-
-    El propietario sale solo de la identidad autenticada. Evalúa de forma síncrona en el
-    hilo de la petición, sin sostener el lock de publicación del registro. Se rechaza
-    si el estado del servicio indica entrenamiento/evaluación activos. Es una comprobación
-    de estado sin lock: a diferencia de start_training, no revisa el proceso worker ni
-    impide que un entrenamiento empiece durante la evaluación.
-    """
-    owner = web_identity(request, response, db).id
-    db.close()  # la evaluación abre sus propias sesiones; no retener la de la petición
-    unavailable = HTTPException(status_code=404, detail="Composición importada no disponible.")
-    if training_service.status in {"training", "evaluating"}:
-        raise HTTPException(status_code=409, detail="Hay un entrenamiento en curso; intente de nuevo al terminar.")
-    try:
-        records = registry._triad_service(training_service.checkpoints_dir)
-        revised = records.revise_weights(owner, model_id, body.weights)
-    except Exception:
-        raise unavailable from None
-    return {"id": revised["predictor"].model_id, "name": "Tríada importada",
-            "weights": [float(w) for w in revised["manifest"]["weights"]]}
-
-
 @app.get("/api/training/progress")
 def get_training_progress(request: Request, response: Response, db: Session = Depends(get_db),
                           access: ResourceAccess = Depends(resource_access)):
@@ -1343,11 +1245,11 @@ def get_training_history(request: Request, response: Response, db: Session = Dep
                          access: ResourceAccess = Depends(resource_access)):
     """
     Retorna el historial de modelos entrenados desde PostgreSQL (CU_INV_04).
-    Por defecto excluye importados; include_imported=true autentica y añade solo los propios.
+    La opción include_imported=true fue retirada.
     """
-    user = web_identity(request, response, db) if include_imported else None
-    history = training_service.get_history(db=db, access=access,
-                                           owner_id=user.id if include_imported and user else None)
+    if include_imported:
+        raise HTTPException(422, "El historial importado fue retirado.")
+    history = training_service.get_history(db=db, access=access)
     return {"history": history}
 
 
@@ -1358,80 +1260,12 @@ def activate_model(model_id: int, request: Request, response: Response, db: Sess
     Activa un modelo para inferencias bioacústicas en tiempo real (CU_INV_05).
     """
     access.require_administrator()
-    from sqlalchemy import inspect
-    source_owner = None
-    if inspect(db.get_bind()).has_table("imported_model_source"):
-        from app.models.imported_training_source import ImportedModelSource
-        association = db.get(ImportedModelSource, model_id)
-        source_owner = association.owner_id if association else None
-    user = web_identity(request, response, db) if source_owner is not None else None
-    if source_owner is not None and user.id != source_owner:
-        raise HTTPException(status_code=404, detail="Recurso de entrenamiento no disponible.")
     return training_service.set_active_model(model_id=model_id, db=db)
 
 
 # ============================================================================
 # ENDPOINTS DE RETROALIMENTACIÓN ACTIVA Y CURACIÓN SEMI-MANUAL (RF_06)
 # ============================================================================
-def _feedback_imported_user(db, prediction_id, request, response):
-    """Authenticate imported feedback by its persisted model association, never a client owner."""
-    from sqlalchemy import inspect
-    from app.models.prediction import Prediccion
-    if prediction_id is None:
-        return None
-    prediction = db.get(Prediccion, prediction_id)
-    if prediction is None:
-        return None
-    from app.services.imported_feedback import imported_model_id
-    model_id = imported_model_id(prediction.modelo_id)
-    association = None
-    if model_id is not None and inspect(db.get_bind()).has_table("imported_model_source"):
-        from app.models.imported_training_source import ImportedModelSource
-        association = db.get(ImportedModelSource, model_id)
-    private = str(prediction.dataset_name or "").startswith("imported:")
-    if association is None and not private:
-        return None
-    user = web_identity(request, response, db)
-    if (association is None or user.id != association.owner_id
-            or prediction.dataset_name != "imported:" + association.dataset_id):
-        raise HTTPException(status_code=404, detail="Retroalimentación no disponible.")
-    return user
-
-
-def _feedback_prediction_id(db, feedback_id):
-    from app.models.feedback import Retroalimentacion
-    feedback = db.get(Retroalimentacion, feedback_id)
-    return feedback.id_prediccion if feedback is not None else None
-
-
-def _feedback_visible_prediction_ids(db, request, response):
-    """Scope SQL before aggregation or pagination; anonymous callers see legacy only."""
-    from sqlalchemy import String, and_, cast, inspect, or_
-    from app.models.prediction import Prediccion
-    user = None
-    if request.cookies:
-        try:
-            user = web_identity(request, response, db)
-        except HTTPException as error:
-            if error.status_code not in (401, 404):
-                raise
-    legacy = or_(Prediccion.dataset_name.is_(None),
-                 ~Prediccion.dataset_name.startswith("imported:"))
-    visible = legacy
-    if inspect(db.get_bind()).has_table("imported_model_source"):
-        from app.models.imported_training_source import ImportedModelSource
-        stored_id = cast(ImportedModelSource.model_id, String)
-        association = db.query(ImportedModelSource).filter(or_(
-            Prediccion.modelo_id == stored_id,
-            Prediccion.modelo_id == "fama_trained_model_" + stored_id))
-        visible = and_(legacy, ~association.exists())
-        if user is not None:
-            owned = association.filter(ImportedModelSource.owner_id == user.id,
-                Prediccion.dataset_name == "imported:" + ImportedModelSource.dataset_id).exists()
-            visible = or_(visible, owned)
-    return db.query(Prediccion.id_prediccion).filter(visible)
-
-
 @app.post("/api/feedback", status_code=status.HTTP_201_CREATED)
 def record_feedback(req: FeedbackCreateRequest, request: Request, response: Response,
                     db: Session = Depends(get_db),
@@ -1440,9 +1274,7 @@ def record_feedback(req: FeedbackCreateRequest, request: Request, response: Resp
     Registra retroalimentación de usuario/experto sobre una inferencia (RF_06, CU_INV_07).
     Si la predicción fue errónea, valida la etiqueta corregida y respalda en GCS.
     """
-    user = _feedback_imported_user(db, req.id_prediccion, request, response)
-    if user is None:
-        access.require_prediction(req.id_prediccion)
+    access.require_prediction(req.id_prediccion)
     existing = db.query(Retroalimentacion).filter_by(id_prediccion=req.id_prediccion).with_for_update().first()
     if existing is not None and not access.administrator and existing.id_usuario != access.user.id:
         raise HTTPException(403, "No se permite modificar retroalimentación de otro autor.")
@@ -1477,8 +1309,7 @@ def get_feedback_sync_states(
 ):
     """Read recent accepted local milestones; never upload or change outcomes."""
     try:
-        visible = _feedback_visible_prediction_ids(db, request, response)
-        return FeedbackSyncQueue().recent(db, limit=limit, access=access, prediction_ids=visible)
+        return FeedbackSyncQueue().recent(db, limit=limit, access=access)
     except HTTPException:
         raise
     except Exception:
@@ -1495,8 +1326,7 @@ def get_pending_feedback(
     """
     Retorna la lista de retroalimentaciones pendientes de curación semi-manual (procesado == False).
     """
-    visible = _feedback_visible_prediction_ids(db, request, response)
-    return feedback_service.get_pending_feedback(db=db, limit=limit, access=access, prediction_ids=visible)
+    return feedback_service.get_pending_feedback(db=db, limit=limit, access=access)
 
 
 @app.post("/api/feedback/{id_retroalimentacion}/approve", response_model=ApproveFeedbackResponse)
@@ -1517,13 +1347,8 @@ def approve_feedback(
     Aprueba e incorpora el audio en el destino congelado durante la inferencia,
     actualiza metadata.csv y marca el registro como procesado.
     """
-    user = _feedback_imported_user(db, _feedback_prediction_id(db, id_retroalimentacion),
-                                   request, response)
-    if user is None:
-        access.require_feedback(id_retroalimentacion)
+    access.require_feedback(id_retroalimentacion)
     kwargs = {"db": db, "id_retroalimentacion": id_retroalimentacion, "dataset_name": dataset_name, "actor_id": access.user.id}
-    if user is not None:
-        kwargs["owner_id"] = user.id
     if curation_source_id is not None:
         kwargs["curation_source_id"] = curation_source_id
     return feedback_service.approve_feedback(**kwargs)
@@ -1540,10 +1365,7 @@ def reject_feedback(
     Descarta la retroalimentación sin alterar los datasets de entrenamiento,
     marcando el registro como procesado.
     """
-    user = _feedback_imported_user(db, _feedback_prediction_id(db, id_retroalimentacion),
-                                   request, response)
-    if user is None:
-        access.require_feedback(id_retroalimentacion)
+    access.require_feedback(id_retroalimentacion)
     return feedback_service.reject_feedback(db=db, id_retroalimentacion=id_retroalimentacion)
 
 
@@ -1554,5 +1376,4 @@ def get_feedback_stats(request: Request, response: Response, db: Session = Depen
     Retorna la telemetría consolidada del bucle de retroalimentación activa (RF_06)
     incluyendo conteo de audios pendientes de curación.
     """
-    visible = _feedback_visible_prediction_ids(db, request, response)
-    return feedback_service.get_feedback_stats(db=db, access=access, prediction_ids=visible)
+    return feedback_service.get_feedback_stats(db=db, access=access)
