@@ -91,7 +91,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
   it('separates local ZIP import from explicit shared download without export', async () => {
     await open();
     const download = screen.getByRole('button', { name: 'Descargar desde GCS' });
-    expect(screen.getByRole('button', {name:'Preprocesar audios locales'})).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Preprocesar audios locales' })).toBeNull();
     const upload = screen.getByRole('button', { name: 'Importar ZIP' });
     expect(screen.queryByRole('button', { name: 'Descargar versión como ZIP' })).toBeNull();
 

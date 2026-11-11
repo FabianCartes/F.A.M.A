@@ -425,29 +425,6 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
     }
   };
 
-  const handlePreprocess = async (names: string[]) => {
-    if (isSyncing || names.length === 0) return;
-    setIsSyncing(true);
-    addLog("INFO", "Preparando los audios locales seleccionados…");
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/ingestion/preprocess`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ datasets: names }),
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(typeof result.detail === "string" ? result.detail : "No se pudo confirmar el preprocesamiento.");
-      if (Number.isInteger(result.total_processed) && result.total_processed >= 0) {
-        setSyncProgress(previous => ({ ...previous, preprocessed: result.total_processed }));
-      }
-      const complete = result.status === "completed" && result.total_failed === 0;
-      addLog(complete ? "SUCCESS" : "WARN", complete
-        ? `Preprocesamiento completado: ${result.total_processed} audios preparados.`
-        : `Preprocesamiento ${result.status === "failed" ? "fallido" : "parcial"}: ${result.total_processed ?? 0} preparados, ${result.total_failed ?? 0} errores.`);
-    } catch (reason) {
-      addLog("ERROR", reason instanceof Error ? reason.message : "No se pudo confirmar el preprocesamiento.");
-    } finally { setIsSyncing(false); }
-  };
-
   // Acciones de Curación Human-in-the-Loop (RF_06 / ADR 0013)
   const handleApprove = async (item: PendingFeedbackItem) => {
     if (processingFeedback.current) return;
@@ -608,7 +585,7 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
       <DatasetUpload datasets={datasets} canCreate={administrator && canCreateDataset} busy={isSyncing}
         onUploaded={fetchDatasets} onBusyChange={setIsUploading} limits={uploadLimits} />
       <DatasetInventory datasets={datasets} loading={isLoadingDatasets} busy={isSyncing || isUploading}
-        onRefresh={fetchDatasets} onDownload={handleSync} onInspect={handleInspectDataset} onPreprocess={handlePreprocess} />
+        onRefresh={fetchDatasets} onDownload={handleSync} onInspect={handleInspectDataset} />
       {transferStatus && <p role={transferStatus.error ? "alert" : "status"} className={`text-xs break-words ${transferStatus.error ? "text-amber-300" : "text-gray-300"}`}>{transferStatus.message}</p>}
       <p className="text-[11px] text-gray-400">
         Guarda los archivos en el entorno donde se ejecuta F.A.M.A.; no inicia el entrenamiento.

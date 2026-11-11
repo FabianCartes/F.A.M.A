@@ -6,17 +6,17 @@ const originalFetch = global.fetch;
 afterEach(() => { cleanup(); global.fetch = originalFetch; vi.restoreAllMocks(); });
 
 it.each([
-  { count: 2, available: true, source: 'gcs', cloud: '2 audios', state: 'Local y GCS' },
-  { count: 3, available: true, source: 'gcs', cloud: '3 audios', state: 'Local y GCS' },
-  { count: 0, available: true, source: 'local', cloud: '0 audios', state: 'Solo local' },
-  { count: null, available: false, source: 'local', cloud: 'Sin consultar', state: 'GCS sin consultar' },
-])('reports local and remote counts independently for $count remote files', async ({ count, available, source, cloud, state }) => {
+  { count: 2, available: true, source: 'gcs', cloud: '2 audios' },
+  { count: 3, available: true, source: 'gcs', cloud: '3 audios' },
+  { count: 0, available: true, source: 'local', cloud: '0 audios' },
+  { count: null, available: false, source: 'local', cloud: 'Sin consultar' },
+])('reports local and remote counts independently for $count remote files', async ({ count, available, source, cloud }) => {
   const requests: string[] = [];
   global.fetch = vi.fn(async input => {
     const path = new URL(String(input), 'http://localhost').pathname;
     requests.push(path);
     if (path.endsWith('/datasets')) return Response.json({ datasets: [{ id: 'sample', name: 'Muestra',
-      file_count: 2, local_file_count: 2, local_size_bytes: 20, total_size_bytes: 20, is_synced: count === 2,
+      file_count: 2, classes: ['Chucao', 'Rayadito'], local_file_count: 2, local_size_bytes: 20, total_size_bytes: 20, is_synced: count === 2,
       gcs_file_count: count, gcs_available: available, source }] });
     if (path.endsWith('/status')) return Response.json({ connected: available, bucket: 'test', total_objects: 0, total_bytes: 0 });
     return Response.json([]);
@@ -24,11 +24,16 @@ it.each([
   render(<IngestionView />);
   const table = await screen.findByRole('table');
   const row = (await within(table).findByText('Muestra')).closest('tr')!;
+  expect(within(table).getAllByRole('columnheader').map(header => header.textContent)).toEqual(
+    ['', 'Dataset', 'Clases', 'En este equipo', 'En GCS', 'Acción']);
   const cells = within(row).getAllByRole('cell');
-  expect(cells[2].textContent).toContain('2 audios');
-  expect(cells[3].textContent).toContain(cloud);
-  expect(within(row).getByText(state)).toBeDefined();
-  if (count && count > 0) expect(within(row).getByText('Contenido sin comparar')).toBeDefined();
+  expect(cells[1].textContent).toContain('Muestra');
+  expect(cells[1].textContent).not.toContain('Chucao');
+  expect(cells[2].textContent).toContain('ChucaoRayadito');
+  expect(cells[3].textContent).toContain('2 audios');
+  expect(cells[4].textContent).toContain(cloud);
+  if (count && count > 0) expect(within(cells[4]).getByText('Contenido sin comparar')).toBeDefined();
+  else expect(within(row).queryByText('Contenido sin comparar')).toBeNull();
   expect(screen.getAllByRole('table')).toHaveLength(1);
   expect(requests.some(path => path.includes('/imports/datasets'))).toBe(false);
   expect(screen.queryByRole('button', { name: 'Subir selección a GCS' })).toBeNull();

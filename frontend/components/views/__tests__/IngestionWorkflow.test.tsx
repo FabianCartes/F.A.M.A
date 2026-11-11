@@ -73,23 +73,9 @@ describe('Gestión de audios mediante formularios y HTTP', () => {
     const row = within(screen.getByRole('row', { name: /AvesChilenas/ }));
     expect(row.getByRole('cell', { name: '0 audios 0 B' })).toBeDefined();
     expect(row.getByRole('cell', { name: '2 audios 2 KB' })).toBeDefined();
-    expect(row.getByText('Solo local')).toBeDefined();
     fireEvent.click(row.getByRole('checkbox', { name: 'Seleccionar AvesChilenas' }));
     expect((screen.getByRole('button', { name: 'Descargar desde GCS' }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: 'Preprocesar audios locales' }) as HTMLButtonElement).disabled).toBe(false);
-  });
-
-  it('preprocesa explícitamente la selección local sin pedir una descarga', async () => {
-    await act(async () => { render(<IngestionView />); });
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar AvesChilenas' }));
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Preprocesar audios locales' })); });
-
-    const command = requests.find(request => request.url.endsWith('/api/ingestion/preprocess'));
-    expect(command?.options?.method).toBe('POST');
-    expect(JSON.parse(String(command?.options?.body))).toEqual({ datasets: ['AvesChilenas'] });
-    expect(requests.some(request => request.url.endsWith('/api/ingestion/sync'))).toBe(false);
-    expect(screen.getByText('Preprocesamiento completado: 2 audios preparados.')).toBeDefined();
-    expect(screen.getByText((_, element) => element?.textContent?.replace(/\s/g, '') === 'TensoresPreprocesados2')).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Preprocesar audios locales' })).toBeNull();
   });
 
   it('el investigador opera su inventario sin consultar estadísticas globales del bucket', async () => {
