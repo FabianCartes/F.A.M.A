@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { API_BASE_URL, apiFetch } from "@/lib/api";
 import DatasetReview from "./DatasetReview";
+import { versionName as sharedVersionName, versionShares, versionShortName } from "@/lib/partitionVersions";
 
 const summarySchema = z.object({
   format: z.number().int().optional(),
@@ -105,21 +106,11 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect, w
     } finally { if (!controller.signal.aborted) setPhase("idle"); }
   }
 
-  // Versions arrive newest first; number them from the oldest so a name stays stable.
-  const versionName = (item: Summary) => `Versión ${versions.length - versions.indexOf(item)}`;
-  // The chosen policy names the version; versions without one show their actual shares.
-  const shares = (item: Summary) => {
-    const total = item.counts.train + item.counts.val + (item.counts.test ?? 0);
-    const val = item.policy?.validation_percent ?? Math.round(item.counts.val * 100 / total);
-    const test = item.counts.test ? item.policy?.test_percent ?? Math.round(item.counts.test * 100 / total) : 0;
-    return { total, train: 100 - val - test, val, test };
-  };
+  const versionName = (item: Summary) => sharedVersionName(versions, item);
+  const shares = versionShares;
   // Short enough for a phone's native picker; the selected version is detailed below it.
-  const versionLabel = (item: Summary) => {
-    const { train, val, test } = shares(item);
-    return `${versionName(item)} · ${[train, val, ...(test ? [test] : [])].join("/")} %`
-      + `${item.created_at ? ` · ${new Date(item.created_at).toLocaleDateString("es-CL")}` : ""}`;
-  };
+  const versionLabel = (item: Summary) =>
+    `${versionShortName(versions, item)}${item.created_at ? ` · ${new Date(item.created_at).toLocaleDateString("es-CL")}` : ""}`;
   const versionDetail = (item: Summary) => {
     const { total, train, val, test } = shares(item);
     return `${train} % entrenamiento / ${val} % validación${test ? ` / ${test} % prueba` : ""} · ${total} audios`

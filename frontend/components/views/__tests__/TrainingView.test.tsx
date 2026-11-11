@@ -421,14 +421,34 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
           id: 7, name: "FAMA_Prueba_Aves · EfficientNet-B0 (v1)",
           dataset: "Aves Chilenas", dataset_name: "FAMA_Prueba_Aves",
           architecture: "EfficientNet-B0", epochs: 1, filename: "sample.pt", partition_version: "a".repeat(64),
+        }, {
+          id: 8, name: "FAMA_Prueba_Aves · ResNet (v1)", dataset_name: "FAMA_Prueba_Aves",
+          architecture: "ResNet", epochs: 1, filename: "other.pt",
+        }, {
+          id: 9, name: "FAMA_Prueba_Aves · PANNs (v1)", dataset_name: "FAMA_Prueba_Aves",
+          architecture: "PANNs", epochs: 1, filename: "third.pt", partition_version: "e".repeat(64),
         }] }) };
+      }
+      if (url.endsWith("/api/training/datasets/FAMA_Prueba_Aves/partitions")) {
+        return { ok: true, json: async () => ({ versions: [
+          { format: 2, version: "a".repeat(64), counts: { train: 6, val: 2, test: 2 }, warnings: [],
+            policy: { validation_percent: 20, test_percent: 20, seed: 42 } },
+          { format: 2, version: "b".repeat(64), counts: { train: 5, val: 2, test: 2 }, warnings: [],
+            policy: { validation_percent: 25, test_percent: 15, seed: 1 } },
+        ] }) };
       }
       return defaultFetch(url, init);
     });
     await act(async () => { render(<TrainingView />); });
+    expect(screen.getByRole("columnheader", { name: "Partición" })).toBeDefined();
+    expect(screen.queryByRole("columnheader", { name: "Archivo" })).toBeNull();
     const row = screen.getByRole("row", { name: /FAMA_Prueba_Aves · EfficientNet-B0/ });
     expect(within(row).getByRole("cell", { name: "FAMA_Prueba_Aves" })).toBeDefined();
-    expect(within(row).getByText("Partición aaaaaaaaaaaa")).toBeDefined();
+    expect(await within(row).findByText("Versión 2 · 60/20/20 %")).toBeDefined();
+    expect(within(row).queryByText(/sample\.pt|aaaaaaaaaaaa/)).toBeNull();
+    const partitionCell = (name: RegExp) => within(screen.getByRole("row", { name })).getAllByRole("cell")[5].textContent;
+    expect(partitionCell(/ResNet/)).toBe("—");
+    expect(partitionCell(/PANNs/)).toBe("Partición guardada");
     // Phone layout labels each metric inside its cell (hidden from md up by CSS).
     for (const label of ["Épocas", "Precisión", "Pérdida"]) expect(within(row).getByText(label)).toBeDefined();
   });

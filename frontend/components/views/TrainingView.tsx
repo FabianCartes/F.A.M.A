@@ -14,6 +14,7 @@ import {
 import { getChartPaths, ChartOptions } from "@/lib/utils/trainingChart";
 import InfoTooltip from "@/components/common/InfoTooltip";
 import DatasetPartitions from "@/components/training/DatasetPartitions";
+import { usePartitionNames } from "@/components/training/usePartitionNames";
 import CheckpointBackup from "@/components/training/CheckpointBackup";
 import { PARAMETER_EXPLANATIONS } from "@/lib/constants/parameterExplanations";
 
@@ -668,6 +669,7 @@ export default function TrainingView() {
 
   // 4. Historial de Modelos (CU_INV_04 / CU_INV_05)
   const [history, setHistory] = useState<ModelHistoryItem[]>([]);
+  const partitionNames = usePartitionNames(history);
   const [selectedModelModal, setSelectedModelModal] = useState<ModelHistoryItem | null>(null);
 
   const logsContainerRef = useRef<HTMLDivElement | null>(null);
@@ -2655,7 +2657,7 @@ export default function TrainingView() {
                 <th className="pb-3 font-medium">Épocas</th>
                 <th className="pb-3 font-medium">Precisión (Val Acc)</th>
                 <th className="pb-3 font-medium">Pérdida (Loss)</th>
-                <th className="pb-3 font-medium">Archivo</th>
+                <th className="pb-3 font-medium">Partición</th>
                 <th className="pb-3 font-medium text-right pr-2">Acción</th>
               </tr>
             </thead>
@@ -2701,9 +2703,11 @@ export default function TrainingView() {
                       <span className="block md:hidden font-sans text-[10px] text-gray-500">Pérdida</span>
                       {item.loss != null ? item.loss.toFixed(4) : "—"}
                     </td>
-                    <td className="col-span-3 md:py-3 text-gray-400 font-mono text-[11px] min-w-0 md:max-w-[220px] truncate" title={item.filename}>
-                      {item.filename}
-                      {item.partition_version && <span className="block text-emerald-400 mt-1" title={item.partition_version}>Partición {item.partition_version.slice(0, 12)}</span>}
+                    <td className="col-span-3 md:py-3 text-[11px]">
+                      {/* The checkpoint file name stays in the technical sheet only. */}
+                      {item.partition_version
+                        ? <span className="text-emerald-400">{partitionNames[item.partition_version] ?? "Partición guardada"}</span>
+                        : <span className="text-gray-500">—</span>}
                     </td>
                     <td className="col-span-3 md:py-3 md:text-right md:pr-2">
                       <button
