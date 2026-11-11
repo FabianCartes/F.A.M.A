@@ -54,7 +54,8 @@ def test_recent_accepted_states_are_bounded_read_only_and_separate_from_curation
             'sync_status': 'synced', 'attempts': 1, 'error_code': None,
             'dataset_display_name': 'AvesChilenas', 'audio_filename': None,
             'incorporated_filename': 'feedback_2.wav',
-            'proposed_by': 1, 'incorporated_by': None, 'incorporated_at': result[0]['incorporated_at'],
+            'proposed_by': 1, 'incorporated_by': None, 'proposed_by_name': None, 'incorporated_by_name': None,
+            'incorporated_at': result[0]['incorporated_at'],
             'db_persisted': True,
         }]
         recent = client.get('/api/feedback/sync').json()

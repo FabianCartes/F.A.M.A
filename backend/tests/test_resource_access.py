@@ -223,6 +223,7 @@ def test_assigned_researcher_incorporates_own_correction_and_registers_audio_onc
     milestone, = client.get("/api/feedback/sync").json()
     assert milestone["proposed_by"] == 2
     assert milestone["incorporated_by"] == 2
+    assert (milestone["proposed_by_name"], milestone["incorporated_by_name"]) == ("investigador", "investigador")
     assert milestone["incorporated_at"]
     assert milestone["db_persisted"] is True
     assert login(client, "administrador").status_code == 200

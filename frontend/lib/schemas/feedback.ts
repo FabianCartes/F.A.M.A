@@ -131,6 +131,8 @@ export const FeedbackSyncStateSchema = z.object({
   error_code: z.enum(["upload_failed", "integrity_mismatch"]).nullable(),
   proposed_by: z.number().int().positive().nullable().optional(),
   incorporated_by: z.number().int().positive().nullable().optional(),
+  proposed_by_name: z.string().nullable().optional(),
+  incorporated_by_name: z.string().nullable().optional(),
   incorporated_at: z.string().nullable().optional(),
   db_persisted: z.boolean().nullable().optional(),
 });

@@ -76,6 +76,9 @@ class FeedbackSyncState(BaseModel):
     error_code: Optional[Literal["upload_failed", "integrity_mismatch"]]
     proposed_by: Optional[int] = None
     incorporated_by: Optional[int] = None
+    # Display names for authorship traceability (ADR 0061); None when unknown.
+    proposed_by_name: Optional[str] = None
+    incorporated_by_name: Optional[str] = None
     incorporated_at: Optional[datetime] = None
     db_persisted: Optional[bool] = None
 

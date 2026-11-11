@@ -4,6 +4,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getFeedbackSync } from "@/lib/api/feedbackApi";
 import type { FeedbackSyncState } from "@/lib/schemas/feedback";
 
+function author(id: number | null | undefined, name: string | null | undefined) {
+  return name || (id ? `cuenta #${id}` : "autor sin registrar");
+}
+
+/** Who proposed and who incorporated the audio (ADR 0061), abbreviated for one person. */
+function authorship(record: FeedbackSyncState) {
+  const proposed = author(record.proposed_by, record.proposed_by_name);
+  if (record.proposed_by && record.proposed_by === record.incorporated_by) return `Propuesto e incorporado por ${proposed}`;
+  return `Propuesto por ${proposed} · Incorporado por ${author(record.incorporated_by, record.incorporated_by_name)}`;
+}
+
 /** Owns read-only recent outcomes independently of the uncurated queue. */
 export default function FeedbackSyncPanel({ refreshKey, onSynced }: {
   refreshKey: number;
@@ -103,7 +114,7 @@ export default function FeedbackSyncPanel({ refreshKey, onSynced }: {
                     <p><span className="text-gray-400">En el dataset: </span>{record.incorporated_filename || 'Nombre de incorporación no disponible'}</p>
                   </td>
                   <td className="p-2 text-emerald-300">Incorporado localmente</td>
-                  <td className="p-2"><p>{record.db_persisted === true ? "Registrado en PostgreSQL" : "Registro SQL sin confirmar"}</p><p className="text-gray-400 mt-1">Propuesto por {record.proposed_by ? `cuenta #${record.proposed_by}` : "autor sin registrar"} · Incorporado por {record.incorporated_by ? `cuenta #${record.incorporated_by}` : "autor sin registrar"}</p>{record.incorporated_at && <p className="text-gray-500 mt-1">{new Date(record.incorporated_at).toLocaleString()}</p>}</td>
+                  <td className="p-2"><p>{record.db_persisted === true ? "Registrado en PostgreSQL" : "Registro SQL sin confirmar"}</p><p className="text-gray-400 mt-1">{authorship(record)}</p>{record.incorporated_at && <p className="text-gray-500 mt-1">{new Date(record.incorporated_at).toLocaleString()}</p>}</td>
                   <td className="p-2">
                     <p>{record.sync_status === "synced" ? "Copia cloud confirmada" : "Pendiente de copia cloud"}</p>
                   </td>

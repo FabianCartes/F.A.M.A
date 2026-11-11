@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
+import FeedbackSyncPanel from "@/components/feedback/FeedbackSyncPanel";
 import IngestionView from "../IngestionView";
 import * as feedbackApi from "@/lib/api/feedbackApi";
 
@@ -41,4 +42,20 @@ it("does not poll when every cloud copy is already synced", async () => {
   await act(async () => { render(<IngestionView />); });
   await act(async () => { await vi.advanceTimersByTimeAsync(30000); });
   expect(vi.mocked(feedbackApi.getFeedbackSync)).toHaveBeenCalledTimes(1);
+});
+
+it("names who proposed and who incorporated each audio, abbreviating when it is the same person", async () => {
+  vi.mocked(feedbackApi.getFeedbackSync).mockResolvedValue([
+    { ...record("synced"), id_retroalimentacion: 3, proposed_by: 2, incorporated_by: 2,
+      proposed_by_name: "Kevin Cárdenas", incorporated_by_name: "Kevin Cárdenas" },
+    { ...record("synced"), id_retroalimentacion: 2, proposed_by: 3, incorporated_by: 2,
+      proposed_by_name: "Ana", incorporated_by_name: "Kevin Cárdenas" },
+    { ...record("synced"), id_retroalimentacion: 1, proposed_by: 3, incorporated_by: null,
+      proposed_by_name: "Ana", incorporated_by_name: null },
+  ]);
+  await act(async () => { render(<FeedbackSyncPanel refreshKey={0} />); });
+  expect(await screen.findByText("Propuesto e incorporado por Kevin Cárdenas")).toBeDefined();
+  expect(screen.getByText("Propuesto por Ana · Incorporado por Kevin Cárdenas")).toBeDefined();
+  expect(screen.getByText("Propuesto por Ana · Incorporado por autor sin registrar")).toBeDefined();
+  expect(screen.queryByText(/cuenta #/)).toBeNull();
 });

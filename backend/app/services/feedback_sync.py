@@ -123,6 +123,11 @@ class FeedbackSyncQueue:
                          .join(Audio, Audio.id_conjunto_datos == ConjuntoDatos.id_conjunto_datos)
                          .filter(ConjuntoDatos.nombre.in_(names), Audio.nombre_archivo.in_(filenames)).all()) if rows else set()
 
+        from app.models.user import Usuario
+        authors = {author for row, feedback in rows for author in (feedback.id_usuario, row.incorporated_by) if author}
+        author_names = dict(db.query(Usuario.id, Usuario.nombre_completo)
+                            .filter(Usuario.id.in_(authors)).all()) if authors else {}
+
         def timestamp(value):
             if value is not None and value.tzinfo is None:
                 return value.replace(tzinfo=timezone.utc) if db.get_bind().dialect.name == 'sqlite' else None
@@ -139,6 +144,8 @@ class FeedbackSyncQueue:
                      attempts=row.attempts, error_code=row.error_code,
                      proposed_by=feedback.id_usuario,
                      incorporated_by=row.incorporated_by, incorporated_at=timestamp(row.incorporated_at),
+                     proposed_by_name=author_names.get(feedback.id_usuario),
+                     incorporated_by_name=author_names.get(row.incorporated_by),
                      db_persisted=(row.dataset_name, f"feedback_{row.id_retroalimentacion}.wav", row.sha256) in registered)
                 for row, feedback in rows]
 

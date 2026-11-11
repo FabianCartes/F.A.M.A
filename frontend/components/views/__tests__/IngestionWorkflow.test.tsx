@@ -57,7 +57,7 @@ describe('Gestión de audios mediante formularios y HTTP', () => {
         id_retroalimentacion: 1, id_prediccion: 1, dataset_name: 'AvesChilenas',
         storage_class: 'Chucao', class_label: 'Chucao', local_status: 'incorporated',
         sync_status: 'pending', attempts: 0, error_code: null, db_persisted: true,
-        proposed_by: 2, incorporated_by: 2, incorporated_at: '2026-10-23T00:00:00Z',
+        proposed_by: 2, incorporated_by: 2, proposed_by_name: 'Kevin Cárdenas', incorporated_by_name: 'Kevin Cárdenas', incorporated_at: '2026-10-23T00:00:00Z',
       }] : []);
       return fallback(input, options);
     }));
@@ -67,7 +67,7 @@ describe('Gestión de audios mediante formularios y HTTP', () => {
       .getByRole('row', { name: /AvesChilenas.*Incorporado localmente/ }));
     expect(row.getByText('Registrado en PostgreSQL')).toBeDefined();
     expect(row.getByText('Pendiente de copia cloud')).toBeDefined();
-    expect(row.getByText('Propuesto por cuenta #2 · Incorporado por cuenta #2')).toBeDefined();
+    expect(row.getByText('Propuesto e incorporado por Kevin Cárdenas')).toBeDefined();
   });
 
   it('distingue los audios locales de una nube vacía y no ofrece descargarlos', async () => {
