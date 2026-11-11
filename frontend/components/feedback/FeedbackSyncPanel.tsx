@@ -5,24 +5,34 @@ import { getFeedbackSync } from "@/lib/api/feedbackApi";
 import type { FeedbackSyncState } from "@/lib/schemas/feedback";
 
 /** Owns read-only recent outcomes independently of the uncurated queue. */
-export default function FeedbackSyncPanel({ refreshKey }: { refreshKey: number }) {
+export default function FeedbackSyncPanel({ refreshKey, onSynced }: {
+  refreshKey: number;
+  /** Called when a pending cloud copy is observed as synced. */
+  onSynced?: () => void;
+}) {
   const [records, setRecords] = useState<FeedbackSyncState[]>([]);
+  const pending = useRef(new Set<number>());
+  const synced = useRef(onSynced);
+  useEffect(() => { synced.current = onSynced; }, [onSynced]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const generation = useRef(0);
   const request = useRef<AbortController | null>(null);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (quiet = false) => {
     const current = ++generation.current;
     request.current?.abort();
     const controller = new AbortController();
     request.current = controller;
-    setLoading(true);
+    if (!quiet) setLoading(true);
     try {
       const next = await getFeedbackSync(50, controller.signal);
       if (current !== generation.current || controller.signal.aborted) return;
+      const arrived = next.some(record => record.sync_status === "synced" && pending.current.has(record.id_retroalimentacion));
+      pending.current = new Set(next.filter(record => record.sync_status === "pending").map(record => record.id_retroalimentacion));
       setRecords(next);
       setError(null);
+      if (arrived) synced.current?.();
     } catch {
       if (current !== generation.current || controller.signal.aborted) return;
       setError("No se pudo consultar el registro. Se conserva la última consulta disponible; vuelve a esta pestaña o recarga la página para reintentar.");
@@ -40,6 +50,15 @@ export default function FeedbackSyncPanel({ refreshKey }: { refreshKey: number }
       request.current?.abort();
     };
   }, [refresh, refreshKey]);
+
+  // The backend worker copies pending audios to GCS every 60 s; poll only while
+  // some copy is pending, so the state and the inventory follow it.
+  const waiting = records.some(record => record.sync_status === "pending");
+  useEffect(() => {
+    if (!waiting) return;
+    const timer = setInterval(() => void refresh(true), 10000);
+    return () => clearInterval(timer);
+  }, [waiting, refresh]);
 
   useEffect(() => {
     const onVisible = () => {

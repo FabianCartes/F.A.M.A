@@ -818,7 +818,7 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
         )}
       </section>
 
-      <FeedbackSyncPanel refreshKey={syncRefreshKey} />
+      <FeedbackSyncPanel refreshKey={syncRefreshKey} onSynced={fetchDatasets} />
 
       {/* ==================================================================== */}
       {/* 4. MODAL EXPLORADOR DE ARCHIVOS POR CLASE */}
