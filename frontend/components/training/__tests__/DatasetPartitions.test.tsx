@@ -59,22 +59,15 @@ function partitionsTransport(versions: unknown[], calls: { url: string; body?: u
   });
 }
 
-it("warns that the selected version is behind and creates an updated version with its policy", async () => {
+it("warns that the selected version is behind without offering to update it", async () => {
   const stale = { format: 2, version: "c".repeat(64), counts: { train: 6, val: 2, test: 2 }, warnings: [],
     created_at: "2026-11-11T18:00:00Z", policy: { validation_percent: 25, test_percent: 15, seed: 7 }, freshness: { new: 12, changed: 1 } };
-  const calls: { url: string; body?: unknown }[] = [];
-  vi.stubGlobal("fetch", partitionsTransport([stale], calls));
+  vi.stubGlobal("fetch", partitionsTransport([stale]));
   render(<DatasetPartitions dataset="Sample" selected={stale.version} busy={false} onSelect={vi.fn()} />);
   expect(await screen.findByText("Hay 12 audios nuevos desde esta versión.")).toBeDefined();
   expect(screen.getByText("1 audio de esta versión cambió o ya no está disponible.")).toBeDefined();
-  fireEvent.click(screen.getByRole("button", { name: "Crear versión actualizada" }));
-  expect(await screen.findByText(/Versión actualizada de Versión 1/)).toBeDefined();
-  const preview = calls.find(call => call.url.endsWith("/preview"));
-  expect(preview?.body).toEqual({ validation_percent: 25, test_percent: 15, seed: 7, base_version: stale.version });
-  expect((screen.getByLabelText("Semilla del reparto") as HTMLInputElement).value).toBe("7");
-  fireEvent.click(screen.getByRole("button", { name: "Guardar versión y seleccionarla" }));
-  await waitFor(() => expect(calls.filter(call => call.body && !call.url.endsWith("/preview")).at(-1)?.body).toMatchObject({
-    base_version: stale.version, preview_version: "f".repeat(64) }));
+  expect(screen.queryByRole("button", { name: "Crear versión actualizada" })).toBeNull();
+  expect(screen.queryByText(/versión actualizada/)).toBeNull();
 });
 
 it("does not warn for a version that is up to date", async () => {

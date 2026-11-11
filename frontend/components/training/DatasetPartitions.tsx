@@ -41,8 +41,6 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect, w
   const [test, setTest] = useState("20");
   const [seed, setSeed] = useState("42");
   const [acknowledged, setAcknowledged] = useState(false);
-  // Saved version whose splits an updated version keeps; cleared when the policy changes.
-  const [baseVersion, setBaseVersion] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const active = useRef<AbortController | null>(null);
@@ -66,21 +64,13 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect, w
 
   function changePolicy(value: string, field: "validation" | "test" | "seed") {
     if (field === "validation") setValidation(value); else if (field === "test") setTest(value); else setSeed(value);
-    setPreview(null); setAcknowledged(false); setMessage(""); setBaseVersion("");
+    setPreview(null); setAcknowledged(false); setMessage("");
   }
 
-  function update(item: Summary) {
-    const policy = item.policy ?? {};
-    setValidation(String(policy.validation_percent ?? 20)); setTest(String(policy.test_percent ?? 20)); setSeed(String(policy.seed ?? 42));
-    setBaseVersion(item.version);
-    void prepare(false, { percent: policy.validation_percent ?? 20, testPercent: policy.test_percent ?? 20, randomSeed: policy.seed ?? 42, base: item.version });
-  }
-
-  async function prepare(save = false, override?: { percent: number; testPercent: number; randomSeed: number; base: string }) {
+  async function prepare(save = false) {
     if (locked) return;
-    const percent = override?.percent ?? Number(validation), testPercent = override?.testPercent ?? Number(test);
-    const randomSeed = override?.randomSeed ?? Number(seed), base_version = override?.base ?? baseVersion;
-    if (!override && (!validation.trim() || !test.trim() || !seed.trim()) || !Number.isInteger(percent) || percent < 10 || percent > 40 || !Number.isInteger(testPercent) || testPercent < 10 || testPercent > 40 || percent + testPercent > 60 ||
+    const percent = Number(validation), testPercent = Number(test), randomSeed = Number(seed);
+    if (!validation.trim() || !test.trim() || !seed.trim() || !Number.isInteger(percent) || percent < 10 || percent > 40 || !Number.isInteger(testPercent) || testPercent < 10 || testPercent > 40 || percent + testPercent > 60 ||
       !Number.isInteger(randomSeed) || randomSeed < 0 || randomSeed > 2147483647) {
       setError("Usa entre 10 y 40 % para validación y prueba, deja al menos 40 % para entrenamiento y usa una semilla entera entre 0 y 2147483647.");
       return;
@@ -93,7 +83,6 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect, w
       const data = await request(save ? base : `${base}/preview`, {
         method: "POST", signal: controller.signal, headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ validation_percent: percent, test_percent: testPercent, seed: randomSeed,
-          ...(base_version ? { base_version } : {}),
           ...(save ? { preview_version: preview?.version, acknowledge_warnings: acknowledged } : {}) }),
       });
       if (controller.signal.aborted) return;
@@ -101,7 +90,7 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect, w
         const parsed = summarySchema.safeParse(data);
         if (!parsed.success) throw new Error("No se pudo confirmar la versión guardada.");
         setVersions(previous => [parsed.data, ...previous.filter(item => item.version !== parsed.data.version)]);
-        onSelect(parsed.data.version); setPreview(null); setAcknowledged(false); setBaseVersion("");
+        onSelect(parsed.data.version); setPreview(null); setAcknowledged(false);
         setMessage("Versión guardada. Se usará al iniciar el próximo entrenamiento.");
       } else {
         const parsed = previewSchema.safeParse(data);
@@ -167,8 +156,6 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect, w
           <div className="text-xs text-amber-200 bg-amber-950/20 border border-amber-900/50 rounded-lg p-3 space-y-2">
             {selectedVersion.freshness.new > 0 && <p>{selectedVersion.freshness.new === 1 ? "Hay 1 audio nuevo desde esta versión." : `Hay ${selectedVersion.freshness.new} audios nuevos desde esta versión.`}</p>}
             {selectedVersion.freshness.changed > 0 && <p>{selectedVersion.freshness.changed === 1 ? "1 audio de esta versión cambió o ya no está disponible." : `${selectedVersion.freshness.changed} audios de esta versión cambiaron o ya no están disponibles.`}</p>}
-            <p className="text-amber-100/80">La versión actualizada mantiene la semilla y los porcentajes, y deja en su lugar los audios ya repartidos.</p>
-            <button type="button" disabled={locked} onClick={() => update(selectedVersion)} className="px-3 py-2 rounded-lg text-xs font-semibold border border-amber-700 text-amber-100 bg-amber-950/40 disabled:opacity-50">Crear versión actualizada</button>
           </div>}
         {selectedVersion?.format === 2 && selectedVersion.counts.test && <p role="status" className="text-xs font-semibold text-emerald-300">Listo para entrenar con la {versionName(selectedVersion)}.</p>}
         </section>
@@ -183,7 +170,6 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect, w
             <button type="button" disabled={locked} onClick={() => void prepare()} className="px-3 py-2 rounded-lg text-xs font-semibold border border-emerald-800 text-emerald-300 bg-emerald-950/30 disabled:opacity-50">{phase === "preview" ? "Calculando reparto…" : "Previsualizar reparto"}</button>
           </div>
           {preview && <div className="rounded-lg bg-[#111215] border border-[#23252e] p-4 space-y-3">
-            {baseVersion && <p className="text-xs text-emerald-300">Versión actualizada de {(() => { const base = versions.find(item => item.version === baseVersion); return base ? versionName(base) : "la versión seleccionada"; })()}: conserva el reparto de sus audios y reparte solo los nuevos.</p>}
             <p className="text-sm font-semibold text-gray-200">{preview.counts.train} para entrenamiento · {preview.counts.val} para validación · {preview.counts.test} para prueba</p>
             <p className="text-xs text-gray-400">{preview.excluded.length} audios excluidos de esta propuesta. Los archivos y CSV existentes se conservan.</p>
             {preview.excluded.length > 0 && <details className="text-xs text-gray-400">
