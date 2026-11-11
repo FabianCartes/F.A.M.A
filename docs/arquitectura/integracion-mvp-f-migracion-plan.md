@@ -36,6 +36,10 @@ Verificación: APIs públicas y comprobaciones de esquema con SQLite en memoria 
 - T6 | S1-S6 | independent verify | pending | Verificador independiente (items 1, 2 y 5) y RDD por commit de unidad de riesgo.
 - T7 | S5,S6 | inline | pending | ADR, manual de migración/instalación, recibo `docs/receipts/integracion-mvp-f.json`, KANBAN y README; commits locales.
 
+## Estrategia de revisión
+- Durante f: revisar por separado con RDD cada commit de alto riesgo (la migración 0005 y la autorización de la tríada combinada), cuando quepa en el presupuesto de contexto; el verificador independiente (T6) se mantiene igual.
+- La revisión de la rama completa `mvp` frente a `main` se hace al terminar, dividida en PRs encadenados por etapa. Toda la rama (1427 archivos, ~135 000 líneas) excede el presupuesto (`lens_context_budget_exceeded`, 2026-11-11), así que no puede revisarse de una vez. Mientras tanto se puede omitir en cada cierre.
+
 ## Comprobaciones
 - Runner: desde `backend/`, `PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 ../.venv/bin/python tests/run_isolated_training_checks.py <selectores> --maxfail=100000`. El runner fija `-x`; `--maxfail` lo anula. Prohíbe SQLite en archivo y subprocesos, así que las pruebas de esquema que dependan de ellos deben adaptarse o declararse como exclusión explícita.
 - Comparar siempre el candidato contra la base `baf1f01` (copia `git archive` en un directorio temporal) por nodeid y fase; no contar como aprobados los fallos de la base.
@@ -45,3 +49,5 @@ Verificación: APIs públicas y comprobaciones de esquema con SQLite en memoria 
 - L1 — Kevin: «Haz el plan para la etapa f, se debe realizar el traspaso para realizarla en una nueva sesion».
 - L2 — Kevin: «Guardemoslos para la estapa f» (tríada estándar combinada, ajuste de pesos y tríadas importadas existentes).
 - L3 — Planificación sobre `baf1f01`, árbol limpio: diferencias entre el ORM y `schema_0004`, consumidores y hallazgo de `archived` obtenidos por inspección del código; nada se ejecutó contra una base real. La etapa e está cerrada (`2f67a26`, `3c7dfa1`, `f2c64b7`). Kevin omitió la revisión nativa del rango de e y de la rama completa frente a `main`; la revisión de la rama sigue pendiente y se recomienda hacerla en PRs por etapa al entregar.
+- L4 — Kevin aceptó revisar la rama completa al terminar: «Puede que la revision sea lo ideal al terminar, debido a que como faltan partes por implementar parte del codigo estara mal». El intento con toda la rama falló por `lens_context_budget_exceeded`, sin crear autoridad. Estrategia registrada arriba.
+- L5 — Kevin: «Vamos por f, haz el plan y el traspaso». La sesión nueva empieza por las decisiones abiertas 1–4.
