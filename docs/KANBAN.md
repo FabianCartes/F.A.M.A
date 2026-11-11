@@ -8,7 +8,7 @@ kanban-plugin: basic
 
 ## Importación ZIP: progreso de la subida e inventario
 
-- [ ] **IMPORT-PROGRESO:** planificada. Avance real «Subiendo a GCS: X de N audios» en el modal; tabla de datasets que se actualiza durante la subida, con columnas «Dataset», «Clases» y «Descripción» (migración 0006), sin «Disponibilidad» ni el botón de preprocesar. Origen: hallazgo 4 de la etapa g. [Plan](arquitectura/importacion-zip-progreso-e-inventario-plan.md).
+- [x] **IMPORT-PROGRESO:** cerrada el 2026-11-11 (T1–T6, ADR 0079, migración 0006 aplicada en `fama_pruebas`). Avance real «Subiendo a GCS: X de N audios» en el modal; tabla de datasets que se actualiza durante la subida, con columnas «Dataset», «Clases» y «Descripción» (migración 0006), sin «Disponibilidad» ni el botón de preprocesar. Origen: hallazgo 4 de la etapa g. [Plan](arquitectura/importacion-zip-progreso-e-inventario-plan.md).
 
 ## Entrenamiento con GPU NVIDIA (pendiente)
 
