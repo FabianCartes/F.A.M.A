@@ -454,3 +454,20 @@ def test_review_requires_a_session(partition_http):
     client, _, _ = partition_http
     client.cookies.clear()
     assert client.get(BASE + "/review").status_code == 401
+
+
+def test_updated_version_rejects_metadata_that_joins_groups_from_different_splits(partition_http):
+    client, _, raw = partition_http
+    base = saved_base(client)
+    by_split = {}
+    for entry in base["entries"]:
+        by_split.setdefault(entry["split"], entry)
+    first, second = by_split["train"], by_split["val"]
+    (raw / "metadata.csv").write_text(
+        "file_path,file_stage,clase,source_group\n"
+        f"{first['file_path']},raw,{first['clase']},shared-session\n"
+        f"{second['file_path']},raw,{second['clase']},shared-session\n", encoding="utf-8")
+    response = client.post(BASE + "/preview", headers={"Origin": ORIGIN}, json={**POLICY, "base_version": base["version"]})
+    assert response.status_code == 409
+    assert "desde cero" in response.json()["detail"]
+    assert client.post(BASE + "/preview", headers={"Origin": ORIGIN}, json=POLICY).status_code == 200
