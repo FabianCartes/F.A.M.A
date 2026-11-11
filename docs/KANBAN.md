@@ -2,6 +2,14 @@
 kanban-plugin: basic
 ---
 
+## Integración de afinamiento integral en `mvp` — etapa e: predicción y feedback por asignación
+
+- [x] **E-PREDICCIÓN:** predicción, historial (con audio local o en la nube) y feedback autorizados por `ResourceAccess` según la asignación al dataset, sin excepciones por dueño de importación; se conservan catálogo `metadata_only`, ensambles declarados, prewarm y caché de hashes. `PredictionView` usa `/api/models` y el historial persistido; se retiró la revisión de pesos de tríadas importadas. Regresión de 16 módulos sin fallos exclusivos del candidato; frontend 620 PASS, tipos y build correctos, lint con los 2 errores previos; verificador independiente S1–S7 PASS sin bloqueantes. [Plan](arquitectura/integracion-mvp-e-prediccion-plan.md), [manual](manuales/prediccion-feedback-mvp.md) y [recibo](receipts/integracion-mvp-e.json). Commits locales 2f67a26/3c7dfa1, sin push ni PR. Sin datos borrados.
+
+## Integración de afinamiento integral en `mvp` — tríada estándar combinada (posterior a e)
+
+- [ ] **TRIADA-ESTANDAR:** planificada, no iniciada. Publicar la tríada estándar entrenada como un solo modelo combinado, autorizado por asignación, con revisión de pesos versionada y la interfaz de pesos en `PredictionView`. Hoy se registran tres modelos independientes y `ensemble_weight` no se usa al predecir. Decidir antes cómo se persiste la composición (recomendado: tabla nueva en la migración aditiva 0005 de f, con ADR). [Plan](arquitectura/integracion-mvp-triada-estandar-plan.md).
+
 ## Integración de afinamiento integral en `mvp` — etapa d: entrenamiento estándar
 
 - [x] **D-ENTRENAMIENTO:** retiradas la entrada importada de API/worker y el selector privado; ZIP publicado usa catálogo estándar y `partition_version`. Backend final625PASS/3deselecciones explícitas de base; frontend632PASS/tipos/build0. Independiente: B1/catálogo6PASS, lectores37PASS/1deselección, frontend32PASS/tipos0. Lint conserva2errores previos de PredictionView. El fallo inicial de integridad por edición concurrente queda registrado, no cuenta como prueba final. [Plan](arquitectura/integracion-mvp-d-snapshots-plan.md) y [recibo/exclusiones](receipts/integracion-mvp-d.json). Commits locales26a2d6f/49e7ebb, sin push/PR ni entrenamiento real. ASSESS backend no disponible por recibo no rastreado; sin revisión nativa iniciada ni aprobación inventada.

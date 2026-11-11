@@ -1,0 +1,34 @@
+{
+  "stage": "e",
+  "status": "complete_in_synthetic_scope_with_documented_baseline_failures",
+  "branch": "mvp",
+  "base": "931f414f8355a0f71e848539b411eb29b6b4bbef",
+  "backend_commit": "2f67a26",
+  "frontend_commit": "3c7dfa1",
+  "contract": "Prediction, history and feedback are authorized by ResourceAccess dataset assignment; no imported-owner exceptions; catalogue metadata_only with declared ensembles, prewarm and checkpoint hash cache preserved; no data or table deletion.",
+  "risk": "item 2 (authorization of models, predictions and feedback)",
+  "checks": {
+    "runner": "cd backend && PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 ../.venv/bin/python tests/run_isolated_training_checks.py <selectors> --maxfail=100000",
+    "tracer_module": {"selector": "tests/test_mvp_prediction_flow.py", "passed": 4, "failed": 0, "exit": 0},
+    "regression_16_modules": {
+      "candidate": {"failed": 88, "passed": 242, "skipped": 5, "errors": 19},
+      "baseline_931f414": {"failed": 112, "passed": 244, "skipped": 5, "errors": 9},
+      "candidate_only_nonpassing_nodeids": 0,
+      "baseline_only_nonpassing_nodeids": 14,
+      "shared_failure_causes": ["storage_configuration_missing", "file SQLite forbidden by runner", "mocked query().order_by() shape in checkpoint identity tests", "retired imported triad (setup: Checkpoint importado no admitido)"],
+      "note": "Shared failures are pre-existing at baseline and are not counted as passed."
+    },
+    "chucao_quality_diagnostic": "tests/test_api_predict.py::test_predict_real_chucao_quality is skipped without FAMA_QUALITY_* in both candidate and baseline; not a regression, not counted as passed.",
+    "standard_triad_training": {"selectors": "tests/test_api_training.py tests/test_training_schemas.py tests/test_dataset_partitions.py -k 'tri or triad'", "passed": 62, "failed": 0},
+    "concurrency_recheck": {"selectors": "tests/test_api_model_catalogue.py tests/test_mvp_prediction_flow.py tests/test_resource_access.py", "runs": 10, "passed_per_run": 93, "failed": 0},
+    "frontend": {"vitest": "75 files / 620 passed", "tsc": "exit 0", "build": "ok", "lint": "2 errors, 6 warnings; same 2 errors as baseline (refs during render, setState in effect)"},
+    "independent_verifier": {"verdicts": {"S1": "PASS", "S2": "PASS", "S3": "PASS", "S4": "PASS", "S5": "PASS", "S6": "PASS", "S7": "PASS"}, "blockers": 0, "advisories": ["intermittent test_concurrent_catalogue_requests_keep_one_predictor (1 failure, not reproduced in 10 parent re-runs)", "predict maps ModelWeightsError to 503 before model_allowed, same structure as baseline, no leak demonstrated", "unused owner_id parameter in feedback.approve_feedback and training.get_history"], "workspace_unchanged": true}
+  },
+  "limits": [
+    "Synthetic CPU data, in-memory SQLite and blocked network only; no real weights, GCS, PostgreSQL, Docker or deployment validated.",
+    "Imported triad compositions are no longer published or revisable; their rows and files are preserved. Standard combined triad is planned separately (docs/arquitectura/integracion-mvp-triada-estandar-plan.md).",
+    "tests/test_imported_triad_registry.py is kept unchanged; it exercises retired behaviour and fails at baseline too.",
+    "No push, PR or native review approval recorded in this receipt."
+  ],
+  "delivery": "local commits on mvp; push and PR remain the user's decision"
+}
