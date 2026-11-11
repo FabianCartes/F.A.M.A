@@ -33,9 +33,9 @@ def components(tmp_path, monkeypatch):
 
 
 def test_full_vectors_choose_nonwinning_class_and_keep_single_output(components):
-    from app.services.predictors.imported_triad_predictor import ImportedTriadPredictor
+    from app.services.predictors.triad_predictor import TriadPredictor
     parts, audio = components([[.5,.4,.1],[.1,.4,.5],[.5,.4,.1]])
-    triad = ImportedTriadPredictor(parts, [.25,.5,.25], ['a','b','c'], 'triad-v1')
+    triad = TriadPredictor(parts, [.25,.5,.25], ['a','b','c'], 'triad-v1')
     assert all(p.model is None for p in parts)
     result = triad.predict(audio)
     assert result.clase == 'b'
@@ -59,9 +59,9 @@ def test_full_vectors_choose_nonwinning_class_and_keep_single_output(components)
 @pytest.mark.parametrize('weights', [[1.0000000005, 0, 0],
     [0.3333333335, 0.3333333335, 0.3333333335]], ids=['single-weight', 'equal-weights'])
 def test_tolerance_weight_overflow_keeps_probabilities_bounded(components, weights):
-    from app.services.predictors.imported_triad_predictor import ImportedTriadPredictor
+    from app.services.predictors.triad_predictor import TriadPredictor
     parts, audio = components([[1.0]] * 3, [['only']] * 3)
-    triad = ImportedTriadPredictor(parts, weights, ['only'], 'tolerance-v1')
+    triad = TriadPredictor(parts, weights, ['only'], 'tolerance-v1')
     metadata = triad.metadata.model_dump()
     result = triad.predict(audio)
     assert 0 <= result.confianza <= 1
@@ -92,18 +92,18 @@ def test_vector_keeps_precision_lost_by_single_prediction(components):
 
 @pytest.mark.parametrize('count', [0, 2, 4])
 def test_requires_exactly_three_components(components, count):
-    from app.services.predictors.imported_triad_predictor import ImportedTriadPredictor
+    from app.services.predictors.triad_predictor import TriadPredictor
     parts, _ = components([[.5,.4,.1]]*3)
     with pytest.raises(ModelWeightsError, match='three'):
-        ImportedTriadPredictor((parts + parts)[:count], [1,0,0], ['a','b','c'], 'bad')
+        TriadPredictor((parts + parts)[:count], [1,0,0], ['a','b','c'], 'bad')
 
 
 def test_permuted_labels_and_weight_order(components):
-    from app.services.predictors.imported_triad_predictor import ImportedTriadPredictor
+    from app.services.predictors.triad_predictor import TriadPredictor
     parts, audio = components([[.6,.3,.1],[.6,.3,.1],[.6,.3,.1]],
                              [['a','b','c'],['c','a','b'],['b','c','a']])
-    first = ImportedTriadPredictor(parts, [1,0,0], ['a','b','c'], 'first').predict(audio)
-    second = ImportedTriadPredictor(parts, [0,1,0], ['a','b','c'], 'second').predict(audio)
+    first = TriadPredictor(parts, [1,0,0], ['a','b','c'], 'first').predict(audio)
+    second = TriadPredictor(parts, [0,1,0], ['a','b','c'], 'second').predict(audio)
     assert first.clase == 'a' and second.clase == 'c'
     assert second.detalles['probabilities'] == pytest.approx([.3,.1,.6])
     assert all(p.model is not None for p in parts)
@@ -112,33 +112,33 @@ def test_permuted_labels_and_weight_order(components):
 @pytest.mark.parametrize('weights', [[1,0], [0,0,0], [-1,1,1], [1,1,1],
     [float('nan'),0,1], [float('inf'),0,0], [.5,.5,.00000001], [True,0,0]])
 def test_invalid_weights(components, weights):
-    from app.services.predictors.imported_triad_predictor import ImportedTriadPredictor
+    from app.services.predictors.triad_predictor import TriadPredictor
     parts, _ = components([[.5,.4,.1]]*3)
     with pytest.raises(ModelWeightsError, match='weights'):
-        ImportedTriadPredictor(parts, weights, ['a','b','c'], 'bad')
+        TriadPredictor(parts, weights, ['a','b','c'], 'bad')
 
 
 @pytest.mark.parametrize('labels', [['a','b'], ['a','b','d'], ['a','a','c'], ['a','b','c','d']])
 def test_incompatible_labels(components, labels):
-    from app.services.predictors.imported_triad_predictor import ImportedTriadPredictor
+    from app.services.predictors.triad_predictor import TriadPredictor
     parts, _ = components([[.5,.4,.1]]*3)
     parts[1].classes = labels
     with pytest.raises(ModelWeightsError, match='labels'):
-        ImportedTriadPredictor(parts, [1,0,0], ['a','b','c'], 'bad')
+        TriadPredictor(parts, [1,0,0], ['a','b','c'], 'bad')
 
 
 @pytest.mark.parametrize('vector', [[float('nan'),.5,.5], [float('inf'),0,0], [-.1,.5,.6]])
 def test_nonfinite_neural_outputs_are_not_probabilities(components, vector):
-    from app.services.predictors.imported_triad_predictor import ImportedTriadPredictor
+    from app.services.predictors.triad_predictor import TriadPredictor
     parts, audio = components([[.5,.4,.1], vector, [.5,.4,.1]])
     with pytest.raises(ModelWeightsError, match='probabilities'):
-        ImportedTriadPredictor(parts, [1,0,0], ['a','b','c'], 'bad').predict(audio)
+        TriadPredictor(parts, [1,0,0], ['a','b','c'], 'bad').predict(audio)
 
 
 def test_zero_weight_failed_checkpoint_has_no_fallback(components):
-    from app.services.predictors.imported_triad_predictor import ImportedTriadPredictor
+    from app.services.predictors.triad_predictor import TriadPredictor
     parts, audio = components([[.5,.4,.1]]*3)
-    triad = ImportedTriadPredictor(parts, [1,0,0], ['a','b','c'], 'broken')
+    triad = TriadPredictor(parts, [1,0,0], ['a','b','c'], 'broken')
     parts[2].checkpoint_path.write_bytes(b'corruption')
     with pytest.raises(ModelWeightsError, match='SHA-256'):
         triad.predict(audio)
@@ -146,7 +146,7 @@ def test_zero_weight_failed_checkpoint_has_no_fallback(components):
 
 @pytest.mark.parametrize('reject', ['silence', 'noise'])
 def test_silence_has_no_vector_and_preserves_single_reject(components, reject):
-    from app.services.predictors.imported_triad_predictor import ImportedTriadPredictor
+    from app.services.predictors.triad_predictor import TriadPredictor
     parts, audio = components([[.5,.4,.1]]*3)
     waveform = (np.zeros(22050 * 5) if reject == 'silence' else
                 np.random.default_rng(32).normal(0, .1, 22050 * 5))
@@ -159,7 +159,7 @@ def test_silence_has_no_vector_and_preserves_single_reject(components, reject):
         parts[0].predict_probabilities(audio)
     assert isinstance(failure.value, ModelWeightsError)
     assert failure.value.status == reject
-    composed = ImportedTriadPredictor(parts, [1,0,0], ['a','b','c'], 'silent').predict(audio)
+    composed = TriadPredictor(parts, [1,0,0], ['a','b','c'], 'silent').predict(audio)
     assert composed.clase == single.clase and composed.confianza == 0
     assert composed.detalles['status'] == reject
     assert 'probabilities' not in composed.detalles
@@ -169,12 +169,12 @@ def test_silence_has_no_vector_and_preserves_single_reject(components, reject):
         expected_checkpoint_sha256=p.expected_checkpoint_sha256) for p in parts]
     parts[2].checkpoint_path.write_bytes(b'corrupt even after an earlier reject')
     with pytest.raises(ModelWeightsError, match='SHA-256'):
-        ImportedTriadPredictor(parts, [1,0,0], ['a','b','c'], 'silent').predict(audio)
+        TriadPredictor(parts, [1,0,0], ['a','b','c'], 'silent').predict(audio)
 
 
 @pytest.mark.parametrize('shape', [(2,3), (1,2), (1,3,1), (3,), (1,0)])
 def test_malformed_neural_output_shape(components, shape):
-    from app.services.predictors.imported_triad_predictor import ImportedTriadPredictor
+    from app.services.predictors.triad_predictor import TriadPredictor
     parts, audio = components([[.5,.4,.1]]*3)
     parts[1].load_weights()
     class WrongShape(torch.nn.Module):
@@ -182,4 +182,31 @@ def test_malformed_neural_output_shape(components, shape):
             return torch.zeros(shape)
     parts[1].model = WrongShape()
     with pytest.raises(ModelWeightsError, match='probabilities'):
-        ImportedTriadPredictor(parts, [1,0,0], ['a','b','c'], 'shape').predict(audio)
+        TriadPredictor(parts, [1,0,0], ['a','b','c'], 'shape').predict(audio)
+
+
+def test_metadata_carries_catalogue_name_and_dataset_without_owner_or_manifest(components):
+    from app.services.predictors.triad_predictor import TriadPredictor
+    parts, _ = components([[.5,.4,.1]]*3)
+    triad = TriadPredictor(parts, [.5,.3,.2], ['a','b','c'], 'fama_triad_7',
+                           name='Triad v2', dataset_name='AvesChilenas')
+    metadata = triad.metadata
+    assert (metadata.id, metadata.name, metadata.dataset_name) == ('fama_triad_7', 'Triad v2', 'AvesChilenas')
+    assert triad.model_id == 'fama_triad_7' and triad.dataset_name == 'AvesChilenas'
+    assert metadata.classes == ['a', 'b', 'c']
+    assert 'imported' not in metadata.description.lower()
+    assert not hasattr(triad, 'composition_admission') and not hasattr(triad, 'imported_source')
+    assert triad.has_weights == all(p.has_weights for p in parts)
+    assert all(p.model is None for p in parts)
+
+
+def test_has_weights_is_false_when_any_component_checkpoint_is_missing(components, monkeypatch):
+    from app.services.predictors.triad_predictor import TriadPredictor
+    # Tiny synthetic files are below the real 10 kB size floor; keep only existence.
+    monkeypatch.setattr(TrainedModelPredictor, 'has_weights',
+                        property(lambda self: self.checkpoint_path.exists()))
+    parts, _ = components([[.5,.4,.1]]*3)
+    triad = TriadPredictor(parts, [.5,.3,.2], ['a','b','c'], 'fama_triad_8')
+    assert triad.has_weights is True
+    parts[1].checkpoint_path.unlink()
+    assert triad.has_weights is False

@@ -78,6 +78,7 @@ from app.routes.users import router as users_router
 from app.routes.security import router as security_router
 from app.services.web_sessions import current_web_user
 from app.services.access import resource_access, ResourceAccess
+from app.services.triad_compositions import TRIAD_PREFIX, composition_query, parse_triad_key, triad_model_key
 from app.routes.import_capability import zip_router
 
 from app.services.registry import get_model_registry, initialize_model_registry, ModelRegistry, ModelNotFoundError
@@ -540,6 +541,8 @@ app.include_router(checkpoint_router)
 app.include_router(zip_router())
 from app.routes.prediction_history import router as prediction_history_router
 app.include_router(prediction_history_router)
+from app.routes.triad_compositions import router as triad_composition_router
+app.include_router(triad_composition_router)
 
 
 
@@ -654,6 +657,7 @@ def list_models(
         visible_ids = {item.id for item in models}
         default_id = default_id if default_id in visible_ids else ""
         registered_ids = {f"fama_trained_model_{row.id_modelo}" for row in access.query(Modelo).all()}
+        registered_ids |= {triad_model_key(row.id) for row in composition_query(access).all()}
         publication_errors = [item for item in publication_errors if item.get("model_id") in registered_ids]
     evaluations = read_model_evaluations(db, models, admitted_pair_ids)
     for model in models:
@@ -723,6 +727,9 @@ async def predict_audio(
                 or not 1 <= int(suffix) <= 2 ** 31 - 1
                 or access.query(Modelo).filter_by(id_modelo=int(suffix)).first() is None):
             raise HTTPException(404, "Modelo no encontrado o no asignado.")
+    triad_id = parse_triad_key(requested)
+    if triad_id is not None and composition_query(access).filter_by(id=triad_id).first() is None:
+        raise HTTPException(404, "Modelo no encontrado o no asignado.")
     try:
         try:
             predictor = registry.get(model_id)
@@ -736,7 +743,7 @@ async def predict_audio(
             detail="Modelo no encontrado o no asignado.",
         )
     except ModelWeightsError as weights_err:
-        if not access.administrator and not (requested and requested.startswith("fama_trained_model_")):
+        if not access.administrator and not (requested and requested.startswith(("fama_trained_model_", TRIAD_PREFIX))):
             raise HTTPException(404, "Modelo no encontrado o no asignado.") from None
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

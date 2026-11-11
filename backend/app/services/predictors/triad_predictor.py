@@ -1,4 +1,7 @@
-"""Explicit three-checkpoint fusion; publication and ownership belong to its consumer."""
+"""Explicit three-checkpoint probability fusion for a standard triad composition.
+
+Publication and dataset authorization belong to the registry and API, not to the predictor.
+"""
 import math
 from pathlib import Path
 import numpy as np
@@ -15,13 +18,12 @@ def _labels(labels):
     return tuple(labels)
 
 
-class ImportedTriadPredictor(AudioPredictor):
+class TriadPredictor(AudioPredictor):
     """Ordered trained instances, weights summing to one, canonical classes and identity.
 
     No normalization or partial ensemble. Each instance owns its loading/audio contract.
-    T4 must admit owner, artifacts and immutable composition before publication.
     """
-    def __init__(self, components, weights, classes, model_id, *, dataset_name=None):
+    def __init__(self, components, weights, classes, model_id, *, name=None, dataset_name=None):
         self.components = tuple(components)
         if len(self.components) != 3 or any(not isinstance(p, TrainedModelPredictor) for p in self.components):
             raise ModelWeightsError('Exactly three trained components are required')
@@ -39,8 +41,8 @@ class ImportedTriadPredictor(AudioPredictor):
         for component in self.components:
             if set(_labels(component.classes)) != set(self.classes):
                 raise ModelWeightsError('Component class labels do not match')
-        self._metadata = ModelMetadata(id=model_id, name=model_id,
-            description='Imported three-component probability fusion',
+        self._metadata = ModelMetadata(id=model_id, name=name or model_id,
+            description='Three-component probability fusion',
             classes=list(self.classes), dataset_name=dataset_name)
 
     @property

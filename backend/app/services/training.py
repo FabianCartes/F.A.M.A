@@ -26,6 +26,7 @@ from app.database import SessionLocal
 from app.models.dataset import ConjuntoDatos, Audio
 from app.models.training import Modelo, MetricaEntrenamiento, ModelEvaluation
 from app.services.evaluations import EvaluationService
+from app.services.triad_compositions import create_initial_composition
 from app.services.recording_evaluator import (
     LabelledRecording, RecordingEvaluator, validate_recording_splits, REJECTION_LABEL,
 )
@@ -917,6 +918,7 @@ class TrainingService:
                 f"{len(val_df)} audios de val | {len(classes)} clases detectadas."
             )
 
+            registered_components = []  # (id_modelo, weight) in training order, after each commit
             for idx, arch in enumerate(models_to_train):
                 if self._is_stop_requested():
                     break
@@ -1344,6 +1346,7 @@ class TrainingService:
                     model_id = nuevo_modelo.id_modelo
                     commit_attempted = True
                     db.commit()
+                    registered_components.append((model_id, component_weight))
                     self._add_log("SUCCESS", f"Checkpoint local {checkpoint_filename} ({file_size} bytes), modelo #{model_id} ({arch}) y métricas guardados.")
                 except Exception:
                     if db is not None:
@@ -1394,6 +1397,8 @@ class TrainingService:
                     self.current_phase = 'stopped'
                 self._add_log("WARN", "Training stopped before completing the pipeline.")
             else:
+                if is_ensemble and len(models_to_train) == 3:
+                    self._register_triad_composition(config, registered_components)
                 with self._lock:
                     self.status = "completed"
                     self.current_phase = 'completed'
@@ -1410,6 +1415,23 @@ class TrainingService:
                 self.current_phase = self.status
                 self.error_message = None if self.status == 'stopped' else str(exc)
             self._add_log("ERROR", f"Fallo catastrófico en el entrenamiento: {exc}")
+
+    def _register_triad_composition(self, config: Dict[str, Any], components: List[Any]) -> None:
+        """Create composition version 1 once the job's three components are registered.
+
+        The component models are already durable; a failure here is reported but never
+        turns the finished job into a failed one.
+        """
+        try:
+            with SessionLocal() as db:
+                composition = create_initial_composition(
+                    db, job_id=config["job_id"], dataset_id=config["dataset_id"],
+                    partition_version=(config["source"].get("partition_manifest") or {}).get("version"),
+                    components=components, author_id=config.get("user_id"))
+                composition_id = composition.id
+            self._add_log("SUCCESS", f"Composición de tríada #{composition_id} (versión 1) registrada con los pesos de los checkpoints.")
+        except Exception as error:
+            self._add_log("WARN", f"No se pudo registrar la composición de la tríada: {error}")
 
     def _history_checkpoint(self, filename: str) -> tuple[Dict[str, Any], Optional[int]]:
         """Read only a local artifact under the configured checkpoint root."""

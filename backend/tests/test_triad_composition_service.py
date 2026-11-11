@@ -1,0 +1,116 @@
+"""Composition creation and weight revision through the public service functions."""
+import pytest
+from sqlalchemy.orm import sessionmaker
+
+from app.models.dataset import ConjuntoDatos
+from app.models.training import Modelo
+from app.models.triad_composition import TriadComposition
+from app.models.user import Usuario
+from app.services import triad_compositions as service
+from app.services.triad_compositions import (
+    TriadCompositionConflict, TriadCompositionError, create_initial_composition, latest_compositions,
+    parse_triad_key, revise_weights,
+)
+from tests.schema_support import migrated_engine
+
+HASH = "a" * 64
+
+
+@pytest.fixture
+def sessions():
+    engine = migrated_engine()
+    with engine.begin() as connection:
+        connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+    factory = sessionmaker(bind=engine)
+    with factory() as db:
+        db.add(Usuario(id=2, email="investigador@example.test", password_hash="x",
+                       nombre_completo="investigador", rol="investigador", activo=True))
+        db.add_all([ConjuntoDatos(id_conjunto_datos=10, nombre="AvesChilenas", ruta_gcp="datasets/AvesChilenas"),
+                    ConjuntoDatos(id_conjunto_datos=20, nombre="engine_diagnostics", ruta_gcp="datasets/engine_diagnostics")])
+        for model_id, dataset_id, digest in ((1, 10, HASH), (2, 10, HASH), (3, 10, HASH),
+                                             (4, 10, None), (5, 20, HASH)):
+            db.add(Modelo(id_modelo=model_id, id_conjunto_datos=dataset_id, arquitectura="fixture", epocas=1,
+                          tasa_aprendizaje=0.001, tamano_lote=1, ruta_binario_gcp=f"models/{model_id}.pt",
+                          hash_binario=digest))
+        db.commit()
+    yield factory
+    engine.dispose()
+
+
+def initial(db, weights=(0.5, 0.3, 0.2), ids=(1, 2, 3), job_id="job-a", dataset_id=10):
+    return create_initial_composition(db, job_id=job_id, dataset_id=dataset_id, partition_version="p1",
+                                      components=list(zip(ids, weights)), author_id=None)
+
+
+def rows(sessions):
+    with sessions() as db:
+        return [(r.id, r.job_id, r.version, r.previous_id, (r.first_weight, r.second_weight, r.third_weight))
+                for r in db.query(TriadComposition).order_by(TriadComposition.id)]
+
+
+def test_initial_composition_is_idempotent_per_job(sessions):
+    with sessions() as db:
+        first = initial(db)
+        again = initial(db)
+        assert again.id == first.id
+        assert (first.version, first.previous_id, first.partition_version, first.dataset_id) == (1, None, "p1", 10)
+        assert service.component_ids(first) == (1, 2, 3) and service.component_weights(first) == (0.5, 0.3, 0.2)
+    assert len(rows(sessions)) == 1
+
+
+@pytest.mark.parametrize("ids, dataset_id", [((1, 2, 4), 10), ((1, 2, 5), 10), ((1, 2, 99), 10), ((1, 2, 2), 10)],
+                         ids=["no-hash", "other-dataset", "unknown-model", "repeated-model"])
+def test_inadmissible_components_create_nothing(sessions, ids, dataset_id):
+    with sessions() as db, pytest.raises(TriadCompositionError):
+        initial(db, ids=ids, dataset_id=dataset_id)
+    assert rows(sessions) == []
+
+
+def test_revision_is_a_new_version_that_keeps_the_previous_row(sessions):
+    with sessions() as db:
+        first = initial(db)
+        second = revise_weights(db, first, [0.2, 0.3, 0.5], author_id=2)
+        assert (second.version, second.previous_id, second.author_id) == (2, first.id, 2)
+        assert service.component_ids(second) == (1, 2, 3)
+        assert (second.job_id, second.dataset_id, second.partition_version) == ("job-a", 10, "p1")
+        assert [row.id for row in latest_compositions(db)] == [second.id]
+    assert [(r[2], r[4]) for r in rows(sessions)] == [(1, (0.5, 0.3, 0.2)), (2, (0.2, 0.3, 0.5))]
+
+
+@pytest.mark.parametrize("weights", [[.5, .5], [.25] * 4, [.5, .5, .5], [-.5, .75, .75], [0, 0, 0],
+                                     [True, 0, 0], [float("nan"), 0, 1], "abc", None])
+def test_invalid_weights_leave_the_composition_unchanged(sessions, weights):
+    with sessions() as db:
+        first = initial(db)
+        with pytest.raises(TriadCompositionError):
+            revise_weights(db, first, weights, author_id=2)
+    assert len(rows(sessions)) == 1
+
+
+def test_only_the_latest_version_can_be_revised(sessions):
+    with sessions() as db:
+        first = initial(db)
+        revise_weights(db, first, [0.2, 0.3, 0.5], author_id=2)
+        with pytest.raises(TriadCompositionConflict):
+            revise_weights(db, first, [0.1, 0.1, 0.8], author_id=2)
+    assert len(rows(sessions)) == 2
+
+
+def test_concurrent_revision_from_the_same_version_hits_the_unique_constraint(sessions, monkeypatch):
+    with sessions() as winner, sessions() as loser:
+        first = initial(winner)
+        stale = loser.get(TriadComposition, first.id)
+        revise_weights(winner, first, [0.2, 0.3, 0.5], author_id=2)
+        # The loser checked the latest version before the winner committed.
+        monkeypatch.setattr(service, "_latest_version", lambda db, job_id: 1)
+        with pytest.raises(TriadCompositionConflict):
+            revise_weights(loser, stale, [0.1, 0.1, 0.8], author_id=2)
+    assert [(r[2], r[4]) for r in rows(sessions)] == [(1, (0.5, 0.3, 0.2)), (2, (0.2, 0.3, 0.5))]
+
+
+@pytest.mark.parametrize("key, expected", [("fama_triad_7", 7), ("fama_triad_0", None), ("fama_triad_07", None),
+                                           ("fama_triad_-1", None), ("fama_triad_x", None),
+                                           ("fama_triad_99999999999", None), ("fama_trained_model_7", None),
+                                           ("", None), (None, None)])
+def test_catalogue_key_parsing_is_exact(key, expected):
+    assert parse_triad_key(key) == expected

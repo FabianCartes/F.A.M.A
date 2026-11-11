@@ -61,6 +61,9 @@ class ModelRegistry:
         self._predictors: Dict[str, AudioPredictor] = {}
         # Track provenance, not ID spelling: explicit registrations are not DB-owned.
         self._db_predictors: Dict[str, AudioPredictor] = {}
+        # Latest standard triad compositions, keyed ``fama_triad_<id>``; derived from the
+        # component entries of ``_db_predictors`` and never persisted by the registry.
+        self._triad_predictors: Dict[str, AudioPredictor] = {}
         self._default_model_id: Optional[str] = None
         self._blocked_db_aliases: Dict[str, str] = {}
         self._blocked_default_error: Optional[str] = None
@@ -496,7 +499,64 @@ class ModelRegistry:
                         self._block_db_model(model, key, basename, "checkpoint_hash_mismatch")
                         code = "checkpoint_hash_mismatch"
                     errors.append({"model_id": key, "code": code})
+            self._publish_triads(db, access, errors)
         return errors
+
+    def _discard_triad(self, key: str) -> None:
+        predictor = self._triad_predictors.pop(key, None)
+        if predictor is not None and self._predictors.get(key) is predictor:
+            del self._predictors[key]
+        if self._default_model_id == key and key not in self._predictors:
+            self._default_model_id = None
+
+    def _publish_triads(self, db: Any, access: Any, errors: List[Dict[str, Any]]) -> None:
+        """Publish the latest composition of each job as one metadata-only model.
+
+        Call under the publication lock after the individual models. Components are the
+        already published, lazily loaded predictors, so hash caching is shared. A composition
+        whose component is blocked or unavailable is blocked as well; older versions are not
+        listed. Without the composition table, individual models are unaffected.
+        """
+        from app.services.predictors.triad_predictor import TriadPredictor
+        from app.services.triad_compositions import component_ids, component_weights, latest_compositions, triad_model_key
+        try:
+            compositions = latest_compositions(db)
+        except Exception:
+            db.rollback()
+            errors.append({"model_id": "fama_triad", "code": "triad_compositions_unavailable"})
+            return
+        latest_keys = {triad_model_key(composition.id) for composition in compositions}
+        for key in [key for key in self._triad_predictors if key not in latest_keys]:
+            self._discard_triad(key)
+        for composition in compositions:
+            key = triad_model_key(composition.id)
+            if access is not None and not access.administrator and composition.dataset_id not in access.ids:
+                continue
+            keys = [f"fama_trained_model_{model_id}" for model_id in component_ids(composition)]
+            components = [self._db_predictors.get(component_key) for component_key in keys]
+            if any(component_key in self._blocked_db_aliases for component_key in keys) or None in components:
+                self._discard_triad(key)
+                self._blocked_db_aliases[key] = (
+                    f"La composición '{key}' está bloqueada: un componente no está disponible o su hash no es válido.")
+                errors.append({"model_id": key, "code": "triad_component_blocked"})
+                continue
+            cached = self._triad_predictors.get(key)
+            if cached is not None and self.has_model(key) and cached.components == tuple(components):
+                continue  # Composition rows are immutable; the same components keep the same fusion.
+            try:
+                dataset_names = {component.dataset_name for component in components}
+                if len(dataset_names) != 1:
+                    raise ModelWeightsError("Component datasets do not match")
+                predictor = TriadPredictor(
+                    components, component_weights(composition), list(components[0].classes), key,
+                    name=f"Tríada combinada (versión {composition.version})", dataset_name=dataset_names.pop())
+            except Exception:
+                self._discard_triad(key)
+                errors.append({"model_id": key, "code": "triad_invalid"})
+                continue
+            self._discard_triad(key)
+            self._predictors[key] = predictor
+            self._triad_predictors[key] = predictor
 
     @staticmethod
     def _apply_display_name(predictor, display):

@@ -9,6 +9,7 @@ from app.models.prediction_access import AccesoPrediccion
 from app.models.training import Modelo
 from app.services.registry import get_model_registry
 from app.services.access import ResourceAccess, resource_access
+from app.services.triad_compositions import composition_query, parse_triad_key, triad_model_key
 from app.routes.auth import WebAuthRoute
 from app.services.local_prediction_audio import LocalPredictionAudio
 
@@ -53,13 +54,22 @@ def prediction_history(request: Request, response: Response,
         if model is None or model.conjunto_datos is None:
             raise HTTPException(404, 'Modelo no disponible.')
         canonical = f'fama_trained_model_{model.id_modelo}'
-    metadata = next((item for item in registry.list_models() if item.id == canonical), None)
-    if metadata is None or not metadata.dataset_name or not access.model_allowed(canonical, metadata.dataset_name):
-        raise HTTPException(404, 'Modelo no disponible.')
     from app.models.dataset import ConjuntoDatos
-    dataset = db.query(ConjuntoDatos).filter_by(nombre=metadata.dataset_name).first()
-    if dataset is None or dataset.nombre != metadata.dataset_name:
-        raise HTTPException(404, 'Modelo no disponible.')
+    triad_id = parse_triad_key(model_id)
+    if triad_id is not None:
+        # Every stored version keeps its own history, even when it is no longer published.
+        composition = composition_query(access).filter_by(id=triad_id).first()
+        dataset = db.get(ConjuntoDatos, composition.dataset_id) if composition is not None else None
+        if dataset is None:
+            raise HTTPException(404, 'Modelo no disponible.')
+        canonical = triad_model_key(triad_id)
+    else:
+        metadata = next((item for item in registry.list_models() if item.id == canonical), None)
+        if metadata is None or not metadata.dataset_name or not access.model_allowed(canonical, metadata.dataset_name):
+            raise HTTPException(404, 'Modelo no disponible.')
+        dataset = db.query(ConjuntoDatos).filter_by(nombre=metadata.dataset_name).first()
+        if dataset is None or dataset.nombre != metadata.dataset_name:
+            raise HTTPException(404, 'Modelo no disponible.')
     query = (access.query(Prediccion)
              .join(AccesoPrediccion, AccesoPrediccion.id_prediccion == Prediccion.id_prediccion)
              .add_entity(AccesoPrediccion)
