@@ -10,7 +10,7 @@ import {
 } from "@/lib/api/feedbackApi";
 import { PendingFeedbackItem } from "@/lib/schemas/feedback";
 import FeedbackSyncPanel from "@/components/feedback/FeedbackSyncPanel";
-import DatasetInventory, { type DatasetItem, withCloudCount } from "@/components/ingestion/DatasetInventory";
+import DatasetInventory, { type DatasetItem, cloudCount, withCloudCount } from "@/components/ingestion/DatasetInventory";
 import DatasetUpload, { type UploadLimits } from "@/components/ingestion/DatasetUpload";
 import DatasetCatalogue from "@/components/ingestion/DatasetCatalogue";
 import DatasetImportPanel from "@/components/ingestion/DatasetImportPanel";
@@ -54,6 +54,16 @@ interface LogEntry {
   message: string;
 }
 
+/** What the GCS → local download will do for one dataset, from the inventory counts. */
+function syncPlan(dataset: DatasetItem): string {
+  const cloud = cloudCount(dataset);
+  const local = dataset.local_file_count;
+  if (cloud == null) return `${dataset.name}: GCS sin consultar; se descargarán los audios que falten.`;
+  if (local == null) return `${dataset.name}: se descargarán hasta ${cloud} audios.`;
+  if (local >= cloud) return `${dataset.name}: este equipo ya tiene sus ${cloud} audios; solo se descargarán los que hayan cambiado.`;
+  return `${dataset.name}: faltan ${cloud - local} de ${cloud} audios en este equipo.`;
+}
+
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
   const k = 1024;
@@ -82,7 +92,7 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
   // Lista de datasets en GCS
   const [datasets, setDatasets] = useState<DatasetItem[]>([]);
   const [publishingDataset, setPublishingDataset] = useState<string | null>(null);
-  const [pendingSync, setPendingSync] = useState<{ targets: DatasetItem[]; estimatedSize: string } | null>(null);
+  const [pendingSync, setPendingSync] = useState<{ targets: DatasetItem[]; estimatedSize: string | null } | null>(null);
   const syncTrigger = useRef<HTMLButtonElement | null>(null);
   const [isLoadingDatasets, setIsLoadingDatasets] = useState<boolean>(true);
   const [canCreateDataset, setCanCreateDataset] = useState(false);
@@ -337,8 +347,12 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
     if (selectedIds.length === 0 || isSyncing) return;
     const targets = datasets.filter(dataset => selectedIds.includes(dataset.id));
     if (targets.length === 0) return;
-    const hasEstimate = targets.every(dataset => Number.isFinite(dataset.total_size_bytes) && dataset.total_size_bytes >= 0);
-    const estimatedSize = hasEstimate ? formatBytes(targets.reduce((total, dataset) => total + dataset.total_size_bytes, 0)) : "no disponible";
+    // The download compares content and skips matching audios, so a dataset
+    // whose local count already reaches GCS contributes no expected transfer.
+    const incomplete = targets.filter(dataset => (dataset.local_file_count ?? 0) < (cloudCount(dataset) ?? Infinity));
+    const hasEstimate = incomplete.every(dataset => Number.isFinite(dataset.total_size_bytes) && dataset.total_size_bytes >= 0);
+    const estimatedSize = !incomplete.length ? null : hasEstimate
+      ? formatBytes(incomplete.reduce((total, dataset) => total + dataset.total_size_bytes, 0)) : "no disponible";
     syncTrigger.current = document.activeElement instanceof HTMLButtonElement ? document.activeElement : null;
     setPendingSync({ targets, estimatedSize });
   };
@@ -596,8 +610,8 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
       <DatasetInventory datasets={datasets} loading={isLoadingDatasets} busy={isSyncing || isUploading}
         onRefresh={fetchDatasets} onDownload={handleSync} onInspect={handleInspectDataset} />
       {pendingSync && <DatasetConfirmationDialog title="Descargar desde GCS" onClose={closeSyncDialog} returnFocus={syncTrigger}>
-        <p>Se descargarán al entorno local: <strong className="text-white">{pendingSync.targets.map(dataset => dataset.name).join(", ")}</strong>.</p>
-        <p>Tamaño estimado: {pendingSync.estimatedSize}. Los archivos que ya estén en este equipo pueden omitirse. No inicia ningún entrenamiento.</p>
+        <ul className="space-y-1">{pendingSync.targets.map(dataset => <li key={dataset.id}>{syncPlan(dataset)}</li>)}</ul>
+        <p>La descarga compara el contenido y omite los audios que ya coinciden.{pendingSync.estimatedSize ? ` Tamaño máximo: ${pendingSync.estimatedSize}.` : ""} No inicia ningún entrenamiento.</p>
         <div className="flex justify-end gap-2">
           <button type="button" onClick={closeSyncDialog} className="px-3 py-2 rounded-lg border border-[#373a46] text-xs text-gray-200 hover:bg-[#23252e]">Cancelar</button>
           <button type="button" onClick={() => void startSync(pendingSync.targets)} className="px-3 py-2 rounded-lg bg-emerald-600 text-xs font-semibold text-white hover:bg-emerald-500">Descargar</button>

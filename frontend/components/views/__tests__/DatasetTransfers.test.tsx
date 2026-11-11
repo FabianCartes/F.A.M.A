@@ -62,8 +62,8 @@ it('refreshes without transfer and downloads only confirmed selections without p
   fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar Aves' }));
   fireEvent.click(download);
   const dialog = within(screen.getByRole('dialog', { name: 'Descargar desde GCS' }));
-  expect(dialog.getByText(/Aves/)).toBeDefined();
-  expect(dialog.getByText(/Tamaño estimado:/)).toBeDefined();
+  expect(dialog.getByText('Aves: faltan 2 de 2 audios en este equipo.')).toBeDefined();
+  expect(dialog.getByText(/Tamaño máximo: 20 B/)).toBeDefined();
   fireEvent.click(dialog.getByRole('button', { name: 'Cancelar' }));
   expect(screen.queryByRole('dialog')).toBeNull();
   expect(posts).toEqual([]);
@@ -73,4 +73,23 @@ it('refreshes without transfer and downloads only confirmed selections without p
   expect(screen.queryByRole('dialog')).toBeNull();
   expect(confirm).not.toHaveBeenCalled();
   await screen.findByText(/Descarga completada · GCS → Local: Aves/);
+});
+
+it('explains that a dataset already complete locally only gets its changed audios', async () => {
+  global.fetch = vi.fn(async input => {
+    const path = new URL(String(input), 'http://localhost').pathname;
+    if (path.endsWith('/datasets')) return Response.json({ datasets: [{ id: 'small', name: 'Aves pequeño', file_count: 120,
+      local_file_count: 120, total_size_bytes: 9280000, gcs_file_count: 120, gcs_available: true, source: 'gcs' }] });
+    if (path.endsWith('/status')) return Response.json({ connected: true, bucket: 'test', total_objects: 120, total_bytes: 9280000 });
+    return Response.json([]);
+  });
+  render(<IngestionView />);
+  await within(await screen.findByRole('table')).findByText('Aves pequeño');
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Seleccionar Aves pequeño' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Descargar desde GCS' }));
+  const dialog = within(screen.getByRole('dialog', { name: 'Descargar desde GCS' }));
+  expect(dialog.getByText('Aves pequeño: este equipo ya tiene sus 120 audios; solo se descargarán los que hayan cambiado.')).toBeDefined();
+  expect(dialog.queryByText(/Se descargarán al entorno local/)).toBeNull();
+  expect(dialog.queryByText(/Tamaño máximo/)).toBeNull();
+  expect(dialog.getByText(/omite los audios que ya coinciden/)).toBeDefined();
 });
