@@ -32,6 +32,12 @@ class Cloud:
             raise self.failure
         return Blob(self, name) if name in self.objects else None
 
+    def list_blobs(self, bucket, *, prefix="", **kwargs):
+        if self.failure:
+            raise self.failure
+        self.listings = getattr(self, "listings", 0) + 1
+        return [Blob(self, name) for name in self.objects if name.startswith(prefix)]
+
 
 class Blob:
     def __init__(self, cloud, name):
@@ -227,3 +233,125 @@ def test_existing_directory_at_checkpoint_path_is_preserved(checkpoint_http):
     f.file.mkdir()
     assert f.client.post(BASE + '/restore', headers={'Origin': ORIGIN}).status_code == 409
     assert f.file.is_dir()
+
+
+SYNC = BASE + '/sync'
+STATUS = '/api/training/models/checkpoints/sync-status'
+
+
+def sync(client):
+    return client.post(SYNC, headers={'Origin': ORIGIN})
+
+
+def test_sync_uploads_a_missing_cloud_copy_after_verifying_it(checkpoint_http):
+    f = checkpoint_http
+    response = sync(f.client)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body['action'] == 'uploaded'
+    assert (body['local'], body['cloud'], body['transfer_verified']) == ('valid', 'available', True)
+    assert list(f.cloud.objects.values()) == [f.content]
+
+
+def test_sync_restores_a_missing_local_copy(checkpoint_http):
+    f = checkpoint_http
+    assert sync(f.client).status_code == 200
+    f.file.unlink()  # Temporary test artifact, simulates loss of this node's copy.
+    response = sync(f.client)
+    assert response.status_code == 200, response.text
+    assert response.json()['action'] == 'restored'
+    assert response.json()['local'] == 'valid'
+    assert f.file.read_bytes() == f.content
+
+
+def test_sync_reports_already_synced_copies_without_writing(checkpoint_http):
+    f = checkpoint_http
+    assert sync(f.client).status_code == 200
+    unchanged = f.file.stat().st_mtime_ns
+    response = sync(f.client)
+    assert response.status_code == 200
+    assert response.json()['action'] == 'already_synced'
+    assert response.json()['transfer_verified'] is True
+    assert f.file.stat().st_mtime_ns == unchanged
+    assert len(f.cloud.objects) == 1
+
+
+def test_sync_checks_cloud_bytes_of_an_apparently_synced_copy(checkpoint_http):
+    f = checkpoint_http
+    assert sync(f.client).status_code == 200
+    key = next(iter(f.cloud.objects))
+    f.cloud.objects[key] = b'X' * len(f.content)
+    response = sync(f.client)
+    assert response.status_code == 409
+    assert 'SHA-256' in response.json()['detail']
+    assert f.file.read_bytes() == f.content
+
+
+def test_sync_without_any_copy_fails_with_its_reason(checkpoint_http):
+    f = checkpoint_http
+    f.file.unlink()
+    response = sync(f.client)
+    assert response.status_code == 409
+    assert response.json()['detail'] == 'No hay copia local ni respaldo en GCS de este checkpoint; no se puede sincronizar.'
+    assert not f.file.exists() and not f.cloud.objects
+
+
+def test_sync_never_replaces_a_conflicting_local_file(checkpoint_http):
+    f = checkpoint_http
+    f.file.write_bytes(b'preserve this different checkpoint')
+    response = sync(f.client)
+    assert response.status_code == 409
+    assert 'conflicto' in response.json()['detail']
+    assert f.file.read_bytes() == b'preserve this different checkpoint'
+    assert not f.cloud.objects
+
+
+def test_sync_reports_a_conflicting_cloud_object(checkpoint_http):
+    f = checkpoint_http
+    f.cloud.objects['models/checkpoints/sha256/' + hashlib.sha256(f.content).hexdigest() + '.pt'] = b'short'
+    response = sync(f.client)
+    assert response.status_code == 409
+    assert 'GCS' in response.json()['detail']
+    assert f.cloud.objects and f.file.read_bytes() == f.content
+
+
+def test_sync_is_sanitized_when_cloud_is_unavailable_and_requires_origin(checkpoint_http):
+    f = checkpoint_http
+    assert f.client.post(SYNC, headers={'Origin': 'https://evil.example.test'}).status_code == 403
+    f.cloud.failure = RuntimeError('private SQL or credential detail')
+    response = sync(f.client)
+    assert response.status_code == 503
+    assert 'private' not in response.text
+
+
+def test_sync_status_lists_synced_state_with_one_cloud_listing(checkpoint_http):
+    f = checkpoint_http
+    with f.sessions() as db:
+        db.add(Modelo(id_modelo=4, id_conjunto_datos=10, id_usuario=2, arquitectura="AudioCNN", epocas=1,
+                      tasa_aprendizaje=0.001, tamano_lote=2, ruta_binario_gcp="models/other.pt",
+                      hash_binario='a' * 64, tamano_bytes=5, activo=False))
+        db.commit()
+    before = f.client.get(STATUS)
+    assert before.status_code == 200, before.text
+    assert before.json() == {'models': [{'model_id': 3, 'synced': False}, {'model_id': 4, 'synced': False}]}
+    assert sync(f.client).status_code == 200
+    f.cloud.listings = 0
+    after = f.client.get(STATUS).json()['models']
+    assert after == [{'model_id': 3, 'synced': True}, {'model_id': 4, 'synced': False}]
+    assert f.cloud.listings == 1
+    f.file.write_bytes(b'short')  # Size mismatch: not synced, no hashing in the batch check.
+    assert f.client.get(STATUS).json()['models'][0]['synced'] is False
+
+
+def test_sync_status_only_lists_accessible_models_and_sanitizes_failures(checkpoint_http):
+    f = checkpoint_http
+    f.cloud.failure = RuntimeError('private SQL or credential detail')
+    failed = f.client.get(STATUS)
+    assert failed.status_code == 503 and 'private' not in failed.text
+    f.cloud.failure = None
+    with f.sessions() as db:
+        db.query(AsignacionDataset).delete()
+        db.commit()
+    assert f.client.get(STATUS).json() == {'models': []}
+    f.client.cookies.clear()
+    assert f.client.get(STATUS).status_code == 401

@@ -25,6 +25,29 @@ def identity(path):
     return size, digest.hexdigest()
 
 
+CLOUD_PREFIX = 'models/checkpoints/sha256/'
+
+
+def sync_states(models, root):
+    """Cheap per-model "synced" flags: one GCS listing and local sizes, no hashing.
+
+    Bytes are only verified by ``CheckpointCopies.sync``; this never claims more than
+    that both copies exist with the registered size.
+    """
+    remote = {blob.name: blob.size for blob in
+              storage.Client().list_blobs(storage_bucket(), prefix=CLOUD_PREFIX, timeout=30)}
+    states = []
+    for model in models:
+        try:
+            copies = CheckpointCopies(model, root)
+        except CheckpointConflict:
+            synced = False
+        else:
+            synced = remote.get(copies.key) == model.tamano_bytes and copies._local_size_matches()
+        states.append({'model_id': model.id_modelo, 'synced': synced})
+    return states
+
+
 class CheckpointCopies:
     def __init__(self, model, root):
         self.model = model
@@ -39,7 +62,7 @@ class CheckpointCopies:
                 or dataset is None or not dataset.ruta_gcp.startswith(f'gs://{self.bucket_name}/')):
             raise CheckpointConflict('El modelo no tiene identidad, tamaño o destino verificables para esta instalación.')
         self.filename = reference.removeprefix('models/')
-        self.key = f'models/checkpoints/sha256/{self.sha256}.pt'
+        self.key = f'{CLOUD_PREFIX}{self.sha256}.pt'
         if self.root.resolve(strict=True) != self.root or not self.root.is_dir():
             raise CheckpointConflict('El directorio de checkpoints necesita revisión del operador.')
         self.path = self.root / self.filename
@@ -52,6 +75,11 @@ class CheckpointCopies:
         if not self.path.is_file() or self.path.resolve() != self.path:
             return 'conflict'
         return 'valid' if identity(self.path) == (self.model.tamano_bytes, self.sha256) else 'conflict'
+
+    def _local_size_matches(self):
+        if self.path.is_symlink() or not self.path.is_file() or self.path.resolve() != self.path:
+            return False
+        return self.path.stat().st_size == self.model.tamano_bytes
 
     def _remote_state(self, blob):
         if blob is None:
@@ -138,3 +166,22 @@ class CheckpointCopies:
                     finally:
                         os.close(descriptor)
             return self._result(self._local(), blob, verified=True)
+
+    def sync(self):
+        """Check both copies, then upload or restore whichever is missing (byte-verified)."""
+        local = self._local()
+        blob = storage.Client().bucket(self.bucket_name).get_blob(self.key, timeout=30)
+        cloud = self._remote_state(blob)
+        if local == 'conflict':
+            raise CheckpointConflict('El archivo local está en conflicto con el registro del modelo. El operador debe preservarlo y revisarlo antes de sincronizar.')
+        if cloud == 'conflict':
+            raise CheckpointConflict('El objeto en GCS no coincide en tamaño o codificación con el registro del modelo. El operador debe revisarlo antes de sincronizar.')
+        if local == 'missing' and cloud == 'missing':
+            raise CheckpointConflict('No hay copia local ni respaldo en GCS de este checkpoint; no se puede sincronizar.')
+        if local == 'missing':
+            return {**self.restore(), 'action': 'restored'}
+        if cloud == 'missing':
+            return {**self.backup(), 'action': 'uploaded'}
+        with self._temporary() as verification:
+            self._download(blob, verification)
+        return {**self._result(local, blob, verified=True), 'action': 'already_synced'}
