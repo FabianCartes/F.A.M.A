@@ -303,7 +303,8 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`benchmark_local_cpu_inference_validated_20261016.json`](./receipts/benchmark_local_cpu_inference_validated_20261016.json): Carga corregida y ruta del predictor medida con filtro noise; no forward neuronal ni medición navegador/API.
 
 ### 6. [`docs/adr/`](./adr/) — Architectural Decision Records
-Registro de las 78 decisiones de arquitectura del sistema (0001–0078). Los ADR de mvp 0071–0077 se llamaban 0052–0058 hasta la etapa h de la integración; los recibos JSON anteriores conservan esas rutas.
+Registro de las 79 decisiones de arquitectura del sistema (0001–0079). Los ADR de mvp 0071–0077 se llamaban 0052–0058 hasta la etapa h de la integración; los recibos JSON anteriores conservan esas rutas.
+* [`ADR 0079`](./adr/0079-descripcion-del-dataset-compartido.md): Revisión 0006; `conjunto_datos.descripcion` nula, copiada al publicar un ZIP y mostrada en el inventario.
 * [`ADR 0078`](./adr/0078-gcs-como-fuente-unica-y-publicacion-del-zip.md): GCS como fuente única; el ZIP confirmado se publica en `datasets/` y `conjunto_datos` con nombre único global y asignación del importador. Sustituye los ADR 0027 y 0073.
 * [`ADR 0077`](./adr/0077-cache-de-hash-de-checkpoints-por-identidad-de-archivo.md): Caché por identidad de archivo para el SHA-256 de checkpoints en el catálogo.
 * [`ADR 0076`](./adr/0076-identidad-inmutable-de-composiciones-importadas.md): Identidad inmutable de composiciones de modelos importados.

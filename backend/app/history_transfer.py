@@ -97,7 +97,8 @@ def _digest(snapshot):
 def transfer_history(source_url, target_url, *, apply=False, confirm_source=None, confirm_target=None, expect_digest=None):
     """Preview in read-only transactions, or copy into an empty current target atomically."""
     from app.schema import _inspect_schema
-    from migrations.schema_0005 import metadata, BOOTSTRAP_TABLES
+    from app.schema import head_schema
+    metadata, BOOTSTRAP_TABLES = head_schema().metadata, head_schema().BOOTSTRAP_TABLES
     source, target = _address(source_url), _address(target_url)
     if source.database == target.database:
         raise HistoryTransferError('history_source_equals_target')

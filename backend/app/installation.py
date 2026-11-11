@@ -203,7 +203,8 @@ class Installation:
         from app.connections import diagnose
         from app.schema import check_schema
         from app.database_connection import database_engine
-        from migrations.schema_0005 import metadata, BOOTSTRAP_TABLES
+        from app.schema import head_schema
+        metadata, BOOTSTRAP_TABLES = head_schema().metadata, head_schema().BOOTSTRAP_TABLES
         c = self.configuration()
         checks = diagnose(c)
         schema = check_schema(c.database_url) if c.database_url else None
@@ -284,7 +285,8 @@ class Installation:
         from sqlalchemy.engine import make_url
         from app.database_connection import database_engine
         from app.passwords import hash_password
-        from migrations.schema_0005 import metadata, BOOTSTRAP_TABLES
+        from app.schema import head_schema
+        metadata, BOOTSTRAP_TABLES = head_schema().metadata, head_schema().BOOTSTRAP_TABLES
         intent = self._intent()
         if intent and values:
             raise InstallationError("installation_resume_required", 409)

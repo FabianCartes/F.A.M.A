@@ -1,4 +1,4 @@
--- Ejecutar como fama_oficial_migrador en fama_oficial después de 0005_triad_composition.
+-- Ejecutar como fama_oficial_migrador en fama_oficial después de 0006_dataset_description.
 DO $fama$
 DECLARE
     tablas text[] := ARRAY[
@@ -51,12 +51,12 @@ BEGIN
     END IF;
 
     IF to_regclass('public.alembic_version') IS NULL THEN
-        RAISE EXCEPTION 'Se requiere aplicar primero la revision 0005_triad_composition'
+        RAISE EXCEPTION 'Se requiere aplicar primero la revision 0006_dataset_description'
             USING ERRCODE = '55000';
     END IF;
     SELECT array_agg(version_num::text) INTO revisiones FROM public.alembic_version;
-    IF revisiones IS DISTINCT FROM ARRAY['0005_triad_composition']::text[] THEN
-        RAISE EXCEPTION 'Se requiere la revision 0005_triad_composition'
+    IF revisiones IS DISTINCT FROM ARRAY['0006_dataset_description']::text[] THEN
+        RAISE EXCEPTION 'Se requiere la revision 0006_dataset_description'
             USING ERRCODE = '55000';
     END IF;
 

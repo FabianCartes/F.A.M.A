@@ -26,6 +26,8 @@ class ConjuntoDatos(Base):
     cantidad_audios = Column(Integer, default=0, nullable=False)
     finalidad = Column(Text, default="Entrenamiento bioacústico", nullable=False)
     base_licitud = Column(String(50), default="Investigación académica", nullable=False)
+    # Free text entered when importing the ZIP; not ``finalidad`` (purpose). ADR 0079.
+    descripcion = Column(String(2000), nullable=True)
 
     # Relación 1:N con la tabla 'audio' con borrado en cascada
     audios = relationship("Audio", back_populates="conjunto_datos", cascade="all, delete-orphan")

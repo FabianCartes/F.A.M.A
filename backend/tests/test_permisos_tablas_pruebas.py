@@ -19,8 +19,8 @@ SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "permisos_tablas_prue
 def test_permission_scripts_require_the_head_and_cover_every_head_table(name):
     """Static check: runs without PostgreSQL, unlike the executed-script cases below."""
     import re
-    from app.schema import HEAD
-    from migrations.schema_0005 import metadata
+    from app.schema import HEAD, head_schema
+    metadata = head_schema().metadata
 
     text = (SCRIPT.parent / name).read_text()
     listed = re.search(r"tablas text\[\] := ARRAY\[(.*?)\];", text, re.S).group(1)

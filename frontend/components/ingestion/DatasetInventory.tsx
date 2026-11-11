@@ -18,6 +18,7 @@ export interface DatasetItem {
   source?: "gcs" | "local" | "database";
   gcs_available?: boolean | null;
   domain?: string;
+  description?: string | null;
 }
 
 function bytes(value: number | null | undefined): string {
@@ -75,20 +76,21 @@ export default function DatasetInventory({ datasets, loading, busy, onRefresh, o
     </div>
     <p className="text-xs text-gray-400">El equipo y el bucket se consultan por separado. Tener audios en ambos lugares no confirma que su contenido coincida.</p>
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[680px] text-left text-xs" aria-label="Inventario de datasets">
+      <table className="w-full min-w-[820px] text-left text-xs" aria-label="Inventario de datasets">
         <thead><tr className="border-b border-[#23252e] text-gray-400">
           <th className="p-2 w-8"><input type="checkbox" aria-label="Seleccionar todos los datasets" disabled={busy || !datasets.length}
             checked={datasets.length > 0 && selection.length === datasets.length}
             onChange={() => setSelected(selection.length === datasets.length ? [] : datasets.map(item => item.id))} /></th>
           <th className="p-2 font-medium">Dataset</th>
           <th className="p-2 font-medium">Clases</th>
+          <th className="p-2 font-medium">Descripción</th>
           <th className="p-2 font-medium">En este equipo</th>
           <th className="p-2 font-medium">En GCS</th>
           <th className="p-2 font-medium text-right">Acción</th>
         </tr></thead>
         <tbody className="divide-y divide-[#23252e]/60">
-          {loading ? <tr><td colSpan={6} className="p-6 text-center text-gray-400">Consultando datasets…</td></tr>
-            : datasets.length === 0 ? <tr><td colSpan={6} className="p-6 text-center text-gray-400">No hay datasets disponibles para esta cuenta.</td></tr>
+          {loading ? <tr><td colSpan={7} className="p-6 text-center text-gray-400">Consultando datasets…</td></tr>
+            : datasets.length === 0 ? <tr><td colSpan={7} className="p-6 text-center text-gray-400">No hay datasets disponibles para esta cuenta.</td></tr>
               : datasets.map(item => {
                 const cloud = cloudCount(item);
                 const localBytes = item.local_size_bytes ?? (item.source === "local" ? item.total_size_bytes : null);
@@ -105,6 +107,7 @@ export default function DatasetInventory({ datasets, loading, busy, onRefresh, o
                     <div className="flex flex-wrap gap-1">{item.classes?.slice(0, 3).map(label => <span key={label} className="px-1.5 py-0.5 rounded bg-[#222530] text-gray-300 text-[10px]">{label}</span>)}
                       {(item.classes?.length ?? 0) > 3 && <span className="text-gray-500">+{item.classes!.length - 3} más</span>}</div>
                   </td>
+                  <td className="p-2 align-top max-w-64 text-gray-300 break-words">{item.description || "—"}</td>
                   <td className="p-2 align-top whitespace-nowrap"><p>{item.local_file_count == null ? "Sin consultar" : `${item.local_file_count} audios`}</p><p className="text-gray-500 mt-1">{bytes(localBytes)}</p></td>
                   <td className="p-2 align-top whitespace-nowrap"><p>{cloud == null ? "Sin consultar" : `${cloud} audios`}</p><p className="text-gray-500 mt-1">{bytes(cloudBytes)}</p>
                     {uncompared(item) && <p className="mt-1 text-[10px] text-amber-300">Contenido sin comparar</p>}</td>

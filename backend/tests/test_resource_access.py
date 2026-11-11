@@ -533,3 +533,14 @@ def test_inventory_counts_read_registered_audio_totals_scoped_to_the_viewer(func
     assert login(client, "administrador").status_code == 200
     assert client.get("/api/ingestion/datasets/counts").json() == {"datasets": [
         {"name": "AvesChilenas", "file_count": 7}, {"name": "engine_diagnostics", "file_count": 3}]}
+
+
+
+def test_inventory_lists_the_registered_dataset_description(functional):
+    client, sessions = functional
+    with sessions() as db:
+        db.get(ConjuntoDatos, 10).descripcion = "Cantos del sur"
+        db.commit()
+    assign(client)
+    dataset, = client.get("/api/ingestion/datasets").json()["datasets"]
+    assert (dataset["name"], dataset["description"]) == ("AvesChilenas", "Cantos del sur")

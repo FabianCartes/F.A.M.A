@@ -988,6 +988,9 @@ def list_ingestion_datasets(access: ResourceAccess = Depends(resource_access)):
                          "source": "database", "gcs_available": None, "is_synced": None,
                          "local_file_count": None, "gcs_file_count": None}
                         for ds in access.datasets if ds.nombre not in observed)
+    descriptions = dict(access.query(ConjuntoDatos).with_entities(ConjuntoDatos.nombre, ConjuntoDatos.descripcion))
+    for item in datasets:
+        item["description"] = descriptions.get(item["name"])
     try:
         file_limit, batch_limit = ingestion_service.get_upload_limits()
         limits = {"max_file_bytes": file_limit, "max_batch_bytes": batch_limit}

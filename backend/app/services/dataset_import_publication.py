@@ -28,11 +28,12 @@ def publish_import(ingestion, sessions, import_root, import_id, *, progress=None
         if not source.dataset_id:
             return
         owner = source.owner_id
-        name = db.get(ImportedDataset, source.dataset_id).name
+        imported = db.get(ImportedDataset, source.dataset_id)
+        name, description = imported.name, imported.description or None
         files = [(row.class_name, PurePosixPath(row.relative_path).name, row.stored_name, row.sha256, row.size_bytes)
                  for row in db.query(ImportFile).filter_by(import_id=import_id, duplicate=False, existing=False)
                  .order_by(ImportFile.class_name, ImportFile.ordinal)]
-    _claim(ingestion, sessions, name, owner)
+    _claim(ingestion, sessions, name, owner, description)
     objects = Path(import_root) / "objects" / import_id
     _, batch_limit = ingestion.get_upload_limits()
     report = progress or (lambda uploaded, total: None)
@@ -56,7 +57,7 @@ def publish_import(ingestion, sessions, import_root, import_id, *, progress=None
         _copy_local(objects / stored_name, ingestion.local_base_dir / name / class_name / filename, sha256)
 
 
-def _claim(ingestion, sessions, name, owner):
+def _claim(ingestion, sessions, name, owner, description=None):
     """Own the shared name before any upload; the unique name makes the claim atomic.
 
     A later concurrent creator finds this row instead of creating its own, so
@@ -67,7 +68,8 @@ def _claim(ingestion, sessions, name, owner):
         shared = db.query(ConjuntoDatos).filter_by(nombre=name).first()
         if shared is None:
             shared = ConjuntoDatos(nombre=name, ruta_gcp=f"gs://{ingestion.bucket_name}/datasets/{name}/",
-                                   estado="subiendo", id_usuario_carga=owner, tamano_total_bytes=0, cantidad_audios=0)
+                                   estado="subiendo", id_usuario_carga=owner, tamano_total_bytes=0, cantidad_audios=0,
+                                   descripcion=description)
             db.add(shared)
             try:
                 db.flush()
@@ -77,6 +79,8 @@ def _claim(ingestion, sessions, name, owner):
         assigned = db.get(AsignacionDataset, (owner, shared.id_conjunto_datos)) is not None
         if shared.id_usuario_carga != owner and not assigned:
             raise PublicationFailed("name_taken")
+        if shared.descripcion is None and description:
+            shared.descripcion = description  # Fill only; never overwrite an existing description.
         if not assigned:
             db.add(AsignacionDataset(id_usuario=owner, id_conjunto_datos=shared.id_conjunto_datos))
         db.commit()

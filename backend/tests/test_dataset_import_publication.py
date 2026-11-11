@@ -291,3 +291,20 @@ def test_publication_reports_uploaded_audios_per_batch_until_terminal_result(pub
     progress = [value for _, value, _ in seen]
     assert progress == sorted(progress) and all(1 <= value <= 99 for value in progress)
     assert execution["result"] == {"dataset_id": result.json()["dataset_id"], "added_count": 3}
+
+
+
+@pytest.mark.parametrize("description, stored", [("Cantos de aves del bosque", "Cantos de aves del bosque"), ("", None)])
+def test_publication_copies_the_import_description_to_the_shared_dataset(published, tmp_path, description, stored):
+    from app.models.dataset import ConjuntoDatos
+    client = published.client
+    created = client.post(BASE, json={"request_key": "described", "name": "Aves", "description": description})
+    assert created.status_code == 200, created.text
+    from tests.test_dataset_zip_validation import archive
+    data = archive(tmp_path / "described.zip", [("birds/a.wav", wav_bytes())]).read_bytes()
+    assert client.put(f"{BASE}/{created.json()['id']}/archive", content=data,
+                      headers={"Content-Type": "application/zip"}).status_code == 200
+    job = operation(client, created.json()["id"], "preview", {"root": ""}).json()
+    assert confirm(client, job).json()["status"] == "imported"
+    with published.sessions() as db:
+        assert db.query(ConjuntoDatos).filter_by(nombre="Aves").one().descripcion == stored

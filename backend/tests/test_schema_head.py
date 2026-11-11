@@ -41,7 +41,7 @@ def test_head_is_the_frozen_runtime_schema_plus_retained_tables():
     from migrations.schema_0004 import metadata as previous
     head = importlib.import_module("migrations.schema_" + HEAD.split("_", 1)[0]).metadata
     runtime = runtime_metadata()
-    assert HEAD == REVISIONS[-1] == "0005_triad_composition"
+    assert HEAD == REVISIONS[-1] == "0006_dataset_description"
     assert set(head.tables) == set(runtime.tables) | RETAINED_TABLES
     assert set(head.tables) >= set(previous.tables)
 
@@ -89,3 +89,22 @@ def test_downgrade_from_head_fails_explicitly_without_changing_the_schema(connec
         downgrade(connection, "0004_integration")
     assert rows(connection) == before
     assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == HEAD
+
+
+def test_upgrade_from_0005_adds_a_nullable_dataset_description_and_preserves_rows(connection):
+    from app.schema import HEAD, _inspect_schema
+    upgrade(connection, "0005_triad_composition")
+    connection.execute(text(
+        "INSERT INTO conjunto_datos (nombre, ruta_gcp, estado, fecha_carga, tamano_total_bytes, cantidad_audios,"
+        " finalidad, base_licitud) VALUES ('Aves', 'gs://b/datasets/Aves/', 'subido', '2026-01-01 00:00:00', 0, 2,"
+        " 'Entrenamiento', 'Investigación')"))
+    before = rows(connection)
+    upgrade(connection, "head")
+    columns = {column["name"]: column for column in inspect(connection).get_columns("conjunto_datos")}
+    assert columns["descripcion"]["nullable"] is True
+    after = rows(connection)
+    assert set(after) == set(before)
+    assert after["conjunto_datos"] == [row + (None,) for row in before["conjunto_datos"]]
+    assert {name: after[name] for name in before if name != "conjunto_datos"} == {
+        name: before[name] for name in before if name != "conjunto_datos"}
+    assert (_inspect_schema(connection).code, _inspect_schema(connection).revision) == ("schema_current", HEAD)
