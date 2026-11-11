@@ -4,11 +4,11 @@ import { getHistory } from "../trainingApi";
 afterEach(() => vi.unstubAllGlobals());
 
 describe("Contrato de ficha técnica del historial", () => {
-  it("requests imported history through the authenticated owner-scoped endpoint", async () => {
+  it("requests the standard history through the authenticated endpoint", async () => {
     const fetch = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => ({ ok: true, json: async () => ({ history: [] }) }));
     vi.stubGlobal("fetch", fetch);
     expect(await getHistory()).toEqual([]);
-    expect(String(fetch.mock.calls[0][0])).toContain("/api/training/history?include_imported=true");
+    expect(String(fetch.mock.calls[0][0])).toMatch(/\/api\/training\/history$/);
   });
 
   it("conserva física, clases e hiperparámetros explícitos del backend", async () => {

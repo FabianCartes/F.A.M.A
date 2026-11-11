@@ -162,12 +162,12 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     global.fetch = originalFetch;
   });
 
-  it("includes owned imported models in the view history request", async () => {
+  it("requests the standard history without the retired imported filter", async () => {
     await act(async () => { render(<TrainingView />); });
     const urls = vi.mocked(global.fetch).mock.calls.map(([url]) => String(url));
     const historyUrls = urls.filter(url => url.includes('/api/training/history'));
     expect(historyUrls.length).toBeGreaterThan(0);
-    expect(historyUrls.every(url => url.includes('include_imported=true'))).toBe(true);
+    expect(historyUrls.every(url => url.endsWith('/api/training/history'))).toBe(true);
   });
 
   it("sends visible individual AudioCNN parameters in both global and model config", async () => {

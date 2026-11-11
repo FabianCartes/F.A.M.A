@@ -40,5 +40,6 @@ it('entrena un ZIP publicado con sesión por el catálogo y las particiones est�
   expect(body).not.toHaveProperty('snapshot_id');
   expect(body).not.toHaveProperty('imported_prepared_version');
   expect(transport.mock.calls.some(([url]) => /\/imported\/|\/snapshots|\/preparations/.test(String(url)) || String(url).includes('/datasets?include_imported'))).toBe(false);
-  expect(transport.mock.calls.some(([url]) => String(url).includes('/history?include_imported=true'))).toBe(true);
+  expect(transport.mock.calls.some(([url]) => String(url).endsWith('/api/training/history'))).toBe(true);
+  expect(transport.mock.calls.some(([url]) => String(url).includes('include_imported'))).toBe(false);
 });

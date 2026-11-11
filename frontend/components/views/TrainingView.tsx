@@ -737,7 +737,7 @@ export default function TrainingView() {
   // Cargar historial de modelos desde PostgreSQL
   const fetchHistory = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/training/history?include_imported=true`);
+      const res = await fetch(`${API_BASE_URL}/api/training/history`);
       if (res.ok) {
         const data = await res.json();
         setHistory(data.history || []);
@@ -756,7 +756,7 @@ export default function TrainingView() {
         const [resHw, resDs, resHist] = await Promise.all([
           fetch(`${API_BASE_URL}/api/training/hardware`).catch(() => null),
           fetch(`${API_BASE_URL}/api/training/datasets`).catch(() => null),
-          fetch(`${API_BASE_URL}/api/training/history?include_imported=true`).catch(() => null),
+          fetch(`${API_BASE_URL}/api/training/history`).catch(() => null),
         ]);
 
         if (isCancelled) return;
