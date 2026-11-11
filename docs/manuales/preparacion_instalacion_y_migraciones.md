@@ -53,6 +53,18 @@ Una base histórica sin revisión no se adopta mediante `stamp` ni `create_all`.
 
 Las conexiones PostgreSQL tienen un límite de conexión de cinco segundos, de sentencia de cinco segundos y de espera de bloqueo de tres segundos. La comprobación realiza varias sentencias; esos límites no representan un tiempo total de cinco segundos. La actualización usa una transacción y un bloqueo asesor transaccional. No se ofrece borrado/downgrade automático.
 
+### Revisión 0005 (etapa f de la integración mvp, 11 de noviembre)
+
+La revisión vigente es `0005_triad_composition`. Es aditiva: solo crea `triad_composition`, que guarda la composición versionada de las tríadas estándar, y no borra tablas ni filas. Una base en `0004_integration` se actualiza con el mismo procedimiento:
+
+```bash
+cd backend
+python -m app.schema status
+python -m app.schema upgrade --apply
+```
+
+Su downgrade falla de forma explícita. Antes de actualizar, hay que tener un respaldo verificado y detener los escritores. Después hay que volver a ejecutar `scripts/permisos_tablas_pruebas.sql` o `scripts/permisos_tablas_oficial.sql`, que ahora exigen 0005 y cubren `triad_composition`. Los scripts `scripts/migrate_*.py` ya no existen: el esquema se crea y se actualiza solo con Alembic. Esta revisión no se ha probado en PostgreSQL; ver el [recibo de la etapa f](../receipts/integracion-mvp-f.json) y el [ADR 0070](../adr/0070-revision-0005-y-composicion-versionada-de-triadas.md).
+
 ## Identidades y arranque
 
 El operador de migraciones necesita DDL sobre el esquema. La identidad diaria necesita conexión, uso del esquema, DML sobre las tablas de aplicación, lectura de `alembic_version` y uso de secuencias; no necesita crear tablas. Estos permisos se asignarán a las identidades reales en la etapa 4. La CLI no entrega ni conserva credenciales de migración en la aplicación.

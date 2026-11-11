@@ -8,7 +8,7 @@ kanban-plugin: basic
 
 ## Integración de afinamiento integral en `mvp` — etapa f: migración 0005
 
-- [ ] **F-MIGRACIÓN:** planificada, no iniciada; se ejecuta en una sesión nueva. Esquema congelado 0005 aditivo con paridad frente al ORM, `HEAD`, instalación y permisos actualizados, y retiro de `migrate_*.py`, `grant_training_snapshot_updates.sql` y `create_all` propios de mvp. Incluye la tríada estándar combinada. Decidir al inicio: tablas de snapshots/`imported_model_source` sin consumidores, hallazgo de `imported_dataset.archived` (columna usada por la ruta ZIP y ausente en 0004) y persistencia de la composición. [Plan](arquitectura/integracion-mvp-f-migracion-plan.md).
+- [x] **F-MIGRACIÓN:** cerrada en `mvp` (`5faf9b5`…`b46ac93`, frontend `9c2f397`). Revisión aditiva `0005_triad_composition` con paridad frente al ORM. Se retiraron del código las tablas sin uso, `imported_dataset.archived` (corrige el 503 de importación ZIP sobre una base migrada), los 13 `migrate_*.py`, el grant SQL y `create_all` de mvp. Tríada estándar combinada: catálogo `fama_triad_<id>`, revisión de pesos, activación por administrador e interfaz en `PredictionView`. Verificador independiente sin bloqueantes; PostgreSQL no verificado. [Plan](arquitectura/integracion-mvp-f-migracion-plan.md), [recibo](receipts/integracion-mvp-f.json), [ADR 0070](adr/0070-revision-0005-y-composicion-versionada-de-triadas.md).
 
 ## Integración de afinamiento integral en `mvp` — tríada estándar combinada (etapa f)
 

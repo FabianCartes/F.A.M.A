@@ -1,0 +1,39 @@
+{
+  "stage": "f",
+  "status": "verified_synthetic",
+  "branch": "mvp",
+  "base": "85a605e",
+  "backend_commits": ["5faf9b5", "af35dca", "0e415b9", "59bb632", "70f2b83", "7b176d2", "b46ac93"],
+  "frontend_commit": "9c2f397",
+  "contract": {
+    "schema_head": "0005_triad_composition",
+    "migration": "additive; creates only triad_composition (with activo); downgrade raises explicitly",
+    "retired_from_code": ["training_snapshot", "training_snapshot_member", "imported_model_source", "imported_dataset.archived", "DELETE /api/ingestion/imports/datasets/{id}", "backend/scripts/migrate_*.py (13)", "backend/scripts/grant_training_snapshot_updates.sql", "create_all in prepare_zip_manual_database.py"],
+    "retained_tables_without_code": ["dataset_export", "dataset_export_session", "imported_dataset_revision", "imported_dataset_revision_object"],
+    "triad": {
+      "catalogue_id": "fama_triad_<id> (latest version per job, metadata_only, dataset assignment)",
+      "endpoints": ["GET /api/triad-compositions/{id}", "POST /api/triad-compositions/{id}/weights", "POST /api/triad-compositions/{id}/activate (administrator)"],
+      "single_active_entry": "enforced in service code across modelo and triad_composition, not by a database constraint"
+    }
+  },
+  "risk": ["item 1: persisted schema (0005)", "item 2: authorization of combined models, weight revision and activation", "item 3: removed DELETE route without production consumer", "item 5: bootstrap image inventory and alembic pin"],
+  "checks": {
+    "environment": "alembic 1.20.1 installed into .venv with operator authorization; SQLAlchemy 2.1.1 unchanged",
+    "schema": "tests/test_schema_head.py 4/4 on in-memory SQLite (parity HEAD = ORM + retained tables, upgrade 0004->0005 preserves rows, downgrade rejected)",
+    "independent_verifier": {
+      "verdict": "no blockers; S1-S6 pass except PostgreSQL items unverifiable",
+      "full_suite_baseline_85a605e": {"call_reports": 2831, "nonpassing_entries": 742},
+      "full_suite_candidate_042caf6": {"call_reports": 2626, "nonpassing_entries": 595, "candidate_only_failures": 0},
+      "single_model_differential": "19 normalized outputs byte-identical between baseline and candidate"
+    },
+    "frontend": "vitest 620/620, tsc clean, lint 2 pre-existing errors only, build ok",
+    "review": "RDD candidate reviews declined by the operator for 0e415b9, the triad range 59bb632..7b176d2 and the whole branch; whole-branch review deferred to per-stage PRs"
+  },
+  "limits": [
+    "PostgreSQL 16 not exercised: CHECK constraints, types, boolean server_default, GRANT scripts and bootstrap image build are unverified (operator chose SQLite only)",
+    "No real training, real weights, real data, Docker or deployment",
+    "Non-finite JSON weights (NaN/Infinity) return 500 from framework error serialization; out-of-domain advisory",
+    "Activation of a composition is not exposed in the frontend; administrators use the API"
+  ],
+  "delivery": "local commits on mvp; no push, PR or deployment"
+}
