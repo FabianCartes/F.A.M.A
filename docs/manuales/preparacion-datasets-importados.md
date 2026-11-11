@@ -8,7 +8,7 @@
 
 Módulo callable independiente: `backend/training/imported_dataset_preparation.py`.
 Implementa T2 del [plan](../arquitectura/entrenamiento-datasets-importados-plan.md)
-y el contrato del [ADR 0052](../adr/0052-preparacion-local-de-datasets-importados.md).
+y el contrato del [ADR 0071](../adr/0071-preparacion-local-de-datasets-importados.md).
 No modifica ZIP, admisión, catálogo, loaders legacy, UI, base de datos ni entrenamiento.
 T3 deberá integrar un consumidor de este formato; **estos CSV no son compatibles
 por sí solos con `load_prepared_dataset`**. Preparar no inicia un job ni acredita

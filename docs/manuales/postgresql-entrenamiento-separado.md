@@ -6,7 +6,7 @@ Estado: **procedimiento administrativo ejecutado en desechable y persistente; pe
 
 El usuario pidió «Haz el plan para simplificar el plan y dejar atras los experimentos» y «Procede con la implementacion». Se conserva la CLI pública de inicialización/verificación y se separa de la creación del clúster, que requiere intervención administrativa explícita. No se introduce otro framework ni se invocan inicializadores internos para eludir sus guardas.
 
-Se mantiene el objetivo de [ADR 0055](../adr/0055-postgresql-separado-para-bootstrap-de-entrenamiento.md): PostgreSQL separado, sin tocar la principal. Su camino de implementación asistida queda histórico por esta nueva decisión; no se reescribe el ADR como si hubiera aprobado la nueva operación. No arrancar aplicación/workers, importar datos reales, entrenar ni acceder a GCS. Una base inicializada no acredita activación, usuario web, entrenamiento ni inferencia.
+Se mantiene el objetivo de [ADR 0074](../adr/0074-postgresql-separado-para-bootstrap-de-entrenamiento.md): PostgreSQL separado, sin tocar la principal. Su camino de implementación asistida queda histórico por esta nueva decisión; no se reescribe el ADR como si hubiera aprobado la nueva operación. No arrancar aplicación/workers, importar datos reales, entrenar ni acceder a GCS. Una base inicializada no acredita activación, usuario web, entrenamiento ni inferencia.
 
 ## Preparación administrativa
 

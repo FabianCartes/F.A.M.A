@@ -26,7 +26,7 @@ Objetivo: dejar la documentación coherente con lo integrado en `mvp` (U0, a–f
 - `docs/KANBAN.md` y `docs/README.md` ya se fusionaron en U0 y se actualizaron por etapa; S2 es revisar el índice completo (entradas de las etapas U0–h, duplicados o estados obsoletos como el que tenía la tríada) y agregar 0071–0078.
 
 ## Tasks
-- T1 | S1,S5 | inline | pending | Renumerar con `git mv` los 7 ADR de mvp y actualizar todos los enlaces y referencias; comprobar que no queden números duplicados ni enlaces rotos.
+- T1 | S1,S5 | inline | done (commit de T1) | Renumerar con `git mv` los 7 ADR de mvp y actualizar todos los enlaces y referencias; comprobar que no queden números duplicados ni enlaces rotos.
 - T2 | S1 | inline | pending | Escribir el ADR 0078 y marcar los ADR sustituidos.
 - T3 | S3 | inline | pending | Notas de sustitución en los 4 manuales.
 - T4 | S2,S4,S6 | inline | pending | Índice de `docs/README.md` y KANBAN (h cerrada, g bloqueada por acceso), recibo breve si corresponde.
@@ -39,3 +39,4 @@ Objetivo: dejar la documentación coherente con lo integrado en `mvp` (U0, a–f
 ## Log
 - L1 — Kevin: «Es buena idea avanzar con h teniendo g incompleta?». Respuesta: sí; h no depende de lo pendiente en g; no cerrar el plan ni hacer la revisión final con g abierta.
 - L2 — Kevin: «Cerremos h por mientras entonces pero hagamoslo en una nueva sesion». Plan y traspaso en `faf8751`+1; Engram `integration/afinamiento-integral-handoff-h`.
+- L3 — T1: 7 ADR renumerados con `git mv` (0071–0077, encabezados de 0071 y 0072 corregidos); enlaces y referencias en texto («ADR0053», «ADR0056», etc.) actualizados en KANBAN, README, manuales, planes y `backend/app/services/checkpoint_digest.py`. Se conservan las del compañero (0060, 0067, bitácora, `administracion_visual.md`) y los recibos JSON, como en `integracion_dev_20261024`. Comprobado: ningún prefijo repetido en `docs/adr/`; sin nombres antiguos fuera de recibos y de este plan; enlaces rotos de `docs/` 93 antes y 93 después (preexistentes, rutas `./adr/` desde `docs/modelos/`, ajenos a h).

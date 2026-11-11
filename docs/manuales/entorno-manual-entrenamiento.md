@@ -203,7 +203,7 @@ responda con error. Ante confirmación o cancelación inciertas se conservan los
 bytes privados antes que borrar una fuente posiblemente referenciada; también
 puede quedar un WAV sin fila. No hay reintento, limpieza, incorporación ni
 sincronización automática por ese hecho. La comparación de referencias debe
-preceder cualquier limpieza manual. Véase [ADR0056](../adr/0056-audio-local-privado-de-inferencia.md).
+preceder cualquier limpieza manual. Véase [ADR0075](../adr/0075-audio-local-privado-de-inferencia.md).
 
 La aceptación sobre un audio real y la UI corresponde al usuario. La prueba de
 salud, el catálogo y las pruebas sintéticas no equivalen a inferencia real.

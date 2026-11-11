@@ -1,4 +1,4 @@
-# ADR 0052: Preparación local de datasets importados con grupos explícitos
+# ADR 0071: Preparación local de datasets importados con grupos explícitos
 
 **Estado:** Contrato de diseño aceptado para el plan; T1 implementada en `36bf338`, T2 implementada con verificación funcional y límite independiente documentado/aceptado; T3–T7 pendientes. El perfil de T2 debe ser explícito (S9 del plan), sin defaults silenciosos. Autoridad y evidencia: [plan, resultado T0 y Log](../arquitectura/entrenamiento-datasets-importados-plan.md#resultado-técnico-de-t0).
 

@@ -4,7 +4,7 @@ The cache key is the stat identity of the opened file: device, inode, size,
 modification time and change time (nanoseconds). Any write updates ``ctime``,
 which unprivileged processes cannot restore, so rewritten or replaced files
 are always re-hashed; a digest read while the file changed is stored under an
-identity that no longer exists. See ADR 0058 for the accepted trust boundary.
+identity that no longer exists. See ADR 0077 for the accepted trust boundary.
 
 Callers that deserialize bytes (inference loads) must keep hashing the exact
 snapshot they deserialize; this cache only replaces repeated identity checks.

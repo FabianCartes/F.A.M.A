@@ -61,6 +61,6 @@ Esta retirada no migra ni elimina tablas/datos, no ejecuta GC, no transfiere pro
 - [Plan vigente de integración MVP d](../arquitectura/integracion-mvp-d-snapshots-plan.md).
 - [Snapshots locales históricos](snapshots-locales-entrenamiento.md).
 - [Preparaciones importadas históricas](preparacion-datasets-importados.md).
-- [Plan histórico T1–T5 y su Log](../arquitectura/entrenamiento-datasets-importados-plan.md), [ADR 0052](../adr/0052-preparacion-local-de-datasets-importados.md) y [ADR 0053](../adr/0053-procedencia-durable-de-entrenamiento-importado.md).
+- [Plan histórico T1–T5 y su Log](../arquitectura/entrenamiento-datasets-importados-plan.md), [ADR 0071](../adr/0071-preparacion-local-de-datasets-importados.md) y [ADR 0072](../adr/0072-procedencia-durable-de-entrenamiento-importado.md).
 
 Los recibos T1–T5 documentan cortes anteriores, no la vigencia de sus entradas retiradas. Las comprobaciones de integración d usan SQLite en memoria, ZIP/WAV y checkpoints CPU sintéticos, proceso de entrenamiento diferido y el runner aislado. Los artefactos históricos sintéticos sirven para probar lectura e inferencia sin volver a abrir la entrada retirada; sus pesos no acreditan aprendizaje ni calidad ML. Los comandos y resultados nuevos deben consultarse en el cierre de d, sin atribuirles Docker/Python 3.12, GPU, PostgreSQL real, servicios remotos o entrenamiento operacional.

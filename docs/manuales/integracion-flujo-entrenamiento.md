@@ -63,7 +63,7 @@ El selector y la tarjeta muestran los pesos en el orden del manifiesto, por ejem
 
 El historial pertenece al ID exacto de la composición: una revisión de pesos no hereda predicciones de la anterior ni de sus componentes. Su lectura comprueba propietario, dataset y vínculo del descriptor persistido mediante ruta, tamaño y SHA; no fabrica una asociación individual ni requiere cargar pesos neuronales o evaluar de nuevo. Conserva la guarda de referencias locales de audio del propietario. Un historial vacío devuelve 200; una composición ajena o no verificable devuelve 404 y una petición sin autenticación devuelve 401.
 
-Límites: comprobado con pruebas sintéticas en CPU y SQLite en memoria; no acredita entrenamiento real, GPU, PostgreSQL, calidad de modelos ni concurrencia multiproceso. Una evaluación fallida puede dejar un manifiesto o un registro pendiente no visibles que requieren limpieza operativa. Decisión de identidad: [ADR 0057](../adr/0057-identidad-inmutable-de-composiciones-importadas.md); seguimiento: [plan de tríada](../arquitectura/triad-training-inference-plan.md).
+Límites: comprobado con pruebas sintéticas en CPU y SQLite en memoria; no acredita entrenamiento real, GPU, PostgreSQL, calidad de modelos ni concurrencia multiproceso. Una evaluación fallida puede dejar un manifiesto o un registro pendiente no visibles que requieren limpieza operativa. Decisión de identidad: [ADR 0076](../adr/0076-identidad-inmutable-de-composiciones-importadas.md); seguimiento: [plan de tríada](../arquitectura/triad-training-inference-plan.md).
 
 ### Reproducir comprobaciones aisladas
 

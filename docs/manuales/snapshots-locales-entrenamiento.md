@@ -8,7 +8,7 @@ El resto de este documento describe el contrato y la evidencia **históricos de 
 
 ## Alcance T1 (histórico)
 
-Implementa la base local de S1–S2/S8 del [plan](../arquitectura/entrenamiento-datasets-importados-plan.md), conforme al [ADR 0052](../adr/0052-preparacion-local-de-datasets-importados.md). No agrega endpoints, catálogo de entrenamiento, admisión, trabajos, splits ni entrenamiento. No modifica el importador ZIP ni el contrato remoto `DatasetRevision.complete`.
+Implementa la base local de S1–S2/S8 del [plan](../arquitectura/entrenamiento-datasets-importados-plan.md), conforme al [ADR 0071](../adr/0071-preparacion-local-de-datasets-importados.md). No agrega endpoints, catálogo de entrenamiento, admisión, trabajos, splits ni entrenamiento. No modifica el importador ZIP ni el contrato remoto `DatasetRevision.complete`.
 
 ## Interfaz pública
 
