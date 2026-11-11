@@ -12,7 +12,7 @@ kanban-plugin: basic
 
 ## Integración de afinamiento integral en `mvp` — tríada estándar combinada (etapa f)
 
-- [ ] **TRIADA-ESTANDAR (etapa f):** planificada, no iniciada; Kevin la asignó a la etapa f. Publicar la tríada estándar entrenada como un solo modelo combinado, autorizado por asignación, con revisión de pesos versionada y la interfaz de pesos en `PredictionView`. Hoy se registran tres modelos independientes y `ensemble_weight` no se usa al predecir. Decidir antes cómo se persiste la composición (recomendado: tabla nueva en la migración aditiva 0005 de f, con ADR). [Plan](arquitectura/integracion-mvp-triada-estandar-plan.md).
+- [x] **TRIADA-ESTANDAR (etapa f):** implementada en la etapa f (`70f2b83`, `7b176d2`, `9c2f397`): la tríada estándar entrenada se publica como un solo modelo combinado `fama_triad_<id>`, autorizado por asignación, con revisión de pesos versionada, activación solo por administrador e interfaz de pesos en `PredictionView`. Las tríadas importadas existentes no se recuperan. Ver F-MIGRACIÓN. [Plan](arquitectura/integracion-mvp-triada-estandar-plan.md).
 
 ## Integración de afinamiento integral en `mvp` — etapa d: entrenamiento estándar
 

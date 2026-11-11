@@ -1,6 +1,6 @@
 # Integración MVP — unidad posterior: tríada estándar combinada con ajuste de pesos
 
-Estado: **planificada, no iniciada; asignada a la etapa f**. Kevin, 2026-11-11: «Guardemoslos para la estapa f». Se aborda dentro de la etapa f (migración 0005), y su implementación requiere la autorización de esa etapa. Rama `mvp`, sin push ni PR.
+Estado: **implementada en la etapa f** (`0e415b9`, `70f2b83`, `7b176d2`, `9c2f397`, `b46ac93`). Kevin, 2026-11-11: «Guardemoslos para la estapa f». La trazabilidad, las decisiones y la verificación están en el [plan de la etapa f](integracion-mvp-f-migracion-plan.md) y en el [recibo](../receipts/integracion-mvp-f.json). Rama `mvp`, sin push ni PR. Las secciones siguientes conservan el plan original.
 
 Pendientes que se trasladan a f:
 - Predecir con los tres modelos combinados: hoy no funciona; `ensemble_weight` se guarda en cada checkpoint, pero ningún predictor lo usa.
