@@ -6,11 +6,11 @@ El destino es exclusivamente `proyectotesis-fama:us-central1:fama-postgres-prueb
 
 ## Permisos preparados
 
-El [script SQL](../../backend/scripts/permisos_tablas_pruebas.sql) se ejecuta como `fama_migrador`. Su versión actual exige la revisión `0003_autonomy` y las 16 tablas de aplicación más `alembic_version`, presentes y pertenecientes al migrador. La comprobación real de etapa 6 descrita en este manual corresponde al corte histórico `0002_access` con 15 tablas. La actualización de autonomía añade la tabla de solicitudes y tiene su [paso controlado del operador](autonomia_y_solicitudes_datasets.md#activar-la-actualización-en-la-instancia-de-pruebas), pendiente en GCP.
+El [script SQL](../../backend/scripts/permisos_tablas_pruebas.sql) se ejecuta como `fama_migrador`. Su versión actual exige la revisión `0005_triad_composition` y las 38 tablas de aplicación más `alembic_version`, presentes y pertenecientes al migrador (comprobado en PostgreSQL 16.15 local en la [etapa g](../arquitectura/integracion-mvp-g-base-integracion-plan.md): 15 secuencias). La comprobación real de etapa 6 descrita en este manual corresponde al corte histórico `0002_access` con 15 tablas. La actualización de autonomía añade la tabla de solicitudes y tiene su [paso controlado del operador](autonomia_y_solicitudes_datasets.md#activar-la-actualización-en-la-instancia-de-pruebas), pendiente en GCP.
 
 | Objeto | Concesión directa a `fama_app` |
 | --- | --- |
-| Las 16 tablas de aplicación enumeradas por el script actual | `SELECT`, `INSERT`, `UPDATE`, `DELETE`. |
+| Las 38 tablas de aplicación enumeradas por el script actual | `SELECT`, `INSERT`, `UPDATE`, `DELETE`. |
 | `alembic_version` | Únicamente `SELECT`. |
 | Secuencias pertenecientes a columnas de esas tablas | `USAGE`, `SELECT`; sin `UPDATE` para `setval`. |
 

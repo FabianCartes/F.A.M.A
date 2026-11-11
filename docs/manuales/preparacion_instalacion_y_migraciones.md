@@ -36,7 +36,7 @@ La CLI **no carga `.env`**: exige `DATABASE_URL` suministrada expresamente al pr
 .\.venv\Scripts\python.exe -m app.schema status
 ```
 
-Sin `--apply` no se ejecuta la migración. `status` es de lectura. Las respuestas son JSON con código y revisión, sin URL, contraseñas ni detalles SQL. Las revisiones son `0001_core` (negocio), `0002_access` (acceso web) y `0003_autonomy` (autoría de incorporaciones y solicitudes). Las dos anteriores se pueden solicitar expresamente con `--revision` para probar una actualización; la instalación final requiere la última. El [manual de autonomía](autonomia_y_solicitudes_datasets.md) contiene el comando que pide la contraseña del migrador y actualiza también los permisos de `fama_app` en la base de pruebas.
+Sin `--apply` no se ejecuta la migración. `status` es de lectura. Las respuestas son JSON con código y revisión, sin URL, contraseñas ni detalles SQL. Las revisiones son `0001_core` (negocio), `0002_access` (acceso web), `0003_autonomy` (autoría de incorporaciones y solicitudes), `0004_integration` (integración) y `0005_triad_composition` (composición de tríadas). Las anteriores se pueden solicitar expresamente con `--revision` para probar una actualización; la instalación final requiere la última. El [manual de autonomía](autonomia_y_solicitudes_datasets.md) contiene el comando que pide la contraseña del migrador y actualiza también los permisos de `fama_app` en la base de pruebas.
 
 | Código | Interpretación |
 | --- | --- |
@@ -63,7 +63,7 @@ python -m app.schema status
 python -m app.schema upgrade --apply
 ```
 
-Su downgrade falla de forma explícita. Antes de actualizar, hay que tener un respaldo verificado y detener los escritores. Después hay que volver a ejecutar `scripts/permisos_tablas_pruebas.sql` o `scripts/permisos_tablas_oficial.sql`, que ahora exigen 0005 y cubren `triad_composition`. Los scripts `scripts/migrate_*.py` ya no existen: el esquema se crea y se actualiza solo con Alembic. Esta revisión no se ha probado en PostgreSQL; ver el [recibo de la etapa f](../receipts/integracion-mvp-f.json) y el [ADR 0070](../adr/0070-revision-0005-y-composicion-versionada-de-triadas.md).
+Su downgrade falla de forma explícita. Antes de actualizar, hay que tener un respaldo verificado y detener los escritores. Después hay que volver a ejecutar `scripts/permisos_tablas_pruebas.sql` o `scripts/permisos_tablas_oficial.sql`, que ahora exigen 0005 y cubren `triad_composition`. Los scripts `scripts/migrate_*.py` ya no existen: el esquema se crea y se actualiza solo con Alembic. En la [etapa g](../arquitectura/integracion-mvp-g-base-integracion-plan.md) se aplicó por primera vez en PostgreSQL 16.15 local; reveló y corrigió dos rechazos de la base migrada (restricción con `double precision` y número fijo de secuencias). Ver también el [recibo de la etapa f](../receipts/integracion-mvp-f.json) y el [ADR 0070](../adr/0070-revision-0005-y-composicion-versionada-de-triadas.md).
 
 ## Identidades y arranque
 
