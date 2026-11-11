@@ -14,7 +14,7 @@
   "secondary_worktrees_removed": 46,
   "secondary_worktrees_retained": 12,
   "backup": {
-    "local_path": "/home/kevin/Work/fama-preservation/20261015T151502Z",
+    "local_path": "/workspace/fama-preservation/20261015T151502Z",
     "manifest_sha256": "78167bd19edb909a74e5277267bb2744bf74a73c77cb36564bb332123a22fb3f",
     "clean_removal_receipt_sha256": "d09b1167982dea3d9a3426c241a4ec5315df04dce660ebe4511e39be79e471dc",
     "snapshot_removal_receipt_sha256": "565a1d0110a7b28a44a01f8b308c54e4f4e5d2830d442718745fa7cdf2a53d83",
@@ -40,8 +40,8 @@
     "lint": {"exit_code": 1, "preexisting_errors": 25, "preexisting_warnings": 1, "head_sources_compared": true, "evidence": "frontend-lint.json"}
   },
   "retained_groups": [
-    {"path": "/home/kevin/Work/fama-frontend-contract", "reason": "spawn_supervision_and_end_to_end_child_runtime_not_ready"},
-    {"path": "/home/kevin/Work/fama-review-new-model-flow", "reason": "historical_artifacts_environment_and_policy_differences_preserved"},
+    {"path": "/workspace/fama-frontend-contract", "reason": "spawn_supervision_and_end_to_end_child_runtime_not_ready"},
+    {"path": "/workspace/fama-review-new-model-flow", "reason": "historical_artifacts_environment_and_policy_differences_preserved"},
     {"path": ".git/gentle-ai/candidate-views", "count": 10, "reason": "no_verified_selective_provider_cleanup_preserving_review_authority"}
   ],
   "not_claimed": ["full_consolidation", "global_suite_green", "spawn_integrated", "cuda_verification", "production_postgresql", "real_training", "native_review_approval", "deployment"],

@@ -1,10 +1,10 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-wzhtt3q3
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-wzhtt3q3
 F
 =================================== FAILURES ===================================
 _________ test_exact_reselect_and_mixed_class_groups_are_reproducible __________
 
 cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7f7a63e170e0>, {'id': 'f90ff50500434db19ccea0fc0de015b...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7f7a63e14980>, 'a1338e0404fc49d4bfbb116c2e1e35dc')
-tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-wzhtt3q3/pytest/test_exact_reselect_and_mixed_0')
+tmp_path = PosixPath('/workspace/fama/backend/.training-consumer-suite-wzhtt3q3/pytest/test_exact_reselect_and_mixed_0')
 
     def test_exact_reselect_and_mixed_class_groups_are_reproducible(cohort, tmp_path):
 >       preparations = service(cohort, tmp_path)
@@ -14,7 +14,7 @@ tests/test_imported_dataset_preparation.py:45:
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
 
 cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7f7a63e170e0>, {'id': 'f90ff50500434db19ccea0fc0de015b...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7f7a63e14980>, 'a1338e0404fc49d4bfbb116c2e1e35dc')
-tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-wzhtt3q3/pytest/test_exact_reselect_and_mixed_0')
+tmp_path = PosixPath('/workspace/fama/backend/.training-consumer-suite-wzhtt3q3/pytest/test_exact_reselect_and_mixed_0')
 
     def service(cohort, tmp_path):
 >       from training.imported_dataset_preparation import ImportedDatasetPreparation

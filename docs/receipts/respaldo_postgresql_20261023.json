@@ -92,7 +92,7 @@
     "checked_at": "2026-10-24T01:18:13.512949+00:00",
     "backup": {
       "code": "database_backup_created",
-      "directory": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\backend\\installation\\cloud-pruebas\\backups\\20261024T011708Z",
+      "directory": "C:\\Users\\local-user\\Desktop\\F.A.M.A\\backend\\installation\\cloud-pruebas\\backups\\20261024T011708Z",
       "sha256": "de0cc3fdca7d474142e98d583ffdfafc40da4c83c0ff79ca1d26aa90b854dd52",
       "tables": 17,
       "revision": "0003_autonomy"

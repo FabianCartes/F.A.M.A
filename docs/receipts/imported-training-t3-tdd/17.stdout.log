@@ -1,4 +1,4 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-tks15ew4
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-tks15ew4
 [Database] Tablas sincronizadas exitosamente en PostgreSQL.
 F
 =================================== FAILURES ===================================
@@ -7,8 +7,8 @@ ____________ test_imported_progress_stop_and_history_require_owner _____________
 client = <starlette.testclient.TestClient object at 0x7fa007904440>
 training_env = (<app.services.training.TrainingService object at 0x7fa003b22c10>, sessionmaker(class_='Session', bind=Engine(sqlite:/...ining-consumer-suite-tks15ew4/pytest/test_imported_progress_stop_an0'), <MagicMock name='Thread' id='140325233925088'>)
 cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7fa003772270>, {'id': 'c12bba571d634b6ebc9290a9e971bfc...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7fa0037ce210>, 'fe8efe18cb984db1b51e8d10f6614287')
-tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-tks15ew4/pytest/test_imported_progress_stop_an0')
-authenticated = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwiZXhwIjoxNzkzNzg1NjY0LCJpYXQiOjE3OTM3NTY4NjR9.PugAqpH9ex6_faccxLvJJ2VrWoqwpwMxE-Qt4dMRe_g'}
+tmp_path = PosixPath('/workspace/fama/backend/.training-consumer-suite-tks15ew4/pytest/test_imported_progress_stop_an0')
+authenticated = {'Authorization': 'Bearer [REDACTED_TEST_TOKEN]'}
 
     def test_imported_progress_stop_and_history_require_owner(client, training_env, cohort, tmp_path, authenticated):
         import pickle

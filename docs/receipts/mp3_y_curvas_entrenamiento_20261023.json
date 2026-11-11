@@ -95,7 +95,7 @@
   "runtime": {
     "proxy_port_preserved": 5433,
     "code": "test_backend_restarted",
-    "backend_directory": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\.pytest_cache\\stage8-live\\backend",
+    "backend_directory": "C:\\Users\\local-user\\Desktop\\F.A.M.A\\.pytest_cache\\stage8-live\\backend",
     "frontend_port_preserved": 3010,
     "backend_parent_pid": 29320,
     "checked_at": "2026-10-23T17:01:30.0938095Z",

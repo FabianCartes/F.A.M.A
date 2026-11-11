@@ -1,1 +1,1 @@
-{"command": "node_modules/.bin/vitest run components/views/__tests__/TrainingView.test.tsx", "cwd": "/home/kevin/Work/fama/frontend", "exitcode": 0}
+{"command": "node_modules/.bin/vitest run components/views/__tests__/TrainingView.test.tsx", "cwd": "/workspace/fama/frontend", "exitcode": 0}

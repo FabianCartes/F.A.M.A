@@ -41,7 +41,7 @@
       "symptom": "Scripts y módulos que importaban entidades del modelo relacional desde models (raíz de backend) fallaban con ImportError para ConjuntoDatos, Audio, Modelo, MetricaEntrenamiento, Retroalimentacion y Usuario.",
       "mechanism": "backend/models.py fue creado originalmente como un stub parcial que únicamente re-exportaba Prediccion desde app.models.prediction, omitiendo las restantes tablas del modelo de dominio de F.A.M.A.",
       "fix": "Se re-exportaron todas las entidades del dominio en backend/models.py (Prediccion, ConjuntoDatos, Audio, Modelo, MetricaEntrenamiento, Retroalimentacion, Usuario) actualizando __all__ en consecuencia.",
-      "red_evidence": "test_root_models_reexports_all_domain_entities en backend/tests/test_dataset_models.py falló en Red con 'ImportError: cannot import name ConjuntoDatos from models (/home/kevin/Work/fama/backend/models.py)'.",
+      "red_evidence": "test_root_models_reexports_all_domain_entities en backend/tests/test_dataset_models.py falló en Red con 'ImportError: cannot import name ConjuntoDatos from models (/workspace/fama/backend/models.py)'.",
       "green_evidence": "test_root_models_reexports_all_domain_entities pasó en Green verificando la presencia e integridad de las 7 tablas SQLAlchemy en models."
     },
     {

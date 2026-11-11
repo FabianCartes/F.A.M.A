@@ -2,14 +2,14 @@
   "version": 1,
   "status": "PASS_LOCAL_COLLECTION_ONLY",
   "code_commit": "40dbd76054fe0094c1425f6ef9a4da1d63a39627",
-  "instance_root": "/run/media/kevin/FAMA_P2/fama-dev-large-zip/local-instance",
-  "original_backup": "/run/media/kevin/FAMA_P2/fama-dev-large-zip/manual-large-zip-nf1me5r1",
+  "instance_root": "/run/media/local-user/FAMA_P2/fama-dev-large-zip/local-instance",
+  "original_backup": "/run/media/local-user/FAMA_P2/fama-dev-large-zip/manual-large-zip-nf1me5r1",
   "qualification": {
     "command": "python -B .git/agent-scratch/qualify_local_collection_runtime.py",
     "job": "job-22",
     "exit_code": 0,
     "reported_duration": "1m23s",
-    "raw_evidence": "/run/media/kevin/FAMA_P2/fama-dev-large-zip/local-instance/operation-qualification/result.json"
+    "raw_evidence": "/run/media/local-user/FAMA_P2/fama-dev-large-zip/local-instance/operation-qualification/result.json"
   },
   "dataset": {
     "id": "08429ae80a4d49369960189ab805c9ae",
@@ -22,7 +22,7 @@
   "cycles": [
     {
       "cycle": 1,
-      "session": "/run/media/kevin/FAMA_P2/fama-dev-large-zip/local-instance/runtime/session-y_5vywmi",
+      "session": "/run/media/local-user/FAMA_P2/fama-dev-large-zip/local-instance/runtime/session-y_5vywmi",
       "public_pages": 6,
       "members": 1194,
       "classes": 15,
@@ -49,7 +49,7 @@
     },
     {
       "cycle": 2,
-      "session": "/run/media/kevin/FAMA_P2/fama-dev-large-zip/local-instance/runtime/session-7657c72z",
+      "session": "/run/media/local-user/FAMA_P2/fama-dev-large-zip/local-instance/runtime/session-7657c72z",
       "public_pages": 6,
       "members": 1194,
       "classes": 15,
@@ -139,7 +139,7 @@
         "url": "http://127.0.0.1:3000/api/feedback/pending?limit=50"
       }
     ],
-    "raw_evidence": "/run/media/kevin/FAMA_P2/fama-dev-large-zip/local-instance/operation-qualification/browser-result.json"
+    "raw_evidence": "/run/media/local-user/FAMA_P2/fama-dev-large-zip/local-instance/operation-qualification/browser-result.json"
   },
   "original_controls_unchanged": true,
   "original_controls_scope": [

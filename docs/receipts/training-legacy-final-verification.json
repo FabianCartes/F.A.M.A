@@ -6,7 +6,7 @@
   "reported_exit_code": 0,
   "passed": 297,
   "warnings": 2,
-  "stdout": "........................................................................ [ 24%]\n........................................................................ [ 48%]\n........................................................................ [ 72%]\n........................................................................ [ 96%]\n.........                                                                [100%]\n=============================== warnings summary ===============================\ntests/test_training_persistence.py::test_cpu_checkpoint_and_final_predictor_use_first_best_not_last[1.0--1.0]\ntests/test_training_persistence.py::test_cpu_checkpoint_and_final_predictor_use_first_best_not_last[-1.0--2.0]\n  /home/kevin/Work/fama/.venv/lib/python3.14/site-packages/librosa/core/spectrum.py:3004: UserWarning: n_fft=2048 is too large for input signal of length=512\n    stft(\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n297 passed, 2 warnings in 20.78s\n",
+  "stdout": "........................................................................ [ 24%]\n........................................................................ [ 48%]\n........................................................................ [ 72%]\n........................................................................ [ 96%]\n.........                                                                [100%]\n=============================== warnings summary ===============================\ntests/test_training_persistence.py::test_cpu_checkpoint_and_final_predictor_use_first_best_not_last[1.0--1.0]\ntests/test_training_persistence.py::test_cpu_checkpoint_and_final_predictor_use_first_best_not_last[-1.0--2.0]\n  /workspace/fama/.venv/lib/python3.14/site-packages/librosa/core/spectrum.py:3004: UserWarning: n_fft=2048 is too large for input signal of length=512\n    stft(\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n297 passed, 2 warnings in 20.78s\n",
   "stderr": "",
   "selectors": [
     "tests/test_training_entrypoints.py",
@@ -26,7 +26,7 @@
     "tests/test_cli_paths.py::test_root_data_dir_completely_removed"
   ],
   "python_wrapper": "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in cleanup checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
-  "command_form": "/home/kevin/Work/fama/.venv/bin/python -B -c <python_wrapper> -q -p no:cacheprovider --basetemp \"$RUNTIME/pytest\" <selectors>",
+  "command_form": "/workspace/fama/.venv/bin/python -B -c <python_wrapper> -q -p no:cacheprovider --basetemp \"$RUNTIME/pytest\" <selectors>",
   "isolation": "Source copy including intended new test, private caches/HOME, SQLite, synthetic fixtures, dotenv disabled, CUDA hidden, offline; all socket connects blocked",
   "retired_import_tests": 3,
   "shared_exports_preserved": [

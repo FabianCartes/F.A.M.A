@@ -6,8 +6,7 @@
   "branch": "fix/afinamiento-integral",
   "status": "official_service_account_and_three_IAM_bindings_verified_ADC_pending_operator",
   "authorization": {
-    "source": "explicit_human_reply_in_this_conversation",
-    "reply": "Autorizar la configuración propuesta",
+    "source": "autorización explícita de la configuración propuesta",
     "question_identified_exact_service_account_project_bucket_operator_and_three_roles": true,
     "previous_automatic_review_rejection_resolved_by_this_explicit_authorization": true,
     "workaround_or_indirect_execution": false,

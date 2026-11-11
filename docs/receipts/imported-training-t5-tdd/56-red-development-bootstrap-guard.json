@@ -1,10 +1,10 @@
 {
   "command": [
-    "/home/kevin/Work/fama/.venv/bin/python",
+    "/workspace/fama/.venv/bin/python",
     "tests/run_isolated_training_checks.py",
     "tests/test_zip_manual_database.py::test_training_development_target_requires_matching_connected_identity"
   ],
-  "cwd": "/home/kevin/Work/fama/backend",
+  "cwd": "/workspace/fama/backend",
   "environment": {
     "PYTHONDONTWRITEBYTECODE": "1",
     "PYTHON_DOTENV_DISABLED": "1",

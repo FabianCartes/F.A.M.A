@@ -1,5 +1,5 @@
 {
-  "root": "/home/kevin/Work/fama",
+  "root": "/workspace/fama",
   "head": "d9c374fa3467fea4307b54ed6bdb644839c45dcc",
   "status": " M backend/app/schemas/model_info.py\n M backend/app/services/predictors/trained_predictor.py\n M backend/app/services/standard_evaluation_guard.py\n M backend/app/services/training.py\n M backend/poc/preprocess.py\n M backend/tests/test_api_model_catalogue.py\n M backend/tests/test_model_reevaluation.py\n M backend/tests/test_registry_db_sync.py\n M backend/tests/test_trained_predictor.py\n M backend/tests/test_training_flow.py\n M backend/tests/test_training_persistence.py\n M backend/tests/test_training_service.py\n M docs/KANBAN.md\n M docs/README.md\n M frontend/app/__tests__/layout.test.ts\n M frontend/app/layout.tsx\n M frontend/components/views/PredictionView.tsx\n M frontend/components/views/__tests__/PredictionView.catalogue.test.tsx\n M frontend/components/views/__tests__/PredictionView.test.tsx\n?? docs/manuales/fuentes-locales-frontend.md\n?? docs/seguimiento-frontend-definitivo.md\n?? frontend/app/fonts/\n",
   "hashes": {
@@ -290,8 +290,8 @@
     "docs/modelos/fundamentacion_tecnica_efficientnet_focal_loss.md": "34c7984cd485b82441fc16b2abe68219120f7e3923e26e9f8b971101f6a0889c",
     "docs/modelos/informe_consolidado_diagnostico_acustico_motores.md": "b2e2fa5a2a5bb13fca736ab13455ccdd2f0396e199f5674724e8ba871667b18b",
     "docs/seguimiento-frontend-definitivo.md": "1971406639ce76c1b07d54655ae995b591d06be89364ec8c32f5eefefcc50b5d",
-    "docs/tesis/VIDA_01_CINF_FINAL_PT_2026_1_CARTES.md": "3a5202c1ce0e55779a1a01c8a4c0188a99cfd0f95c0260b4dbdec4b8242a1334",
-    "docs/tesis/VIDA_01_CINF_FINAL_PT_2026_1_CARTES.pdf": "b018504692f00483dedbfd0a6592e5a2aa97444fdb5893d4ad1849a0d6a58fe5",
+    "docs/tesis/memoria_proyecto_titulo_2026_1.md": "3a5202c1ce0e55779a1a01c8a4c0188a99cfd0f95c0260b4dbdec4b8242a1334",
+    "docs/tesis/memoria_proyecto_titulo_2026_1.pdf": "b018504692f00483dedbfd0a6592e5a2aa97444fdb5893d4ad1849a0d6a58fe5",
     "docs/tesis/analisis_objetivos_fama.md": "d0c071c2acd9e226c82d88eae93f75ecb800110f4fdbdf67e4e41353e138d8f5",
     "frontend/.dockerignore": "a046fb7db7c800d52d5285a090acfa17c8f6689d245041f0c728143d394075a1",
     "frontend/.gitignore": "207e265ff4901f9ad9f96d8ce08530e04f9fc600815472a66d0a446096d654cd",

@@ -1,6 +1,6 @@
 {
   "scope": "T2 S3-S5; synthetic current-revision admission, historical compatibility, explicit reprepare",
-  "cwd": "/home/kevin/Work/fama/backend",
+  "cwd": "/workspace/fama/backend",
   "commands": [
     {"command": "cd backend && PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 ../.venv/bin/python tests/run_isolated_training_checks.py tests/test_imported_training_revision_admission.py > ../docs/receipts/feedback-growth-t2-red.stdout 2> ../docs/receipts/feedback-growth-t2-red.stderr", "exit": 1, "result": "1 failed: stale HTTP start returned 200 instead of 404"},
     {"command": "cd backend && PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 ../.venv/bin/python tests/run_isolated_training_checks.py tests/test_imported_training_revision_admission.py > ../docs/receipts/feedback-growth-t2-green.stdout 2> ../docs/receipts/feedback-growth-t2-green.stderr", "exit": 0, "result": "1 passed in 1.33s"},

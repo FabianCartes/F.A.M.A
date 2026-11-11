@@ -3,7 +3,7 @@
   "generated_at": "2026-09-27T18:58:45Z",
   "methodology": "TDD + RDD + ODD",
   "architecture_layer": "Frontend UI/API Connection to FastAPI Training Worker",
-  "plan_reference": "/home/kevin/.gemini/antigravity-cli/brain/90de64a1-0ccd-4a2c-abab-635879f537e9/plan_conexion_entrenamiento_tdd_rdd_odd.md",
+  "plan_reference": "Plan técnico de conexión de entrenamiento",
   "verified_endpoints": [
     {
       "method": "GET",

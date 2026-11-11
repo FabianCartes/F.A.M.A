@@ -60,21 +60,21 @@
     "attempts": [
       {
         "scope": "backend",
-        "reported_cwd": "/home/kevin/Work/fama",
+        "reported_cwd": "/workspace/fama",
         "reported_exit": 2,
         "reason": "runner path absent in repository root",
         "tests_executed": false
       },
       {
         "scope": "frontend",
-        "reported_cwd": "/home/kevin/Work/fama",
+        "reported_cwd": "/workspace/fama",
         "reported_exit": 254,
         "reason": "package.json absent in repository root",
         "tests_executed": false
       }
     ],
     "full_command_stdout_stderr_artifacts": "not provided by verifier; no streams invented",
-    "external_side_effect": "npm reported creation of /home/kevin/.npm/_logs/2026-11-04T03_24_56_988Z-debug-0.log; not inspected or removed",
+    "external_side_effect": "npm reported creation of /home/local-user/.npm/_logs/2026-11-04T03_24_56_988Z-debug-0.log; not inspected or removed",
     "retry": false,
     "human_disposition": "accepted explicitly by user Acepto; no retry or independent approval"
   },

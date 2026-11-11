@@ -1,10 +1,10 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-sf1ppj0i
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-sf1ppj0i
 [Database] Tablas sincronizadas exitosamente en PostgreSQL.
 .......................................................................................................................................................................................................................................................................
 =============================== warnings summary ===============================
 tests/test_training_persistence.py::test_cpu_checkpoint_and_final_predictor_use_first_best_not_last[1.0--1.0]
 tests/test_training_persistence.py::test_cpu_checkpoint_and_final_predictor_use_first_best_not_last[-1.0--2.0]
-  /home/kevin/Work/fama/.venv/lib/python3.14/site-packages/librosa/core/spectrum.py:3004: UserWarning: n_fft=2048 is too large for input signal of length=512
+  /workspace/fama/.venv/lib/python3.14/site-packages/librosa/core/spectrum.py:3004: UserWarning: n_fft=2048 is too large for input signal of length=512
     stft(
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html

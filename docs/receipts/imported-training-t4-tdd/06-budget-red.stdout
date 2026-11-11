@@ -1,4 +1,4 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-klvzz800
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-klvzz800
 F
 =================================== FAILURES ===================================
 _________ test_oversized_json_is_rejected_before_snapshot_publication __________

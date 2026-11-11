@@ -1,4 +1,4 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-7qvfbo34
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-7qvfbo34
 F
 =================================== FAILURES ===================================
 ________ test_altered_snapshot_audio_never_reads_back_ready_preparation ________

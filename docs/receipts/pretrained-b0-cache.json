@@ -1,6 +1,6 @@
 {
   "state_directory": ".pretrained-cache-0bda6d69b0d7a77c",
-  "cache_directory": "/home/kevin/Work/fama/.pretrained-cache-0bda6d69b0d7a77c/huggingface",
+  "cache_directory": "/workspace/fama/.pretrained-cache-0bda6d69b0d7a77c/huggingface",
   "repository": "timm/efficientnet_b0.ra_in1k",
   "revision": "1b5383e5f79cc0f7fc067e372f8f26a5fa73f26a",
   "filename": "model.safetensors",

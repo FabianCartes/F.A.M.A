@@ -1,9 +1,9 @@
 {
-  "issue": "https://github.com/FabianCartes/F.A.M.A/issues/2",
+  "issue": "Incidencia 2 del repositorio configurado",
   "branch": "fix/unify-model-names",
   "base": "b27edd7",
   "rdd_mode": "on (global)",
-  "issue_approval": "Explicit user approval recorded in issue comment and status:approved label",
+  "issue_approval": "Incidencia aprobada con etiqueta status:approved",
   "causal_invariant": "One persisted model has the same display name in training and prediction; technical identity stays separate",
   "main_reproduction": {
     "revision": "831573761709ad65a9b2e9aed722a8ee5bed306d",
@@ -35,13 +35,13 @@
   "candidate_review": {"lineage": "review-59dbfaa6bea52aa0", "target": "sha256:8a1ce7aa284a0edff71e85c149571e67e8e850e88ccc7c916c7594bd789dd6be", "candidate_tree": "5d4dfbc91ba07ca7d1bcf5d886eca1d57cf00d7f", "changed_lines": 325, "lenses": ["readability", "reliability"], "findings": [], "state": "approved", "acknowledged": true, "authority": "burned", "scope_note": "Frozen candidate before this receipt/KANBAN closeout; no source changes after review"},
   "changed_line_budget": {"forecast": 390, "hard_limit": 400, "reviewed_candidate": 325},
   "integration": {
-    "authorization": "User approved the integration/commit/rebuild plan with Procede",
-    "destination": "/home/kevin/Work/fama", "branch": "dev", "status": "integrated_rebuilt_verified",
+    "authorization": "Integración y reconstrucción aprobadas",
+    "destination": "/workspace/fama", "branch": "dev", "status": "integrated_rebuilt_verified",
     "code_commit": "89590d0607eb2bec2e6b215f7bb129504aaca637", "method": "git merge --ff-only fix/unify-model-names",
     "review": {"lineage": "review-fa66443cf036b924", "target": "sha256:6191bba6a9446b7f63b15bb98337b9a103a5da0ca4edf0f9b32390a1912a58e4", "commit_tree": "056ec51b0fbc22bfed5f5daabb39b821c770f501", "commit_matches_candidate": true, "changed_lines": 329, "findings": [], "state": "approved", "acknowledged": true, "authority": "burned"},
     "before": {"model_id": "fama_trained_model_14", "catalogue_name": "EfficientNet-B0 (Entrenado #14)", "history_name": "Aves Chilenas · EfficientNet-B0 (v1)", "checkpoint_sha256": "d6ede3c7f343d8a2945209bd13d3fcbc0b497a2863dcd7e8afee18c0be7cbc4d", "dataset_name": "AvesChilenas"},
     "destination_checks": {"backend_passed": 174, "backend_deselected": 0, "frontend_passed": 123, "typescript_exit": 0, "focused_lint_exit": 0, "global_lint_exit": 1, "global_lint_errors": 26, "global_lint_warnings": 3, "backend_commands": "Same selectors/environment as tests.backend, invoked from destination backend directory", "frontend_commands": "Same five selectors as manual, followed by npx tsc --noEmit --incremental false; focused npx eslint on PredictionView.tsx, its catalogue test and training schema"},
-    "rebuild": {"command": "./iniciar_fama.sh --build", "cwd": "/home/kevin/Work/fama", "exit": 0, "healthy_services": ["backend", "frontend", "db"], "next_build": "passed in Docker", "backend_runtime_python": "3.12.15"},
+    "rebuild": {"command": "./iniciar_fama.sh --build", "cwd": "/workspace/fama", "exit": 0, "healthy_services": ["backend", "frontend", "db"], "next_build": "passed in Docker", "backend_runtime_python": "3.12.15"},
     "images": {"backend": "sha256:3874e93c1f595fb962a496758292ec2e07c71e898f67d426e8b49dea0193ee36", "frontend": "sha256:6cf01cef40e422f4bc92f0b87c126ca8cb597b60b6a7f433bf6c08cfbd6f837a", "backend_rollback_tag": "fama-backend:rollback-model-names-ea25565df94e", "frontend_rollback": "Prior running image was absent from image store; tag attempt failed; rebuild prior Git code if rollback is needed"},
     "after": {"direct_catalogue_url": "http://localhost:8000/api/models", "proxy_catalogue_url": "http://localhost:3000/api/models", "model_id": "fama_trained_model_14", "default_model_id": "fama_trained_model_14", "name": "Aves Chilenas · EfficientNet-B0 (v1)", "architecture": "EfficientNet-B0", "version": 1, "dataset_name": "AvesChilenas", "checkpoint_sha256": "d6ede3c7f343d8a2945209bd13d3fcbc0b497a2863dcd7e8afee18c0be7cbc4d"},
     "browser": {"status": "passed", "engine": "Chromium 152.0.7977.82 headless via Playwright", "url": "http://localhost:3000", "checks": ["selected technical ID", "canonical option and heading", "Versión v1 badge", "old label and unavailable-version badge absent", "same training-history row", "navigation back to prediction", "zero page errors"], "inference_submitted": false},

@@ -2,7 +2,7 @@
   "schema": "fama.real-wav-sample/v1",
   "run": "46f2a0d77585871f",
   "state_directory": ".training-sample-46f2a0d77585871f",
-  "source_archive": "/run/media/kevin/FAMA_P2/fama-p2/datasets/aves-chilenas/aves-chilenas-wav-import-871a8d559b/AvesChilenas-WAV-max10min.zip",
+  "source_archive": "/run/media/local-user/FAMA_P2/fama-p2/datasets/aves-chilenas/aves-chilenas-wav-import-871a8d559b/AvesChilenas-WAV-max10min.zip",
   "source_archive_size": 5620955136,
   "source_stat_unchanged": true,
   "source_full_archive_hash_computed": false,

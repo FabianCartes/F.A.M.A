@@ -1,11 +1,11 @@
 {
   "command": [
-    "/home/kevin/Work/fama/.venv/bin/python",
+    "/workspace/fama/.venv/bin/python",
     "tests/run_isolated_training_checks.py",
     "tests/test_imported_model_access.py::test_imported_http_catalogue_is_opt_in_and_owner_private",
     "-q"
   ],
-  "cwd": "/home/kevin/Work/fama/backend",
+  "cwd": "/workspace/fama/backend",
   "environment": {
     "PYTHONDONTWRITEBYTECODE": "1",
     "PYTHON_DOTENV_DISABLED": "1",

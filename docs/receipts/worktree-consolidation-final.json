@@ -6,7 +6,7 @@
   "branch": "feat/consistent-evaluation-publication",
   "previous_receipt": "docs/receipts/worktree-consolidation.json",
   "backup": {
-    "path": "/home/kevin/Work/fama-preservation/20261015T163827Z-remaining",
+    "path": "/workspace/fama-preservation/20261015T163827Z-remaining",
     "manifest": "manifest.json",
     "manifest_sha256": "2365576508f4a6c49c5d372e81b645d70251c258ffdb7d99d582f62646c911c5",
     "archive_member_sha256_verified": true,
@@ -28,7 +28,7 @@
     "additional_source_worktrees_removed": 2,
     "additional_candidate_views_removed": 10,
     "total_secondary_worktrees_removed": 58,
-    "remaining_registered_worktrees": ["/home/kevin/Work/fama"],
+    "remaining_registered_worktrees": ["/workspace/fama"],
     "branches_deleted": false,
     "global_prune_used": false,
     "force_removal": "Only exact archived states after immediate file and Git-state revalidation.",

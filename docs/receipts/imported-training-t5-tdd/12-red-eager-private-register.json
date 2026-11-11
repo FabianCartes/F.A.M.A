@@ -1,11 +1,11 @@
 {
   "command": [
-    "/home/kevin/Work/fama/.venv/bin/python",
+    "/workspace/fama/.venv/bin/python",
     "tests/run_isolated_training_checks.py",
     "tests/test_imported_training_evaluation.py::test_imported_eager_predictor_cannot_register_publicly",
     "-q"
   ],
-  "cwd": "/home/kevin/Work/fama/backend",
+  "cwd": "/workspace/fama/backend",
   "environment": {
     "PYTHONDONTWRITEBYTECODE": "1",
     "PYTHON_DOTENV_DISABLED": "1",

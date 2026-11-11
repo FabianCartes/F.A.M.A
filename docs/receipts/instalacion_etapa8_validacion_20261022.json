@@ -1695,7 +1695,7 @@
     "at": "2026-10-22T23:18:59.630288+00:00",
     "status": "not_adopted_operator_selected_full_autonomy_on_assigned_datasets",
     "project_basis": [
-      "docs/tesis/VIDA_01_CINF_FINAL_PT_2026_1_CARTES.md",
+      "docs/tesis/memoria_proyecto_titulo_2026_1.md",
       "docs/adr/0013_bucle_retroalimentacion_curacion_semi_manual_mlops.md"
     ],
     "assigned_researcher_can_propose_uploads_and_corrections": true,
@@ -3099,7 +3099,7 @@
     "checked_at": "2026-10-24T00:36:31.433964+00:00",
     "receipt": "docs/receipts/directorios_persistentes_20261023.json",
     "status": "persistent_native_test_runtime_activated_and_verified",
-    "root": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\runtime\\pruebas",
+    "root": "C:\\Users\\local-user\\Desktop\\F.A.M.A\\runtime\\pruebas",
     "files_preserved": 29,
     "SQL_counts_preserved": true,
     "sources_original_repository": true,

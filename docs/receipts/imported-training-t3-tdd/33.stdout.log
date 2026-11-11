@@ -1,4 +1,4 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-724t7tna
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-724t7tna
 [Database] Tablas sincronizadas exitosamente en PostgreSQL.
 F
 =================================== FAILURES ===================================
@@ -7,8 +7,8 @@ _ test_owned_invalid_selection_has_no_admission_effects[schema-source_unavailabl
 client = <starlette.testclient.TestClient object at 0x7f7627b4da90>
 training_env = (<app.services.training.TrainingService object at 0x7f762bd53b10>, sessionmaker(class_='Session', bind=Engine(sqlite:/...ining-consumer-suite-724t7tna/pytest/test_owned_invalid_selection_h0'), <MagicMock name='Thread' id='140145515463744'>)
 cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7f7627952660>, {'id': 'f9e8756a7a154f12ab7afe14aae5269...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7f762777e5d0>, 'f7456b4f136c46fdaa50cce27f051737')
-tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-724t7tna/pytest/test_owned_invalid_selection_h0')
-authenticated = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwiZXhwIjoxNzkzNzg2OTI0LCJpYXQiOjE3OTM3NTgxMjR9.3cHEWV9UDuooWeaAAf9BvgcUyiv6XSKY2HaVkh0hlGI'}
+tmp_path = PosixPath('/workspace/fama/backend/.training-consumer-suite-724t7tna/pytest/test_owned_invalid_selection_h0')
+authenticated = {'Authorization': 'Bearer [REDACTED_TEST_TOKEN]'}
 damage = 'schema', code = 'source_unavailable'
 message = 'Fuente importada no disponible.'
 monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f7627ce3e10>

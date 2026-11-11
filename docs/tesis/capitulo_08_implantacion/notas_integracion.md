@@ -31,11 +31,11 @@ Las rutas siguientes son relativas a la raíz del repositorio. Se contrastaron d
 
 | Afirmación o tratamiento | Fuente de contraste |
 | --- | --- |
-| Estructura y tono del informe; capítulo 8 vacío | PDF `VIDA_01_CINF_FINAL_PT_2026_1_CARTES_incompleto.pdf`, proporcionado por el autor; páginas PDF 5 a 7, 14 a 18 y 68 a 73. Página impresa 62 para el inicio del capítulo 8. |
+| Estructura y tono del informe; capítulo 8 vacío | PDF incompleto de la tesis, proporcionado por el autor; páginas PDF 5 a 7, 14 a 18 y 68 a 73. Página impresa 62 para el inicio del capítulo 8. |
 | Puesta en marcha local y límites del catálogo | `docs/manuales/conciliacion_catalogo_y_pesos_oficiales.md`; `docs/adr/0068-declaracion-explicita-de-ensambles-por-instalacion.md`. |
 | Mantenimiento oficial, esquema 0004, catálogo y restauraciones | `docs/manuales/actualizacion_oficial_0004_20261025.md`; `docs/receipts/actualizacion_oficial_0004_20261025.json`. |
 | Reanudación de servicios y límite del arranque permanente | `docs/receipts/restablecimiento_login_oficial_20261101.json`. |
-| Segundo integrante: cuenta y permiso comprobados; Linux pendiente | `docs/manuales/entrega_a_kevin.md`; `docs/receipts/alta_kevin_administrador_20261104.json`. La disponibilidad de archivos comunicada por el operador no se convierte en comprobación independiente de su equipo. |
+| Segundo integrante: cuenta y permiso comprobados; Linux pendiente | `docs/manuales/instalacion_segundo_nodo.md`; `docs/receipts/alta_administrador_secundario_20261104.json`. La disponibilidad de archivos comunicada por el operador no se convierte en comprobación independiente de su equipo. |
 | Asistente, adopción y arranque condicionado al esquema | `backend/app/entrypoint.py`; `backend/app/installation.py`; `backend/app/history_adoption.py`; `docs/adr/0058-configuracion-persistente-y-migraciones-explicitas.md`. |
 | Identidad y bloqueo del runtime | `backend/app/runtime.py`; `docs/manuales/directorios_persistentes_por_entorno.md`. |
 | Separación de identidades cloud, SQL y web | `docs/manuales/identidad_tecnica_oficial.md`; `backend/app/connections.py`; `backend/app/services/access.py`. |
@@ -50,6 +50,6 @@ La composición tipográfica de la vista previa aproxima el borrador, pero no re
 
 ## Verificación de la entrega
 
-El proyecto independiente compiló correctamente con el compilador integrado del editor LaTeX de Codex. También se comprobaron la existencia de una sola declaración de capítulo, las tres secciones solicitadas, la unicidad de etiquetas, la resolución de referencias internas y la suma de 300 minutos del plan propuesto. La revisión de diferencias de Git no informó errores de espacios.
+El proyecto independiente compiló correctamente con un compilador LaTeX integrado en el editor. También se comprobaron la existencia de una sola declaración de capítulo, las tres secciones solicitadas, la unicidad de etiquetas, la resolución de referencias internas y la suma de 300 minutos del plan propuesto. La revisión de diferencias de Git no informó errores de espacios.
 
 La integración con la plantilla real de Overleaf queda sujeta a su compilación allí: se recibió el PDF, no el proyecto fuente de la tesis. La vista previa independiente conserva los archivos de contenido y no incorpora una nueva portada o bibliografía.

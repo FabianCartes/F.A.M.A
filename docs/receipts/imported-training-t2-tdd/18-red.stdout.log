@@ -1,9 +1,9 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-7f77ieoh
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-7f77ieoh
 F
 =================================== FAILURES ===================================
 ___________ test_concurrent_absent_root_creators_reopen_safe_winner ____________
 
-path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-7f77ieoh/pytest/test_concurrent_absent_root_cr0/prepared')
+path = PosixPath('/workspace/fama/backend/.training-consumer-suite-7f77ieoh/pytest/test_concurrent_absent_root_cr0/prepared')
 
     @contextmanager
     def _root_directory(path):
@@ -46,7 +46,7 @@ tests/test_imported_dataset_preparation.py:392: FileExistsError
 The above exception was the direct cause of the following exception:
 
 cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7efe9391f620>, {'id': '205bdc44f75c4dec9a7b4914a132dbb...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7efe9391dfd0>, 'ed09e206ddf243108e16028ac1940897')
-tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-7f77ieoh/pytest/test_concurrent_absent_root_cr0')
+tmp_path = PosixPath('/workspace/fama/backend/.training-consumer-suite-7f77ieoh/pytest/test_concurrent_absent_root_cr0')
 monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7efe93e52d70>
 
     def test_concurrent_absent_root_creators_reopen_safe_winner(cohort, tmp_path, monkeypatch):
@@ -99,7 +99,7 @@ training/imported_dataset_preparation.py:290: in create
            ^^^^^^^^^^^^^^
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
 
-path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-7f77ieoh/pytest/test_concurrent_absent_root_cr0/prepared')
+path = PosixPath('/workspace/fama/backend/.training-consumer-suite-7f77ieoh/pytest/test_concurrent_absent_root_cr0/prepared')
 
     @contextmanager
     def _root_directory(path):

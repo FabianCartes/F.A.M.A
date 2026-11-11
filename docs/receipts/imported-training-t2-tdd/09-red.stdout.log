@@ -1,10 +1,10 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-op4iep23
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-op4iep23
 F
 =================================== FAILURES ===================================
 ___________________ test_invalid_seed_does_not_publish[True] ___________________
 
 cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7f55c120af90>, {'id': '1bf0bc709d2f44acbf6b9b8256e35f5...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7f55c12096a0>, 'ccf45e73144f4a50852a28f2b4b9b86d')
-tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-op4iep23/pytest/test_invalid_seed_does_not_pub0')
+tmp_path = PosixPath('/workspace/fama/backend/.training-consumer-suite-op4iep23/pytest/test_invalid_seed_does_not_pub0')
 seed = True
 
     @pytest.mark.parametrize("seed", [True, -1, 2**32, 1.2, "42"])

@@ -1,4 +1,4 @@
 {
-  "command": "PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /home/kevin/Work/fama/.venv/bin/python tests/run_isolated_training_checks.py tests/test_imported_training_admission.py tests/test_imported_training_source.py tests/test_imported_training_persistence.py tests/test_training_flow.py tests/test_api_training.py tests/test_training_service.py tests/test_training_schemas.py tests/test_training_persistence.py tests/test_training_spawn.py",
+  "command": "PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /workspace/fama/.venv/bin/python tests/run_isolated_training_checks.py tests/test_imported_training_admission.py tests/test_imported_training_source.py tests/test_imported_training_persistence.py tests/test_training_flow.py tests/test_api_training.py tests/test_training_service.py tests/test_training_schemas.py tests/test_training_persistence.py tests/test_training_spawn.py",
   "exit": 1
 }

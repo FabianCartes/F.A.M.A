@@ -3,7 +3,7 @@
 > vitest run
 
 
- RUN  v5.0.2 /home/kevin/Work/fama/frontend
+ RUN  v5.0.2 /workspace/fama/frontend
 
  ❯ components/views/__tests__/U6Independent.test.tsx (14 tests | 1 failed) 3988ms
    ❯ S1/S4 preserved shared consumer seams (4)

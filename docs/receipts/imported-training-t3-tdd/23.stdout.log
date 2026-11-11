@@ -1,4 +1,4 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-8he5zw1_
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-8he5zw1_
 [Database] Tablas sincronizadas exitosamente en PostgreSQL.
 F
 =================================== FAILURES ===================================
@@ -7,8 +7,8 @@ _______ test_imported_catalog_requires_auth_and_preserves_legacy_catalog _______
 client = <starlette.testclient.TestClient object at 0x7fc374414440>
 training_env = (<app.services.training.TrainingService object at 0x7fc370697d90>, sessionmaker(class_='Session', bind=Engine(sqlite:/...ining-consumer-suite-8he5zw1_/pytest/test_imported_catalog_requires0'), <MagicMock name='Thread' id='140477381730256'>)
 cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7fc37003a3c0>, {'id': '6cb3c59a9da0406989022d7e65dfa2d...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7fc370019d10>, '584b58580d1741baa7b000ef708300bf')
-tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-8he5zw1_/pytest/test_imported_catalog_requires0')
-authenticated = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwiZXhwIjoxNzkzNzg1ODg2LCJpYXQiOjE3OTM3NTcwODZ9.QYTq47YWH-Z27kBFvH2fdi4-W_OUGtFcdlSi4OeMxpg'}
+tmp_path = PosixPath('/workspace/fama/backend/.training-consumer-suite-8he5zw1_/pytest/test_imported_catalog_requires0')
+authenticated = {'Authorization': 'Bearer [REDACTED_TEST_TOKEN]'}
 
     def test_imported_catalog_requires_auth_and_preserves_legacy_catalog(client, training_env, cohort, tmp_path, authenticated):
         from app.services import auth

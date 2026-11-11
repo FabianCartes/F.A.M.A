@@ -1,13 +1,13 @@
 {
   "command": [
-    "/home/kevin/Work/fama/.venv/bin/python",
+    "/workspace/fama/.venv/bin/python",
     "-m",
     "pytest",
     "-q",
     "-p",
     "no:cacheprovider",
     "--basetemp",
-    "/home/kevin/Work/fama/backend/.t3-spawn-6o5qhpp1/pytest",
+    "/workspace/fama/backend/.t3-spawn-6o5qhpp1/pytest",
     "backend/tests/test_training_spawn.py"
   ],
   "environment": {
@@ -21,7 +21,7 @@
     "MKL_NUM_THREADS": "1",
     "HF_HUB_OFFLINE": "1"
   },
-  "private_scratch": "/home/kevin/Work/fama/backend/.t3-spawn-6o5qhpp1",
+  "private_scratch": "/workspace/fama/backend/.t3-spawn-6o5qhpp1",
   "scope": "separate authorized spawn; no original runner guard; memory and private file SQLite; synthetic CPU; child network blocked by synthetic_pipeline",
   "exit": 0
 }

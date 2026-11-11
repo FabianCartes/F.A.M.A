@@ -1,5 +1,5 @@
 
- RUN  v5.0.2 /home/kevin/Work/fama/frontend
+ RUN  v5.0.2 /workspace/fama/frontend
 
  ❯ components/training/__tests__/ImportedTrainingPanel.test.tsx (0 test)
 

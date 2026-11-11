@@ -8,7 +8,7 @@
     "odd": "Organic-Driven Development (Adaptive real-time telemetry and domain feedback)"
   },
   "architecture_layer": "Dynamic Ensemble Training Pipeline (FastAPI PyTorch Service & Next.js React UI)",
-  "plan_reference": "/home/kevin/.gemini/antigravity-cli/brain/d19db34d-1b00-4711-8b5b-9687587bd6b0/plan_ensemble_epochs_per_model_tdd_rdd_odd.md",
+  "plan_reference": "/home/local-user/.gemini/antigravity-cli/brain/d19db34d-1b00-4711-8b5b-9687587bd6b0/plan_ensemble_epochs_per_model_tdd_rdd_odd.md",
   "summary": "Implementación desacoplada y tipada del selector individual de épocas por modelo en ensambles dinámicos (Dúo/Tríada). Resuelve la asimetría de convergencia entre redes livianas (EfficientNet-B0) y profundas (ResNet-34d) con retrocompatibilidad completa y observabilidad SVG desacoplada.",
   "contracts": {
     "backend_pydantic": {

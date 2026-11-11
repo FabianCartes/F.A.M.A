@@ -3,7 +3,7 @@
 > vitest run components/auth/__tests__/workspace.test.tsx components/auth/__tests__/login.test.tsx
 
 
- RUN  v5.0.2 /home/kevin/Work/fama/frontend
+ RUN  v5.0.2 /workspace/fama/frontend
 
 
  Test Files  2 passed (2)

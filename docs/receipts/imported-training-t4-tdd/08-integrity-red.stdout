@@ -1,4 +1,4 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-b_u3x2ha
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-b_u3x2ha
 F
 =================================== FAILURES ===================================
 ________ test_altered_snapshot_audio_never_reads_back_ready_preparation ________
@@ -21,7 +21,7 @@ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
          ^^^^^^^^^^^^^^^^^^^^
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
 
-self = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-b_u3x2ha/pytest/test_altered_snapshot_audio_ne0/snapshots/adf23a57046e4e72b8255fdfd91a0262/1649b507340442a9af1c442ac9b4692c')
+self = PosixPath('/workspace/fama/backend/.training-consumer-suite-b_u3x2ha/pytest/test_altered_snapshot_audio_ne0/snapshots/adf23a57046e4e72b8255fdfd91a0262/1649b507340442a9af1c442ac9b4692c')
 mode = 'wb', buffering = -1, encoding = None, errors = None, newline = None
 
     def open(self, mode='r', buffering=-1, encoding=None,
@@ -34,7 +34,7 @@ mode = 'wb', buffering = -1, encoding = None, errors = None, newline = None
             encoding = io.text_encoding(encoding)
 >       return io.open(self, mode, buffering, encoding, errors, newline)
                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-E       PermissionError: [Errno 13] Permission denied: '/home/kevin/Work/fama/backend/.training-consumer-suite-b_u3x2ha/pytest/test_altered_snapshot_audio_ne0/snapshots/adf23a57046e4e72b8255fdfd91a0262/1649b507340442a9af1c442ac9b4692c'
+E       PermissionError: [Errno 13] Permission denied: '/workspace/fama/backend/.training-consumer-suite-b_u3x2ha/pytest/test_altered_snapshot_audio_ne0/snapshots/adf23a57046e4e72b8255fdfd91a0262/1649b507340442a9af1c442ac9b4692c'
 
 /usr/lib/python3.14/pathlib/__init__.py:771: PermissionError
 =========================== short test summary info ============================

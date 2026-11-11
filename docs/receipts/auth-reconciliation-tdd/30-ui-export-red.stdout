@@ -3,7 +3,7 @@
 > vitest run components/auth/__tests__/session-imports.test.tsx
 
 
- RUN  v5.0.2 /home/kevin/Work/fama/frontend
+ RUN  v5.0.2 /workspace/fama/frontend
 
  ❯ components/auth/__tests__/session-imports.test.tsx (2 tests | 1 failed) 1138ms
    × loads export collections using the same confirmed cookie outside development mode 1018ms

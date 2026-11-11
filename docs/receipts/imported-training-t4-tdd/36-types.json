@@ -1,1 +1,1 @@
-{"command": ["node_modules/.bin/tsc", "--noEmit"], "cwd": "/home/kevin/Work/fama/frontend", "exit_code": 0, "duration_seconds": 4.57}
+{"command": ["node_modules/.bin/tsc", "--noEmit"], "cwd": "/workspace/fama/frontend", "exit_code": 0, "duration_seconds": 4.57}

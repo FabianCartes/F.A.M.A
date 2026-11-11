@@ -1,5 +1,5 @@
 
- RUN  v5.0.2 /home/kevin/Work/fama/frontend
+ RUN  v5.0.2 /workspace/fama/frontend
 
  ❯ lib/api/__tests__/importedTrainingApi.test.ts (0 test)
 

@@ -7,7 +7,7 @@
     "components/views/__tests__/ImportedTrainingView.test.tsx",
     "components/training/__tests__/ImportedTrainingPanel.test.tsx"
   ],
-  "cwd": "/home/kevin/Work/fama/frontend",
+  "cwd": "/workspace/fama/frontend",
   "exit_code": 0,
   "wall_seconds": 5.043065781001133,
   "scope": "UI bridge, existing prepared start payload, panel eligibility; synthetic HTTP only"

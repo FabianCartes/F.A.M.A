@@ -3,7 +3,7 @@
 > vitest run app/__tests__/session.test.tsx
 
 
- RUN  v5.0.2 /home/kevin/Work/fama/frontend
+ RUN  v5.0.2 /workspace/fama/frontend
 
  ❯ app/__tests__/session.test.tsx (2 tests | 2 failed) 2032ms
    × keeps legacy available without a session when /me returns 401 1024ms

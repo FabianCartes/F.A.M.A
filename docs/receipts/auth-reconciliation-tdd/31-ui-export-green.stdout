@@ -3,7 +3,7 @@
 > vitest run components/views/__tests__/DatasetImportPanel.test.tsx components/views/__tests__/DatasetExport.test.tsx components/auth app/__tests__/session.test.tsx
 
 
- RUN  v5.0.2 /home/kevin/Work/fama/frontend
+ RUN  v5.0.2 /workspace/fama/frontend
 
 
  Test Files  6 passed (6)

@@ -9,7 +9,7 @@
     "components/auth/__tests__/workspace.test.tsx",
     "components/auth/__tests__/session-imports.test.tsx"
   ],
-  "cwd": "/home/kevin/Work/fama/frontend",
+  "cwd": "/workspace/fama/frontend",
   "exit_code": 0,
   "wall_seconds": 5.750159011999131
 }

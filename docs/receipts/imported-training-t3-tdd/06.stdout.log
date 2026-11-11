@@ -1,4 +1,4 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-8ggy5mnd
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-8ggy5mnd
 [Database] Tablas sincronizadas exitosamente en PostgreSQL.
 F
 =================================== FAILURES ===================================
@@ -7,8 +7,8 @@ ________________ test_foreign_imported_start_is_non_disclosing _________________
 client = <starlette.testclient.TestClient object at 0x7fbf66aa02f0>
 training_env = (<app.services.training.TrainingService object at 0x7fbf62d0e850>, sessionmaker(class_='Session', bind=Engine(sqlite:/...ining-consumer-suite-8ggy5mnd/pytest/test_foreign_imported_start_is0'), <MagicMock name='Thread' id='140459973809824'>)
 cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7fbf62966660>, {'id': 'f7942f03f63b40ecaa588225b8ef447...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7fbf62de9bd0>, '201a91e973954b9f80f4f48a98ec6a3b')
-tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-8ggy5mnd/pytest/test_foreign_imported_start_is0')
-authenticated = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwiZXhwIjoxNzkzNzg1MTMwLCJpYXQiOjE3OTM3NTYzMzB9.0ECku_A9owi7rZIZB94Cxd1t6jCInyrZU3Pn8XSr-eM'}
+tmp_path = PosixPath('/workspace/fama/backend/.training-consumer-suite-8ggy5mnd/pytest/test_foreign_imported_start_is0')
+authenticated = {'Authorization': 'Bearer [REDACTED_TEST_TOKEN]'}
 
     def test_foreign_imported_start_is_non_disclosing(client, training_env, cohort, tmp_path, authenticated):
         from app.services.imported_training_source import ImportedTrainingSource

@@ -8,7 +8,7 @@
     "odd": "Organic-Driven Development (Adaptive real-time telemetry and domain feedback)"
   },
   "architecture_layer": "Full-Stack Training Optimization Pipeline (FastAPI PyTorch Service & Next.js React UI)",
-  "plan_reference": "/home/kevin/.gemini/antigravity-cli/brain/d19db34d-1b00-4711-8b5b-9687587bd6b0/plan_adamw_frontend_tdd_rdd_odd.md",
+  "plan_reference": "/home/local-user/.gemini/antigravity-cli/brain/d19db34d-1b00-4711-8b5b-9687587bd6b0/plan_adamw_frontend_tdd_rdd_odd.md",
   "summary": "Implementación desacoplada y tipada de la sintonización del optimizador AdamW (Weight Decay L2) de punta a punta, permitiendo la adaptación precisa a cualquier tamaño y tipo de dataset sin sobre-ingeniería.",
   "contracts": {
     "backend_pydantic": {

@@ -1,10 +1,10 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-kim5p5r3
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-kim5p5r3
 F
 =================================== FAILURES ===================================
 _____________ test_existing_version_directory_is_never_overwritten _____________
 
 cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7f14f93fb0e0>, {'id': '829e0d88d90a4bed9d70086bbf32cff...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7f14f93f9940>, '17e8acc815044d8e9e19b419dde84c4f')
-tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-kim5p5r3/pytest/test_existing_version_director0')
+tmp_path = PosixPath('/workspace/fama/backend/.training-consumer-suite-kim5p5r3/pytest/test_existing_version_director0')
 
     def test_existing_version_directory_is_never_overwritten(cohort, tmp_path):
         from training.imported_dataset_preparation import ImportedDatasetPreparation, PreparationError

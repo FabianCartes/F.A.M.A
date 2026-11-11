@@ -1,4 +1,4 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-k3qi8ymb
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-k3qi8ymb
 F
 =================================== FAILURES ===================================
 __________________ test_explicit_migration_from_absent_table ___________________

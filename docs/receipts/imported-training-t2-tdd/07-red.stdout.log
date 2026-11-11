@@ -1,10 +1,10 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-6e6265y7
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-6e6265y7
 F
 =================================== FAILURES ===================================
 ___________ test_unreadable_wav_aborts_without_publication[not_wav] ____________
 
 cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7ff6ace3af90>, {'id': 'a17ee1db750241dc8dcf5aa3e9d36f4...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7ff6ace396a0>, '5acfbc999a6f4d748949bfb429d31343')
-tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-6e6265y7/pytest/test_unreadable_wav_aborts_wit0')
+tmp_path = PosixPath('/workspace/fama/backend/.training-consumer-suite-6e6265y7/pytest/test_unreadable_wav_aborts_wit0')
 damage = 'not_wav'
 
     @pytest.mark.parametrize("damage", ["not_wav", "truncated", "stereo_header"])

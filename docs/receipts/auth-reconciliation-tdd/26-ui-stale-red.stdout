@@ -3,7 +3,7 @@
 > vitest run components/auth/__tests__/workspace.test.tsx
 
 
- RUN  v5.0.2 /home/kevin/Work/fama/frontend
+ RUN  v5.0.2 /workspace/fama/frontend
 
  ❯ components/auth/__tests__/workspace.test.tsx (5 tests | 2 failed) 156ms
    × ignores a stale unauthorized response after confirming a different cookie identity 10ms

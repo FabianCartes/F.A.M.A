@@ -188,7 +188,7 @@
     "offsite_backup_setup"
   ],
   "next_operator_action": {
-    "command": "python -m scripts.preparar_esquema_oficial --config-dir C:\\Users\\fabia\\Desktop\\F.A.M.A\\backend\\installation\\cloud-oficial\\native --apply",
+    "command": "python -m scripts.preparar_esquema_oficial --config-dir C:\\Users\\local-user\\Desktop\\F.A.M.A\\backend\\installation\\cloud-oficial\\native --apply",
     "secret_entry": "local_hidden_prompt_for_fama_oficial_migrador_only",
     "expected_code": "official_schema_prepared",
     "schema_only_no_history_transfer_or_profile_activation": true

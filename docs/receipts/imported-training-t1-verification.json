@@ -10,7 +10,7 @@
     "backend/tests/test_training_snapshots.py": "2e780a38c206e27f441cbdda68d46e3912acd54222da17112a990e94c141e840"
   },
   "combined_suite": {
-    "command": "cd backend && PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /home/kevin/Work/fama/.venv/bin/python tests/run_isolated_training_checks.py tests/test_training_snapshots.py tests/test_training_snapshot_migration.py tests/test_dataset_import_api.py tests/test_dataset_import_execution.py tests/test_dataset_import_manifests.py",
+    "command": "cd backend && PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /workspace/fama/.venv/bin/python tests/run_isolated_training_checks.py tests/test_training_snapshots.py tests/test_training_snapshot_migration.py tests/test_dataset_import_api.py tests/test_dataset_import_execution.py tests/test_dataset_import_manifests.py",
     "exit": 0,
     "passed": 66,
     "pytest_seconds": 16.3,

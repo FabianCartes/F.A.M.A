@@ -1,10 +1,10 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-6onz3ykd
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-6onz3ykd
 F
 =================================== FAILURES ===================================
 _____________________ test_foreign_source_is_not_disclosed _____________________
 
 cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7fa31ffadd30>, {'id': '24ecd23143b74c7a873a6e044782894...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7fa3200f0d70>, '0a1b1fc957eb4d65954e5e1908632ca0')
-tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-6onz3ykd/pytest/test_foreign_source_is_not_dis0')
+tmp_path = PosixPath('/workspace/fama/backend/.training-consumer-suite-6onz3ykd/pytest/test_foreign_source_is_not_dis0')
 
     def test_foreign_source_is_not_disclosed(cohort, tmp_path):
         from training.imported_dataset_preparation import ImportedDatasetPreparation

@@ -4,7 +4,7 @@
     "run",
     "lint"
   ],
-  "cwd": "/home/kevin/Work/fama/frontend",
+  "cwd": "/workspace/fama/frontend",
   "exit_code": 0,
   "wall_seconds": 11.565500739998242
 }

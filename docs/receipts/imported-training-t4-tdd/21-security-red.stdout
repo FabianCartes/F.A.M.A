@@ -1,4 +1,4 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-f609qqfo
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-f609qqfo
 ......F
 =================================== FAILURES ===================================
 ________ test_altered_snapshot_audio_never_reads_back_ready_preparation ________
@@ -21,9 +21,9 @@ cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7f9639c
 >       assert client.get('/api/training/imported/snapshots/' + cohort[1]['id'], headers=headers(1)).status_code == 404
 E       AssertionError: assert 200 == 404
 E        +  where 200 = <Response [200 OK]>.status_code
-E        +    where <Response [200 OK]> = get(('/api/training/imported/snapshots/' + '6bd2eff3f62b4723924f6d15bca204e9'), headers={'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzkzNzkzODkxLCJpYXQiOjE3OTM3NjUwOTF9.TMuQzFYjUDAnNV3jULwQIA1k_qgZV7nUfiRZNjhjjnE'})
+E        +    where <Response [200 OK]> = get(('/api/training/imported/snapshots/' + '6bd2eff3f62b4723924f6d15bca204e9'), headers={'Authorization': 'Bearer [REDACTED_TEST_TOKEN]'})
 E        +      where get = <starlette.testclient.TestClient object at 0x7f96390916d0>.get
-E        +      and   {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzkzNzkzODkxLCJpYXQiOjE3OTM3NjUwOTF9.TMuQzFYjUDAnNV3jULwQIA1k_qgZV7nUfiRZNjhjjnE'} = <function bridge.<locals>.<lambda> at 0x7f963905cbf0>(1)
+E        +      and   {'Authorization': 'Bearer [REDACTED_TEST_TOKEN]'} = <function bridge.<locals>.<lambda> at 0x7f963905cbf0>(1)
 
 tests/test_imported_training_preparation_api.py:131: AssertionError
 =========================== short test summary info ============================

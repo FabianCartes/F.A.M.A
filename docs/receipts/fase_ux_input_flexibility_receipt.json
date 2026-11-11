@@ -8,7 +8,7 @@
     "odd": "Organic-Driven Development (Adaptive real-time telemetry and domain feedback)"
   },
   "architecture_layer": "Frontend User Experience & Resilient Form Validation Layer (Next.js React UI)",
-  "plan_reference": "/home/kevin/.gemini/antigravity-cli/brain/d19db34d-1b00-4711-8b5b-9687587bd6b0/plan_ux_input_flexibility_and_weights.md",
+  "plan_reference": "/home/local-user/.gemini/antigravity-cli/brain/d19db34d-1b00-4711-8b5b-9687587bd6b0/plan_ux_input_flexibility_and_weights.md",
   "summary": "Eliminación del rebalanceo forzado en sliders de ensamble reemplazándolos por campos directos independientes de porcentaje (0-100%), tolerancia completa a estados vacíos temporales en inputs numéricos durante la edición, y validación contextual con destacado visual en rojo y mensajes en lenguaje natural con los nombres de la interfaz.",
   "contracts": {
     "frontend_ensemble_weights": {

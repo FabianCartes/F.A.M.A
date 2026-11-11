@@ -1,4 +1,4 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-qejjjbgo
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-qejjjbgo
 ..............................................................................................................usage: run_isolated_training_checks.py [-h]
                                        --dataset {AvesChilenas,engine_diagnostics}
                                        --index-csv INDEX_CSV

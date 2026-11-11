@@ -1,10 +1,10 @@
 {
   "command": [
-    "/home/kevin/Work/fama/.venv/bin/python",
+    "/workspace/fama/.venv/bin/python",
     "tests/run_isolated_training_checks.py",
     "tests/test_training_postgres_probe_permissions.py::test_missing_sqlstate_fails_closed_despite_independent_permission_state"
   ],
-  "cwd": "/home/kevin/Work/fama/backend",
+  "cwd": "/workspace/fama/backend",
   "environment": {
     "PYTHONDONTWRITEBYTECODE": "1",
     "PYTHON_DOTENV_DISABLED": "1",

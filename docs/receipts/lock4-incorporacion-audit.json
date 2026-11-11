@@ -43,7 +43,7 @@
   },
   "regression": {
     "cwd": "backend",
-    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /home/kevin/Work/fama/.venv/bin/python tests/run_isolated_training_checks.py tests/test_feedback_local_approval.py",
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /workspace/fama/.venv/bin/python tests/run_isolated_training_checks.py tests/test_feedback_local_approval.py",
     "python": "3.14.7",
     "passed": 78,
     "failed": 0,

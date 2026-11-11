@@ -116,7 +116,7 @@
     "historical_data_transfer_or_official_cutover"
   ],
   "next_operator_action": {
-    "cwd": "C:/Users/fabia/Desktop/F.A.M.A/backend",
+    "cwd": "C:/Users/local-user/Desktop/F.A.M.A/backend",
     "command": ".venv/Scripts/python.exe -m scripts.comprobar_acceso_sql_oficial",
     "share": "sanitized_final_JSON_only"
   },

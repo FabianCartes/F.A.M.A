@@ -3,7 +3,7 @@
 > vitest run components/views/__tests__/DatasetImportPanel.test.tsx components/views/__tests__/DatasetExport.test.tsx components/auth app/__tests__/session.test.tsx
 
 
- RUN  v5.0.2 /home/kevin/Work/fama/frontend
+ RUN  v5.0.2 /workspace/fama/frontend
 
  ❯ components/views/__tests__/DatasetImportPanel.test.tsx (9 tests | 1 failed) 639ms
    ❯ private dataset import (9)

@@ -1,10 +1,10 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-zprwlp48
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-zprwlp48
 E
 ==================================== ERRORS ====================================
 ___ ERROR at setup of test_completed_snapshot_members_preparation_roundtrip ____
 
 cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7f24e8972510>, {'id': 'fa46ca378e0641bdb625435b5bcee46...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7f24e8ac2510>, 'b0eb5abe30284c28ac09dcfaef39eb6f')
-tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-zprwlp48/pytest/test_completed_snapshot_member0')
+tmp_path = PosixPath('/workspace/fama/backend/.training-consumer-suite-zprwlp48/pytest/test_completed_snapshot_member0')
 monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f24e90b5e00>
 
     @pytest.fixture

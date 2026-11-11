@@ -58,7 +58,7 @@ Es un **framework MLOps de Arquitectura Híbrida** que resuelve un problema conc
 
 > **Problema:** Los investigadores que trabajan con clasificación de audio mediante IA operan con scripts aislados, hardware local saturado, sin trazabilidad, y sin forma de centralizar datos ni reproducir experimentos. Migrar todo a la nube (Vertex AI, SageMaker) es económicamente inviable en el entorno académico.
 
-> **Solución F.A.M.A.:** Combinar lo mejor de ambos mundos → **almacenamiento barato en la nube** (Google Cloud Storage) + **cómputo local gratuito** (tu propia GPU) + **una interfaz web visual** que orquesta todo el ciclo MLOps sin que el investigador necesite saber de infraestructura cloud.
+> **Solución F.A.M.A.:** Combinar lo mejor de ambos mundos → **almacenamiento barato en la nube** (Google Cloud Storage) + **cómputo local gratuito** (GPU local) + **una interfaz web visual** que orquesta todo el ciclo MLOps sin que el investigador necesite saber de infraestructura cloud.
 
 ---
 
@@ -68,7 +68,7 @@ Es un **framework MLOps de Arquitectura Híbrida** que resuelve un problema conc
 |---|---|---|
 | **Google Cloud Storage (GCS)** | Almacena los audios crudos y los modelos entrenados en la nube | Elimina la pérdida de datos locales, centraliza datasets para colaboración, tiene costo marginal (~$0.02/GB/mes) vs. comprar discos o pagar GPU cloud |
 | **PostgreSQL (Cloud SQL)** | Registra predicciones, métricas, usuarios, retroalimentación | Garantiza **trazabilidad ACID** del ciclo MLOps: quién entrenó qué modelo, con qué datos, qué resultados dio, qué predicciones se corrigieron |
-| **Backend FastAPI (Orquestador)** | Coordina ingesta ↔ preprocesamiento ↔ entrenamiento ↔ predicción | Es el "cerebro" que conecta la nube con tu hardware local, sin que el usuario toque APIs ni terminales |
+| **Backend FastAPI (Orquestador)** | Coordina ingesta ↔ preprocesamiento ↔ entrenamiento ↔ predicción | Es el "cerebro" que conecta la nube con el hardware local, sin que el usuario toque APIs ni terminales |
 | **Frontend Next.js (Dashboard)** | Interfaz visual para subir audios, ver predicciones, entrenar modelos | **Democratiza** el acceso: un investigador sin conocimiento técnico puede usar todo el pipeline desde el navegador |
 | **Super-Ensamble Tri-Modelo** | 3 CNNs heterogéneas (EfficientNet + ConvNeXt + ResNet34d) votan ponderadamente | Combina arquitecturas que capturan patrones distintos; el 88.31% de accuracy citado requiere consolidar su referencia experimental en OE5 |
 
@@ -186,10 +186,10 @@ La columna de tesis conserva los valores citados de la Tabla 6.17. El estado del
 
 1. **RF_01 al RF_06:** Hay implementación de las funcionalidades descritas; el alcance de la validación varía por requisito y no permite declarar un cierre global al 100%.
 2. **Ciclo de Retroalimentación Activa (RF_06 / ADR 0013):**
-   - Captura inmediata de validación experta y corrección en [`PredictionView.tsx`](file:///home/kevin/Work/fama/frontend/components/views/PredictionView.tsx).
+   - Captura inmediata de validación experta y corrección en [`PredictionView.tsx`](../../frontend/components/views/PredictionView.tsx).
    - Registro pendiente en PostgreSQL (`procesado = False`) y subida a staging en GCS condicionada a localizar el audio y completar la transferencia; un fallo de subida puede quedar registrado sin impedir la captura del feedback.
-   - Bandeja de curación semi-manual en [`IngestionView.tsx`](file:///home/kevin/Work/fama/frontend/components/views/IngestionView.tsx) para prevenir la contaminación del dataset (*Human-in-the-Loop MLOps*).
-   - Notificación y badge reactivo en [`Sidebar.tsx`](file:///home/kevin/Work/fama/frontend/components/Sidebar.tsx).
+   - Bandeja de curación semi-manual en [`IngestionView.tsx`](../../frontend/components/views/IngestionView.tsx) para prevenir la contaminación del dataset (*Human-in-the-Loop MLOps*).
+   - Notificación y badge reactivo en [`Sidebar.tsx`](../../frontend/components/Sidebar.tsx).
    - [Recibo de captura y curación](../receipts/fase_rf06_feedback_curation_receipt.json) con resultados históricos de pruebas de esa fase. No acredita el E2E hasta reentrenamiento; aprobar una muestra no dispara automáticamente el entrenamiento.
 3. **Infraestructura de despliegue y autenticación:**
    - `Dockerfile`, `docker-compose.yml`, healthchecks, autenticación JWT y `require_roles` presentes. El [recibo de operación Docker](../receipts/fase1_operacion_red_docker_receipt.json) documenta validaciones de configuración/rutas, no la ejecución integral con GPU.
@@ -197,7 +197,7 @@ La columna de tesis conserva los valores citados de la Tabla 6.17. El estado del
 
 ---
 
-## Resumen: Lo que YA logramos
+## Resumen de implementación y evidencia
 
 | Logro | Impacto |
 |---|---|

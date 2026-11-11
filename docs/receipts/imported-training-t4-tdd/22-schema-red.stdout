@@ -1,4 +1,4 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-vw85s0do
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-vw85s0do
 F
 =================================== FAILURES ===================================
 ____________ test_malformed_snapshot_foreign_key_fails_before_write ____________

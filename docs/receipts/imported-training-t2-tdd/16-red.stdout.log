@@ -1,10 +1,10 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-1fufjk9e
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-1fufjk9e
 F
 =================================== FAILURES ===================================
 ___________ test_publication_failure_cleans_only_owned_staging[open] ___________
 
 cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7f7ac46dde80>, {'id': 'ef8a0c041ae8402db3d60ad74c77e90...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7f7ac47ddd30>, 'acf5514118fe4317958255a0993fe07a')
-tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-1fufjk9e/pytest/test_publication_failure_clean0')
+tmp_path = PosixPath('/workspace/fama/backend/.training-consumer-suite-1fufjk9e/pytest/test_publication_failure_clean0')
 monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f7ac4cfac40>
 fault = 'open'
 
@@ -54,7 +54,7 @@ fault = 'open'
 E       AssertionError: assert {PosixPath('/...4187b5fd8ad')} == {PosixPath('/...4187b5fd8ad')}
 E         
 E         Extra items in the left set:
-E         PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-1fufjk9e/pytest/test_publication_failure_clean0/prepared/.staging-6b3c7a14e41045f6ac3f95087309f615')
+E         PosixPath('/workspace/fama/backend/.training-consumer-suite-1fufjk9e/pytest/test_publication_failure_clean0/prepared/.staging-6b3c7a14e41045f6ac3f95087309f615')
 E         Use -v to get more diff
 
 tests/test_imported_dataset_preparation.py:375: AssertionError

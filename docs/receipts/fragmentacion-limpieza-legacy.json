@@ -22,7 +22,7 @@
     "stdout": "......................................................                   [100%]\n54 passed in 1.52s\n",
     "stderr": "",
     "argv": [
-      "/home/kevin/Work/fama/.venv/bin/python",
+      "/workspace/fama/.venv/bin/python",
       "-B",
       "-c",
       "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in split checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
@@ -30,7 +30,7 @@
       "-p",
       "no:cacheprovider",
       "--basetemp",
-      "/home/kevin/Work/fama/backend/tests/.legacy-split-unit-lcr8r0sd/pytest",
+      "/workspace/fama/backend/tests/.legacy-split-unit-lcr8r0sd/pytest",
       "tests/test_training_callers.py",
       "tests/test_cli_paths.py::test_training_scripts_no_hardcoded_root_data_dir"
     ],
@@ -72,7 +72,7 @@
       "stdout": "....................................................                     [100%]\n52 passed in 1.39s\n",
       "stderr": "",
       "argv": [
-        "/home/kevin/Work/fama/.venv/bin/python",
+        "/workspace/fama/.venv/bin/python",
         "-B",
         "-c",
         "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in split checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
@@ -80,7 +80,7 @@
         "-p",
         "no:cacheprovider",
         "--basetemp",
-        "/home/kevin/Work/fama/backend/tests/.legacy-split-hpss-nqaugvfv/train_efficientnet_hpss_additive",
+        "/workspace/fama/backend/tests/.legacy-split-hpss-nqaugvfv/train_efficientnet_hpss_additive",
         "tests/test_training_callers.py",
         "tests/test_cli_paths.py::test_training_scripts_no_hardcoded_root_data_dir"
       ],
@@ -95,7 +95,7 @@
       "stdout": "..................................................                       [100%]\n50 passed in 1.39s\n",
       "stderr": "",
       "argv": [
-        "/home/kevin/Work/fama/.venv/bin/python",
+        "/workspace/fama/.venv/bin/python",
         "-B",
         "-c",
         "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in split checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
@@ -103,7 +103,7 @@
         "-p",
         "no:cacheprovider",
         "--basetemp",
-        "/home/kevin/Work/fama/backend/tests/.legacy-split-hpss-nqaugvfv/train_panns_hpss_additive",
+        "/workspace/fama/backend/tests/.legacy-split-hpss-nqaugvfv/train_panns_hpss_additive",
         "tests/test_training_callers.py",
         "tests/test_cli_paths.py::test_training_scripts_no_hardcoded_root_data_dir"
       ],
@@ -118,7 +118,7 @@
       "stdout": "................................................                         [100%]\n48 passed in 1.32s\n",
       "stderr": "",
       "argv": [
-        "/home/kevin/Work/fama/.venv/bin/python",
+        "/workspace/fama/.venv/bin/python",
         "-B",
         "-c",
         "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in split checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
@@ -126,7 +126,7 @@
         "-p",
         "no:cacheprovider",
         "--basetemp",
-        "/home/kevin/Work/fama/backend/tests/.legacy-split-hpss-nqaugvfv/train_multitask_hpss",
+        "/workspace/fama/backend/tests/.legacy-split-hpss-nqaugvfv/train_multitask_hpss",
         "tests/test_training_callers.py",
         "tests/test_cli_paths.py::test_training_scripts_no_hardcoded_root_data_dir"
       ],
@@ -141,7 +141,7 @@
       "stdout": "..............................................                           [100%]\n46 passed in 1.27s\n",
       "stderr": "",
       "argv": [
-        "/home/kevin/Work/fama/.venv/bin/python",
+        "/workspace/fama/.venv/bin/python",
         "-B",
         "-c",
         "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in split checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
@@ -149,7 +149,7 @@
         "-p",
         "no:cacheprovider",
         "--basetemp",
-        "/home/kevin/Work/fama/backend/tests/.legacy-split-hpss-nqaugvfv/train_multitask_hpss_wideband",
+        "/workspace/fama/backend/tests/.legacy-split-hpss-nqaugvfv/train_multitask_hpss_wideband",
         "tests/test_training_callers.py",
         "tests/test_cli_paths.py::test_training_scripts_no_hardcoded_root_data_dir"
       ],
@@ -164,7 +164,7 @@
       "stdout": "............................................                             [100%]\n44 passed in 1.24s\n",
       "stderr": "",
       "argv": [
-        "/home/kevin/Work/fama/.venv/bin/python",
+        "/workspace/fama/.venv/bin/python",
         "-B",
         "-c",
         "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in split checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
@@ -172,7 +172,7 @@
         "-p",
         "no:cacheprovider",
         "--basetemp",
-        "/home/kevin/Work/fama/backend/tests/.legacy-split-hpss-nqaugvfv/train_multitask_hpss_rms_balanced",
+        "/workspace/fama/backend/tests/.legacy-split-hpss-nqaugvfv/train_multitask_hpss_rms_balanced",
         "tests/test_training_callers.py",
         "tests/test_cli_paths.py::test_training_scripts_no_hardcoded_root_data_dir"
       ],
@@ -187,7 +187,7 @@
       "stdout": "..........................................                               [100%]\n42 passed in 1.15s\n",
       "stderr": "",
       "argv": [
-        "/home/kevin/Work/fama/.venv/bin/python",
+        "/workspace/fama/.venv/bin/python",
         "-B",
         "-c",
         "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in split checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
@@ -195,7 +195,7 @@
         "-p",
         "no:cacheprovider",
         "--basetemp",
-        "/home/kevin/Work/fama/backend/tests/.legacy-split-hpss-nqaugvfv/train_multitask_hpss_balanced_additive",
+        "/workspace/fama/backend/tests/.legacy-split-hpss-nqaugvfv/train_multitask_hpss_balanced_additive",
         "tests/test_training_callers.py",
         "tests/test_cli_paths.py::test_training_scripts_no_hardcoded_root_data_dir"
       ],
@@ -210,7 +210,7 @@
       "stdout": "........................................                                 [100%]\n40 passed in 1.13s\n",
       "stderr": "",
       "argv": [
-        "/home/kevin/Work/fama/.venv/bin/python",
+        "/workspace/fama/.venv/bin/python",
         "-B",
         "-c",
         "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in split checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
@@ -218,7 +218,7 @@
         "-p",
         "no:cacheprovider",
         "--basetemp",
-        "/home/kevin/Work/fama/backend/tests/.legacy-split-hpss-nqaugvfv/train_multitask_multires_hpss",
+        "/workspace/fama/backend/tests/.legacy-split-hpss-nqaugvfv/train_multitask_multires_hpss",
         "tests/test_training_callers.py",
         "tests/test_cli_paths.py::test_training_scripts_no_hardcoded_root_data_dir"
       ],
@@ -233,7 +233,7 @@
       "stdout": "......................................                                   [100%]\n38 passed in 1.04s\n",
       "stderr": "",
       "argv": [
-        "/home/kevin/Work/fama/.venv/bin/python",
+        "/workspace/fama/.venv/bin/python",
         "-B",
         "-c",
         "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in split checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
@@ -241,7 +241,7 @@
         "-p",
         "no:cacheprovider",
         "--basetemp",
-        "/home/kevin/Work/fama/backend/tests/.legacy-split-hpss-nqaugvfv/train_multitask_hpss_asl",
+        "/workspace/fama/backend/tests/.legacy-split-hpss-nqaugvfv/train_multitask_hpss_asl",
         "tests/test_training_callers.py",
         "tests/test_cli_paths.py::test_training_scripts_no_hardcoded_root_data_dir"
       ],
@@ -268,7 +268,7 @@
       "stdout": "..................................                                       [100%]\n34 passed in 0.93s\n",
       "stderr": "",
       "argv": [
-        "/home/kevin/Work/fama/.venv/bin/python",
+        "/workspace/fama/.venv/bin/python",
         "-B",
         "-c",
         "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in split checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
@@ -276,7 +276,7 @@
         "-p",
         "no:cacheprovider",
         "--basetemp",
-        "/home/kevin/Work/fama/backend/tests/.legacy-split-rest-18cp5ft_/train_v2_and_compare",
+        "/workspace/fama/backend/tests/.legacy-split-rest-18cp5ft_/train_v2_and_compare",
         "tests/test_training_callers.py",
         "tests/test_cli_paths.py::test_prepare_engine_dataset_default_path",
         "tests/test_cli_paths.py::test_poc_scripts_no_hardcoded_root_data_dir",
@@ -295,7 +295,7 @@
       "stdout": "...........................                                              [100%]\n27 passed in 0.78s\n",
       "stderr": "",
       "argv": [
-        "/home/kevin/Work/fama/.venv/bin/python",
+        "/workspace/fama/.venv/bin/python",
         "-B",
         "-c",
         "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in split checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
@@ -303,7 +303,7 @@
         "-p",
         "no:cacheprovider",
         "--basetemp",
-        "/home/kevin/Work/fama/backend/tests/.legacy-split-rest-18cp5ft_/train_and_ensemble_engines",
+        "/workspace/fama/backend/tests/.legacy-split-rest-18cp5ft_/train_and_ensemble_engines",
         "tests/test_training_callers.py",
         "tests/test_cli_paths.py::test_prepare_engine_dataset_default_path",
         "tests/test_cli_paths.py::test_poc_scripts_no_hardcoded_root_data_dir",
@@ -321,7 +321,7 @@
       "stdout": "...........................                                              [100%]\n27 passed in 0.82s\n",
       "stderr": "",
       "argv": [
-        "/home/kevin/Work/fama/.venv/bin/python",
+        "/workspace/fama/.venv/bin/python",
         "-B",
         "-c",
         "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in split checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
@@ -329,7 +329,7 @@
         "-p",
         "no:cacheprovider",
         "--basetemp",
-        "/home/kevin/Work/fama/backend/tests/.legacy-split-rest-18cp5ft_/recetas-retiradas",
+        "/workspace/fama/backend/tests/.legacy-split-rest-18cp5ft_/recetas-retiradas",
         "tests/test_training_callers.py",
         "tests/test_cli_paths.py::test_prepare_engine_dataset_default_path",
         "tests/test_cli_paths.py::test_poc_scripts_no_hardcoded_root_data_dir",
@@ -347,7 +347,7 @@
       "stdout": "..............                                                           [100%]\n14 passed in 0.57s\n",
       "stderr": "",
       "argv": [
-        "/home/kevin/Work/fama/.venv/bin/python",
+        "/workspace/fama/.venv/bin/python",
         "-B",
         "-c",
         "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in split checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
@@ -355,7 +355,7 @@
         "-p",
         "no:cacheprovider",
         "--basetemp",
-        "/home/kevin/Work/fama/backend/tests/.legacy-split-rest-18cp5ft_/entrenador-standalone",
+        "/workspace/fama/backend/tests/.legacy-split-rest-18cp5ft_/entrenador-standalone",
         "tests/test_standalone_evaluation.py",
         "tests/test_bundle_exporter.py",
         "tests/test_cli_paths.py::test_prepare_engine_dataset_default_path",
@@ -374,7 +374,7 @@
       "stdout": "...........................................                              [100%]\n43 passed in 3.54s\n",
       "stderr": "",
       "argv": [
-        "/home/kevin/Work/fama/.venv/bin/python",
+        "/workspace/fama/.venv/bin/python",
         "-B",
         "-c",
         "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in split checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
@@ -382,7 +382,7 @@
         "-p",
         "no:cacheprovider",
         "--basetemp",
-        "/home/kevin/Work/fama/backend/tests/.legacy-split-rest-18cp5ft_/orquestadores-poc",
+        "/workspace/fama/backend/tests/.legacy-split-rest-18cp5ft_/orquestadores-poc",
         "tests/test_training_entrypoints.py",
         "tests/test_poc_dataset_references.py",
         "tests/test_benchmark.py",
@@ -420,7 +420,7 @@
   "ownFinalVerification": {
     "commit": "c194f8c0c0366cec3b00ef46f61fc2af18edeccf",
     "exitCode": 0,
-    "stdout": "........................................................................ [ 24%]\n........................................................................ [ 48%]\n........................................................................ [ 72%]\n........................................................................ [ 96%]\n.........                                                                [100%]\n=============================== warnings summary ===============================\ntests/test_training_persistence.py::test_cpu_checkpoint_and_final_predictor_use_first_best_not_last[1.0--1.0]\ntests/test_training_persistence.py::test_cpu_checkpoint_and_final_predictor_use_first_best_not_last[-1.0--2.0]\n  /home/kevin/Work/fama/.venv/lib/python3.14/site-packages/librosa/core/spectrum.py:3004: UserWarning: n_fft=2048 is too large for input signal of length=512\n    stft(\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n297 passed, 2 warnings in 20.64s\n",
+    "stdout": "........................................................................ [ 24%]\n........................................................................ [ 48%]\n........................................................................ [ 72%]\n........................................................................ [ 96%]\n.........                                                                [100%]\n=============================== warnings summary ===============================\ntests/test_training_persistence.py::test_cpu_checkpoint_and_final_predictor_use_first_best_not_last[1.0--1.0]\ntests/test_training_persistence.py::test_cpu_checkpoint_and_final_predictor_use_first_best_not_last[-1.0--2.0]\n  /workspace/fama/.venv/lib/python3.14/site-packages/librosa/core/spectrum.py:3004: UserWarning: n_fft=2048 is too large for input signal of length=512\n    stft(\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n297 passed, 2 warnings in 20.64s\n",
     "stderr": "",
     "selectors": [
       "tests/test_training_entrypoints.py",
@@ -440,7 +440,7 @@
       "tests/test_cli_paths.py::test_root_data_dir_completely_removed"
     ],
     "argv": [
-      "/home/kevin/Work/fama/.venv/bin/python",
+      "/workspace/fama/.venv/bin/python",
       "-B",
       "-c",
       "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in cleanup checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
@@ -448,7 +448,7 @@
       "-p",
       "no:cacheprovider",
       "--basetemp",
-      "/home/kevin/Work/fama/backend/tests/.legacy-split-final-94nx583w/pytest",
+      "/workspace/fama/backend/tests/.legacy-split-final-94nx583w/pytest",
       "tests/test_training_entrypoints.py",
       "tests/test_api_training.py",
       "tests/test_training_flow.py",
@@ -488,8 +488,8 @@
     },
     "evidence": {
       "scope": "independent read-only verification; only own receipt and isolated scratch permitted",
-      "scratch": "/home/kevin/Work/fama/backend/tests/.legacy-split-independent-verify-20260312",
-      "receipt": "/home/kevin/Work/fama/backend/tests/.legacy-split-independent-result.json",
+      "scratch": "/workspace/fama/backend/tests/.legacy-split-independent-verify-20260312",
+      "receipt": "/workspace/fama/backend/tests/.legacy-split-independent-result.json",
       "structural": {
         "assembled_tree": "97d30788ba2ac092b565f12fa3485f53a2370012",
         "backup_tree": "97d30788ba2ac092b565f12fa3485f53a2370012",
@@ -710,7 +710,7 @@
       },
       "suite": {
         "argv": [
-          "/home/kevin/Work/fama/.venv/bin/python",
+          "/workspace/fama/.venv/bin/python",
           "-B",
           "-c",
           "import socket; socket.socket.connect=lambda *a, **k: (_ for _ in ()).throw(RuntimeError(\"Network forbidden in cleanup checks\")); import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
@@ -718,7 +718,7 @@
           "-p",
           "no:cacheprovider",
           "--basetemp",
-          "/home/kevin/Work/fama/backend/tests/.legacy-split-independent-verify-20260312/runtime/pytest",
+          "/workspace/fama/backend/tests/.legacy-split-independent-verify-20260312/runtime/pytest",
           "tests/test_training_entrypoints.py",
           "tests/test_api_training.py",
           "tests/test_training_flow.py",
@@ -735,9 +735,9 @@
           "tests/test_cli_paths.py::test_poc_scripts_no_hardcoded_root_data_dir",
           "tests/test_cli_paths.py::test_root_data_dir_completely_removed"
         ],
-        "cwd": "/home/kevin/Work/fama/backend/tests/.legacy-split-independent-verify-20260312/backend",
+        "cwd": "/workspace/fama/backend/tests/.legacy-split-independent-verify-20260312/backend",
         "exit_code": 0,
-        "stdout": "........................................................................ [ 24%]\n........................................................................ [ 48%]\n........................................................................ [ 72%]\n........................................................................ [ 96%]\n.........                                                                [100%]\n=============================== warnings summary ===============================\ntests/test_training_persistence.py::test_cpu_checkpoint_and_final_predictor_use_first_best_not_last[1.0--1.0]\ntests/test_training_persistence.py::test_cpu_checkpoint_and_final_predictor_use_first_best_not_last[-1.0--2.0]\n  /home/kevin/Work/fama/.venv/lib/python3.14/site-packages/librosa/core/spectrum.py:3004: UserWarning: n_fft=2048 is too large for input signal of length=512\n    stft(\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n297 passed, 2 warnings in 20.27s\n",
+        "stdout": "........................................................................ [ 24%]\n........................................................................ [ 48%]\n........................................................................ [ 72%]\n........................................................................ [ 96%]\n.........                                                                [100%]\n=============================== warnings summary ===============================\ntests/test_training_persistence.py::test_cpu_checkpoint_and_final_predictor_use_first_best_not_last[1.0--1.0]\ntests/test_training_persistence.py::test_cpu_checkpoint_and_final_predictor_use_first_best_not_last[-1.0--2.0]\n  /workspace/fama/.venv/lib/python3.14/site-packages/librosa/core/spectrum.py:3004: UserWarning: n_fft=2048 is too large for input signal of length=512\n    stft(\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n297 passed, 2 warnings in 20.27s\n",
         "stderr": ""
       },
       "selectors": [
@@ -759,12 +759,12 @@
       ],
       "ast": {
         "argv": [
-          "/home/kevin/Work/fama/.venv/bin/python",
+          "/workspace/fama/.venv/bin/python",
           "-B",
           "-c",
           "<AST parser>"
         ],
-        "cwd": "/home/kevin/Work/fama/backend",
+        "cwd": "/workspace/fama/backend",
         "exit_code": 0,
         "stdout": "{\"python_files_parsed\": 182, \"retired_import_or_definition_findings\": [], \"shared_exports_missing_public_test_reference\": []}\n",
         "stderr": "",
@@ -772,12 +772,12 @@
       },
       "ast_assembled_archive": {
         "argv": [
-          "/home/kevin/Work/fama/.venv/bin/python",
+          "/workspace/fama/.venv/bin/python",
           "-B",
           "-c",
           "<AST and metadata-link parser>"
         ],
-        "cwd": "/home/kevin/Work/fama/backend/tests/.legacy-split-independent-ast-20260312",
+        "cwd": "/workspace/fama/backend/tests/.legacy-split-independent-ast-20260312",
         "exit_code": 0,
         "stdout": "{\"python_files_parsed\": 182, \"retired_import_or_definition_findings\": [], \"shared_exports_missing_public_test_reference\": [], \"broken_links_in_metadata_docs\": []}\n",
         "stderr": ""

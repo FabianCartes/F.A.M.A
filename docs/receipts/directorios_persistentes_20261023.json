@@ -170,13 +170,13 @@
       },
       "runtime": {
         "code": "runtime_ready",
-        "root": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\runtime\\pruebas",
+        "root": "C:\\Users\\local-user\\Desktop\\F.A.M.A\\runtime\\pruebas",
         "environment": "f82251ef9f504d82cb7d0e844b6dc58723bf3b57fa494564f075e3872d82ff41",
         "directories": {
-          "raw": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\runtime\\pruebas\\data\\raw",
-          "processed": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\runtime\\pruebas\\data\\processed",
-          "checkpoints": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\runtime\\pruebas\\checkpoints",
-          "logs": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\runtime\\pruebas\\logs"
+          "raw": "C:\\Users\\local-user\\Desktop\\F.A.M.A\\runtime\\pruebas\\data\\raw",
+          "processed": "C:\\Users\\local-user\\Desktop\\F.A.M.A\\runtime\\pruebas\\data\\processed",
+          "checkpoints": "C:\\Users\\local-user\\Desktop\\F.A.M.A\\runtime\\pruebas\\checkpoints",
+          "logs": "C:\\Users\\local-user\\Desktop\\F.A.M.A\\runtime\\pruebas\\logs"
         }
       },
       "verified_source_and_destination_files": 29,
@@ -208,13 +208,13 @@
       },
       "runtime": {
         "code": "runtime_ready",
-        "root": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\runtime\\pruebas",
+        "root": "C:\\Users\\local-user\\Desktop\\F.A.M.A\\runtime\\pruebas",
         "environment": "f82251ef9f504d82cb7d0e844b6dc58723bf3b57fa494564f075e3872d82ff41",
         "directories": {
-          "raw": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\runtime\\pruebas\\data\\raw",
-          "processed": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\runtime\\pruebas\\data\\processed",
-          "checkpoints": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\runtime\\pruebas\\checkpoints",
-          "logs": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\runtime\\pruebas\\logs"
+          "raw": "C:\\Users\\local-user\\Desktop\\F.A.M.A\\runtime\\pruebas\\data\\raw",
+          "processed": "C:\\Users\\local-user\\Desktop\\F.A.M.A\\runtime\\pruebas\\data\\processed",
+          "checkpoints": "C:\\Users\\local-user\\Desktop\\F.A.M.A\\runtime\\pruebas\\checkpoints",
+          "logs": "C:\\Users\\local-user\\Desktop\\F.A.M.A\\runtime\\pruebas\\logs"
         }
       },
       "verified_source_and_destination_files": 29,
@@ -252,13 +252,13 @@
   "running_node": {
     "launch": {
       "code": "native_processes_started",
-      "runtime_root": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\runtime\\pruebas",
+      "runtime_root": "C:\\Users\\local-user\\Desktop\\F.A.M.A\\runtime\\pruebas",
       "backend_pid": 21008,
       "checked_at": "2026-10-24T00:21:40.0542591Z",
-      "frontend_log_prefix": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\runtime\\pruebas\\logs\\frontend-20261024-002139-829",
+      "frontend_log_prefix": "C:\\Users\\local-user\\Desktop\\F.A.M.A\\runtime\\pruebas\\logs\\frontend-20261024-002139-829",
       "frontend_port": 3010,
       "backend_port": 8010,
-      "backend_log_prefix": "C:\\Users\\fabia\\Desktop\\F.A.M.A\\runtime\\pruebas\\logs\\backend-20261024-002139-829",
+      "backend_log_prefix": "C:\\Users\\local-user\\Desktop\\F.A.M.A\\runtime\\pruebas\\logs\\backend-20261024-002139-829",
       "frontend_pid": 26660,
       "frontend_dist_dir": ".next-3010"
     },

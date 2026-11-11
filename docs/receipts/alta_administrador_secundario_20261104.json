@@ -1,16 +1,16 @@
 {
-  "code": "kevin_administrator_and_service_account_access_verified",
+  "code": "secondary_administrator_and_service_account_access_verified",
   "verified_at_utc": "2026-11-04T23:21:06.099068+00:00",
   "operator_confirmation": {
-    "email": "kevcardenas675@gmail.com",
+    "email": "administrador-secundario@example.test",
     "operating_system": "Linux",
     "audio_index_and_models_already_available": true,
     "operator_google_login_completed": true
   },
   "web_account": {
-    "email": "kevcardenas675@gmail.com",
+    "email": "administrador-secundario@example.test",
     "id": 2,
-    "name": "Kevin",
+    "name": "Administrador secundario",
     "role": "administrador",
     "active": true,
     "previously_existed": false,
@@ -21,14 +21,14 @@
     "identity_confirmed": true,
     "administrator_confirmed": true,
     "administration_http_status": 200,
-    "kevin_test_session_logout_http_status": 204,
+    "secondary_admin_test_session_logout_http_status": 204,
     "operator_test_session_logout_http_status": 204,
     "initial_password_generated": true,
     "password_stored_in_documents_or_receipts": false
   },
   "google_cloud": {
     "project": "proyectotesis-fama",
-    "member": "user:kevcardenas675@gmail.com",
+    "member": "user:administrador-secundario@example.test",
     "resource": "fama-oficial-app@proyectotesis-fama.iam.gserviceaccount.com",
     "role": "roles/iam.serviceAccountTokenCreator",
     "created": true,
@@ -47,7 +47,7 @@
     "schema_migrated": false,
     "sql_users_changed": false,
     "application_code_changed": false,
-    "messages_or_files_sent_to_kevin": false
+    "messages_or_files_sent_to_secondary_administrator": false
   },
   "documentation_validation": {
     "receipt_json_valid": true,
@@ -57,8 +57,8 @@
     "linux_runtime_tested": false
   },
   "limits": [
-    "El operador confirmó los archivos de Kevin; no se inspeccionaron en Linux.",
-    "La política IAM se comprobó con la identidad del operador; Kevin aún debe generar y probar su ADC.",
+    "Se confirmó la disponibilidad de los archivos del nodo secundario; no se inspeccionaron en Linux.",
+    "La política IAM se comprobó con la identidad del operador; la generación y comprobación del ADC del nodo secundario siguen pendientes.",
     "Login y Administración se comprobaron por HTTP en el nodo oficial de este PC, sin instalar un nodo Linux.",
     "Los comandos Linux se contrastaron con el checkout actual y no se ejecutaron en su equipo.",
     "La distribución Linux y la arquitectura del equipo siguen sin especificarse.",

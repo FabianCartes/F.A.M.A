@@ -1,7 +1,7 @@
 {
   "code": "dev_integration_published",
   "date": "2026-10-24",
-  "repository": "https://github.com/FabianCartes/F.A.M.A",
+  "repository": "Repositorio configurado de F.A.M.A",
   "target_branch": "fix/afinamiento-integral",
   "parents": {
     "our_recovery_commit": "aa53e09a9b935f752b01fe464cbc1a5bd10556c0",

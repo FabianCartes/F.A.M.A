@@ -3,7 +3,7 @@
     "npm",
     "test"
   ],
-  "cwd": "/home/kevin/Work/fama/frontend",
+  "cwd": "/workspace/fama/frontend",
   "exit_code": 0,
   "wall_seconds": 17.73483049999959
 }

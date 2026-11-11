@@ -1,10 +1,10 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-hypu6u17
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-hypu6u17
 F
 =================================== FAILURES ===================================
 ___ test_profile_is_explicit_finite_and_architecture_compatible[audio-None] ____
 
 cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7facf8aff0e0>, {'id': '44f88bf0772c4f99933467ebf13a7c3...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7facf8afd7f0>, 'b955abb8c9d043658302380dbc7b9376')
-tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-hypu6u17/pytest/test_profile_is_explicit_finit0')
+tmp_path = PosixPath('/workspace/fama/backend/.training-consumer-suite-hypu6u17/pytest/test_profile_is_explicit_finit0')
 field = 'audio', value = None
 
     @pytest.mark.parametrize("field,value", [

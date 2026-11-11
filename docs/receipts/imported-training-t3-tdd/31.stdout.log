@@ -1,4 +1,4 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-yhhwcsuc
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-yhhwcsuc
 [Database] Tablas sincronizadas exitosamente en PostgreSQL.
 ...F
 =================================== FAILURES ===================================
@@ -6,7 +6,7 @@ _ test_real_cpu_worker_persists_source_pending_evaluation[audio_after_admission]
 
 cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7f3b34385220>, {'id': '403fd3697b864cdb93205d40f568526...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7f3b34417890>, 'c68b4def0b3f42e7be0be3a12d2fb1a0')
 training_env = (<app.services.training.TrainingService object at 0x7f3b34ee8b90>, sessionmaker(class_='Session', bind=Engine(sqlite:/...ining-consumer-suite-yhhwcsuc/pytest/test_real_cpu_worker_persists_2'), <MagicMock name='Thread' id='139892267396000'>)
-tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-yhhwcsuc/pytest/test_real_cpu_worker_persists_2')
+tmp_path = PosixPath('/workspace/fama/backend/.training-consumer-suite-yhhwcsuc/pytest/test_real_cpu_worker_persists_2')
 monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f3b36286cf0>
 client = <starlette.testclient.TestClient object at 0x7f3b343bf530>
 fault = 'audio_after_admission'

@@ -3,7 +3,7 @@
   "generated_at": "2026-09-27T19:20:00Z",
   "methodology": "TDD + RDD + ODD",
   "architecture_layer": "Frontend RF_06 Active Feedback Loop & Semi-Manual Curation (Human-in-the-Loop MLOps)",
-  "plan_reference": "/home/kevin/.gemini/antigravity-cli/brain/90de64a1-0ccd-4a2c-abab-635879f537e9/plan_rf06_feedback_curation_tdd_rdd_odd.md",
+  "plan_reference": "/home/local-user/.gemini/antigravity-cli/brain/90de64a1-0ccd-4a2c-abab-635879f537e9/plan_rf06_feedback_curation_tdd_rdd_odd.md",
   "adr_reference": "docs/adr/0013_bucle_retroalimentacion_curacion_semi_manual_mlops.md",
   "verified_endpoints": [
     {

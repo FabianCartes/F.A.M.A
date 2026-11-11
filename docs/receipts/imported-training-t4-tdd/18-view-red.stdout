@@ -1,5 +1,5 @@
 
- RUN  v5.0.2 /home/kevin/Work/fama/frontend
+ RUN  v5.0.2 /workspace/fama/frontend
 
  ❯ components/views/__tests__/ImportedTrainingView.test.tsx (1 test | 1 failed) 125ms
    × starts only the selected imported profile with visible individual parameters 123ms

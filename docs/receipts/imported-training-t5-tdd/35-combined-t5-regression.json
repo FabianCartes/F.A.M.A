@@ -1,6 +1,6 @@
 {
   "command": [
-    "/home/kevin/Work/fama/.venv/bin/python",
+    "/workspace/fama/.venv/bin/python",
     "tests/run_isolated_training_checks.py",
     "tests/test_imported_training_evaluation.py",
     "tests/test_imported_model_access.py",
@@ -13,7 +13,7 @@
     "tests/test_imported_training_startup.py",
     "-q"
   ],
-  "cwd": "/home/kevin/Work/fama/backend",
+  "cwd": "/workspace/fama/backend",
   "environment": {
     "PYTHONDONTWRITEBYTECODE": "1",
     "PYTHON_DOTENV_DISABLED": "1",

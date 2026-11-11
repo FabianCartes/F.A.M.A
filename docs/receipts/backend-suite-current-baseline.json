@@ -3,16 +3,16 @@
   "date": "2026-10-15",
   "purpose": "Current isolated backend baseline after cleanup; not a global-suite result or a reconstruction of historical failures.",
   "checkout": {
-    "root": "/home/kevin/Work/fama",
+    "root": "/workspace/fama",
     "head": "95cae81fe2d06f10c8ddbf029322716545592ed5",
-    "interpreter": "/home/kevin/Work/fama/.venv/bin/python",
+    "interpreter": "/workspace/fama/.venv/bin/python",
     "python_version": "3.14.7",
     "preexisting_modified": ["docs/KANBAN.md", "docs/KANBAN_VISUAL.md", "docs/README.md"],
     "preexisting_untracked": ["docs/receipts/lock4-incorporacion-audit.json"],
     "production_code_changed_by_this_task": false
   },
   "reproduction": {
-    "cwd": "/home/kevin/Work/fama/backend",
+    "cwd": "/workspace/fama/backend",
     "environment": {
       "PYTHON_DOTENV_DISABLED": "1",
       "DATABASE_URL": "sqlite://",
@@ -22,7 +22,7 @@
       "OMP_NUM_THREADS": "1",
       "MKL_NUM_THREADS": "1"
     },
-    "argv_prefix": ["/home/kevin/Work/fama/.venv/bin/python", "tests/run_isolated_training_checks.py"],
+    "argv_prefix": ["/workspace/fama/.venv/bin/python", "tests/run_isolated_training_checks.py"],
     "instructions": "Apply environment, use cwd and argv_prefix, then append the run argv_suffix. The existing runner supplies pytest isolation options and fails closed on nonpassing reports."
   },
   "runs": [
@@ -54,7 +54,7 @@
       },
       "sqlite_memory_connection_count": 260,
       "nonpassing_reports": [],
-      "local_raw_output": "/home/kevin/.local/share/opencode/tool-output/tool_140f7e99c001WEFKhtcyfuib0D",
+      "local_raw_output": "/home/local-user/.local/share/opencode/tool-output/tool_140f7e99c001WEFKhtcyfuib0D",
       "local_raw_output_sha256": "4025cdfeea6a4d8070694191fa82b7e4105c97407c6f333ccdcd249df437dde9",
       "raw_output_note": "Local harness capture contains all 320 call nodeids and runner CHECK_SUMMARY; not a portable repository artifact. The PostgreSQL-labelled application log is not evidence of a live PostgreSQL connection."
     },
@@ -142,8 +142,8 @@
     "status": "Not reconstructible from identified preserved sources; not current confirmed defects.",
     "counts": ["12 FAIL / 5 SKIP", "26 FAIL / 1493 PASS / 5 SKIP"],
     "sources_inspected_by_read_only_investigation": [
-      "/home/kevin/Work/fama-preservation/20261015T151502Z/",
-      "/home/kevin/Work/fama-preservation/20261015T163827Z-remaining/",
+      "/workspace/fama-preservation/20261015T151502Z/",
+      "/workspace/fama-preservation/20261015T163827Z-remaining/",
       "docs/arquitectura/identidad-checkpoint-cargado.md",
       "docs/seguimiento-frontend-definitivo.md"
     ],

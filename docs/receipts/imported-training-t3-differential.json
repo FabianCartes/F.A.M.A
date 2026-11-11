@@ -5,7 +5,7 @@
   "runs": {
     "base": {
       "command": [
-        "/home/kevin/Work/fama/.venv/bin/python",
+        "/workspace/fama/.venv/bin/python",
         "tests/run_isolated_training_checks.py",
         "tests/test_t3_differential_probe.py"
       ],
@@ -358,7 +358,7 @@
     },
     "candidate": {
       "command": [
-        "/home/kevin/Work/fama/.venv/bin/python",
+        "/workspace/fama/.venv/bin/python",
         "tests/run_isolated_training_checks.py",
         "tests/test_t3_differential_probe.py"
       ],

@@ -1,4 +1,4 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-02baet9p
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-02baet9p
 [Database] Tablas sincronizadas exitosamente en PostgreSQL.
 [SuperEnsemble] Checkpoint cargado: efficientnet_gpu_pipeline_35e_best.pt
 [SuperEnsemble] Checkpoint cargado: convnext_nano_35e_best.pt
@@ -142,8 +142,8 @@ _______ test_browser_identity_guards_real_imported_source_and_lifecycle ________
 client = <starlette.testclient.TestClient object at 0x7f397e189bf0>
 training_env = (<app.services.training.TrainingService object at 0x7f39ce9bb9d0>, sessionmaker(class_='Session', bind=Engine(sqlite:/...ining-consumer-suite-02baet9p/pytest/test_browser_identity_guards_r0'), <MagicMock name='Thread' id='139884920478016'>)
 cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7f397efe8980>, {'id': '33ce4ceb76dd409295ff1fae6b4f3f3...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7f397e13dbf0>, '2d8f62cf98e643c48daae3f0f37a51cb')
-tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-02baet9p/pytest/test_browser_identity_guards_r0')
-authenticated = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwiZXhwIjoxNzkzNzkwNzUwLCJpYXQiOjE3OTM3NjE5NTB9.S53uGL3zb3VJtpVKfTbvjh9OHY_wneRA6MPPJvUg7xE'}
+tmp_path = PosixPath('/workspace/fama/backend/.training-consumer-suite-02baet9p/pytest/test_browser_identity_guards_r0')
+authenticated = {'Authorization': 'Bearer [REDACTED_TEST_TOKEN]'}
 monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f397ef4a8f0>
 
     def test_browser_identity_guards_real_imported_source_and_lifecycle(

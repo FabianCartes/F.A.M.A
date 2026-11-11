@@ -328,7 +328,7 @@
       "sqlite_memory_connections": 55,
       "protected_paths_unchanged": 30,
       "private_scratch_cleanup": true,
-      "command": "cd backend && PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /home/kevin/Work/fama/.venv/bin/python tests/run_isolated_training_checks.py tests/test_imported_training_admission.py tests/test_imported_training_source.py tests/test_imported_training_persistence.py"
+      "command": "cd backend && PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /workspace/fama/.venv/bin/python tests/run_isolated_training_checks.py tests/test_imported_training_admission.py tests/test_imported_training_source.py tests/test_imported_training_persistence.py"
     },
     "unresolved": "main.py99 Base.metadata.create_all would include source ORM table if registered by earlier import; info flag alone does not exclude it. Normal lazy order appears safe; other supported order not established. No actual production DDL or confirmed severe defect observed. Needs bounded isolated import-order probe, not second reviewer/model.",
     "evidence_limits": "Subagent tool output combined streams; no separate raw stderr or persistent full-output path provided. Counts and claims are from the delivered independent handoff, not fabricated raw logs. Memory unavailable to child; parent observation6372 saves verdict.",

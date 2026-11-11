@@ -3,7 +3,7 @@
   "generated_at": "2026-09-27T20:50:00Z",
   "methodology": "TDD + RDD + ODD",
   "architecture_layer": "Bioacoustic Real Inference Pipeline, FastAPI Engine, and Next.js UI",
-  "plan_reference": "/home/kevin/.gemini/antigravity-cli/brain/90de64a1-0ccd-4a2c-abab-635879f537e9/plan_reparacion_inferencia_real_tdd_rdd_odd.md",
+  "plan_reference": "/home/local-user/.gemini/antigravity-cli/brain/90de64a1-0ccd-4a2c-abab-635879f537e9/plan_reparacion_inferencia_real_tdd_rdd_odd.md",
   "verified_checkpoint": {
     "file_path": "backend/checkpoints/fama_efficientnet_b0_1790539191_efficientnet_b0_best.pt",
     "architecture": "EfficientNet-B0",
@@ -17,7 +17,7 @@
     }
   },
   "verified_inference": {
-    "audio_path": "/home/kevin/Downloads/audio_prueba.wav",
+    "audio_path": "/home/local-user/Downloads/audio_prueba.wav",
     "predicted_class": "Chucao",
     "calibrated_confidence": 1.0,
     "device": "cuda",
@@ -71,7 +71,7 @@
   ],
   "test_suites": {
     "backend_pytest": {
-      "runner": "/home/kevin/Work/fama/.venv/bin/pytest",
+      "runner": "/workspace/fama/.venv/bin/pytest",
       "total_tests": 203,
       "passed": 203,
       "failed": 0,

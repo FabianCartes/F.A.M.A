@@ -80,7 +80,7 @@
   ],
   "smoke_end_to_end": {
     "date": "2026-11-11",
-    "operator": "Kevin, browser (http://localhost:3000)",
+    "interface": "browser (http://localhost:3000)",
     "fix_during_smoke": "59232bb (history requested without retired include_imported filter)",
     "environment": {
       "backend": "uvicorn main:app with FAMA_CONFIG_DIR (native installation) and private FAMA_RUNTIME_DIR prepared by app.node runtime",

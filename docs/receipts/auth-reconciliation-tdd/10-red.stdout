@@ -1,4 +1,4 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-1jbn0qbo
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-1jbn0qbo
 [Database] Tablas sincronizadas exitosamente en PostgreSQL.
 F
 =================================== FAILURES ===================================

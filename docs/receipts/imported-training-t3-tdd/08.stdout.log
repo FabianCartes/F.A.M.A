@@ -1,17 +1,17 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-f3_l1gew
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-f3_l1gew
 F
 =================================== FAILURES ===================================
 _____________ test_source_pins_classes_and_consumes_verified_audio _____________
 
 cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7fceabf5b230>, {'id': '862b1d6d59b24c56b1d899f5269f30d...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7fceabf58d70>, '550e87f4eb0d4e97a022423b163a99dd')
-tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-f3_l1gew/pytest/test_source_pins_classes_and_c0')
+tmp_path = PosixPath('/workspace/fama/backend/.training-consumer-suite-f3_l1gew/pytest/test_source_pins_classes_and_c0')
 
     def test_source_pins_classes_and_consumes_verified_audio(cohort, tmp_path):
         import pickle
         import torch
         from training.imported_dataset_preparation import ImportedDatasetPreparation
 >       from app.services.imported_training_source import ImportedTrainingSource, ImportedAudioDataset
-E       ImportError: cannot import name 'ImportedAudioDataset' from 'app.services.imported_training_source' (/home/kevin/Work/fama/backend/app/services/imported_training_source.py)
+E       ImportError: cannot import name 'ImportedAudioDataset' from 'app.services.imported_training_source' (/workspace/fama/backend/app/services/imported_training_source.py)
 
 tests/test_imported_training_source.py:24: ImportError
 =========================== short test summary info ============================

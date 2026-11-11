@@ -4,7 +4,7 @@
  FAIL  lib/api/__tests__/importedTrainingApi.test.ts [ lib/api/__tests__/importedTrainingApi.test.ts ]
 Error: Failed to resolve import "../importedTrainingApi" from "lib/api/__tests__/importedTrainingApi.test.ts". Does the file exist?
   Plugin: vite:import-analysis
-  File: /home/kevin/Work/fama/frontend/lib/api/__tests__/importedTrainingApi.test.ts:2:36
+  File: /workspace/fama/frontend/lib/api/__tests__/importedTrainingApi.test.ts:2:36
   1  |  import { afterEach, describe, expect, it, vi } from "vitest";
   2  |  import { importedTrainingApi } from "../importedTrainingApi";
      |                                       ^

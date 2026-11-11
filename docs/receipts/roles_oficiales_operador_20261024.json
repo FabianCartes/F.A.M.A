@@ -20,7 +20,7 @@
     },
     "full_result_screenshot_received": false
   },
-  "codex_observation": {
+  "independent_observation": {
     "method": "gcloud_sql_users_list_read_only_explicit_project_and_instance",
     "usernames": [
       "fama_oficial_app",
@@ -33,7 +33,7 @@
     "menu": "Cloud_SQL_instance_Users",
     "action": "Change_password_for_each_existing_official_SQL_user",
     "different_passwords_kept_locally": true,
-    "password_values_requested_in_chat": false,
+    "password_values_recorded": false,
     "source": "https://docs.cloud.google.com/sql/docs/postgres/create-manage-users"
   },
   "pending": [

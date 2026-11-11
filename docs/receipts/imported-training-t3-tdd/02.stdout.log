@@ -1,4 +1,4 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-brqftfvu
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-brqftfvu
 [Database] Tablas sincronizadas exitosamente en PostgreSQL.
 F
 =================================== FAILURES ===================================
@@ -7,7 +7,7 @@ ______________ test_imported_start_requires_auth_before_admission ______________
 client = <starlette.testclient.TestClient object at 0x7f8f703182f0>
 training_env = (<app.services.training.TrainingService object at 0x7f8f6c1142d0>, sessionmaker(class_='Session', bind=Engine(sqlite:/...ining-consumer-suite-brqftfvu/pytest/test_imported_start_requires_a0'), <MagicMock name='Thread' id='140254039344192'>)
 cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7f8f6c4a2660>, {'id': '37e5e645f3e7428c887b89cbd490250...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7f8f6c115d10>, 'c63416fb94a243ed9cc272251fd4465e')
-tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-brqftfvu/pytest/test_imported_start_requires_a0')
+tmp_path = PosixPath('/workspace/fama/backend/.training-consumer-suite-brqftfvu/pytest/test_imported_start_requires_a0')
 
     def test_imported_start_requires_auth_before_admission(client, training_env, cohort, tmp_path):
         runtime, sessions, root, process = training_env

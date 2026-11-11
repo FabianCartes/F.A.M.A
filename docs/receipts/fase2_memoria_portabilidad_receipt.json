@@ -41,7 +41,7 @@
         "backend/tests/test_trained_predictor.py",
         "backend/tests/test_api_predict.py"
       ],
-      "symptom": "Pruebas críticas de inferencia real dependían rígidamente de una ruta del host (/home/kevin/Downloads/audio_prueba.wav), forzando pytest.skip o fallando en máquinas CI/CD y contenedores.",
+      "symptom": "Pruebas críticas de inferencia real dependían rígidamente de una ruta del host (/home/local-user/Downloads/audio_prueba.wav), forzando pytest.skip o fallando en máquinas CI/CD y contenedores.",
       "mechanism": "AUDIO_PRUEBA_PATH estaba hardcodeado con la ruta personal del desarrollador, y .gitignore excluía todos los archivos *.wav impidiendo la inclusión del archivo en el repositorio.",
       "fix": "Se copió el audio a audios_prueba/audio_prueba.wav, se añadió excepción !audios_prueba/audio_prueba.wav a .gitignore, y se implementó resolve_test_audio_path() en test_trained_predictor.py y test_api_predict.py para buscar prioritariamente audios_prueba/audio_prueba.wav relativo a la raíz del repositorio.",
       "red_evidence": "Pruebas dependientes de rutas absolutas de host no reproducibles en entornos sin directorio Downloads.",

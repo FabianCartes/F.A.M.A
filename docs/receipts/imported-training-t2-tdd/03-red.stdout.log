@@ -1,10 +1,10 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-jnoqac7h
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-jnoqac7h
 F
 =================================== FAILURES ===================================
 ______ test_mapping_must_cover_exact_membership_without_mutation[missing] ______
 
 cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7fc7748570e0>, {'id': '8e27943f86b5454bbfb8393e4867c79...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7fc7748557f0>, '5dad0277b19b40009ebf93598eb95553')
-tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-jnoqac7h/pytest/test_mapping_must_cover_exact_0')
+tmp_path = PosixPath('/workspace/fama/backend/.training-consumer-suite-jnoqac7h/pytest/test_mapping_must_cover_exact_0')
 damage = 'missing'
 
     @pytest.mark.parametrize("damage", ["missing", "extra", "duplicate", "empty_group", "recording_conflict", "provenance"])

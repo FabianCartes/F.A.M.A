@@ -1,9 +1,9 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-s8gpbiap
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-s8gpbiap
 F
 =================================== FAILURES ===================================
 ___________ test_concurrent_absent_root_creators_reopen_safe_winner ____________
 
-path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-s8gpbiap/pytest/test_concurrent_absent_root_cr0/prepared')
+path = PosixPath('/workspace/fama/backend/.training-consumer-suite-s8gpbiap/pytest/test_concurrent_absent_root_cr0/prepared')
 
     @contextmanager
     def _root_directory(path):
@@ -33,7 +33,7 @@ tests/run_isolated_training_checks.py:20: FileNotFoundError
 During handling of the above exception, another exception occurred:
 
 cohort = (<app.services.training_snapshots.TrainingSnapshots object at 0x7f3c0e7f63c0>, {'id': '5a94369a24654e2ab00a61d67164dfd...energy_peak_pad', ...}, <starlette.testclient.TestClient object at 0x7f3c0e90e3c0>, 'b904a094dd61445cb04141e9759fbd30')
-tmp_path = PosixPath('/home/kevin/Work/fama/backend/.training-consumer-suite-s8gpbiap/pytest/test_concurrent_absent_root_cr0')
+tmp_path = PosixPath('/workspace/fama/backend/.training-consumer-suite-s8gpbiap/pytest/test_concurrent_absent_root_cr0')
 monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f3c0edd76f0>
 
     def test_concurrent_absent_root_creators_reopen_safe_winner(cohort, tmp_path, monkeypatch):

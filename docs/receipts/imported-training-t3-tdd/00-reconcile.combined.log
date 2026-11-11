@@ -1,4 +1,4 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-_bea2fc9
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-_bea2fc9
 [Database] Tablas sincronizadas exitosamente en PostgreSQL.
 .............F
 =================================== FAILURES ===================================
@@ -6,7 +6,7 @@ _________ test_invalid_supplied_credentials_do_not_fall_back_to_legacy _________
 
 client = <starlette.testclient.TestClient object at 0x7fd394608cb0>
 training_env = (<app.services.training.TrainingService object at 0x7fd373337390>, sessionmaker(class_='Session', bind=Engine(sqlite:/...ining-consumer-suite-_bea2fc9/pytest/test_invalid_supplied_credenti0'), <MagicMock name='Thread' id='140546150136336'>)
-authenticated = {'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwiZXhwIjoxNzkzNzg2MjIzLCJpYXQiOjE3OTM3NTc0MjN9.QciKbpK7JL90nHpJkbR9uHhWhjLavGzq9W5MpBfZntY'}
+authenticated = {'Authorization': 'Bearer [REDACTED_TEST_TOKEN]'}
 
     def test_invalid_supplied_credentials_do_not_fall_back_to_legacy(client, training_env, authenticated):
         _, sessions, root, process = training_env

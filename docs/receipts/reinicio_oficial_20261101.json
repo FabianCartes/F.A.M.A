@@ -2,7 +2,7 @@
   "code": "official_native_restart_verified",
   "verified_at_utc": "2026-11-01T04:53:36.201272+00:00",
   "requested_by": "operator",
-  "performed_by": "Codex",
+  "operation": "reinicio oficial",
   "source_commit": "a2c67f0e455c8872d530cb9c8a253b005520dd4e",
   "source_branch": "fix/afinamiento-integral",
   "frontend_mode": "production-standalone",
@@ -38,5 +38,5 @@
     "Windows nativo mantiene la limitación de workers ZIP documentada.",
     "Servicio permanente y despliegue universitario siguen pendientes."
   ],
-  "next_step": "Acceder al nodo oficial; para preparar el equipo de Kevin siguen pendientes su correo Google, sistema operativo y accesos propios."
+  "next_step": "Acceder al nodo oficial; para preparar el nodo secundario siguen pendientes la cuenta Google, el sistema operativo y los accesos correspondientes."
 }

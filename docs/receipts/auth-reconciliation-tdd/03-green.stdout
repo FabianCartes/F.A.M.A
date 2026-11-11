@@ -1,4 +1,4 @@
-PRIVATE_SCRATCH /home/kevin/Work/fama/backend/.training-consumer-suite-9dt9_twx
+PRIVATE_SCRATCH /workspace/fama/backend/.training-consumer-suite-9dt9_twx
 [Database] Tablas sincronizadas exitosamente en PostgreSQL.
 [SuperEnsemble] Checkpoint cargado: efficientnet_gpu_pipeline_35e_best.pt
 [SuperEnsemble] Checkpoint cargado: convnext_nano_35e_best.pt

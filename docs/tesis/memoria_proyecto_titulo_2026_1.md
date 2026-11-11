@@ -7,10 +7,6 @@
 (F.A.M.A)
 |     |     |           | AnteProyecto |          | de     | Título    |     |
 | --- | --- | --------- | ------------ | -------- | ------ | --------- | --- |
-|     |     | Fabián    |              | Ignacio  | Cartes | Oliva     |     |
-|     |     | Kevin     | Alejandro    | Cárdenas |        | Sepúlveda |     |
-|     |     |           |              | Dirigida | por    |           |     |
-|     |     | Christian |              | Lautaro  | Vidal  | Castro    |     |
 |     |     |           |              | Mayo     | 2026   |           |     |
 
 Resumen

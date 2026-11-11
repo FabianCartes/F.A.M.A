@@ -1,13 +1,13 @@
 {
   "command": [
-    "/home/kevin/Work/fama/.venv/bin/python",
+    "/workspace/fama/.venv/bin/python",
     "tests/run_isolated_training_checks.py",
     "tests/test_model_registry.py::test_registry_register_and_get",
     "tests/test_model_registry.py::test_registry_multiple_models_and_list",
     "tests/test_model_registry.py::test_registry_unknown_model_raises_model_not_found_error",
     "-q"
   ],
-  "cwd": "/home/kevin/Work/fama/backend",
+  "cwd": "/workspace/fama/backend",
   "environment": {
     "PYTHONDONTWRITEBYTECODE": "1",
     "PYTHON_DOTENV_DISABLED": "1",
