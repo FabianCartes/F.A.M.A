@@ -6,6 +6,10 @@ kanban-plugin: basic
 
 - [x] **E-PREDICCIÓN:** predicción, historial (con audio local o en la nube) y feedback autorizados por `ResourceAccess` según la asignación al dataset, sin excepciones por dueño de importación; se conservan catálogo `metadata_only`, ensambles declarados, prewarm y caché de hashes. `PredictionView` usa `/api/models` y el historial persistido; se retiró la revisión de pesos de tríadas importadas. Regresión de 16 módulos sin fallos exclusivos del candidato; frontend 620 PASS, tipos y build correctos, lint con los 2 errores previos; verificador independiente S1–S7 PASS sin bloqueantes. [Plan](arquitectura/integracion-mvp-e-prediccion-plan.md), [manual](manuales/prediccion-feedback-mvp.md) y [recibo](receipts/integracion-mvp-e.json). Commits locales 2f67a26/3c7dfa1, sin push ni PR. Sin datos borrados.
 
+## Integración de afinamiento integral en `mvp` — etapa g: base de datos de integración
+
+- [ ] **G-BASE-INTEGRACIÓN:** planificada. PostgreSQL 16.15 local en Docker con `fama_pruebas`, roles, migración 0001→0005, permisos y primer administrador; después bucket de pruebas, smoke de punta a punta y Cloud SQL. Bloqueo a corregir primero con TDD: la verificación de instalación espera 14 secuencias y la 0005 tiene 15. [Plan](arquitectura/integracion-mvp-g-base-integracion-plan.md).
+
 ## Integración de afinamiento integral en `mvp` — etapa f: migración 0005
 
 - [x] **F-MIGRACIÓN:** cerrada en `mvp` (`5faf9b5`…`b46ac93`, frontend `9c2f397`). Revisión aditiva `0005_triad_composition` con paridad frente al ORM. Se retiraron del código las tablas sin uso, `imported_dataset.archived` (corrige el 503 de importación ZIP sobre una base migrada), los 13 `migrate_*.py`, el grant SQL y `create_all` de mvp. Tríada estándar combinada: catálogo `fama_triad_<id>`, revisión de pesos, activación por administrador e interfaz en `PredictionView`. Verificador independiente sin bloqueantes; PostgreSQL no verificado. [Plan](arquitectura/integracion-mvp-f-migracion-plan.md), [recibo](receipts/integracion-mvp-f.json), [ADR 0070](adr/0070-revision-0005-y-composicion-versionada-de-triadas.md).
