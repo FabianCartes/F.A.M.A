@@ -1,0 +1,305 @@
+{
+  "stage": "d",
+  "status": "complete_in_synthetic_scope_with_documented_baseline_exclusions",
+  "branch": "mvp",
+  "base": "c1c7b2f86600ba1324c109dd84f218f472f3297d",
+  "frontend_commit": "26a2d6f318a36b5543d68a845e9c4c6820eb37d3",
+  "contract": {
+    "new_training": "dataset_name + partition_version",
+    "retired_selectors": [
+      "imported_dataset_id",
+      "snapshot_id",
+      "imported_prepared_version"
+    ],
+    "retired_selector_http_status": 422,
+    "retired_routes_prefix": "/api/training/imported/snapshots",
+    "retired_routes_http_status": 404,
+    "retain_existing_imported_model_readers": true,
+    "tables_or_data_deleted": false,
+    "retired_catalog_option_http_status": 422,
+    "retired_catalog_option_policy": "Reject explicit include_imported even false or empty; do not change history/models include_imported."
+  },
+  "checks": {
+    "frontend": {
+      "cwd": "frontend",
+      "tests": {
+        "command": "npm test",
+        "exit_code": 0,
+        "passed": 632,
+        "files": 77,
+        "failed": 0
+      },
+      "types": {
+        "command": "./node_modules/.bin/tsc --noEmit --incremental false",
+        "exit_code": 0
+      },
+      "build": {
+        "command": "npm run build",
+        "exit_code": 0
+      },
+      "lint": {
+        "command": "npm run lint",
+        "exit_code": 1,
+        "errors": 2,
+        "classification": "Both existing errors in components/views/PredictionView.tsx; outside stage d."
+      }
+    },
+    "frontend_base": {
+      "ref": "c1c7b2f86600ba1324c109dd84f218f472f3297d",
+      "isolation": "git archive in temporary scratch, shared read-only dependency symlink, automatic cleanup",
+      "tests": {
+        "command": "npm test",
+        "exit_code": 1,
+        "passed": 658,
+        "failed": 19,
+        "files": 80
+      },
+      "lint": {
+        "command": "npm run lint",
+        "exit_code": 1,
+        "errors": 5
+      }
+    },
+    "backend_writer": {
+      "cwd": "backend",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 /home/kevin/Work/fama/.venv/bin/python tests/run_isolated_training_checks.py tests/test_api_training.py tests/test_training_schemas.py tests/test_dataset_partitions.py tests/test_dataset_import_publication.py tests/test_training_service.py tests/test_training_flow.py tests/test_training_history_metadata.py tests/test_imported_model_access.py tests/test_imported_triad_predictor.py tests/test_imported_triad_registry.py tests/test_imported_feedback_api.py",
+      "exit_code": 0,
+      "passed": 350,
+      "failed": 0,
+      "skipped": 0,
+      "deselected": 0,
+      "source": "writer report mwbdpcia-4-brz4"
+    },
+    "backend_base": {
+      "ref": "c1c7b2f86600ba1324c109dd84f218f472f3297d",
+      "exit_code": 0,
+      "passed": 331,
+      "failed": 0,
+      "isolation": "same required 11-module suite, git archive scratch, isolated runner"
+    },
+    "backend_public_differential": {
+      "ref": "c1c7b2f86600ba1324c109dd84f218f472f3297d",
+      "cases": 9,
+      "base_exit_code": 0,
+      "candidate_exit_code": 0,
+      "stdout_equal": true,
+      "stderr_empty": true,
+      "source": "writer report; schema/catalog/progress/history/stop/start standard siblings",
+      "limitation": "history compared its unconfigured-session 503 path, not successful authenticated history",
+      "initial_failed_attempt": "incomplete scratch missing ml_core; corrected source copy before successful run"
+    },
+    "revision_api_fixture": {
+      "selector": "tests/test_imported_triad_revision_api.py::test_owner_revises_and_new_version_is_listed_for_owner_only",
+      "base_exit_code": 1,
+      "base_error": "503 Sesión web no configurada.",
+      "candidate_exit_code": 0,
+      "candidate_passed": 1,
+      "fix": "test-only import of existing cookie_security fixture"
+    },
+    "integrated_backend": {
+      "status": "passed_with_explicit_baseline_deselections",
+      "exit_code": 0,
+      "passed": 625,
+      "failed": 0,
+      "errors": 0,
+      "deselected": [
+        "tests/test_resource_access.py::test_every_functional_operation_rejects_anonymous_requests",
+        "tests/test_imported_triad_revision_api.py::test_unauthenticated_and_foreign_requests_are_denied_without_changes",
+        "tests/test_imported_feedback_archive.py::test_http_feedback_approval_after_archive_preserves_membership"
+      ],
+      "warnings": 2,
+      "warning_reason": "librosa n_fft2048 exceeds short synthetic signal512 in existing persistence tests",
+      "cwd": "backend in frozen scratch",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 /home/kevin/Work/fama/.venv/bin/python tests/run_isolated_training_checks.py --maxfail=0 tests/test_api_training.py tests/test_training_schemas.py tests/test_dataset_partitions.py tests/test_dataset_import_publication.py tests/test_training_service.py tests/test_training_flow.py tests/test_training_persistence.py tests/test_training_history_metadata.py tests/test_training_entrypoints.py tests/test_cookie_identity.py tests/test_resource_access.py tests/test_imported_model_access.py tests/test_imported_training_evaluation.py tests/test_imported_training_persistence.py tests/test_imported_training_admission.py tests/test_imported_training_revision_admission.py tests/test_imported_training_archive.py tests/test_imported_training_triad.py tests/test_imported_training_source.py tests/test_imported_triad_completion.py tests/test_imported_triad_records.py tests/test_imported_triad_source.py tests/test_imported_triad_manifests.py tests/test_imported_triad_evaluation.py tests/test_imported_triad_revisions.py tests/test_imported_triad_revision_api.py tests/test_imported_triad_registry.py tests/test_imported_triad_predictor.py tests/test_imported_feedback_api.py tests/test_imported_feedback_growth.py tests/test_imported_feedback_archive.py -k 'not test_every_functional_operation_rejects_anonymous_requests and not test_unauthenticated_and_foreign_requests_are_denied_without_changes and not test_http_feedback_approval_after_archive_preserves_membership'",
+      "test_modules": 31,
+      "sqlite_memory_connection_count": 559,
+      "nonpassing_reports": [],
+      "protected_paths_unchanged": true,
+      "protected_path_count": 30,
+      "private_scratch_cleanup": true,
+      "network_live_db_forbidden": true,
+      "final_worktree_hashes_equal_tested_source": true,
+      "isolation": "git archive HEAD backend plus pre-captured git diff --binary HEAD -- backend applied once before runner; private outer scratch removed by trap"
+    },
+    "independent_verifier": {
+      "status": "passed_in_synthetic_scope",
+      "initial_task": "mwbec5vw-6-hmu6",
+      "recheck_task": "mwbek0e4-7-f1cl",
+      "b1_and_ordinary_catalog": {
+        "passed": 6,
+        "exit_code": 0
+      },
+      "historical_readers": {
+        "passed": 37,
+        "deselected": 1,
+        "exit_code": 0,
+        "excluded_case": "test_unauthenticated_and_foreign_requests_are_denied_without_changes",
+        "exclusion_is_not_a_pass": true
+      },
+      "frontend": {
+        "passed": 32,
+        "files": 5,
+        "exit_code": 0,
+        "types_exit_code": 0
+      },
+      "spec_verdicts": {
+        "S1": "met for synthetic admission, not operational completion",
+        "S2": "met",
+        "S3": "met after B1 correction",
+        "S4": "met across completed synthetic checks; initial focused full run still failed on baseline route count",
+        "S5": "met for synthetic UI, no browser acceptance",
+        "S6": "met in completed synthetic reader checks, one baseline case deselected"
+      },
+      "guards": "protected hashes unchanged, private runner runtimes cleaned",
+      "outer_scratch": "Verifier retained its outer scratch under runtime-owned temporary directory due tool restriction; no repository scratch created."
+    },
+    "native_review_frontend": {
+      "assessment": "medium",
+      "reviewDue": false,
+      "base_ref": "c1c7b2f86600ba1324c109dd84f218f472f3297d",
+      "committed_only": true,
+      "candidate_commit": "26a2d6f318a36b5543d68a845e9c4c6820eb37d3",
+      "review_started": false
+    },
+    "integrated_backend_initial": {
+      "exit_code": 1,
+      "observed_passed": 622,
+      "failed": 2,
+      "errors": 1,
+      "warnings": 2,
+      "final_candidate_proof": false,
+      "protected_hash_check": "failed because parent edited inventoried main.py/test_api_training.py during run",
+      "cleanup": "runner TemporaryDirectory exited; final CHECK_SUMMARY not emitted due integrity assertion",
+      "failures": [
+        "test_every_functional_operation_rejects_anonymous_requests",
+        "test_unauthenticated_and_foreign_requests_are_denied_without_changes"
+      ],
+      "setup_error": "test_http_feedback_approval_after_archive_preserves_membership: missing legacy_client fixture"
+    },
+    "baseline_advisories": [
+      {
+        "selector": "test_resource_access.py::test_every_functional_operation_rejects_anonymous_requests",
+        "base_exit_code": 1,
+        "reason": "expected23 operations, observed24; all enumerated operations correctly rejected401",
+        "source": "independent verification baseline"
+      },
+      {
+        "selector": "test_imported_triad_revision_api.py::test_unauthenticated_and_foreign_requests_are_denied_without_changes",
+        "base_exit_code": 1,
+        "reason": "request without Origin gives403, assertion expects401",
+        "isolation": "git archive c1c7b2f, synthetic cookie env, guarded runner"
+      },
+      {
+        "selector": "test_imported_feedback_archive.py::test_http_feedback_approval_after_archive_preserves_membership",
+        "base_exit_code": 1,
+        "reason": "legacy_client fixture not registered in importing module",
+        "isolation": "same baseline run:1FAIL/1ERROR/exit1; protected hashes and cleanup passed"
+      }
+    ],
+    "independent_initial": {
+      "task": "mwbec5vw-6-hmu6",
+      "backend_passed": 123,
+      "backend_failed": 1,
+      "backend_exit_code": 1,
+      "fail_fast_limit": "ResourceAccess preexisting count stopped later reader modules; they were not verified",
+      "frontend_passed": 32,
+      "frontend_files": 5,
+      "frontend_exit_code": 0,
+      "types_exit_code": 0,
+      "blocker": "S3 include_imported silently ignored; corroborated candidate200 vs baseline503"
+    },
+    "blocker_B1_correction": {
+      "red_exit_code": 1,
+      "red_failed": 1,
+      "red_actual": "200 {\"datasets\":[]}",
+      "green_exit_code": 0,
+      "green_passed": 6,
+      "new_expected": "422 with explicit retired-option detail",
+      "effects": "progress/history unchanged; no training process created",
+      "independent_recheck": "passed"
+    },
+    "native_review_backend": {
+      "assessment": "unassessable",
+      "risk": "high via explicit item3 escalation",
+      "reason": "native assessment rejected undeclared untracked receipt",
+      "reviewDue": "not returned",
+      "review_started": false,
+      "independent_verifier": "passed; required by item3 regardless of RDD outcome",
+      "candidate_commit": "49e7ebb351406634e3c407998de804a5ac59e8a4"
+    },
+    "documentation": {
+      "links_checked": 19,
+      "links_valid": true,
+      "json_valid": true,
+      "git_diff_check_exit_code": 0
+    }
+  },
+  "limits": [
+    "No operational training or learned-model quality certification.",
+    "Published-ZIP HTTP checks use a deferred training-process boundary; started means admission, not completion.",
+    "Historical checkpoint fixtures contain synthetic CPU weights and real synthetic evaluation reports; they do not prove learning.",
+    "No real browser, Docker/Python 3.12, GPU, PostgreSQL, remote GCS, service restart or deployment verification.",
+    "No push or pull request.",
+    "Real spawn tests are not rerun under the runner which forbids subprocesses; only the retired imported-specific spawn test is removed."
+  ],
+  "candidate_source_sha256": {
+    "backend/app/main.py": "b3aea375a8e422d7a2ceca3a44ace523b3cb21d9a8652c9fd65b151081b90c0d",
+    "backend/app/routes/imported_training.py": null,
+    "backend/app/schemas/training.py": "b7a9a0663abf76498ca789c5ed40dd7ac52a238e81660a8b44e1983d319f61a2",
+    "backend/app/services/training.py": "5800f715353b5d5e494bae3c3442edc83101fb42904bbb2a9e570c8d17c9294e",
+    "backend/tests/test_api_training.py": "3ba36348f7e36460745fa6f3766d6dcf9b73ac5ad47e22686b3294f36ad0fa2b",
+    "backend/tests/test_cookie_identity.py": "bc910914809d5773901e3bf60b43cca79f5f79bb52f0b76434ce7f130f7de69f",
+    "backend/tests/test_dataset_import_publication.py": "05ff34f452a38ed53e85a8628700594178d46657f8e9048fad495fed51240e64",
+    "backend/tests/test_imported_model_access.py": "e84075f4ecc2a6bd327a732a49a6adea62e568776211a2fc9828052bd0f89189",
+    "backend/tests/test_imported_training_admission.py": "5f0040b8c242856259cc59a53866102154c361b2364b3663483baa78888f902f",
+    "backend/tests/test_imported_training_archive.py": "53bc98477548e73e563b0e733d853c5cbf1fb60be491a29d5924554e4440d8f2",
+    "backend/tests/test_imported_training_evaluation.py": "b7b11b182243bea382d54d1c15377ab9ee7d978252009220fb3b1bb585c93800",
+    "backend/tests/test_imported_training_persistence.py": "e6455ab42941480674a3f24f44719a023029c59670923077161c5efc5d199201",
+    "backend/tests/test_imported_training_preparation_api.py": null,
+    "backend/tests/test_imported_training_revision_admission.py": "fb9473938a19ca0c0dcd1ce10ebfb53e3bd0f94c7ae0904e1254272e25336aa7",
+    "backend/tests/test_imported_training_triad.py": "55fff416c9b81444379d8adb539a9312ad3bc9f56e7fdc13e034316525420c15",
+    "backend/tests/test_imported_triad_completion.py": "5d0a777749b7fe2ffc308fe7af0517dcec628dca03dac56b4cd53a98841140bc",
+    "backend/tests/test_imported_triad_revision_api.py": "118499b3c8d6c2bb43abbbdc9416487b32a549da040f59d744ec663e4a69de00",
+    "backend/tests/test_training_schemas.py": "709b7a7737a4ef1d70b1980303646f2ba20bfb9fa5971d6acfae530209821f06",
+    "backend/tests/test_training_spawn.py": "aa18d26b17f3d56d98aef5f633345b7670c317a91f2323eefa5697ab2961dad1",
+    "backend/tests/test_web_imported_training.py": null,
+    "frontend/components/training/ImportedTrainingPanel.tsx": null,
+    "frontend/components/training/TrainingDatasetSelector.tsx": "0887d31917df119191b33f039484b5f5ad02dab17dc021ecad8d38ad0c4a8199",
+    "frontend/components/training/__tests__/AutomaticPreparation.test.tsx": null,
+    "frontend/components/training/__tests__/ImportedTrainingPanel.test.tsx": null,
+    "frontend/components/training/__tests__/ImportedTrainingRevision.test.tsx": null,
+    "frontend/components/training/__tests__/PreparedRecognition.test.tsx": null,
+    "frontend/components/training/__tests__/TrainingDatasetSelector.test.tsx": "7e1508374e907588f3cb538b12449f3558e017538f036749d01f1b61bf22421b",
+    "frontend/components/training/__tests__/TriadTraining.test.tsx": "012bb370a37e1b42aa4ec26095dd6d53e529be60f956fc19ff168b4bbe044fcf",
+    "frontend/components/views/TrainingView.tsx": "42cf752028b779b3f1cd695ed26ba496786b738bfaaeb97988681ff6390c816d",
+    "frontend/components/views/__tests__/ImportedTrainingBridge.test.tsx": "1080dd7efa144150604e950fd60dc5b9b27e0768e8572b33df8f682f1c8179df",
+    "frontend/components/views/__tests__/ImportedTrainingView.test.tsx": "8a663c246a007111ee654f30c7d15cbf5befb2a829db424f11b6d9a0d6e08bf7",
+    "frontend/components/views/__tests__/TrainingDatasetCatalog.test.tsx": "7e2f4779c735f5d71aa3346d3224c999f5b0da8199092f62f9a0be6e60b08339",
+    "frontend/components/views/__tests__/TrainingLifecycleRecovery.test.tsx": "75fa2f75838393142e38e6830161f103d8336b51722acf7d9d0ede4097680083",
+    "frontend/components/views/__tests__/TrainingStandardTraining.test.tsx": "2eb818735685f0681420df635ee1ebb1dea06d45fd1fb647bd66eb1b9332dfe9",
+    "frontend/components/views/__tests__/TrainingView.test.tsx": "b3c4a97162dcac09e04553984e9a62c653e49a192cc254a34a77210bcf1567c6",
+    "frontend/lib/api/__tests__/importedTrainingApi.test.ts": "471511bfe3516cfe45a6b902a492b5fad9244a6edf25f53918391e96308ac8e6",
+    "frontend/lib/api/__tests__/trainingApi.test.ts": "6f32e61cf5cd610080aff6eedf03ffe2829989b0d76a18f2290c06ce96b5509e",
+    "frontend/lib/api/importedTrainingApi.ts": "7567df3bd58de5af463db68c9d211604a28a08544bb1435b73f56c1c0176c099",
+    "frontend/lib/schemas/importedTraining.ts": null
+  },
+  "candidate_hash_scope": "Changed backend/frontend tracked files relative to c1c7b2f, including deletions as null; excludes data, environments and documentation.",
+  "backend_commit": "49e7ebb351406634e3c407998de804a5ac59e8a4",
+  "risk": {
+    "item": 3,
+    "reason": "Intentional removal of consumed training selectors and endpoints; independent verification completed."
+  },
+  "delivery": {
+    "pushed": false,
+    "pull_request_created": false,
+    "new_services_started": false,
+    "data_or_tables_deleted": false,
+    "feature_branch": "mvp",
+    "commits": {
+      "T1": "c1c7b2f86600ba1324c109dd84f218f472f3297d",
+      "T2": "49e7ebb351406634e3c407998de804a5ac59e8a4",
+      "T3": "26a2d6f318a36b5543d68a845e9c4c6820eb37d3"
+    },
+    "documentation_closure": "separate local docs commit after backend49e7ebb"
+  }
+}

@@ -2,6 +2,11 @@
 kanban-plugin: basic
 ---
 
+## Integración de afinamiento integral en `mvp` — etapa d: entrenamiento estándar
+
+- [x] **D-ENTRENAMIENTO:** retiradas la entrada importada de API/worker y el selector privado; ZIP publicado usa catálogo estándar y `partition_version`. Backend final625PASS/3deselecciones explícitas de base; frontend632PASS/tipos/build0. Independiente: B1/catálogo6PASS, lectores37PASS/1deselección, frontend32PASS/tipos0. Lint conserva2errores previos de PredictionView. El fallo inicial de integridad por edición concurrente queda registrado, no cuenta como prueba final. [Plan](arquitectura/integracion-mvp-d-snapshots-plan.md) y [recibo/exclusiones](receipts/integracion-mvp-d.json). Commits locales26a2d6f/49e7ebb, sin push/PR ni entrenamiento real. ASSESS backend no disponible por recibo no rastreado; sin revisión nativa iniciada ni aprobación inventada.
+- **Límite d/e/f:** se conservan snapshots/preparaciones y sus modelos/tablas para predicción, historial, feedback y revisión de pesos existentes; e resuelve los lectores y f el bootstrap. No se borran datos en d.
+
 ## Integración de afinamiento integral en `mvp` — etapa c: publicación del ZIP
 
 - [x] **C-PUBLICACIÓN:** confirmar un ZIP lo publica en GCS `datasets/{ds}/{clase}/` y en `conjunto_datos`/`audio` reutilizando `upload_files_to_gcs` por lotes, deja la copia en `raw_data_dir` y asigna al importador. Nombre único global (409) y válido (422). Si falla la publicación, la importación sigue local y el trabajo se reintenta sin duplicar; fallos de validación o confirmación local siguen cancelándose solos. Límite por archivo de subida 96 MiB por defecto. [Plan](arquitectura/integracion-mvp-c-publicacion-plan.md).

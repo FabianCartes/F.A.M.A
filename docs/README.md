@@ -23,8 +23,9 @@ La documentación está organizada temáticamente en subdirectorios especializad
 
 ---
 
-## Integración de afinamiento integral en `mvp` — etapa a
+## Integración de afinamiento integral en `mvp` — etapas a–d
 
+- [Etapa d: entrenamiento estándar de ZIP publicados](./arquitectura/integracion-mvp-d-snapshots-plan.md) y [recibo de comprobaciones](./receipts/integracion-mvp-d.json): retiro de la entrada de snapshots/preparaciones importadas y selección por `dataset_name`/`partition_version`. Se conservan los artefactos y lectores de modelos importados existentes; no hay eliminación de tablas ni datos. Implementación local verificada: backend625PASS/3deselecciones de base, frontend632PASS/tipos/build correctos e independiente aprobado; lint conserva2errores previos. El recibo distingue fallos históricos, corrida invalidada y comprobación final. No acredita despliegue ni entrenamiento real; sin revisión nativa backend iniciada por evaluación no disponible.
 - [Etapa c: publicación del ZIP en `conjunto_datos`](./arquitectura/integracion-mvp-c-publicacion-plan.md): publicación por lotes en GCS y catálogo compartido, nombre único global, asignación del importador y reintento sin cancelar la importación local.
 - [Etapa b: GCS e inventario único](./arquitectura/integracion-mvp-gcs-unico-plan.md) y [recibo](./receipts/integracion-mvp-b.json): retiro de sincronización privada, manifiestos, exportación ZIP y reserva física; inventario único local/GCS. ZIP confirmado local hasta la etapa c. Commits locales en `mvp`, sin push ni PR.
 - [Etapa a: consolidación de sesión por cookie](./arquitectura/integracion-mvp-sesion-cookie-plan.md) y [recibo de verificación](./receipts/integracion-mvp-a.json): implementación a1/a2 aplicada y cierre funcional limitado aceptado por el usuario, conservando los problemas de exportación y la prueba independiente parcial. Incluye comparación frontend base/candidato; no equivale a suite global verde ni aprobación técnica integral. Entrega local organizada en commits encadenados sobre `fix/mvp-cookie-session`, sin push ni PR.
