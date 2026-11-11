@@ -64,7 +64,7 @@ Prepara desde cero una base vacía con el esquema vigente (`0005_triad_compositi
 
    Comprobación: 39 tablas en `public` (38 de aplicación más `alembic_version`) y 15 secuencias.
 
-6. **Asistente y primer administrador.** Seguir el [asistente de primera instalación](asistente_primera_instalacion.md) con un directorio de configuración propio, el usuario `fama_app`, la base `fama_pruebas` y el bucket de pruebas `fama-pruebas` (nunca el bucket definitivo). La comprobación del asistente lista un objeto del bucket, así que necesita una credencial de Google con acceso a ese bucket. Al 11 de noviembre esa credencial está pendiente.
+6. **Asistente y primer administrador.** Seguir el [asistente de primera instalación](asistente_primera_instalacion.md) con un directorio de configuración propio, el usuario `fama_app`, la base `fama_pruebas` y el bucket de pruebas `fama-pruebas` (nunca el bucket definitivo). La comprobación del asistente lista un objeto del bucket, así que necesita una credencial de Google con acceso a ese bucket. `app.node prepare` exige que el archivo se llame `application_default_credentials.json`; en la etapa g se usó una clave JSON de la cuenta de servicio `fama-pruebas-app`, guardada fuera del repositorio con permisos `0600` ([recibo](../receipts/integracion-mvp-g-local.json)). El asistente exige un correo con dominio y una contraseña de 12 caracteres o más; tras `/complete` hay que reiniciar el backend.
 
 ## Recrear desde cero
 
