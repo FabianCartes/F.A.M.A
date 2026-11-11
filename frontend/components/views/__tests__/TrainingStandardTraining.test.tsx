@@ -1,0 +1,44 @@
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, expect, it, vi } from 'vitest';
+import TrainingView from '../TrainingView';
+import SessionBoundary from '@/components/auth/SessionBoundary';
+vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn() }) }));
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+
+it('entrena un ZIP publicado con sesión por el catálogo y las particiones estándar, sin entrada privada', async () => {
+  const version = 'a'.repeat(64);
+  const transport = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.endsWith('/api/auth/me')) return Response.json({ id: 1, email: 'owner@example.test', nombre_completo: 'Owner', rol: 'investigador', activo: true });
+    if (url.includes('/history')) return Response.json({ history: [] });
+    if (url.includes('/datasets') && !url.includes('/partitions')) return Response.json({ datasets: [{ id: 'ZIP_Publicado', name: 'ZIP publicado', record_id: 'legacy:7', source_type: 'legacy', audio_count: 9, class_count: 3, eligible: true, eligibility_state: 'current_flow_compatible', reasons: [] }] });
+    if (url.endsWith('/partitions')) return Response.json({ versions: [{ version, counts: { train: 6, val: 2, test: 1 }, warnings: [] }] });
+    if (url.endsWith('/progress')) return Response.json({ status: 'idle' });
+    if (url.endsWith('/start')) return Response.json({ status: 'started' });
+    return Response.json({});
+  });
+  vi.stubGlobal('fetch', transport);
+  render(<SessionBoundary><TrainingView /></SessionBoundary>);
+  const selector = await screen.findByRole('combobox', { name: 'Dataset para entrenamiento' });
+  expect(selector.textContent).toBe('Buscar o seleccionar dataset…');
+  const start = screen.getByRole('button', { name: 'Iniciar Entrenamiento Local (1 Modelo)' });
+  expect((start as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(selector);
+  fireEvent.click(await screen.findByRole('option', { name: 'ZIP publicado' }));
+  expect(screen.queryByText(/Privado|Compartido|Legacy predeterminado/)).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Preparar dataset' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Gestionar particiones' }));
+  await screen.findByRole('option', { name: /aaaaaaaaaaaa/ });
+  fireEvent.change(screen.getByLabelText('Versión para entrenar'), { target: { value: version } });
+  await waitFor(() => expect((start as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(start);
+  await waitFor(() => expect(transport.mock.calls.some(([url]) => String(url).endsWith('/start'))).toBe(true));
+  const request = transport.mock.calls.find(([url]) => String(url).endsWith('/start'))!;
+  const body = JSON.parse(String(request[1]?.body));
+  expect(body).toMatchObject({ dataset_name: 'ZIP_Publicado', partition_version: version, models: [{ architecture: 'EfficientNet-B0', weight: 1 }] });
+  expect(body).not.toHaveProperty('imported_dataset_id');
+  expect(body).not.toHaveProperty('snapshot_id');
+  expect(body).not.toHaveProperty('imported_prepared_version');
+  expect(transport.mock.calls.some(([url]) => /\/imported\/|\/snapshots|\/preparations/.test(String(url)) || String(url).includes('/datasets?include_imported'))).toBe(false);
+  expect(transport.mock.calls.some(([url]) => String(url).includes('/history?include_imported=true'))).toBe(true);
+});

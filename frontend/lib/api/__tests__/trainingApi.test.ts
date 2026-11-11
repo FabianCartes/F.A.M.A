@@ -32,7 +32,9 @@ describe("trainingApi (TDD Contract Tests)", () => {
       audio_count:0,class_count:null,eligible:false,eligibility_state:'blocked',reasons:['incompatible_configuration'],
     }]})});
     const rows = await getDatasetCatalog();
-    expect(global.fetch).toHaveBeenCalledWith(`${API_BASE_URL}/api/training/datasets?include_unavailable=true`, {method:'GET'});
+    expect(global.fetch).toHaveBeenCalledWith(`${API_BASE_URL}/api/training/datasets?include_unavailable=true`, {
+      method: 'GET', cache: 'no-store', credentials: 'same-origin', redirect: 'error',
+    });
     expect(rows[0]).toMatchObject({record_id:'legacy:23',class_count:null,eligible:false,reasons:['incompatible_configuration']});
   });
 

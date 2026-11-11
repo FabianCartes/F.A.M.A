@@ -8,7 +8,10 @@ function transport(progress: () => Promise<Response>, stop = async () => Respons
   const url=String(input);
   if(url.endsWith('/progress'))return progress();
   if(url.endsWith('/stop'))return stop();
-  if(new URL(url,window.location.origin).pathname.endsWith('/datasets'))return Response.json({datasets:[]});
+  if(new URL(url,window.location.origin).pathname.endsWith('/datasets'))return Response.json({datasets:[{
+   id:'Fixture',name:'Fixture',audio_count:9,class_count:3,source_type:'legacy',record_id:'legacy:1',
+   eligible:true,eligibility_state:'current_flow_compatible',reasons:[],
+  }]});
   if(url.endsWith('/history'))return Response.json({history:[]});
   return Response.json({});
  });

@@ -1,17 +1,15 @@
 'use client';
 import { useEffect, useId, useRef, useState } from 'react';
 import { getDatasetCatalog } from '@/lib/api/trainingApi';
-import { importedTrainingApi } from '@/lib/api/importedTrainingApi';
 import type { TrainingCatalogDataset } from '@/lib/schemas/training';
-import type { ImportedDataset } from '@/lib/schemas/importedTraining';
 
-export type CatalogSelection = TrainingCatalogDataset | ImportedDataset;
-const identity = (row: CatalogSelection) => row.source_type === 'legacy' ? row.record_id : `imported:${row.id}`;
-const label = (row: CatalogSelection) => `${row.name} — ${row.source_type === 'legacy' ? 'Compartido' : 'Privado'}`;
+export type CatalogSelection = TrainingCatalogDataset;
+const identity = (row: CatalogSelection) => row.record_id;
+const label = (row: CatalogSelection) => row.name;
 
-export default function TrainingDatasetSelector({includeImported, onSelect, disabled=false, defaultLegacyName}: {
-  includeImported:boolean; onSelect:(row:CatalogSelection)=>void; disabled?:boolean;
-  defaultLegacyName?:string;
+export default function TrainingDatasetSelector({onSelect, disabled=false, defaultName}: {
+  onSelect:(row:CatalogSelection)=>void; disabled?:boolean;
+  defaultName?:string;
 }) {
   const [rows,setRows]=useState<CatalogSelection[]>([]);
   const [selected,setSelected]=useState<CatalogSelection|null>(null);
@@ -26,11 +24,11 @@ export default function TrainingDatasetSelector({includeImported, onSelect, disa
   const [retry,setRetry]=useState(0);
   useEffect(()=>{
     const request=new AbortController();
-    Promise.all([getDatasetCatalog(), includeImported ? importedTrainingApi.catalog(request.signal) : Promise.resolve([])])
-      .then(([legacy,imports])=>{if(!request.signal.aborted){setRows([...legacy,...imports]);setError(false);}})
+    getDatasetCatalog()
+      .then(rows=>{if(!request.signal.aborted){setRows(rows);setError(false);}})
       .catch(()=>{if(!request.signal.aborted)setError(true);});
     return ()=>request.abort();
-  },[includeImported,retry]);
+  },[retry]);
   const matches=rows.filter(row=>row.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
   const choose=(row:CatalogSelection)=>{if(disabled)return;setSelected(row);onSelect(row);close(true);};
   return <section aria-label="Catálogo de entrenamiento" className="space-y-3">
@@ -40,7 +38,7 @@ export default function TrainingDatasetSelector({includeImported, onSelect, disa
         onClick={()=>{if(expanded)close();else {setQuery('');setActive(0);setOpen(true);}}}
         onKeyDown={event=>{if(disabled)return;if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();setActive(event.key==='ArrowUp'?Math.max(0,rows.length-1):0);setOpen(true);}else if(event.key==='Escape')close();}}
         className="relative mt-1.5 w-full bg-[#111215] border border-[#23252e] rounded-lg pl-3 pr-9 py-2 text-xs text-gray-200 text-left enabled:hover:border-gray-500 transition-colors focus:border-emerald-600 disabled:opacity-50">
-        {selected?label(selected):defaultLegacyName?`${defaultLegacyName} (Legacy predeterminado; validación al iniciar)`:'Buscar o seleccionar dataset…'}
+        {selected?label(selected):defaultName || 'Buscar o seleccionar dataset…'}
         <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400">
           <circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4" strokeLinecap="round"/>
         </svg>

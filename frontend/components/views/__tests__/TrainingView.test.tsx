@@ -58,6 +58,8 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
               {
                 id: "AvesChilenas",
                 name: "AvesChilenas (1211 audios)",
+                source_type: 'legacy', record_id: 'legacy:1', eligible: true,
+                eligibility_state: 'current_flow_compatible', reasons: [],
                 audio_count: 1211,
                 class_count: 15,
                 size_mb: 340.5,
@@ -225,6 +227,8 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
           json: async () => ({ datasets: [{
             id: "FAMA_Prueba_Aves",
             name: "FAMA_Prueba_Aves (10 audios)",
+            source_type: 'legacy', record_id: 'legacy:7', eligible: true,
+            eligibility_state: 'current_flow_compatible', reasons: [],
             audio_count: 10,
             class_count: 2,
             size_mb: 3.67,
@@ -236,8 +240,8 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
 
     await act(async () => { render(<TrainingView />); });
     const card = screen.getByTestId("dataset-selection-card");
-    expect((within(card).getByRole("combobox") as HTMLSelectElement).value).toBe("FAMA_Prueba_Aves");
-    expect(within(card).getByText("2 clases detectadas")).toBeDefined();
+    expect(within(card).getByRole("combobox").textContent).toBe("FAMA_Prueba_Aves (10 audios)");
+    expect(within(card).getByText(/2 clases detectadas/)).toBeDefined();
     await act(async () => {
       fireEvent.click(screen.getByText("Iniciar Entrenamiento Local (1 Modelo)"));
     });
@@ -331,8 +335,8 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     global.fetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
       if (url.includes("/api/training/datasets") && !url.includes("/partitions")) {
         return { ok: true, json: async () => ({ datasets: [
-          { id: "AvesChilenas", name: "AvesChilenas", audio_count: 10 },
-          { id: "Other", name: "Other", audio_count: 8 },
+          { id: "AvesChilenas", name: "AvesChilenas", audio_count: 10, source_type: 'legacy', record_id: 'legacy:1', eligible: true, eligibility_state: 'current_flow_compatible', reasons: [] },
+          { id: "Other", name: "Other", audio_count: 8, source_type: 'legacy', record_id: 'legacy:2', eligible: true, eligibility_state: 'current_flow_compatible', reasons: [] },
         ] }) };
       }
       if (url.endsWith("/partitions")) return { ok: true, json: async () => ({ versions: [
@@ -343,7 +347,8 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     await act(async () => { render(<TrainingView />); });
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Gestionar particiones" })); });
     await act(async () => { fireEvent.change(screen.getByLabelText("Versión para entrenar"), { target: { value: version } }); });
-    await act(async () => { fireEvent.change(screen.getByLabelText("Dataset para Entrenamiento"), { target: { value: "Other" } }); });
+    fireEvent.click(screen.getByRole('combobox', { name: 'Dataset para entrenamiento' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Other' }));
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Iniciar Entrenamiento Local (1 Modelo)" })); });
     const postCall = vi.mocked(global.fetch).mock.calls.find(([url]) => url === `${API_BASE_URL}/api/training/start`);
     const body = JSON.parse(String(postCall?.[1]?.body));
@@ -405,7 +410,7 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     await act(async () => { render(<TrainingView />); });
     const card = screen.getByTestId("dataset-selection-card");
     expect(within(card).queryByText(/AvesChilenas/)).toBeNull();
-    expect(within(card).getByText("0 clases detectadas")).toBeDefined();
+    expect(within(card).getByText(/0 clases detectadas/)).toBeDefined();
     const start = screen.getByRole("button", { name: "Iniciar Entrenamiento Local (1 Modelo)" });
     expect((start as HTMLButtonElement).disabled).toBe(true);
     await act(async () => { fireEvent.click(start); });
