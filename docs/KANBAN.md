@@ -12,7 +12,7 @@ kanban-plugin: basic
 
 ## Integración de afinamiento integral en `mvp` — etapa g: base de datos de integración
 
-- [ ] **G-BASE-INTEGRACIÓN:** en curso, bloqueada por acceso. Hecho: la 0005 ya se acepta en PostgreSQL (`a48d143`: restricción `double precision` y secuencias derivadas del esquema) y `fama_pruebas` local en PostgreSQL 16.15 migrada a 0005 con permisos (`127.0.0.1:5433`); manual nuevo y conteos de 0005 en los manuales. Pendiente: asistente y primer administrador, smoke de punta a punta y Cloud SQL, que necesitan acceso al bucket `fama-pruebas` (lo da el compañero). [Plan](arquitectura/integracion-mvp-g-base-integracion-plan.md).
+- [ ] **G-BASE-INTEGRACIÓN:** etapa local cerrada; falta Cloud SQL. La 0005 ya se acepta en PostgreSQL (`a48d143`); `fama_pruebas` en PostgreSQL 16.15 con primer administrador y bucket `fama-pruebas`; smoke de punta a punta desde el navegador aprobado (importar ZIP, asignar, entrenar con partición, respaldar en GCS y predecir), con el fix del historial `59232bb`. Hallazgos pendientes en el plan (L12, L14). [Recibo](receipts/integracion-mvp-g-local.json), [Plan](arquitectura/integracion-mvp-g-base-integracion-plan.md).
 
 ## Integración de afinamiento integral en `mvp` — etapa f: migración 0005
 

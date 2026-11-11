@@ -75,8 +75,67 @@
   },
   "secrets_recorded": false,
   "not_verified": [
-    "smoke end-to-end (T4)",
     "Cloud SQL (T5)",
     "13 backup tests: local pg_dump 18.6 vs server 16"
-  ]
+  ],
+  "smoke_end_to_end": {
+    "date": "2026-11-11",
+    "operator": "Kevin, browser (http://localhost:3000)",
+    "fix_during_smoke": "59232bb (history requested without retired include_imported filter)",
+    "environment": {
+      "backend": "uvicorn main:app with FAMA_CONFIG_DIR (native installation) and private FAMA_RUNTIME_DIR prepared by app.node runtime",
+      "import_worker": "python -m scripts.run_dataset_import_worker --local-only --watch (PGPASSFILE)",
+      "frontend": "npm run dev with API_URL to backend and empty NEXT_PUBLIC_API_URL"
+    },
+    "steps": {
+      "researcher_created": true,
+      "zip_import": {
+        "dataset": "gatos y perros",
+        "zip_mb": 50.82,
+        "audios": 276,
+        "bytes": 61370374,
+        "gcs_prefix": "gs://fama-pruebas/datasets/gatos y perros/",
+        "job": "preview with auto_import succeeded in ~4 min (upload ~200-250 KB/s)",
+        "catalog_state": "subido"
+      },
+      "assignment": "dataset assigned to researcher by administrator",
+      "sync": "not needed: import leaves local copy in runtime raw dir (276 wav)",
+      "training": {
+        "actor": "researcher",
+        "partition_version": "69e0c8b8…",
+        "model_id": 1,
+        "architecture": "EfficientNet-B0",
+        "epochs": 3,
+        "precision": 89.09,
+        "loss": 0.4315,
+        "state": "standard_eval_completed"
+      },
+      "backup": {
+        "endpoint": "POST /api/training/models/1/checkpoint/backup 200",
+        "object": "models/checkpoints/sha256/2a7b62b0fa93a744b2f5a481e86904304d25fee9ea91439bb903d77220db68e0.pt",
+        "size_bytes": 16395757,
+        "matches_local_and_db_hash": true
+      },
+      "prediction": {
+        "actor": "researcher",
+        "model": "fama_trained_model_1",
+        "audio": "external, not in ZIP",
+        "label": "cat",
+        "confidence": 1,
+        "history": "visible in UI"
+      }
+    },
+    "findings": [
+      "training/paths.py get_prepared_data_dir ignores FAMA_RUNTIME_DIR",
+      "start without partition_version falls back to legacy CSV preparation",
+      "training start error shown as browser dialog; needs app modal",
+      "import progress stays at 'Validando los audios' until done",
+      "modelo.ruta_binario_gcp (models/fama_..._best.pt) differs from actual backup object (models/checkpoints/sha256/<hash>.pt)"
+    ],
+    "test_data_left_in_bucket": [
+      "datasets/gatos y perros/ (276 audios)",
+      "models/checkpoints/sha256/2a7b62b0….pt",
+      "raw_audios/db0ece3d7abb47d590a9edf81ec6ea36.wav"
+    ]
+  }
 }
