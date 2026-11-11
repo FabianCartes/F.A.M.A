@@ -16,8 +16,8 @@ class SchemaStatus:
     revision: str | None = None
 
 
-HEAD = "0004_integration"
-REVISIONS = ("0001_core", "0002_access", "0003_autonomy", HEAD)
+HEAD = "0005_triad_composition"
+REVISIONS = ("0001_core", "0002_access", "0003_autonomy", "0004_integration", HEAD)
 
 
 def _check_expression(expression: str) -> str:
@@ -36,8 +36,10 @@ def _matches_revision(connection, revision: str) -> bool:
     expected = metadata
     if revision == "0003_autonomy":
         from migrations.schema_0003 import metadata as expected
-    if revision == HEAD:
+    if revision == "0004_integration":
         from migrations.schema_0004 import metadata as expected
+    if revision == HEAD:
+        from migrations.schema_0005 import metadata as expected
     if revision == "0001_core":
         expected = MetaData()
         for name in CORE_TABLES:
@@ -51,7 +53,8 @@ def matches_schema(connection, expected: MetaData) -> bool:
     from alembic.migration import MigrationContext
 
     inspector = inspect(connection)
-    if inspector.get_view_names() or inspector.get_materialized_view_names():
+    if inspector.get_view_names() or (connection.dialect.name == "postgresql"
+                                      and inspector.get_materialized_view_names()):
         return False
     context = MigrationContext.configure(connection, opts={"compare_type": True, "compare_server_default": True})
     if compare_metadata(context, expected):

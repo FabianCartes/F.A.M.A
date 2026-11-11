@@ -118,6 +118,8 @@ docs/
 * [`manuales/traslado-local-almacenamiento.md`](./manuales/traslado-local-almacenamiento.md): Copia fuera de línea de un laboratorio SQLite a una raíz nueva, preservación de identidad y autoridad física, capacidad, fallos y retiro humano; no activa servicios.
 **Integración con dev, 24 de octubre:** [registro de la integración](./manuales/integracion_dev_20261024.md), [ADR 0069](./adr/0069-integracion-de-acceso-evaluacion-y-datasets.md) y [particiones de tres grupos](./manuales/particiones_versionadas.md). La revisión se realiza en un worktree aislado, con PostgreSQL 16 temporal y datos sintéticos. El esquema integrado `0004_integration` requiere mantenimiento explícito antes de reemplazar el servicio oficial que conserva `0003_autonomy`.
 
+**Integración mvp, etapa f, 11 de noviembre:** [ADR 0070](./adr/0070-revision-0005-y-composicion-versionada-de-triadas.md) agrega la revisión aditiva `0005_triad_composition` con la composición versionada de tríadas estándar, y retira del código las tablas sin uso y `imported_dataset.archived`; seguimiento en el [plan de la etapa f](./arquitectura/integracion-mvp-f-migracion-plan.md).
+
 **Historia oficial confirmada y pesos preparados, 24 de octubre:** [conciliacion_catalogo_y_pesos_oficiales.md](./manuales/conciliacion_catalogo_y_pesos_oficiales.md) reúne comparación SQL, runtime, corrección de formato histórico, propuesta para cinco versiones de audio, respaldo posterior recuperado y decisiones pendientes. [traslado_historia_confirmado_y_pesos_20261024.json](./receipts/traslado_historia_confirmado_y_pesos_20261024.json) conserva evidencia y límites de pruebas. El perfil oficial permanece sin activar; los siguientes recibos conservan los cortes anteriores.
 
 

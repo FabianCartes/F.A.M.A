@@ -65,7 +65,7 @@ def test_autonomy_upgrade_from_access_preserves_data_and_does_not_invent_legacy_
                                 "'Aves/Chucao/feedback_901.wav', :digest, 'pending', 0)"), {'digest': 'a' * 64})
     result, report = migrate(database_url, "upgrade", "--apply")
     assert result.returncode == 0, result.stderr
-    assert report == {"code": "schema_current", "revision": "0004_integration"}
+    assert report == {"code": "schema_current", "revision": "0005_triad_composition"}
     with engine.connect() as connection:
         assert 'solicitud_dataset' in inspect(connection).get_table_names()
         row = connection.execute(text("SELECT incorporated_by, incorporated_at, status FROM feedback_sync WHERE id_retroalimentacion=901")).one()
@@ -80,7 +80,7 @@ def test_empty_database_is_migrated_explicitly_and_repeated_upgrade_is_safe(data
 
     result, report = migrate(database_url, "upgrade", "--apply")
     assert result.returncode == 0, result.stderr
-    assert report == {"code": "schema_current", "revision": "0004_integration"}
+    assert report == {"code": "schema_current", "revision": "0005_triad_composition"}
     result, report = migrate(database_url, "upgrade", "--apply")
     assert result.returncode == 0, result.stderr
     assert report["code"] == "schema_current"
@@ -99,7 +99,7 @@ def test_revision_does_not_hide_a_missing_or_modified_role_constraint(database_u
 
     result, report = migrate(database_url, "status")
     assert result.returncode == 1
-    assert report == {"code": "schema_incompatible", "revision": "0004_integration"}
+    assert report == {"code": "schema_incompatible", "revision": "0005_triad_composition"}
     result, report = migrate(database_url, "upgrade", "--apply")
     assert result.returncode == 1
     assert report["code"] == "schema_incompatible"
