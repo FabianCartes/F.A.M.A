@@ -31,3 +31,9 @@ def migrated_engine(revision="head"):
     with engine.connect() as connection:
         upgrade(connection, revision)
     return engine
+
+
+def migrate(engine, revision="head"):
+    """Migrate an existing engine (for example a file-backed SQLite one) and commit."""
+    with engine.begin() as connection:
+        upgrade(connection, revision)

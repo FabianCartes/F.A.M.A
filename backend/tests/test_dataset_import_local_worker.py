@@ -9,13 +9,9 @@ from sqlalchemy.pool import StaticPool
 
 @pytest.fixture
 def queue_store():
-    from scripts.migrate_dataset_imports import create_import_tables
-    from scripts.migrate_dataset_import_jobs import migrate_jobs
+    from tests.schema_support import migrated_engine
 
-    engine = create_engine("sqlite://", poolclass=StaticPool,
-                           connect_args={"check_same_thread": False})
-    create_import_tables(engine)
-    migrate_jobs(engine, writers_stopped=True)
+    engine = migrated_engine()
     yield engine, sessionmaker(bind=engine)
     engine.dispose()
 

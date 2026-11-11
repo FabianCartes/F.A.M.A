@@ -69,7 +69,7 @@ def run_checks(socket_dir, container_id):
     from app.models.web_session import SesionWeb
     from app.models.access_quota import CuotaAcceso
     from app.models.security_audit import EventoSeguridad
-    from scripts.migrate_web_sessions import migrate_web_sessions, validate_web_sessions
+    from app.services.web_session_schema import validate_web_sessions
 
     # The sole connection destination is the socket directory just mounted in
     # our container. No environment database URL is consulted.
@@ -147,19 +147,17 @@ def run_checks(socket_dir, container_id):
                 stage = "create_user"
                 Usuario.__table__.create(engine)
                 if target is None:
-                    stage = "first_migration"
-                    migrate_web_sessions(engine, writers_stopped=True)
-                    stage = "second_migration"
-                    migrate_web_sessions(engine, writers_stopped=True)
+                    stage = "create_tables"
+                    for table in (SesionWeb.__table__, CuotaAcceso.__table__, EventoSeguridad.__table__):
+                        table.create(engine)
                     stage = "validate"
                     validate_web_sessions(engine)
                 else:
-                    # Leave a different required table absent: a rejected preflight
-                    # must not create it as an acceptance artifact.
+                    # The read-only preflight must reject a weakened check without
+                    # creating or repairing anything.
                     stage = "create_target"
-                    table = {"cuota_acceso": CuotaAcceso.__table__,
-                             "evento_seguridad": EventoSeguridad.__table__}[target]
-                    table.create(engine)
+                    for table in (SesionWeb.__table__, CuotaAcceso.__table__, EventoSeguridad.__table__):
+                        table.create(engine)
                     constraint = {"cuota_acceso": "chk_cuota_intentos_positivos",
                                   "evento_seguridad": "chk_evento_resultado"}[target]
                     stage = "tamper_check"
@@ -168,17 +166,14 @@ def run_checks(socket_dir, container_id):
                         if replacement:
                             suffix = " NOT VALID" if schema.endswith("_not_valid") else ""
                             conn.execute(text(f'ALTER TABLE "{target}" ADD CONSTRAINT "{constraint}" CHECK ({replacement}){suffix}'))
-                    stage = "reject_migration"
+                    stage = "reject_validation"
                     try:
-                        migrate_web_sessions(engine, writers_stopped=True)
+                        validate_web_sessions(engine)
                     except RuntimeError as error:
                         if "Incompatible web-session checks" not in str(error):
                             raise AssertionError("Rejected for the wrong reason") from error
                     else:
-                        raise AssertionError("Migration accepted an absent or weakened check")
-                    stage = "check_artifacts"
-                    if inspect(engine).has_table(SesionWeb.__tablename__):
-                        raise AssertionError("Rejected migration created the absent session table")
+                        raise AssertionError("Validation accepted a weakened check")
                 print(f"{schema}: PASS", flush=True)
             except Exception as error:
                 # Fixed labels and allowlisted class names only; never print exception text.
@@ -196,7 +191,7 @@ def run_checks(socket_dir, container_id):
                 if not failures and driver_class == "OperationalError":
                     startup_diagnostic(container_id, socket_dir, error)
                 failures.append(schema)
-                if schema == "fresh" and stage == "first_migration":
+                if schema == "fresh" and stage == "validate":
                     diagnose_fresh_checks()
             finally:
                 if engine is not None:

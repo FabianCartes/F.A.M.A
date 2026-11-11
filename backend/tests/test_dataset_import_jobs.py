@@ -9,12 +9,10 @@ from tests.test_dataset_import_api import imports
 
 def queue_fixture(imports, *, global_limit=4, owner_limit=1):
     from app.services.dataset_import_jobs import ImportJobQueue, JobLimits
-    from scripts.migrate_dataset_import_jobs import migrate_jobs
 
     from tests.test_dataset_zip_validation import archive, wav_bytes
 
     client, service, _, sessions = imports
-    migrate_jobs(sessions.kw["bind"], writers_stopped=True)
     queue = ImportJobQueue(sessions, limits=JobLimits(global_limit, owner_limit), clock=lambda: 100.0)
     row = client.post("/api/ingestion/imports", json={"request_key": "queue", "name": "Synthetic"}).json()
     data = archive(service.root.parent / "queue.zip", [("birds/a.wav", wav_bytes())]).read_bytes()
@@ -114,23 +112,6 @@ def test_owner_and_global_limits_are_separate(imports):
     assert queue.get(2, second["id"])["status"] == "queued"
 
 
-def test_explicit_migration_preserves_sources_is_replayable_and_requires_maintenance(imports):
-    from sqlalchemy import select
-    from app.models.dataset_import import DatasetImport
-    from scripts.migrate_dataset_import_jobs import JobMigrationError, migrate_jobs
-
-    _, _, _, sessions = imports
-    engine = sessions.kw["bind"]
-    with engine.connect() as conn:
-        before = list(conn.execute(select(DatasetImport.__table__)).mappings())
-    with pytest.raises(JobMigrationError, match="stop_writers"):
-        migrate_jobs(engine)
-    assert migrate_jobs(engine, writers_stopped=True) == {"version": 1, "verified": True}
-    assert migrate_jobs(engine, writers_stopped=True) == {"version": 1, "verified": True}
-    with engine.connect() as conn:
-        assert list(conn.execute(select(DatasetImport.__table__)).mappings()) == before
-
-
 @pytest.mark.parametrize("kind, parameters", [
     ("preview", {"root": "", "ignored": True}), ("preview", {"root": 3}),
     ("confirm", {"preview_token": "a" * 64}), ("sync", {}),
@@ -165,17 +146,6 @@ def test_rejected_admission_rolls_back_every_persisted_change(imports):
     assert dump() == before
 
 
-def test_migration_refuses_missing_unique_index_instead_of_repairing_it(imports):
-    from scripts.migrate_dataset_import_jobs import JobMigrationError, migrate_jobs
-
-    queue, _ = queue_fixture(imports)
-    engine = queue.sessions.kw["bind"]
-    with engine.begin() as conn:
-        conn.exec_driver_sql("DROP INDEX uq_import_job_active_import")
-    with pytest.raises(JobMigrationError, match="incompatible_job_indexes"):
-        migrate_jobs(engine, writers_stopped=True)
-
-
 def test_admission_without_explicit_migration_is_unavailable_without_creating_schema(imports):
     from sqlalchemy import inspect
     from app.services.dataset_import_jobs import ImportJobQueue
@@ -183,7 +153,7 @@ def test_admission_without_explicit_migration_is_unavailable_without_creating_sc
     client, _, _, sessions = imports
     engine = sessions.kw["bind"]
     # Metadata may have been registered by an earlier case. Neither its presence
-    # nor create_all counts as the explicit queue initialization acknowledgement.
+    # is the queue initialization acknowledgement; only its gate row is.
     row = client.post("/api/ingestion/imports", json={"request_key": "not-migrated", "name": "X"}).json()
     # The shared HTTP fixture now migrates jobs for the async routes. Remove
     # only its acknowledgement to exercise this intentionally unmigrated case.
@@ -194,29 +164,3 @@ def test_admission_without_explicit_migration_is_unavailable_without_creating_sc
         ImportJobQueue(sessions).admit(1, row["id"], "preview", "one", {"root": ""})
     assert error.value.status_code == 503
     assert set(inspect(engine).get_table_names()) == before
-
-
-def test_migration_rejects_missing_foreign_key_without_changing_data(imports):
-    from sqlalchemy import ForeignKeyConstraint, MetaData, inspect
-    from app.models.dataset_import_job import ImportJob
-    from scripts.migrate_dataset_import_jobs import JobMigrationError, migrate_jobs
-
-    queue, _ = queue_fixture(imports)
-    engine = queue.sessions.kw["bind"]
-    replacement = ImportJob.__table__.to_metadata(MetaData())
-    for constraint in list(replacement.constraints):
-        if isinstance(constraint, ForeignKeyConstraint):
-            replacement.constraints.remove(constraint)
-    with engine.begin() as conn:
-        ImportJob.__table__.drop(conn)
-        replacement.create(conn)
-    assert inspect(engine).get_foreign_keys("dataset_import_job") == []
-
-    def dump():
-        with engine.connect() as conn:
-            return "\n".join(conn.connection.driver_connection.iterdump())
-
-    before = dump()
-    with pytest.raises(JobMigrationError, match="incompatible_job_foreign_keys"):
-        migrate_jobs(engine, writers_stopped=True)
-    assert dump() == before

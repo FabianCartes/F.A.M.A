@@ -30,9 +30,9 @@ def local_imports(tmp_path, monkeypatch):
     monkeypatch.delenv("FAMA_IMPORT_DEV_MODE", raising=False)
     monkeypatch.delenv("FAMA_IMPORT_DEV_FRONTEND_IP", raising=False)
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
-    Base.metadata.create_all(engine)
-    from scripts.migrate_dataset_import_jobs import migrate_jobs
-    migrate_jobs(engine, writers_stopped=True)
+    from tests.schema_support import upgrade
+    with engine.connect() as connection:
+        upgrade(connection)
     sessions = sessionmaker(bind=engine)
     service = DatasetImports(tmp_path / "managed", limits=ImportLimits(free_bytes=1))
     app = FastAPI()

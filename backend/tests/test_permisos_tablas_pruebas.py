@@ -8,11 +8,26 @@ import sys
 import psycopg2
 import pytest
 
-from app.schema import check_schema, upgrade_schema
+from app.schema import HEAD, check_schema, upgrade_schema
 from tests.test_preparacion_roles_pruebas import PASSWORD, connection, isolated_server, prepare
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "permisos_tablas_pruebas.sql"
+
+
+@pytest.mark.parametrize("name", ["permisos_tablas_pruebas.sql", "permisos_tablas_oficial.sql"])
+def test_permission_scripts_require_the_head_and_cover_every_head_table(name):
+    """Static check: runs without PostgreSQL, unlike the executed-script cases below."""
+    import re
+    from app.schema import HEAD
+    from migrations.schema_0005 import metadata
+
+    text = (SCRIPT.parent / name).read_text()
+    listed = re.search(r"tablas text\[\] := ARRAY\[(.*?)\];", text, re.S).group(1)
+    assert set(re.findall(r"'([a-z_]+)'", listed)) == set(metadata.tables)
+    assert re.findall(r"ARRAY\['(\w+)'\]::text\[\]", text) == [HEAD]
+    assert re.findall(r"revision (\w+)'", text) == [HEAD, HEAD]
+    assert re.search(r"después de (\w+)\.", text.splitlines()[0]).group(1) == HEAD
 
 
 @pytest.fixture
@@ -70,7 +85,7 @@ def test_operator_autonomy_command_prompts_without_persisting_password_and_is_re
                                 cwd=SCRIPT.parents[1], env=dict(os.environ, PYTHON_DOTENV_DISABLED='1'),
                                 capture_output=True, text=True, timeout=30)
         assert result.returncode == 0, result.stderr
-        assert json.loads(result.stdout) == {'code': 'autonomy_update_ready', 'revision': '0004_integration'}
+        assert json.loads(result.stdout) == {'code': 'autonomy_update_ready', 'revision': HEAD}
         assert PASSWORD not in result.stdout + result.stderr
     with connection(runtime) as database, database.cursor() as cursor:
         cursor.execute("SELECT has_table_privilege(current_user, 'solicitud_dataset', 'INSERT'), "
@@ -118,7 +133,7 @@ def test_normaliza_permisos_directos_anteriores_sin_alterar_la_revision(migrated
             has_table_privilege(current_user, 'public.usuario', 'TRIGGER')""")
         assert cursor.fetchone() == (False, False, False)
         cursor.execute("SELECT version_num FROM public.alembic_version")
-        assert cursor.fetchone() == ("0004_integration",)
+        assert cursor.fetchone() == (HEAD,)
 
 
 @pytest.mark.parametrize("change", ["owner", "missing"])

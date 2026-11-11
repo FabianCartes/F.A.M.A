@@ -13,8 +13,6 @@ BASE = "/api/ingestion/imports"
 def receive(imports, tmp_path, *, key="failed", entries=None):
     client, _, _, sessions = imports
     migrate(sessions)
-    from scripts.migrate_dataset_import_chunks import migrate_chunks
-    migrate_chunks(sessions.kw["bind"], writers_stopped=True)
     created = client.post(BASE, json={"request_key": key, "name": key,
                                     "layout": "class_folders", "auto_import": True})
     assert created.status_code == 200, created.text

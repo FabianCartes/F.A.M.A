@@ -126,20 +126,19 @@ def test_import_cookie_keeps_exact_owner_even_for_two_administrators(imports, we
         assert local.get(f"/api/ingestion/imports/{job['id']}").json() == job
 
 
-def test_session_schema_requires_explicit_idempotent_migration(client, web, test_db):
+def test_missing_session_schema_is_unavailable_until_tables_exist(client, web, test_db):
     from app.models.web_session import SesionWeb
     from app.models.access_quota import CuotaAcceso
     from app.models.security_audit import EventoSeguridad
     engine = test_db.get_bind()
-    for table in (SesionWeb.__table__, CuotaAcceso.__table__, EventoSeguridad.__table__):
+    tables = (SesionWeb.__table__, CuotaAcceso.__table__, EventoSeguridad.__table__)
+    for table in tables:
         table.drop(engine)
-    assert login(client).status_code == 503
-    from scripts.migrate_web_sessions import migrate_web_sessions
-    with pytest.raises(RuntimeError, match="writers"):
-        migrate_web_sessions(engine)
-    assert login(client).status_code == 503
-    migrate_web_sessions(engine, writers_stopped=True)
-    migrate_web_sessions(engine, writers_stopped=True)
+    response = login(client)
+    assert response.status_code == 503
+    assert "set-cookie" not in response.headers
+    for table in tables:
+        table.create(engine)
     assert login(client).status_code == 200
     assert client.get("/api/auth/me").json()["id"] == 1
 
@@ -154,9 +153,6 @@ def test_incompatible_session_schema_fails_before_creating_cookie(client, web, t
     response = login(client)
     assert response.status_code == 503, response.text
     assert "set-cookie" not in response.headers
-    from scripts.migrate_web_sessions import migrate_web_sessions
-    with pytest.raises(RuntimeError, match="Incompatible"):
-        migrate_web_sessions(engine, writers_stopped=True)
     assert login(client).status_code == 503
 
 

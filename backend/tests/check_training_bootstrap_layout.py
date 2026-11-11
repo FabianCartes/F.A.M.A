@@ -13,7 +13,7 @@ BACKEND = ROOT / "backend"
 
 def check_layout():
     entries = (BACKEND / "bootstrap/source-files.txt").read_text().splitlines()
-    if len(entries) != 30 or len(set(entries)) != len(entries):
+    if not entries or len(set(entries)) != len(entries):
         raise ValueError("Unexpected bootstrap source inventory")
     with tempfile.TemporaryDirectory(prefix="fama-bootstrap-layout-", dir="/tmp") as directory:
         private = Path(directory)
@@ -22,7 +22,7 @@ def check_layout():
         for name in entries:
             relative = Path(name)
             if (relative.is_absolute() or ".." in relative.parts or relative.suffix != ".py"
-                    or relative.parts[0] not in ("app", "scripts")):
+                    or relative.parts[0] not in ("app", "migrations", "scripts")):
                 raise ValueError("Unsafe source inventory entry")
             source = BACKEND / relative
             if any(path.is_symlink() for path in (source, *source.parents)) or not source.is_file():
@@ -88,9 +88,11 @@ for name in json.loads(sys.argv[2]): importlib.import_module(name)
 for name in sys.modules:
     if name.split(".")[0] in ("torch","tensorflow","google","fastapi","pydantic","training","poc"):
         raise RuntimeError("Unexpected runtime dependency")
-print(json.dumps({"source_imports":30,"cloud_ml_runtime_loaded":False}))
+print(json.dumps({"source_imports":len(json.loads(sys.argv[2])),"cloud_ml_runtime_loaded":False}))
 '''
-        modules = [name.removesuffix(".py").removesuffix("/__init__").replace("/", ".") for name in entries]
+        # Alembic loads its environment and revision files itself; they are not importable modules.
+        modules = [name.removesuffix(".py").removesuffix("/__init__").replace("/", ".") for name in entries
+                   if name != "migrations/env.py" and not name.startswith("migrations/versions/")]
         result = subprocess.run([sys.executable, "-B", "-c", probe, str(context), json.dumps(modules)],
                                 cwd=private, env=environment, capture_output=True, text=True,
                                 check=True, timeout=20)

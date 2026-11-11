@@ -26,7 +26,7 @@ El login conserva límites persistentes: `FAMA_RATE_LIMIT_KEY` debe contener al 
 
 **Conservar `JWT_SECRET_KEY`:** el arranque todavía exige esta configuración y ejecuta `ensure_authentication_configured()`. La clave debe contener al menos 32 bytes, no estar en blanco ni usar el valor histórico inseguro. El nombre se mantiene por compatibilidad de configuración; ya no existe emisión, validación ni expiración independiente de JWT en el servicio de autenticación.
 
-El login canónico valida el esquema de sesión **antes** de reservar cuotas o comprobar credenciales. La ausencia o incompatibilidad devuelve 503 sin escribir cuotas, último acceso, auditoría ni sesiones, y sin emitir cookie. `validate_web_sessions(engine)` es un preflight de solo lectura. El migrador existente `scripts.migrate_web_sessions.migrate_web_sessions(engine, writers_stopped=True)` valida tablas presentes y crea solo las ausentes; no repara tablas incompatibles ni migra propiedad de datasets.
+El login canónico valida el esquema de sesión **antes** de reservar cuotas o comprobar credenciales. La ausencia o incompatibilidad devuelve 503 sin escribir cuotas, último acceso, auditoría ni sesiones, y sin emitir cookie. `validate_web_sessions(engine)` (`backend/app/services/web_session_schema.py`) es un preflight de solo lectura: no crea ni repara tablas. Las tablas de sesión, cuota y auditoría las crean las revisiones Alembic (`python -m app.schema upgrade --apply`); el script `scripts.migrate_web_sessions` fue retirado.
 
 ### Instalación existente
 

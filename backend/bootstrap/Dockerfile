@@ -8,8 +8,9 @@ WORKDIR /bootstrap
 COPY requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 COPY app/ ./app/
+COPY migrations/ ./migrations/
 COPY scripts/ ./scripts/
 # The private host context is 0600/0700; only source code becomes readable in the image.
-RUN chmod -R a+rX /bootstrap/app /bootstrap/scripts
+RUN chmod -R a+rX /bootstrap/app /bootstrap/migrations /bootstrap/scripts
 USER 10001:10001
 ENTRYPOINT ["python", "-B", "-m", "scripts.prepare_zip_manual_database"]

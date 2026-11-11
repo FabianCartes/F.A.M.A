@@ -31,12 +31,12 @@ def layout_api(tmp_path, monkeypatch):
     from app.services.dataset_import_execution import ImportExecution
     from app.services import dataset_import_execution
     from app.services.dataset_zip import ImportLimits, validate_zip
-    from scripts.migrate_dataset_import_jobs import migrate_jobs
 
     monkeypatch.setattr(dataset_import_execution, "validate_zip", validate_zip)
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
-    Base.metadata.create_all(engine)
-    migrate_jobs(engine, writers_stopped=True)
+    from tests.schema_support import upgrade
+    with engine.connect() as connection:
+        upgrade(connection)
     sessions = sessionmaker(bind=engine)
     service = DatasetImports(tmp_path / "managed", limits=ImportLimits(free_bytes=1))
     app = FastAPI()

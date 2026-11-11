@@ -34,13 +34,11 @@ def child(root, action):
     from fastapi.testclient import TestClient
     from sqlalchemy import create_engine, event
     from sqlalchemy.orm import sessionmaker
-    from app.database import Base, get_db
+    from app.database import get_db
     from app.routes.dataset_imports import router, get_import_user, get_import_service
     from app.services.dataset_imports import DatasetImports
     from app.services.dataset_zip import ImportLimits
-    from scripts.migrate_dataset_import_jobs import migrate_jobs
-    from scripts.migrate_dataset_import_receipts import migrate_receipts
-    from scripts.migrate_dataset_import_chunks import migrate_chunks
+    from tests.schema_support import migrate
 
     engine = create_engine(f"sqlite:///{database}", connect_args={"timeout": 3, "check_same_thread": False})
     sessions = sessionmaker(bind=engine)
@@ -70,10 +68,7 @@ def child(root, action):
     try:
         with TestClient(app, raise_server_exceptions=False) as client:
             if action == "prepare":
-                Base.metadata.create_all(engine)
-                migrate_jobs(engine, writers_stopped=True)
-                migrate_receipts(engine, writers_stopped=True)
-                migrate_chunks(engine, writers_stopped=True)
+                migrate(engine)
                 response = client.post(base, json={"request_key": "source", "name": "Source"})
                 assert response.status_code == 200, response.text
                 identity = response.json()["id"]

@@ -18,8 +18,10 @@ def create(client, key="receipt"):
 
 
 def migrate(sessions):
-    from scripts.migrate_dataset_import_receipts import migrate_receipts
-    return migrate_receipts(sessions.kw["bind"], writers_stopped=True)
+    """The shared fixture builds the schema with Alembic; only assert it is at head."""
+    from app.schema import HEAD
+    with sessions.kw["bind"].connect() as conn:
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == HEAD
 
 
 def dump(sessions):
@@ -156,40 +158,13 @@ def test_receipt_explicit_owner_budget_has_exact_boundary(imports, monkeypatch):
     assert start(client, identity, size=10).status_code == 200
 
 
-def test_receipt_without_migration_does_not_create_or_mutate_schema(imports):
+def test_receipt_without_schema_marker_is_unavailable_without_mutating_state(imports):
     client, _, _, sessions = imports
     identity = create(client)
+    with sessions.kw["bind"].begin() as conn:
+        conn.exec_driver_sql("DELETE FROM dataset_import_receipt_schema")
     before = dump(sessions)
     assert start(client, identity).status_code == 503
-    assert dump(sessions) == before
-
-
-def test_receipt_migration_requires_maintenance_is_additive_and_replayable(imports):
-    from scripts.migrate_dataset_import_receipts import migrate_receipts
-    client, _, _, sessions = imports
-    identity = create(client)
-    before = client.get(f"{BASE}/{identity}").json()
-    engine = sessions.kw["bind"]
-    with pytest.raises(ValueError, match="stop_writers"):
-        migrate_receipts(engine)
-    assert migrate_receipts(engine, writers_stopped=True) == {"version": 1, "verified": True}
-    assert migrate_receipts(engine, writers_stopped=True) == {"version": 1, "verified": True}
-    assert client.get(f"{BASE}/{identity}").json() == before
-    assert "dataset_import_receipt" in inspect(engine).get_table_names()
-
-
-def test_receipt_migration_refuses_incompatible_table_without_repair(imports):
-    from scripts.migrate_dataset_import_receipts import migrate_receipts
-    _, _, _, sessions = imports
-    engine = sessions.kw["bind"]
-    # Registration by earlier cases may have created an empty table, not an
-    # acknowledgement. Replace only this new table with an incompatible fixture.
-    with engine.begin() as conn:
-        conn.exec_driver_sql("DROP TABLE IF EXISTS dataset_import_receipt")
-        conn.execute(text("CREATE TABLE dataset_import_receipt (import_id VARCHAR(32) PRIMARY KEY)"))
-    before = dump(sessions)
-    with pytest.raises(ValueError, match="incompatible"):
-        migrate_receipts(engine, writers_stopped=True)
     assert dump(sessions) == before
 
 

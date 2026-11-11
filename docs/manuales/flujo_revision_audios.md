@@ -79,24 +79,16 @@ No borrar ni editar intenciones para cambiar destinos. Las intenciones legacy co
 | HTTP 422 al incorporar | Revisar componentes de ruta válidos (no vacíos, hasta 100 caracteres, sin separadores ni controles) y ambigüedad o ausencia del catálogo. `dataset_name` no es obligatorio; si se envía por compatibilidad, debe ser válido y coincidir con el persistido. |
 | Reintento incompatible con la intención | No cambiar dataset, clase, fuente ni directorio. Conservar la intención original y diagnosticar el error sin editarla. |
 
-## Migración antes de actualizar el backend
+## Esquema antes de actualizar el backend
 
-Una base existente requiere la migración explícita de [`migrate_prediction_dataset.py`](../../backend/scripts/migrate_prediction_dataset.py). `create_all` crea tablas nuevas, pero **no altera una tabla existente**. La migración no se ejecuta automáticamente al iniciar el backend.
+La columna `prediccion.dataset_name` (`VARCHAR(100) NULL`) y la tabla `feedback_sync` forman parte de las revisiones Alembic. Una base existente se actualiza con el procedimiento explícito del operador:
 
-Procedimiento para un operador autorizado; este manual no concede autorización ni acredita que se haya ejecutado:
+```bash
+python -m app.schema status
+python -m app.schema upgrade --apply
+```
 
-1. Obtener y verificar un respaldo recuperable de la base de datos, según el procedimiento del operador.
-2. Pausar los escritores de **inferencia y curación** para evitar operaciones concurrentes durante el cambio.
-3. Suministrar explícitamente en el entorno la `DATABASE_URL` aprobada para la base objetivo, sin imprimir su valor ni exponer secretos. El script no carga `.env` ni usa una URL por defecto.
-4. Desde la **raíz del repositorio**, con el intérprete Python del entorno de dependencias existente, ejecutar **antes de actualizar el backend**:
-
-   ```bash
-   python backend/scripts/migrate_prediction_dataset.py --apply
-   ```
-
-5. Verificar el resultado: `dataset_name added` si agregó la columna, o `dataset_name already present` si ya existía. Solo después de comprobar el éxito, continuar la actualización y la reanudación de escritores conforme al procedimiento autorizado de despliegue.
-
-El script soporta **SQLite y PostgreSQL** y agrega `dataset_name VARCHAR(100) NULL` a `prediccion`. Es idempotente si la columna ya existe; no hace backfill: las filas antiguas conservan `NULL`. No exige instalar dependencias nuevas ni se debe sustituir la URL aprobada por una base elegida automáticamente.
+Los scripts `migrate_prediction_dataset.py` y `migrate_feedback_sync.py` fueron retirados. Como antes, la actualización no se ejecuta al iniciar el backend; requiere respaldo verificado, escritores de **inferencia y curación** pausados y la `DATABASE_URL` aprobada suministrada explícitamente sin imprimirla. Este manual no concede autorización ni acredita que se haya ejecutado. Las filas antiguas de `prediccion` conservan `NULL` en `dataset_name`; no hay backfill.
 
 ## Intención durable de sincronización (AUDIO-2 + AUDIO-3a/3b)
 
@@ -114,21 +106,13 @@ Contrato de [`FeedbackSyncQueue`](../../backend/app/services/feedback_sync.py), 
 
 Las operaciones no hacen commit ni rollback; las escrituras hacen flush de la sesión y pueden incluir cambios pendientes del llamador. Este controla confirmación, rollback y errores de base de datos. La cola no escribe archivos, calcula hashes, sube bytes, reclama trabajos ni ejecuta reintentos. El sincronizador posee sus propias sesiones y coordina la exclusión con el mismo lock de filesystem de aprobación. SQLite no proporciona `FOR UPDATE`; PostgreSQL real no se ha ejercitado.
 
-### Creación explícita del esquema de sincronización
+### Creación del esquema de sincronización
 
-Con respaldo verificado, escritores pausados y `DATABASE_URL` explícita aprobada por el operador, desde la raíz:
+`feedback_sync` la crea la revisión Alembic correspondiente (`python -m app.schema upgrade --apply`, con respaldo verificado y escritores pausados); el script `migrate_feedback_sync.py` fue retirado. La revisión no modifica columnas, filas ni estados anteriores, no hace backfill y no declara audios históricos localmente listos. No se ejecutó sobre una base desplegada.
 
-```bash
-python backend/scripts/migrate_feedback_sync.py --apply
-```
+Las pruebas de [cola](../../backend/tests/test_feedback_sync_queue.py) usan SQLite temporal y la interfaz pública, verifican reconstrucción de sesión/módulo, duplicados, resultados, rollback y conservación de históricos. No prueban PostgreSQL real, integridad de archivos, contención física/symlinks ni sincronización cloud.
 
-El [script](../../backend/scripts/migrate_feedback_sync.py) no carga `.env`, no importa la aplicación ni elige una base por defecto. Soporta PostgreSQL/SQLite y requiere la tabla legacy `retroalimentacion`. Crea **solo** `feedback_sync`; devuelve `feedback_sync added` o `feedback_sync already present` al reejecutarse. No modifica columnas, filas ni estados anteriores, no hace backfill y no declara audios históricos localmente listos. Si la tabla ya existe, no repara ni valida un esquema incompatible: inspeccionarlo es responsabilidad del operador.
-
-El modelo también está registrado en `Base.metadata`: el `create_all` del arranque puede crear esta tabla faltante tanto en una base nueva como en una existente; no altera tablas ya presentes ni inserta intenciones. Esto difiere de la migración de columnas de `prediccion`. El script es una acción operativa explícita disponible antes del despliegue, no un hook de arranque. No se ejecutó sobre una base desplegada.
-
-Las pruebas de [cola](../../backend/tests/test_feedback_sync_queue.py) y [migración](../../backend/tests/test_feedback_sync_migration.py) usan SQLite temporal y la interfaz pública, verifican reconstrucción de sesión/módulo, duplicados, resultados, rollback y conservación de históricos. Comparan además el contrato de columnas de migración y metadata. No prueban PostgreSQL real, integridad de archivos, contención física/symlinks ni sincronización cloud.
-
-Rollback de código: retirar modelo, registro, módulo, script, pruebas y esta sección sin tocar AUDIO-1. No se proporciona ni ejecuta una migración destructiva inversa. Si un operador ya creó la tabla y guardó intenciones, debe preservar esos registros y definir una recuperación explícita; revertir código no revierte datos.
+Rollback de código: retirar modelo, registro, módulo, pruebas y esta sección sin tocar AUDIO-1. No se proporciona ni ejecuta una migración destructiva inversa. Si un operador ya creó la tabla, conservarla.
 
 ## Sincronización automática y consulta de estados (AUDIO-3b)
 
@@ -202,7 +186,7 @@ Ante un rollback, pausar los escritores bajo autorización y definir recuperaci�
 
 La primera incorporación necesita acceso de lectura a la fuente raw administrada de GCS. No requiere permisos de subida al dataset para aprobar localmente; la sincronización automática sí los necesita. El backend requiere acceso de escritura y durabilidad al dataset local y un sistema Linux/FS con soporte de `flock`; la protección de metadatos supone escritores cooperantes.
 
-Las pruebas en [`test_audio_review_flow.py`](../../backend/tests/test_audio_review_flow.py) conectan los endpoints con `TestClient` sin lifespan, SQLite aislado, predictor/registro controlados y GCS falso que conserva bytes. Las de [aprobación local](../../backend/tests/test_feedback_local_approval.py) verifican disponibilidad mediante el ingestor real, catálogo local sin cloud, transacción conjunta, replay, corrupción, conflictos, symlinks e interrupciones de filesystem/BD, con WAV sintético y directorios temporales. Las pruebas de [almacenamiento](../../backend/tests/test_storage.py), [incorporación](../../backend/tests/test_feedback_storage.py) y [migración](../../backend/tests/test_prediction_dataset_migration.py) protegen la resolución de clase, los reintentos y el cambio de esquema. No acreditan acceso a GCS real, despliegue, interacción de navegador ni calidad acústica. La integración del registro con PostgreSQL y la prueba optativa de calidad real de Chucao requieren sus entornos y artefactos propios y quedan fuera de esta verificación; Chucao se omite sin `FAMA_QUALITY_MODEL_ID`, `FAMA_QUALITY_CHECKPOINT` y `FAMA_QUALITY_AUDIO`.
+Las pruebas en [`test_audio_review_flow.py`](../../backend/tests/test_audio_review_flow.py) conectan los endpoints con `TestClient` sin lifespan, SQLite aislado, predictor/registro controlados y GCS falso que conserva bytes. Las de [aprobación local](../../backend/tests/test_feedback_local_approval.py) verifican disponibilidad mediante el ingestor real, catálogo local sin cloud, transacción conjunta, replay, corrupción, conflictos, symlinks e interrupciones de filesystem/BD, con WAV sintético y directorios temporales. Las pruebas de [almacenamiento](../../backend/tests/test_storage.py), [incorporación](../../backend/tests/test_feedback_storage.py) protegen la resolución de clase, los reintentos y el cambio de esquema. No acreditan acceso a GCS real, despliegue, interacción de navegador ni calidad acústica. La integración del registro con PostgreSQL y la prueba optativa de calidad real de Chucao requieren sus entornos y artefactos propios y quedan fuera de esta verificación; Chucao se omite sin `FAMA_QUALITY_MODEL_ID`, `FAMA_QUALITY_CHECKPOINT` y `FAMA_QUALITY_AUDIO`.
 
 Las pruebas del sincronizador usan SQLite temporal, uploads falsos y sesiones propias; ejercitan identidad/integridad, resultados indeterminados de commit, reintentos, contención entre threads y procesos con **spawn**. Las pruebas de lifespan sustituyen modelos y seeding, verifican recuperación inicial, retries periódicos tras caída cloud/BD y espera real del upload en shutdown. Las HTTP verifican schema, límites y separación de la cola de curación sin iniciar servicios reales. No prueban PostgreSQL/GCS reales ni interrupción abrupta del sistema. Las pruebas frontend de AUDIO-4 ejercitan vista/panel renderizados con API simulada en jsdom: separación de colas, outcomes, refresco, fallos, respuestas tardías y cancelación. No equivalen a una verificación con navegador real o servicios desplegados.
 

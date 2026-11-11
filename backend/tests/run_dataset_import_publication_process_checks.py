@@ -40,7 +40,7 @@ def child(root, action):
     from types import SimpleNamespace
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-    from app.database import Base, get_db
+    from app.database import get_db
     from app.routes.dataset_imports import router, get_import_service, get_import_user
     from app.services.dataset_import_jobs import ImportJobQueue
     from app.services.dataset_import_worker import ImportJobWorker
@@ -76,9 +76,8 @@ def child(root, action):
     try:
         with TestClient(app, raise_server_exceptions=False) as client:
             if action == "prepare":
-                from scripts.migrate_dataset_import_jobs import migrate_jobs
-                Base.metadata.create_all(engine)
-                migrate_jobs(engine, writers_stopped=True)
+                from tests.schema_support import migrate
+                migrate(engine)
                 service._initialize()
                 (service.root / "attempts").mkdir(mode=0o700)
                 source = client.post(base, json={"request_key": "source", "name": "Synthetic"}).json()

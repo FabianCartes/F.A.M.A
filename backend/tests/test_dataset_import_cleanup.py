@@ -87,11 +87,7 @@ def test_failed_deletion_blocks_new_work_and_is_retryable_without_failing_succes
 def test_cleanup_recovers_expired_receipt_but_not_recent_useful_activity(imports, tmp_path, monkeypatch):
     import hashlib
     from app.services import dataset_import_cleanup as cleanup
-    from scripts.migrate_dataset_import_receipts import migrate_receipts
-    from scripts.migrate_dataset_import_chunks import migrate_chunks
     client, service, _, sessions = imports
-    migrate_receipts(sessions.kw["bind"], writers_stopped=True)
-    migrate_chunks(sessions.kw["bind"], writers_stopped=True)
     base = "/api/ingestion/imports"
     source = client.post(base, json={"request_key": "activity", "name": "Activity"}).json()["id"]
     url = base + "/" + source

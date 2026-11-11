@@ -1,5 +1,7 @@
 # Backfill import metadata before the normalized runtime cutover
 
+> **Histórico.** El script `scripts.migrate_dataset_import_metadata` y su prueba fueron retirados: las tablas normalizadas las crean las revisiones Alembic (`python -m app.schema upgrade --apply`). Los comandos de las secciones «Safe inspection», «Authorized maintenance procedure» y «Reproduce synthetic checks» ya no existen y se conservan solo como registro; no los ejecute. El contrato HTTP de abajo sigue vigente.
+
 The explicit backfill adds normalized metadata and verifies equivalence while retaining `ImportedDataset.files` and `DatasetImport.preview` unchanged. **Running the migration does not activate a new application version or increase ZIP limits.** The T1b working-tree runtime reads/writes normalized records and must be deployed together with its paginated client. Implementation checks and pending acceptance are recorded in the [tracking document](../arquitectura/large-zip-gcs.md); no live migration or deployment is authorized by these instructions.
 
 ## Safe inspection
@@ -53,13 +55,4 @@ Sync progress is stored in normalized file/member rows and a scalar continuation
 
 ## Reproduce synthetic checks
 
-Use the validated interpreter and isolated runner described in [training integration](integracion-flujo-entrenamiento.md#reproducir-comprobaciones-aisladas):
-
-```bash
-PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// \
-CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
-../.venv/bin/python tests/run_isolated_training_checks.py \
-  tests/test_dataset_import_metadata_migration.py -q
-```
-
-Run from `backend/`. Tests use synthetic data and in-memory SQLite only. Results and pending checks are recorded in the implementation log, not inferred from this procedure.
+La prueba `test_dataset_import_metadata_migration.py` se retiró con el script. Las pruebas vigentes del contrato paginado son `test_dataset_import_pages.py` y `test_dataset_import_paging_regressions.py`, que se ejecutan con el runner aislado descrito en [training integration](integracion-flujo-entrenamiento.md#reproducir-comprobaciones-aisladas).

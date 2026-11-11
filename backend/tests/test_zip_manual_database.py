@@ -3,30 +3,6 @@ import pytest
 from sqlalchemy import create_engine, inspect
 
 
-def test_postgres_evaluation_spelling_uses_existing_strict_matcher(monkeypatch):
-    from sqlalchemy.dialects import postgresql
-    from scripts.prepare_zip_manual_database import _verify_application_table
-    from scripts.migrate_model_evaluations import _POSTGRES_CATALOG_CHECKS
-    from app.models.training import ModelEvaluation
-    from scripts import migrate_dataset_import_jobs
-
-    checks = [{"name": name, "sqltext": sql} for name, sql in _POSTGRES_CATALOG_CHECKS.items()]
-    class Inspector:
-        def get_check_constraints(self, name):
-            assert name == "model_evaluation"
-            return checks
-    connection = type("Connection", (), {"dialect": postgresql.dialect()})()
-    monkeypatch.setattr("sqlalchemy.inspect", lambda value: Inspector())
-    tables = []
-    monkeypatch.setattr(migrate_dataset_import_jobs, "_verify_table", lambda conn, table: tables.append(table))
-    _verify_application_table(connection, ModelEvaluation.__table__)
-    assert tables[0] is not ModelEvaluation.__table__
-    assert not any(type(item).__name__ == "CheckConstraint" for item in tables[0].constraints)
-    checks[0] = dict(checks[0], sqltext="status IS NOT NULL")
-    with pytest.raises(ValueError):
-        _verify_application_table(connection, ModelEvaluation.__table__)
-
-
 def test_internal_bridge_database_is_explicit_local_target(monkeypatch, capsys):
     from scripts.prepare_zip_manual_database import main
     calls = []
@@ -40,26 +16,39 @@ def test_internal_bridge_database_is_explicit_local_target(monkeypatch, capsys):
     assert len(calls) == 1
 
 
-def test_fresh_initialization_runs_ordered_existing_stages_and_checks_read_only(monkeypatch):
+def test_fresh_initialization_applies_the_alembic_head_and_checks_read_only():
+    from app.schema import HEAD
     from scripts.prepare_zip_manual_database import initialize, verify
-    from scripts import migrate_dataset_import_metadata
 
     engine = create_engine("sqlite://")
     try:
-        assert initialize(engine, writers_stopped=True) == {
-            "prepared": True, "stages": ["application", "imports", "metadata", "jobs", "receipts", "chunks"]}
+        assert initialize(engine, writers_stopped=True) == {"prepared": True, "stages": ["migrations"]}
+        with engine.connect() as connection:
+            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalars().all() == [HEAD]
+        assert "triad_composition" in inspect(engine).get_table_names()
         with engine.connect() as connection:
             before = tuple(connection.connection.driver_connection.iterdump())
-        def forbidden(*args, **kwargs):
-            raise AssertionError("Verification must never repeat legacy backfill")
-        monkeypatch.setattr(migrate_dataset_import_metadata, "migrate_metadata", forbidden)
         assert verify(engine) == {"prepared": True, "verification": "schema_and_markers"}
+        assert verify(engine, training_development=True) == {
+            "prepared": True, "verification": "training_schema_and_markers"}
         with engine.connect() as connection:
             assert tuple(connection.connection.driver_connection.iterdump()) == before
         with pytest.raises(ValueError, match="nonempty"):
             initialize(engine, writers_stopped=True)
         with engine.connect() as connection:
             assert tuple(connection.connection.driver_connection.iterdump()) == before
+    finally:
+        engine.dispose()
+
+
+def test_check_rejects_a_schema_that_is_not_the_current_revision():
+    from scripts.prepare_zip_manual_database import verify
+    from tests.schema_support import migrated_engine
+
+    engine = migrated_engine("0004_integration")
+    try:
+        with pytest.raises(ValueError, match="current"):
+            verify(engine)
     finally:
         engine.dispose()
 
@@ -292,6 +281,9 @@ def test_training_development_rejects_identity_change_before_ddl(monkeypatch):
 
     class Engine:
         dialect = mock_engine.dialect
+
+        def begin(self):
+            return self.connect()
 
         def connect(self):
             identity = expected if not checkouts else old_identity

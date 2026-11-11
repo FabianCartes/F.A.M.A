@@ -12,8 +12,6 @@ def prepared(imports, monkeypatch, size=10):
     client, _, _, sessions = imports
     monkeypatch.setenv("FAMA_IMPORT_CHUNK_BYTES", "4")
     migrate(sessions)
-    from scripts.migrate_dataset_import_chunks import migrate_chunks
-    assert migrate_chunks(sessions.kw["bind"], writers_stopped=True) == {"version": 1, "verified": True}
     identity = create(client)
     assert start(client, identity, size=size).json()["chunk_bytes"] == 4
     return f"{BASE}/{identity}/receipt"
@@ -193,53 +191,21 @@ def test_owner_checks_cancel_and_existing_import_cancel_behavior(imports, monkey
     assert client.post(f"{BASE}/{legacy}/cancel").json()["status"] == "cancelled"
 
 
-def test_chunk_schema_needs_explicit_ack_and_migration_preserves_receipt_v1(imports, monkeypatch):
-    from scripts.migrate_dataset_import_chunks import migrate_chunks, main
-    from scripts.migrate_dataset_import_receipts import migrate_receipts
-    import contextlib
-    import io
+def test_chunk_schema_marker_is_required_and_missing_marker_preserves_receipt_state(imports):
     client, _, _, sessions = imports
     migrate(sessions)
     identity = create(client)
     assert start(client, identity).status_code == 200
-    before = dump(sessions)
     url = f"{BASE}/{identity}/receipt"
+    state = client.get(url).content
+    with sessions.kw["bind"].begin() as conn:
+        conn.exec_driver_sql("DELETE FROM dataset_import_chunk_schema")
+    before = dump(sessions)
     assert put(client, url, 0, b"abcd").status_code == 503
     assert client.post(url + "/finalize").status_code == 503
     assert client.get(url + "/chunks").status_code == 503
     assert dump(sessions) == before
-    engine = sessions.kw["bind"]
-    with pytest.raises(ValueError, match="stop_writers_before_chunk_migration"):
-        migrate_chunks(engine)
-    state = client.get(url).content
-    assert migrate_chunks(engine, writers_stopped=True) == {"version": 1, "verified": True}
     assert client.get(url).content == state
-    before = dump(sessions)
-    assert migrate_chunks(engine, writers_stopped=True) == {"version": 1, "verified": True}
-    assert migrate_receipts(engine, writers_stopped=True) == {"version": 1, "verified": True}
-    assert dump(sessions) == before
-    # CLI owns its engine, while this synthetic fixture owns its memory database.
-    monkeypatch.setattr("sqlalchemy.create_engine", lambda _: engine)
-    monkeypatch.setattr(engine, "dispose", lambda: None)
-    output, errors = io.StringIO(), io.StringIO()
-    with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
-        assert main(["--database-url", "sqlite://", "--writers-stopped"]) == 0
-    assert output.getvalue() == '{"version": 1, "verified": true}\n'
-    assert errors.getvalue() == "" and dump(sessions) == before
-
-
-def test_chunk_migration_rejects_incompatible_schema_without_changing_data(imports):
-    from scripts.migrate_dataset_import_chunks import migrate_chunks
-    _, _, _, sessions = imports
-    migrate(sessions)
-    engine = sessions.kw["bind"]
-    with engine.begin() as conn:
-        conn.exec_driver_sql("DROP TABLE IF EXISTS dataset_import_chunk")
-        conn.exec_driver_sql("CREATE TABLE dataset_import_chunk (import_id VARCHAR(32) PRIMARY KEY)")
-    before = dump(sessions)
-    with pytest.raises(ValueError, match="incompatible"):
-        migrate_chunks(engine, writers_stopped=True)
-    assert dump(sessions) == before
 
 
 def test_finalize_rejects_changed_middle_and_preserves_receiving_state(imports, monkeypatch):
@@ -308,20 +274,3 @@ def test_cancel_releases_promise_but_cleanup_retries_directory_durability(import
     with sessions() as db:
         assert service.cleanup(db, attempt_root=client.execution.root) == {"completed": 1, "failed": 0}
     assert client.get(url).json()["reserved_bytes"] == 0
-
-
-def test_migration_rejects_orphan_chunk_records_without_partial_ack(imports):
-    from scripts.migrate_dataset_import_chunks import migrate_chunks
-    from sqlalchemy import text
-    _, _, _, sessions = imports
-    migrate(sessions)
-    # Synthetic maintenance input, not a runtime storage test seam.
-    assert migrate_chunks(sessions.kw["bind"], writers_stopped=True)["verified"]
-    with sessions.kw["bind"].begin() as conn:
-        conn.execute(text("INSERT INTO dataset_import_chunk "
-            "(import_id, chunk_index, offset_bytes, length_bytes, sha256) VALUES (:id, 0, 0, 4, :sha)"),
-            {"id": "f" * 32, "sha": "0" * 64})
-    before = dump(sessions)
-    with pytest.raises(ValueError, match="incompatible_chunk_reference"):
-        migrate_chunks(sessions.kw["bind"], writers_stopped=True)
-    assert dump(sessions) == before

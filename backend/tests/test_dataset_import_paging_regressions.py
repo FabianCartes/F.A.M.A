@@ -100,38 +100,6 @@ def test_publication_totals_canonical_paths_downloads_and_owner_rejections(impor
         assert digest(sessions) == before
 
 
-def test_migrated_originals_survive_append_and_rejected_backfill_replay(imports, tmp_path):
-    from tests.test_dataset_import_metadata_migration import legacy_database
-    from app.models.dataset_import import DatasetImport, ImportedDataset
-    from scripts.migrate_dataset_import_metadata import migrate_metadata, MetadataMigrationError
-
-    client, _, _, sessions = imports
-    source, job_id, target, _, _ = legacy_database()
-    engine = sessions.kw["bind"]
-    try:
-        with source.connect() as old, engine.begin() as destination:
-            for model in (DatasetImport, ImportedDataset):
-                rows = [dict(row) for row in old.execute(select(model.__table__)).mappings()]
-                destination.execute(model.__table__.insert(), rows)
-    finally:
-        source.dispose()
-    def originals():
-        with engine.connect() as conn:
-            values = [conn.scalar(select(DatasetImport.__table__.c.preview).where(DatasetImport.id == job_id)),
-                      conn.scalar(select(ImportedDataset.__table__.c.files).where(ImportedDataset.id == target))]
-            return hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()
-    original = originals()
-    migrate_metadata(engine, writers_stopped=True)
-    assert originals() == original
-    job = prepare(client, tmp_path, key="postmigration", target_id=target, sample=9)
-    assert confirm(client, job).status_code == 200
-    assert originals() == original
-    before = digest(sessions)
-    with pytest.raises(MetadataMigrationError):
-        migrate_metadata(engine, writers_stopped=True)
-    assert digest(sessions) == before
-
-
 def test_revision_cursor_rejection_is_atomic(imports, tmp_path):
     client, _, _, sessions = imports
     job = prepare(client, tmp_path, entries=[("birds/a.wav", wav_bytes(1)), ("birds/b.wav", wav_bytes(2))])

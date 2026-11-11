@@ -145,12 +145,7 @@ def test_publication_retries_after_rename_preserving_automatic_and_manual_author
         layout_api, tmp_path, monkeypatch, auto):
     from app.services import dataset_import_execution
 
-    from scripts.migrate_dataset_import_receipts import migrate_receipts
-    from scripts.migrate_dataset_import_chunks import migrate_chunks
-
     request, worker, engine = layout_api
-    migrate_receipts(engine, writers_stopped=True)
-    migrate_chunks(engine, writers_stopped=True)
     source, _ = create(request, tmp_path, [("bird/a.wav", wav_bytes())], auto=auto, receipt=worker)
     if auto:
         execution, _ = admit(request, source)

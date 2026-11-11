@@ -1,35 +1,8 @@
-"""Explicit fresh manual-test initialization; never repair or repeat a legacy backfill."""
+"""Explicit fresh manual-test initialization through the Alembic migrations; never repairs."""
 import argparse
 import json
 import re
 import sys
-
-
-def _application_models():
-    from app import models
-    return tuple(getattr(models, name) for name in models.__all__
-                 if name not in ("ImportedDataset", "DatasetImport"))
-
-
-def _verify_application_table(connection, table):
-    from sqlalchemy import CheckConstraint, MetaData, inspect
-    from scripts.migrate_dataset_import_jobs import _verify_table
-
-    if table.name != "model_evaluation":
-        _verify_table(connection, table)
-        return
-    # Reuse this table's existing bounded PostgreSQL catalog spellings, not the
-    # queue verifier's simpler IN normalization. No DDL or metadata mutation.
-    from scripts.migrate_model_evaluations import _checks_match
-    if not _checks_match(table, connection.dialect, inspect(connection).get_check_constraints(table.name)):
-        raise ValueError("Incompatible evaluation check constraints")
-    metadata = MetaData()
-    table.metadata.tables["modelo"].to_metadata(metadata)
-    structural = table.to_metadata(metadata)
-    for constraint in tuple(structural.constraints):
-        if isinstance(constraint, CheckConstraint):
-            structural.constraints.remove(constraint)
-    _verify_table(connection, structural)
 
 
 def initialize(engine, *, writers_stopped=False, training_development=False):
@@ -64,63 +37,32 @@ def initialize(engine, *, writers_stopped=False, training_development=False):
                 )
             """)).scalar_one()
         if nonempty is not False:
-            raise ValueError("Refusing nonempty schema; use --check, never repeat backfill as repair")
+            raise ValueError("Refusing nonempty schema; use --check, never repeat the initialization as repair")
     elif inspect(engine).get_table_names():
-        raise ValueError("Refusing nonempty schema; use --check, never repeat backfill as repair")
-    from app.database import Base
-    from scripts.migrate_dataset_imports import create_import_tables
-    from scripts.migrate_dataset_import_metadata import migrate_metadata
-    from scripts.migrate_dataset_import_jobs import migrate_jobs
-    from scripts.migrate_dataset_import_receipts import migrate_receipts
-    from scripts.migrate_dataset_import_chunks import migrate_chunks
+        raise ValueError("Refusing nonempty schema; use --check, never repeat the initialization as repair")
+    from pathlib import Path
+    from alembic import command
+    from alembic.config import Config
 
-    basic = [model.__table__ for model in _application_models()]
-    Base.metadata.create_all(engine, tables=basic)
-    create_import_tables(engine)
-    migrate_metadata(engine, writers_stopped=True)
-    migrate_jobs(engine, writers_stopped=True)
-    migrate_receipts(engine, writers_stopped=True)
-    migrate_chunks(engine, writers_stopped=True)
-    stages = ["application", "imports", "metadata", "jobs", "receipts", "chunks"]
-    if training_development:
-        from scripts.migrate_training_snapshots import migrate_snapshots
-        from scripts.migrate_imported_training_source import migrate_imported_sources
-        from scripts.migrate_web_sessions import migrate_web_sessions
-        migrate_snapshots(engine, writers_stopped=True)
-        migrate_imported_sources(engine, writers_stopped=True)
-        migrate_web_sessions(engine, writers_stopped=True)
-        stages.extend(["snapshots", "imported_sources", "web_sessions"])
+    config = Config()
+    config.set_main_option("script_location", str(Path(__file__).resolve().parents[1] / "migrations"))
+    with engine.begin() as connection:
+        config.attributes["connection"] = connection
+        command.upgrade(config, "head")
     verify(engine, training_development=training_development)
-    return {"prepared": True, "stages": stages}
+    return {"prepared": True, "stages": ["migrations"]}
 
 
 def verify(engine, *, training_development=False):
-    from sqlalchemy import select
-    from app.models.dataset_import import DatasetImport, ImportedDataset
-    from app.models.dataset_import_metadata import BACKFILL_MODELS, MetadataBackfill
-    from app.models.dataset_import_job import JOB_MODELS, ImportJobGate
-    from app.models.dataset_import_receipt import RECEIPT_MODELS, ImportReceiptSchema
-    from app.models.dataset_import_chunk import CHUNK_MODELS, ImportChunkSchema
-    from scripts.migrate_dataset_import_jobs import _verify_table
+    from app.schema import _inspect_schema
+    from app.services.dataset_import_schema import verify_import_schema
 
     with engine.connect() as connection:
-        for model in _application_models():
-            _verify_application_table(connection, model.__table__)
-        for model in (DatasetImport, ImportedDataset, *BACKFILL_MODELS,
-                      *JOB_MODELS, *RECEIPT_MODELS, *CHUNK_MODELS):
-            _verify_table(connection, model.__table__)
-        for model in (MetadataBackfill, ImportJobGate, ImportReceiptSchema, ImportChunkSchema):
-            versions = connection.execute(select(model.version)).scalars().all()
-            if versions != [1]:
-                raise ValueError("Manual import schema requires verified version markers")
+        if _inspect_schema(connection).code != "schema_current":
+            raise ValueError("Schema is not the current Alembic revision")
+        verify_import_schema(connection)
     if training_development:
-        from app.models.training_snapshot import TrainingSnapshot, SnapshotMember
-        from scripts.migrate_imported_training_source import validate_imported_sources
-        from scripts.migrate_web_sessions import validate_web_sessions
-        with engine.connect() as connection:
-            for model in (TrainingSnapshot, SnapshotMember):
-                _verify_table(connection, model.__table__)
-        validate_imported_sources(engine)
+        from app.services.web_session_schema import validate_web_sessions
         validate_web_sessions(engine)
     return {"prepared": True, "verification": (
         "training_schema_and_markers" if training_development else "schema_and_markers")}

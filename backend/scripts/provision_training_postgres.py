@@ -98,7 +98,7 @@ class Provision:
         context.mkdir(mode=0o700)
         backend = ROOT / 'backend'
         names = (backend / 'bootstrap/source-files.txt').read_text().splitlines()
-        if len(names) != 30 or len(set(names)) != len(names):
+        if len(names) != 41 or len(set(names)) != len(names):
             raise Refused('source_inventory_mismatch')
         files = [(backend / name, context / name) for name in names]
         files += [(backend / 'bootstrap' / name, context / name) for name in ('Dockerfile', 'requirements.txt')]

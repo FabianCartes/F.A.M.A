@@ -8,12 +8,7 @@ BASE = "/api/ingestion/imports"
 
 
 def test_resume_confirm_and_download_without_private_cloud(imports, tmp_path, monkeypatch):
-    from scripts.migrate_dataset_import_receipts import migrate_receipts
-    from scripts.migrate_dataset_import_chunks import migrate_chunks
-
     client, service, app, sessions = imports
-    for migrate in (migrate_receipts, migrate_chunks):
-        migrate(sessions.kw["bind"], writers_stopped=True)
     monkeypatch.setenv("FAMA_IMPORT_CHUNK_BYTES", "4096")
     monkeypatch.delenv("FAMA_IMPORT_STORAGE_PROFILE", raising=False)
     expected = {f"birds/{i}.wav": wav_bytes(i + 1) for i in range(61)}

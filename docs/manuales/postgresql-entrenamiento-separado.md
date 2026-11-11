@@ -140,7 +140,7 @@ python -B scripts/prepare_zip_manual_database.py \
   --expected-database-oid '<DATABASE_OID>' --check
 ```
 
-`--initialize` y `--check` son mutuamente excluyentes. El opt-in `--training-development` incluye snapshots, asociación de fuentes importadas y sesiones web mediante migradores existentes; `--check` verifica esquemas/versiones sin reparar ni hacer backfill. No llamar funciones internas ni debilitar guardas para otro destino.
+`--initialize` y `--check` son mutuamente excluyentes. `--initialize` aplica las revisiones Alembic hasta `HEAD` (única etapa informada: `migrations`); el opt-in `--training-development` exige además la identidad esperada y valida las tablas de sesiones web; `--check` verifica que el esquema sea exactamente el `HEAD` y sus marcadores de versión, sin reparar ni hacer backfill. La imagen bootstrap incluye `migrations/` (inventario en `backend/bootstrap/source-files.txt`). No llamar funciones internas ni debilitar guardas para otro destino.
 
 **Allowlist real de la CLI:** normalmente admite `db:5432` y `172.30.252.30:5432`, con base `fama_zip_manual`; el opt-in añade `172.30.253.30:5432` y exige el patrón de base de entrenamiento e identidad esperada. Este procedimiento usa deliberadamente **solo `db:5432` en una red nueva aislada**. Que una IP histórica esté admitida por el código no autoriza usarla aquí ni conectar a la principal.
 

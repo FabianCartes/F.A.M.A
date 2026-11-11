@@ -2,6 +2,7 @@
 import json
 import re
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -117,7 +118,8 @@ def test_persistent_creation_requires_disposable_proof(daemon, tmp_path, capsys)
     receipt = json.loads((state / 'receipt.json').read_text())
     assert [phase['kind'] for phase in receipt['phases']] == ['disposable', 'persistent']
     assert all(phase['proof']['quarantined'] for phase in receipt['phases'])
-    assert len(list((state / 'context').rglob('*.py'))) == 30
+    inventory = (Path(__file__).resolve().parents[1] / 'bootstrap/source-files.txt').read_text().splitlines()
+    assert len(list((state / 'context').rglob('*.py'))) == len(inventory)
     assert all(p.stat().st_mode & 0o077 == 0 for p in state.rglob('*') if p.is_file())
     assert not any(word in (state/'receipt.json').read_text() for word in ('password', 'PGPASS', 'secret'))
 

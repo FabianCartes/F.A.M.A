@@ -50,27 +50,15 @@ Unidad local: commit `36bf33806d4678246c76331b7abede7c2a81e8df`. ASSESS nativo d
 
 Tablas nuevas: `training_snapshot` y `training_snapshot_member`. Importar el módulo no ejecuta DDL. El runtime no migra implícitamente ni repara un esquema ausente/incompatible.
 
-El operador debe detener **todos** los escritores antes de invocar, con un engine elegido explícitamente:
-
-```python
-from scripts.migrate_training_snapshots import migrate_snapshots
-migrate_snapshots(engine, writers_stopped=True)
-```
-
-El migrador valida las tablas de importación/compuerta requeridas y los tipos/columnas del esquema existente; para tablas de snapshot comprueba también PK y nullabilidad. Solo agrega las dos tablas ausentes; no modifica datos/tablas previos. Requiere SQLite o PostgreSQL. La bandera es una declaración del operador, no un mecanismo para detener procesos. En esta tarea se ejecutó únicamente contra SQLite sintético en memoria, nunca sobre la DB real.
+**Histórico:** el migrador `scripts.migrate_training_snapshots` fue retirado y la revisión Alembic 0005 no crea estas tablas (ADR 0070). Un esquema nuevo no las incluye; las bases anteriores que las conservan no se modifican. No hay instrucción de migración vigente para ellas; el esquema vigente se aplica con `python -m app.schema upgrade --apply`.
 
 ### Permisos de PostgreSQL para finalizar cualquier dataset
 
 La migración de esquema no concede permisos a la cuenta de aplicación. Además de sus permisos existentes de captura y lectura, `fama_training_app` necesita `UPDATE` exclusivamente sobre `state`, `file_count`, `total_size_bytes`, `classes` y `manifest_sha256` de `public.training_snapshot`. Sin ese permiso, la copia puede publicarse en disco y fallar la confirmación `ready`; el endpoint devuelve el error genérico de fuente no disponible. La salud de la API y la lectura del catálogo no verifican esta capacidad.
 
-El operador debe verificar explícitamente la identidad de la base de desarrollo seleccionada, conservar un respaldo y detener los escritores de API antes de aplicar el script versionado, con la cuenta propietaria de la tabla:
+**Histórico:** el script `backend/scripts/grant_training_snapshot_updates.sql` fue retirado junto con las tablas de snapshots. El procedimiento que describía ya no se ofrece; lo siguiente conserva el contexto de la concesión que se aplicó.
 
-```bash
-psql --dbname="$VERIFIED_TRAINING_DATABASE" --set=ON_ERROR_STOP=1 \
-  --file=backend/scripts/grant_training_snapshot_updates.sql
-```
-
-La variable debe seleccionar la base mediante la configuración privada del operador; no incluir credenciales en argumentos, documentación o logs. El script admite bases `fama_training_dev_<14 dígitos>`, exige una cuenta de aplicación sin atributos administrativos y rechaza permisos preexistentes para cambiar la identidad/propietario/revisión. No crea roles, no concede `DELETE`, no cambia la identidad del snapshot y no concede `UPDATE` de tabla completa. Se puede aplicar de nuevo: la concesión es idempotente y queda persistida en PostgreSQL para **todos los datasets presentes y futuros**. No depende de la sesión de UI ni de un contenedor de API; debe incluirse al aprovisionar o restaurar otro entorno con esta cuenta limitada.
+La concesión se aplicó seleccionando la base mediante la configuración privada del operador, sin credenciales en argumentos, documentación o logs. El script retirado admitía bases `fama_training_dev_<14 dígitos>`, exige una cuenta de aplicación sin atributos administrativos y rechaza permisos preexistentes para cambiar la identidad/propietario/revisión. No crea roles, no concede `DELETE`, no cambia la identidad del snapshot y no concede `UPDATE` de tabla completa. Se puede aplicar de nuevo: la concesión es idempotente y queda persistida en PostgreSQL para **todos los datasets presentes y futuros**. No depende de la sesión de UI ni de un contenedor de API; debe incluirse al aprovisionar o restaurar otro entorno con esta cuenta limitada.
 
 Verificar después con la identidad real de la aplicación los cinco `has_column_privilege(..., 'UPDATE')`, la ausencia de permisos para modificar identidad/propietario/revisión y un `EXPLAIN UPDATE` sobre los cinco campos con `WHERE false`. No usar `EXPLAIN ANALYZE`: este último sí ejecuta la consulta. Un test SQLite no valida concesiones PostgreSQL. El recibo de la corrección conectada es [snapshot-permissions-repair.json](../receipts/snapshot-permissions-repair.json).
 

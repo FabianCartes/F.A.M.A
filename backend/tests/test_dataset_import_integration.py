@@ -56,13 +56,9 @@ def disk_bytes(root):
 
 
 def test_receipt_to_local_download_recovers_and_remains_bounded(imports, tmp_path, monkeypatch):
-    from scripts.migrate_dataset_import_receipts import migrate_receipts
-    from scripts.migrate_dataset_import_chunks import migrate_chunks
 
     original, service, app, sessions = imports
     engine = sessions.kw["bind"]
-    for migrate in (migrate_receipts, migrate_chunks):
-        assert migrate(engine, writers_stopped=True) == {"version": 1, "verified": True}
     chunk_bytes = 4096
     monkeypatch.setenv("FAMA_IMPORT_CHUNK_BYTES", str(chunk_bytes))
     monkeypatch.delenv("FAMA_IMPORT_STORAGE_PROFILE", raising=False)

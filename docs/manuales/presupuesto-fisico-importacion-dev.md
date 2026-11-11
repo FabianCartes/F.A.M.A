@@ -33,7 +33,7 @@ La raíz HTTP/CLI debe coincidir con `roots.imports`; el CLI también compara su
 rutas, no conecta DB, no migra, no registra pools ni modifica TMPDIR o cachés.
 El rol `exports` es obligatorio para describir capacidad, **no habilita exports**.
 
-`scripts.migrate_dataset_storage.activate_empty_lab(engine, policy,
+(Histórico: `scripts.migrate_dataset_storage` ya no existe en el repositorio.) `scripts.migrate_dataset_storage.activate_empty_lab(engine, policy,
 writers_stopped=True)` recibe un engine **explícito ya migrado/preparado** y una
 `PhysicalStorage` de raíces previamente provisionadas. Sin el flag exacto rechaza.
 Exige gate verificado, estado prepared, cero imports/datasets/jobs/grants
@@ -229,6 +229,8 @@ conserva la aceptación y el recheck exacto del gap; no se inició otro verifica
   No se modifican autenticación, acceso por propietario ni rutas HTTP.
 
 ### Preparación explícita: solo metadatos nuevos y vacíos
+
+> **Histórico.** `migrate_dataset_storage.py` y sus funciones ya no existen en el repositorio; el esquema vigente se aplica con `python -m app.schema upgrade --apply`. Lo siguiente describe el diseño anterior.
 
 `backend/scripts/migrate_dataset_storage.py` ofrece `inspect_storage(engine)` y
 `migrate_storage(engine, writers_stopped=True)`. No añade CLI, no carga dotenv ni

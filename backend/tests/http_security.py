@@ -41,12 +41,17 @@ def cookie_headers(sessions, user_id):
     from app.database import get_db
     from app.routes.auth import router
     from app.services.auth import hash_password
-    from scripts.migrate_web_sessions import migrate_web_sessions
+    from app.models.access_quota import CuotaAcceso
+    from app.models.security_audit import EventoSeguridad
+    from app.models.web_session import SesionWeb
 
     cache = _COOKIE_HEADERS.setdefault(sessions, {})
     if user_id in cache:
         return dict(cache[user_id])
-    migrate_web_sessions(sessions.kw["bind"], writers_stopped=True)
+    # Fixtures built from ORM metadata or Alembic already hold these tables; the
+    # synthetic ones that omit them only need them present, never migrated.
+    for table in (SesionWeb.__table__, CuotaAcceso.__table__, EventoSeguridad.__table__):
+        table.create(sessions.kw["bind"], checkfirst=True)
     with sessions() as db:
         user = db.get(Usuario, int(user_id))
         if user is None or user.id <= 0 or not user.activo:

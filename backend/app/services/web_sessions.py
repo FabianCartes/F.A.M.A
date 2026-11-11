@@ -19,7 +19,7 @@ from app.web_settings import WebSessionSettings, settings
 
 
 def ensure_web_schema(db: Session):
-    from scripts.migrate_web_sessions import validate_web_sessions
+    from app.services.web_session_schema import validate_web_sessions
     try:
         validate_web_sessions(db.get_bind())
     except (RuntimeError, SQLAlchemyError):

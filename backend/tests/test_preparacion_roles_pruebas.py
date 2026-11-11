@@ -10,6 +10,8 @@ import psycopg2
 import pytest
 from sqlalchemy.engine import make_url
 
+from app.schema import HEAD
+
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "preparar_roles_pruebas.sql"
 PASSWORD = "SoloPruebaLocalRoles2026!"
@@ -83,7 +85,7 @@ def test_migrador_puede_migrar_y_aplicacion_no_puede_crear_tablas(isolated_serve
         cwd=SCRIPT.parents[1], env=environment, capture_output=True, text=True, timeout=30,
     )
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout) == {"code": "schema_current", "revision": "0004_integration"}
+    assert json.loads(result.stdout) == {"code": "schema_current", "revision": HEAD}
 
     with connection(operator.set(username="fama_app", password=PASSWORD)) as database, database.cursor() as cursor:
         with pytest.raises(psycopg2.errors.InsufficientPrivilege):

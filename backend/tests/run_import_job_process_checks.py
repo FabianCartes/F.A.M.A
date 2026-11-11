@@ -38,20 +38,18 @@ def child(root, action, owner, key):
     install_guard([root])
     from sqlalchemy import create_engine, select
     from sqlalchemy.orm import sessionmaker
-    from app.database import Base
     from app.models.dataset_import import DatasetImport
     from app.models.dataset_import_job import ImportJob
     from app.models.dataset_import_metadata import ImportSummary
     from app.services.dataset_import_jobs import ImportJobQueue, JobLimits
-    from scripts.migrate_dataset_import_jobs import migrate_jobs
+    from tests.schema_support import migrate
 
     engine = create_engine(f"sqlite:///{database}", connect_args={"timeout": 10})
     sessions = sessionmaker(bind=engine)
     queue = ImportJobQueue(sessions, limits=JobLimits(2, 1), clock=lambda: 100.0)
     try:
         if action == "prepare":
-            Base.metadata.create_all(engine)
-            migrate_jobs(engine, writers_stopped=True)
+            migrate(engine)
             with sessions.begin() as db:
                 for user in (1, 2, 3):
                     for number in range(3):

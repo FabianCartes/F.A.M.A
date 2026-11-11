@@ -6,28 +6,15 @@ from pathlib import Path
 
 
 def verify(engine):
-    from sqlalchemy import inspect, select
+    from sqlalchemy import select
     from app.models.dataset_import import DatasetImport, ImportedDataset
-    from app.models.dataset_import_metadata import (
-        BACKFILL_MODELS, MetadataBackfill, ImportSummary, DatasetSummary,
-    )
-    from app.models.dataset_import_job import JOB_MODELS, ImportJobGate
-    from app.models.dataset_import_receipt import RECEIPT_MODELS, ImportReceiptSchema
-    from app.models.dataset_import_chunk import CHUNK_MODELS, ImportChunkSchema
-    from scripts.migrate_dataset_import_jobs import _verify_table
+    from app.models.dataset_import_metadata import ImportSummary, DatasetSummary
+    from app.services.dataset_import_schema import verify_import_schema
 
     with engine.connect() as connection:
         if connection.dialect.name == "postgresql":
             connection.exec_driver_sql("SET TRANSACTION READ ONLY")
-        models = (DatasetImport, ImportedDataset, *BACKFILL_MODELS,
-                  *JOB_MODELS, *RECEIPT_MODELS, *CHUNK_MODELS)
-        if not {model.__tablename__ for model in models} <= set(inspect(connection).get_table_names()):
-            raise ValueError("Missing import tables")
-        for model in models:
-            _verify_table(connection, model.__table__)
-        for model in (MetadataBackfill, ImportJobGate, ImportReceiptSchema, ImportChunkSchema):
-            if connection.execute(select(model.version)).scalars().all() != [1]:
-                raise ValueError("Missing verified import schema marker")
+        verify_import_schema(connection)
         for source, summary, key in ((DatasetImport, ImportSummary, ImportSummary.import_id),
                                      (ImportedDataset, DatasetSummary, DatasetSummary.dataset_id)):
             if connection.execute(select(source.id).outerjoin(summary, source.id == key)

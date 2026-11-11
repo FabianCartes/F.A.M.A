@@ -7,11 +7,9 @@ from tests.test_dataset_import_api import imports, prepare
 
 
 def executor(imports, tmp_path):
-    from scripts.migrate_dataset_import_jobs import migrate_jobs
     from app.services.dataset_import_execution import ImportExecution
     from app.services.dataset_import_jobs import ImportJobQueue
     client, service, _, sessions = imports
-    migrate_jobs(sessions.kw["bind"], writers_stopped=True)
     queue = ImportJobQueue(sessions, clock=lambda: 100.0)
     root = client.execution.root
     return queue, ImportExecution(queue, service, root)

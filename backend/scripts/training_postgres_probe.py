@@ -146,7 +146,7 @@ def _prove(database, stage):
         args = ['--database-url', target_url.render_as_string(hide_password=False), '--training-development',
                 '--expected-system-id', str(system), '--expected-database-oid', str(oid)]
         result = invoke(args + ['--initialize', '--writers-stopped'])
-        if result != {'prepared': True, 'stages': ['application', 'imports', 'metadata', 'jobs', 'receipts', 'chunks', 'snapshots', 'imported_sources', 'web_sessions']}:
+        if result != {'prepared': True, 'stages': ['migrations']}:
             raise RuntimeError('Unexpected initialization stages')
         def inventory():
             with target.connect() as connection:

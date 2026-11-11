@@ -7,11 +7,7 @@ def test_automatic_receipt_release_and_duplicate_replay(layout_api, tmp_path):
     from fastapi import FastAPI
     from app.database import get_db
     from app.routes.dataset_imports import router, get_import_service, get_import_user
-    from scripts.migrate_dataset_import_receipts import migrate_receipts
-    from scripts.migrate_dataset_import_chunks import migrate_chunks
     request, worker, engine = layout_api
-    migrate_receipts(engine, writers_stopped=True)
-    migrate_chunks(engine, writers_stopped=True)
     app = FastAPI()
     app.include_router(router)
     def db():

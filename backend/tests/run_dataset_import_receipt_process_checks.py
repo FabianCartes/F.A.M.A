@@ -35,12 +35,11 @@ def child(root, action, key):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
     from types import SimpleNamespace
-    from app.database import Base, get_db
+    from app.database import get_db
     from app.routes.dataset_imports import router, get_import_user, get_import_service
     from app.services.dataset_imports import DatasetImports
     from app.services.dataset_zip import ImportLimits
-    from scripts.migrate_dataset_import_jobs import migrate_jobs
-    from scripts.migrate_dataset_import_receipts import migrate_receipts, main
+    from tests.schema_support import migrate
 
     engine = create_engine(f"sqlite:///{database}", connect_args={"timeout": 10, "check_same_thread": False})
     sessions = sessionmaker(bind=engine)
@@ -69,17 +68,7 @@ def child(root, action, key):
     try:
         with TestClient(app, raise_server_exceptions=False) as client:
             if action == "prepare":
-                Base.metadata.create_all(engine)
-                migrate_jobs(engine, writers_stopped=True)
-                before = dump()
-                try:
-                    migrate_receipts(engine)
-                except ValueError as error:
-                    assert str(error) == "stop_writers_before_receipt_migration"
-                else:
-                    raise AssertionError("Missing acknowledgement accepted")
-                assert dump() == before
-                assert migrate_receipts(engine, writers_stopped=True) == {"version": 1, "verified": True}
+                migrate(engine)
                 for user in (1, 2, 3):
                     owner = user
                     for number in (0, 1):
@@ -89,16 +78,6 @@ def child(root, action, key):
                         mapping[identity] = response.json()["id"]
                 (root / "ids.json").write_text(json.dumps(mapping))
                 result = {"prepared": True}
-            elif action == "cli":
-                import contextlib
-                import io
-                output, errors = io.StringIO(), io.StringIO()
-                before = dump()
-                with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
-                    assert main(["--database-url", f"sqlite:///{database}", "--writers-stopped"]) == 0
-                assert output.getvalue() == '{"version": 1, "verified": true}\n'
-                assert errors.getvalue() == "" and dump() == before
-                result = {"cli": True}
             elif action == "inspect":
                 before, result = dump(), {}
                 for identity, value in mapping.items():
@@ -198,7 +177,6 @@ def coordinator():
 
         try:
             assert finish(launch("prepare")) == {"prepared": True}
-            assert finish(launch("cli")) == {"cli": True}
             keys = [f"{user}:{number}" for user in (1, 2, 3) for number in (0, 1)]
             contenders = [launch("admit", key) for key in keys]
             for process in contenders:

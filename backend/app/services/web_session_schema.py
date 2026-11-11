@@ -1,7 +1,7 @@
-"""Explicit additive web-session schema; never executed by application startup.
+"""Read-only check that the web-session, quota and audit tables match the ORM.
 
-The operator must stop writers and authorize a real migration separately.
-Only the synthetic in-memory invocation is part of development verification.
+The tables are created by the Alembic migrations (see ``app.schema``); this
+preflight only runs before authentication changes session or quota state.
 """
 from sqlalchemy import inspect, text
 
@@ -81,17 +81,4 @@ def validate_web_sessions(engine):
     if engine.dialect.name not in ("sqlite", "postgresql"):
         raise RuntimeError("Unsupported schema dialect")
     with engine.connect() as connection:
-        _validate(connection, require_all=True)
-
-
-def migrate_web_sessions(engine, *, writers_stopped=False):
-    """Create only absent session/quota/audit tables after validating existing ones."""
-    if writers_stopped is not True:
-        raise RuntimeError("All writers must be stopped explicitly")
-    if engine.dialect.name not in ("sqlite", "postgresql"):
-        raise RuntimeError("Unsupported schema dialect")
-    with engine.begin() as connection:
-        _validate(connection, require_all=False)
-        for table in TABLES:
-            table.create(connection, checkfirst=True)
         _validate(connection, require_all=True)

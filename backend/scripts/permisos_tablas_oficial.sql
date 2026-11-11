@@ -1,4 +1,4 @@
--- Ejecutar como fama_oficial_migrador en fama_oficial después de 0004_integration.
+-- Ejecutar como fama_oficial_migrador en fama_oficial después de 0005_triad_composition.
 DO $fama$
 DECLARE
     tablas text[] := ARRAY[
@@ -38,6 +38,7 @@ DECLARE
         'retroalimentacion',
         'sesion_web',
         'solicitud_dataset',
+        'triad_composition',
         'usuario'
     ];
     revisiones text[];
@@ -50,12 +51,12 @@ BEGIN
     END IF;
 
     IF to_regclass('public.alembic_version') IS NULL THEN
-        RAISE EXCEPTION 'Se requiere aplicar primero la revision 0004_integration'
+        RAISE EXCEPTION 'Se requiere aplicar primero la revision 0005_triad_composition'
             USING ERRCODE = '55000';
     END IF;
     SELECT array_agg(version_num::text) INTO revisiones FROM public.alembic_version;
-    IF revisiones IS DISTINCT FROM ARRAY['0004_integration']::text[] THEN
-        RAISE EXCEPTION 'Se requiere la revision 0004_integration'
+    IF revisiones IS DISTINCT FROM ARRAY['0005_triad_composition']::text[] THEN
+        RAISE EXCEPTION 'Se requiere la revision 0005_triad_composition'
             USING ERRCODE = '55000';
     END IF;
 

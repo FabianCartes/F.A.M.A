@@ -20,7 +20,7 @@ from unittest.mock import patch
 # Only the explicitly selected audio/feedback suites get collection isolation.
 # Real create_all still runs, against SQLite; do not replace schema operations.
 _focused_suites = {
-    "test_prediction_audio_metadata.py", "test_prediction_audio_metadata_migration.py",
+    "test_prediction_audio_metadata.py",
     "test_api_feedback.py", "test_api_feedback_sync.py",
     "test_feedback_local_approval.py", "test_feedback_sync_worker.py",
     "test_feedback_storage.py", "test_inference_execution.py", "test_inference_input_limits.py",

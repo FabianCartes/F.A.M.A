@@ -11,8 +11,8 @@ DATABASE = "fama_training_dev_20250102030405"
 IDENTITY_QUERY = "FROM pg_database CROSS JOIN pg_control_system()"
 ARGS = ["--database-url", f"postgresql://operator:synthetic@db:5432/{DATABASE}",
         "--training-development", "--expected-system-id", "123456", "--expected-database-oid", "789"]
-REQUIRED = {"training_snapshot", "training_snapshot_member", "imported_model_source",
-            "sesion_web", "cuota_acceso", "evento_seguridad"}
+REQUIRED = {"sesion_web", "cuota_acceso", "evento_seguridad", "triad_composition",
+            "dataset_import_job", "dataset_import_receipt", "dataset_import_chunk"}
 
 
 class IdentityCursor:
@@ -80,7 +80,7 @@ def test_training_cli_initializes_complete_schema_and_checks_without_writes(cli,
     result = json.loads(capsys.readouterr().out)
     tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert REQUIRED <= tables
-    assert result["stages"][-3:] == ["snapshots", "imported_sources", "web_sessions"]
+    assert result["stages"] == ["migrations"]
     before = dump(connection)
     assert main(ARGS + ["--check"]) == 0
     assert json.loads(capsys.readouterr().out)["verification"] == "training_schema_and_markers"

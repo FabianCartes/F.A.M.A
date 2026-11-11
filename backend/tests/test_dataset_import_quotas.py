@@ -114,9 +114,7 @@ def receive(client, tmp_path, key, *, target_id=None, sample=1):
 
 def receipt_schema(sessions):
     from tests.test_dataset_import_receipts import migrate
-    from scripts.migrate_dataset_import_chunks import migrate_chunks
     migrate(sessions)
-    migrate_chunks(sessions.kw["bind"], writers_stopped=True)
 
 
 def test_fragmented_publication_releases_reservation_atomically_and_replay_is_inert(imports, tmp_path, monkeypatch):
