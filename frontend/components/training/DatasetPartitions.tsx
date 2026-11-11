@@ -118,8 +118,14 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect, w
 
   // Versions arrive newest first; number them from the oldest so a name stays stable.
   const versionName = (item: Summary) => `Versión ${versions.length - versions.indexOf(item)}`;
-  const versionLabel = (item: Summary) => `${versionName(item)} · ${item.counts.train} entrenamiento / ${item.counts.val} validación${
-    item.counts.test ? ` / ${item.counts.test} prueba` : ""}${item.created_at ? ` · ${new Date(item.created_at).toLocaleString("es-CL")}` : ""}`;
+  const versionLabel = (item: Summary) => {
+    const total = item.counts.train + item.counts.val + (item.counts.test ?? 0);
+    // The chosen policy names the version; versions without one show their actual shares.
+    const val = item.policy?.validation_percent ?? Math.round(item.counts.val * 100 / total);
+    const test = item.counts.test ? item.policy?.test_percent ?? Math.round(item.counts.test * 100 / total) : 0;
+    return `${versionName(item)} · ${100 - val - test} % entrenamiento / ${val} % validación${test ? ` / ${test} % prueba` : ""}`
+      + ` · ${total} audios${item.created_at ? ` · ${new Date(item.created_at).toLocaleString("es-CL")}` : ""}`;
+  };
   const selectedVersion = versions.find(item => item.version === selected);
   const classes = [...new Set(preview?.entries.map(entry => entry.clase) ?? [])].sort();
   const fieldClass = "w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-emerald-600 disabled:opacity-50";

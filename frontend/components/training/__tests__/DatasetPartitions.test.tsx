@@ -13,7 +13,7 @@ it("reserves test recordings and keeps legacy 80/20 versions visible as history"
   }));
   const select = vi.fn();
   render(<DatasetPartitions dataset="Sample" selected="" busy={false} onSelect={select} />);
-  const legacy = await screen.findByRole("option",{name:/Histórica 80\/20/});
+  const legacy = await screen.findByRole("option",{name:/^Histórica 80\/20 · Versión 1 · 80 % entrenamiento \/ 20 % validación · 10 audios$/});
   expect((legacy as HTMLOptionElement).disabled).toBe(true);
   expect(screen.getByLabelText("Prueba (%)")).toBeDefined();
   fireEvent.click(screen.getByRole("button",{name:"Previsualizar reparto"}));
@@ -32,9 +32,9 @@ it("opens with the dataset and names versions by number and date without their h
   vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ versions: [newer, older] }) })));
   render(<DatasetPartitions dataset="Sample" selected={newer.version} busy={false} onSelect={vi.fn()} />);
   expect(screen.queryByRole("button", { name: /particiones/ })).toBeNull();
-  const option = await screen.findByRole("option", { name: /^Versión 2 · 6 entrenamiento \/ 2 validación \/ 2 prueba/ });
+  const option = await screen.findByRole("option", { name: /^Versión 2 · 60 % entrenamiento \/ 20 % validación \/ 20 % prueba · 10 audios/ });
   expect(option.textContent).toContain(new Date(newer.created_at).toLocaleString("es-CL"));
-  expect(screen.getByRole("option", { name: /^Versión 1 · 5 entrenamiento/ })).toBeDefined();
+  expect(screen.getByRole("option", { name: /^Versión 1 · 60 % entrenamiento \/ 20 % validación \/ 20 % prueba · 9 audios/ })).toBeDefined();
   const section = screen.getByRole("region", { name: "Particiones de entrenamiento" });
   expect(section.textContent).toContain("Versión seleccionada: Versión 2");
   expect(section.textContent).not.toMatch(/[0-9a-f]{12}/);
