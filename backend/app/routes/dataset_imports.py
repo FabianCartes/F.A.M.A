@@ -136,19 +136,6 @@ def files(dataset_id: str, db: Session = Depends(get_db), user=Depends(get_impor
                                 class_name=class_name, feedback=feedback, **paging)
 
 
-class ArchiveDataset(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    revision: int = Field(strict=True, ge=0)
-
-
-@router.delete("/datasets/{dataset_id}", status_code=204)
-def archive_dataset(dataset_id: str, payload: ArchiveDataset, db: Session = Depends(get_db),
-                    user=Depends(get_import_user), service=Depends(get_import_service)):
-    from app.services.dataset_import_archive import archive
-    archive(service, db, user.id, dataset_id, payload.revision)
-    return Response(status_code=204)
-
-
 @router.get("/datasets/{dataset_id}/files/{sha256}")
 def download(dataset_id: str, sha256: str, db: Session = Depends(get_db), user=Depends(get_import_user), service=Depends(get_import_service)):
     return FileResponse(service.download(db, user.id, dataset_id, sha256), media_type="audio/wav", filename=f"{sha256}.wav")
@@ -216,8 +203,6 @@ async def upload(job_id: str, request: Request, db: Session = Depends(get_db), u
         if has_receipt(db, job_id):
             reject(409, "Esta importación usa recepción fragmentada; consulta su estado para continuar.")
         service.require_idle(db, job_id)
-        from app.services.dataset_import_archive import require_import_active
-        require_import_active(db, row)
         db.commit()  # No queue gate or DB write transaction spans receipt.
         if row.status not in ("receiving", "validating", "needs_correction", "ready"):
             reject(409, "La importación no admite otro archivo.")

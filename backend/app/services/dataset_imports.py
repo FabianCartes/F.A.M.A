@@ -170,7 +170,6 @@ class DatasetImports:
     def create(self, db, owner, payload):
         with self.mutation(db):
             from app.services.dataset_import_jobs import _gate
-            from app.services.dataset_import_archive import require_active
             _gate(db)
             prior = db.query(DatasetImport).filter_by(owner_id=owner, request_key=payload["request_key"]).first()
             if prior:
@@ -178,7 +177,7 @@ class DatasetImports:
                     reject(409, "La solicitud ya existe con otro destino o contenido.")
                 return self.view(prior)
             if payload.get("target_id"):
-                require_active(db, self.dataset(db, owner, payload["target_id"]))
+                self.dataset(db, owner, payload["target_id"])
             else:
                 # New datasets publish into the shared catalog under a unique name.
                 from app.models.dataset import ConjuntoDatos
@@ -189,11 +188,6 @@ class DatasetImports:
                     reject(422, "Nombre de dataset no válido: máximo 100 caracteres, sin / \\ : * ? \" < > | ni nombres reservados.")
                 if db.query(ConjuntoDatos.id_conjunto_datos).filter_by(nombre=payload["name"]).first():
                     reject(409, "Ya existe un dataset con ese nombre. Elige otro nombre.")
-                from app.services.dataset_import_archive import require_schema
-                require_schema(db)
-                named = db.query(ImportedDataset).filter_by(owner_id=owner, name=payload["name"]).first()
-                if named is not None:
-                    require_active(db, named)
             active_count = db.query(DatasetImport).filter(DatasetImport.status.in_(
                 ["receiving", "validating", "needs_correction", "ready", "committing"])).count()
             if active_count >= self.limits.concurrent_imports:
@@ -216,14 +210,12 @@ class DatasetImports:
         return self.root / "staging" / row.id
 
     def list_datasets(self, db, owner, **pagination):
-        from app.services.dataset_import_archive import require_schema
-        require_schema(db)
         def serialize(dataset):
             summary = required_summary(db, DatasetSummary, dataset.id)
             return dict(id=dataset.id, name=dataset.name, description=dataset.description,
                         revision=dataset.revision, file_count=summary.file_count,
                         class_count=summary.class_count, total_size_bytes=summary.total_size_bytes)
-        result = page(db.query(ImportedDataset).filter_by(owner_id=owner, archived=False), ImportedDataset.id,
+        result = page(db.query(ImportedDataset).filter_by(owner_id=owner), ImportedDataset.id,
                       scope=f"datasets:{owner}", snapshot="catalog", key="datasets", serialize=serialize, **pagination)
         ids = [dataset["id"] for dataset in result["datasets"]]
         imported_at = dict(db.query(DatasetImport.dataset_id, func.min(DatasetImport.created_at))
@@ -268,8 +260,6 @@ class DatasetImports:
     def dataset_page(self, db, owner, dataset_id, *, browse=False, class_name=None, feedback=None, **pagination):
         dataset = self.dataset(db, owner, dataset_id)
         if browse:
-            from app.services.dataset_import_archive import require_active
-            require_active(db, dataset)
             provenance = func.coalesce(or_(
                 DatasetMember.legacy_metadata["origin"]["kind"].as_string() == "feedback",
                 DatasetImport.request["origin"]["kind"].as_string() == "feedback"), False)

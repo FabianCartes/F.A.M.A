@@ -68,8 +68,6 @@ def reserve_receipt(service, db, owner, import_id, *, name, size_bytes):
             if prior.name != name or prior.size_bytes != size_bytes or source.status == "cancelled":
                 reject(409, "La recepción ya existe con otros parámetros o fue cancelada.")
             return _view(prior)
-        from app.services.dataset_import_archive import require_import_active
-        require_import_active(db, source)
         if source.status != "receiving" or source.archive_sha256:
             reject(409, "La importación no admite una recepción nueva.")
         if size_bytes > service.limits.received_bytes:

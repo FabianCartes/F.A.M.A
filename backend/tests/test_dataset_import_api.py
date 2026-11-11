@@ -27,10 +27,8 @@ def imports(tmp_path, monkeypatch, request):
         from app.services.dataset_zip import validate_zip
         monkeypatch.setattr(dataset_import_execution, "validate_zip", validate_zip)
 
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
-    Base.metadata.create_all(engine)
-    from scripts.migrate_dataset_import_jobs import migrate_jobs
-    migrate_jobs(engine, writers_stopped=True)
+    from tests.schema_support import migrated_engine
+    engine = migrated_engine()
     sessions = sessionmaker(bind=engine)
     service = DatasetImports(tmp_path / "managed", limits=ImportLimits(free_bytes=1))
     app = FastAPI()
@@ -341,3 +339,13 @@ def test_active_admission_limit_and_expired_staging_cleanup(imports, tmp_path, m
     assert client.post("/api/ingestion/imports", json={"request_key": "third", "name": "Third"}).status_code == 200
     assert not (service.root / "staging" / imported["id"]).exists()
     assert (service.root / "objects" / imported["id"]).is_dir()
+
+
+def test_private_dataset_delete_route_is_not_served_and_dataset_stays_listed(imports, tmp_path):
+    client, _, _, _ = imports
+    target = confirm(client, prepare(client, tmp_path)).json()["dataset_id"]
+    response = client.request("DELETE", f"/api/ingestion/imports/datasets/{target}", json={"revision": 1})
+    assert response.status_code == 404, response.text
+    listed = client.get("/api/ingestion/imports/datasets")
+    assert listed.status_code == 200, listed.text
+    assert [row["id"] for row in listed.json()["datasets"]] == [target]

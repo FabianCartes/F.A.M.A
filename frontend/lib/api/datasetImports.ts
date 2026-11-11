@@ -77,13 +77,6 @@ export function jsonRequest(body: unknown): RequestInit {
 
 export const importBase = "/api/ingestion/imports";
 
-export async function deletePrivateDataset(dataset: Pick<CatalogDataset, "id" | "revision">, signal?: AbortSignal): Promise<void> {
-  const response = await importRequest(`${importBase}/datasets/${encodeURIComponent(dataset.id)}`, {
-    ...jsonRequest({ revision: dataset.revision }), method: "DELETE", signal,
-  });
-  if (response.status !== 204) throw new Error("No se confirmó la eliminación local. Actualiza el catálogo antes de reintentar.");
-}
-
 export async function saveDownload(response: Response, filename: string) {
   const url = URL.createObjectURL(await response.blob());
   const link = document.createElement("a");

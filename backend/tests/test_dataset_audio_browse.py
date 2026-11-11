@@ -36,16 +36,12 @@ def test_feedback_provenance_and_intersection(imports, tmp_path):
     assert ordinary["has_feedback"] is True
 
 
-def test_browse_rejects_archived_after_owner_authorization(imports, tmp_path):
+def test_browse_rejects_other_owner(imports, tmp_path):
     from types import SimpleNamespace
     from app.routes.dataset_imports import get_import_user
     client, _, app, _ = imports
     target = confirm(client, prepare(client, tmp_path)).json()["dataset_id"]
     url = f"/api/ingestion/imports/datasets/{target}/files"
-    assert client.request("DELETE", f"/api/ingestion/imports/datasets/{target}", json={"revision": 1}).status_code == 204
-    response = client.get(url, params={"browse": True})
-    assert response.status_code == 409, response.text
-    assert response.json()["detail"] == "El dataset está archivado y no admite nuevas operaciones."
     app.dependency_overrides[get_import_user] = lambda: SimpleNamespace(id=2)
     response = client.get(url, params={"browse": True, "cursor": "invalid"})
     assert response.status_code == 404
