@@ -539,8 +539,6 @@ app.include_router(partitions_router)
 from app.routes.checkpoints import router as checkpoint_router
 app.include_router(checkpoint_router)
 app.include_router(zip_router())
-from app.routes.imported_training import router as imported_training_router
-app.include_router(imported_training_router)
 from app.routes.prediction_history import router as prediction_history_router
 app.include_router(prediction_history_router)
 
@@ -1214,7 +1212,6 @@ async def upload_ingestion_files(
 # ============================================================================
 # ENDPOINTS DE ENTRENAMIENTO Y MÉTRICAS (RF_04, CU_INV_03, CU_INV_04, CU_INV_05)
 from app.schemas.training import StartTrainingRequest, TriadWeightsRevisionRequest
-from app.services.imported_training_source import ImportedSourceError
 
 
 @app.get("/api/training/hardware")
@@ -1226,26 +1223,19 @@ def get_training_hardware():
 
 
 @app.get("/api/training/datasets")
-def get_training_datasets(request: Request, response: Response, db: Session = Depends(get_db), include_imported: bool = False,
+def get_training_datasets(request: Request, response: Response, db: Session = Depends(get_db),
                           include_unavailable: bool = False,
                           access: ResourceAccess = Depends(resource_access)):
     """
     Retorna la lista de datasets disponibles para entrenar (CU_INV_02).
-    include_imported=true exige usuario activo y añade solo sus fuentes preparadas.
-    Los motivos de elegibilidad no acreditan pesos, ejecución ni evaluación.
+    Los ZIP publicados se seleccionan por dataset_name y partition_version.
+    No ofrece snapshots ni preparaciones importadas; include_imported explícito se rechaza.
     """
-    user = web_identity(request, response, db) if include_imported else None
+    if "include_imported" in request.query_params:
+        raise HTTPException(422, "La opción include_imported fue retirada del catálogo de entrenamiento.")
     # Opt-in projection only; preserve the historical call and response by default.
     datasets = (training_service.get_available_datasets(db=db, access=access, include_unavailable=True)
                 if include_unavailable else training_service.get_available_datasets(db=db, access=access))
-    if include_imported:
-        from app.services.imported_training_source import configured_sources
-        from app.database import SessionLocal
-        try:
-            sources = training_service.imported_sources or configured_sources(SessionLocal)
-            datasets += sources.catalog(user.id)
-        except ImportedSourceError as exc:
-            raise HTTPException(status_code=503, detail={"code": exc.code, "message": str(exc)})
     return {"datasets": datasets}
 
 
@@ -1254,14 +1244,11 @@ def start_training_pipeline(req: StartTrainingRequest, request: Request, respons
                             db: Session = Depends(get_db), access: ResourceAccess = Depends(resource_access)):
     """
     Inicia un entrenamiento en segundo plano utilizando PyTorch (CU_INV_03).
-    Legacy soporta modelo individual, Tríada Completa o Ensamble Dinámico.
-    Importados exigen sesión activa y dataset/snapshot/versión propios explícitos;
-    usan una arquitectura/perfil preparado, sin rutas del cliente ni fallback legacy.
+    Soporta modelo individual, Tríada Completa o Ensamble Dinámico por dataset.
+    La selección importada histórica se rechaza antes de admitir el trabajo.
     started solo acredita admisión; checkpoint_persisted queda pendiente de evaluación.
     """
-    owner = web_identity(request, response, db) if req.imported_dataset_id is not None else None
-    if owner is None:
-        access.require_dataset(req.dataset_name)
+    access.require_dataset(req.dataset_name)
     try:
         kwargs = {
             "user_id": access.user.id,
@@ -1276,15 +1263,8 @@ def start_training_pipeline(req: StartTrainingRequest, request: Request, respons
             "seed": req.seed,
             "early_stopping": req.early_stopping,
         }
-        if owner is not None:
-            kwargs.update(imported_dataset_id=req.imported_dataset_id, snapshot_id=req.snapshot_id,
-                          imported_prepared_version=req.imported_prepared_version, owner_id=owner.id)
         if getattr(req, "_explicit_models", False) and req.models is not None:
-            # Los campos de tríada importada solo viajan si se informan; las peticiones
-            # legacy conservan exactamente su forma anterior.
-            triad_only = ("imported_prepared_version", "audio_config", "windowing_config")
-            kwargs["models"] = [m.model_dump(exclude={k for k in triad_only if getattr(m, k) is None})
-                                 for m in req.models]
+            kwargs["models"] = [m.model_dump() for m in req.models]
         if req.partition_version is not None:
             kwargs["partition_version"] = req.partition_version
         if req.prepared_version is not None:
@@ -1301,19 +1281,9 @@ def start_training_pipeline(req: StartTrainingRequest, request: Request, respons
 
         result = training_service.start_training(**kwargs)
         return result
-    except ImportedSourceError as exc:
-        raise HTTPException(status_code=404, detail={"code": exc.code, "message": str(exc)})
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
-
-
-def _training_resource_owner(request, response, db, *, required=False):
-    current_owner = training_service.current_source_owner
-    user = web_identity(request, response, db) if required or current_owner is not None else None
-    if current_owner is not None and user.id != current_owner:
-        raise HTTPException(status_code=404, detail="Recurso de entrenamiento no disponible.")
-    return user.id if user else None
 
 
 @app.post("/api/training/models/{model_id}/triad-weights")
@@ -1348,12 +1318,9 @@ def get_training_progress(request: Request, response: Response, db: Session = De
     """
     Retorna el progreso en tiempo real, curvas de Loss/Accuracy y logs (IS_02).
     """
-    owner = _training_resource_owner(request, response, db)
     try:
-        return training_service.get_progress(owner_id=owner, user_id=access.user.id,
+        return training_service.get_progress(user_id=access.user.id,
                                              administrator=access.administrator, allowed_datasets=access.names)
-    except ImportedSourceError:
-        raise HTTPException(status_code=404, detail="Recurso de entrenamiento no disponible.")
     except PermissionError:
         raise HTTPException(403, "Trabajo no accesible para este usuario.") from None
 
@@ -1364,12 +1331,9 @@ def stop_training_pipeline(request: Request, response: Response, db: Session = D
     """
     Solicita la detención segura del entrenamiento en ejecución (CU_INV_03 Paso 2.a).
     """
-    owner = _training_resource_owner(request, response, db)
     try:
-        return training_service.stop_training(owner_id=owner, user_id=access.user.id,
+        return training_service.stop_training(user_id=access.user.id,
                                               administrator=access.administrator, allowed_datasets=access.names)
-    except ImportedSourceError:
-        raise HTTPException(status_code=404, detail="Recurso de entrenamiento no disponible.")
     except PermissionError:
         raise HTTPException(403, "Trabajo no accesible para este usuario.") from None
 

@@ -5,6 +5,14 @@ import math
 from typing import List, Optional, Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+def reject_retired_selection(data):
+    """Reject retired keys even when null; never silently train the default source."""
+    if isinstance(data, dict) and any(key in data for key in (
+            "imported_dataset_id", "snapshot_id", "imported_prepared_version")):
+        raise ValueError("La entrada de entrenamiento importado fue retirada; use dataset_name y partition_version.")
+    return data
+
+
 VALID_ARCHITECTURES = {
     "EfficientNet-B0",
     "ConvNeXt-Nano",
@@ -68,22 +76,13 @@ class ModelEnsembleItem(BaseModel):
     """
     Especificación de un modelo miembro del ensamble con su respectiva ponderación y épocas dedicadas.
     """
-    imported_prepared_version: Optional[str] = Field(default=None, strict=True, pattern=r"^[0-9a-f]{64}$")
-    audio_config: Optional[AudioConfigSchema] = None
-    windowing_config: Optional[WindowingConfigSchema] = None
     architecture: str
     weight: float = Field(ge=0.0, le=1.0)
     epochs: Optional[int] = Field(default=None, ge=1, le=1000, description="Épocas de entrenamiento individuales para este modelo")
     learning_rate: Optional[float] = Field(default=None, gt=0.0, le=1.0, description="Tasa de aprendizaje individual para este modelo")
     batch_size: Optional[int] = Field(default=None, ge=1, le=512, description="Tamaño de lote individual para este modelo")
 
-    @model_validator(mode="before")
-    @classmethod
-    def validate_prepared_member(cls, data):
-        if (isinstance(data, dict) and data.get("imported_prepared_version") is not None
-                and set(data) - set(cls.model_fields)):
-            raise ValueError("El componente preparado no admite propietario, rutas ni campos adicionales.")
-        return data
+    _reject_retired_selection = model_validator(mode="before")(reject_retired_selection)
 
     @field_validator("architecture")
     @classmethod
@@ -102,12 +101,6 @@ class StartTrainingRequest(BaseModel):
     y desacoplamiento del dominio acústico mediante AudioConfigSchema, WindowingConfigSchema y RegularizationConfigSchema.
     """
     dataset_name: str = "AvesChilenas"
-    imported_dataset_id: Optional[str] = Field(default=None, strict=True, pattern=r"^[0-9a-f]{32}$",
-        description="Owned imported dataset ID; requires an active cookie session and exact snapshot/preparation; alternative to legacy selection.")
-    snapshot_id: Optional[str] = Field(default=None, strict=True, pattern=r"^[0-9a-f]{32}$",
-        description="Ready immutable local snapshot belonging to the authenticated imported-dataset owner.")
-    imported_prepared_version: Optional[str] = Field(default=None, strict=True, pattern=r"^[0-9a-f]{64}$",
-        description="Exact T2 preparation version; pins classes and explicit audio/architecture profile. No implicit latest or legacy re-preparation.")
     partition_version: Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     prepared_version: Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{64}$",
                                           description="Pin an immutable prepared dataset identity")
@@ -133,36 +126,14 @@ class StartTrainingRequest(BaseModel):
     regularization_config: Optional[RegularizationConfigSchema] = None
     _explicit_models: bool = False
 
-    @model_validator(mode="before")
-    @classmethod
-    def validate_imported_selection(cls, data):
-        members = data.get("models") if isinstance(data, dict) else None
-        if not isinstance(members, (list, tuple)):
-            members = []  # Let Pydantic report malformed containers as validation errors.
-        refs = [m.get("imported_prepared_version") if isinstance(m, dict)
-                else getattr(m, "imported_prepared_version", None) for m in members]
-        triad = any(ref is not None for ref in refs)
-        if isinstance(data, dict) and (triad or any(data.get(k) is not None for k in (
-                "imported_dataset_id", "snapshot_id", "imported_prepared_version"))):
-            if triad and (len(refs) != 3 or not all(refs) or data.get("imported_prepared_version") is not None):
-                raise ValueError("La tríada exige tres preparaciones sin selección individual.")
-            required = ("imported_dataset_id", "snapshot_id") if triad else ("imported_dataset_id", "snapshot_id", "imported_prepared_version")
-            if not all(data.get(k) is not None for k in required):
-                raise ValueError("La selección importada exige dataset, snapshot y preparación explícitos.")
-            if ("dataset_name" in data or data.get("prepared_version") is not None
-                    or data.get("allow_historical_preparation") or data.get("is_tri_model")):
-                raise ValueError("La selección importada es alternativa a la selección legacy.")
-            if set(data) - set(cls.model_fields):
-                raise ValueError("La selección importada no admite rutas, propietario ni campos adicionales.")
-        return data
-
     def __init__(self, **data):
         has_models = "models" in data and data["models"] is not None
         super().__init__(**data)
         object.__setattr__(self, "_explicit_models", has_models)
 
-    @model_validator(mode="after")
+    _reject_retired_selection = model_validator(mode="before")(reject_retired_selection)
 
+    @model_validator(mode="after")
     def validate_and_normalize_models(self) -> "StartTrainingRequest":
         if self.allow_historical_preparation and self.prepared_version is None:
             raise ValueError("Historical preparation requires an explicit prepared_version")
@@ -175,12 +146,6 @@ class StartTrainingRequest(BaseModel):
             total_weight = sum(item.weight for item in self.models)
             if total_weight <= 0.0:
                 raise ValueError("La suma de ponderaciones debe ser mayor a 0.")
-
-            if any(m.imported_prepared_version is not None for m in self.models):
-                if (not all(math.isfinite(m.weight) for m in self.models)
-                        or not math.isclose(total_weight, 1.0, rel_tol=0.0, abs_tol=1e-9)):
-                    raise ValueError("Los pesos de la tríada deben sumar 1.")
-                return self
 
             # Auto-normalización determinista de pesos legacy
             normalized_models = []

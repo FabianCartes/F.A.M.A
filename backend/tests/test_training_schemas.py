@@ -1,34 +1,26 @@
 import pytest
 
 
-def test_imported_triad_preserves_exact_weights_references_and_profiles():
+@pytest.mark.parametrize("key", ["imported_dataset_id", "snapshot_id", "imported_prepared_version"])
+@pytest.mark.parametrize("value", [None, "a" * 64])
+def test_retired_source_selectors_are_rejected_in_request_and_members(key, value):
+    from app.schemas.training import StartTrainingRequest, ModelEnsembleItem
+    message = "La entrada de entrenamiento importado fue retirada; use dataset_name y partition_version."
+    with pytest.raises(ValueError, match=message):
+        StartTrainingRequest(**{key: value})
+    with pytest.raises(ValueError, match=message):
+        ModelEnsembleItem(architecture="AudioCNN", weight=1, **{key: value})
+    with pytest.raises(ValueError, match=message):
+        StartTrainingRequest(models=[dict(architecture="AudioCNN", weight=1, **{key: value})])
+    assert key not in StartTrainingRequest.model_json_schema()["properties"]
+    assert key not in ModelEnsembleItem.model_json_schema()["properties"]
+
+
+def test_malformed_model_container_still_rejects():
     from app.schemas.training import StartTrainingRequest
-    body = dict(imported_dataset_id="a" * 32, snapshot_id="b" * 32,
-        models=[dict(architecture="AudioCNN", weight=w, imported_prepared_version=c * 64,
-                     audio_config={"duration_seconds": d}, windowing_config={"hop_seconds": 0.25})
-                for w, c, d in ((0.2, "c", 1), (0.3, "d", 2), (0.5, "e", 3))])
     for malformed in (42, True):
         with pytest.raises(ValueError):
             StartTrainingRequest(models=malformed)
-    request = StartTrainingRequest(**body)
-    assert [m.imported_prepared_version for m in request.models] == [c * 64 for c in "cde"]
-    assert [m.audio_config.duration_seconds for m in request.models] == [1, 2, 3]
-    assert [m.weight for m in request.models] == [0.2, 0.3, 0.5]
-    for damage in ("partial", "mixed", "sum", "orphan", "override"):
-        from copy import deepcopy
-        invalid = deepcopy(body)
-        if damage == "partial":
-            invalid["models"][1].pop("imported_prepared_version")
-        elif damage == "mixed":
-            invalid["imported_prepared_version"] = "f" * 64
-        elif damage == "sum":
-            invalid["models"][0]["weight"] = 0.1
-        elif damage == "override":
-            invalid["models"][1]["owner_id"] = 2
-        else:
-            invalid.pop("imported_dataset_id")
-        with pytest.raises(ValueError):
-            StartTrainingRequest(**invalid)
 
 from pathlib import Path
 from pydantic import ValidationError

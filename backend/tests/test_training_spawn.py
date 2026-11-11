@@ -7,8 +7,6 @@ import pytest
 
 from app.services import training
 from tests.test_training_flow import training_env, partitions, register
-from tests.test_dataset_import_api import imports
-from tests.test_imported_dataset_preparation import cohort, create as create_imported_preparation
 
 
 def flood_progress(config, checkpoints, publish, stop_event):
@@ -243,86 +241,5 @@ def test_spawn_pipeline_persists_checkpoint_and_reports_or_stops_before_publicat
             assert all(r.checkpoint_sha256 == digest for r in reports)
             assert reports[0].manifest_sha256 != reports[1].manifest_sha256
             assert db.query(Modelo).one().hash_binario == digest
-    finally:
-        engine.dispose()
-
-
-@pytest.mark.parametrize("cancel_registration", [False, True])
-def test_spawn_imported_checkpoint_keeps_identity_pending_evaluation(
-    training_env, cohort, tmp_path, monkeypatch, cancel_registration,
-):
-    """Real spawn, real CPU loader/model and private SQLite; no publication/T5."""
-    import sqlite3
-    import torch
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
-    from app.services.imported_training_source import ImportedTrainingSource
-    from app.services.training_process import TrainingProcess
-    from training.imported_dataset_preparation import ImportedDatasetPreparation
-    from scripts.migrate_imported_training_source import migrate_imported_sources
-
-    service = training_env[0]
-    preparations = ImportedDatasetPreparation(cohort[0], tmp_path / "imported-prepared")
-    prepared = create_imported_preparation(preparations, cohort)
-    source_engine = cohort[0].sessions.kw["bind"]
-    migrate_imported_sources(source_engine, writers_stopped=True)
-    private_db = tmp_path / "imported-spawn.sqlite"
-    connection = source_engine.raw_connection()
-    try:
-        with sqlite3.connect(private_db) as destination:
-            connection.driver_connection.backup(destination)
-    finally:
-        connection.close()
-    url = f"sqlite:///{private_db}"
-    engine = create_engine(url)
-    sessions = sessionmaker(bind=engine)
-    # Fixture preparation and child registration see the same isolated source DB.
-    monkeypatch.setattr(cohort[0], "sessions", sessions)
-    monkeypatch.setattr(training, "SessionLocal", sessions)
-    monkeypatch.setenv("DATABASE_URL", url)
-    monkeypatch.setenv("HF_HUB_OFFLINE", "1")
-    service.imported_sources = ImportedTrainingSource(preparations)
-
-    def factory(target, *, args, seed):
-        config, checkpoints = args
-        config = dict(config, cancel_validation="registration" if cancel_registration else False)
-        return TrainingProcess(synthetic_pipeline, args=(config, checkpoints), seed=seed)
-
-    service._process_factory = factory
-    try:
-        result = service.start_training(
-            "", imported_dataset_id=cohort[5], snapshot_id=cohort[1]["id"],
-            imported_prepared_version=prepared["version_id"], owner_id=1,
-            architecture="AudioCNN", epochs=1, batch_size=2, seed=314, early_stopping=False,
-        )
-        assert result["status"] == "started"
-        assert service.wait_for_completion(timeout=40), service.get_progress()
-        progress = service.get_progress(owner_id=1)
-        assert progress["status"] == ("stopped" if cancel_registration else "checkpoint_persisted"), progress
-        assert progress["error_message"] is None
-        with sessions() as db:
-            entry, = service.get_history(db, owner_id=1)
-            assert service.get_history(db) == []
-            assert service.get_history(db, owner_id=2) == []
-            assert service.set_active_model(entry["id"], db)["success"] is False
-            from app.services.registry import ModelRegistry
-            registry = ModelRegistry()
-            registry.register_from_db(db, service.checkpoints_dir)
-            assert registry.list_models() == []
-        identity = service.imported_sources.model_source(1, entry["id"])
-        assert identity["dataset_id"] == cohort[5]
-        assert identity["snapshot_id"] == cohort[1]["id"]
-        assert identity["preparation_version"] == prepared["version_id"]
-        assert identity["profile"] == prepared["profile"]
-        checkpoint = torch.load(service.checkpoints_dir / entry["filename"], weights_only=True)
-        assert checkpoint["imported_source"] == identity
-        assert checkpoint["classes"] == ["ants", "zebra"]
-        assert checkpoint["runtime"]["device"] == "cpu"
-        assert checkpoint["reproducibility"]["execution"] == "spawned_process"
-        assert checkpoint["seed"] == 314
-        assert len(entry["metrics"]) == 1
-        assert entry["dataset_id"] is None
-        assert entry["active"] is False
-        assert entry["status"] == "standard_eval_pending"
     finally:
         engine.dispose()

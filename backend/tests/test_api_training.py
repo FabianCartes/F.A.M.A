@@ -398,42 +398,78 @@ def test_get_training_datasets(client):
     assert data["datasets"] == []
 
 
-def test_catalog_opt_in_keeps_imported_auth_and_owner_isolation(client, training_env, monkeypatch):
-    from types import SimpleNamespace
+def test_training_entry_no_longer_admits_imported_sources(client, training_env):
     from app.models.dataset_import import ImportedDataset
-    from app.models.user import Usuario
-    from app.services import auth
-    from app.services.imported_training_source import ImportedTrainingSource
-    service, sessions, root, _ = training_env
-    monkeypatch.setattr(auth, "SECRET_KEY", "synthetic-catalog-signing-key-not-production-2026")
+    service, sessions, root, thread = training_env
     with sessions() as db:
-        for owner in (1, 2):
-            db.add(Usuario(id=owner, email=f"catalog{owner}@example.test", password_hash="unused",
-                           nombre_completo="Synthetic", rol="investigador", activo=True))
-            db.add(ImportedDataset(id=str(owner) * 32, owner_id=owner, name=f"Private {owner}"))
+        db.add(ImportedDataset(id="a" * 32, owner_id=1, name="Private import"))
         db.commit()
-    prepared_root = root / "imported-prepared"
-    prepared_root.mkdir(mode=0o700)
-    # No snapshots/preparations: real catalog query must retain preparation_required.
-    service.imported_sources = ImportedTrainingSource(SimpleNamespace(
-        root=prepared_root, snapshots=SimpleNamespace(sessions=sessions)))
-    register(sessions, "medical_cough")
-    path = "/api/training/datasets?include_imported=true"
-    assert client.get(path + "&include_unavailable=true").status_code == 401
-    for owner in (1, 2):
-        headers = cookie_headers(sessions, owner)
-        previous = client.get(path, headers=headers)
-        assert previous.status_code == 200, previous.text
-        response = client.get(path + "&include_unavailable=true", headers=headers)
-        assert response.status_code == 200, response.text
-        legacy, imported = response.json()["datasets"]
-        assert legacy["source_type"] == "legacy"
-        assert previous.json()["datasets"][0]["id"] == "medical_cough"
-        assert [entry for entry in previous.json()["datasets"]
-                if entry.get("source_type") == "imported"] == [imported]
-        assert imported == {"source_type": "imported", "id": str(owner) * 32,
-                            "name": f"Private {owner}", "eligible": False,
-                            "reasons": ["preparation_required"], "preparations": []}
+    register(sessions, "AvesChilenas")
+    partitions(root, "AvesChilenas")
+    catalog = client.get("/api/training/datasets")
+    assert catalog.status_code == 200, catalog.text
+    assert [entry["id"] for entry in catalog.json()["datasets"]] == ["AvesChilenas"]
+    assert all(entry.get("source_type") != "imported" for entry in catalog.json()["datasets"])
+    before = service.get_progress()
+    response = client.post("/api/training/start", json={
+        "dataset_name": "AvesChilenas", "imported_dataset_id": "a" * 32, "snapshot_id": "b" * 32})
+    assert response.status_code == 422, response.text
+    assert response.json() == {"detail": "Solicitud de autenticación inválida."}
+    assert service.get_progress() == before
+    assert client.get("/api/training/history").json() == {"history": []}
+    thread.assert_not_called()
+
+
+@pytest.mark.parametrize("value", ["true", "false", ""])
+def test_retired_catalog_option_is_rejected_without_side_effects(client, training_env, value):
+    service, _, _, process = training_env
+    before = client.get("/api/training/progress").json()
+    response = client.get("/api/training/datasets", params={"include_imported": value})
+    assert response.status_code == 422, response.text
+    assert response.json() == {
+        "detail": "La opción include_imported fue retirada del catálogo de entrenamiento."
+    }
+    assert client.get("/api/training/progress").json() == before
+    assert client.get("/api/training/history").json() == {"history": []}
+    process.assert_not_called()
+
+
+@pytest.mark.parametrize("body", [
+    {"imported_dataset_id": "a" * 32}, {"snapshot_id": "b" * 32},
+    {"imported_prepared_version": "c" * 64}, {"snapshot_id": None},
+    {"models": [{"architecture": "AudioCNN", "weight": 1,
+                  "imported_prepared_version": "c" * 64}]},
+])
+def test_retired_selectors_never_fall_back_to_default_dataset(client, training_env, body):
+    service, sessions, root, thread = training_env
+    register(sessions, "AvesChilenas")
+    partitions(root, "AvesChilenas")
+    before = client.get("/api/training/progress").json()
+    response = client.post("/api/training/start", json=body)
+    assert response.status_code == 422, response.text
+    assert response.json() == {"detail": "Solicitud de autenticación inválida."}
+    assert client.get("/api/training/progress").json() == before
+    assert client.get("/api/training/history").json() == {"history": []}
+    thread.assert_not_called()
+
+
+@pytest.mark.parametrize("method,path,body", [
+    ("post", "/snapshots", {"dataset_id": "a" * 32}),
+    ("get", "/snapshots/" + "b" * 32, None),
+    ("get", "/snapshots/" + "b" * 32 + "/members", None),
+    ("post", "/snapshots/" + "b" * 32 + "/preparations", {}),
+    ("get", "/snapshots/" + "b" * 32 + "/preparations/" + "c" * 64, None),
+])
+def test_imported_preparation_routes_are_retired(client, training_env, method, path, body):
+    service, _, _, process = training_env
+    before = service.get_progress()
+    response = client.request(method, "/api/training/imported" + path,
+                              **({"json": body} if body is not None else {}))
+    assert response.status_code == 404, response.text
+    assert response.json() == {"detail": "Not Found"}
+    assert service.get_progress() == before
+    assert client.get("/api/training/history").json() == {"history": []}
+    process.assert_not_called()
 
 
 def test_catalog_includes_new_registered_dataset_for_training(client, training_env):

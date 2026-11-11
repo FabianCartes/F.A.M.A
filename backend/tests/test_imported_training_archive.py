@@ -5,14 +5,9 @@ from tests.test_dataset_import_api import imports
 from tests.test_imported_dataset_preparation import cohort, create
 
 
-@pytest.mark.parametrize('boundary', ['snapshot', 'preparation', 'training'])
-def test_archive_schema_unavailable_keeps_503(cohort, tmp_path, monkeypatch, boundary):
-    from fastapi import FastAPI
-    from fastapi.testclient import TestClient
-    from types import SimpleNamespace
+def test_archive_schema_unavailable_keeps_503(cohort, tmp_path, monkeypatch):
     from training.imported_dataset_preparation import ImportedDatasetPreparation
     from app.services.imported_training_source import ImportedTrainingSource
-    from app.routes import imported_training
     from scripts.migrate_imported_training_source import migrate_imported_sources
     from scripts import migrate_dataset_import_archive
     snapshots, snapshot, mapping, profile, _, dataset_id = cohort
@@ -22,23 +17,10 @@ def test_archive_schema_unavailable_keeps_503(cohort, tmp_path, monkeypatch, bou
     def incompatible(connection):
         raise RuntimeError('synthetic incompatible archive default')
     monkeypatch.setattr(migrate_dataset_import_archive, 'validate_archive', incompatible)
-    if boundary == 'training':
-        with pytest.raises(HTTPException) as failure:
-            ImportedTrainingSource(preparations).resolve_for_training(
-                1, dataset_id, snapshot['id'], prepared['version_id'], architecture='AudioCNN')
-        assert failure.value.status_code == 503
-    else:
-        app = FastAPI()
-        app.include_router(imported_training.router)
-        app.dependency_overrides[imported_training.get_user] = lambda: SimpleNamespace(id=1)
-        app.dependency_overrides[imported_training.get_preparations] = lambda: preparations
-        with TestClient(app, raise_server_exceptions=False) as client:
-            if boundary == 'snapshot':
-                response = client.post('/api/training/imported/snapshots', json={'dataset_id': dataset_id})
-            else:
-                response = client.post(f"/api/training/imported/snapshots/{snapshot['id']}/preparations",
-                    json={'mapping': mapping, 'profile': profile, 'provenance': {'source': 'synthetic'}, 'seed': 42})
-            assert response.status_code == 503, response.text
+    with pytest.raises(HTTPException) as failure:
+        ImportedTrainingSource(preparations).resolve_for_training(
+            1, dataset_id, snapshot['id'], prepared['version_id'], architecture='AudioCNN')
+    assert failure.value.status_code == 503
     assert snapshots.get(1, snapshot['id']) == snapshot
     assert preparations.get(1, snapshot['id'], prepared['version_id']) == prepared
 

@@ -1,5 +1,6 @@
 """Weights-only composition revision through the public authenticated HTTP seam."""
 import pytest
+from tests.http_security import cookie_security  # noqa: F401 - configure the HTTP fixture in this module
 from tests.test_imported_triad_evaluation import bound, synthetic_audio, database_snapshot
 from tests.test_dataset_import_api import imports
 from tests.test_imported_dataset_preparation import cohort

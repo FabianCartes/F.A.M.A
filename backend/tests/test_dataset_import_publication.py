@@ -8,6 +8,8 @@ from google.api_core.exceptions import NotFound, PreconditionFailed
 
 from tests.test_dataset_import_api import imports, prepare, confirm, operation
 from tests.test_dataset_zip_validation import wav_bytes
+from tests.test_training_flow import training_env
+from tests.http_security import cookie_headers, cookie_security, COOKIE_ORIGIN
 
 BASE = "/api/ingestion/imports"
 
@@ -195,10 +197,19 @@ def test_foreign_dataset_created_during_publication_receives_no_rows_and_no_gran
     assert published.bucket.objects == {}
 
 
-def test_published_zip_trains_through_a_partition_version_and_rejects_changed_local_copy(published, tmp_path, monkeypatch):
+@pytest.mark.parametrize("is_tri_model", [False, True])
+@pytest.mark.parametrize("changed_local", [False, True])
+def test_published_zip_trains_through_a_partition_version_and_rejects_changed_local_copy(
+        published, tmp_path, monkeypatch, training_env, cookie_security, is_tri_model, changed_local):
     from app.models.dataset import ConjuntoDatos
     from app.services.partitions import DatasetPartitions, PartitionError
+    from app.services import training
+    from tests.test_api_training import main
     from training import paths
+    runtime, _, _, process = training_env
+    monkeypatch.setattr(training, "SessionLocal", published.sessions)
+    monkeypatch.setattr(main, "training_service", runtime)
+    monkeypatch.setattr(training, "get_raw_data_dir", lambda name=None: published.raw / (name or ""))
     monkeypatch.setattr(paths, "get_raw_data_dir", lambda name=None: published.raw / (name or ""))
     monkeypatch.setattr(paths, "get_processed_data_dir", lambda name=None: tmp_path / "processed" / (name or ""))
     entries = [(f"{label}/{index}.wav", wav_bytes(index + 1)) for index in range(10)
@@ -215,6 +226,40 @@ def test_published_zip_trains_through_a_partition_version_and_rejects_changed_lo
         assert sum(len(source["recordings"][split]) for split in ("train", "val", "test")) == 10
         assert {e["hash_sha256"] for e in saved["entries"]} == {hashlib.sha256(c).hexdigest() for _, c in entries}
 
+    # The same published ZIP reaches the real public start admission, with a
+    # deferred process boundary: this does not execute heavy/operational training.
+    for path, endpoint, methods in (
+            ("/api/training/datasets", main.get_training_datasets, ["GET"]),
+            ("/api/training/start", main.start_training_pipeline, ["POST"]),
+            ("/api/training/progress", main.get_training_progress, ["GET"]),
+            ("/api/training/stop", main.stop_training_pipeline, ["POST"]),
+            ("/api/training/history", main.get_training_history, ["GET"])):
+        published.app.add_api_route(path, endpoint, methods=methods)
+    headers = {**cookie_headers(published.sessions, 1), "Origin": COOKIE_ORIGIN}
+    catalog = client.get("/api/training/datasets", headers=headers)
+    assert catalog.status_code == 200, catalog.text
+    assert [row["id"] for row in catalog.json()["datasets"]] == ["Bosque"]
+    body = dict(dataset_name="Bosque", partition_version=saved["version"], is_tri_model=is_tri_model)
+    if changed_local:
         (published.raw / "Bosque" / "Chucao" / "0.wav").write_bytes(b"changed")
-        with pytest.raises(PartitionError, match="contenido local"):
-            partitions.training_source(saved["version"])
+        with published.sessions() as db:
+            partitions = DatasetPartitions(db.query(ConjuntoDatos).filter_by(nombre="Bosque").one(), db)
+            with pytest.raises(PartitionError, match="contenido local"):
+                partitions.training_source(saved["version"])
+        rejected = client.post("/api/training/start", json=body, headers=headers)
+        assert rejected.status_code == 400, rejected.text
+        assert "contenido local" in rejected.json()["detail"]
+        assert client.get("/api/training/progress", headers=headers).json()["status"] == "failed"
+        assert client.get("/api/training/history", headers=headers).json() == {"history": []}
+        process.assert_not_called()
+        return
+    admitted = client.post("/api/training/start", json=body, headers=headers)
+    assert admitted.status_code == 200, admitted.text
+    assert admitted.json()["status"] == "started"
+    assert admitted.json()["partition_version"] == saved["version"]
+    config = process.call_args.kwargs["args"][0]
+    assert config["dataset_name"] == "Bosque"
+    assert config["source"]["partition_manifest"]["version"] == saved["version"]
+    assert len(config["models"]) == (3 if is_tri_model else 1)
+    assert client.get("/api/training/history", headers=headers).json() == {"history": []}
+    assert client.post("/api/training/stop", headers=headers).status_code == 200

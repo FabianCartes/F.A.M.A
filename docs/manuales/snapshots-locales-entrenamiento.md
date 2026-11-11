@@ -1,6 +1,12 @@
 # Snapshots locales de entrenamiento
 
-## Alcance T1
+**Estado vigente — MVP d:** la entrada HTTP de snapshots/preparaciones importadas está retirada. Para nuevos entrenamientos publique el ZIP, guarde particiones estándar y seleccione `dataset_name` + `partition_version`; consulte el [manual vigente](entrenamiento-datasets-importados.md). Las rutas `/api/training/imported/*` ya no están registradas y los selectores importados de inicio se rechazan sin fallback.
+
+**Retención obligatoria:** se conservan `TrainingSnapshots`, sus tablas y archivos porque los lectores de modelos importados existentes aún los necesitan para predicción, evaluación, historial, feedback y revisión de pesos. Este cambio no elimina datos ni autoriza DDL, GC, nuevas capturas o cambios de permisos operacionales.
+
+El resto de este documento describe el contrato y la evidencia **históricos de T1**, no el camino vigente de nuevos entrenamientos ni una instrucción para volver a habilitarlo.
+
+## Alcance T1 (histórico)
 
 Implementa la base local de S1–S2/S8 del [plan](../arquitectura/entrenamiento-datasets-importados-plan.md), conforme al [ADR 0052](../adr/0052-preparacion-local-de-datasets-importados.md). No agrega endpoints, catálogo de entrenamiento, admisión, trabajos, splits ni entrenamiento. No modifica el importador ZIP ni el contrato remoto `DatasetRevision.complete`.
 

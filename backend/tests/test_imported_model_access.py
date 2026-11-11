@@ -1,4 +1,4 @@
-"""Public imported-model HTTP access with real synthetic training and identity."""
+"""Public HTTP access to existing synthetic imported checkpoints and identities."""
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pathlib import Path
@@ -9,7 +9,9 @@ from app.models import web_session, access_quota, security_audit
 from tests.test_dataset_import_api import imports
 from tests.test_imported_dataset_preparation import cohort
 from tests.test_training_flow import training_env
-from tests.test_imported_training_evaluation import _complete_imported_cpu_worker
+from tests.test_imported_training_evaluation import (
+    _complete_imported_cpu_worker, publish_preexisting_imported_checkpoint,
+)
 
 
 def test_imported_http_catalogue_is_opt_in_and_owner_private(cohort, training_env, tmp_path, monkeypatch):
@@ -45,8 +47,8 @@ def test_imported_http_catalogue_is_opt_in_and_owner_private(cohort, training_en
     app.dependency_overrides[get_model_registry] = lambda: registry
     headers = lambda uid: cookie_headers(sessions, uid)
     key = f"fama_trained_model_{model_id}"
-    # Populate a second owner's real synthetic checkpoint/evaluations through
-    # the same import, snapshot, preparation and training public boundaries.
+    # Seed another owner's historical checkpoint and real synthetic evaluation
+    # reports without reintroducing the retired training entry.
     from types import SimpleNamespace
     from app.routes.dataset_imports import get_import_user
     from tests.test_dataset_import_api import prepare, confirm
@@ -63,13 +65,12 @@ def test_imported_http_catalogue_is_opt_in_and_owner_private(cohort, training_en
                  for m, _ in cohort[0].iter_verified(2, snapshot_b['id'])]
     prepared_b = runtime.imported_sources.preparations.create(2, snapshot_b['id'],
         mapping=mapping_b, provenance={'source': 'synthetic owner B'}, seed=42, profile=cohort[3])
-    assert runtime.start_training('', imported_dataset_id=dataset_b, snapshot_id=snapshot_b['id'],
-        imported_prepared_version=prepared_b['version_id'], owner_id=2,
-        architecture='AudioCNN', epochs=1, batch_size=2, early_stopping=False)['status'] == 'started'
-    assert runtime.get_progress(owner_id=2)['status'] == 'completed'
-    with sessions() as db:
-        row_b, = [row for row in runtime.get_history(db, owner_id=2) if row['status'] == 'standard_eval_completed']
-    key_b = f"fama_trained_model_{row_b['id']}"
+    model_b, _ = publish_preexisting_imported_checkpoint(
+        runtime, sessions, runtime.imported_sources, owner_id=2,
+        dataset_id=dataset_b, snapshot_id=snapshot_b['id'],
+        prepared_version=prepared_b['version_id'])
+    assert runtime.get_progress()['status'] == 'idle'
+    key_b = f"fama_trained_model_{model_b}"
     # A publication collaborator can report unavailable identities. Its foreign
     # diagnostics must not appear even though successful owned rows still do.
     publish = registry.publish_from_db

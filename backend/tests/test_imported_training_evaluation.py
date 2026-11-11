@@ -89,44 +89,31 @@ def test_fresh_active_legacy_registry_loads_weights_before_return(training_env):
         assert registry.get_default_model_id() == key
 
 
-def test_imported_evaluation_failure_preserves_checkpoint_and_previous_active(cohort, training_env, tmp_path, monkeypatch):
-    import hashlib
+def test_existing_imported_evaluation_rejects_audio_changed_during_inference(
+        cohort, training_env, tmp_path, monkeypatch):
     from pathlib import Path
-    from app.models.training import Modelo, ModelEvaluation
-    from app.services import training
-    from app.services.evaluations import EvaluationService
-    from app.services.imported_training_source import ImportedTrainingSource
+    from app.models.training import Modelo
+    from app.services.imported_evaluation import evaluation_recordings
+    from app.services.recording_evaluator import RecordingEvaluator
     from app.services.predictors.trained_predictor import TrainedModelPredictor
-    from app.services.registry import ModelRegistry, ModelNotFoundError
-    from training.imported_dataset_preparation import ImportedDatasetPreparation
-    from scripts.migrate_imported_training_source import migrate_imported_sources
+    from app.services.standard_evaluation_guard import inspect_checkpoint
 
-    runtime, _, _, process = training_env
-    sessions = cohort[0].sessions
-    migrate_imported_sources(sessions.kw["bind"], writers_stopped=True)
-    preparations = ImportedDatasetPreparation(cohort[0], tmp_path / "failure-prepared")
-    prepared = create(preparations, cohort)
-    runtime.imported_sources = ImportedTrainingSource(preparations)
-    monkeypatch.setattr(training, "SessionLocal", sessions)
-    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    runtime, sessions, model_id, identity = _complete_imported_cpu_worker(
+        cohort, training_env, tmp_path, monkeypatch)
+    source = runtime.imported_sources.resolve(1, cohort[5], cohort[1]["id"],
+        identity["preparation_version"], architecture="AudioCNN")
     originals = {row["member_id"]: row["sha256"]
                  for row, _ in cohort[0].iter_verified(1, cohort[1]["id"])}
     with sessions() as db:
-        previous = Modelo(arquitectura="existing", clase_objetivo="Historical",
-            ruta_binario_gcp="models/previous.pt", epocas=1, tasa_aprendizaje=0.001,
-            tamano_lote=1, activo=True, estado="legacy")
-        db.add(previous)
-        db.commit()
-        previous_id = previous.id_modelo
-    class Inline:
-        def __init__(self, target, args, **kwargs):
-            self.target, self.args = target, args
-        def start(self):
-            self.target(*self.args)
-    process.side_effect = Inline
-    real_predict = TrainedModelPredictor.predict
+        before = runtime.get_history(db, owner_id=1)
+        model = db.get(Modelo, model_id)
+        checkpoint = runtime.checkpoints_dir / Path(model.ruta_binario_gcp).name
+        checkpoint_bytes = checkpoint.read_bytes()
+        inspection = inspect_checkpoint(runtime.checkpoints_dir, checkpoint, model.hash_binario)
+    predictor = TrainedModelPredictor(checkpoint, lazy_load=True)
+    real_predict = predictor.predict
     changed = []
-    def mutate_private_copy_then_predict(predictor, path):
+    def mutate_private_copy_then_predict(path):
         if not changed:
             path = Path(path)
             assert path.parent.name.startswith("imported-evaluation-")
@@ -135,51 +122,19 @@ def test_imported_evaluation_failure_preserves_checkpoint_and_previous_active(co
             with path.open("ab") as output:
                 output.write(b"x")
             changed.append(path)
-        return real_predict(predictor, path)
-    monkeypatch.setattr(TrainedModelPredictor, "predict", mutate_private_copy_then_predict)
-    admitted = runtime.start_training("", imported_dataset_id=cohort[5], snapshot_id=cohort[1]["id"],
-        imported_prepared_version=prepared["version_id"], owner_id=1,
-        architecture="AudioCNN", epochs=1, batch_size=2, early_stopping=False)
-    assert admitted["status"] == "started"
-    progress = runtime.get_progress(owner_id=1)
-    assert progress["status"] == "failed", progress
-    assert progress["error_message"] == "Audio changed during inference"
-    assert len(changed) == 1
-    assert not changed[0].exists()
+        return real_predict(path)
+    monkeypatch.setattr(predictor, "predict", mutate_private_copy_then_predict)
+    with evaluation_recordings(source) as recordings:
+        evaluator = RecordingEvaluator(recordings["val"], predictor,
+            id_modelo=model_id, dataset="imported:" + cohort[5], split="val",
+            checkpoint_sha256=inspection.sha256, predictor_config=inspection.configurations[0],
+            preprocessing_config=inspection.configurations[1], aggregation_config=inspection.configurations[2])
+        with pytest.raises(ValueError, match="Audio changed during inference"):
+            evaluator.evaluate()
+    assert len(changed) == 1 and not changed[0].exists()
+    assert checkpoint.read_bytes() == checkpoint_bytes
     with sessions() as db:
-        history = runtime.get_history(db, owner_id=1)
-        entry, = [row for row in history if row["id"] != previous_id]
-        assert entry["status"] == "standard_eval_failed"
-        assert entry["active"] is False
-        assert next(row for row in history if row["id"] == previous_id)["active"] is True
-        checkpoint = runtime.checkpoints_dir / entry["filename"]
-        assert hashlib.sha256(checkpoint.read_bytes()).hexdigest() == entry["sha256"]
-        association = runtime.imported_sources.model_source(1, entry["id"])
-        payload = torch.load(checkpoint, map_location="cpu", weights_only=True)
-        assert payload["imported_source"] == association
-        assert payload["audio_config"] == association["profile"]["audio"]
-        assert association["preparation_version"] == prepared["version_id"]
-        assert payload["classes"] == association["classes"] == ["ants", "zebra"]
-        # Discover attempt IDs only; report/state observations use the public service.
-        ids = [row.id_evaluation for row in db.query(ModelEvaluation).filter_by(id_modelo=entry["id"]).all()]
-        reports = [EvaluationService(db).read(attempt_id) for attempt_id in ids]
-        assert sorted(report["split"] for report in reports) == ["test", "val"]
-        for report in reports:
-            assert report["status"] == "failed"
-            assert report["report"] is None
-            assert report["error_reason"] == "Audio changed during inference"
-            assert report["checkpoint_sha256"] == entry["sha256"]
-        registry = ModelRegistry()
-        key = f"fama_trained_model_{entry['id']}"
-        assert key not in [meta.id for meta in registry.list_models()]
-        public_errors = registry.publish_from_db(db, runtime.checkpoints_dir)
-        assert all(error.get("model_id") != key for error in public_errors)
-        errors = registry.publish_from_db(db, runtime.checkpoints_dir, owner_id=1)
-        assert any(error.get("model_id") == key and error["code"] == "standard_evaluation_invalid"
-                   for error in errors)
-        assert key not in [meta.id for meta in registry.list_models(owner_id=1)]
-        with pytest.raises(ModelNotFoundError):
-            registry.get(key, owner_id=1)
+        assert runtime.get_history(db, owner_id=1) == before
     assert {row["member_id"]: row["sha256"]
             for row, _ in cohort[0].iter_verified(1, cohort[1]["id"])} == originals
 
@@ -243,70 +198,125 @@ from tests.test_imported_dataset_preparation import cohort, create
 from tests.test_training_flow import training_env
 
 
+def publish_preexisting_imported_checkpoint(runtime, sessions, sources, *, owner_id,
+        dataset_id, snapshot_id, prepared_version, filename=None):
+    """Seed a historical artifact and real reports; never admit or train a job.
+
+    Sources and preparation must already exist. Returns (model_id, identity), so
+    owner-isolation tests can seed a second owner through the same fixture.
+    """
+    import hashlib
+    import uuid
+    from poc.train import AudioCNN
+    from app.models.training import Modelo
+    from app.models.imported_training_source import ImportedModelSource
+    from app.services.imported_evaluation import evaluation_recordings
+    from app.services.recording_evaluator import RecordingEvaluator
+    from app.services.predictors.trained_predictor import TrainedModelPredictor
+    from app.services.standard_evaluation_guard import (
+        inspect_checkpoint, admitted_manifest_pair_provenance, ADMITTED_MANIFEST_PAIR_KEY)
+    from app.services.evaluations import EvaluationService
+
+    source = sources.resolve(owner_id, dataset_id, snapshot_id, prepared_version, architecture="AudioCNN")
+    payload = checkpoint_payload()
+    payload.update(imported_source=source["identity"], classes=source["classes"],
+        dataset_name="imported:" + dataset_id, audio_config=source["identity"]["profile"]["audio"],
+        job_id="historical-synthetic-" + uuid.uuid4().hex)
+    audio = payload["audio_config"]
+    from poc.preprocess import build_gpu_audio_frontend_contract
+    payload["preprocessing_contract"] = build_gpu_audio_frontend_contract(
+        sample_rate=audio["target_sr"], duration_seconds=audio["duration_seconds"],
+        n_mels=audio["n_mels"], n_fft=audio["n_fft"], hop_length=audio["hop_length"],
+        f_min=audio["f_min"], f_max=audio["f_max"])
+    payload["windowing_config"]["hop_seconds"] = source["identity"]["profile"]["window_hop_seconds"]
+    # Random CPU weights are only a valid synthetic historical checkpoint, not
+    # evidence of training completion or model quality. Preserve the caller RNG.
+    with torch.random.fork_rng(devices=[]):
+        torch.manual_seed(42)
+        payload["state_dict"] = AudioCNN(num_classes=len(source["classes"])).state_dict()
+    checkpoint = runtime.checkpoints_dir / (filename or ("historical-" + uuid.uuid4().hex + ".pt"))
+    torch.save(payload, checkpoint)
+    digest = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+    with sessions() as db:
+        model = Modelo(arquitectura="AudioCNN", clase_objetivo="Historical imported fixture",
+            ruta_binario_gcp=checkpoint.as_uri(), hash_binario=digest,
+            tamano_bytes=checkpoint.stat().st_size, id_usuario=owner_id,
+            epocas=1, tasa_aprendizaje=0.001, tamano_lote=2,
+            activo=False, estado="standard_eval_completed")
+        db.add(model)
+        db.flush()
+        model_id = model.id_modelo
+        db.add(ImportedModelSource(model_id=model_id, owner_id=owner_id,
+            dataset_id=dataset_id, snapshot_id=snapshot_id, identity=source["identity"]))
+        db.commit()
+        inspection = inspect_checkpoint(runtime.checkpoints_dir, checkpoint, digest)
+        predictor = TrainedModelPredictor(checkpoint, lazy_load=True, expected_checkpoint_sha256=digest)
+        with evaluation_recordings(source) as recordings:
+            evaluators = [RecordingEvaluator(recordings[split], predictor,
+                id_modelo=model_id, dataset=payload["dataset_name"], split=split,
+                checkpoint_sha256=digest, predictor_config=inspection.configurations[0],
+                preprocessing_config=inspection.configurations[1],
+                aggregation_config=inspection.configurations[2]) for split in ("val", "test")]
+            pair = admitted_manifest_pair_provenance(*(e.identity.manifest_sha256 for e in evaluators))
+            service = EvaluationService(db)
+            for evaluator in evaluators:
+                identity = evaluator.identity.model_dump()
+                identity["predictor_config"] = {
+                    **identity["predictor_config"], ADMITTED_MANIFEST_PAIR_KEY: pair}
+                evaluator.identity = type(evaluator.identity).model_validate(identity)
+                attempt = service.create(evaluator.identity)["id_evaluation"]
+                service.start(attempt)
+                service.complete(attempt, evaluator.evaluate())
+    return model_id, source["identity"]
+
+
 def _complete_imported_cpu_worker(cohort, training_env, tmp_path, monkeypatch):
-    from app.services import training
+    """Compatibility fixture name: prepares existing artifacts, does not run a worker."""
     from app.models.training import Modelo
     from app.services.imported_training_source import ImportedTrainingSource
     from training.imported_dataset_preparation import ImportedDatasetPreparation
     from scripts.migrate_imported_training_source import migrate_imported_sources
-    from app.services.standard_evaluation_guard import select_admitted_standard_pair
-    from app.services.evaluations import EvaluationService
-    runtime, _, _, process = training_env
+    runtime = training_env[0]
     sessions = cohort[0].sessions
     migrate_imported_sources(sessions.kw["bind"], writers_stopped=True)
     preparations = ImportedDatasetPreparation(cohort[0], tmp_path / "imported-prepared")
     prepared = create(preparations, cohort)
     runtime.imported_sources = ImportedTrainingSource(preparations)
-    monkeypatch.setattr(training, "SessionLocal", sessions)
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
     with sessions() as db:
-        previous = Modelo(arquitectura="existing", clase_objetivo="Historical",
+        db.add(Modelo(arquitectura="existing", clase_objetivo="Historical",
             ruta_binario_gcp="models/previous.pt", epocas=1, tasa_aprendizaje=0.001,
-            tamano_lote=1, activo=True, estado="legacy")
-        db.add(previous)
+            tamano_lote=1, activo=True, estado="legacy"))
         db.commit()
-        previous_id = previous.id_modelo
-    class Inline:
-        def __init__(self, target, args, **kwargs):
-            self.target, self.args = target, args
-        def start(self):
-            self.target(*self.args)
-    process.side_effect = Inline
-    result = runtime.start_training("", imported_dataset_id=cohort[5], snapshot_id=cohort[1]["id"],
-        imported_prepared_version=prepared["version_id"], owner_id=1,
-        architecture="AudioCNN", epochs=1, batch_size=2, early_stopping=False)
-    assert result["status"] == "started"
-    progress = runtime.get_progress(owner_id=1)
-    assert progress["status"] == "completed", (
-        f"error_message={progress['error_message']!r}\nlogs={progress['logs']!r}"
-    )
+    model_id, identity = publish_preexisting_imported_checkpoint(
+        runtime, sessions, runtime.imported_sources, owner_id=1,
+        dataset_id=cohort[5], snapshot_id=cohort[1]["id"], prepared_version=prepared["version_id"])
+    return runtime, sessions, model_id, identity
+
+
+def test_existing_imported_checkpoint_has_private_coherent_val_test(cohort, training_env, tmp_path, monkeypatch):
+    from app.models.training import Modelo
+    from app.services.standard_evaluation_guard import select_admitted_standard_pair
+    from app.services.evaluations import EvaluationService
+    runtime, sessions, model_id, identity = _complete_imported_cpu_worker(
+        cohort, training_env, tmp_path, monkeypatch)
+    assert runtime.get_progress()["status"] == "idle"
+    training_env[3].assert_not_called()
     with sessions() as db:
-        imported, = [r for r in runtime.get_history(db, owner_id=1) if r["id"] != previous_id]
-        assert imported["status"] == "standard_eval_completed"
-        assert imported["active"] is False
-        assert imported["classes"] == ["ants", "zebra"]
-        association = runtime.imported_sources.model_source(1, imported["id"])
-        assert association["preparation_version"] == prepared["version_id"]
-        pair = select_admitted_standard_pair(db.get(Modelo, imported["id"]), db, runtime.checkpoints_dir)
+        pair = select_admitted_standard_pair(db.get(Modelo, model_id), db, runtime.checkpoints_dir)
         assert pair.val_identity.classes == pair.test_identity.classes == ["ants", "zebra"]
         assert pair.val_identity.predictor_config == pair.test_identity.predictor_config
-        for split, attempt_id in (("val", pair.val_id), ("test", pair.test_id)):
-            report = EvaluationService(db).read(attempt_id)
+        for split, attempt in (("val", pair.val_id), ("test", pair.test_id)):
+            report = EvaluationService(db).read(attempt)
             assert report["status"] == "completed"
             assert report["split"] == split
             assert report["dataset"] == "imported:" + cohort[5]
-            assert report["checkpoint_sha256"] == pair.val_identity.checkpoint_sha256
             assert report["sample_count"] == 2
-            assert report["classes"] == ["ants", "zebra"]
-        public_history = runtime.get_history(db)
-        assert [r["id"] for r in public_history] == [previous_id]
-        assert public_history[0]["active"] is True
-        assert [r["id"] for r in runtime.get_history(db, owner_id=2)] == [previous_id]
-        return runtime, sessions, imported["id"], association
-
-
-def test_imported_cpu_worker_completes_private_coherent_val_test(cohort, training_env, tmp_path, monkeypatch):
-    _complete_imported_cpu_worker(cohort, training_env, tmp_path, monkeypatch)
+        owned = next(row for row in runtime.get_history(db, owner_id=1) if row["id"] == model_id)
+        assert owned["imported_source"] == identity
+        assert not owned["active"]
+        assert all(row["id"] != model_id for row in runtime.get_history(db))
+        assert all(row["id"] != model_id for row in runtime.get_history(db, owner_id=2))
 
 
 def test_imported_registry_is_private_to_exact_owner(cohort, training_env, tmp_path, monkeypatch):

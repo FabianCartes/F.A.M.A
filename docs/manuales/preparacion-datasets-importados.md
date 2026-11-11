@@ -1,6 +1,10 @@
 # Preparación local de datasets importados (T2)
 
-## Alcance y estado
+**Estado vigente — MVP d:** se retiró la entrada de entrenamiento por snapshots/preparaciones importadas. Las rutas `/api/training/imported/*` ya no están registradas; `imported_dataset_id`, `snapshot_id` e `imported_prepared_version` se rechazan al iniciar, incluso con `null`, sin entrenar el dataset predeterminado. Para trabajos nuevos use el ZIP publicado y `dataset_name` + `partition_version` del [flujo vigente](entrenamiento-datasets-importados.md).
+
+**Los artefactos existentes se retienen:** `ImportedDatasetPreparation`, sus CSV/manifiestos, snapshots y asociaciones siguen siendo necesarios para leer y evaluar modelos importados históricos y revisar sus pesos. No se eliminan tablas, filas ni archivos. Los ejemplos de creación y resultados siguientes son documentación histórica de T2, no instrucciones para restaurar la entrada retirada ni autorización para operaciones reales.
+
+## Alcance y estado históricos
 
 Módulo callable independiente: `backend/training/imported_dataset_preparation.py`.
 Implementa T2 del [plan](../arquitectura/entrenamiento-datasets-importados-plan.md)

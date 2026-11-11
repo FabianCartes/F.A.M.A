@@ -60,16 +60,14 @@ def test_expected_principal_mismatch_does_not_refresh_idle_lifetime(web, monkeyp
 
 
 @pytest.mark.parametrize("path", ["/api/ingestion/imports/example.zip",
-                                  "/api/training/imported/snapshots/unknown",
                                   "/api/inference/history?model_id=301"])
 def test_imported_auth_database_errors_are_private_and_not_cacheable(web, path):
     from sqlalchemy import event
     from sqlalchemy.exc import OperationalError
     from app.routes.dataset_imports import router as imports_router
-    from app.routes.imported_training import router as preparation_router
     from app.routes.prediction_history import router as history_router
     client, sessions = web
-    for router in (imports_router, preparation_router, history_router):
+    for router in (imports_router, history_router):
         client.app.include_router(router)
     assert login(client).status_code == 200
     def unavailable(*args):
