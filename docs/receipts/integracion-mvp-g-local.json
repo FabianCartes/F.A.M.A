@@ -1,0 +1,82 @@
+{
+  "stage": "integracion-mvp-g-local",
+  "date": "2026-11-11",
+  "branch": "mvp",
+  "code_commit": "a48d143",
+  "plan": "docs/arquitectura/integracion-mvp-g-base-integracion-plan.md",
+  "manual": "docs/manuales/base-integracion-local-fama-pruebas.md",
+  "postgresql": {
+    "image": "postgres:16.15",
+    "server_version": "16.15 (Debian 16.15-1.pgdg13+2)",
+    "container": "fama-g-pruebas-pg",
+    "volume": "fama-g-pruebas-data",
+    "listen": "127.0.0.1:5433",
+    "database": "fama_pruebas",
+    "version_source": "receipts instalacion_etapa4/5/6 of 2026-10-22; Cloud SQL console not consulted"
+  },
+  "roles": {
+    "owner": {
+      "name": "fama_operador_pruebas",
+      "superuser": false,
+      "createdb": false,
+      "createrole": true
+    },
+    "fama_migrador": {
+      "superuser": false,
+      "createdb": false,
+      "createrole": false
+    },
+    "fama_app": {
+      "superuser": false,
+      "createdb": false,
+      "createrole": false
+    }
+  },
+  "schema": {
+    "before": "schema_empty",
+    "after": "schema_current",
+    "revision": "0005_triad_composition",
+    "public_tables": 39,
+    "public_sequences": 15
+  },
+  "permissions_script": "runtime_permissions_ready",
+  "storage": {
+    "project": "proyectotesis-fama",
+    "bucket": "fama-pruebas",
+    "identity": "service account fama-pruebas-app (JSON key, outside repo, mode 0600)",
+    "operation": "list_blobs max_results=1 (read only)",
+    "result": "storage_read_connected"
+  },
+  "installation_check": {
+    "ready": true,
+    "codes": [
+      "database_connected",
+      "storage_read_connected",
+      "schema_current",
+      "configuration_ready",
+      "initial_administrator_available",
+      "database_runtime_permissions_ready"
+    ]
+  },
+  "installation_complete": {
+    "code": "installation_completed",
+    "restart_required": true,
+    "state_after": "installation_closed"
+  },
+  "first_admin": {
+    "role": "administrador",
+    "email": "admin@fama.test",
+    "test_only": true,
+    "password_stored": "private file outside repo"
+  },
+  "post_restart": {
+    "login": "HTTP 200",
+    "users_list": "HTTP 200, total 1"
+  },
+  "secrets_recorded": false,
+  "not_verified": [
+    "smoke end-to-end (T4)",
+    "Cloud SQL (T5)",
+    "13 backup tests: local pg_dump 18.6 vs server 16"
+  ]
+}
