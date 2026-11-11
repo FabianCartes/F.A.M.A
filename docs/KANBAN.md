@@ -6,9 +6,13 @@ kanban-plugin: basic
 
 - [x] **E-PREDICCIÓN:** predicción, historial (con audio local o en la nube) y feedback autorizados por `ResourceAccess` según la asignación al dataset, sin excepciones por dueño de importación; se conservan catálogo `metadata_only`, ensambles declarados, prewarm y caché de hashes. `PredictionView` usa `/api/models` y el historial persistido; se retiró la revisión de pesos de tríadas importadas. Regresión de 16 módulos sin fallos exclusivos del candidato; frontend 620 PASS, tipos y build correctos, lint con los 2 errores previos; verificador independiente S1–S7 PASS sin bloqueantes. [Plan](arquitectura/integracion-mvp-e-prediccion-plan.md), [manual](manuales/prediccion-feedback-mvp.md) y [recibo](receipts/integracion-mvp-e.json). Commits locales 2f67a26/3c7dfa1, sin push ni PR. Sin datos borrados.
 
+## Integración de afinamiento integral en `mvp` — etapa h: documentación
+
+- [ ] **H-DOCUMENTACIÓN:** planificada para una sesión nueva. Renumerar los 7 ADR de mvp duplicados (0052–0058 → 0071–0077), ADR 0078 de GCS como fuente única, notas de sustitución en 4 manuales e índice. [Plan](arquitectura/integracion-mvp-h-documentacion-plan.md).
+
 ## Integración de afinamiento integral en `mvp` — etapa g: base de datos de integración
 
-- [ ] **G-BASE-INTEGRACIÓN:** planificada. PostgreSQL 16.15 local en Docker con `fama_pruebas`, roles, migración 0001→0005, permisos y primer administrador; después bucket de pruebas, smoke de punta a punta y Cloud SQL. Bloqueo a corregir primero con TDD: la verificación de instalación espera 14 secuencias y la 0005 tiene 15. [Plan](arquitectura/integracion-mvp-g-base-integracion-plan.md).
+- [ ] **G-BASE-INTEGRACIÓN:** en curso, bloqueada por acceso. Hecho: la 0005 ya se acepta en PostgreSQL (`a48d143`: restricción `double precision` y secuencias derivadas del esquema) y `fama_pruebas` local en PostgreSQL 16.15 migrada a 0005 con permisos (`127.0.0.1:5433`); manual nuevo y conteos de 0005 en los manuales. Pendiente: asistente y primer administrador, smoke de punta a punta y Cloud SQL, que necesitan acceso al bucket `fama-pruebas` (lo da el compañero). [Plan](arquitectura/integracion-mvp-g-base-integracion-plan.md).
 
 ## Integración de afinamiento integral en `mvp` — etapa f: migración 0005
 
