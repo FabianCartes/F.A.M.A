@@ -2,24 +2,138 @@
 Servicio de Agregación del Dashboard MLOps (F.A.M.A.)
 Consolida métricas operacionales de Ingesta, Entrenamiento, Predicción y Hardware.
 """
-from typing import Optional, List, Dict, Any
+import threading
+import time
+from typing import Callable, Optional, List, Dict, Any
 from pathlib import Path
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.models.prediction import Prediccion
 from app.models.dataset import ConjuntoDatos, Audio
-from app.models.training import Modelo, MetricaEntrenamiento
+from app.models.training import Modelo, MetricaEntrenamiento, ModelEvaluation
+from app.models.triad_composition import TriadComposition
 from app.services.training import training_service
+
+STORAGE_PROBE_TTL_SECONDS = 60.0
+
+
+def _configured_storage_probe() -> Dict[str, Any]:
+    """Bounded read probe of the configured bucket (one listed object, short timeouts)."""
+    from app.configuration import get_configuration
+    from app.connections import _storage
+    return _storage(get_configuration())
+
+
+def _percent(value) -> Optional[float]:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1:
+        return None
+    return round(float(value) * 100, 2)
+
+
+def _best_models(query, db) -> List[Dict[str, Any]]:
+    """Best registered model per accessible dataset.
+
+    A completed held-out (``test``) evaluation of the model's current weights ranks first;
+    otherwise the training validation accuracy recorded on the model is used and labelled so.
+    """
+    models = [m for m in query(Modelo).filter(Modelo.id_conjunto_datos.isnot(None)).all()
+              if m.arquitectura != "ImportedTriad"]
+    if not models:
+        return []
+    by_id = {m.id_modelo: m for m in models}
+    evaluated = {}
+    rows = (db.query(ModelEvaluation)
+            .filter(ModelEvaluation.id_modelo.in_(tuple(by_id)), ModelEvaluation.split == "test",
+                    ModelEvaluation.status == "completed")
+            .order_by(ModelEvaluation.id_evaluation.desc()).all())
+    for row in rows:
+        owner = by_id[row.id_modelo]
+        if row.id_modelo in evaluated or row.checkpoint_sha256 != owner.hash_binario:
+            continue
+        metrics = row.report.get("metrics") if isinstance(row.report, dict) else None
+        accuracy = _percent(metrics.get("accuracy")) if isinstance(metrics, dict) else None
+        if accuracy is not None:
+            evaluated[row.id_modelo] = (accuracy, _percent(metrics.get("f1_macro")))
+    best = {}
+    for m in models:
+        if m.id_modelo in evaluated:
+            candidate = (1, *evaluated[m.id_modelo], "test_evaluation")
+        elif m.precision is not None:
+            candidate = (0, round(float(m.precision), 2), None, "training_validation")
+        else:
+            continue
+        current = best.get(m.id_conjunto_datos)
+        if current is None or candidate[:2] > current[0][:2]:
+            best[m.id_conjunto_datos] = (candidate, m)
+    result = []
+    for (_, accuracy, macro_f1, source), m in best.values():
+        result.append({"dataset_id": m.id_conjunto_datos,
+                       "dataset_name": m.conjunto_datos.nombre if m.conjunto_datos else None,
+                       "model_id": m.id_modelo, "architecture": m.arquitectura,
+                       "accuracy": accuracy, "macro_f1": macro_f1, "source": source})
+    return sorted(result, key=lambda item: (item["dataset_name"] or "", item["dataset_id"]))
+
+
+def _empty_super_ensemble() -> Dict[str, Any]:
+    return {"ready": None, "active_mode": "none", "composition_id": None, "dataset_name": None,
+            "version": None, "default": False, "models": []}
+
+
+def _super_ensemble(query, db) -> Dict[str, Any]:
+    """The default triad, or else the latest revision, with its members and registry readiness."""
+    summary = _empty_super_ensemble()
+    triad = (query(TriadComposition)
+             .order_by(TriadComposition.activo.desc(), TriadComposition.created_at.desc(),
+                       TriadComposition.id.desc()).first())
+    if triad is None:
+        return summary
+    members = {m.id_modelo: m for m in db.query(Modelo).filter(Modelo.id_modelo.in_(
+        (triad.first_model_id, triad.second_model_id, triad.third_model_id))).all()}
+    dataset = db.get(ConjuntoDatos, triad.dataset_id)
+    from app.services import registry
+    from app.services.triad_compositions import triad_model_key
+    loaded = registry._global_model_registry  # In-memory catalogue only; never loads or probes weights.
+    summary.update(
+        ready=loaded.has_model(triad_model_key(triad.id)) if loaded is not None else None,
+        active_mode="triad", composition_id=triad.id, version=triad.version, default=bool(triad.activo),
+        dataset_name=dataset.nombre if dataset else None,
+        models=[{"name": members[model_id].arquitectura if model_id in members else f"Modelo {model_id}",
+                 "model_id": model_id, "weight": weight, "ready": None,
+                 "accuracy": (round(float(members[model_id].precision), 2)
+                              if model_id in members and members[model_id].precision is not None else None)}
+                for model_id, weight in ((triad.first_model_id, triad.first_weight),
+                                         (triad.second_model_id, triad.second_weight),
+                                         (triad.third_model_id, triad.third_weight))])
+    return summary
 
 
 class DashboardService:
     """Módulo profundo que centraliza las consultas y agregaciones para el Dashboard."""
 
+    def __init__(self, storage_probe: Callable[[], Dict[str, Any]] = _configured_storage_probe,
+                 clock: Callable[[], float] = time.monotonic):
+        self._storage_probe = storage_probe
+        self._clock = clock
+        self._storage_lock = threading.Lock()
+        self._storage_cache: Optional[tuple] = None
+
+    def _storage_status(self) -> str:
+        with self._storage_lock:
+            now = self._clock()
+            if self._storage_cache is None or now - self._storage_cache[0] >= STORAGE_PROBE_TTL_SECONDS:
+                try:
+                    result = self._storage_probe()
+                    status = ("connected" if result.get("ok") else
+                              "unknown" if result.get("code") == "storage_configuration_missing" else "unavailable")
+                except Exception:
+                    status = "unavailable"
+                self._storage_cache = (now, status)
+            return self._storage_cache[1]
+
     def get_stats(
         self,
         db: Optional[Session] = None,
-        ensemble_status: Optional[Dict[str, Any]] = None,
         access=None,
     ) -> Dict[str, Any]:
         """
@@ -42,6 +156,8 @@ class DashboardService:
 
         recent_activity: List[Dict[str, Any]] = []
         training_curves: List[Dict[str, Any]] = []
+        best_models: List[Dict[str, Any]] = []
+        super_ens = _empty_super_ensemble()
 
         if db is not None:
             try:
@@ -138,22 +254,12 @@ class DashboardService:
                             for m in metricas
                         ]
 
+                best_models = _best_models(query, db)
+                super_ens = _super_ensemble(query, db)
                 db_status = "operational"
             except Exception:
                 db_status = "degraded"
                 db.rollback()
-
-        # Información del Super-Ensamble
-        super_ens = {
-            "ready": None,
-            "active_mode": "unknown",
-            "models": [],
-        }
-        if ensemble_status:
-            super_ens["ready"] = ensemble_status.get("ensemble_ready")
-            super_ens["active_mode"] = ensemble_status.get("active_mode", "unknown")
-            if "triad_status" in ensemble_status:
-                super_ens["models"] = ensemble_status["triad_status"]
 
         # Telemetría básica de hardware
         try:
@@ -174,36 +280,13 @@ class DashboardService:
                 "latest_model_name": active_model_name,
                 "metrics_source": metrics_source,
             },
-            "domain_champions": {
-                "bioacoustic": {
-                    "source": "historical_reference",
-                    "id": "chilean-birds-ensemble",
-                    "title": "Campeón Bioacústica Silvestre",
-                    "dataset": "Aves Chilenas",
-                    "architecture": "Super-Ensamble Tri-Modelo (EffNet 55% + ConvNeXt 30% + ResNet 15%)",
-                    "accuracy": 88.31,
-                    "macro_f1": 88.68,
-                    "classes_count": 15,
-                    "badge": "Récord F.A.M.A.",
-                },
-                "industrial": {
-                    "source": "historical_reference",
-                    "id": "car-engine-diagnostics-super-ensemble",
-                    "title": "Campeón Diagnóstico Automotriz",
-                    "dataset": "Motores Vehiculares",
-                    "architecture": "Super-Ensamble Tri-Modelo All-RMS-Balanced (ResNet 60% + EffNet 10% + PANNs 30%)",
-                    "accuracy": 81.16,
-                    "macro_f1": 80.33,
-                    "classes_count": 13,
-                    "badge": "Fase 11 RDD",
-                },
-            },
+            "best_models": best_models,
             "training_curves": training_curves,
             "recent_activity": recent_activity[:6],
             "super_ensemble": super_ens,
             "system_health": {
                 "database": db_status,
-                "storage": "unknown",
+                "storage": self._storage_status(),
                 "inference_engine": "unknown",
                 "device": device_label,
             },

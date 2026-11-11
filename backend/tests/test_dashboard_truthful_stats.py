@@ -25,7 +25,7 @@ def dashboard_environment(monkeypatch):
     Base.metadata.create_all(engine)
     try:
         with Session(engine) as db:
-            yield DashboardService(), db
+            yield DashboardService(storage_probe=lambda: {"ok": False, "code": "storage_configuration_missing"}), db
     finally:
         engine.dispose()
 
@@ -86,7 +86,7 @@ def test_metrics_remain_attributed_to_latest_record_not_inference_ensemble(dashb
                   precision=12.0, perdida=0.5, ruta_binario_gcp="synthetic.pt", activo=False))
     db.commit()
 
-    stats = service.get_stats(db=db, ensemble_status={"model_name": "Different inference ensemble", "ensemble_ready": False})
+    stats = service.get_stats(db=db)
 
     assert stats["kpis"]["latest_model_name"] == "Synthetic recorded model"
     assert stats["kpis"]["metrics_source"] == "latest_registered_model"
@@ -108,13 +108,13 @@ def test_model_with_unknown_metrics_does_not_break_database_health(dashboard_env
     assert "No disponible" in stats["recent_activity"][0]["description"]
 
 
-def test_domain_records_are_marked_as_historical_not_live_telemetry(dashboard_environment):
+def test_dashboard_has_no_fixed_reference_records(dashboard_environment):
     service, db = dashboard_environment
 
     stats = service.get_stats(db=db)
 
-    assert stats["domain_champions"]["bioacoustic"]["source"] == "historical_reference"
-    assert stats["domain_champions"]["industrial"]["source"] == "historical_reference"
+    assert "domain_champions" not in stats
+    assert stats["best_models"] == []
 
 
 def test_http_dashboard_does_not_load_or_probe_checkpoint_files(dashboard_environment, monkeypatch):

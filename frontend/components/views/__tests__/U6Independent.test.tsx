@@ -12,8 +12,8 @@ const stats = () => ({
  training_curves: [], recent_activity: [],
  super_ensemble: { ready: null, active_mode: "unknown", models: [] },
  system_health: { database: "operational", storage: "not_checked", inference_engine: "not_checked", device: "unknown" },
- domain_champions: { bioacoustic: { title: "Historical bird experiment", architecture: "ReferenceNet",
- accuracy: 91.25, macro_f1: 88, classes_count: 7, source: "historical_reference" } },
+ best_models: [{ dataset_id: 1, dataset_name: "AvesChilenas", model_id: 3, architecture: "ReferenceNet",
+ accuracy: 91.25, macro_f1: 88, source: "test_evaluation" }],
 });
 const dataset = { id: "AvesChilenas", name: "AvesChilenas", classes: ["bird"], file_count: 1,
  total_size_bytes: 12, last_modified: null, local_file_count: 0, is_synced: false, source: "gcs", gcs_available:true, gcs_file_count:1 };
@@ -82,12 +82,13 @@ describe("S1/S4 truthful dashboard observations", () => {
   expect(within(metrics).getAllByText("No disponible").length).toBeGreaterThanOrEqual(4);
   expect(within(metrics).queryByText("0.00%")).toBeNull();
  });
- it("separates historical results from current availability", async () => {
+ it("shows recorded best models and does not claim triad availability", async () => {
   render(<DashboardView onNavigate={vi.fn()} />);
-  const history = await screen.findByRole("article", { name: "Referencia bioacoustic" });
-  expect(within(history).getByText("91.25%")).toBeDefined();
-  expect(within(history).getByText(/no acredita disponibilidad actual/)).toBeDefined();
-  expect(screen.getByText("Estado no comprobado")).toBeDefined();
+  const best = await screen.findByRole("article", { name: "Mejor modelo de AvesChilenas" });
+  expect(within(best).getByText("91.25%")).toBeDefined();
+  expect(within(best).getByText("Evaluación en test")).toBeDefined();
+  expect(screen.queryByText(/Referencia experimental histórica/)).toBeNull();
+  expect(screen.getByText("Sin tríada")).toBeDefined();
  });
  it("retains the last reading but marks failed refresh as unavailable", async () => {
   render(<DashboardView onNavigate={vi.fn()} />); await screen.findByText("Recorded zero model");

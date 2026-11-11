@@ -39,15 +39,19 @@ interface RecentActivityItem {
 
 interface TriadModelItem {
   name: string;
+  model_id?: number;
   weight: number;
   ready: boolean | null;
-  accuracy?: number;
-  checkpoint?: string;
+  accuracy?: number | null;
 }
 
 interface SuperEnsembleSummary {
   ready: boolean | null;
   active_mode: string;
+  composition_id?: number | null;
+  dataset_name?: string | null;
+  version?: number | null;
+  default?: boolean;
   models: TriadModelItem[];
 }
 
@@ -58,18 +62,14 @@ interface SystemHealth {
   device: string;
 }
 
-interface DomainChampionInfo {
-  title: string;
+interface BestModel {
+  dataset_id: number;
+  dataset_name: string | null;
+  model_id: number;
   architecture: string;
-  accuracy: number | null;
+  accuracy: number;
   macro_f1: number | null;
-  classes_count: number;
-  source: string;
-}
-
-interface DomainChampions {
-  bioacoustic: DomainChampionInfo;
-  industrial: DomainChampionInfo;
+  source: "test_evaluation" | "training_validation";
 }
 
 interface DashboardStatsResponse {
@@ -78,7 +78,7 @@ interface DashboardStatsResponse {
   recent_activity: RecentActivityItem[];
   super_ensemble: SuperEnsembleSummary;
   system_health: SystemHealth;
-  domain_champions?: DomainChampions;
+  best_models?: BestModel[];
 }
 
 interface HardwareTelemetry {
@@ -263,7 +263,8 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
             <span className="w-1.5 h-1.5 rounded-full bg-gray-500" />
             <span className="text-[11px]">
               {!statsUnavailable && stats?.system_health.database === "operational" ? "BD consultada" : "BD no confirmada"}
-              {" · "}{stats?.system_health.storage === "connected" ? "GCS conectado" : "GCS no comprobado"}
+              {" · "}{statsUnavailable || !stats ? "GCS no comprobado" : stats.system_health.storage === "connected" ? "GCS conectado"
+                : stats.system_health.storage === "unavailable" ? "GCS sin conexión" : "GCS no configurado"}
             </span>
           </div>
 
@@ -394,25 +395,33 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
         </div>
       </section>
 
-      {/* Referencias experimentales, separadas de la telemetría actual */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-        {(["bioacoustic", "industrial"] as const).map(domain => {
-          const reference = stats?.domain_champions?.[domain];
-          if (!reference || reference.source !== "historical_reference") return null;
-          return (
-            <article key={domain} aria-label={`Referencia ${domain}`} className="bg-[#16171b] border border-[#23252e] rounded-xl p-4 space-y-3">
-              <p className="text-xs text-amber-300">Referencia experimental histórica · no acredita disponibilidad actual</p>
-              <h3 className="text-sm font-bold text-white">{reference.title}</h3>
-              <p className="text-[11px] text-gray-400">{reference.architecture}</p>
-              <div className="grid grid-cols-3 gap-2 text-xs">
-                <div><span className="block text-gray-400">Accuracy de referencia</span>{metric(reference.accuracy, 2, "%")}</div>
-                <div><span className="block text-gray-400">Macro F1 de referencia</span>{metric(reference.macro_f1, 2, "%")}</div>
-                <div><span className="block text-gray-400">Clases de referencia</span>{reference.classes_count}</div>
-              </div>
-            </article>
-          );
-        })}
-      </div>
+      {/* Mejor modelo registrado por dataset accesible (evaluación en test o validación del entrenamiento) */}
+      {stats && !statsUnavailable && (
+        (stats.best_models ?? []).length === 0
+          ? <p className="text-xs text-gray-500 bg-[#16171b] border border-[#23252e] rounded-xl p-4">Aún no hay modelos registrados con métricas en tus datasets.</p>
+          : <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            {(stats.best_models ?? []).map(best => {
+              const dataset = best.dataset_name ?? `Dataset ${best.dataset_id}`;
+              const evaluated = best.source === "test_evaluation";
+              return (
+                <article key={best.dataset_id} aria-label={`Mejor modelo de ${dataset}`} className="bg-[#16171b] border border-[#23252e] rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-gray-400">Mejor modelo · {dataset}</p>
+                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${evaluated
+                      ? "bg-emerald-950/60 text-emerald-300 border-emerald-800/50" : "bg-amber-950/60 text-amber-300 border-amber-800/50"}`}>
+                      {evaluated ? "Evaluación en test" : "Validación del entrenamiento"}
+                    </span>
+                  </div>
+                  <h3 className="text-sm font-bold text-white">{best.architecture}</h3>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div><span className="block text-gray-400">Accuracy</span>{metric(best.accuracy, 2, "%")}</div>
+                    <div><span className="block text-gray-400">Macro F1</span>{best.macro_f1 != null ? metric(best.macro_f1, 2, "%") : "No evaluado"}</div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+      )}
 
       {/* Fila 2: Gráfico de Convergencia + Actividad Reciente */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -730,7 +739,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
         </div>
 
         {/* Tarjeta 2: Estado del Super-Ensamble Tri-Modelo */}
-        <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-4 flex flex-col justify-between">
+        <section aria-label="Super-Ensamble Tri-Modelo" className="bg-[#16171b] border border-[#23252e] rounded-xl p-4 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs text-white font-semibold flex items-center gap-1.5">
@@ -740,12 +749,15 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
                 Super-Ensamble Tri-Modelo
               </span>
               <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/40">
-                {stats?.super_ensemble.ready === true ? "Estado reportado: disponible"
-                  : stats?.super_ensemble.ready === false ? "Estado reportado: no disponible" : "Estado no comprobado"}
+                {stats?.super_ensemble.active_mode !== "triad" ? "Sin tríada"
+                  : stats.super_ensemble.ready === true ? "Cargada en el catálogo"
+                  : stats.super_ensemble.ready === false ? "No cargada en el catálogo" : "Catálogo sin consultar"}
               </span>
             </div>
             <p className="text-[10px] text-gray-400">
-              Sin comprobación de pesos ni ejecución de inferencia en esta consulta
+              {stats?.super_ensemble.active_mode === "triad"
+                ? `${stats.super_ensemble.dataset_name ?? "Dataset"} · versión ${stats.super_ensemble.version ?? "?"}${stats.super_ensemble.default ? " · predeterminada" : ""}`
+                : stats && !statsUnavailable ? "No hay tríadas registradas en tus datasets." : "Consulta no disponible"}
             </p>
           </div>
 
@@ -784,7 +796,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
               </svg>
             </button>
           </div>
-        </div>
+        </section>
 
         {/* Tarjeta 3: Accesos Rápidos al Pipeline (Compactos y Alíneados) */}
         <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-4 flex flex-col justify-between">
