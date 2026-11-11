@@ -35,6 +35,15 @@ export function cloudCount(item: DatasetItem): number | null {
   return null;
 }
 
+/** Show a registered GCS audio total for one dataset, adding its row when not listed yet. */
+export function withCloudCount(datasets: DatasetItem[], name: string, count: number): DatasetItem[] {
+  if (!datasets.some(item => item.name === name)) {
+    return [...datasets, { id: name, name, file_count: count, total_size_bytes: 0, last_modified: null,
+      source: "database", gcs_available: true, gcs_file_count: count, local_file_count: null }];
+  }
+  return datasets.map(item => item.name === name ? { ...item, gcs_file_count: count } : item);
+}
+
 function state(item: DatasetItem): string {
   const cloud = cloudCount(item);
   const local = item.local_file_count;

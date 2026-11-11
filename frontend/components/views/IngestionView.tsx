@@ -10,7 +10,7 @@ import {
 } from "@/lib/api/feedbackApi";
 import { PendingFeedbackItem } from "@/lib/schemas/feedback";
 import FeedbackSyncPanel from "@/components/feedback/FeedbackSyncPanel";
-import DatasetInventory, { type DatasetItem } from "@/components/ingestion/DatasetInventory";
+import DatasetInventory, { type DatasetItem, withCloudCount } from "@/components/ingestion/DatasetInventory";
 import DatasetUpload, { type UploadLimits } from "@/components/ingestion/DatasetUpload";
 import DatasetCatalogue from "@/components/ingestion/DatasetCatalogue";
 import DatasetImportPanel from "@/components/ingestion/DatasetImportPanel";
@@ -80,6 +80,7 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
 
   // Lista de datasets en GCS
   const [datasets, setDatasets] = useState<DatasetItem[]>([]);
+  const [publishingDataset, setPublishingDataset] = useState<string | null>(null);
   const [isLoadingDatasets, setIsLoadingDatasets] = useState<boolean>(true);
   const [canCreateDataset, setCanCreateDataset] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -204,6 +205,25 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
       setIsLoadingDatasets(false);
     }
   }, [addLog]);
+
+  // While an import publishes, poll registered audio totals instead of listing
+  // the whole bucket; the full listing runs again when the import finishes.
+  useEffect(() => {
+    if (!publishingDataset) return;
+    const controller = new AbortController();
+    const timer = setInterval(async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/ingestion/datasets/counts`, { signal: controller.signal });
+        if (!response.ok) return;
+        const data: { datasets?: { name: string; file_count: number }[] } = await response.json();
+        const row = data.datasets?.find(item => item.name === publishingDataset);
+        if (row && !controller.signal.aborted) setDatasets(current => withCloudCount(current, row.name, row.file_count));
+      } catch {
+        // A failed read keeps the last counts; the next tick retries.
+      }
+    }, 2000);
+    return () => { controller.abort(); clearInterval(timer); };
+  }, [publishingDataset]);
 
   const fetchPendingFeedbacks = useCallback(async () => {
     const current = ++queueGeneration.current;
@@ -579,7 +599,8 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
         </div>
       )}
 
-      <div className="flex justify-end"><DatasetImportPanel key={sessionIdentity} triggerLabel="Importar ZIP" /></div>
+      <div className="flex justify-end"><DatasetImportPanel key={sessionIdentity} triggerLabel="Importar ZIP"
+        onCatalogChange={fetchDatasets} onPublishingChange={setPublishingDataset} /></div>
 
       {/* Inventario observado por origen y acciones independientes. */}
       <div className="flex justify-end"><button type="button" aria-expanded={showCatalogue} onClick={() => setShowCatalogue(value => !value)} className="px-4 py-2 text-xs text-blue-300 border border-[#373a46] rounded-lg hover:bg-[#23252e]">{showCatalogue ? "Cerrar catálogo" : "Explorar datasets disponibles"}</button></div>

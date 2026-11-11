@@ -996,6 +996,17 @@ def list_ingestion_datasets(access: ResourceAccess = Depends(resource_access)):
     return {"datasets": datasets, "can_create_dataset": access.administrator, "upload_limits": limits}
 
 
+@app.get("/api/ingestion/datasets/counts")
+def count_ingestion_datasets(access: ResourceAccess = Depends(resource_access)):
+    """Registered audio totals per visible dataset, without listing the bucket.
+
+    Meant for frequent polling while an import publishes; ``cantidad_audios``
+    counts the audio rows confirmed after each uploaded batch.
+    """
+    rows = access.query(ConjuntoDatos).order_by(ConjuntoDatos.nombre).all()
+    return {"datasets": [{"name": row.nombre, "file_count": row.cantidad_audios or 0} for row in rows]}
+
+
 @app.get("/api/ingestion/datasets/{dataset_name}/files")
 def list_ingestion_dataset_files(
     dataset_name: str, db: Session = Depends(get_db),

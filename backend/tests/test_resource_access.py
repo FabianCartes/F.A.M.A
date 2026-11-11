@@ -424,7 +424,7 @@ def test_every_functional_operation_rejects_anonymous_requests(functional):
             response = client.request(method, path, headers={"Origin": ORIGIN})
             assert response.status_code == 401, (method, path, response.text)
             operations.append((method, path))
-    assert len(operations) == 23
+    assert len(operations) == 24
 
 
 def test_sync_states_are_filtered_before_limit_and_ignore_unverified_legacy(functional):
@@ -518,3 +518,18 @@ def test_incorporation_refuses_a_registered_dataset_in_another_bucket(functional
     with sessions() as db:
         assert db.get(Retroalimentacion,identifier).procesado is False
         assert db.query(Audio).count() == 0
+
+
+def test_inventory_counts_read_registered_audio_totals_scoped_to_the_viewer(functional):
+    client, sessions = functional
+    with sessions() as db:
+        db.get(ConjuntoDatos, 10).cantidad_audios = 7
+        db.get(ConjuntoDatos, 20).cantidad_audios = 3
+        db.commit()
+    assign(client)
+    response = client.get("/api/ingestion/datasets/counts")
+    assert response.status_code == 200, response.text
+    assert response.json() == {"datasets": [{"name": "AvesChilenas", "file_count": 7}]}
+    assert login(client, "administrador").status_code == 200
+    assert client.get("/api/ingestion/datasets/counts").json() == {"datasets": [
+        {"name": "AvesChilenas", "file_count": 7}, {"name": "engine_diagnostics", "file_count": 3}]}

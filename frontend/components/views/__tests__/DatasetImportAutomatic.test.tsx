@@ -161,11 +161,15 @@ it("shows uploaded GCS audios after validation while the automatic job publishes
     if (path.endsWith("/issues")) return page("issues", []);
     throw new Error(`Unexpected ${options?.method || "GET"} ${path}`);
   }));
-  render(<DatasetImportPanel />);
+  const onPublishingChange = vi.fn();
+  render(<DatasetImportPanel onPublishingChange={onPublishingChange} />);
   await open();
   fireEvent.change(screen.getByLabelText("Nombre del dataset"), { target: { value: "Birds" } });
   fireEvent.change(screen.getByLabelText("Archivo ZIP"), { target: { files: [new File(["zip"], "birds.zip")] } });
   fireEvent.click(screen.getByRole("button", { name: /^(Importar|Validar) ZIP$/ }));
   expect(await screen.findByText("Subiendo a GCS: 120 de 276 audios")).toBeDefined();
   expect(screen.queryByText("Validando los audios…")).toBeNull();
+  expect(onPublishingChange).toHaveBeenLastCalledWith("Birds");
+  cleanup();
+  expect(onPublishingChange).toHaveBeenLastCalledWith(null);
 });

@@ -65,8 +65,10 @@ const statusLabels: Record<string, string> = {
 const inputClass = "mt-1 block w-full rounded-lg border border-[#2d303b] bg-[#111215] px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500";
 const buttonClass = "rounded-lg border border-emerald-800/60 bg-emerald-950/40 px-3 py-2 text-xs font-semibold text-emerald-400 hover:bg-emerald-900/50 transition-colors focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed";
 
-export default function DatasetImportPanel({ onCatalogChange, triggerLabel = "Importar dataset", datasetNames = {} }: {
+export default function DatasetImportPanel({ onCatalogChange, onPublishingChange, triggerLabel = "Importar dataset", datasetNames = {} }: {
   onCatalogChange?: () => void; triggerLabel?: string; datasetNames?: Record<string, string>;
+  /** Shared dataset name while its job uploads to GCS, then null. */
+  onPublishingChange?: (name: string | null) => void;
 } = {}) {
   const [open, setOpen] = useState(false);
   const [started, setStarted] = useState(false);
@@ -104,6 +106,12 @@ export default function DatasetImportPanel({ onCatalogChange, triggerLabel = "Im
   const executionResult = job?.execution?.result;
   const publishingCounts = job?.execution?.stage === "publishing" && executionResult?.uploaded !== undefined
     && executionResult.total !== undefined ? { uploaded: executionResult.uploaded, total: executionResult.total } : null;
+  const publishingName = executing && job?.execution?.stage === "publishing"
+    ? (createdImport?.id === job.id ? createdImport.name : (job.dataset_id && datasetNames[job.dataset_id]) || null) : null;
+  useEffect(() => {
+    onPublishingChange?.(publishingName);
+  }, [publishingName, onPublishingChange]);
+  useEffect(() => () => onPublishingChange?.(null), [onPublishingChange]);
   const automatic = !job || job.preview.auto_import === true;
   const quota = job?.preview.quota;
   const quotaExceeded = quota && (quota.projected_bytes > quota.limit_bytes || quota.projected_files > quota.limit_files);
