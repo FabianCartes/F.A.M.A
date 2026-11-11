@@ -429,6 +429,8 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     const row = screen.getByRole("row", { name: /FAMA_Prueba_Aves · EfficientNet-B0/ });
     expect(within(row).getByRole("cell", { name: "FAMA_Prueba_Aves" })).toBeDefined();
     expect(within(row).getByText("Partición aaaaaaaaaaaa")).toBeDefined();
+    // Phone layout labels each metric inside its cell (hidden from md up by CSS).
+    for (const label of ["Épocas", "Precisión", "Pérdida"]) expect(within(row).getByText(label)).toBeDefined();
   });
 
   it("offers only individual and triad topology", async () => {

@@ -2645,9 +2645,10 @@ export default function TrainingView() {
           </button>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
+        {/* Below md each row becomes a labelled card; the same markup is a table on wider screens. */}
+        <div className="md:overflow-x-auto">
+          <table className="w-full text-left text-xs block md:table">
+            <thead className="hidden md:table-header-group">
               <tr className="border-b border-[#23252e] text-gray-400">
                 <th className="pb-3 font-medium">Modelo / Versión</th>
                 <th className="pb-3 font-medium">Dataset / Dominio</th>
@@ -2658,7 +2659,7 @@ export default function TrainingView() {
                 <th className="pb-3 font-medium text-right pr-2">Acción</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#23252e]/60">
+            <tbody className="block md:table-row-group divide-y divide-[#23252e]/60">
               {history.map((item) => {
                 const isBirds =
                   item.dataset?.toLowerCase().includes("aves") ||
@@ -2667,42 +2668,44 @@ export default function TrainingView() {
                   item.id === 6;
 
                 return (
-                  <tr key={item.id} className="hover:bg-[#1c1e24]/40 transition-colors">
-                    <td className="py-3 font-medium text-gray-200">
-                      <div className="flex items-center gap-2">
+                  <tr key={item.id} className="grid grid-cols-3 gap-x-3 gap-y-2 py-3 md:table-row md:py-0 hover:bg-[#1c1e24]/40 transition-colors">
+                    <td className="col-span-3 md:py-3 font-medium text-gray-200">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span>{item.name || `${item.architecture} (v${item.version || 1})`}</span>
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-blue-950/70 text-blue-300 border border-blue-800/60">
                           v{item.version || 1}
                         </span>
                       </div>
                     </td>
-                    <td className="py-3">
+                    <td className="col-span-3 md:py-3">
                       {isBirds ? (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-950/60 text-emerald-400 border border-emerald-800/50 inline-flex items-center gap-1.5">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-950/60 text-emerald-400 border border-emerald-800/50 inline-flex items-center gap-1.5 whitespace-nowrap">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                           {item.dataset_name || item.dataset || "Sin dataset declarado"}
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-950/60 text-amber-400 border border-amber-800/50 inline-flex items-center gap-1.5">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-950/60 text-amber-400 border border-amber-800/50 inline-flex items-center gap-1.5 whitespace-nowrap">
                           <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                           {item.dataset_name || item.dataset || "Sin dataset declarado"}
                         </span>
                       )}
                     </td>
-                    <td className="py-3 text-gray-400 font-mono">{item.epochs}</td>
-                    <td className="py-3 font-mono font-semibold">
+                    <td className="md:py-3 text-gray-400 font-mono"><span className="block md:hidden font-sans text-[10px] text-gray-500">Épocas</span>{item.epochs}</td>
+                    <td className="md:py-3 font-mono font-semibold">
+                      <span className="block md:hidden font-sans font-normal text-[10px] text-gray-500">Precisión</span>
                       <span className={item.accuracy != null && item.accuracy >= 75 ? "text-emerald-400" : "text-amber-400"}>
                         {item.accuracy != null ? `${item.accuracy.toFixed(2)}%` : "—"}
                       </span>
                     </td>
-                    <td className="py-3 text-gray-400 font-mono">
+                    <td className="md:py-3 text-gray-400 font-mono">
+                      <span className="block md:hidden font-sans text-[10px] text-gray-500">Pérdida</span>
                       {item.loss != null ? item.loss.toFixed(4) : "—"}
                     </td>
-                    <td className="py-3 text-gray-400 font-mono text-[11px] max-w-[220px] truncate" title={item.filename}>
+                    <td className="col-span-3 md:py-3 text-gray-400 font-mono text-[11px] min-w-0 md:max-w-[220px] truncate" title={item.filename}>
                       {item.filename}
                       {item.partition_version && <span className="block text-emerald-400 mt-1" title={item.partition_version}>Partición {item.partition_version.slice(0, 12)}</span>}
                     </td>
-                    <td className="py-3 text-right pr-2">
+                    <td className="col-span-3 md:py-3 md:text-right md:pr-2">
                       <button
                         type="button"
                         onClick={() => setSelectedModelModal(item)}
