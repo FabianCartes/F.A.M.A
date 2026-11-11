@@ -10,6 +10,10 @@ kanban-plugin: basic
 
 - [ ] **IMPORT-PROGRESO:** planificada. Avance real «Subiendo a GCS: X de N audios» en el modal; tabla de datasets que se actualiza durante la subida, con columnas «Dataset», «Clases» y «Descripción» (migración 0006), sin «Disponibilidad» ni el botón de preprocesar. Origen: hallazgo 4 de la etapa g. [Plan](arquitectura/importacion-zip-progreso-e-inventario-plan.md).
 
+## Entrenamiento con GPU NVIDIA (pendiente)
+
+- [ ] **GPU-NVIDIA:** anotado por Kevin para después: «deja anotado la compatibilidad para entrenar con GPU Nvidia para despues». Estado observado el 2026-11-11: el equipo tiene una NVIDIA GeForce RTX 2050 (driver 615.78.08), pero el `.venv` local usa `torch 2.14.0+cpu` (sin CUDA, `cuda.is_available()` falso), y el smoke de la etapa g se lanzó además con `CUDA_VISIBLE_DEVICES=''`, así que entrenó en CPU. `docker-compose.yml` ya reserva un dispositivo `nvidia` con capacidad `gpu`. Pendiente: definir el torch con CUDA para nativo y Docker, comprobar la detección en `/api/training/hardware` y entrenar el smoke en GPU (4 GB de VRAM: revisar tamaño de lote).
+
 ## Integración de afinamiento integral en `mvp` — etapa h: documentación
 
 - [x] **H-DOCUMENTACIÓN:** cerrada en `mvp` (`8879e77`, `56fa2cf`, `a56f402` y el commit de índices). ADR de mvp duplicados renumerados de 0052–0058 a 0071–0077 con enlaces y referencias actualizados (los recibos JSON conservan las rutas anteriores); [ADR 0078](adr/0078-gcs-como-fuente-unica-y-publicacion-del-zip.md) de GCS como fuente única, que sustituye los ADR 0027 y 0073 (el 0044 sigue vigente: trata la sincronización GCS→local en uso); notas de sustitución en los 4 manuales del catálogo privado; índice del README con 0070–0078. Comprobación estructural: numeración 0001–0078 sin duplicados y ningún enlace roto nuevo (93 preexistentes, ajenos a h). [Plan](arquitectura/integracion-mvp-h-documentacion-plan.md).
