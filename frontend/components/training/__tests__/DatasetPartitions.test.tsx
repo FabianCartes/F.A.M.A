@@ -109,3 +109,29 @@ it("asks the review for the training analysis window", async () => {
   await screen.findByRole("region", { name: "Revisión del dataset" });
   expect(calls.some(call => call.url.endsWith("/partitions/review?window_seconds=8"))).toBe(true);
 });
+
+it("splits choosing a saved partition from creating a new one and says when training is ready", async () => {
+  const ready = { format: 2, version: "c".repeat(64), counts: { train: 6, val: 2, test: 2 }, warnings: [],
+    created_at: "2026-11-11T18:00:00Z", policy: { validation_percent: 20, test_percent: 20, seed: 42 }, freshness: { new: 0, changed: 0 } };
+  const legacy = { format: 1, version: "d".repeat(64), counts: { train: 8, val: 2 }, warnings: [] };
+  vi.stubGlobal("fetch", partitionsTransport([ready, legacy]));
+  const { rerender } = render(<DatasetPartitions dataset="Sample" selected="" busy={false} onSelect={vi.fn()} />);
+  const choose = within(await screen.findByRole("region", { name: "Usar una partición guardada" }));
+  const create = within(screen.getByRole("region", { name: "Crear una partición nueva" }));
+  expect(choose.getByLabelText("Versión para entrenar")).toBeDefined();
+  expect(choose.queryByRole("button", { name: "Previsualizar reparto" })).toBeNull();
+  expect(create.getByRole("button", { name: "Previsualizar reparto" })).toBeDefined();
+  expect(create.queryByLabelText("Versión para entrenar")).toBeNull();
+  expect(screen.queryByText(/Listo para entrenar/)).toBeNull();
+  rerender(<DatasetPartitions dataset="Sample" selected={ready.version} busy={false} onSelect={vi.fn()} />);
+  expect(await choose.findByText("Listo para entrenar con la Versión 2.")).toBeDefined();
+  rerender(<DatasetPartitions dataset="Sample" selected={legacy.version} busy={false} onSelect={vi.fn()} />);
+  expect(choose.queryByText(/Listo para entrenar/)).toBeNull();
+});
+
+it("points to the creation block when no partition has been saved", async () => {
+  vi.stubGlobal("fetch", partitionsTransport([]));
+  render(<DatasetPartitions dataset="Sample" selected="" busy={false} onSelect={vi.fn()} />);
+  const choose = within(await screen.findByRole("region", { name: "Usar una partición guardada" }));
+  expect(await choose.findByText("Aún no hay particiones guardadas para este dataset. Crea una en el bloque siguiente.")).toBeDefined();
+});

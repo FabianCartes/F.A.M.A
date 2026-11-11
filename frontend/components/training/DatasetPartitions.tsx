@@ -135,7 +135,10 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect, w
         <p className="text-xs text-gray-400 leading-relaxed">Entrenamiento enseña al modelo; validación ayuda a ajustar el entrenamiento; prueba evalúa el resultado final con audios independientes. Una versión fija los archivos y su reparto. Añadir audios después no cambia las versiones guardadas. Las versiones históricas 80/20 se conservan para consulta; los entrenamientos nuevos requieren los tres grupos.</p>
         {error && <p role="alert" className="text-xs text-rose-300 bg-rose-950/30 border border-rose-900 rounded-lg p-3">{error}</p>}
         {message && <p role="status" className="text-xs text-emerald-300">{message}</p>}
+        <section aria-label="Usar una partición guardada" className="rounded-lg border border-[#23252e] bg-[#111215]/60 p-4 space-y-3">
+        <h3 className="text-xs font-semibold text-gray-200">Usar una partición guardada</h3>
         {phase === "loading" && <p role="status" className="text-xs text-gray-400">Consultando versiones…</p>}
+        {phase !== "loading" && !versions.length && <p className="text-xs text-gray-400">Aún no hay particiones guardadas para este dataset. Crea una en el bloque siguiente.</p>}
         <label className="block text-xs text-gray-400">Versión para entrenar
           <select aria-label="Versión para entrenar" value={selected} disabled={locked} onChange={event => onSelect(event.target.value)} className={`${fieldClass} mt-1`}>
             <option value="">Usar CSV existentes (requiere particiones preparadas)</option>
@@ -150,8 +153,10 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect, w
             <p className="text-amber-100/80">La versión actualizada mantiene la semilla y los porcentajes, y deja en su lugar los audios ya repartidos.</p>
             <button type="button" disabled={locked} onClick={() => update(selectedVersion)} className="px-3 py-2 rounded-lg text-xs font-semibold border border-amber-700 text-amber-100 bg-amber-950/40 disabled:opacity-50">Crear versión actualizada</button>
           </div>}
-        <div className="border-t border-[#23252e] pt-4 space-y-3">
-          <h3 className="text-xs font-semibold text-gray-200">Preparar una nueva versión</h3>
+        {selectedVersion?.format === 2 && selectedVersion.counts.test && <p role="status" className="text-xs font-semibold text-emerald-300">Listo para entrenar con la {versionName(selectedVersion)}.</p>}
+        </section>
+        <section aria-label="Crear una partición nueva" className="rounded-lg border border-[#23252e] bg-[#111215]/60 p-4 space-y-3">
+          <h3 className="text-xs font-semibold text-gray-200">Crear una partición nueva</h3>
           <DatasetReview dataset={dataset} windowSeconds={windowSeconds} />
           <p className="text-xs text-gray-400">Solo se incluyen audios registrados y disponibles en este equipo. Se conservan juntos los duplicados y grupos de origen o grabador conocidos. El porcentaje puede variar para respetar esos grupos.</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
@@ -184,7 +189,7 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect, w
             </div>}
             <button type="button" disabled={locked || preview.warnings.length > 0 && !acknowledged} onClick={() => void prepare(true)} className="px-4 py-2 rounded-lg text-xs font-semibold bg-emerald-700 text-white hover:bg-emerald-600 disabled:opacity-40">{phase === "saving" ? "Guardando versión…" : "Guardar versión y seleccionarla"}</button>
           </div>}
-        </div>
+        </section>
       </>
     </section>
   );
