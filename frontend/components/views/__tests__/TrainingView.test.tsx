@@ -6,29 +6,32 @@ import { API_BASE_URL } from "@/lib/api";
 describe("TrainingView (Dynamic Ensemble Selector)", () => {
   const originalFetch = global.fetch;
 
-  it("comprueba copias y confirma un respaldo verificado desde la ficha del modelo", async () => {
+  it("sincroniza desde la fila del historial y saca las copias de la ficha técnica", async () => {
     const existing = global.fetch;
-    const state = { model_id: 1, filename: "sample.pt", sha256: "a".repeat(64), size_bytes: 20000,
-      local: "valid", cloud: "missing", generation: null, transfer_verified: false };
     const requested: string[] = [];
     global.fetch = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
       const url = String(input);
-      if (url.includes("/models/1/checkpoint")) {
-        requested.push(`${options?.method || "GET"} ${url}`);
-        return new Response(JSON.stringify(url.endsWith("/backup")
-          ? { ...state, cloud: "available", generation: "17", transfer_verified: true } : state));
+      if (url.includes("/checkpoints/sync-status")) {
+        requested.push(`GET ${url}`);
+        return new Response(JSON.stringify({ models: [{ model_id: 1, synced: false }] }));
+      }
+      if (url.includes("/models/1/checkpoint/sync")) {
+        requested.push(`${options?.method} ${url}`);
+        return new Response(JSON.stringify({ model_id: 1, filename: "sample.pt", sha256: "a".repeat(64),
+          size_bytes: 20000, local: "valid", cloud: "available", generation: "17", transfer_verified: true,
+          action: "uploaded" }));
       }
       return existing(input, options);
     });
     await act(async () => { render(<TrainingView />); });
-    fireEvent.click((await screen.findAllByRole("button", { name: "Ficha Técnica" }))[0]);
-    expect(screen.getByText("Copias del checkpoint")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Comprobar copias" }));
-    expect(await screen.findByText("Sin respaldo en GCS")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Respaldar en GCS" }));
-    expect(await screen.findByText("Respaldo verificado: tamaño y SHA-256 coinciden.")).toBeTruthy();
-    expect(requested.some(value => value.includes("POST") && value.endsWith("/backup"))).toBe(true);
-    expect((screen.getByRole("button", { name: "Recuperar en este equipo" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click((await screen.findAllByRole("button", { name: "Sincronizar" }))[0]);
+    expect(await screen.findByRole("dialog", { name: "Checkpoint sincronizado" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cerrar" }));
+    expect((await screen.findAllByRole("button", { name: "Sincronizado" })).length).toBeGreaterThan(0);
+    expect(requested.some(value => value.startsWith("POST") && value.endsWith("/models/1/checkpoint/sync"))).toBe(true);
+    fireEvent.click(screen.getAllByRole("button", { name: "Ficha Técnica" })[0]);
+    expect(screen.queryByText("Copias del checkpoint")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Comprobar copias" })).toBeNull();
   });
 
   beforeEach(() => {
@@ -446,11 +449,14 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     expect(within(row).getByRole("cell", { name: "FAMA_Prueba_Aves" })).toBeDefined();
     expect(await within(row).findByText("Versión 2 · 60/20/20 %")).toBeDefined();
     expect(within(row).queryByText(/sample\.pt|aaaaaaaaaaaa/)).toBeNull();
-    const partitionCell = (name: RegExp) => within(screen.getByRole("row", { name })).getAllByRole("cell")[5].textContent;
+    expect(screen.queryByRole("columnheader", { name: "Épocas" })).toBeNull();
+    expect(screen.queryByRole("columnheader", { name: "Pérdida (Loss)" })).toBeNull();
+    const partitionCell = (name: RegExp) => within(screen.getByRole("row", { name })).getAllByRole("cell")[3].textContent;
     expect(partitionCell(/ResNet/)).toBe("—");
     expect(partitionCell(/PANNs/)).toBe("Partición guardada");
     // Phone layout labels each metric inside its cell (hidden from md up by CSS).
-    for (const label of ["Épocas", "Precisión", "Pérdida"]) expect(within(row).getByText(label)).toBeDefined();
+    expect(within(row).getByText("Precisión")).toBeDefined();
+    for (const label of ["Épocas", "Pérdida"]) expect(within(row).queryByText(label)).toBeNull();
   });
 
   it("offers only individual and triad topology", async () => {

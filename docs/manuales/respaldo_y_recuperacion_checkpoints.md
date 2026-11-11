@@ -4,11 +4,17 @@ Implementación del 23 de octubre de 2026 en `fix/afinamiento-integral`. Disponi
 
 ## Uso
 
-1. Abre **Entrenamiento → Historial de Modelos Guardados → Ficha Técnica**.
-2. En **Copias del checkpoint**, pulsa **Comprobar copias**. La consulta lee el archivo local y los metadatos del objeto cloud; no sube ni recupera pesos.
-3. Si aparece **Copia local íntegra**, pulsa **Respaldar en GCS**. La aplicación prepara una copia temporal estable, la sube sin reemplazar objetos y descarga su generación concreta para comprobar tamaño y SHA-256. Solo entonces muestra **Respaldo verificado**.
-4. En otro nodo que conserve acceso a la misma base, bucket e identidad del modelo, comprueba las copias. Si muestra **Sin copia local** y **Respaldo disponible en GCS**, pulsa **Recuperar en este equipo**. La descarga se valida antes de publicar el archivo local.
-5. Abre de nuevo la ficha si necesitas refrescar los metadatos internos del checkpoint recuperado. Para inferencia, vuelve a consultar el catálogo de Predicción. Recuperar pesos no designa un nuevo modelo predeterminado.
+Desde el 11 de noviembre de 2026 las copias se gestionan con un único botón por modelo; la sección «Copias del checkpoint» de la ficha técnica se retiró.
+
+1. Abre **Entrenamiento → Historial de Modelos Guardados**. Cada fila muestra **Sincronizar** o **Sincronizado**. El rótulo sale de una consulta por lotes (`GET /api/training/models/checkpoints/sync-status`): un listado del prefijo `models/checkpoints/sha256/` en GCS y el tamaño del archivo local, sin calcular hashes. **Sincronizado** solo indica que ambas copias existen con el tamaño registrado; si GCS no responde, todas las filas quedan en **Sincronizar**.
+2. Pulsa el botón (`POST /api/training/models/{id}/checkpoint/sync`). La aplicación comprueba las dos copias y actúa:
+   - copia local íntegra y sin respaldo: respalda en GCS con la verificación descrita abajo;
+   - sin copia local y con respaldo: recupera en este equipo y valida la descarga antes de publicar el archivo;
+   - ambas copias: descarga la generación remota a un temporal y verifica tamaño y SHA-256 sin escribir nada.
+3. Una ventana modal informa el resultado (**Checkpoint sincronizado**) o el motivo del fallo (**No se pudo sincronizar**). Un conflicto local o remoto, o la ausencia de ambas copias, se informa sin modificar archivos: `No hay copia local ni respaldo en GCS de este checkpoint; no se puede sincronizar.`
+4. Tras una recuperación se recarga el historial. Para inferencia, vuelve a consultar el catálogo de Predicción. Recuperar pesos no designa un nuevo modelo predeterminado.
+
+Los endpoints anteriores `GET …/checkpoint`, `POST …/checkpoint/backup` y `POST …/checkpoint/restore` se conservan con el mismo contrato; la interfaz ya no los usa directamente.
 
 Un **respaldo disponible** indica que se encontró un objeto de tamaño y generación compatibles. La consulta no descarga todos sus bytes: no acredita por sí sola integridad. La confirmación de una transferencia sí comprueba los bytes recibidos contra el hash registrado.
 

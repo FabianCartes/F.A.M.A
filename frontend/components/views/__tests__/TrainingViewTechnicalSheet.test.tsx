@@ -62,13 +62,18 @@ describe("Ficha técnica del historial", () => {
     expect(sheet.queryByText("No disponible")).toBeNull();
   });
 
-  it("no oculta accuracy ni pérdida registradas iguales a cero", async () => {
-    await openSheet({ ...historicalModel, accuracy: 0, loss: 0 });
+  it("muestra épocas, precisión y pérdida en la ficha sin ocultar ceros", async () => {
+    const sheet = await openSheet({ ...historicalModel, accuracy: 0, loss: 0 });
     const row = screen.getAllByRole("row").find((element) =>
       element.textContent?.includes(historicalModel.name));
     expect(row).toBeDefined();
-
     expect(within(row!).getByText("0.00%")).toBeDefined();
-    expect(within(row!).getByText("0.0000")).toBeDefined();
+    expect(within(row!).queryByText("0.0000")).toBeNull();
+
+    expect(sheet.getByText("Épocas:")).toBeDefined();
+    expect(sheet.getByText("10")).toBeDefined();
+    expect(sheet.getByText("Pérdida (Loss):")).toBeDefined();
+    expect(sheet.getByText("0.0000")).toBeDefined();
+    expect(sheet.getByText("Precisión (Val Acc):")).toBeDefined();
   });
 });

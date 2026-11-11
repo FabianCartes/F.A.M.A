@@ -15,7 +15,7 @@ import { getChartPaths, ChartOptions } from "@/lib/utils/trainingChart";
 import InfoTooltip from "@/components/common/InfoTooltip";
 import DatasetPartitions from "@/components/training/DatasetPartitions";
 import { usePartitionNames } from "@/components/training/usePartitionNames";
-import CheckpointBackup from "@/components/training/CheckpointBackup";
+import { CheckpointSyncButton, useCheckpointSyncStatus } from "@/components/training/CheckpointSync";
 import { PARAMETER_EXPLANATIONS } from "@/lib/constants/parameterExplanations";
 
 // ============================================================================
@@ -670,6 +670,7 @@ export default function TrainingView() {
   // 4. Historial de Modelos (CU_INV_04 / CU_INV_05)
   const [history, setHistory] = useState<ModelHistoryItem[]>([]);
   const partitionNames = usePartitionNames(history);
+  const checkpointSync = useCheckpointSyncStatus(useMemo(() => history.map(item => item.id), [history]));
   const [selectedModelModal, setSelectedModelModal] = useState<ModelHistoryItem | null>(null);
 
   const logsContainerRef = useRef<HTMLDivElement | null>(null);
@@ -2631,7 +2632,7 @@ export default function TrainingView() {
               Historial de Modelos Guardados
             </span>
             <p className="text-[11px] text-gray-500">
-              Modelos registrados. Consulta sus copias locales y en GCS desde la ficha técnica.
+              Modelos registrados. «Sincronizar» comprueba las copias del checkpoint y respalda o recupera la que falte en GCS o en este equipo.
             </p>
           </div>
 
@@ -2654,9 +2655,7 @@ export default function TrainingView() {
               <tr className="border-b border-[#23252e] text-gray-400">
                 <th className="pb-3 font-medium">Modelo / Versión</th>
                 <th className="pb-3 font-medium">Dataset / Dominio</th>
-                <th className="pb-3 font-medium">Épocas</th>
                 <th className="pb-3 font-medium">Precisión (Val Acc)</th>
-                <th className="pb-3 font-medium">Pérdida (Loss)</th>
                 <th className="pb-3 font-medium">Partición</th>
                 <th className="pb-3 font-medium text-right pr-2">Acción</th>
               </tr>
@@ -2692,16 +2691,11 @@ export default function TrainingView() {
                         </span>
                       )}
                     </td>
-                    <td className="md:py-3 text-gray-400 font-mono"><span className="block md:hidden font-sans text-[10px] text-gray-500">Épocas</span>{item.epochs}</td>
                     <td className="md:py-3 font-mono font-semibold">
                       <span className="block md:hidden font-sans font-normal text-[10px] text-gray-500">Precisión</span>
                       <span className={item.accuracy != null && item.accuracy >= 75 ? "text-emerald-400" : "text-amber-400"}>
                         {item.accuracy != null ? `${item.accuracy.toFixed(2)}%` : "—"}
                       </span>
-                    </td>
-                    <td className="md:py-3 text-gray-400 font-mono">
-                      <span className="block md:hidden font-sans text-[10px] text-gray-500">Pérdida</span>
-                      {item.loss != null ? item.loss.toFixed(4) : "—"}
                     </td>
                     <td className="col-span-3 md:py-3 text-[11px]">
                       {/* The checkpoint file name stays in the technical sheet only. */}
@@ -2710,6 +2704,9 @@ export default function TrainingView() {
                         : <span className="text-gray-500">—</span>}
                     </td>
                     <td className="col-span-3 md:py-3 md:text-right md:pr-2">
+                      <div className="flex flex-wrap items-center gap-2 md:justify-end">
+                      <CheckpointSyncButton modelId={item.id} synced={checkpointSync.synced.has(item.id)}
+                        onSynced={action => { checkpointSync.markSynced(item.id); if (action === "restored") void fetchHistory(); }} />
                       <button
                         type="button"
                         onClick={() => setSelectedModelModal(item)}
@@ -2720,6 +2717,7 @@ export default function TrainingView() {
                         </svg>
                         <span>Ficha Técnica</span>
                       </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -2762,7 +2760,6 @@ export default function TrainingView() {
                 </button>
               </div>
 
-              <CheckpointBackup key={selectedModelModal.id} modelId={selectedModelModal.id} onRestored={() => void fetchHistory()} />
               {/* 3 Tarjetas de Especificaciones */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
                 {/* 1) Hiperparámetros de Entrenamiento */}
@@ -2797,6 +2794,24 @@ export default function TrainingView() {
                       <span className="text-gray-400 shrink-0">Loss Function:</span>
                       <span className="text-emerald-400 font-mono font-medium text-right">
                          {selectedModelModal.hyperparameters?.loss_type ?? "No disponible"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="text-gray-400 shrink-0">Épocas:</span>
+                      <span className="text-gray-200 font-mono font-medium text-right">
+                         {selectedModelModal.epochs ?? "No disponible"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="text-gray-400 shrink-0">Precisión (Val Acc):</span>
+                      <span className="text-gray-200 font-mono font-medium text-right">
+                         {selectedModelModal.accuracy != null ? `${selectedModelModal.accuracy.toFixed(2)}%` : "No disponible"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="text-gray-400 shrink-0">Pérdida (Loss):</span>
+                      <span className="text-gray-200 font-mono font-medium text-right">
+                         {selectedModelModal.loss != null ? selectedModelModal.loss.toFixed(4) : "No disponible"}
                       </span>
                     </div>
                   </div>
