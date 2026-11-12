@@ -51,6 +51,10 @@ Un dataset bloqueado permanece visible con «Configuración incompatible», sin 
 
 Esta ruta estándar sustituye las instrucciones anteriores de **Preparar dataset**, snapshots y preparaciones importadas por arquitectura. TrainingView no crea snapshots ni envía `imported_dataset_id`, `snapshot_id` o `imported_prepared_version`.
 
+### Identificar tríadas estándar en Predicción
+
+El selector identifica la tríada estándar por el nombre visual del dataset y su versión. La etiqueta no cambia el nombre canónico usado para almacenamiento y autorización ni modifica los IDs seleccionables. Los modelos individuales y antiguos conservan su identificación.
+
 ### Consultar tríadas importadas existentes y revisar sus pesos
 
 La retirada de la entrada de entrenamiento importado no elimina los modelos ya existentes. Se conservan su predicción, historial, feedback y revisión de pesos; los lectores aún pueden necesitar sus snapshots y preparaciones históricos. `include_imported=true` sigue vigente en las consultas del historial de modelos, no en el catálogo de datasets para entrenar. El inicio de un trabajo no demuestra finalización, evaluación, publicación ni activación.

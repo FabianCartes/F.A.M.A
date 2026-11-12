@@ -514,7 +514,7 @@ class ModelRegistry:
                         self._block_db_model(model, key, basename, "checkpoint_hash_mismatch")
                         code = "checkpoint_hash_mismatch"
                     errors.append({"model_id": key, "code": code})
-            self._publish_triads(db, access, errors)
+            self._publish_triads(db, access, errors, models, names)
         return errors
 
     def _discard_triad(self, key: str) -> None:
@@ -524,7 +524,7 @@ class ModelRegistry:
         if self._default_model_id == key and key not in self._predictors:
             self._default_model_id = None
 
-    def _publish_triads(self, db: Any, access: Any, errors: List[Dict[str, Any]]) -> None:
+    def _publish_triads(self, db: Any, access: Any, errors: List[Dict[str, Any]], models, names) -> None:
         """Publish the latest composition of each job as one metadata-only model.
 
         Call under the publication lock after the individual models. Components are the
@@ -540,6 +540,7 @@ class ModelRegistry:
             db.rollback()
             errors.append({"model_id": "fama_triad", "code": "triad_compositions_unavailable"})
             return
+        rows = {model.id_modelo: model for model in models}
         latest_keys = {triad_model_key(composition.id) for composition in compositions}
         for key in [key for key in self._triad_predictors if key not in latest_keys]:
             self._discard_triad(key)
@@ -555,16 +556,25 @@ class ModelRegistry:
                     f"La composición '{key}' está bloqueada: un componente no está disponible o su hash no es válido.")
                 errors.append({"model_id": key, "code": "triad_component_blocked"})
                 continue
+            first = rows.get(component_ids(composition)[0])
+            display_dataset = (names[first.id_modelo]["dataset"] if first is not None
+                               and first.id_conjunto_datos == composition.dataset_id else "Dataset no verificado")
+            display_name = f"{display_dataset} · Tríada combinada (versión {composition.version})"
             cached = self._triad_predictors.get(key)
             if cached is not None and self.has_model(key) and cached.components == tuple(components):
-                continue  # Composition rows are immutable; the same components keep the same fusion.
+                cached.metadata.name = display_name
+                cached.metadata.dataset = display_dataset
+                cached.metadata.version = composition.version
+                continue
             try:
                 dataset_names = {component.dataset_name for component in components}
                 if len(dataset_names) != 1:
                     raise ModelWeightsError("Component datasets do not match")
                 predictor = TriadPredictor(
                     components, component_weights(composition), list(components[0].classes), key,
-                    name=f"Tríada combinada (versión {composition.version})", dataset_name=dataset_names.pop())
+                    name=display_name, dataset_name=dataset_names.pop())
+                predictor.metadata.dataset = display_dataset
+                predictor.metadata.version = composition.version
             except Exception:
                 self._discard_triad(key)
                 errors.append({"model_id": key, "code": "triad_invalid"})
@@ -701,7 +711,7 @@ class ModelRegistry:
                             self._discard_invalid_standard_predictor(model_key)
 
             # The active default may be a triad composition (never together with an active model).
-            self._publish_triads(db, None, [])
+            self._publish_triads(db, None, [], db_models, names)
             return active_predictor or self._active_triad_predictor()
 
     def _active_triad_predictor(self) -> Optional[AudioPredictor]:

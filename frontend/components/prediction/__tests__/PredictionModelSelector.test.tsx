@@ -8,6 +8,21 @@ const models = [
 ];
 afterEach(cleanup);
 
+it("shows and searches the standard triad by its visual dataset while retaining its identity", () => {
+  const onChange = vi.fn();
+  const triad = { id: "fama_triad_7", name: "Motores · Tríada combinada (versión 1)",
+    dataset: "Motores", dataset_name: "engine_diagnostics", version: 1, has_weights: true };
+  render(<PredictionModelSelector models={[triad, models[0]]} value={triad.id} onChange={onChange} />);
+  const trigger = screen.getByRole("combobox", { name: "Modelo:" });
+  expect(trigger.textContent).toContain("Motores · Tríada combinada (versión 1)");
+  fireEvent.click(trigger);
+  const group = screen.getByRole("group", { name: "Motores" });
+  expect(within(group).getByRole("option").textContent).toContain(triad.name);
+  fireEvent.change(screen.getByRole("combobox", { name: "Buscar modelo por nombre" }), { target: { value: "Motores" } });
+  fireEvent.click(screen.getByRole("option"));
+  expect(onChange).toHaveBeenCalledExactlyOnceWith("fama_triad_7");
+});
+
 it("shows ordered compact triad weights without renumbering the persisted title or changing the selected ID", () => {
   const onChange = vi.fn();
   const triad = {

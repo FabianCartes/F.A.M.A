@@ -5,6 +5,9 @@ interface ModelOption {
   name?: string;
   has_weights?: boolean;
   architecture?: string | null;
+  dataset?: string | null;
+  dataset_name?: string | null;
+  version?: number | null;
   metrics?: unknown;
 }
 
@@ -12,8 +15,10 @@ interface ModelOption {
 export function triadModelDetails(model?: ModelOption) {
   const metrics: Record<string, unknown> = model?.architecture === "ImportedTriad" && model.metrics && typeof model.metrics === "object"
     ? model.metrics as Record<string, unknown> : {};
-  const version = typeof metrics.triad_version === "number" && Number.isInteger(metrics.triad_version) && metrics.triad_version > 0
-    ? metrics.triad_version : null;
+  const standard = /^fama_triad_[1-9]\d*$/.test(model?.id || "");
+  const rawVersion = standard ? model?.version : metrics.triad_version;
+  const version = typeof rawVersion === "number" && Number.isInteger(rawVersion) && rawVersion > 0
+    ? rawVersion : null;
   const reference = metrics.same_components_as_version;
   const tooltip = version && typeof reference === "number" && Number.isInteger(reference) && reference > 0 && reference < version
     ? `Mismos modelos que la v${reference}; solo cambian los pesos` : undefined;
@@ -34,8 +39,8 @@ export function triadModelDetails(model?: ModelOption) {
   }
   return {
     version, tooltip, weightsLabel,
-    datasetId: typeof metrics.dataset_id === "string" ? metrics.dataset_id : undefined,
-    datasetName: typeof metrics.dataset_display_name === "string" ? metrics.dataset_display_name : undefined,
+    datasetId: standard ? model?.dataset_name || model?.dataset || undefined : typeof metrics.dataset_id === "string" ? metrics.dataset_id : undefined,
+    datasetName: standard ? model?.dataset || undefined : typeof metrics.dataset_display_name === "string" ? metrics.dataset_display_name : undefined,
   };
 }
 
