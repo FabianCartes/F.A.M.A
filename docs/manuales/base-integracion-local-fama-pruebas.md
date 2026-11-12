@@ -66,6 +66,17 @@ Prepara desde cero una base vacía con el esquema vigente (`0007_triad_evaluatio
 
 6. **Asistente y primer administrador.** Seguir el [asistente de primera instalación](asistente_primera_instalacion.md) con un directorio de configuración propio, el usuario `fama_app`, la base `fama_pruebas` y el bucket de pruebas `fama-pruebas` (nunca el bucket definitivo). La comprobación del asistente lista un objeto del bucket, así que necesita una credencial de Google con acceso a ese bucket. `app.node prepare` exige que el archivo se llame `application_default_credentials.json`; en la etapa g se usó una clave JSON de la cuenta de servicio `fama-pruebas-app`, guardada fuera del repositorio con permisos `0600` ([recibo](../receipts/integracion-mvp-g-local.json)). El asistente exige un correo con dominio y una contraseña de 12 caracteres o más; tras `/complete` hay que reiniciar el backend.
 
+7. **Procesos de uso diario.** La aplicación necesita cuatro procesos en marcha; ninguno se instala como servicio, así que tras reiniciar el equipo hay que volver a levantarlos. `<config>` es el directorio de configuración del paso 6 (el que contiene `installation.json`) y `<runtime>` el directorio de runtime, ambos fuera del repositorio.
+
+   | Proceso | Comando (desde `backend/` o `frontend/`) |
+   | --- | --- |
+   | Base | Contenedor de los pasos 1–5 o, con Cloud SQL, `cloud-sql-proxy --gcloud-auth --port <puerto> <proyecto>:<región>:<instancia>` |
+   | Backend | `PYTHON_DOTENV_DISABLED=1 FAMA_RUNTIME_DIR=<runtime> ../.venv/bin/python -m app.node --config-dir <config> serve --port 8000` |
+   | Frontend | `NEXT_PUBLIC_API_URL= npm run dev` (puerto 3000; con otro backend, `API_URL=http://127.0.0.1:<puerto>`) |
+   | Worker de importaciones | `PYTHON_DOTENV_DISABLED=1 FAMA_CONFIG_DIR=<config> ../.venv/bin/python -m scripts.run_dataset_import_worker --database-url '<URL de fama_app>' --import-root <runtime>/dataset-imports --staging-root <raíz de intentos> --watch` |
+
+   Sin el worker, una importación de ZIP se queda en «En espera para importar»: la API solo la encola. El worker revisa la cola cada 2 s, valida, publica en el bucket y registra el catálogo; necesita la misma raíz de importaciones que la API (`<runtime>/dataset-imports`, o `backend/data/dataset-imports` si el backend arranca sin `FAMA_RUNTIME_DIR`) y una raíz de intentos privada en el mismo sistema de archivos. `FAMA_CONFIG_DIR` le da el bucket y la credencial de la instalación. No escribir la URL con contraseña en archivos del repositorio.
+
 ## Recrear desde cero
 
 Retira el contenedor y su volumen (pierde todos los datos de esta base) y repite los pasos:

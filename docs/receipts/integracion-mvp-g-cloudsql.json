@@ -1,0 +1,78 @@
+{
+  "stage": "integracion-mvp-g-T5-cloudsql",
+  "date": "2026-11-12",
+  "branch": "mvp",
+  "code_commit": "3e7db87",
+  "plan": "docs/arquitectura/integracion-mvp-g-base-integracion-plan.md",
+  "manual": "docs/manuales/base-integracion-local-fama-pruebas.md",
+  "cloud_sql": {
+    "project": "proyectotesis-fama",
+    "instance": "fama-postgres-pruebas",
+    "region": "us-central1",
+    "tier": "db-f1-micro",
+    "server_version": "16.15",
+    "public_ipv4_enabled": true,
+    "database": "fama_pruebas",
+    "untouched": ["fama_oficial", "fama_oficial_app", "fama_oficial_migrador"]
+  },
+  "proxy": {
+    "binary": "cloud-sql-proxy 2.26.2 linux.amd64",
+    "sha256": "787d23b4b396186f307b6b274c94099d25b15a81b7e60c91ceed18c07558e9d7",
+    "sha256_matches_release": true,
+    "auth": "--gcloud-auth (sesión gcloud del operador); sin ADC el proxy termina con 'could not find default credentials'",
+    "listen": "127.0.0.1:5434"
+  },
+  "before_recreation": {
+    "previous_database_tables": 17,
+    "active_connections": 0,
+    "role_dependencies_in_other_databases": 0,
+    "bucket_export": "rechazada: HTTP 412, la cuenta de servicio de la instancia no tiene permisos sobre el bucket",
+    "on_demand_backup": {"id": "1794502456875", "status": "SUCCESSFUL", "scope": "instancia completa"},
+    "deleted": ["database fama_pruebas", "user fama_migrador", "user fama_app"],
+    "postgres_password": "restablecida con gcloud sql users set-password; guardada fuera del repositorio"
+  },
+  "roles": {
+    "script": "backend/scripts/preparar_roles_pruebas.sql",
+    "script_changed": false,
+    "fama_migrador": {"login": true, "superuser": false, "createdb": false, "createrole": false, "schema_usage": true, "schema_create": true},
+    "fama_app": {"login": true, "superuser": false, "createdb": false, "createrole": false, "schema_usage": true, "schema_create": false}
+  },
+  "schema": {"before": "schema_empty", "after": "schema_current", "revision": "0007_triad_evaluation", "public_tables": 40, "public_sequences": 16},
+  "permissions_script": {
+    "first_run": "rechazado: 'Se requiere la revision 0006_dataset_description'",
+    "fix_commit": "4a3969b",
+    "result": "runtime_permissions_ready",
+    "fama_app_checks": {"triad_composition_evaluation_insert": true, "alembic_version_update": false, "public_create": false}
+  },
+  "installation": {
+    "prepare": "configuration_prepared",
+    "wizard": "finalizado desde la interfaz; backend reiniciado",
+    "ready_after_restart": "schema_current",
+    "credentials": "clave JSON de la cuenta de servicio fama-pruebas-app, fuera del repositorio, modo 0600"
+  },
+  "smoke_end_to_end": {
+    "interface": "frontend en http://localhost:3001 hacia backend en 127.0.0.1:8001",
+    "steps": [
+      "inicio de sesión del primer administrador y navegación (panel, usuarios, datasets) sin errores en el registro",
+      "importación ZIP sintético de 2 clases y 20 WAV: imported, added_count 20",
+      "descripción guardada en imported_dataset.description y conjunto_datos.descripcion",
+      "conjunto_datos smoke_cloudsql en estado subido con 20 audios; 20 objetos en gs://fama-pruebas/datasets/smoke_cloudsql/",
+      "entrenamiento con partición guardada: modelo 1 EfficientNet-B0, 10 métricas de entrenamiento, 2 evaluaciones",
+      "predicción 1: tono_agudo_01.wav como tono_agudo, confianza 0.9774"
+    ],
+    "findings": [
+      "GET /ready tarda unos 26 s por consulta contra Cloud SQL (0.2 s con la base local): check_schema refleja todo el esquema a través del proxy hacia us-central1; el inicio de sesión también es perceptiblemente lento",
+      "sin el worker de importaciones las importaciones quedan 'En espera para importar'; documentado en el paso 7 del manual",
+      "la instalación se preparó sin FAMA_RUNTIME_DIR: importaciones, checkpoints y audios quedaron en backend/data y backend/checkpoints (ignorados por git)",
+      "el entorno virtual no tiene psycopg 3, declarado en backend/requirements.txt; 3 pruebas de test_installation_wizard.py fallan por eso"
+    ],
+    "test_data_left": ["dataset smoke_cloudsql (base y bucket)", "modelo 1 y su checkpoint local", "predicción 1"]
+  },
+  "secrets_recorded": false,
+  "not_verified": [
+    "restauración del respaldo bajo demanda",
+    "respaldo del checkpoint del modelo 1 en GCS",
+    "despliegue con Docker contra Cloud SQL",
+    "script de permisos oficial ejecutado sobre fama_oficial"
+  ]
+}

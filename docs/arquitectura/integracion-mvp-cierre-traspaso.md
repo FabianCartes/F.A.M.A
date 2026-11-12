@@ -27,7 +27,7 @@ Estado al 2026-11-12 y pasos pendientes para cerrar la integración de afinamien
 ## Pendiente, en orden
 
 1. **Integrar `feat/triad-presentation` en `mvp`** con avance rápido, en local. Comprobar antes que `mvp` sigue siendo ancestro de la rama.
-2. **Etapa g, T5 (Cloud SQL).** Repetir los scripts y el smoke de punta a punta sobre una base vacía mediante Cloud SQL Auth Proxy 2.26.2, sin copiar un dump (S6 del [plan g](integracion-mvp-g-base-integracion-plan.md)). Bloqueado por las decisiones 6 y 7 del plan general (ubicación de la base), pendientes de acordar dentro del equipo.
+2. **Etapa g, T5 (Cloud SQL).** Hecho el 2026-11-12 sobre `fama-postgres-pruebas` ([recibo](../receipts/integracion-mvp-g-cloudsql.json), plan g L17–L18).
 3. **Cierre de la etapa g.**
    - Verificador independiente de la etapa g.
    - Borrar la clave JSON de la cuenta de servicio `fama-pruebas-app` al terminar las pruebas que la usan.
