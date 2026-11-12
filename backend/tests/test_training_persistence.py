@@ -663,3 +663,59 @@ def test_job_without_epoch_metrics_cannot_claim_completed(persistence_env):
     assert "métricas" in service.get_progress()["error_message"]
     assert history(service, sessions) == []
     assert list(service.checkpoints_dir.iterdir()) == []
+
+
+THREE_COMPONENTS = [{'architecture': 'fixture', 'epochs': 1, 'weight': .5},
+                    {'architecture': 'fixture2', 'epochs': 1, 'weight': .3},
+                    {'architecture': 'fixture3', 'epochs': 1, 'weight': .2}]
+
+
+def joint_attempts(sessions):
+    from app.models.triad_composition import TriadComposition
+    from app.services.triad_evaluations import TriadEvaluationService
+    with sessions() as db:
+        composition, = db.query(TriadComposition).all()
+        return composition, TriadEvaluationService(db).latest_by_split([composition.id]).get(composition.id, {})
+
+
+def test_new_standard_triad_gets_joint_reports_without_publication_changes(persistence_env):
+    service, sessions, _, _ = persistence_env
+    previous_id = old_active(sessions)
+    start(service, models=THREE_COMPONENTS)
+    assert service.get_progress()['status'] == 'completed', service.get_progress()['error_message']
+    composition, attempts = joint_attempts(sessions)
+    assert set(attempts) == {'val', 'test'}
+    for split, attempt in attempts.items():
+        assert attempt['status'] == 'completed' and attempt['split'] == split
+        assert attempt['composition_version'] == 1
+        assert attempt['weights'] == [composition.first_weight, composition.second_weight, composition.third_weight]
+        assert attempt['report']['sample_count'] == attempt['sample_count']
+    assert composition.activo is False
+    entries = history(service, sessions)
+    assert next(e for e in entries if e['id'] == previous_id)['active'] is True
+    assert all(e['status'] == 'standard_component_evaluated' for e in entries if e['id'] != previous_id)
+    assert any('Evaluación conjunta de la tríada' in log['message'] for log in service.logs)
+    assert not any('sin evaluar ni publicar' in log['message'] for log in service.logs)
+
+
+def test_joint_evaluation_failure_keeps_the_finished_job_and_its_components(persistence_env, monkeypatch):
+    from app.services import triad_evaluations
+    service, sessions, _, _ = persistence_env
+    previous_id = old_active(sessions)
+    real = triad_evaluations.TriadEvaluationService.start
+
+    def failing_start(self, attempt_id):
+        real(self, attempt_id)
+        raise RuntimeError('joint inference failed')
+    monkeypatch.setattr(triad_evaluations.TriadEvaluationService, 'start', failing_start)
+    start(service, models=THREE_COMPONENTS)
+    assert service.get_progress()['status'] == 'completed', service.get_progress()['error_message']
+    composition, attempts = joint_attempts(sessions)
+    assert {split: a['status'] for split, a in attempts.items()} == {'val': 'failed', 'test': 'failed'}
+    assert attempts['val']['error_reason'] == 'joint inference failed'
+    entries = history(service, sessions)
+    assert next(e for e in entries if e['id'] == previous_id)['active'] is True
+    new = [e for e in entries if e['id'] != previous_id]
+    assert len(new) == 3 and all(e['status'] == 'standard_component_evaluated' for e in new)
+    assert all((service.checkpoints_dir / e['filename']).is_file() for e in new)
+    assert any('No se pudo completar la evaluación conjunta' in log['message'] for log in service.logs)

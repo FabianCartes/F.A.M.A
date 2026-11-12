@@ -16,7 +16,7 @@ Delivery: feature-branch-chain, local work-unit commits only; no push/PR. Checks
 - T1 | S1,S5,S6 | done (external prerequisite A only) | separate A delivery | A completed and verified through local source commit 8e09e663581063bdbc7a5e999fb99084e9e4e923; final frontend662/662 and earlier backend139, no B evaluation implemented.
 - T2 | S2,S6 | done | inline | persistencia aditiva (tabla, migración 0007, identidad y servicio); RED ModuleNotFoundError observado; test_triad_evaluations 11 y test_schema_head exit 0 en runner aislado; test_schema_migrations y test_model_evaluations incompatibles con las guardas del runner (Matplotlib/SQLite de archivo), 65 aprobadas y 14 omitidas PostgreSQL con pytest directo.
 - T3 | S3,S6 | done | inline | evaluate_composition reutiliza RecordingEvaluator y TriadPredictor; RED ImportError observado; 17 aprobadas en runner aislado (contraejemplo argmax ≠ media ponderada, clases permutadas con peso cero, rechazo, checkpoint alterado, pesos distintos, fallo parcial); test_triad_predictor exit 0; test_recording_evaluator incompatible con la guarda del runner, sin cambios, aprobado con pytest directo.
-- T4 | S4,S6 | pending | inline | integración en entrenamientos nuevos y mensaje de cierre.
+- T4 | S4,S6 | done | inline | `_evaluate_triad_composition` evalúa la composición nueva en el worker de entrenamiento; un fallo queda en los intentos y en el log sin cambiar el estado del trabajo, componentes, publicación ni activación. RED `set() == {val,test}` observado; persistencia/flujo/tríada/historial 232 aprobadas con pytest directo.
 - T5 | S5,S6 | pending | inline | lectura en historial y presentación en fila/ficha.
 - T6 | S1-S6 | pending | inline | cierre: suite, verificación independiente y recibo.
 

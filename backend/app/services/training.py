@@ -852,6 +852,7 @@ class TrainingService:
                 # an explicit administrator operation and preserves the current default.
                 target.activo = False
                 publication_db.commit()
+            return settings
         except Exception as exc:
             try:
                 with SessionLocal() as failure_db:
@@ -947,6 +948,7 @@ class TrainingService:
             )
 
             registered_components = []  # (id_modelo, weight) in training order, after each commit
+            component_artifacts = []  # (checkpoint path, effective evaluation settings) per component
             for idx, arch in enumerate(models_to_train):
                 if self._is_stop_requested():
                     break
@@ -1412,9 +1414,9 @@ class TrainingService:
                     with self._lock:
                         self.status = 'stopped'
                     return
-                self._evaluate_registered_checkpoint(
+                component_artifacts.append((checkpoint_path, self._evaluate_registered_checkpoint(
                     model_id, checkpoint_path, file_hash, config, classes, training_audio,
-                    preprocessing_contract, is_ensemble, arch)
+                    preprocessing_contract, is_ensemble, arch)))
 
                 # Limpieza de memoria RAM y VRAM antes del siguiente modelo
                 if torch.cuda.is_available():
@@ -1431,12 +1433,18 @@ class TrainingService:
                     self.current_phase = 'stopped'
                 self._add_log("WARN", "Training stopped before completing the pipeline.")
             else:
+                joint_evaluated = False
                 if is_ensemble and len(models_to_train) == 3:
-                    self._register_triad_composition(config, registered_components)
+                    composition_id = self._register_triad_composition(config, registered_components)
+                    if composition_id is not None and not self._is_stop_requested():
+                        joint_evaluated = self._evaluate_triad_composition(
+                            config, composition_id, component_artifacts, classes)
                 with self._lock:
                     self.status = "completed"
                     self.current_phase = 'completed'
-                if is_ensemble:
+                if is_ensemble and joint_evaluated:
+                    self._add_log("SUCCESS", f"Entrenamiento de {len(models_to_train)} componentes finalizado; informes individuales y evaluación conjunta completos. Publicación y activación sin cambios.")
+                elif is_ensemble:
                     self._add_log("SUCCESS", f"Entrenamiento de {len(models_to_train)} componentes finalizado; informes individuales completos. Ensamble combinado sin evaluar ni publicar (EVAL-4).")
                 else:
                     self._add_log("SUCCESS", f"Pipeline de modelado finalizado exitosamente. Mejor Val Acc: {best_val_acc:.2f}%")
@@ -1450,7 +1458,7 @@ class TrainingService:
                 self.error_message = None if self.status == 'stopped' else str(exc)
             self._add_log("ERROR", f"Fallo catastrófico en el entrenamiento: {exc}")
 
-    def _register_triad_composition(self, config: Dict[str, Any], components: List[Any]) -> None:
+    def _register_triad_composition(self, config: Dict[str, Any], components: List[Any]) -> Optional[int]:
         """Create composition version 1 once the job's three components are registered.
 
         The component models are already durable; a failure here is reported but never
@@ -1464,8 +1472,52 @@ class TrainingService:
                     components=components, author_id=config.get("user_id"))
                 composition_id = composition.id
             self._add_log("SUCCESS", f"Composición de tríada #{composition_id} (versión 1) registrada con los pesos de los checkpoints.")
+            return composition_id
         except Exception as error:
             self._add_log("WARN", f"No se pudo registrar la composición de la tríada: {error}")
+            return None
+
+    def _evaluate_triad_composition(self, config, composition_id, artifacts, classes) -> bool:
+        """Evaluate the fused output of the new composition on the admitted val/test splits.
+
+        Runs in the training worker, never in an HTTP request. A failure is persisted on the
+        attempts and logged; checkpoints, component reports, publication and activation stay.
+        """
+        from app.models.triad_composition import TriadComposition
+        from app.services.predictors.triad_predictor import TriadPredictor
+        from app.services.triad_compositions import component_ids, component_weights, triad_model_key
+        from app.services import triad_evaluations
+
+        with self._lock:
+            self.status = 'evaluating'
+        self._emit_progress()
+        try:
+            with SessionLocal() as db:
+                composition = db.get(TriadComposition, composition_id)
+                ids, weights = component_ids(composition), component_weights(composition)
+                hashes = [db.get(Modelo, model_id).hash_binario for model_id in ids]
+            components = [published_predictor.TrainedModelPredictor(
+                path, model_id=str(model_id), dataset_name=config['dataset_name'], lazy_load=True,
+                expected_checkpoint_sha256=digest)
+                for model_id, (path, _), digest in zip(ids, artifacts, hashes)]
+            predictor = TriadPredictor(components, weights, list(classes), triad_model_key(composition_id),
+                                       dataset_name=config['dataset_name'])
+            attempts = triad_evaluations.evaluate_composition(
+                SessionLocal, composition_id, predictor=predictor,
+                checkpoint_paths=[path for path, _ in artifacts],
+                recordings={split: config['source']['recordings'][split] for split in ('val', 'test')},
+                component_configs=[settings for _, settings in artifacts])
+            val, test = (attempts[split]['report']['metrics']['accuracy'] * 100 for split in ('val', 'test'))
+            self._add_log("SUCCESS", f"Evaluación conjunta de la tríada #{composition_id}: val {val:.2f}%, test {test:.2f}%.")
+            return True
+        except Exception as error:
+            self._add_log("WARN", f"No se pudo completar la evaluación conjunta de la tríada #{composition_id}: {error}")
+            return False
+        finally:
+            with self._lock:
+                if self.status == 'evaluating':
+                    self.status = 'training'
+            self._emit_progress()
 
     def _history_checkpoint(self, filename: str) -> tuple[Dict[str, Any], Optional[int]]:
         """Read only a local artifact under the configured checkpoint root."""
