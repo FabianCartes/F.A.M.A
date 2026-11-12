@@ -67,11 +67,19 @@ def get_processed_data_dir(dataset_name: Optional[str] = None) -> Path:
 
 
 def get_prepared_data_dir(dataset_name: str) -> Path:
-    """Declare the separate prepared destination; never create directories."""
+    """Declare the separate prepared destination; never create directories.
+
+    Like raw and processed data, it lives under the selected ``FAMA_RUNTIME_DIR``
+    when one is configured, and under ``backend/data/prepared`` otherwise.
+    """
     if (not isinstance(dataset_name, str) or not dataset_name
             or dataset_name in (".", "..") or "/" in dataset_name
             or "\\" in dataset_name):
         raise ValueError("dataset_name must be a single directory name")
+    from app.runtime import runtime_root
+    selected = runtime_root()
+    if selected is not None:
+        return selected / "data" / "prepared" / dataset_name
     return Path(__file__).absolute().parent.parent / "data" / "prepared" / dataset_name
 
 

@@ -52,7 +52,7 @@ def test_selected_root_is_used_by_public_path_resolvers_and_default_file_consume
 import json,sys
 from app.configuration import load_configuration,activate_configuration
 activate_configuration(load_configuration({'FAMA_CONFIG_DIR':sys.argv[1]}),replace_environment=True)
-from training.paths import get_raw_data_dir,get_processed_data_dir,get_checkpoints_dir
+from training.paths import get_raw_data_dir,get_processed_data_dir,get_checkpoints_dir,get_prepared_data_dir,get_training_prepared_read_dir
 from app.services.ingestion import IngestionService
 from app.services.training import TrainingService
 from app.services.feedback import FeedbackService
@@ -62,6 +62,7 @@ from app.services.predictors.engine_ensemble_predictor import EngineEnsemblePred
 birds=ChileanBirdsEnsemblePredictor()
 engines=EngineEnsemblePredictor()
 print(json.dumps({'raw':str(get_raw_data_dir()),'processed':str(get_processed_data_dir()),
+ 'prepared':str(get_prepared_data_dir('gatos y perros')),'prepared_read':str(get_training_prepared_read_dir('gatos y perros')),
  'checkpoints':str(get_checkpoints_dir()),'ingestion':str(IngestionService().local_base_dir),
  'training':str(TrainingService().checkpoints_dir),'feedback':str(FeedbackService().raw_data_dir),
  'ensemble':str(SuperEnsembleService().checkpoints_dir),
@@ -79,6 +80,8 @@ print(json.dumps({'raw':str(get_raw_data_dir()),'processed':str(get_processed_da
     assert all(Path(path).is_relative_to(target / 'checkpoints') for path in predictor_paths)
     assert report == {
         'raw': str(target / 'data/raw'), 'processed': str(target / 'data/processed'),
+        'prepared': str(target / 'data/prepared/gatos y perros'),
+        'prepared_read': str(target / 'data/prepared/gatos y perros'),
         'checkpoints': str(target / 'checkpoints'), 'ingestion': str(target / 'data/raw'),
         'training': str(target / 'checkpoints'), 'feedback': str(target / 'data/raw'),
         'ensemble': str(target / 'checkpoints'),
