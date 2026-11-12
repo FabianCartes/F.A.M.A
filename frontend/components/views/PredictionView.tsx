@@ -318,7 +318,7 @@ function EvaluationSplitCard({
               </tbody>
             </table>
           </div>
-          {perClass.length > 0 && <div className="overflow-x-auto">
+          {perClass.length > 0 && <div className="overflow-x-auto pb-3">
             <table className="w-full min-w-[32rem] text-left text-xs" aria-label={`Métricas por clase ${label}`}>
               <thead className="text-gray-400"><tr>
                 <th scope="col" className="py-1 pr-3">Clase</th><th scope="col" className="py-1 pr-3">Precision</th>
@@ -344,7 +344,7 @@ function EvaluationSplitCard({
               })}</tbody>
             </table>
           </div>}
-          {confusionMatrix && <div className="overflow-x-auto">
+          {confusionMatrix && <div className="overflow-x-auto pb-3">
             <table className="w-full min-w-[24rem] text-left text-xs" aria-label={`Matriz de confusión ${label}`}>
               <caption className="pb-1 text-left font-semibold text-gray-300">Matriz de confusión · filas reales, columnas predichas</caption>
               <thead className="text-gray-400"><tr>
@@ -1547,9 +1547,8 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
                         <td className="py-2 text-gray-200">
                           <span>{match}</span>
                           {!split?.latest_completed && attemptLabel && <span className="block text-[11px] text-gray-400">Sin informe completado · último intento: {attemptLabel}</span>}
-                          {split?.latest_completed && !admittedCompleted && (match === "Coincide"
-                            ? <span className="block max-w-xs text-[11px] text-amber-200">Solo histórico; coincidir en SHA-256 no acredita compatibilidad de configuración ni runtime.</span>
-                            : <span className="block max-w-xs text-[11px] text-amber-200">Informe histórico; no es aplicable al checkpoint registrado.</span>)}
+                          {split?.latest_completed && !admittedCompleted && match !== "Coincide" &&
+                            <span className="block max-w-xs text-[11px] text-amber-200">Informe histórico; no es aplicable al checkpoint registrado.</span>}
                         </td>
                       </tr>
                     );

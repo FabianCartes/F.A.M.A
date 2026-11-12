@@ -507,8 +507,9 @@ describe("Catálogo público de Predicción", () => {
     expect(screen.queryByText(/Accuracy histórica|F1 histórico|Precision histórica|Evaluación en test set|Rendimiento \/ Métrica/)).toBeNull();
     expect(screen.queryByText("Informes finales por split")).toBeNull();
     const summary = screen.getByRole("region", { name: "Evaluaciones finales del modelo seleccionado" });
-    expect(within(summary).getByRole("row", { name: "Validación 100.00% 100.00% CoincideSolo histórico; coincidir en SHA-256 no acredita compatibilidad de configuración ni runtime." })).toBeDefined();
-    expect(within(summary).getByRole("row", { name: "Test 100.00% 100.00% CoincideSolo histórico; coincidir en SHA-256 no acredita compatibilidad de configuración ni runtime." })).toBeDefined();
+    expect(within(summary).getByRole("row", { name: "Validación 100.00% 100.00% Coincide" })).toBeDefined();
+    expect(within(summary).getByRole("row", { name: "Test 100.00% 100.00% Coincide" })).toBeDefined();
+    expect(summary.textContent).not.toContain("Solo histórico; coincidir en SHA-256");
     expect(summary.textContent).toContain("checkpoint registrado");
     expect(summary.textContent).not.toContain("50.00%");
     expect(screen.queryByRole("region", { name: "Evaluaciones finales" })).toBeNull();
