@@ -1,0 +1,36 @@
+{
+  "receipt": "triada-pesos-fijos-cierre",
+  "date": "2026-11-12",
+  "scope": "Pesos de tríada fijos desde el entrenamiento, evaluación conjunta visible en Predicción e identificación por dataset (S1-S6 de docs/arquitectura/triada-pesos-fijos-plan.md)",
+  "baseline": "03e5404",
+  "candidate": "fec1a43",
+  "commits": ["e171961", "bf411b1", "fec1a43"],
+  "observed_checks": [
+    {"command": "pytest tests/test_triad_api.py tests/test_triad_access_regressions.py tests/test_triad_composition_service.py tests/test_triad_evaluations.py tests/test_api_model_catalogue.py", "result": "baseline 173 passed; candidate 153 passed (pruebas de revisión de pesos retiradas o sustituidas)", "by": ["writer", "independent_verifier"]},
+    {"command": "pytest tests (suite backend completa, pytest directo)", "result": "candidate 205 failed, 2684 passed, 151 skipped, 4 errors; baseline 208 failed, 2681 passed, 152 skipped, 4 errors; ningún fallo exclusivo del candidato", "by": ["writer"]},
+    {"command": "npx vitest run", "result": "79 archivos, 669 passed", "by": ["writer"]},
+    {"command": "npx vitest run PredictionView.triad TrainingViewTriadHistory PredictionView", "result": "3 archivos, 59 passed", "by": ["independent_verifier"]},
+    {"command": "npx tsc --noEmit -p .", "result": "sin errores", "by": ["writer", "independent_verifier"]},
+    {"command": "npx eslint (archivos modificados)", "result": "sin hallazgos nuevos; PredictionView.tsx conserva 2 errores y 1 advertencia previos a la base", "by": ["writer"]},
+    {"command": "npm run build", "result": "compilación correcta; tsconfig.json restaurado", "by": ["writer"]}
+  ],
+  "independent_verification": {
+    "verdict": {"S1": "PASS", "S2": "PASS", "S3": "PASS", "S4": "PASS", "S5": "PASS", "S6": "PASS"},
+    "blockers": [],
+    "advisories": [
+      "La lectura GET /api/triad-compositions/{id} expone la arquitectura de cada componente pero no el nombre visible.",
+      "El registro toma la etiqueta del dataset del primer componente y el historial del dataset de la composición; coinciden en los datos de prueba y podrían divergir si el primer componente pertenece a otro dataset.",
+      "La rama del predictor en caché no recalcula checkpoint_sha256; solo se reutiliza con componentes idénticos.",
+      "La cantidad de pruebas focales baja de 173 a 153 por el retiro intencional de las pruebas de revisión."
+    ]
+  },
+  "decisions": [
+    "ADR 0082: retiro de POST /api/triad-compositions/{id}/weights y de revise_weights; se conservan las filas existentes.",
+    "El catálogo de modelos no expone el motivo de un intento conjunto fallido, igual que para los modelos individuales."
+  ],
+  "limits": [
+    "SQLite en memoria y datos sintéticos; PostgreSQL real, GPU y calidad de modelos no verificados.",
+    "Sin migración nueva.",
+    "Una composición sin intentos conjuntos (por ejemplo, la composición local #1 en versión 2) muestra «Esta tríada no tiene evaluación conjunta»."
+  ]
+}
