@@ -38,9 +38,3 @@ async function read(response: Response, failure: string): Promise<TriadCompositi
 export async function getTriadComposition(id: number, signal?: AbortSignal): Promise<TriadComposition> {
   return read(await apiFetch(`${API_BASE_URL}/api/triad-compositions/${id}`, { signal }), 'No se pudo cargar la tríada');
 }
-
-export async function reviseTriadWeights(id: number, weights: number[]): Promise<TriadComposition> {
-  return read(await apiFetch(`${API_BASE_URL}/api/triad-compositions/${id}/weights`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ weights }),
-  }), 'No se pudo revisar los pesos');
-}

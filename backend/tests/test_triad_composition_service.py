@@ -8,8 +8,8 @@ from app.models.triad_composition import TriadComposition
 from app.models.user import Usuario
 from app.services import triad_compositions as service
 from app.services.triad_compositions import (
-    TriadCompositionConflict, TriadCompositionError, create_initial_composition, latest_compositions,
-    parse_triad_key, revise_weights,
+    TriadCompositionError, create_initial_composition,
+    parse_triad_key,
 )
 from tests.schema_support import migrated_engine
 
@@ -64,48 +64,6 @@ def test_inadmissible_components_create_nothing(sessions, ids, dataset_id):
     with sessions() as db, pytest.raises(TriadCompositionError):
         initial(db, ids=ids, dataset_id=dataset_id)
     assert rows(sessions) == []
-
-
-def test_revision_is_a_new_version_that_keeps_the_previous_row(sessions):
-    with sessions() as db:
-        first = initial(db)
-        second = revise_weights(db, first, [0.2, 0.3, 0.5], author_id=2)
-        assert (second.version, second.previous_id, second.author_id) == (2, first.id, 2)
-        assert service.component_ids(second) == (1, 2, 3)
-        assert (second.job_id, second.dataset_id, second.partition_version) == ("job-a", 10, "p1")
-        assert [row.id for row in latest_compositions(db)] == [second.id]
-    assert [(r[2], r[4]) for r in rows(sessions)] == [(1, (0.5, 0.3, 0.2)), (2, (0.2, 0.3, 0.5))]
-
-
-@pytest.mark.parametrize("weights", [[.5, .5], [.25] * 4, [.5, .5, .5], [-.5, .75, .75], [0, 0, 0],
-                                     [True, 0, 0], [float("nan"), 0, 1], "abc", None])
-def test_invalid_weights_leave_the_composition_unchanged(sessions, weights):
-    with sessions() as db:
-        first = initial(db)
-        with pytest.raises(TriadCompositionError):
-            revise_weights(db, first, weights, author_id=2)
-    assert len(rows(sessions)) == 1
-
-
-def test_only_the_latest_version_can_be_revised(sessions):
-    with sessions() as db:
-        first = initial(db)
-        revise_weights(db, first, [0.2, 0.3, 0.5], author_id=2)
-        with pytest.raises(TriadCompositionConflict):
-            revise_weights(db, first, [0.1, 0.1, 0.8], author_id=2)
-    assert len(rows(sessions)) == 2
-
-
-def test_concurrent_revision_from_the_same_version_hits_the_unique_constraint(sessions, monkeypatch):
-    with sessions() as winner, sessions() as loser:
-        first = initial(winner)
-        stale = loser.get(TriadComposition, first.id)
-        revise_weights(winner, first, [0.2, 0.3, 0.5], author_id=2)
-        # The loser checked the latest version before the winner committed.
-        monkeypatch.setattr(service, "_latest_version", lambda db, job_id: 1)
-        with pytest.raises(TriadCompositionConflict):
-            revise_weights(loser, stale, [0.1, 0.1, 0.8], author_id=2)
-    assert [(r[2], r[4]) for r in rows(sessions)] == [(1, (0.5, 0.3, 0.2)), (2, (0.2, 0.3, 0.5))]
 
 
 @pytest.mark.parametrize("key, expected", [("fama_triad_7", 7), ("fama_triad_0", None), ("fama_triad_07", None),

@@ -14,7 +14,7 @@ Comprobaciones: runner aislado de backend (pytest directo para los archivos inco
 
 ## Tasks
 
-- T1 | S1 | pending | inline | Retirar endpoint, servicio, tipos y llamadas de revisión; conservar lectura/activación y filas existentes. ADR 0082 que sustituye la parte de revisión de ADR 0070.
+- T1 | S1 | done | inline | Retirar endpoint, servicio, tipos y llamadas de revisión; conservar lectura/activación y filas existentes. ADR 0082 que sustituye la parte de revisión de ADR 0070.
 - T2 | S2,S3 | pending | inline | Catálogo de evaluaciones para tríadas desde `TriadEvaluationService` y digest actual del ensamble en los metadatos del predictor.
 - T3 | S5 | pending | inline | Nombre visible de tríada en registro e historial (`compositions` agrega nombre y arquitecturas).
 - T4 | S3,S4,S5 | pending | inline | Predicción: panel de solo lectura y evaluación final de tríada; Entrenamiento: fila/ficha con el nombre nuevo.
@@ -26,3 +26,4 @@ Comprobaciones: runner aislado de backend (pytest directo para los archivos inco
 - L2 — Evidencia previa: los pesos no intervienen en el entrenamiento de cada componente; solo se registran en log/checkpoint y en la composición (`backend/app/services/training.py`). `evaluation_catalogue` solo resuelve `fama_trained_model_<id>`. El nombre visible actual es `<Dataset> · Tríada combinada (versión N)`, donde N es la versión de pesos (`registry.py`), por lo que dos tríadas del mismo dataset se confunden. Consumidores de la revisión: `routes/triad_compositions.py`, `services/triad_compositions.py`, `lib/api/triadCompositions.ts`, `TriadCompositionPanel.tsx`, `PredictionView.tsx` (`selectRevisedTriad`) y pruebas `test_triad_api`, `test_triad_composition_service`, `test_triad_evaluations`, `test_api_model_availability`, `test_checkpoint_backup`, `PredictionView.triad.test.tsx`.
 - L3 — Consecuencia en el entorno local: la composición #1 ya está en versión 2 y no tiene intentos conjuntos; seguirá utilizable para inferencia y mostrará «Esta tríada no tiene evaluación conjunta». Una tríada entrenada después mostrará métricas.
 - L4 — Riesgo previsto: item 3 (retiro de un endpoint consumido y campos nuevos en `/api/models` y composición) e item 2 (lecturas autorizadas por dataset). Sin migración nueva. Estimación aproximada: 500–600 líneas en cuatro commits.
+- L5 — T1: RED observado (`test_weights_cannot_be_revised_after_training`, `test_the_service_offers_no_weight_revision` y dos pruebas de Predicción); GREEN con 53 pruebas de tríada en backend y 126 de Predicción en frontend; TypeScript y ESLint focal sin hallazgos nuevos (los 2 errores de `PredictionView.tsx` ya existían en la base). Las filas de versión > 1 se prueban insertándolas directamente.

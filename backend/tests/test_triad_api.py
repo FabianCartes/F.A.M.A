@@ -1,4 +1,4 @@
-"""Standard triad compositions over authenticated HTTP: catalogue, prediction, history and revision."""
+"""Standard triad compositions over authenticated HTTP: catalogue, prediction, history and activation."""
 import hashlib
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -110,6 +110,18 @@ def predict(env, model_id, name="tone.wav"):
 def revise(env, weights, composition_id=TRIAD_ID):
     return env.client.post(f"/api/triad-compositions/{composition_id}/weights",
                            headers={"Origin": ORIGIN}, json={"weights": weights})
+
+
+def stored_version(env, weights, active=False):
+    """A later version stored before weights were fixed at training (ADR 0082)."""
+    with env.sessions() as db:
+        first = db.get(TriadComposition, TRIAD_ID)
+        db.add(TriadComposition(
+            dataset_id=first.dataset_id, partition_version=first.partition_version, job_id=first.job_id,
+            version=2, previous_id=first.id, first_model_id=1, second_model_id=2, third_model_id=3,
+            first_weight=weights[0], second_weight=weights[1], third_weight=weights[2],
+            author_id=1, created_at=first.created_at, activo=active))
+        db.commit()
 
 
 def composition_rows(env):
@@ -241,85 +253,31 @@ def test_changed_component_bytes_after_publication_reject_without_inventing_a_re
         assert db.query(Prediccion).count() == 0
 
 
-# --- Rule 4: weight revision ----------------------------------------------------------------
+# --- Rule 4: fixed training weights (ADR 0082) -----------------------------------------------
 
-def test_assignment_authorizes_a_revision_that_creates_the_next_version(triad_env):
+def test_weights_cannot_be_revised_after_training(triad_env):
     env = triad_env
-    assign(env.client)  # the researcher did not author version 1
+    assign(env.client)
     before = {path.name: path.read_bytes() for path in env.checkpoints.values()}
-    with env.sessions() as db:
-        models_before = [(m.id_modelo, m.hash_binario, m.estado, m.activo) for m in db.query(Modelo).order_by(Modelo.id_modelo)]
     response = revise(env, V2_WEIGHTS)
-    assert response.status_code == 201, response.text
-    body = response.json()
-    assert (body["id"], body["model_id"], body["version"], body["previous_id"]) == (2, triad_key(2), 2, 1)
-    assert [c["weight"] for c in body["components"]] == V2_WEIGHTS
-    assert [c["id_modelo"] for c in body["components"]] == [1, 2, 3]
-    assert body["latest"] is True and body["author_id"] == 2
-    assert composition_rows(env) == [(1, 1, None), (2, 2, 1)]
+    assert response.status_code in (404, 405), response.text
+    assert composition_rows(env) == [(1, 1, None)]
     assert {path.name: path.read_bytes() for path in env.checkpoints.values()} == before
     with env.sessions() as db:
-        assert [(m.id_modelo, m.hash_binario, m.estado, m.activo) for m in db.query(Modelo).order_by(Modelo.id_modelo)] == models_before
-        assert db.get(TriadComposition, 1).first_weight == V1_WEIGHTS[0]  # the old row is never edited
-    listed = {model["id"] for model in catalogue(env)["models"]}
-    assert triad_key(2) in listed and triad_key(1) not in listed
-    assert env.client.get("/api/triad-compositions/1").json()["latest"] is False
+        assert db.get(TriadComposition, 1).first_weight == V1_WEIGHTS[0]
+    assert {model["id"] for model in catalogue(env)["models"]} >= {triad_key(1)}
 
 
-@pytest.mark.parametrize("weights", [[.5, .5], [.25] * 4, [.5, .5, .5], [-.5, .75, .75], [0, 0, 0],
-                                     [True, 0, 0], ["a", "b", "c"]])
-def test_invalid_weights_are_rejected_without_a_new_version(triad_env, weights):
-    env = triad_env
-    assign(env.client)
-    response = revise(env, weights)
-    assert response.status_code == 422, response.text
-    assert composition_rows(env) == [(1, 1, None)]
+def test_the_service_offers_no_weight_revision():
+    assert not hasattr(compositions_service, "revise_weights")
 
 
-def test_a_revision_without_assignment_is_not_found_and_changes_nothing(triad_env):
-    env = triad_env
-    assert login(env.client).status_code == 200
-    response = revise(env, V2_WEIGHTS)
-    assert response.status_code == 404
-    assert response.json() == {"detail": "Recurso no encontrado o no asignado."}
-    assert env.client.get("/api/triad-compositions/1").status_code == 404
-    assert composition_rows(env) == [(1, 1, None)]
-
-
-def test_an_anonymous_revision_is_unauthorized(triad_env):
-    env = triad_env
-    assert revise(env, V2_WEIGHTS).status_code == 401
-    assert composition_rows(env) == [(1, 1, None)]
-
-
-def test_only_the_latest_version_can_be_revised(triad_env):
-    env = triad_env
-    assign(env.client)
-    assert revise(env, V2_WEIGHTS).status_code == 201
-    stale = revise(env, [.3, .3, .4], composition_id=1)
-    assert stale.status_code == 409, stale.text
-    assert composition_rows(env) == [(1, 1, None), (2, 2, 1)]
-
-
-def test_a_concurrent_revision_from_the_same_version_fails_cleanly(triad_env, monkeypatch):
-    env = triad_env
-    assign(env.client)
-    with env.sessions() as db:
-        winner = db.get(TriadComposition, 1)
-        compositions_service.revise_weights(db, winner, V2_WEIGHTS, author_id=1)
-    # This request read version 1 as the latest before the other revision committed.
-    monkeypatch.setattr(compositions_service, "_latest_version", lambda db, job_id: 1)
-    response = revise(env, [.3, .3, .4])
-    assert response.status_code == 409, response.text
-    assert composition_rows(env) == [(1, 1, None), (2, 2, 1)]
-
-
-def test_a_revision_changes_the_prediction_and_keeps_each_versions_history_apart(triad_env):
+def test_a_stored_later_version_predicts_with_its_weights_and_keeps_each_versions_history_apart(triad_env):
     env = triad_env
     assign(env.client)
     catalogue(env)
     first = predict(env, triad_key(1), "v1.wav").json()
-    assert revise(env, V2_WEIGHTS).status_code == 201
+    stored_version(env, V2_WEIGHTS)
     catalogue(env)
     second = predict(env, triad_key(2), "v2.wav").json()
     assert (first["clase"], second["clase"]) == ("a", "c")
@@ -391,30 +349,13 @@ def test_a_non_administrator_cannot_activate_a_composition(triad_env):
 def test_only_the_latest_version_can_be_activated(triad_env):
     env = triad_env
     assert login(env.client, "administrador").status_code == 200
-    assert revise(env, V2_WEIGHTS).status_code == 201
+    stored_version(env, V2_WEIGHTS)
     response = activate_triad(env, 1)
     assert response.status_code == 409, response.text
     assert active_flags(env) == ([], [])
     assert activate_triad(env, 99).status_code == 404
-
-
-def test_a_weight_revision_transfers_the_activation_keeping_one_active_entry(triad_env):
-    env = triad_env
-    assert login(env.client, "administrador").status_code == 200
-    assert activate_triad(env).status_code == 200
-    assert revise(env, V2_WEIGHTS).status_code == 201
+    assert activate_triad(env, 2).status_code == 200
     assert active_flags(env) == ([], [2])
-    assert catalogue(env)["default_model_id"] == triad_key(2)
-
-
-def test_a_revision_of_an_inactive_composition_stays_inactive(triad_env):
-    env = triad_env
-    with env.sessions() as db:
-        db.get(Modelo, 3).activo = True
-        db.commit()
-    assert login(env.client, "administrador").status_code == 200
-    assert revise(env, V2_WEIGHTS).status_code == 201
-    assert active_flags(env) == ([3], [])
 
 
 def test_the_active_composition_is_the_default_of_a_fresh_registry(triad_env):

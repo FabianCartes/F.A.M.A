@@ -1,9 +1,9 @@
-"""Versioned standard-triad compositions: creation, weight revision and lookup.
+"""Standard-triad compositions: creation, lookup and activation.
 
 A composition fuses three independently trained ``Modelo`` rows of one training job.
-A weight revision is a new row (``version`` + 1, ``previous_id``); rows are never
-edited, and no checkpoint is touched. The unique ``(job_id, version)`` constraint
-makes concurrent revisions from the same version fail instead of forking history.
+Its weights are fixed when the job registers version 1 (ADR 0082). Rows with a higher
+``version`` exist only from the earlier weight revision; they are kept unchanged and
+remain readable and activatable, and only the highest version of a job is published.
 """
 import math
 from datetime import datetime, timezone
@@ -26,7 +26,7 @@ class TriadCompositionError(ValueError):
 
 
 class TriadCompositionConflict(Exception):
-    """The composition already has a newer version (or another writer revised it first)."""
+    """The composition already has a newer version."""
 
 
 def triad_model_key(composition_id: int) -> str:
@@ -151,38 +151,3 @@ def create_initial_composition(db, *, job_id: str, dataset_id: int, partition_ve
             raise
         return existing
     return composition
-
-
-def revise_weights(db, composition: TriadComposition, weights: Sequence,
-                   author_id: Optional[int]) -> TriadComposition:
-    """Create the next version of the latest composition with new weights.
-
-    Raises ``TriadCompositionError`` for invalid weights and ``TriadCompositionConflict``
-    when the composition is not the latest version or another revision won the race.
-    A revision of the active composition becomes the active one.
-    """
-    new_weights = validate_weights(weights)
-    if not is_latest(db, composition):
-        raise TriadCompositionConflict("La composición ya tiene una versión más reciente.")
-    revision = TriadComposition(
-        dataset_id=composition.dataset_id, partition_version=composition.partition_version,
-        job_id=composition.job_id, version=composition.version + 1, previous_id=composition.id,
-        first_model_id=composition.first_model_id, second_model_id=composition.second_model_id,
-        third_model_id=composition.third_model_id,
-        first_weight=new_weights[0], second_weight=new_weights[1], third_weight=new_weights[2],
-        author_id=author_id, created_at=datetime.now(timezone.utc),
-        activo=bool(composition.activo))
-    # The default never silently disappears from the catalogue: a revision of the active
-    # composition inherits the activation in the same commit, so one entry stays active.
-    composition.activo = False
-    db.add(revision)
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        taken = db.query(TriadComposition).filter_by(
-            job_id=composition.job_id, version=composition.version + 1).first() is not None
-        if not taken:
-            raise  # not the unique-version race: surface the real integrity failure
-        raise TriadCompositionConflict("La composición ya tiene una versión más reciente.") from None
-    return revision

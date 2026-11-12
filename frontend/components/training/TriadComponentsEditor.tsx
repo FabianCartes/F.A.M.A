@@ -24,23 +24,20 @@ export function triadWeightsFromPercents(percents: Array<number | string>) {
   return { total, weights, valid };
 }
 
-export default function TriadComponentsEditor({models, disabled, componentLabels, onArchitecture, onPercent}: {
+export default function TriadComponentsEditor({models, disabled, onArchitecture, onPercent}: {
   models: TriadComponentDraft[]; disabled?: boolean;
-  /** Weights-only mode: fixed component names are shown instead of architecture selectors. */
-  componentLabels?: string[];
   onArchitecture: (index: number, architecture: string) => void; onPercent: (index: number, value: string) => void;
 }) {
   const {total, valid} = triadWeightsFromPercents(models.map(m => m.weight));
   const shown = Number.isFinite(total) ? Math.round(total * 1e6) / 1e6 : NaN;
   return <div className="space-y-2" aria-label="Componentes de la tríada" role="group">
     {models.map((m, i) => <div key={i} className="grid grid-cols-[1fr_6rem] gap-2 items-end">
-      {componentLabels ? <p className="text-[11px] text-gray-300 font-mono break-all">Componente {i + 1} · {componentLabels[i]}</p> :
       <label className="text-[11px] text-gray-400 block font-medium">Arquitectura del componente {i + 1}
         <select className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-2 text-xs text-gray-200 mt-1 font-mono disabled:opacity-60"
           disabled={disabled} value={m.architecture} onChange={e => onArchitecture(i, e.target.value)}>
           {TRIAD_ARCHITECTURES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select>
-      </label>}
+      </label>
       <label className="text-[11px] text-gray-400 block font-medium">Porcentaje del componente {i + 1}
         <input type="number" min="0" max="100" step="any" className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-2 py-2 text-xs text-gray-200 mt-1 font-mono disabled:opacity-60"
           disabled={disabled} value={m.weight} onChange={e => onPercent(i, e.target.value)} />

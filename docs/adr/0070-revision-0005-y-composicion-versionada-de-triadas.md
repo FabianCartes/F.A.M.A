@@ -1,6 +1,6 @@
 # ADR 0070: Revisión 0005 y composición versionada de tríadas estándar
 
-Fecha: 2026-11-11. Estado: aceptado en la etapa f de la integración `mvp` (decisiones 1–3). Verificado en SQLite en memoria; PostgreSQL no verificado.
+Fecha: 2026-11-11. Estado: aceptado en la etapa f de la integración `mvp` (decisiones 1–3). Verificado en SQLite en memoria; PostgreSQL no verificado. La revisión de pesos posterior al entrenamiento fue sustituida por [ADR 0082](0082-pesos-fijos-de-entrenamiento-en-triadas.md).
 
 ## Contexto
 

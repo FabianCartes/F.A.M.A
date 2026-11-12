@@ -551,17 +551,6 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
   const evaluationDialogCloseRef = useRef<HTMLButtonElement | null>(null);
   const evaluationDialogTriggerRef = useRef<HTMLButtonElement | null>(null);
   const inferenceSequence = useRef(0);
-  const refreshCatalogue = useRef<(() => Promise<RegisteredModel[] | null>) | null>(null);
-  // After a triad weight revision: reload the catalogue, then select the new version if it is selectable.
-  const selectRevisedTriad = useCallback(async (newModelId: string): Promise<string | null> => {
-    const models = await refreshCatalogue.current?.();
-    if (!models?.some((m) => m.id === newModelId && m.has_weights === true)) {
-      return "La nueva versión se creó, pero aún no está disponible en el catálogo de modelos.";
-    }
-    setSelectionState((state) => ({ ...state, modelId: newModelId, evaluationDialogOpen: false, evaluationDialogModelId: null }));
-    return null;
-  }, []);
-
   const selectedModel = useMemo(() => {
     return availableModels.find((m) => m.id === selectedModelId);
   }, [availableModels, selectedModelId]);
@@ -724,7 +713,6 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
         return null;
       }
     }
-    refreshCatalogue.current = fetchModels;
     const onVisible = () => { if (document.visibilityState === "visible") void fetchModels(); };
     void fetchModels();
     window.addEventListener("focus", fetchModels);
@@ -1483,7 +1471,7 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
             </div>
           </div>
 
-          {selectedModel && <TriadCompositionPanel modelId={selectedModel.id} onRevised={selectRevisedTriad} />}
+          {selectedModel && <TriadCompositionPanel modelId={selectedModel.id} />}
 
           <section aria-label="Evaluaciones finales del modelo seleccionado" className="mt-5 border-t border-[#23252e]/70 pt-4 space-y-3">
             <div>

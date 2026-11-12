@@ -4,7 +4,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.models.dataset import ConjuntoDatos
 from app.models.training import ModelEvaluation, Modelo
-from app.services.triad_compositions import create_initial_composition, revise_weights
+from app.services.triad_compositions import create_initial_composition
 from tests.schema_support import migrated_engine
 
 HASHES = ("a" * 64, "b" * 64, "c" * 64)
@@ -96,14 +96,22 @@ def test_identity_must_match_the_stored_composition(sessions, changes):
         assert service(db).latest_by_split([1]) == {}
 
 
-def test_weight_revision_does_not_inherit_reports(sessions):
+def test_a_stored_later_version_does_not_inherit_reports(sessions):
     with sessions() as db:
         attempts = service(db)
         attempt = attempts.create(identity())
         attempts.start(attempt["id"])
         attempts.complete(attempt["id"], report())
         from app.models.triad_composition import TriadComposition
-        revised = revise_weights(db, db.get(TriadComposition, 1), [.2, .3, .5], None)
+        first = db.get(TriadComposition, 1)
+        # Versions above 1 exist only from before weights were fixed at training (ADR 0082).
+        revised = TriadComposition(
+            dataset_id=first.dataset_id, partition_version=first.partition_version, job_id=first.job_id,
+            version=2, previous_id=first.id, first_model_id=first.first_model_id,
+            second_model_id=first.second_model_id, third_model_id=first.third_model_id,
+            first_weight=.2, second_weight=.3, third_weight=.5, created_at=first.created_at)
+        db.add(revised)
+        db.commit()
         assert attempts.latest_by_split([1, revised.id]) == {1: {"val": attempts.read(attempt["id"])}}
         with pytest.raises(ValueError):
             # The previous version's identity cannot be attached to the revision.
