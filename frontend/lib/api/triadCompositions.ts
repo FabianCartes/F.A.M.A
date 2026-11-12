@@ -6,7 +6,7 @@ export interface TriadComposition {
   version: number;
   latest: boolean;
   active: boolean;
-  components: Array<{ id_modelo: number; catalogue_id: string; weight: number }>;
+  components: Array<{ id_modelo: number; catalogue_id: string; architecture?: string | null; weight: number }>;
 }
 
 const TRIAD_KEY = /^fama_triad_([1-9][0-9]*)$/;

@@ -3,6 +3,7 @@
 import { getPredictionHistory } from "@/lib/api/predictionHistory";
 import PredictionModelSelector, { TriadModelBadges, triadModelDetails } from "@/components/prediction/PredictionModelSelector";
 import TriadCompositionPanel from "@/components/prediction/TriadCompositionPanel";
+import { triadCompositionId } from "@/lib/api/triadCompositions";
 import InfoTooltip from "@/components/common/InfoTooltip";
 
 import { useState, useEffect, useMemo, useRef, useCallback, ChangeEvent, FormEvent } from "react";
@@ -162,6 +163,18 @@ export interface RegisteredModel {
   loaded_checkpoint_sha256?: string | null;
   metrics?: ModelEvaluationMetrics;
   evaluations?: ModelEvaluations | null;
+}
+
+/** Why a standard triad shows no joint metrics; null when a completed report exists. */
+function triadEvaluationStatus(evaluations?: ModelEvaluations | null): string | null {
+  const splits = [evaluations?.val, evaluations?.test];
+  if (splits.some(split => split?.latest_completed)) return null;
+  const statuses = splits.map(split => split?.latest_attempt?.status);
+  if (statuses.some(status => status === "pending" || status === "running")) {
+    return "Evaluación conjunta en curso. Las métricas aparecen al terminar.";
+  }
+  if (statuses.includes("failed")) return "Evaluación conjunta fallida. Esta tríada no tiene métricas conjuntas.";
+  return "Esta tríada no tiene evaluación conjunta. Las métricas se calculan al entrenar una tríada nueva.";
 }
 
 const EVALUATION_STATUS_LABELS: Record<string, string> = {
@@ -555,6 +568,8 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
     return availableModels.find((m) => m.id === selectedModelId);
   }, [availableModels, selectedModelId]);
   const selectedModelHasWeights = selectedModel?.has_weights === true;
+  const selectedIsTriad = selectedModel ? triadCompositionId(selectedModel.id) !== null : false;
+  const triadStatus = selectedIsTriad ? triadEvaluationStatus(selectedModel?.evaluations) : null;
   const hasUnavailableModels = availableModels.some((model) => model.has_weights !== true);
 
   const selectedDomain = useMemo(() => {
@@ -1475,8 +1490,14 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
 
           <section aria-label="Evaluaciones finales del modelo seleccionado" className="mt-5 border-t border-[#23252e]/70 pt-4 space-y-3">
             <div>
-              <h3 className="text-xs font-semibold text-gray-200">Evaluación final · checkpoint registrado</h3>
-              <p className="mt-1 text-[11px] text-gray-400">La comparación identifica el archivo registrado; no acredita los pesos cargados actualmente en runtime.</p>
+              {selectedIsTriad ? <>
+                <h3 className="text-xs font-semibold text-gray-200">Evaluación final · tríada combinada</h3>
+                <p className="mt-1 text-[11px] text-gray-400">Métricas por grabación de la salida combinada; no es un promedio de los componentes.</p>
+                <p className="mt-1 text-[11px] text-gray-400">La correspondencia compara los tres checkpoints, los pesos y las clases del informe con los registrados.</p>
+              </> : <>
+                <h3 className="text-xs font-semibold text-gray-200">Evaluación final · checkpoint registrado</h3>
+                <p className="mt-1 text-[11px] text-gray-400">La comparación identifica el archivo registrado; no acredita los pesos cargados actualmente en runtime.</p>
+              </>}
             </div>
             {evaluationCatalogueStatus === "unavailable" ? (
               <p role="status" className="text-xs text-amber-200">
@@ -1490,6 +1511,8 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
               <p role="status" className="text-xs text-gray-300">Esta respuesta antigua del catálogo no informa el estado de las evaluaciones finales.</p>
             ) : !selectedModel ? (
               <p role="status" className="text-xs text-gray-300">Selecciona un modelo para consultar sus informes finales.</p>
+            ) : selectedIsTriad ? (
+              triadStatus && <p role="status" className="text-xs text-gray-300">{triadStatus}</p>
             ) : !selectedModel.evaluations?.val?.latest_attempt && !selectedModel.evaluations?.val?.latest_completed &&
               !selectedModel.evaluations?.test?.latest_attempt && !selectedModel.evaluations?.test?.latest_completed ? (
               <p role="status" className="text-xs text-gray-300">Catálogo de evaluaciones disponible; no hay informes finales para este modelo.</p>

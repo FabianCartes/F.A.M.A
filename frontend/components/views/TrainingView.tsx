@@ -2754,7 +2754,10 @@ export default function TrainingView() {
                 const partition = group.members[0].partition_version;
                 const sharedPartition = partition && group.members.every(member => member.partition_version === partition) ? partition : null;
                 return <tr key={`triad-${group.composition.id}`} className="grid grid-cols-3 gap-x-3 gap-y-2 py-3 md:table-row md:py-0 hover:bg-[#1c1e24]/40 transition-colors">
-                <td className="col-span-3 md:py-3 text-gray-200">{group.members.map(member => <div key={member.id}>{member.name || member.architecture}</div>)}</td>
+                <td className="col-span-3 md:py-3 text-gray-200">
+                  {group.composition.name && <div className="font-semibold text-white">{group.composition.name}</div>}
+                  {group.members.map(member => <div key={member.id} className={group.composition.name ? "text-gray-400" : undefined}>{member.name || member.architecture}</div>)}
+                </td>
                 <td className="col-span-3 md:py-3 text-gray-400">{group.members[0].dataset || group.members[0].dataset_name || "Sin dataset declarado"}</td>
                 <td className={jointMetric(group.composition.evaluation?.val, "accuracy") !== null ? "md:py-3 text-emerald-400" : "md:py-3 text-amber-400"}>{jointStatusLabel(group.composition.evaluation?.val)}</td>
                 <td className="col-span-3 md:py-3 text-[11px]">
@@ -2788,7 +2791,7 @@ export default function TrainingView() {
                       v{selectedGroup ? selectedGroup.composition.version : selectedModelModal.version || 1}
                     </span>
                     <h2 className="text-base font-bold text-white tracking-tight">
-                      {selectedGroup ? "Ficha técnica de la tríada" : selectedModelModal.name || `${selectedModelModal.architecture} (v${selectedModelModal.version || 1})`}
+                      {selectedGroup ? selectedGroup.composition.name || "Ficha técnica de la tríada" : selectedModelModal.name || `${selectedModelModal.architecture} (v${selectedModelModal.version || 1})`}
                     </h2>
                   </div>
                   <p className="text-xs text-gray-400 mt-1">

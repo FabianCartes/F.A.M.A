@@ -15,6 +15,8 @@ export interface HistoryComposition {
   id: number;
   version: number;
   job_id: string;
+  /** `<Dataset> · Tríada <n> — <architectures>`; absent for older servers. */
+  name?: string;
   components: { id_modelo: number; weight: number }[];
   /** Stored joint reports of this exact composition; absent for older servers. */
   evaluation?: JointEvaluation;

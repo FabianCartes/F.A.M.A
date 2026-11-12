@@ -172,3 +172,19 @@ it("distingue pendiente, fallo y ausencia sin inventar precisión", async () => 
   expect(joint.getByText("Sin informe válido")).toBeDefined();
   expect(joint.queryByText(/%/)).toBeNull();
 });
+
+it("identifica la tríada por el nombre del servidor en la fila y en la ficha", async () => {
+  const name = "Datos · Tríada 2 — Alpha + Beta + Gamma";
+  await setup(models, [{ ...composition, name, architectures: ["Alpha", "Beta", "Gamma"] }]);
+  const row = await screen.findByRole("row", { name: /Tríada 2.*Miembro 1.*Miembro 2.*Miembro 3/ });
+  expect(within(row).getByText(name)).toBeDefined();
+  fireEvent.click(within(row).getByRole("button", { name: "Ficha Técnica" }));
+  expect(within(screen.getByTestId("modal-ficha-tecnica")).getByRole("heading", { name })).toBeDefined();
+});
+
+it("conserva el título genérico de la ficha con un servidor que no envía el nombre", async () => {
+  await setup(models, [composition]);
+  const row = await screen.findByRole("row", { name: /Miembro 1.*Miembro 2.*Miembro 3/ });
+  fireEvent.click(within(row).getByRole("button", { name: "Ficha Técnica" }));
+  expect(within(screen.getByTestId("modal-ficha-tecnica")).getByRole("heading", { name: "Ficha técnica de la tríada" })).toBeDefined();
+});

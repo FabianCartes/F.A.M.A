@@ -34,7 +34,7 @@ export default function TriadCompositionPanel({ modelId }: { modelId: string }) 
       <ul className="space-y-1.5">
         {composition.components.map((component, index) => <li key={component.id_modelo}
           className="flex items-center justify-between gap-3 text-xs text-gray-300">
-          <span>Componente {index + 1} · {component.catalogue_id}</span>
+          <span>Componente {index + 1} · {component.architecture || "Arquitectura no registrada"}</span>
           <span className="text-gray-100 font-semibold">{percent(component.weight)}</span>
         </li>)}
       </ul>
