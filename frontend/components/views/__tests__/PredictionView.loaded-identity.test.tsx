@@ -58,7 +58,9 @@ const deferred = <T,>() => {
 let models: RegisteredModel[];
 let predict: () => Promise<Response>;
 const catalogueIdentity = () => screen.queryByRole("region", { name: "Identidad de checkpoints del modelo seleccionado" });
-const resultIdentity = () => screen.getByRole("region", { name: "Identidad del checkpoint del resultado" });
+const resultIdentity = () => screen.queryByRole("region", { name: "Identidad del checkpoint del resultado" });
+const CHECKPOINT_MISMATCH = "El checkpoint cargado por el predictor no coincide con el registrado para el modelo solicitado.";
+const mismatchAlert = () => screen.queryByText(CHECKPOINT_MISMATCH);
 const show = async () => {
   let view!: ReturnType<typeof render>;
   await act(async () => { view = render(<PredictionView />); });
@@ -131,14 +133,12 @@ describe("Identidad del checkpoint en Predicción", () => {
     });
     await act(async () => { fireEvent(window, new Event("focus")); });
 
-    const result = resultIdentity();
-    expect(result.textContent).toContain(loadedD);
-    expect(result.textContent).toContain(registeredA);
-    expect(result.textContent).toContain("No coincide");
-    expect(result.textContent).not.toContain(loadedF);
+    // The result keeps the original response's provenance: registered A vs loaded D.
+    expect(resultIdentity()).toBeNull();
+    expect(mismatchAlert()?.getAttribute("role")).toBe("alert");
     expect(catalogueIdentity()).toBeNull();
     expect(screen.getByRole("heading", { name: modelB.name })).toBeDefined();
-    expect(within(result).queryByText(registeredG)).toBeNull();
+    expect(screen.queryByText(new RegExp(loadedD))).toBeNull();
   });
 
   it("identifica una coincidencia válida entre registro e instancia cargada", async () => {
@@ -155,8 +155,9 @@ describe("Identidad del checkpoint en Predicción", () => {
 
     expect(catalogueIdentity()).toBeNull();
     await startInference(view);
-    const result = await screen.findByRole("region", { name: "Identidad del checkpoint del resultado" });
-    expect(result.textContent).toContain("Coincide");
+    await screen.findByText("Modelo ejecutado:");
+    expect(resultIdentity()).toBeNull();
+    expect(mismatchAlert()).toBeNull();
   });
 
   it.each([
@@ -180,11 +181,10 @@ describe("Identidad del checkpoint en Predicción", () => {
     });
     const view = await show();
     await startInference(view);
-    await screen.findByRole("region", { name: "Identidad del checkpoint del resultado" });
+    await screen.findByText("Modelo ejecutado:");
 
     expect(catalogueIdentity()).toBeNull();
-    expect(resultIdentity().textContent).toContain("No disponible");
-    expect(resultIdentity().textContent).toContain("No verificable");
-    expect(resultIdentity().textContent).not.toContain("Coincide");
+    expect(resultIdentity()).toBeNull();
+    expect(mismatchAlert()).toBeNull();
   });
 });

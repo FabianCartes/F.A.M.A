@@ -1929,15 +1929,11 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
                     El modelo ejecutado difiere del modelo solicitado: {result.inferenceModel} ({result.inferenceModelId}). El resultado corresponde al modelo informado por la API.
                   </p>
                 )}
-                <section aria-label="Identidad del checkpoint del resultado" className="border-t border-[#23252e]/70 pt-2 space-y-1">
-                  <h3 className="text-[11px] font-semibold text-gray-300">Identidad del checkpoint del resultado</h3>
-                  <dl className="grid min-w-0 grid-cols-1 gap-1 text-[10px] text-gray-400">
-                    <div className="min-w-0 break-all"><dt className="inline">Checkpoint registrado al solicitar:</dt> <dd className="inline font-mono">{result.inferenceRegisteredCheckpointHash || "No disponible"}</dd></div>
-                    <div className="min-w-0 break-all"><dt className="inline">Checkpoint cargado informado por el predictor:</dt> <dd className="inline font-mono">{validCheckpointHash(result.detalles?.loaded_checkpoint_sha256) || "No disponible"}</dd></div>
-                    <div><dt className="inline">Correspondencia con el registro solicitado:</dt> <dd className="inline">{registeredCheckpointMatch(result.inferenceRegisteredCheckpointHash, result.detalles?.loaded_checkpoint_sha256)}</dd></div>
-                  </dl>
-                  <p className="text-[10px] text-gray-500">El hash describe la procedencia informada al cargar; no acredita continuamente los parámetros en memoria.</p>
-                </section>
+                {registeredCheckpointMatch(result.inferenceRegisteredCheckpointHash, result.detalles?.loaded_checkpoint_sha256) === "No coincide" && (
+                  <p role="alert" className="text-xs text-amber-300">
+                    El checkpoint cargado por el predictor no coincide con el registrado para el modelo solicitado.
+                  </p>
+                )}
                 {result.inferenceEnsemble && result.modelos_activos && result.modelos_activos.length > 0 && (
                   <div className="flex flex-wrap gap-1 pt-1 border-t border-[#23252e]/70">
                     {result.modelos_activos.map((model, index) => (

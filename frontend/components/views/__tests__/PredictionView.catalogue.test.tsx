@@ -962,10 +962,10 @@ describe("U7Independent", () => {
       modelo_id: requested.id, modelo: "Executed snapshot", clase: "Chucao", confianza: 0, gcp_upload: false,
       modelos_activos: ["Result participant 17%"], modelos_ejecutados: ["Executed predictor"],
       detalles: { dataset_name: "AvesChilenas", loaded_checkpoint_sha256: "b".repeat(64), device: "cpu" } })); });
-    const checkpoint = screen.getByRole("region", { name: "Identidad del checkpoint del resultado" });
-    expect(checkpoint.textContent).toContain("a".repeat(64));
-    expect(checkpoint.textContent).toContain("b".repeat(64));
-    expect(checkpoint.textContent).not.toContain("c".repeat(64));
+    // Registered a vs loaded b: only a one-line mismatch alert, without hashes.
+    expect(screen.queryByRole("region", { name: "Identidad del checkpoint del resultado" })).toBeNull();
+    expect(screen.getByText("El checkpoint cargado por el predictor no coincide con el registrado para el modelo solicitado.").getAttribute("role")).toBe("alert");
+    expect(screen.queryByText(/b{64}/)).toBeNull();
     expect(screen.getByText("Modelo ejecutado:").parentElement?.textContent).toContain("Executed snapshot");
     expect(screen.getByText("✓ Result participant 17%")).toBeDefined();
     expect(screen.getByText("✓ Executed predictor")).toBeDefined();

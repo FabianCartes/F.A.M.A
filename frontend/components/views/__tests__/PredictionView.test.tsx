@@ -452,7 +452,6 @@ describe("U7IndependentStable", () => {
       confianza: 0, gcp_upload: false, modelo: "Stable predictor", modelo_id: "machine-model",
       detalles: { dataset_name: "maquinaria-canonical", loaded_checkpoint_sha256: "d".repeat(64) } }));
     await api.infer();
-    const checkpoint = screen.getByRole("region", { name: "Identidad del checkpoint del resultado" }).textContent;
     const originalFetch = fetch;
     global.fetch = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) =>
       String(input).includes("/api/models")
@@ -460,8 +459,8 @@ describe("U7IndependentStable", () => {
         : originalFetch(input, options));
     await chooseModel(mockModels[2].name);
     await act(async () => { fireEvent(window, new Event("focus")); });
-    expect(screen.getByRole("region", { name: "Identidad del checkpoint del resultado" }).textContent).toBe(checkpoint);
-    expect(checkpoint).toContain("d".repeat(64));
+    expect(screen.queryByRole("region", { name: "Identidad del checkpoint del resultado" })).toBeNull();
+    expect(screen.queryByText(/d{64}/)).toBeNull();
     expect(screen.getByText("Modelo ejecutado:").parentElement?.textContent).toBe("Modelo ejecutado:Stable predictor (machine-model)");
     // History follows the newly selected model; the original result/review stays intact.
     expect(screen.queryByRole("row", { name: /stable\.wav/ })).toBeNull();
