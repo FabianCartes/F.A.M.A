@@ -56,6 +56,39 @@ describe('IngestionView persisted inference dataset and curation', () => {
     expect(vi.mocked(global.fetch).mock.calls.some(([url]) => String(url).includes('/imports/datasets'))).toBe(false);
   });
 
+  it('shows descriptions up to 100 characters and opens longer ones in a dialog', async () => {
+    const long = 'Prueba de Cloud SQL. '.repeat(10).trim();
+    const datasets = [{ ...mockDatasets[0], id: 'long', name: 'largo', description: long },
+      { ...mockDatasets[0], id: 'short', name: 'corto', description: 'Cantos del bosque' }];
+    global.fetch = vi.fn(async input => ({ ok: true, json: async () => privateCatalogFixture(input)
+      ?? (String(input).includes('/datasets') ? { datasets } : mockStatus) }) as Response);
+    await open();
+    const inventory = within(await screen.findByRole('table', { name: 'Inventario de datasets' }));
+    expect(inventory.getByText('Cantos del bosque')).toBeDefined();
+    expect(inventory.queryByRole('button', { name: 'Ver descripción completa de corto' })).toBeNull();
+    expect(inventory.getByText(`${long.slice(0, 100).trimEnd()}…`)).toBeDefined();
+    expect(inventory.queryByText(long)).toBeNull();
+
+    fireEvent.click(inventory.getByRole('button', { name: 'Ver descripción completa de largo' }));
+    const dialog = within(screen.getByRole('dialog', { name: 'Descripción de largo' }));
+    expect(dialog.getByText(long)).toBeDefined();
+    fireEvent.click(dialog.getByRole('button', { name: 'Cerrar' }));
+    expect(screen.queryByRole('dialog', { name: 'Descripción de largo' })).toBeNull();
+  });
+
+  it('hides the dataset catalogue toggle from administrators, who already see every dataset in the inventory', async () => {
+    await open();
+    await screen.findByRole('table', { name: 'Inventario de datasets' });
+    expect(screen.queryByRole('button', { name: 'Explorar datasets disponibles' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Catálogo de datasets' })).toBeNull();
+  });
+
+  it('keeps the dataset catalogue toggle for non-administrators', async () => {
+    await act(async () => { render(<IngestionView administrator={false} />); });
+    const toggle = await screen.findByRole('button', { name: 'Explorar datasets disponibles' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+  });
+
   it('refreshes the shared inventory audio count after explicit feedback incorporation', async () => {
     const imported = { id: 'owned-aves', name: 'aves', description: '', revision: 1,
       file_count: 1194, class_count: 15, total_size_bytes: 8523910642, synced_file_count: 0 };

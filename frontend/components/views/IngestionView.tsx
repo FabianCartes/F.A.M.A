@@ -603,8 +603,9 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
         onCatalogChange={fetchDatasets} onPublishingChange={setPublishingDataset} /></div>
 
       {/* Inventario observado por origen y acciones independientes. */}
-      <div className="flex justify-end"><button type="button" aria-expanded={showCatalogue} onClick={() => setShowCatalogue(value => !value)} className="px-4 py-2 text-xs text-blue-300 border border-[#373a46] rounded-lg hover:bg-[#23252e]">{showCatalogue ? "Cerrar catálogo" : "Explorar datasets disponibles"}</button></div>
-      {showCatalogue && <DatasetCatalogue />}
+      {/* Administrators already see every dataset in the inventory below. */}
+      {!administrator && <div className="flex justify-end"><button type="button" aria-expanded={showCatalogue} onClick={() => setShowCatalogue(value => !value)} className="px-4 py-2 text-xs text-blue-300 border border-[#373a46] rounded-lg hover:bg-[#23252e]">{showCatalogue ? "Cerrar catálogo" : "Explorar datasets disponibles"}</button></div>}
+      {!administrator && showCatalogue && <DatasetCatalogue />}
       <DatasetUpload datasets={datasets} canCreate={administrator && canCreateDataset} busy={isSyncing}
         onUploaded={fetchDatasets} onBusyChange={setIsUploading} limits={uploadLimits} />
       <DatasetInventory datasets={datasets} loading={isLoadingDatasets} busy={isSyncing || isUploading}

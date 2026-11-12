@@ -1,6 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import DatasetConfirmationDialog from "./DatasetConfirmationDialog";
+
+const DESCRIPTION_PREVIEW = 100;
+
+/** Shows up to 100 characters; a longer description opens complete in a dialog. */
+function DescriptionCell({ name, description }: { name: string; description?: string | null }) {
+  const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  if (!description) return <>—</>;
+  if (description.length <= DESCRIPTION_PREVIEW) return <>{description}</>;
+  return <>
+    <span>{`${description.slice(0, DESCRIPTION_PREVIEW).trimEnd()}…`}</span>{" "}
+    <button ref={trigger} type="button" onClick={() => setOpen(true)} aria-label={`Ver descripción completa de ${name}`}
+      className="text-[11px] text-blue-300 hover:text-blue-200 underline underline-offset-2">Ver más</button>
+    {open && <DatasetConfirmationDialog title={`Descripción de ${name}`} onClose={() => setOpen(false)} returnFocus={trigger}>
+      <p className="whitespace-pre-wrap break-words text-gray-300">{description}</p>
+      <div className="flex justify-end"><button type="button" onClick={() => setOpen(false)}
+        className="px-4 py-2 text-xs text-gray-200 border border-[#373a46] rounded-lg hover:bg-[#23252e]">Cerrar</button></div>
+    </DatasetConfirmationDialog>}
+  </>;
+}
 
 export interface DatasetItem {
   id: string;
@@ -107,7 +128,7 @@ export default function DatasetInventory({ datasets, loading, busy, onRefresh, o
                     <div className="flex flex-wrap gap-1">{item.classes?.slice(0, 3).map(label => <span key={label} className="px-1.5 py-0.5 rounded bg-[#222530] text-gray-300 text-[10px]">{label}</span>)}
                       {(item.classes?.length ?? 0) > 3 && <span className="text-gray-500">+{item.classes!.length - 3} más</span>}</div>
                   </td>
-                  <td className="p-2 align-top max-w-64 text-gray-300 break-words">{item.description || "—"}</td>
+                  <td className="p-2 align-top max-w-64 text-gray-300 break-words"><DescriptionCell name={item.name} description={item.description} /></td>
                   <td className="p-2 align-top whitespace-nowrap"><p>{item.local_file_count == null ? "Sin consultar" : `${item.local_file_count} audios`}</p><p className="text-gray-500 mt-1">{bytes(localBytes)}</p></td>
                   <td className="p-2 align-top whitespace-nowrap"><p>{cloud == null ? "Sin consultar" : `${cloud} audios`}</p><p className="text-gray-500 mt-1">{bytes(cloudBytes)}</p>
                     {uncompared(item) && <p className="mt-1 text-[10px] text-amber-300">Contenido sin comparar</p>}</td>
