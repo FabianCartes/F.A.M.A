@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import RejectedImportReason from "@/components/ingestion/RejectedImportReason";
 import type { ImportJob } from "@/lib/api/datasetImports";
 import SessionBoundary from "@/components/auth/SessionBoundary";
@@ -60,6 +60,9 @@ it("aborts obsolete requests without displaying another identity's reasons", asy
   }));
   render(<SessionBoundary><RejectedImportReason job={job} /></SessionBoundary>);
   await screen.findByText("Consultando la razón del rechazo…");
+  // Loading can render before the effect starts the request we intend to abort.
+  await waitFor(() => expect(finish).toBeTypeOf("function"));
+  expect(signal?.aborted).toBe(false);
   owner = 2;
   await act(async () => { fireEvent.focus(window); });
   await screen.findByText("Razón de la identidad actual.");
