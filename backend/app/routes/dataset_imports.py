@@ -64,7 +64,7 @@ class CreateImport(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     request_key: str = Field(min_length=1, max_length=100)
     name: str = Field(min_length=1, max_length=150)
-    description: str = Field(default="", max_length=2000)
+    description: str = Field(default="", max_length=100)
     target_id: str | None = Field(default=None, pattern="^[0-9a-f]{32}$")
     layout: Literal["class_folders"] | None = None
     auto_import: bool = Field(default=False, strict=True)

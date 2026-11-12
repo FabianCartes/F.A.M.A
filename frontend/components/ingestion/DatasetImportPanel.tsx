@@ -316,7 +316,7 @@ export default function DatasetImportPanel({ onCatalogChange, onPublishingChange
           {limits && <>
           {!job && <div className="grid gap-3 sm:grid-cols-2">
             <label>Nombre del dataset<input className={inputClass} value={name} onChange={e => setName(e.target.value)} maxLength={100} disabled={!!busy} /></label>
-            <label>Descripción<textarea className={inputClass} value={description} onChange={e => setDescription(e.target.value)} maxLength={2000} disabled={!!busy} /></label>
+            <div><label>Descripción<textarea className={inputClass} value={description} onChange={e => setDescription(e.target.value)} maxLength={100} disabled={!!busy} /></label><p className="text-right text-[10px] text-gray-500">{description.length}/100</p></div>
           </div>}
           {(!job || job.status === "receiving") && <label className="block">Archivo ZIP<input ref={fileInputRef} type="file" accept=".zip,application/zip" disabled={!!busy} onChange={e => {
             const selected = e.target.files?.[0] ?? null;

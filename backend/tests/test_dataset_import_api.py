@@ -90,6 +90,14 @@ def operation(client, import_id, kind, payload=None):
     return client.get(f"/api/ingestion/imports/{import_id}")
 
 
+@pytest.mark.parametrize("length, status", [(100, 200), (101, 422)])
+def test_import_description_accepts_at_most_100_characters(imports, length, status):
+    client, *_ = imports
+    response = client.post("/api/ingestion/imports", json={"request_key": f"described-{length}",
+        "name": "Birds", "description": "d" * length})
+    assert response.status_code == status, response.text
+
+
 def test_import_is_local_queryable_downloadable_and_replayable(imports, tmp_path):
     client, service, _, _ = imports
     job = prepare(client, tmp_path)

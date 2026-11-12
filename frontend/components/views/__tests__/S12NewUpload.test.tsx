@@ -72,3 +72,22 @@ it.each([false, true])("new upload authorizes only local publication; rejected=%
   expect(writes.filter(w => w.path.endsWith("/preview"))).toHaveLength(rejected ? 2 : 1);
   expect(screen.queryByRole("button", { name: "Confirmar importación local" })).toBeNull();
 });
+
+it("limits the import description to 100 characters and shows the count", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (input: string) => {
+    const path = new URL(input, "http://synthetic.test").pathname;
+    if (path.endsWith("/access")) return Response.json({ development_mode: true });
+    if (path.endsWith("/limits")) return Response.json(limits);
+    if (path === B) return page("imports", []);
+    throw new Error("Unexpected request " + path);
+  }));
+  render(<DatasetImportPanel />);
+  fireEvent.click(screen.getByRole("button", { name: "Importar dataset" }));
+  const open = within(screen.getByRole("dialog")).getByRole("button", { name: "Importar dataset" });
+  await waitFor(() => expect((open as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(open);
+  const description = screen.getByLabelText("Descripción") as HTMLTextAreaElement;
+  expect(description.maxLength).toBe(100);
+  fireEvent.change(description, { target: { value: "Cantos del bosque" } });
+  expect(screen.getByText("17/100")).toBeDefined();
+});
