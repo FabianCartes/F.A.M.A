@@ -2693,6 +2693,7 @@ export default function TrainingView() {
                 <th className="pb-3 font-medium">Dataset / Dominio</th>
                 <th className="pb-3 font-medium">Precisión (Val Acc)</th>
                 <th className="pb-3 font-medium">Partición</th>
+                <th className="pb-3 font-medium">Sincronizar</th>
                 <th className="pb-3 font-medium text-right pr-2">Acción</th>
               </tr>
             </thead>
@@ -2739,12 +2740,12 @@ export default function TrainingView() {
                         ? <span className="text-emerald-400">{partitionNames[item.partition_version] ?? "Partición guardada"}</span>
                         : <span className="text-gray-500">—</span>}
                     </td>
-                    <td className="col-span-3 md:py-3 md:text-right md:pr-2">
-                      <div className="flex flex-wrap items-center gap-2 md:justify-end">
+                    <td className="col-span-2 md:py-3 md:pr-3">
                       <CheckpointSyncButton modelId={item.id} synced={checkpointSync.synced.has(item.id)}
                         onSynced={action => { checkpointSync.markSynced(item.id); if (action === "restored") void fetchHistory(); }} />
+                    </td>
+                    <td className="text-right md:py-3 md:pr-2">
                       <TechnicalSheetButton onClick={() => { setSelectedGroup(null); setSelectedModelModal(item); }} />
-                      </div>
                     </td>
                   </tr>
                 );
@@ -2765,15 +2766,15 @@ export default function TrainingView() {
                     ? <span className="text-emerald-400">{partitionNames[sharedPartition] ?? "Partición guardada"}</span>
                     : <span className="text-gray-500">—</span>}
                 </td>
-                <td className="col-span-3 md:py-3 md:text-right md:pr-2">
-                  <div className="flex flex-wrap items-center gap-2 md:justify-end">
-                    {/* Each component checkpoint is synchronized from the technical sheet. */}
-                    <span title="La ficha técnica sincroniza con GCS el checkpoint de cada componente."
-                      className="max-w-[7rem] text-[11px] leading-tight text-emerald-300 whitespace-normal text-left md:text-right">
-                      Sincronizar en ficha técnica
-                    </span>
-                    <TechnicalSheetButton onClick={() => { setSelectedGroup(group); setSelectedModelModal(group.members[0]); }} />
-                  </div>
+                <td className="col-span-2 md:py-3 md:pr-3">
+                  {/* Each component checkpoint is synchronized from the technical sheet. */}
+                  <span title="La ficha técnica sincroniza con GCS el checkpoint de cada componente."
+                    className="block max-w-[7rem] text-[11px] leading-tight text-emerald-300 whitespace-normal">
+                    Sincronizar en ficha técnica
+                  </span>
+                </td>
+                <td className="text-right md:py-3 md:pr-2">
+                  <TechnicalSheetButton onClick={() => { setSelectedGroup(group); setSelectedModelModal(group.members[0]); }} />
                 </td>
               </tr>;
               })}

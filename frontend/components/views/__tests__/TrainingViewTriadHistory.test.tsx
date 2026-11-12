@@ -203,3 +203,19 @@ it("indica en la fila de la tríada que la sincronización con GCS se hace en la
   // The sheet holds one GCS sync action per component checkpoint.
   expect(sheet.getAllByRole("button", { name: /Sincronizar en GCS|Sincronizado/ })).toHaveLength(3);
 });
+
+it("separa la columna Sincronizar de la columna Acción para modelos individuales y tríadas", async () => {
+  const standalone = { ...models[0], id: 7, name: "Individual" };
+  await setup([...models, standalone], [composition]);
+  const triadRow = await screen.findByRole("row", { name: /Miembro 1.*Miembro 2.*Miembro 3/ });
+  const headers = screen.getAllByRole("columnheader").map(cell => cell.textContent);
+  expect(headers.slice(-2)).toEqual(["Sincronizar", "Acción"]);
+  const cells = (row: HTMLElement) => within(row).getAllByRole("cell");
+  const [individualSync, individualAction] = cells(screen.getByRole("row", { name: /Individual/ })).slice(-2);
+  expect(within(individualSync).getByRole("button", { name: /Sincronizar en GCS|Sincronizado/ })).toBeDefined();
+  expect(within(individualSync).queryByRole("button", { name: "Ficha Técnica" })).toBeNull();
+  expect(within(individualAction).getByRole("button", { name: "Ficha Técnica" })).toBeDefined();
+  const [triadSync, triadAction] = cells(triadRow).slice(-2);
+  expect(within(triadSync).getByText("Sincronizar en ficha técnica")).toBeDefined();
+  expect(within(triadAction).getByRole("button", { name: "Ficha Técnica" })).toBeDefined();
+});
