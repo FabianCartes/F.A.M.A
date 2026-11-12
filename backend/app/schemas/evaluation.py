@@ -1,6 +1,7 @@
 """Strict provenance and finite, coherent EVAL-1 reports (no inference)."""
 import json
 import math
+import re
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -49,6 +50,40 @@ class EvaluationProvenance(BaseModel):
 class EvaluationIdentity(EvaluationProvenance):
     """Persisted evaluation provenance, requiring a real Modelo foreign key."""
     id_modelo: int = Field(gt=0)
+
+
+def triad_ensemble_sha256(checkpoint_sha256s, weights, classes):
+    """Digest of the ordered checkpoints, weights and classes of a whole composition."""
+    import hashlib
+    payload = json.dumps({'checkpoints': list(checkpoint_sha256s), 'weights': list(weights),
+                          'classes': list(classes)}, sort_keys=True, separators=(',', ':'),
+                         ensure_ascii=False, allow_nan=False)
+    return hashlib.sha256(payload.encode('utf-8')).hexdigest()
+
+
+class TriadEvaluationIdentity(EvaluationProvenance):
+    """Joint evaluation provenance of one exact composition version (no Modelo row)."""
+    composition_id: int = Field(gt=0)
+    composition_version: int = Field(ge=1)
+    component_model_ids: list[int] = Field(min_length=3, max_length=3)
+    checkpoint_sha256s: list[str] = Field(min_length=3, max_length=3)
+    weights: list[float] = Field(min_length=3, max_length=3)
+
+    @model_validator(mode='after')
+    def validate_composition(self):
+        if self.schema_version != 2:
+            raise ValueError('Joint evaluation requires schema_version 2')
+        if len(set(self.component_model_ids)) != 3 or any(i <= 0 for i in self.component_model_ids):
+            raise ValueError('Three distinct component model ids are required')
+        if any(re.fullmatch(r'[0-9a-f]{64}', value) is None for value in self.checkpoint_sha256s):
+            raise ValueError('Invalid component checkpoint hash')
+        if (any(not math.isfinite(w) or w < 0 for w in self.weights) or not any(self.weights)
+                or not math.isclose(sum(self.weights), 1, rel_tol=0, abs_tol=1e-9)):
+            raise ValueError('Invalid composition weights')
+        if self.checkpoint_sha256 != triad_ensemble_sha256(
+                self.checkpoint_sha256s, self.weights, self.classes):
+            raise ValueError('Ensemble digest does not match its components')
+        return self
 
 
 def strict_json(value):

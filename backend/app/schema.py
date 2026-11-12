@@ -16,8 +16,9 @@ class SchemaStatus:
     revision: str | None = None
 
 
-HEAD = "0006_dataset_description"
-REVISIONS = ("0001_core", "0002_access", "0003_autonomy", "0004_integration", "0005_triad_composition", HEAD)
+HEAD = "0007_triad_evaluation"
+REVISIONS = ("0001_core", "0002_access", "0003_autonomy", "0004_integration", "0005_triad_composition",
+             "0006_dataset_description", HEAD)
 
 
 def frozen_schema(revision: str):

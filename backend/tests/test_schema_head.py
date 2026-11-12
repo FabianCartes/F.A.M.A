@@ -41,7 +41,7 @@ def test_head_is_the_frozen_runtime_schema_plus_retained_tables():
     from migrations.schema_0004 import metadata as previous
     head = importlib.import_module("migrations.schema_" + HEAD.split("_", 1)[0]).metadata
     runtime = runtime_metadata()
-    assert HEAD == REVISIONS[-1] == "0006_dataset_description"
+    assert HEAD == REVISIONS[-1] == "0007_triad_evaluation"
     assert set(head.tables) == set(runtime.tables) | RETAINED_TABLES
     assert set(head.tables) >= set(previous.tables)
 
@@ -103,8 +103,27 @@ def test_upgrade_from_0005_adds_a_nullable_dataset_description_and_preserves_row
     columns = {column["name"]: column for column in inspect(connection).get_columns("conjunto_datos")}
     assert columns["descripcion"]["nullable"] is True
     after = rows(connection)
-    assert set(after) == set(before)
+    assert set(after) == set(before) | {"triad_composition_evaluation"}
     assert after["conjunto_datos"] == [row + (None,) for row in before["conjunto_datos"]]
     assert {name: after[name] for name in before if name != "conjunto_datos"} == {
         name: before[name] for name in before if name != "conjunto_datos"}
+    assert (_inspect_schema(connection).code, _inspect_schema(connection).revision) == ("schema_current", HEAD)
+
+
+def test_upgrade_from_0006_only_adds_empty_joint_evaluation_attempts(connection):
+    from app.schema import HEAD, _inspect_schema
+    upgrade(connection, "0006_dataset_description")
+    connection.execute(text(
+        "INSERT INTO conjunto_datos (nombre, ruta_gcp, estado, fecha_carga, tamano_total_bytes, cantidad_audios,"
+        " finalidad, base_licitud) VALUES ('Aves', 'gs://b/datasets/Aves/', 'subido', '2026-01-01 00:00:00', 0, 2,"
+        " 'Entrenamiento', 'Investigación')"))
+    before = rows(connection)
+    upgrade(connection, "head")
+    after = rows(connection)
+    assert set(after) == set(before) | {"triad_composition_evaluation"}
+    assert {name: after[name] for name in before} == before
+    assert after["triad_composition_evaluation"] == []
+    foreign = inspect(connection).get_foreign_keys("triad_composition_evaluation")
+    assert [(key["referred_table"], key["constrained_columns"]) for key in foreign] == [
+        ("triad_composition", ["composition_id"])]
     assert (_inspect_schema(connection).code, _inspect_schema(connection).revision) == ("schema_current", HEAD)
