@@ -3,6 +3,13 @@ import { render, screen, fireEvent, act, within } from "@testing-library/react";
 import TrainingView from "../TrainingView";
 import { API_BASE_URL } from "@/lib/api";
 
+// Training requires a saved partition (the start button stays disabled without one).
+const PARTITION = "e".repeat(64);
+async function choosePartition() {
+  for (let i = 0; i < 20 && !screen.queryByRole("option", { name: /Versión 1 ·/ }); i++) await act(async () => { await Promise.resolve(); });
+  await act(async () => { fireEvent.change(screen.getByLabelText("Versión para entrenar"), { target: { value: PARTITION } }); });
+}
+
 describe("TrainingView (Dynamic Ensemble Selector)", () => {
   const originalFetch = global.fetch;
 
@@ -52,6 +59,9 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
             status: "ready",
           }),
         };
+      }
+      if (url.endsWith("/partitions")) {
+        return { ok: true, json: async () => ({ versions: [{ version: PARTITION, counts: { train: 6, val: 2, test: 1 }, warnings: [] }] }) };
       }
       if (url.includes("/api/training/datasets")) {
         return {
@@ -177,6 +187,7 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     await act(async () => {
       render(<TrainingView />);
     });
+    await choosePartition();
     await act(async () => {
       fireEvent.change(screen.getByRole("combobox", { name: /Arquitectura/i }), { target: { value: "AudioCNN" } });
     });
@@ -202,6 +213,7 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     ["Tríada", "3 Modelos (Tríada)", "Iniciar Pipeline de Tri Ensamble (3 Modelos)", 3],
   ] as const)("preserves custom per-model parameters and weights in %s requests", async (_name, topology, start, size) => {
     await act(async () => { render(<TrainingView />); });
+    await choosePartition();
     await act(async () => { fireEvent.click(screen.getByText(topology)); });
     await act(async () => {
       fireEvent.change(screen.getByLabelText("Épocas del Modelo #1"), { target: { value: "7" } });
@@ -224,7 +236,7 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
   it("starts training with the assigned dataset displayed in the selector", async () => {
     const defaultFetch = global.fetch;
     global.fetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
-      if (url.includes("/api/training/datasets")) {
+      if (url.includes("/api/training/datasets") && !url.endsWith("/partitions")) {
         return {
           ok: true,
           json: async () => ({ datasets: [{
@@ -242,6 +254,7 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     });
 
     await act(async () => { render(<TrainingView />); });
+    await choosePartition();
     const card = screen.getByTestId("dataset-selection-card");
     expect(within(card).getByRole("combobox").textContent).toBe("FAMA_Prueba_Aves (10 audios)");
     expect(within(card).getByText(/2 clases detectadas/)).toBeDefined();
@@ -257,6 +270,7 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
 
   it("uses the visible individual hyperparameters instead of hidden ensemble defaults", async () => {
     await act(async () => { render(<TrainingView />); });
+    await choosePartition();
     await act(async () => {
       fireEvent.change(screen.getByLabelText("Épocas de Entrenamiento"), { target: { value: "1" } });
       fireEvent.change(screen.getByLabelText("Batch Size (Tamaño de Lote)"), { target: { value: "2" } });
@@ -350,11 +364,12 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     await act(async () => { fireEvent.change(screen.getByLabelText("Versión para entrenar"), { target: { value: version } }); });
     fireEvent.click(screen.getByRole('combobox', { name: 'Dataset para entrenamiento' }));
     fireEvent.click(await screen.findByRole('option', { name: 'Other' }));
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Iniciar Entrenamiento Local (1 Modelo)" })); });
-    const postCall = vi.mocked(global.fetch).mock.calls.find(([url]) => url === `${API_BASE_URL}/api/training/start`);
-    const body = JSON.parse(String(postCall?.[1]?.body));
-    expect(body.dataset_name).toBe("Other");
-    expect(body.partition_version).toBeUndefined();
+    // The other dataset has no selected partition, so training cannot start with the previous one.
+    expect((screen.getByLabelText("Versión para entrenar") as HTMLSelectElement).value).toBe("");
+    const start = screen.getByRole("button", { name: "Iniciar Entrenamiento Local (1 Modelo)" }) as HTMLButtonElement;
+    expect(start.disabled).toBe(true);
+    await act(async () => { fireEvent.click(start); });
+    expect(vi.mocked(global.fetch).mock.calls.some(([url]) => url === `${API_BASE_URL}/api/training/start`)).toBe(false);
   });
 
   it("reports failed publication without selecting or claiming a saved version", async () => {
@@ -503,6 +518,7 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     await act(async () => {
       render(<TrainingView />);
     });
+    await choosePartition();
 
     // Select triad ensemble
     const trioBtn = screen.getByText("3 Modelos (Tríada)");
@@ -536,6 +552,7 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     await act(async () => {
       render(<TrainingView />);
     });
+    await choosePartition();
 
     // Panel exists
     expect(screen.getByText("Física de Audio y Adaptación al Dominio")).toBeDefined();
@@ -713,6 +730,7 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     await act(async () => {
       render(<TrainingView />);
     });
+    await choosePartition();
 
     const wdInput = screen.getByLabelText(/Weight Decay/i) as HTMLInputElement;
     expect(wdInput).toBeDefined();
@@ -740,6 +758,7 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     await act(async () => {
       render(<TrainingView />);
     });
+    await choosePartition();
 
     // Cambiar la arquitectura a PANNs-CNN14 en el desplegable individual
     const archSelect = screen.getByTestId("architecture-select") as HTMLSelectElement;
@@ -793,6 +812,7 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     await act(async () => {
       render(<TrainingView />);
     });
+    await choosePartition();
 
     // 1. Switch to triad ensemble
     const trioBtn = screen.getByText("3 Modelos (Tríada)");
@@ -836,6 +856,7 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     await act(async () => {
       render(<TrainingView />);
     });
+    await choosePartition();
 
     const trioBtn = screen.getByText("3 Modelos (Tríada)");
     await act(async () => {
@@ -878,6 +899,7 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     await act(async () => {
       render(<TrainingView />);
     });
+    await choosePartition();
 
     const epochsInput = screen.getByLabelText("Épocas de Entrenamiento") as HTMLInputElement;
 
@@ -934,6 +956,7 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     await act(async () => {
       render(<TrainingView />);
     });
+    await choosePartition();
 
     const hopInput = screen.getByLabelText("Salto Temporal (s)") as HTMLInputElement;
     const gemInput = screen.getByLabelText("Exponente GeM (p)") as HTMLInputElement;
@@ -1119,6 +1142,7 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     await act(async () => {
       render(<TrainingView />);
     });
+    await choosePartition();
 
     // Select triad ensemble
     const trioBtn = screen.getByText("3 Modelos (Tríada)");
@@ -1199,6 +1223,7 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
 
   it("sends the selected seed and rejects fractional seeds before submission", async () => {
     await act(async () => { render(<TrainingView />); });
+    await choosePartition();
     const input = screen.getByLabelText("Semilla aleatoria") as HTMLInputElement;
     expect(input.value).toBe("42");
     await act(async () => {
@@ -1232,6 +1257,7 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     await act(async () => {
       render(<TrainingView />);
     });
+    await choosePartition();
 
     const toggle = screen.getByLabelText("Detención Temprana Inteligente (Early Stopping)") as HTMLInputElement;
     await act(async () => {
@@ -1256,6 +1282,7 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     await act(async () => {
       render(<TrainingView />);
     });
+    await choosePartition();
 
     const startBtn = screen.getByRole("button", { name: /Iniciar Entrenamiento/i });
     await act(async () => {

@@ -7,6 +7,7 @@ afterEach(()=>{cleanup();vi.unstubAllGlobals();});
 it('dispatches an explicitly selected registered candidate without using imported preparation',async()=>{
  const transport=vi.fn(async(input:RequestInfo|URL)=>{
   const url=String(input);
+  if(url.endsWith('/partitions'))return Response.json({versions:[{version:'d'.repeat(64),counts:{train:6,val:2,test:1},warnings:[]}]});
   if(url.includes('/datasets'))return Response.json({datasets:[{id:'AvesChilenas',name:'AvesChilenas',record_id:'legacy:1',source_type:'legacy',audio_count:9,class_count:3,eligible:true,eligibility_state:'current_flow_compatible',reasons:[]}]});
   if(url.includes('/history'))return Response.json({history:[]});
   if(url.endsWith('/progress'))return Response.json({status:'idle'});
@@ -17,6 +18,8 @@ it('dispatches an explicitly selected registered candidate without using importe
  const selector=screen.getByRole('combobox',{name:'Dataset para entrenamiento'});
  fireEvent.click(selector);
  fireEvent.click(await screen.findByRole('option',{name:'AvesChilenas'}));
+ await screen.findByRole('option',{name:/Versión 1 ·/});
+ fireEvent.change(screen.getByLabelText('Versión para entrenar'),{target:{value:'d'.repeat(64)}});
  await waitFor(()=>expect(start.disabled).toBe(false));
  expect(selector.textContent).toBe('AvesChilenas');
  expect(screen.queryByRole('button',{name:'Preparar dataset'})).toBeNull();

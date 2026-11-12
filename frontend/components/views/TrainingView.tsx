@@ -905,7 +905,8 @@ export default function TrainingView() {
 
   // Iniciar Entrenamiento (CU_INV_03)
   const handleStartTraining = async () => {
-    if (!progressKnown || isTraining || isStarting || startInFlight.current || datasetBlocked || !currentDataset) return;
+    // A saved partition is required: without one the backend would fall back to the retired CSV preparation.
+    if (!progressKnown || isTraining || isStarting || startInFlight.current || datasetBlocked || !currentDataset || !partitionVersion) return;
     const requestRevision=apiSessionRevision();
     setTerminalMessage('');
     const errors: Record<string, string> = {};
@@ -2349,12 +2350,14 @@ export default function TrainingView() {
               className="text-xs px-3 py-2 rounded-lg border border-[#2d303b] bg-[#1c1e24] text-gray-200 hover:bg-[#252832]">Entendido</button>
           </div>
         </DatasetConfirmationDialog>}
+        {currentDataset && !datasetBlocked && !partitionVersion && !isTraining &&
+          <p role="status" className="text-xs text-amber-300">Selecciona o crea una partición para iniciar el entrenamiento.</p>}
         <div className="flex items-center gap-3 pt-1">
           <button
             ref={startButton}
             type="button"
             onClick={handleStartTraining}
-            disabled={!progressKnown || isTraining || isStarting || datasetBlocked || !currentDataset}
+            disabled={!progressKnown || isTraining || isStarting || datasetBlocked || !currentDataset || !partitionVersion}
             className={`flex-1 py-2.5 rounded-lg text-white font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-40 disabled:cursor-not-allowed ${
               ensembleSize === 3
                 ? "bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 shadow-emerald-950/40"

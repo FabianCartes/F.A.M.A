@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { it, expect, vi, afterEach } from 'vitest';
 import Home from '@/app/page';
 
@@ -31,7 +31,9 @@ it('al navegar a entrenamiento muestra el ZIP publicado como dataset registrado 
   expect(screen.queryByRole('button', { name: 'Gestionar particiones' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Preparar dataset' })).toBeNull();
   const start = screen.getByRole('button', { name: 'Iniciar Entrenamiento Local (1 Modelo)' });
-  await waitFor(() => expect((start as HTMLButtonElement).disabled).toBe(false));
+  // Without a saved partition the dataset is shown but training cannot start.
+  expect(await screen.findByText('Selecciona o crea una partición para iniciar el entrenamiento.')).toBeTruthy();
+  expect((start as HTMLButtonElement).disabled).toBe(true);
   expect(writes.filter(path => path.includes('/training/'))).toEqual([]);
   expect(reads.some(url => url.includes('/datasets?include_imported') || url.includes('/imported/'))).toBe(false);
 });

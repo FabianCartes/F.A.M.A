@@ -73,3 +73,34 @@ it('explica en una ventana modal por qué no se pudo iniciar el entrenamiento, s
   fireEvent.click(screen.getByRole('button', { name: 'Entendido' }));
   expect(screen.queryByRole('dialog')).toBeNull();
 });
+
+it('exige una partición preparada antes de iniciar el entrenamiento', async () => {
+  const version = 'b'.repeat(64);
+  const transport = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.endsWith('/api/auth/me')) return Response.json({ id: 1, email: 'owner@example.test', nombre_completo: 'Owner', rol: 'investigador', activo: true });
+    if (url.includes('/history')) return Response.json({ history: [] });
+    if (url.includes('/datasets') && !url.includes('/partitions')) return Response.json({ datasets: [{ id: 'ZIP_Publicado', name: 'ZIP publicado', record_id: 'legacy:7', source_type: 'legacy', audio_count: 9, class_count: 3, eligible: true, eligibility_state: 'current_flow_compatible', reasons: [] }] });
+    if (url.endsWith('/partitions')) return Response.json({ versions: [{ version, counts: { train: 6, val: 2, test: 1 }, warnings: [] }] });
+    if (url.endsWith('/progress')) return Response.json({ status: 'idle' });
+    return Response.json({});
+  });
+  vi.stubGlobal('fetch', transport);
+  render(<SessionBoundary><TrainingView /></SessionBoundary>);
+  fireEvent.click(await screen.findByRole('combobox', { name: 'Dataset para entrenamiento' }));
+  fireEvent.click(await screen.findByRole('option', { name: 'ZIP publicado' }));
+  await screen.findByRole('option', { name: /Versión 1 ·/ });
+  const selector = screen.getByLabelText('Versión para entrenar') as HTMLSelectElement;
+  expect(screen.getByRole('option', { name: 'Se debe preparar partición' })).toBeDefined();
+  expect(screen.queryByText(/Usar CSV existentes/)).toBeNull();
+  const start = screen.getByRole('button', { name: 'Iniciar Entrenamiento Local (1 Modelo)' }) as HTMLButtonElement;
+  expect(start.disabled).toBe(true);
+  expect(screen.getByText('Selecciona o crea una partición para iniciar el entrenamiento.')).toBeDefined();
+  fireEvent.change(selector, { target: { value: version } });
+  await waitFor(() => expect(start.disabled).toBe(false));
+  expect(screen.queryByText('Selecciona o crea una partición para iniciar el entrenamiento.')).toBeNull();
+  fireEvent.change(selector, { target: { value: '' } });
+  await waitFor(() => expect(start.disabled).toBe(true));
+  fireEvent.click(start);
+  expect(transport.mock.calls.some(([url]) => String(url).endsWith('/start'))).toBe(false);
+});

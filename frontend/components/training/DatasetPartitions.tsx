@@ -124,7 +124,7 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect, w
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-gray-200">Particiones de entrenamiento</h2>
-          <p className="text-xs text-gray-400 mt-1">{selected ? `Versión seleccionada: ${selectedVersion ? versionName(selectedVersion) : "guardada en este equipo"}` : "CSV existentes o una versión preparada desde tus audios locales."}</p>
+          <p className="text-xs text-gray-400 mt-1">{selected ? `Versión seleccionada: ${selectedVersion ? versionName(selectedVersion) : "guardada en este equipo"}` : "Selecciona una partición guardada o crea una desde tus audios locales."}</p>
         </div>
       </div>
       <>
@@ -137,7 +137,7 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect, w
         {phase !== "loading" && !versions.length && <p className="text-xs text-gray-400">Aún no hay particiones guardadas para este dataset. Crea una en el bloque siguiente.</p>}
         <label className="block text-xs text-gray-400">Versión para entrenar
           <select aria-label="Versión para entrenar" value={selected} disabled={locked} onChange={event => onSelect(event.target.value)} className={`${fieldClass} mt-1`}>
-            <option value="">Usar CSV existentes (requiere particiones preparadas)</option>
+            <option value="">Se debe preparar partición</option>
             {selected && !selectedVersion && <option value={selected}>Versión seleccionada</option>}
             {versions.map(item => <option key={item.version} value={item.version} disabled={item.format !== 2 || !item.counts.test}>{item.format !== 2 || !item.counts.test ? "Histórica 80/20 · " : ""}{versionLabel(item)}</option>)}
           </select>

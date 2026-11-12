@@ -3,6 +3,14 @@ import {act, cleanup, fireEvent, render, screen, waitFor} from '@testing-library
 import TrainingView from '../TrainingView';
 import {confirmApiSession} from '@/lib/api';
 afterEach(()=>{cleanup();vi.unstubAllGlobals();});
+const PARTITION='f'.repeat(64);
+// Training requires a saved partition; select it before waiting for the start button.
+async function ready(timeout=1000){
+ const select=await screen.findByLabelText('Versión para entrenar') as HTMLSelectElement;
+ await screen.findByRole('option',{name:/Versión 1 ·/},{timeout});
+ if(select.value!==PARTITION)fireEvent.change(select,{target:{value:PARTITION}});
+ await waitFor(()=>expect(start().disabled).toBe(false),{timeout});
+}
 function transport(progress: () => Promise<Response>, stop = async () => Response.json({status:'stopping'})) {
  const fetcher=vi.fn(async(input:RequestInfo|URL)=>{
   const url=String(input);
@@ -13,7 +21,7 @@ function transport(progress: () => Promise<Response>, stop = async () => Respons
    eligible:true,eligibility_state:'current_flow_compatible',reasons:[],
   }]});
   if(url.endsWith('/history'))return Response.json({history:[]});
-  if(url.endsWith('/partitions'))return Response.json({versions:[]});
+  if(url.endsWith('/partitions'))return Response.json({versions:[{version:PARTITION,counts:{train:6,val:2,test:1},warnings:[]}]});
   return Response.json({});
  });
  vi.stubGlobal('fetch',fetcher);return fetcher;
@@ -25,7 +33,7 @@ it('holds admission pending across an idle progress read, prevents duplicate POS
  const base=fetcher.getMockImplementation()!;
  fetcher.mockImplementation(async(input:RequestInfo|URL)=>String(input).endsWith('/start') ? new Promise<Response>(r=>{resolve=r;}) : base(input));
  render(<TrainingView/>);
- await waitFor(()=>expect(start().disabled).toBe(false));
+ await ready();
  fireEvent.click(start());
  const pending=screen.getByRole('button',{name:'Preparando inicio…'}) as HTMLButtonElement;
  expect(pending.disabled).toBe(true);
@@ -50,10 +58,10 @@ it.each(['http','network'])('releases pending admission after %s failure without
  const base=fetcher.getMockImplementation()!;
  fetcher.mockImplementation(async(input:RequestInfo|URL)=>String(input).endsWith('/start') ? new Promise<Response>((yes,no)=>{resolve=yes;reject=no;}) : base(input));
  render(<TrainingView/>);
- await waitFor(()=>expect(start().disabled).toBe(false));fireEvent.click(start());
+ await ready();fireEvent.click(start());
  expect(screen.getByRole('button',{name:'Preparando inicio…'})).toBeTruthy();
  await act(async()=>{if(mode==='network')reject(new TypeError('Failed to fetch'));else resolve(Response.json({detail:'Admission denied'},{status:409}));});
- await waitFor(()=>expect(start().disabled).toBe(false));
+ await ready();
  expect((await screen.findByRole('dialog',{name:'No se pudo iniciar el entrenamiento'})).textContent).toContain(mode==='network'?'Resultado incierto':'Admission denied');
  expect(alert).not.toHaveBeenCalled();
  expect(screen.queryByRole('button',{name:'Detener'})).toBeNull();
@@ -65,9 +73,9 @@ it('clears pending for a new session and ignores the previous start response',as
  const base=fetcher.getMockImplementation()!;
  fetcher.mockImplementation(async(input:RequestInfo|URL)=>String(input).endsWith('/start') ? new Promise<Response>(r=>{resolve=r;}) : base(input));
  const view=render(<TrainingView/>);
- await waitFor(()=>expect(start().disabled).toBe(false));fireEvent.click(start());
+ await ready();fireEvent.click(start());
  confirmApiSession();view.rerender(<TrainingView/>);
- await waitFor(()=>expect(start().disabled).toBe(false));
+ await ready();
  await act(async()=>resolve(Response.json({status:'started'})));
  expect(start().disabled).toBe(false);
  expect(screen.queryByRole('button',{name:'Detener'})).toBeNull();
@@ -95,7 +103,7 @@ it('ignores progress JSON from a superseded session and checks the new session b
  await waitFor(()=>expect(resolve).toBeDefined());
  confirmApiSession();view.rerender(<TrainingView/>);
  resolve({status:'training',logs:[{message:'Foreign job',level:'info',timestamp:'12:00'}]});
- await waitFor(()=>expect(start().disabled).toBe(false));
+ await ready();
  expect(screen.queryByText('Foreign job')).toBeNull();
 });
 it.each(['evaluating','training'])('keeps %s active through evaluation and polls until a terminal state without claiming stop was accepted',async initial=>{
@@ -113,12 +121,12 @@ it.each(['evaluating','training'])('keeps %s active through evaluation and polls
  expect(screen.queryByText('Detención solicitada; esperando el estado final.')).toBeNull();
  expect(screen.queryByRole('button',{name:'Iniciar Entrenamiento Local (1 Modelo)'})).toBeNull();
  status='completed';
- await waitFor(()=>expect(start().disabled).toBe(false),{timeout:2500});
+ await ready(2500);
  await screen.findByText('Entrenamiento completado.');
 });
 it.each(['completed','failed','stopped','checkpoint_persisted'])('restores terminal %s without treating it as active',async status=>{
  transport(async()=>Response.json({status}));render(<TrainingView/>);
- await waitFor(()=>expect(start().disabled).toBe(false));
+ await ready();
  expect(screen.queryByRole('button',{name:'Detener'})).toBeNull();
 });
 it('keeps start blocked on initial failure and allows explicit read-only retry',async()=>{
@@ -127,7 +135,7 @@ it('keeps start blocked on initial failure and allows explicit read-only retry',
  render(<TrainingView/>);
  await screen.findByRole('alert');expect(start().disabled).toBe(true);
  fail=false;fireEvent.click(screen.getByText('Reintentar consulta de progreso'));
- await waitFor(()=>expect(start().disabled).toBe(false));
+ await ready();
 });
 it('continues polling after cooperative stop until the actual terminal response',async()=>{
  let status='training';
@@ -137,7 +145,7 @@ it('continues polling after cooperative stop until the actual terminal response'
  await screen.findByText('Detención solicitada; esperando el estado final.');
  expect(screen.queryByRole('button',{name:'Iniciar Entrenamiento Local (1 Modelo)'})).toBeNull();
  status='stopped';
- await waitFor(()=>expect(start().disabled).toBe(false),{timeout:2500});
+ await ready(2500);
 });
 it('does not infer idle from an invalid initial body',async()=>{
  transport(async()=>Response.json({}));render(<TrainingView/>);
@@ -150,7 +158,7 @@ it('handles a nontraining stop reply without claiming that a stop is pending',as
  render(<TrainingView/>);
  fireEvent.click(await screen.findByRole('button',{name:'Detener'}));
  await screen.findByText('No hay ningún entrenamiento activo para detener.');
- await waitFor(()=>expect(start().disabled).toBe(false),{timeout:2500});
+ await ready(2500);
  expect(screen.queryByText('Detención solicitada; esperando el estado final.')).toBeNull();
 });
 it.each([403,200])('shows stop error for HTTP/body failure (%s) and permits retry while polling remains active',async status=>{
