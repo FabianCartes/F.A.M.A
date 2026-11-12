@@ -173,3 +173,21 @@ it('shows saved predictions as a table that becomes labelled cards on narrow scr
   ['Diagnóstico', 'Modelo', 'Confianza'].forEach(label =>
     expect(within(row).getByText(label).className).toContain('md:hidden'));
 });
+
+it('wraps long model names in the history instead of widening the column', async () => {
+  const modelo = 'gatos y perros · Tríada 1 — EfficientNet-B0 + ConvNeXt-Nano + ResNet-34d';
+  global.fetch = vi.fn(async (input) => {
+    const url = String(input);
+    if (url.includes('/api/models')) return Response.json({ models: [{ ...models[0], name: modelo }] });
+    if (url.includes('/api/inference/history')) return Response.json({ items: [item(20)], next_cursor: null });
+    return Response.json({});
+  });
+  render(<PredictionView />); await act(async () => {});
+  const badge = within(screen.getByRole('table', { name: 'Historial de predicciones' })).getByText(modelo);
+  expect(badge.className).not.toContain('break-all');
+  expect(badge.className).toContain('break-words');
+  // Table cells ignore max-width in auto layout, so the limit lives on content inside the cell.
+  expect(badge.className).toMatch(/md:max-w-\[\d+rem\]/);
+  const file = screen.getByText('saved-20.wav').closest<HTMLElement>("[class*='md:max-w-']")!;
+  expect(screen.getByText('saved-20.wav').closest('td')!.contains(file)).toBe(true);
+});

@@ -219,3 +219,21 @@ it("separa la columna Sincronizar de la columna Acción para modelos individuale
   expect(within(triadSync).getByText("Sincronizar en ficha técnica")).toBeDefined();
   expect(within(triadAction).getByRole("button", { name: "Ficha Técnica" })).toBeDefined();
 });
+
+it("reparte en varias líneas los nombres y datasets largos sin ensanchar sus columnas", async () => {
+  const name = "gatos y perros · Tríada 1 — EfficientNet-B0 + ConvNeXt-Nano + ResNet-34d";
+  const longDataset = models.map(m => ({ ...m, dataset: "", dataset_name: "gatos y perros con un nombre de dataset largo" }));
+  const standalone = { ...longDataset[0], id: 7, name: "gatos y perros con un nombre de dataset largo · EfficientNet-B0 (v1)" };
+  await setup([...longDataset, standalone], [{ ...composition, name }]);
+  const wraps = (element: HTMLElement) => {
+    // Table cells ignore max-width in auto layout, so the limit lives on content inside the cell.
+    const limited = element.closest<HTMLElement>("[class*='md:max-w-']")!;
+    expect(element.closest("td")!.contains(limited)).toBe(true);
+    expect(limited.className).toContain("break-words");
+    expect(element.className).not.toContain("whitespace-nowrap");
+  };
+  wraps(await screen.findByText(name));
+  const individual = screen.getByRole("row", { name: /EfficientNet-B0 \(v1\)/ });
+  wraps(within(individual).getByText(standalone.name));
+  wraps(within(individual).getByText(standalone.dataset_name).closest("span")!);
+});

@@ -2095,8 +2095,10 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
                     <tr key={`${item.timestamp}-${item.filename}-${history.indexOf(item)}`}
                       className="grid grid-cols-2 gap-x-3 gap-y-2 py-3 md:table-row md:py-0 hover:bg-[#1c1e24]/40 transition-colors">
                       <td className="col-span-2 md:py-2.5 md:pr-3">
-                        <p className="font-medium text-gray-200 font-mono break-all">{item.filename}</p>
-                        <p className="text-[10px] text-gray-500 mt-0.5">{item.timestamp}</p>
+                        <div className="md:max-w-[16rem] break-words">
+                          <p className="font-medium text-gray-200 font-mono break-all">{item.filename}</p>
+                          <p className="text-[10px] text-gray-500 mt-0.5">{item.timestamp}</p>
+                        </div>
                       </td>
                       <td className="md:py-2.5 md:pr-3">
                         <span className="block md:hidden text-[10px] text-gray-500">Diagnóstico</span>
@@ -2105,7 +2107,7 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
                       <td className="md:py-2.5 md:pr-3">
                         <span className="block md:hidden text-[10px] text-gray-500">Modelo</span>
                         {item.modelo
-                          ? <span className="text-[10px] text-blue-400/80 bg-blue-950/40 px-1.5 py-0.5 rounded border border-blue-900/40 font-mono break-all">{item.modelo}</span>
+                          ? <span className="inline-block max-w-full md:max-w-[16rem] text-[10px] leading-snug text-blue-400/80 bg-blue-950/40 px-1.5 py-0.5 rounded border border-blue-900/40 whitespace-normal break-words">{item.modelo}</span>
                           : <span className="text-gray-500">—</span>}
                       </td>
                       <td className="md:py-2.5 md:text-right">

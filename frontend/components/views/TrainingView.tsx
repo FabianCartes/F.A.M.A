@@ -2707,26 +2707,28 @@ export default function TrainingView() {
 
                 return (
                   <tr key={item.id} className="grid grid-cols-3 gap-x-3 gap-y-2 py-3 md:table-row md:py-0 hover:bg-[#1c1e24]/40 transition-colors">
-                    <td className="col-span-3 md:py-3 font-medium text-gray-200">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span>{item.name || `${item.architecture} (v${item.version || 1})`}</span>
+                    <td className="col-span-3 md:py-3 md:pr-3 font-medium text-gray-200">
+                      <div className="flex flex-wrap items-center gap-2 md:max-w-[18rem] break-words">
+                        <span className="min-w-0 break-words">{item.name || `${item.architecture} (v${item.version || 1})`}</span>
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-blue-950/70 text-blue-300 border border-blue-800/60">
                           v{item.version || 1}
                         </span>
                       </div>
                     </td>
-                    <td className="col-span-3 md:py-3">
+                    <td className="col-span-3 md:py-3 md:pr-3">
+                      <div className="md:max-w-[12rem] break-words">
                       {isBirds ? (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-950/60 text-emerald-400 border border-emerald-800/50 inline-flex items-center gap-1.5 whitespace-nowrap">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-950/60 text-emerald-400 border border-emerald-800/50 inline-flex items-center gap-1.5 whitespace-normal break-words">
+                          <span className="w-1.5 h-1.5 shrink-0 rounded-full bg-emerald-400" />
                           {item.dataset_name || item.dataset || "Sin dataset declarado"}
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-950/60 text-amber-400 border border-amber-800/50 inline-flex items-center gap-1.5 whitespace-nowrap">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-950/60 text-amber-400 border border-amber-800/50 inline-flex items-center gap-1.5 whitespace-normal break-words">
+                          <span className="w-1.5 h-1.5 shrink-0 rounded-full bg-amber-400" />
                           {item.dataset_name || item.dataset || "Sin dataset declarado"}
                         </span>
                       )}
+                      </div>
                     </td>
                     <td className="md:py-3 font-mono font-semibold">
                       <span className="block md:hidden font-sans font-normal text-[10px] text-gray-500">Precisión</span>
@@ -2755,11 +2757,13 @@ export default function TrainingView() {
                 const partition = group.members[0].partition_version;
                 const sharedPartition = partition && group.members.every(member => member.partition_version === partition) ? partition : null;
                 return <tr key={`triad-${group.composition.id}`} className="grid grid-cols-3 gap-x-3 gap-y-2 py-3 md:table-row md:py-0 hover:bg-[#1c1e24]/40 transition-colors">
-                <td className="col-span-3 md:py-3 text-gray-200">
-                  {group.composition.name && <div className="font-semibold text-white">{group.composition.name}</div>}
-                  {group.members.map(member => <div key={member.id} className={group.composition.name ? "text-gray-400" : undefined}>{member.name || member.architecture}</div>)}
+                <td className="col-span-3 md:py-3 md:pr-3 text-gray-200">
+                  <div className="md:max-w-[18rem] break-words">
+                    {group.composition.name && <div className="font-semibold text-white">{group.composition.name}</div>}
+                    {group.members.map(member => <div key={member.id} className={group.composition.name ? "text-gray-400" : undefined}>{member.name || member.architecture}</div>)}
+                  </div>
                 </td>
-                <td className="col-span-3 md:py-3 text-gray-400">{group.members[0].dataset || group.members[0].dataset_name || "Sin dataset declarado"}</td>
+                <td className="col-span-3 md:py-3 md:pr-3 text-gray-400"><div className="md:max-w-[12rem] break-words">{group.members[0].dataset || group.members[0].dataset_name || "Sin dataset declarado"}</div></td>
                 <td className={jointMetric(group.composition.evaluation?.val, "accuracy") !== null ? "md:py-3 text-emerald-400" : "md:py-3 text-amber-400"}>{jointStatusLabel(group.composition.evaluation?.val)}</td>
                 <td className="col-span-3 md:py-3 text-[11px]">
                   {sharedPartition
