@@ -193,7 +193,12 @@ it("indica en la fila de la tríada que la sincronización con GCS se hace en la
   await setup(models, [composition]);
   const row = await screen.findByRole("row", { name: /Miembro 1.*Miembro 2.*Miembro 3/ });
   expect(within(row).queryByRole("button", { name: "Sincronizar en GCS" })).toBeNull();
-  fireEvent.click(within(row).getByRole("button", { name: "Sincronizar en ficha técnica" }));
+  // A plain note, not a button, that may wrap inside its column.
+  expect(within(row).queryByRole("button", { name: /Sincronizar en ficha técnica/ })).toBeNull();
+  const note = within(row).getByText("Sincronizar en ficha técnica");
+  expect(note.className).not.toContain("whitespace-nowrap");
+  expect(note.className).toContain("whitespace-normal");
+  fireEvent.click(within(row).getByRole("button", { name: "Ficha Técnica" }));
   const sheet = within(screen.getByTestId("modal-ficha-tecnica"));
   // The sheet holds one GCS sync action per component checkpoint.
   expect(sheet.getAllByRole("button", { name: /Sincronizar en GCS|Sincronizado/ })).toHaveLength(3);
