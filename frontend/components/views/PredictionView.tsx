@@ -2087,7 +2087,6 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
                     <th scope="col" className="pb-2 pr-3 font-medium">Archivo</th>
                     <th scope="col" className="pb-2 pr-3 font-medium">Diagnóstico</th>
                     <th scope="col" className="pb-2 pr-3 font-medium">Modelo</th>
-                    <th scope="col" className="pb-2 pr-3 font-medium">Registro</th>
                     <th scope="col" className="pb-2 font-medium text-right">Confianza</th>
                   </tr>
                 </thead>
@@ -2108,11 +2107,6 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
                         {item.modelo
                           ? <span className="text-[10px] text-blue-400/80 bg-blue-950/40 px-1.5 py-0.5 rounded border border-blue-900/40 font-mono break-all">{item.modelo}</span>
                           : <span className="text-gray-500">—</span>}
-                      </td>
-                      <td className="md:py-2.5 md:pr-3">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-[#1e2027] border border-[#2d303b] text-gray-300 whitespace-nowrap">
-                          {item.id !== null ? `ID de predicción: ${item.id}` : "ID de predicción no disponible"}
-                        </span>
                       </td>
                       <td className="md:py-2.5 md:text-right">
                         <span className="block md:hidden text-[10px] text-gray-500">Confianza</span>

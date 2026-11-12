@@ -78,7 +78,7 @@ it('refreshes persisted history after local inference without duplicating the re
   await act(async () => { fireEvent.change(view.container.querySelector('input[type="file"]')!,
     { target: { files: [new File(['wav'], 'upload.wav')] } }); });
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Ejecutar inferencia/ })); });
-  expect(screen.getAllByText('ID de predicción: 21')).toHaveLength(1);
+  expect(screen.getAllByRole('row', { name: /saved-21\.wav/ })).toHaveLength(1);
   expect(screen.getByText('saved-20.wav')).toBeDefined();
   expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('/api/inference/history'))).toHaveLength(2);
 });
@@ -123,7 +123,7 @@ it.each([[302, false, false], [301, false, false], [301, true, true]] as const)(
   await act(async () => { fireEvent.change(view.container.querySelector('input[type="file"]')!,
     { target: { files: [new File(['wav'], 'upload.wav')] } }); });
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Ejecutar inferencia/ })); });
-  expect(screen.queryByText('ID de predicción: 99')).toBeNull();
+  expect(screen.queryByRole('row', { name: /wrong-model\.wav/ })).toBeNull();
   expect(screen.getByText('saved-20.wav')).toBeDefined();
 });
 
@@ -163,13 +163,13 @@ it('shows saved predictions as a table that becomes labelled cards on narrow scr
   render(<PredictionView />); await act(async () => {});
   const table = screen.getByRole('table', { name: 'Historial de predicciones' });
   const headers = within(table).getAllByRole('columnheader').map(cell => cell.textContent);
-  expect(headers).toEqual(['Archivo', 'Diagnóstico', 'Modelo', 'Registro', 'Confianza']);
+  expect(headers).toEqual(['Archivo', 'Diagnóstico', 'Modelo', 'Confianza']);
   // Wide screens show the header row; narrow screens hide it and label every cell instead.
   expect(table.querySelector('thead')!.className).toContain('hidden md:table-header-group');
   const row = within(table).getByRole('row', { name: /saved-20\.wav/ });
   expect(row.className).toContain('md:table-row');
   expect(within(row).getByText('80.0%')).toBeDefined();
-  expect(within(row).getByText('ID de predicción: 20')).toBeDefined();
+  expect(table.textContent).not.toMatch(/ID de predicción/);
   ['Diagnóstico', 'Modelo', 'Confianza'].forEach(label =>
     expect(within(row).getByText(label).className).toContain('md:hidden'));
 });

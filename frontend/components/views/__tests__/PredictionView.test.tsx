@@ -48,12 +48,12 @@ describe('PredictionView validation and responsive controls', () => {
     expect(screen.getByText('Modelo ejecutado:').parentElement?.textContent).toContain('Executed CNN');
     expect(screen.queryByText(/Tiempo total de solicitud:/)).toBeNull();
     expect(screen.getByText('Puntuación del modelo (sin calibración acreditada):')).toBeDefined();
-    expect(screen.queryByText('ID de predicción: 305')).toBeNull();
+    expect(screen.queryByRole('row', { name: /actual\.wav/ })).toBeNull();
     expect(screen.queryByText(/AVE-|ENG-/)).toBeNull();
     api.setPrediction(async () => Response.json({ filename: 'unpersisted.wav', db_id: null, clase: 'alarm', confianza: 0.7, gcp_upload: false }));
     await api.infer();
     expect(screen.getByText('Modelo ejecutado:').parentElement?.textContent).toContain('No informado por la API');
-    expect(screen.queryByText('ID de predicción no disponible')).toBeNull();
+    expect(screen.queryByRole('row', { name: /unpersisted\.wav/ })).toBeNull();
   });
 
   it('warns when executed identity differs from the request snapshot, not the current selection', async () => {
@@ -464,7 +464,7 @@ describe("U7IndependentStable", () => {
     expect(checkpoint).toContain("d".repeat(64));
     expect(screen.getByText("Modelo ejecutado:").parentElement?.textContent).toBe("Modelo ejecutado:Stable predictor (machine-model)");
     // History follows the newly selected model; the original result/review stays intact.
-    expect(screen.queryByText("ID de predicción: 902")).toBeNull();
+    expect(screen.queryByRole("row", { name: /stable\.wav/ })).toBeNull();
     if (failed) expect(screen.getByRole("alert").textContent).toBe("No se pudo actualizar el catálogo de modelos (HTTP 503). Se conserva el último catálogo disponible; vuelve a esta ventana para reintentar.");
     fireEvent.click(choice("Incorrecta"));
     expect(within(panel().getByLabelText("Clase correcta")).getAllByRole("option").map(option => option.getAttribute("value"))).toEqual(["", "alarm", "normal"]);

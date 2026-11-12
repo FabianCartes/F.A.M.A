@@ -55,12 +55,12 @@ it('clears private prediction/history on owner switch and ignores an in-flight p
   await act(async () => {});
   await act(async () => { fireEvent.change(view.container.querySelector('input[type="file"]')!, { target: { files: [new File(['wav'], 'private.wav')] } }); });
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Ejecutar inferencia/ })); });
-  expect(screen.getByText('ID de predicción: 99')).toBeDefined();
+  expect(screen.getByRole('row', { name: /private\.wav/ })).toBeDefined();
   pending = true;
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Ejecutar inferencia/ })); });
   session.user = { id: 2 }; confirmApiSession();
   await act(async () => { view.rerender(<PredictionView />); finish(prediction); });
-  expect(screen.queryByText('ID de predicción: 99')).toBeNull();
+  expect(screen.queryByRole('row', { name: /private\.wav/ })).toBeNull();
   expect(screen.queryByRole('region', { name: 'Validar resultado' })).toBeNull();
   expect(screen.queryByText('private.wav')).toBeNull();
 });

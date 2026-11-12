@@ -258,7 +258,7 @@ describe("Catálogo público de Predicción", () => {
     await act(async () => { fireEvent.change(view.container.querySelector('input[type="file"]')!, { target: { files: [new File(["audio"], "audio.wav")] } }); });
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Ejecutar inferencia/ })); });
     expect(screen.getByText("Modelo ejecutado:").parentElement?.textContent).toContain(trained.name);
-    expect(screen.getByText("ID de predicción: 201").parentElement?.parentElement?.textContent).toContain(trained.name);
+    expect(screen.getByRole("row", { name: /audio\.wav/ }).textContent).toContain(trained.name);
     catalogue = async () => response([bird], bird.id);
     await focus();
     expect(screen.getByText("Versión no publicada")).toBeTruthy();
