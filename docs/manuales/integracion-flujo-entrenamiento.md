@@ -55,6 +55,16 @@ Esta ruta estándar sustituye las instrucciones anteriores de **Preparar dataset
 
 El selector identifica la tríada estándar por el nombre visual del dataset y su versión. La etiqueta no cambia el nombre canónico usado para almacenamiento y autorización ni modifica los IDs seleccionables. Los modelos individuales y antiguos conservan su identificación.
 
+### Consultar tríadas estándar en el historial
+
+El historial presenta cada composición estándar válida como una sola fila con sus tres componentes. La agrupación usa sus IDs explícitos y la última revisión de cada trabajo; no combina modelos por compartir dataset o arquitectura. Los componentes sin una composición completa y válida siguen visibles individualmente. La consulta conserva la autorización por asignación al dataset y no ejecuta inferencia.
+
+**Ficha Técnica** abre el resumen conjunto, con una sección por arquitectura y los parámetros individuales conservados: física de audio, hiperparámetros, épocas, pérdida y artefacto. Los pesos mostrados corresponden a la composición actual, no al valor original del checkpoint. La cabecera identifica la versión de la composición; el dataset visual se usa como etiqueta, con el nombre canónico como alternativa cuando falta.
+
+La fila indica **Sin evaluación conjunta**. Las métricas individuales de la ficha no equivalen a una exactitud del ensamble y no se promedian para inventarla. El cálculo por grabación de la salida ponderada queda para la entrega B. Esta presentación no cambia publicación ni activación.
+
+Cada sección conserva **Sincronizar en GCS** para su checkpoint mediante la acción existente; sincronizar un miembro no acredita la sincronización de los otros dos. Las comprobaciones de esta entrega usan respuestas simuladas, sin operaciones GCS reales.
+
 ### Consultar tríadas importadas existentes y revisar sus pesos
 
 La retirada de la entrada de entrenamiento importado no elimina los modelos ya existentes. Se conservan su predicción, historial, feedback y revisión de pesos; los lectores aún pueden necesitar sus snapshots y preparaciones históricos. `include_imported=true` sigue vigente en las consultas del historial de modelos, no en el catálogo de datasets para entrenar. El inicio de un trabajo no demuestra finalización, evaluación, publicación ni activación.

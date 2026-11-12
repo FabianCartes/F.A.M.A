@@ -230,6 +230,81 @@ def test_creation_only_for_complete_triads(triad_env):
         assert snapshot(env) == mid, comps
 
 
+def test_training_history_exposes_only_latest_authorized_composition(triad_env):
+    env = triad_env
+    add_peer(env)
+    assert login(env.client, "investigador").status_code == 200
+    assert revise(env, V2_WEIGHTS).status_code == 201
+    response = env.client.get("/api/training/history")
+    assert response.status_code == 200
+    body = response.json()
+    assert {item["id"] for item in body["history"]} >= {1, 2, 3}
+    assert body["compositions"] == [{"id": 2, "version": 2, "job_id": "job-1",
+                                    "components": [{"id_modelo": 1, "weight": V2_WEIGHTS[0]},
+                                                   {"id_modelo": 2, "weight": V2_WEIGHTS[1]},
+                                                   {"id_modelo": 3, "weight": V2_WEIGHTS[2]}]}]
+    assert login(env.client, "peer").status_code == 200
+    response = env.client.get("/api/training/history")
+    assert response.status_code == 200
+    assert response.json()["compositions"] == []
+
+
+def test_training_history_keeps_explicit_jobs_and_ignores_invalid_compositions(triad_env, monkeypatch):
+    from datetime import datetime, timezone
+    from app import main
+
+    env = triad_env
+    add_peer(env)
+    with env.sessions() as db:
+        for model_id in (4, 5, 6):
+            db.add(Modelo(id_modelo=model_id, id_conjunto_datos=10, arquitectura="AudioCNN", epocas=1,
+                          tasa_aprendizaje=.001, tamano_lote=1, ruta_binario_gcp=f"models/missing_{model_id}.pt"))
+        db.add(Modelo(id_modelo=7, id_conjunto_datos=20, arquitectura="AudioCNN", epocas=1,
+                      tasa_aprendizaje=.001, tamano_lote=1, ruta_binario_gcp="models/missing_7.pt"))
+        db.commit()
+    assert login(env.client, "investigador").status_code == 200
+    before = env.client.get("/api/training/history")
+    assert before.status_code == 200
+    from app.services.access import ResourceAccess
+    with env.sessions() as db:
+        expected_history = main.training_service.get_history(db=db, access=ResourceAccess(db, db.get(Usuario, 2)))
+    assert before.json()["history"] == expected_history
+    with env.sessions() as db:
+        common = dict(dataset_id=10, partition_version="p1", version=1, author_id=1,
+                      created_at=datetime.now(timezone.utc), first_weight=.2, second_weight=.3, third_weight=.5)
+        db.add_all([
+            TriadComposition(job_id="job-2", first_model_id=4, second_model_id=5, third_model_id=6, **common),
+            TriadComposition(job_id="bad-dataset", first_model_id=1, second_model_id=2, third_model_id=3,
+                             **{**common, "dataset_id": 20}),
+            TriadComposition(job_id="bad-weights", first_model_id=1, second_model_id=2, third_model_id=3,
+                             **{**common, "third_weight": .7}),
+            TriadComposition(job_id="hidden-member", first_model_id=1, second_model_id=2, third_model_id=7,
+                             **common),
+        ])
+        db.commit()
+    # The metadata path must not load predictors or run inference.
+    def forbidden(*args, **kwargs):
+        raise AssertionError("history must not load or run a predictor")
+    from app.services.predictors.trained_predictor import TrainedModelPredictor
+    monkeypatch.setattr(env.registry, "get", forbidden)
+    monkeypatch.setattr(TrainedModelPredictor, "_load_model", forbidden)
+    monkeypatch.setattr(TrainedModelPredictor, "predict", forbidden)
+    monkeypatch.setattr(main.training_service, "set_active_model", forbidden)
+    response = env.client.get("/api/training/history")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["history"] == before.json()["history"]
+    assert {item["id"] for item in body["history"]} >= {1, 2, 3, 4, 5, 6}
+    assert body["compositions"] == [
+        {"id": 1, "version": 1, "job_id": "job-1", "components": [
+            {"id_modelo": 1, "weight": V1_WEIGHTS[0]}, {"id_modelo": 2, "weight": V1_WEIGHTS[1]},
+            {"id_modelo": 3, "weight": V1_WEIGHTS[2]}]},
+        {"id": 2, "version": 1, "job_id": "job-2", "components": [
+            {"id_modelo": 4, "weight": .2}, {"id_modelo": 5, "weight": .3},
+            {"id_modelo": 6, "weight": .5}]},
+    ]
+
+
 def test_history_isolated_per_version(triad_env):
     env = triad_env
     add_peer(env)

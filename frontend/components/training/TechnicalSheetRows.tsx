@@ -13,7 +13,7 @@ const INITIALIZATION: Record<string, string> = {
 };
 
 /** Recorded training parameters beyond the base four; older checkpoints show "No registrado". */
-export function hyperparameterRows(item: ModelHistoryItem): Row[] {
+export function hyperparameterRows(item: ModelHistoryItem, compositionWeight?: number): Row[] {
   const h = item.hyperparameters ?? null;
   const patience = present(h?.early_stopping_patience) ? ` (paciencia ${h.early_stopping_patience} épocas)` : "";
   const mixup = present(h?.mixup_alpha) ? ` (α ${h.mixup_alpha})` : "";
@@ -26,7 +26,7 @@ export function hyperparameterRows(item: ModelHistoryItem): Row[] {
     ["Semilla:", show(h?.seed)],
     ["Inicialización:", present(h?.initialization_mode) ? INITIALIZATION[h.initialization_mode] ?? h.initialization_mode : MISSING],
     ["Época del checkpoint:", show(h?.checkpoint_epoch)],
-    ["Peso en la tríada:", show(h?.ensemble_weight)],
+    ["Peso en la tríada:", show(compositionWeight ?? h?.ensemble_weight)],
   ];
 }
 

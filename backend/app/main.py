@@ -1271,7 +1271,29 @@ def get_training_history(request: Request, response: Response, db: Session = Dep
     if include_imported:
         raise HTTPException(422, "El historial importado fue retirado.")
     history = training_service.get_history(db=db, access=access)
-    return {"history": history}
+    from app.models.training import Modelo
+    from app.services.triad_compositions import (
+        component_ids, component_weights, composition_query, latest_compositions,
+        validate_weights, TriadCompositionError,
+    )
+    authorized = {composition.id for composition in composition_query(access).all()}
+    visible = {item["id"] for item in history}
+    datasets = {model.id_modelo: model.id_conjunto_datos for model in access.query(Modelo).all()}
+    compositions = []
+    for composition in latest_compositions(db):
+        ids = component_ids(composition)
+        if (composition.id not in authorized or len(set(ids)) != 3
+                or any(model_id not in visible or datasets.get(model_id) != composition.dataset_id for model_id in ids)):
+            continue
+        try:
+            weights = validate_weights(component_weights(composition))
+        except TriadCompositionError:
+            continue
+        compositions.append({"id": composition.id, "version": composition.version,
+                             "job_id": composition.job_id,
+                             "components": [{"id_modelo": model_id, "weight": weight}
+                                            for model_id, weight in zip(ids, weights)]})
+    return {"history": history, "compositions": compositions}
 
 
 @app.post("/api/training/models/{model_id}/activate")

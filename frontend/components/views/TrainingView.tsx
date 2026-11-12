@@ -19,6 +19,7 @@ import { CheckpointSyncButton, useCheckpointSyncStatus } from "@/components/trai
 import { SheetRows, audioPhysicsRows, hyperparameterRows } from "@/components/training/TechnicalSheetRows";
 import DatasetConfirmationDialog from "@/components/ingestion/DatasetConfirmationDialog";
 import { PARAMETER_EXPLANATIONS } from "@/lib/constants/parameterExplanations";
+import { groupTriadHistory, type TriadHistoryGroup } from "@/components/training/triadHistory";
 
 // ============================================================================
 // INTERFACES DEL DOMINIO DE ENTRENAMIENTO (RF_04, CU_INV_02, CU_INV_03)
@@ -674,6 +675,9 @@ export default function TrainingView() {
 
   // 4. Historial de Modelos (CU_INV_04 / CU_INV_05)
   const [history, setHistory] = useState<ModelHistoryItem[]>([]);
+  const [compositions, setCompositions] = useState<unknown>([]);
+  const groups = useMemo(() => groupTriadHistory(history, compositions), [history, compositions]);
+  const [selectedGroup, setSelectedGroup] = useState<TriadHistoryGroup | null>(null);
   const partitionNames = usePartitionNames(history);
   const checkpointSync = useCheckpointSyncStatus(useMemo(() => history.map(item => item.id), [history]));
   const [selectedModelModal, setSelectedModelModal] = useState<ModelHistoryItem | null>(null);
@@ -752,6 +756,7 @@ export default function TrainingView() {
       if (res.ok) {
         const data = await res.json();
         setHistory(data.history || []);
+        setCompositions(data.compositions || []);
       }
     } catch {
       // Silenciar error transitorio
@@ -789,6 +794,7 @@ export default function TrainingView() {
         if (resHist && resHist.ok) {
           const histData = await resHist.json();
           setHistory(histData.history || []);
+          setCompositions(histData.compositions || []);
         }
       } catch {
         // Silenciar error transitorio
@@ -2674,7 +2680,7 @@ export default function TrainingView() {
               </tr>
             </thead>
             <tbody className="block md:table-row-group divide-y divide-[#23252e]/60">
-              {history.map((item) => {
+              {history.filter(item => !groups.some(group => group.members.some(member => member.id === item.id))).map((item) => {
                 const isBirds =
                   item.dataset?.toLowerCase().includes("aves") ||
                   item.name?.toLowerCase().includes("aves") ||
@@ -2722,7 +2728,7 @@ export default function TrainingView() {
                         onSynced={action => { checkpointSync.markSynced(item.id); if (action === "restored") void fetchHistory(); }} />
                       <button
                         type="button"
-                        onClick={() => setSelectedModelModal(item)}
+                        onClick={() => { setSelectedGroup(null); setSelectedModelModal(item); }}
                         className="text-[11px] text-cyan-300 hover:text-white px-2.5 py-1 rounded bg-cyan-950/60 hover:bg-cyan-900/60 border border-cyan-800/60 hover:border-cyan-600 transition-colors inline-flex items-center gap-1.5 shadow-sm"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2735,6 +2741,13 @@ export default function TrainingView() {
                   </tr>
                 );
               })}
+              {groups.map(group => <tr key={`triad-${group.composition.id}`} className="grid grid-cols-3 gap-x-3 gap-y-2 py-3 md:table-row md:py-0">
+                <td className="col-span-3 md:py-3 text-gray-200">{group.members.map(member => <div key={member.id}>{member.name || member.architecture}</div>)}</td>
+                <td className="col-span-3 md:py-3 text-gray-400">{group.members[0].dataset || group.members[0].dataset_name || "Sin dataset declarado"}</td>
+                <td className="md:py-3 text-amber-400">Sin evaluación conjunta</td>
+                <td className="col-span-3 md:py-3 text-gray-500">—</td>
+                <td className="col-span-3 md:py-3 md:text-right"><button type="button" className="text-cyan-300" onClick={() => { setSelectedGroup(group); setSelectedModelModal(group.members[0]); }}>Ficha Técnica</button></td>
+              </tr>)}
             </tbody>
           </table>
         </div>
@@ -2751,10 +2764,10 @@ export default function TrainingView() {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-blue-950/70 text-blue-300 border border-blue-800/60">
-                      v{selectedModelModal.version || 1}
+                      v{selectedGroup ? selectedGroup.composition.version : selectedModelModal.version || 1}
                     </span>
                     <h2 className="text-base font-bold text-white tracking-tight">
-                      {selectedModelModal.name || `${selectedModelModal.architecture} (v${selectedModelModal.version || 1})`}
+                      {selectedGroup ? "Ficha técnica de la tríada" : selectedModelModal.name || `${selectedModelModal.architecture} (v${selectedModelModal.version || 1})`}
                     </h2>
                   </div>
                   <p className="text-xs text-gray-400 mt-1">
@@ -2773,6 +2786,10 @@ export default function TrainingView() {
                 </button>
               </div>
 
+              {(selectedGroup ? selectedGroup.members : [selectedModelModal]).map((original, index) => {
+                const selectedModelModal = original;
+                return <section key={original.id}>
+                {selectedGroup && <div className="flex items-center justify-between mb-3"><h3 className="text-white font-semibold">{original.architecture} · métricas individuales</h3><CheckpointSyncButton modelId={original.id} synced={checkpointSync.synced.has(original.id)} onSynced={action => { checkpointSync.markSynced(original.id); if (action === "restored") void fetchHistory(); }} /></div>}
               {/* 3 Tarjetas de Especificaciones */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
                 {/* 1) Hiperparámetros de Entrenamiento */}
@@ -2827,7 +2844,7 @@ export default function TrainingView() {
                          {selectedModelModal.loss != null ? selectedModelModal.loss.toFixed(4) : "No disponible"}
                       </span>
                     </div>
-                    <SheetRows rows={hyperparameterRows(selectedModelModal)} />
+                    <SheetRows rows={hyperparameterRows(selectedModelModal, selectedGroup?.composition.components[index].weight)} />
                   </div>
                 </div>
 
@@ -2935,6 +2952,8 @@ export default function TrainingView() {
                 </div>
               )}
 
+              </section>;
+              })}
               {/* Footer */}
               <div className="flex justify-end pt-2 border-t border-[#23252e]">
                 <button
