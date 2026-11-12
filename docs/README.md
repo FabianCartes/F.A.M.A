@@ -268,6 +268,7 @@ Informes técnicos de evolución de los modelos de Machine Learning (desde la Po
 * [`03_mejoras_posibles_modelo_prediccion.md`](./limites/03_mejoras_posibles_modelo_prediccion.md): Roadmap de mejoras futuras más allá del 88.68% F1.
 * [`04_limitacion_subida_directorios_completos_data_lake.md`](./limites/04_limitacion_subida_directorios_completos_data_lake.md): Limitaciones de I/O en la ingesta masiva hacia GCS.
 * [`05_restriccion_formato_audio_y_captura_microfono.md`](./limites/05_restriccion_formato_audio_y_captura_microfono.md): Restricción estricta de formato PCM .wav y pipeline de captura por micrófono web.
+* [`06_ruta_checkpoint_gcs_y_entrenamiento_sin_particion.md`](./limites/06_ruta_checkpoint_gcs_y_entrenamiento_sin_particion.md): Ruta registrada del checkpoint distinta del objeto en GCS y admisión por API de entrenamientos sin partición guardada.
 
 ### Evidencia operacional
 

@@ -34,10 +34,9 @@ Estado al 2026-11-12 y pasos pendientes para cerrar la integración de afinamien
 
 ## Opcionales
 
-- **L14 del plan g:** `modelo.ruta_binario_gcp` registra `models/fama_…_best.pt`, distinto del objeto real `models/checkpoints/sha256/<hash>.pt`. No bloquea el respaldo ni la restauración.
-- **API de entrenamiento:** el backend sigue aceptando `POST /api/training/start` sin `partition_version` y responde con el error de preparación ausente. La interfaz ya lo impide; rechazarlo también en la API con un mensaje claro requiere su propio alcance.
+- **L14 del plan g y API de entrenamiento sin partición:** se conservan; quedan caracterizados en [límite 06](../limites/06_ruta_checkpoint_gcs_y_entrenamiento_sin_particion.md).
 - **Tríada local sin evaluación conjunta:** la composición #1 (versión 2) de `fama_pruebas` no tiene intentos conjuntos y muestra «Esta tríada no tiene evaluación conjunta». Se puede conservar o borrar a mano (primero la fila versión 2 y luego la 1, con respaldo previo); ninguna predicción la referencia. No hay función de borrado en la aplicación.
-- **Preparación por línea de comandos en un runtime:** el runtime no crea `data/prepared`; el script de preparación necesita el directorio del dataset creado de antemano (plan g, L16).
+- **Preparación por línea de comandos en un runtime:** resuelto. `python -m training.prepare_dataset` crea el almacén `--versions-dir` y sus padres ausentes, sin seguir symlinks ([manual](../manuales/versiones-preparadas-dataset.md)).
 
 ## Entorno local
 
