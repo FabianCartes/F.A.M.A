@@ -1,6 +1,6 @@
 # Base de integración local `fama_pruebas` (PostgreSQL 16.15 en Docker)
 
-Prepara desde cero una base vacía con el esquema vigente (`0005_triad_composition`), los roles y permisos del flujo de Cloud SQL y, después, el primer administrador. Sigue la etapa g de la integración mvp ([plan](../arquitectura/integracion-mvp-g-base-integracion-plan.md)). No toca `fama_oficial`, `fama_db` de `docker-compose.yml` ni otros contenedores.
+Prepara desde cero una base vacía con el esquema vigente (`0007_triad_evaluation`), los roles y permisos del flujo de Cloud SQL y, después, el primer administrador. Sigue la etapa g de la integración mvp ([plan](../arquitectura/integracion-mvp-g-base-integracion-plan.md)). No toca `fama_oficial`, `fama_db` de `docker-compose.yml` ni otros contenedores.
 
 ## Requisitos
 
@@ -45,7 +45,7 @@ Prepara desde cero una base vacía con el esquema vigente (`0005_triad_compositi
    SQL
    ```
 
-4. **Migración.** `app.schema` lee solo `DATABASE_URL` (no `.env`). Esperado: `schema_empty`, luego `schema_current` con `0005_triad_composition`.
+4. **Migración.** `app.schema` lee solo `DATABASE_URL` (no `.env`). Esperado: `schema_empty`, luego `schema_current` con `0007_triad_evaluation`.
 
    ```bash
    export DATABASE_URL="postgresql://fama_migrador:$(cat $D/secrets/migrador)@127.0.0.1:5433/fama_pruebas"
@@ -62,7 +62,7 @@ Prepara desde cero una base vacía con el esquema vigente (`0005_triad_compositi
      -v ON_ERROR_STOP=1 -f scripts/permisos_tablas_pruebas.sql
    ```
 
-   Comprobación: 39 tablas en `public` (38 de aplicación más `alembic_version`) y 15 secuencias.
+   Comprobación: 40 tablas en `public` (39 de aplicación más `alembic_version`) y 16 secuencias.
 
 6. **Asistente y primer administrador.** Seguir el [asistente de primera instalación](asistente_primera_instalacion.md) con un directorio de configuración propio, el usuario `fama_app`, la base `fama_pruebas` y el bucket de pruebas `fama-pruebas` (nunca el bucket definitivo). La comprobación del asistente lista un objeto del bucket, así que necesita una credencial de Google con acceso a ese bucket. `app.node prepare` exige que el archivo se llame `application_default_credentials.json`; en la etapa g se usó una clave JSON de la cuenta de servicio `fama-pruebas-app`, guardada fuera del repositorio con permisos `0600` ([recibo](../receipts/integracion-mvp-g-local.json)). El asistente exige un correo con dominio y una contraseña de 12 caracteres o más; tras `/complete` hay que reiniciar el backend.
 

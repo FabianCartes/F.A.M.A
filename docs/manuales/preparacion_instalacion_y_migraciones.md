@@ -36,7 +36,7 @@ La CLI **no carga `.env`**: exige `DATABASE_URL` suministrada expresamente al pr
 .\.venv\Scripts\python.exe -m app.schema status
 ```
 
-Sin `--apply` no se ejecuta la migración. `status` es de lectura. Las respuestas son JSON con código y revisión, sin URL, contraseñas ni detalles SQL. Las revisiones son `0001_core` (negocio), `0002_access` (acceso web), `0003_autonomy` (autoría de incorporaciones y solicitudes), `0004_integration` (integración) y `0005_triad_composition` (composición de tríadas). Las anteriores se pueden solicitar expresamente con `--revision` para probar una actualización; la instalación final requiere la última. El [manual de autonomía](autonomia_y_solicitudes_datasets.md) contiene el comando que pide la contraseña del migrador y actualiza también los permisos de `fama_app` en la base de pruebas.
+Sin `--apply` no se ejecuta la migración. `status` es de lectura. Las respuestas son JSON con código y revisión, sin URL, contraseñas ni detalles SQL. Las revisiones son `0001_core` (negocio), `0002_access` (acceso web), `0003_autonomy` (autoría de incorporaciones y solicitudes), `0004_integration` (integración), `0005_triad_composition` (composición de tríadas), `0006_dataset_description` (descripción del dataset) y `0007_triad_evaluation` (evaluación conjunta de tríadas). Las anteriores se pueden solicitar expresamente con `--revision` para probar una actualización; la instalación final requiere la última. El [manual de autonomía](autonomia_y_solicitudes_datasets.md) contiene el comando que pide la contraseña del migrador y actualiza también los permisos de `fama_app` en la base de pruebas.
 
 | Código | Interpretación |
 | --- | --- |
@@ -53,9 +53,9 @@ Una base histórica sin revisión no se adopta mediante `stamp` ni `create_all`.
 
 Las conexiones PostgreSQL tienen un límite de conexión de cinco segundos, de sentencia de cinco segundos y de espera de bloqueo de tres segundos. La comprobación realiza varias sentencias; esos límites no representan un tiempo total de cinco segundos. La actualización usa una transacción y un bloqueo asesor transaccional. No se ofrece borrado/downgrade automático.
 
-### Revisión 0005 (etapa f de la integración mvp, 11 de noviembre)
+### Revisiones 0005 a 0007 (integración mvp, 11 de noviembre)
 
-La revisión vigente es `0005_triad_composition`. Es aditiva: solo crea `triad_composition`, que guarda la composición versionada de las tríadas estándar, y no borra tablas ni filas. Una base en `0004_integration` se actualiza con el mismo procedimiento:
+La revisión vigente es `0007_triad_evaluation`. Las revisiones posteriores a `0004_integration` son aditivas: `0005_triad_composition` crea `triad_composition`, que guarda la composición versionada de las tríadas estándar; `0006_dataset_description` agrega la descripción del dataset, y `0007_triad_evaluation` crea `triad_composition_evaluation`, con los intentos de evaluación conjunta. Ninguna borra tablas ni filas. Una base en `0004_integration` se actualiza con el mismo procedimiento:
 
 ```bash
 cd backend
