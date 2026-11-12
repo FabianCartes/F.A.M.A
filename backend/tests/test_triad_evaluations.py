@@ -135,3 +135,148 @@ def test_report_must_match_attempt_identity(sessions):
         with pytest.raises(ValueError):
             attempts.complete(attempt["id"], report())
         assert attempts.read(attempt["id"])["status"] == "running"
+
+
+# --- Joint computation over synthetic checkpoints and recordings -------------------------
+
+@pytest.fixture
+def triad(tmp_path, monkeypatch):
+    """Three real trained checkpoints whose constant logits make each component's choice known."""
+    import hashlib
+    import numpy as np
+    import soundfile as sf
+    import torch
+    from app.services.predictors import trained_predictor as module
+    from app.services.predictors.trained_predictor import TrainedModelPredictor
+    from app.services.predictors.triad_predictor import TriadPredictor
+    from app.services.recording_evaluator import LabelledRecording
+
+    class Neural(torch.nn.Module):
+        def __init__(self, num_classes):
+            super().__init__()
+            self.logits = torch.nn.Parameter(torch.zeros(num_classes))
+
+        def forward(self, inputs):
+            return self.logits.unsqueeze(0)
+    monkeypatch.setattr(module, "AudioCNN", Neural)
+    t = np.arange(22050 * 5) / 22050
+
+    def recording(name, label, split, silent=False):
+        path = tmp_path / f"{name}.wav"
+        sf.write(path, np.zeros_like(t) if silent else .5 * np.sin(2 * np.pi * 1000 * t), 22050)
+        return LabelledRecording(name, label, path, f"raw/{name}.wav", "raw", f"group-{name}")
+
+    def build(vectors, labels, weights, splits):
+        engine = migrated_engine()
+        factory = sessionmaker(bind=engine)
+        paths = []
+        with factory() as db:
+            db.add(ConjuntoDatos(id_conjunto_datos=10, nombre="AvesChilenas", ruta_gcp="datasets/AvesChilenas"))
+            for index, (vector, names) in enumerate(zip(vectors, labels), start=1):
+                path = tmp_path / f"{index}.pt"
+                torch.save({"architecture": "AudioCNN", "classes": names,
+                            "state_dict": {"logits": torch.log(torch.tensor(vector))}}, path)
+                paths.append(path)
+                db.add(Modelo(id_modelo=index, id_conjunto_datos=10, arquitectura=f"arch-{index}", epocas=1,
+                              tasa_aprendizaje=0.001, tamano_lote=1, ruta_binario_gcp=f"models/{index}.pt",
+                              hash_binario=hashlib.sha256(path.read_bytes()).hexdigest()))
+            db.commit()
+            create_initial_composition(db, job_id="job-a", dataset_id=10, partition_version="p1",
+                                       components=list(zip((1, 2, 3), weights)))
+        components = [TrainedModelPredictor(path, model_id=str(index), lazy_load=True,
+                                            expected_checkpoint_sha256=hashlib.sha256(path.read_bytes()).hexdigest())
+                      for index, path in enumerate(paths, start=1)]
+        predictor = TriadPredictor(components, weights, ["a", "b"], "fama_triad_1")
+        recordings = {split: tuple(recording(f"{split}-{i}", *spec) for i, spec in enumerate(specs))
+                      for split, specs in splits.items()}
+        return factory, predictor, paths, recordings
+    return build
+
+
+SPLITS = {"val": [("a", "val"), ("b", "val"), ("b", "val")], "test": [("b", "test"), ("a", "test")]}
+CONFIGS = [({"architecture": f"arch-{i}"}, {"crop": "center"}, {"unit": "recording"}) for i in (1, 2, 3)]
+
+
+def run(factory, predictor, paths, recordings):
+    from app.services.triad_evaluations import evaluate_composition
+    return evaluate_composition(factory, 1, predictor=predictor, checkpoint_paths=paths,
+                                recordings=recordings, component_configs=CONFIGS)
+
+
+def test_joint_accuracy_comes_from_the_weighted_vectors_not_averaged_accuracies(triad):
+    weights = (.2, .2, .6)
+    factory, predictor, paths, recordings = triad(
+        [[.6, .4], [.6, .4], [.1, .9]], [["a", "b"]] * 3, weights, SPLITS)
+    attempts = run(factory, predictor, paths, recordings)
+    val = attempts["val"]
+    assert val["status"] == "completed" and val["sample_count"] == 3
+    # Fused vector .3/.7 picks "b" for every recording: 2 of 3 correct.
+    assert val["report"]["metrics"]["accuracy"] == pytest.approx(2 / 3)
+    individual = (1 / 3, 1 / 3, 2 / 3)
+    assert val["report"]["metrics"]["accuracy"] != pytest.approx(sum(w * a for w, a in zip(weights, individual)))
+    assert attempts["test"]["report"]["metrics"]["accuracy"] == pytest.approx(.5)
+    assert val["weights"] == list(weights) and val["component_model_ids"] == [1, 2, 3]
+    assert val["predictor_config"]["components"][2] == {"architecture": "arch-3"}
+    with factory() as db:
+        assert db.query(ModelEvaluation).count() == 0
+
+
+def test_permuted_component_classes_and_zero_weight_keep_the_predictor_contract(triad):
+    factory, predictor, paths, recordings = triad(
+        [[.9, .1], [.9, .1], [.5, .5]], [["a", "b"], ["b", "a"], ["a", "b"]], (.4, .6, 0), SPLITS)
+    # Component 2 reports "b" first, so aligned fusion is a=.42/b=.58 → "b" (2 of 3 correct);
+    # positional fusion would give a=.9 → "a" (1 of 3).
+    attempts = run(factory, predictor, paths, recordings)
+    assert attempts["val"]["report"]["metrics"]["accuracy"] == pytest.approx(2 / 3)
+
+
+def test_rejected_recordings_are_counted_as_rejections(triad):
+    splits = {"val": [("a", "val", True), ("b", "val")], "test": [("b", "test"), ("a", "test")]}
+    factory, predictor, paths, recordings = triad([[.1, .9]] * 3, [["a", "b"]] * 3, (.5, .3, .2), splits)
+    report = run(factory, predictor, paths, recordings)["val"]["report"]
+    assert report["rejection"]["count"] == 1 and report["metrics"]["accuracy"] == pytest.approx(.5)
+
+
+def test_changed_checkpoint_is_refused_before_any_attempt(triad):
+    factory, predictor, paths, recordings = triad([[.6, .4]] * 3, [["a", "b"]] * 3, (.5, .3, .2), SPLITS)
+    paths[1].write_bytes(paths[1].read_bytes() + b"tampered")
+    with pytest.raises(ValueError):
+        run(factory, predictor, paths, recordings)
+    with factory() as db:
+        assert service(db).latest_by_split([1]) == {}
+
+
+def test_mismatched_predictor_weights_are_refused(triad):
+    from app.services.predictors.triad_predictor import TriadPredictor
+    factory, predictor, paths, recordings = triad([[.6, .4]] * 3, [["a", "b"]] * 3, (.5, .3, .2), SPLITS)
+    other = TriadPredictor(predictor.components, (.2, .3, .5), ["a", "b"], "fama_triad_1")
+    with pytest.raises(ValueError):
+        run(factory, other, paths, recordings)
+    with factory() as db:
+        assert service(db).latest_by_split([1]) == {}
+
+
+def test_failure_during_inference_marks_attempts_failed_and_keeps_the_composition(triad):
+    from app.models.triad_composition import TriadComposition
+    factory, predictor, paths, recordings = triad([[.6, .4]] * 3, [["a", "b"]] * 3, (.5, .5, 0), SPLITS)
+
+    class Breaking:
+        """Corrupts the zero-weight checkpoint after admission, before the second split."""
+        def __init__(self, inner):
+            self.inner, self.classes, self.calls = inner, inner.classes, 0
+            self.weights, self.components = inner.weights, inner.components
+
+        def predict(self, path):
+            self.calls += 1
+            if self.calls == 4:
+                paths[2].write_bytes(b"corrupted")
+            return self.inner.predict(path)
+    with pytest.raises(Exception):
+        run(factory, Breaking(predictor), paths, recordings)
+    with factory() as db:
+        latest = service(db).latest_by_split([1])[1]
+        assert latest["val"]["status"] == "completed"
+        assert latest["test"]["status"] == "failed" and latest["test"]["error_reason"].strip()
+        composition = db.get(TriadComposition, 1)
+        assert (composition.version, composition.activo) == (1, False)
+        assert [m.hash_binario is not None for m in db.query(Modelo).order_by(Modelo.id_modelo)] == [True] * 3
