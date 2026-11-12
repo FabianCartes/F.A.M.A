@@ -73,7 +73,7 @@ describe('PredictionView validation and responsive controls', () => {
 
   it('does not invent model health, metrics, versions or ensemble participants for an individual result', async () => {
     const api = await preparePrediction();
-    expect(screen.getByText('Dispositivo de esta selección: No comprobado')).toBeDefined();
+    expect(screen.queryByText(/Dispositivo de esta selección/)).toBeNull();
     expect(screen.queryByText(/Sin métricas publicadas|Accuracy histórica|F1 histórico|Precision histórica|Evaluación en test set/)).toBeNull();
     expect(screen.queryByText('v3.0.0')).toBeNull();
     expect(screen.queryByText(/Dispositivo: CPU/)).toBeNull();
@@ -412,7 +412,7 @@ describe('PredictionView validation and responsive controls', () => {
 
     expect(screen.queryByText('Dispositivo: CPU')).toBeNull();
     expect(screen.queryByText('Evaluación en test set')).toBeNull();
-    expect(screen.getByText('Dispositivo de esta selección: No comprobado')).toBeDefined();
+    expect(screen.queryByText(/Dispositivo de esta selección/)).toBeNull();
   });
 
   it('does not invent an audio contract when the catalogue has no selectable model', async () => {

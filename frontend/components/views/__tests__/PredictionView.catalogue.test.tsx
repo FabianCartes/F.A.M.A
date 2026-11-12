@@ -160,6 +160,12 @@ describe("Catálogo público de Predicción", () => {
     fireEvent.focus(within(table).getByRole("button", { name: /Ver ayuda:/ }));
     expect(screen.getByRole("tooltip").textContent).toContain("Número de audios reales de cada clase");
     fireEvent.blur(within(table).getByRole("button", { name: /Ver ayuda:/ }));
+    // A tap opens it outside the scrollable table, so the container cannot clip it.
+    fireEvent.click(within(table).getByRole("button", { name: /Ver ayuda:/ }));
+    const tapped = screen.getByRole("tooltip");
+    expect(tapped.textContent).toContain("Número de audios reales de cada clase");
+    expect(table.parentElement!.contains(tapped)).toBe(false);
+    fireEvent.keyDown(document, { key: "Escape" });
     const coverageHelp = within(dialog).getByRole("button", { name: /Ver ayuda: cobertura-/ });
     fireEvent.focus(coverageHelp);
     expect(screen.getByRole("tooltip").textContent).toContain("todas las clases tienen audios");

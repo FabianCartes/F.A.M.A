@@ -1404,9 +1404,6 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
 
             <div className="text-[11px] text-gray-400 flex items-center gap-2 font-mono">
               <span className="bg-[#101114] px-2 py-1 rounded border border-[#23252e]">
-                Dispositivo de esta selección: No comprobado
-              </span>
-              <span className="bg-[#101114] px-2 py-1 rounded border border-[#23252e]">
                 {classesCount} {isEngineModel ? "fallas mecánicas" : "especies"}
               </span>
             </div>
@@ -2081,36 +2078,52 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
           {historyCursor !== null && historyModel === selectedModelId && <button type="button"
             className="text-xs text-blue-400 disabled:opacity-50" disabled={historyLoading}
             onClick={() => void loadHistory(historyCursor)}>Cargar más predicciones</button>}
-          {filteredHistory.map((item) => (
-            <div
-              key={`${item.timestamp}-${item.filename}-${history.indexOf(item)}`}
-              className="bg-[#111215] border border-[#1f2128] hover:border-[#2d303b] transition-colors rounded-lg px-4 py-3 flex items-center justify-between"
-            >
-              <div>
-                <p className="text-xs font-medium text-gray-200 font-mono">{item.filename}</p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-[10px] text-gray-500">{item.timestamp}</span>
-                  <span className="text-[10px] text-green-400/90 font-medium">
-                    · {ENGINE_FAULT_LABELS[item.clase] || item.clase}
-                  </span>
-                  {item.modelo && (
-                    <span className="text-[9px] text-blue-400/80 bg-blue-950/40 px-1.5 py-0.2 rounded border border-blue-900/40 font-mono">
-                      {item.modelo}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-[#1e2027] border border-[#2d303b] text-gray-300">
-                  {item.id !== null ? `ID de predicción: ${item.id}` : "ID de predicción no disponible"}
-                </span>
-                <span className="text-xs font-bold text-green-400 font-mono">
-                  {(item.confianza * 100).toFixed(1)}%
-                </span>
-              </div>
+          {filteredHistory.length > 0 && (
+            /* Below md each row becomes a labelled card; the same markup is a table on wider screens. */
+            <div className="md:overflow-x-auto">
+              <table aria-label="Historial de predicciones" className="w-full text-left text-xs block md:table">
+                <thead className="hidden md:table-header-group">
+                  <tr className="border-b border-[#23252e] text-gray-400">
+                    <th scope="col" className="pb-2 pr-3 font-medium">Archivo</th>
+                    <th scope="col" className="pb-2 pr-3 font-medium">Diagnóstico</th>
+                    <th scope="col" className="pb-2 pr-3 font-medium">Modelo</th>
+                    <th scope="col" className="pb-2 pr-3 font-medium">Registro</th>
+                    <th scope="col" className="pb-2 font-medium text-right">Confianza</th>
+                  </tr>
+                </thead>
+                <tbody className="block md:table-row-group divide-y divide-[#23252e]/60">
+                  {filteredHistory.map((item) => (
+                    <tr key={`${item.timestamp}-${item.filename}-${history.indexOf(item)}`}
+                      className="grid grid-cols-2 gap-x-3 gap-y-2 py-3 md:table-row md:py-0 hover:bg-[#1c1e24]/40 transition-colors">
+                      <td className="col-span-2 md:py-2.5 md:pr-3">
+                        <p className="font-medium text-gray-200 font-mono break-all">{item.filename}</p>
+                        <p className="text-[10px] text-gray-500 mt-0.5">{item.timestamp}</p>
+                      </td>
+                      <td className="md:py-2.5 md:pr-3">
+                        <span className="block md:hidden text-[10px] text-gray-500">Diagnóstico</span>
+                        <span className="text-green-400/90 font-medium">{ENGINE_FAULT_LABELS[item.clase] || item.clase}</span>
+                      </td>
+                      <td className="md:py-2.5 md:pr-3">
+                        <span className="block md:hidden text-[10px] text-gray-500">Modelo</span>
+                        {item.modelo
+                          ? <span className="text-[10px] text-blue-400/80 bg-blue-950/40 px-1.5 py-0.5 rounded border border-blue-900/40 font-mono break-all">{item.modelo}</span>
+                          : <span className="text-gray-500">—</span>}
+                      </td>
+                      <td className="md:py-2.5 md:pr-3">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-[#1e2027] border border-[#2d303b] text-gray-300 whitespace-nowrap">
+                          {item.id !== null ? `ID de predicción: ${item.id}` : "ID de predicción no disponible"}
+                        </span>
+                      </td>
+                      <td className="md:py-2.5 md:text-right">
+                        <span className="block md:hidden text-[10px] text-gray-500">Confianza</span>
+                        <span className="font-bold text-green-400 font-mono">{(item.confianza * 100).toFixed(1)}%</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          ))}
+          )}
         </div>
       </section>
     </div>

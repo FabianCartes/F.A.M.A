@@ -1,5 +1,5 @@
 import { chooseModel } from "../../prediction/__tests__/selectorActions";
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import PredictionView from '../PredictionView';
 import { confirmApiSession } from '@/lib/api';
@@ -151,4 +151,25 @@ it('refreshes persisted history for a declared standard model after inference', 
   expect(historyRequests).toBe(2);
   expect(screen.getByText('saved-40.wav')).toBeDefined();
   expect(screen.queryByText('optimistic.wav')).toBeNull();
+});
+
+it('shows saved predictions as a table that becomes labelled cards on narrow screens', async () => {
+  global.fetch = vi.fn(async (input) => {
+    const url = String(input);
+    if (url.includes('/api/models')) return Response.json({ models });
+    if (url.includes('/api/inference/history')) return Response.json({ items: [item(20)], next_cursor: null });
+    return Response.json({});
+  });
+  render(<PredictionView />); await act(async () => {});
+  const table = screen.getByRole('table', { name: 'Historial de predicciones' });
+  const headers = within(table).getAllByRole('columnheader').map(cell => cell.textContent);
+  expect(headers).toEqual(['Archivo', 'Diagnóstico', 'Modelo', 'Registro', 'Confianza']);
+  // Wide screens show the header row; narrow screens hide it and label every cell instead.
+  expect(table.querySelector('thead')!.className).toContain('hidden md:table-header-group');
+  const row = within(table).getByRole('row', { name: /saved-20\.wav/ });
+  expect(row.className).toContain('md:table-row');
+  expect(within(row).getByText('80.0%')).toBeDefined();
+  expect(within(row).getByText('ID de predicción: 20')).toBeDefined();
+  ['Diagnóstico', 'Modelo', 'Confianza'].forEach(label =>
+    expect(within(row).getByText(label).className).toContain('md:hidden'));
 });
