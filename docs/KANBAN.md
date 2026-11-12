@@ -20,7 +20,7 @@ kanban-plugin: basic
 
 ## Integración de afinamiento integral en `mvp` — etapa g: base de datos de integración
 
-- [ ] **G-BASE-INTEGRACIÓN:** etapa local cerrada; falta Cloud SQL. La 0005 ya se acepta en PostgreSQL (`a48d143`); `fama_pruebas` en PostgreSQL 16.15 con primer administrador y bucket `fama-pruebas`; smoke de punta a punta desde el navegador aprobado (importar ZIP, asignar, entrenar con partición, respaldar en GCS y predecir), con el fix del historial `59232bb`. Hallazgos pendientes en el plan (L12, L14). [Recibo](receipts/integracion-mvp-g-local.json), [Plan](arquitectura/integracion-mvp-g-base-integracion-plan.md).
+- [ ] **G-BASE-INTEGRACIÓN:** etapa local cerrada; falta Cloud SQL. La 0005 ya se acepta en PostgreSQL (`a48d143`); `fama_pruebas` en PostgreSQL 16.15 con primer administrador y bucket `fama-pruebas`; smoke de punta a punta desde el navegador aprobado (importar ZIP, asignar, entrenar con partición, respaldar en GCS y predecir), con el fix del historial `59232bb`. Hallazgos 1 y 2 de L12 resueltos (L15, L16); L14 pendiente. Siguiente paso en el [traspaso de cierre](arquitectura/integracion-mvp-cierre-traspaso.md). [Recibo](receipts/integracion-mvp-g-local.json), [Plan](arquitectura/integracion-mvp-g-base-integracion-plan.md).
 
 ## Integración de afinamiento integral en `mvp` — etapa f: migración 0005
 
