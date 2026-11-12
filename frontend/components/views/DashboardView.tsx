@@ -636,7 +636,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
         </div>
       </div>
 
-      {/* Fila 3: Telemetría de Cómputo + Estado del Super-Ensamble + Accesos Rápidos con Tamaños Proporcionales */}
+      {/* Fila 3: Telemetría de Cómputo + Estado del Ensamble + Accesos Rápidos con Tamaños Proporcionales */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Tarjeta 1: Telemetría de Cómputo (Solo Valores Reales) */}
         <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-4 flex flex-col justify-between">
@@ -738,15 +738,15 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
           </div>
         </div>
 
-        {/* Tarjeta 2: Estado del Super-Ensamble Tri-Modelo */}
-        <section aria-label="Super-Ensamble Tri-Modelo" className="bg-[#16171b] border border-[#23252e] rounded-xl p-4 flex flex-col justify-between">
+        {/* Tarjeta 2: Estado del Ensamble Tri-Modelo */}
+        <section aria-label="Ensamble Tri-Modelo" className="bg-[#16171b] border border-[#23252e] rounded-xl p-4 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs text-white font-semibold flex items-center gap-1.5">
                 <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                 </svg>
-                Super-Ensamble Tri-Modelo
+                Ensamble Tri-Modelo
               </span>
               <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/40">
                 {stats?.super_ensemble.active_mode !== "triad" ? "Sin tríada"

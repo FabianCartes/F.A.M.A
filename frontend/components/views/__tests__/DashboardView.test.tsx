@@ -140,7 +140,7 @@ describe('DashboardView truthful observations', () => {
         { name: 'ResNet', model_id: 2, weight: 0.3, ready: null, accuracy: 90 },
         { name: 'PANNs', model_id: 3, weight: 0.15, ready: null, accuracy: null }] } });
 
-    const card = within(screen.getByRole('region', { name: 'Super-Ensamble Tri-Modelo' }));
+    const card = within(screen.getByRole('region', { name: 'Ensamble Tri-Modelo' }));
     expect(card.getByText('Cargada en el catálogo')).toBeDefined();
     expect(card.getByText('AvesChilenas · versión 2 · predeterminada')).toBeDefined();
     expect(card.getByText('55%')).toBeDefined();
@@ -153,12 +153,12 @@ describe('DashboardView truthful observations', () => {
   ])('reports triad readiness %o without inventing it', async (state, label) => {
     await renderWith({ ...baseStats, super_ensemble: { ...baseStats.super_ensemble, ...state, active_mode: 'triad',
       composition_id: 7, dataset_name: 'Motores', version: 1, models: [] } });
-    expect(within(screen.getByRole('region', { name: 'Super-Ensamble Tri-Modelo' })).getByText(label)).toBeDefined();
+    expect(within(screen.getByRole('region', { name: 'Ensamble Tri-Modelo' })).getByText(label)).toBeDefined();
   });
 
   it('says when no triad is registered', async () => {
     await renderWith(baseStats);
-    expect(within(screen.getByRole('region', { name: 'Super-Ensamble Tri-Modelo' }))
+    expect(within(screen.getByRole('region', { name: 'Ensamble Tri-Modelo' }))
       .getByText('No hay tríadas registradas en tus datasets.')).toBeDefined();
   });
 

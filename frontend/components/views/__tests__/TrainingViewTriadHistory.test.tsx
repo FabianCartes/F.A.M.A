@@ -18,6 +18,9 @@ async function setup(history: object[], compositions?: object[]) {
     const url = String(input);
     if (url.includes("/checkpoints/sync-status")) return new Response(JSON.stringify({ models: [] }));
     if (url.includes("/models/2/checkpoint/sync")) return new Response(JSON.stringify({ model_id: 2, filename: "2.pt", sha256: "a".repeat(64), size_bytes: 2, local: "valid", cloud: "available", generation: "1", transfer_verified: true, action: "uploaded" }));
+    if (url.includes("/partitions")) return new Response(JSON.stringify({ versions: [
+      { version: "p1", counts: { train: 60, val: 20, test: 20 }, policy: { validation_percent: 20, test_percent: 20 } },
+    ] }));
     return { ok: true, json: async () => url.includes("/history") ? { history, compositions }
       : url.includes("/datasets") ? { datasets: [] } : url.includes("/progress") ? { status: "idle", logs: [] } : {} };
   }));
@@ -60,6 +63,28 @@ it("agrupa miembros explícitos y no inventa una evaluación conjunta", async ()
   expect(within(row).getByText("Sin evaluación conjunta")).toBeDefined();
   expect(screen.getAllByRole("row")).toHaveLength(2);
   expect(within(row).queryByRole("button", { name: /Activar/ })).toBeNull();
+});
+
+it("usa el mismo botón de ficha técnica que las filas individuales", async () => {
+  const standalone = { ...models[0], id: 7, name: "Individual" };
+  await setup([...models, standalone], [composition]);
+  const row = await screen.findByRole("row", { name: /Miembro 1.*Miembro 2.*Miembro 3/ });
+  const triadButton = within(row).getByRole("button", { name: "Ficha Técnica" });
+  const individualButton = within(screen.getByRole("row", { name: /Individual/ })).getByRole("button", { name: "Ficha Técnica" });
+  expect(triadButton.className).toBe(individualButton.className);
+  expect(triadButton.querySelector("svg")).not.toBeNull();
+});
+
+it("muestra la partición compartida por los tres miembros y no la inventa si difieren", async () => {
+  const shared = models.map(m => ({ ...m, dataset_name: "Datos", partition_version: "p1" }));
+  const mixed = shared.map(m => ({ ...m, id: m.id + 3, name: `Otro ${m.id}`, partition_version: m.id === 3 ? "p2" : "p1" }));
+  await setup([...shared, ...mixed], [composition,
+    { ...composition, id: 6, job_id: "job-b", components: composition.components.map(c => ({ ...c, id_modelo: c.id_modelo + 3 })) },
+  ]);
+  const row = await screen.findByRole("row", { name: /Miembro 1.*Miembro 2.*Miembro 3/ });
+  expect(await within(row).findByText("Versión 1 · 60/20/20 %")).toBeDefined();
+  const other = screen.getByRole("row", { name: /Otro 1.*Otro 2.*Otro 3/ });
+  expect(within(other).queryByText(/Versión|Partición guardada/)).toBeNull();
 });
 
 it("mantiene trabajos distintos y deja visibles grupos incompletos o inválidos", async () => {

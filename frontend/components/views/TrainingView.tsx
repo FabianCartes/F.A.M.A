@@ -38,6 +38,22 @@ interface HardwareStatus {
   status: string;
 }
 
+/** «Ficha Técnica» action shared by individual and triad history rows. */
+function TechnicalSheetButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-[11px] text-cyan-300 hover:text-white px-2.5 py-1 rounded bg-cyan-950/60 hover:bg-cyan-900/60 border border-cyan-800/60 hover:border-cyan-600 transition-colors inline-flex items-center gap-1.5 shadow-sm"
+    >
+      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+      <span>Ficha Técnica</span>
+    </button>
+  );
+}
+
 interface TrainingDataset {
   id: string;
   name: string;
@@ -2727,28 +2743,32 @@ export default function TrainingView() {
                       <div className="flex flex-wrap items-center gap-2 md:justify-end">
                       <CheckpointSyncButton modelId={item.id} synced={checkpointSync.synced.has(item.id)}
                         onSynced={action => { checkpointSync.markSynced(item.id); if (action === "restored") void fetchHistory(); }} />
-                      <button
-                        type="button"
-                        onClick={() => { setSelectedGroup(null); setSelectedModelModal(item); }}
-                        className="text-[11px] text-cyan-300 hover:text-white px-2.5 py-1 rounded bg-cyan-950/60 hover:bg-cyan-900/60 border border-cyan-800/60 hover:border-cyan-600 transition-colors inline-flex items-center gap-1.5 shadow-sm"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        <span>Ficha Técnica</span>
-                      </button>
+                      <TechnicalSheetButton onClick={() => { setSelectedGroup(null); setSelectedModelModal(item); }} />
                       </div>
                     </td>
                   </tr>
                 );
               })}
-              {groups.map(group => <tr key={`triad-${group.composition.id}`} className="grid grid-cols-3 gap-x-3 gap-y-2 py-3 md:table-row md:py-0">
+              {groups.map(group => {
+                // One training job uses a single partition; show it only when every member records the same one.
+                const partition = group.members[0].partition_version;
+                const sharedPartition = partition && group.members.every(member => member.partition_version === partition) ? partition : null;
+                return <tr key={`triad-${group.composition.id}`} className="grid grid-cols-3 gap-x-3 gap-y-2 py-3 md:table-row md:py-0 hover:bg-[#1c1e24]/40 transition-colors">
                 <td className="col-span-3 md:py-3 text-gray-200">{group.members.map(member => <div key={member.id}>{member.name || member.architecture}</div>)}</td>
                 <td className="col-span-3 md:py-3 text-gray-400">{group.members[0].dataset || group.members[0].dataset_name || "Sin dataset declarado"}</td>
                 <td className={jointMetric(group.composition.evaluation?.val, "accuracy") !== null ? "md:py-3 text-emerald-400" : "md:py-3 text-amber-400"}>{jointStatusLabel(group.composition.evaluation?.val)}</td>
-                <td className="col-span-3 md:py-3 text-gray-500">—</td>
-                <td className="col-span-3 md:py-3 md:text-right"><button type="button" className="text-cyan-300" onClick={() => { setSelectedGroup(group); setSelectedModelModal(group.members[0]); }}>Ficha Técnica</button></td>
-              </tr>)}
+                <td className="col-span-3 md:py-3 text-[11px]">
+                  {sharedPartition
+                    ? <span className="text-emerald-400">{partitionNames[sharedPartition] ?? "Partición guardada"}</span>
+                    : <span className="text-gray-500">—</span>}
+                </td>
+                <td className="col-span-3 md:py-3 md:text-right md:pr-2">
+                  <div className="flex flex-wrap items-center gap-2 md:justify-end">
+                    <TechnicalSheetButton onClick={() => { setSelectedGroup(group); setSelectedModelModal(group.members[0]); }} />
+                  </div>
+                </td>
+              </tr>;
+              })}
             </tbody>
           </table>
         </div>
