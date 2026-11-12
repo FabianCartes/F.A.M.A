@@ -422,6 +422,36 @@ def test_versioned_cli_creates_explicit_immutable_version_and_preserves_prior(tm
     assert len(list(versions.iterdir())) == 2
 
 
+def test_versioned_cli_creates_a_missing_version_store(tmp_path, capsys):
+    import json
+    from training.prepare_dataset import main
+
+    index, roots, _ = fixture_index(tmp_path)
+    versions = tmp_path / "runtime" / "data" / "prepared" / "AvesChilenas"
+    args = ["--dataset", "AvesChilenas", "--index-csv", str(index),
+            "--raw-root", str(roots["raw"]), "--versions-dir", str(versions)]
+    assert main(args) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["output_dir"] == str(versions / result["version_id"])
+    assert (versions / result["version_id"] / ".complete").is_file()
+    assert stat.S_IMODE(versions.stat().st_mode) == 0o755
+
+
+def test_versioned_cli_never_creates_a_store_through_a_linked_ancestor(tmp_path, capsys):
+    from training.prepare_dataset import main
+
+    index, roots, _ = fixture_index(tmp_path)
+    foreign = tmp_path / "foreign"
+    foreign.mkdir()
+    (tmp_path / "alias").symlink_to(foreign, target_is_directory=True)
+    args = ["--dataset", "AvesChilenas", "--index-csv", str(index), "--raw-root", str(roots["raw"]),
+            "--versions-dir", str(tmp_path / "alias" / "prepared" / "AvesChilenas")]
+    with pytest.raises(SystemExit) as error:
+        main(args)
+    assert error.value.code == 2
+    assert list(foreign.iterdir()) == []
+
+
 def test_custom_dataset_preparation_never_imports_application_services(tmp_path):
     import subprocess, sys
     index, roots, _ = fixture_index(tmp_path)

@@ -53,6 +53,33 @@ def _directory(path):
         os.close(fd)
 
 
+def ensure_version_store(path):
+    """Create a missing version store and its missing ancestors (0755), never through a symlink.
+
+    Existing components are only opened with O_NOFOLLOW, so a linked ancestor fails
+    instead of redirecting the store. Returns the store path.
+    """
+    path = Path(path)
+    if not path.is_absolute() or any(p in (".", "..") for p in path.parts):
+        raise ValueError("Directory must be an absolute physical path")
+    fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        for part in path.parts[1:]:
+            try:
+                os.mkdir(part, 0o755, dir_fd=fd)
+                created = True
+            except FileExistsError:
+                created = False
+            next_fd = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+            os.close(fd)
+            fd = next_fd
+            if created:
+                os.fchmod(fd, 0o755)  # Independent of the caller's umask.
+    finally:
+        os.close(fd)
+    return path
+
+
 def _bytes(fd, name):
     descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
     with os.fdopen(descriptor, "rb") as stream:

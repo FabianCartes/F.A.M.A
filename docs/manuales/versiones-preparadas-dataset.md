@@ -4,7 +4,7 @@ DATA-6 convierte la frescura del origen en un requisito de admisión del entrena
 
 ## Preparación explícita
 
-Lo siguiente es una **plantilla de comando de operación**, no una operación ejecutada durante la implementación. La preparación sobre datos reales requiere autorización propia. El almacén de versiones y las raíces de audio deben existir ya como directorios físicos absolutos, sin antecesores symlink. No coloque el almacén dentro de una raíz de audio ni a la inversa.
+Lo siguiente es una **plantilla de comando de operación**, no una operación ejecutada durante la implementación. La preparación sobre datos reales requiere autorización propia. Las raíces de audio deben existir ya como directorios físicos absolutos. El almacén de versiones debe ser una ruta absoluta; si falta, el comando lo crea junto con sus directorios padre ausentes (0755), por ejemplo `<FAMA_RUNTIME_DIR>/data/prepared/<dataset>` en un runtime nuevo. Ningún antecesor puede ser un symlink: en ese caso el comando falla sin crear nada a través del enlace. No coloque el almacén dentro de una raíz de audio ni a la inversa.
 
 Desde `backend/`, con el intérprete validado del proyecto:
 
