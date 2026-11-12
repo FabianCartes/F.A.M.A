@@ -6,12 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models.training import Modelo
 from app.schemas.triad_composition import TriadComponent, TriadCompositionResponse
 from app.services.access import ResourceAccess, resource_access
 from app.services.registry import ModelRegistry, get_model_registry
 from app.services.triad_compositions import (
-    TriadCompositionConflict, activate_composition, component_ids, component_weights, composition_query,
-    get_composition, is_latest, triad_model_key,
+    TriadCompositionConflict, activate_composition, component_architectures, component_ids, component_weights,
+    composition_query, get_composition, is_latest, triad_model_key,
 )
 
 router = APIRouter(prefix="/api/triad-compositions", tags=["Tríadas combinadas"])
@@ -23,9 +24,17 @@ def _describe(db: Session, composition) -> TriadCompositionResponse:
         partition_version=composition.partition_version, job_id=composition.job_id,
         version=composition.version, previous_id=composition.previous_id,
         latest=is_latest(db, composition), active=bool(composition.activo),
-        components=[TriadComponent(id_modelo=model_id, catalogue_id=f"fama_trained_model_{model_id}", weight=weight)
-                    for model_id, weight in zip(component_ids(composition), component_weights(composition))],
+        components=[TriadComponent(id_modelo=model_id, catalogue_id=f"fama_trained_model_{model_id}",
+                                   architecture=architecture, weight=weight)
+                    for model_id, architecture, weight in zip(
+                        component_ids(composition), _architectures(db, composition), component_weights(composition))],
         author_id=composition.author_id, created_at=composition.created_at)
+
+
+def _architectures(db: Session, composition) -> list:
+    ids = component_ids(composition)
+    models = {model.id_modelo: model for model in db.query(Modelo).filter(Modelo.id_modelo.in_(ids))}
+    return component_architectures(composition, models)
 
 
 def _refresh_registry(registry: ModelRegistry, db: Session) -> None:

@@ -532,10 +532,15 @@ class ModelRegistry:
         whose component is blocked or unavailable is blocked as well; older versions are not
         listed. Without the composition table, individual models are unaffected.
         """
+        from app.schemas.evaluation import triad_ensemble_sha256
         from app.services.predictors.triad_predictor import TriadPredictor
-        from app.services.triad_compositions import component_ids, component_weights, latest_compositions, triad_model_key
+        from app.services.triad_compositions import (
+            component_architectures, component_ids, component_weights, latest_compositions, triad_display_name,
+            triad_model_key, triad_ordinals,
+        )
         try:
             compositions = latest_compositions(db)
+            ordinals = triad_ordinals(db)
         except Exception:
             db.rollback()
             errors.append({"model_id": "fama_triad", "code": "triad_compositions_unavailable"})
@@ -559,7 +564,8 @@ class ModelRegistry:
             first = rows.get(component_ids(composition)[0])
             display_dataset = (names[first.id_modelo]["dataset"] if first is not None
                                and first.id_conjunto_datos == composition.dataset_id else "Dataset no verificado")
-            display_name = f"{display_dataset} · Tríada combinada (versión {composition.version})"
+            display_name = triad_display_name(display_dataset, ordinals[composition.id],
+                                              component_architectures(composition, rows))
             cached = self._triad_predictors.get(key)
             if cached is not None and self.has_model(key) and cached.components == tuple(components):
                 cached.metadata.name = display_name
@@ -575,6 +581,11 @@ class ModelRegistry:
                     name=display_name, dataset_name=dataset_names.pop())
                 predictor.metadata.dataset = display_dataset
                 predictor.metadata.version = composition.version
+                # Same digest the joint evaluation stores, so a report can be matched to
+                # these ordered checkpoints, weights and classes (ADR 0081).
+                predictor.metadata.checkpoint_sha256 = triad_ensemble_sha256(
+                    [component.expected_checkpoint_sha256 for component in components],
+                    list(predictor.weights), list(predictor.classes))
             except Exception:
                 self._discard_triad(key)
                 errors.append({"model_id": key, "code": "triad_invalid"})

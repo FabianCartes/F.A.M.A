@@ -1,5 +1,6 @@
 """Standard triad compositions over authenticated HTTP: catalogue, prediction, history and activation."""
 import hashlib
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -194,6 +195,100 @@ def test_a_blocked_component_blocks_the_composition(triad_env, damage):
         assert db.query(Prediccion).count() == 0
     assert login(env.client, "administrador").status_code == 200
     assert {"model_id": triad_key(), "code": "triad_component_blocked"} in catalogue(env)["publication_errors"]
+
+
+def ensemble_digest(env, weights=V1_WEIGHTS):
+    from app.schemas.evaluation import triad_ensemble_sha256
+    hashes = [hashlib.sha256(env.checkpoints[model_id].read_bytes()).hexdigest() for model_id in (1, 2, 3)]
+    return hashes, triad_ensemble_sha256(hashes, list(weights), CLASSES)
+
+
+def joint_identity(env, split):
+    hashes, digest = ensemble_digest(env)
+    return dict(composition_id=TRIAD_ID, composition_version=1, component_model_ids=[1, 2, 3],
+                checkpoint_sha256s=hashes, weights=list(V1_WEIGHTS), checkpoint_sha256=digest,
+                schema_version=2, evaluator_version="recording-v1", dataset="AvesChilenas", split=split,
+                manifest_sha256="d" * 64, classes=list(CLASSES), sample_count=3,
+                predictor_config={"components": [{}, {}, {}]}, preprocessing_config={"components": [{}, {}, {}]},
+                aggregation_config={"components": [{}, {}, {}]})
+
+
+def record_joint_attempts(env):
+    """Validation completes and test fails, as the training job stores them."""
+    from ml_core.classification_metrics import calculate_classification_report
+    from app.services.recording_evaluator import REJECTION_LABEL
+    from app.services.triad_evaluations import TriadEvaluationService
+    with env.sessions() as db:
+        service = TriadEvaluationService(db)
+        val = service.create(joint_identity(env, "val"))
+        service.start(val["id"])
+        service.complete(val["id"], calculate_classification_report(
+            ["a", "b", "c"], ["a", "b", "b"], CLASSES, rejection_label=REJECTION_LABEL))
+        test = service.create(joint_identity(env, "test"))
+        service.fail(test["id"], "Checkpoint cambió durante inferencia")
+
+
+def test_the_catalogue_exposes_the_ensemble_digest_of_the_triad(triad_env):
+    env = triad_env
+    assign(env.client)
+    triad = {model["id"]: model for model in catalogue(env)["models"]}[triad_key()]
+    assert triad["checkpoint_sha256"] == ensemble_digest(env)[1]
+    assert triad["evaluations"] is None
+    # Reading the catalogue never loads a component.
+    assert all(component.model is None for component in env.registry.get(triad_key()).components)
+
+
+def test_the_catalogue_shows_the_stored_joint_evaluation_of_the_triad(triad_env):
+    env = triad_env
+    assign(env.client)
+    record_joint_attempts(env)
+    body = catalogue(env)
+    assert body["evaluation_catalogue_status"] == "available"
+    triad = {model["id"]: model for model in body["models"]}[triad_key()]
+    val, test = triad["evaluations"]["val"], triad["evaluations"]["test"]
+    assert val["latest_attempt"]["status"] == "completed"
+    assert val["latest_completed"]["report"]["metrics"]["accuracy"] == pytest.approx(2 / 3)
+    assert val["latest_completed"]["provenance"]["checkpoint_sha256"] == triad["checkpoint_sha256"]
+    assert val["admitted_completed"] is None
+    assert test["latest_completed"] is None
+    assert test["latest_attempt"]["status"] == "failed"
+    # Failure reasons may carry private paths; the catalogue never exposes them.
+    assert "Checkpoint cambió" not in json.dumps(body) and "error_reason" not in json.dumps(body)
+    assert all(component.model is None for component in env.registry.get(triad_key()).components)
+    # Individual components keep their own (empty) evaluations.
+    assert all(model["evaluations"] is None for model in body["models"] if model["id"] != triad_key())
+
+
+def test_an_unassigned_user_never_receives_the_joint_evaluation(triad_env):
+    env = triad_env
+    record_joint_attempts(env)
+    assert login(env.client).status_code == 200
+    assert triad_key() not in {model["id"] for model in catalogue(env)["models"]}
+
+
+TRIAD_NAME = "Aves Chilenas · Tríada 1 — AudioCNN + AudioCNN + AudioCNN"
+
+
+def test_the_catalogue_and_history_name_the_triad_by_dataset_ordinal_and_architectures(triad_env):
+    env = triad_env
+    assign(env.client)
+    triad = {model["id"]: model for model in catalogue(env)["models"]}[triad_key()]
+    assert (triad["name"], triad["dataset"]) == (TRIAD_NAME, "Aves Chilenas")
+    composition, = env.client.get("/api/training/history").json()["compositions"]
+    assert (composition["name"], composition["architectures"]) == (TRIAD_NAME, ["AudioCNN"] * 3)
+    # A stored later version keeps the ordinal of its training job.
+    stored_version(env, V2_WEIGHTS)
+    triad = {model["id"]: model for model in catalogue(env)["models"]}[triad_key(2)]
+    assert triad["name"] == TRIAD_NAME
+
+
+def test_the_composition_lists_each_component_architecture_and_fixed_weight(triad_env):
+    env = triad_env
+    assign(env.client)
+    response = env.client.get(f"/api/triad-compositions/{TRIAD_ID}")
+    assert response.status_code == 200, response.text
+    assert [(c["architecture"], c["weight"]) for c in response.json()["components"]] == list(
+        zip(["AudioCNN"] * 3, V1_WEIGHTS))
 
 
 # --- Rule 5: prediction, history and feedback -----------------------------------------------

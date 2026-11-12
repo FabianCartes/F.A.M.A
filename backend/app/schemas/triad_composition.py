@@ -8,6 +8,7 @@ from pydantic import BaseModel
 class TriadComponent(BaseModel):
     id_modelo: int
     catalogue_id: str
+    architecture: Optional[str] = None
     weight: float
 
 

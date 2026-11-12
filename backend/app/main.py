@@ -1272,13 +1272,17 @@ def get_training_history(request: Request, response: Response, db: Session = Dep
         raise HTTPException(422, "El historial importado fue retirado.")
     history = training_service.get_history(db=db, access=access)
     from app.models.training import Modelo
+    from app.models.dataset import ConjuntoDatos
+    from app.services.model_names import dataset_label
     from app.services.triad_compositions import (
-        component_ids, component_weights, composition_query, latest_compositions,
-        validate_weights, TriadCompositionError,
+        component_architectures, component_ids, component_weights, composition_query, latest_compositions,
+        triad_display_name, triad_ordinals, validate_weights, TriadCompositionError,
     )
     authorized = {composition.id for composition in composition_query(access).all()}
     visible = {item["id"] for item in history}
-    datasets = {model.id_modelo: model.id_conjunto_datos for model in access.query(Modelo).all()}
+    models_by_id = {model.id_modelo: model for model in access.query(Modelo).all()}
+    datasets = {model_id: model.id_conjunto_datos for model_id, model in models_by_id.items()}
+    ordinals = triad_ordinals(db)
     compositions = []
     for composition in latest_compositions(db):
         ids = component_ids(composition)
@@ -1289,8 +1293,13 @@ def get_training_history(request: Request, response: Response, db: Session = Dep
             weights = validate_weights(component_weights(composition))
         except TriadCompositionError:
             continue
+        architectures = component_architectures(composition, models_by_id)
+        dataset = db.get(ConjuntoDatos, composition.dataset_id)
         compositions.append({"id": composition.id, "version": composition.version,
                              "job_id": composition.job_id,
+                             "name": triad_display_name(dataset_label(getattr(dataset, "nombre", None)),
+                                                        ordinals[composition.id], architectures),
+                             "architectures": architectures,
                              "components": [{"id_modelo": model_id, "weight": weight}
                                             for model_id, weight in zip(ids, weights)]})
     from app.services.triad_evaluations import TriadEvaluationService, joint_evaluation_summary

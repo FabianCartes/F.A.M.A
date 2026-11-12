@@ -1,4 +1,4 @@
-"""Adversarial regressions for standard triad access, weights and activation (stage f verifier probes)."""
+"""Adversarial regressions for standard triad access, fixed weights and activation (stage f verifier probes)."""
 import json
 import pytest
 from sqlalchemy import text
@@ -8,7 +8,7 @@ from app.models.triad_composition import TriadComposition
 from app.models.user import Usuario
 from app.services import triad_compositions as svc
 from app.services.auth import hash_password
-from tests.test_triad_api import (triad_env, functional, web, access, catalogue, triad_key, predict, revise,  # noqa: F401
+from tests.test_triad_api import (triad_env, functional, web, access, catalogue, triad_key, predict, revise, stored_version,  # noqa: F401
                                   activate_triad, active_flags, V1_WEIGHTS, V2_WEIGHTS, ORIGIN, PASSWORD)
 from tests.test_web_sessions import login
 from tests.test_api_predict import create_dummy_wav_bytes
@@ -89,53 +89,18 @@ BAD = [[-0.1, 0.6, 0.5], [0.5, 0.5, 0.5], [0.5, 0.5], [0.25, 0.25, 0.25, 0.25], 
 
 
 @pytest.mark.parametrize("weights", BAD)
-def test_bad_weights_rejected_no_change(triad_env, weights):
+def test_any_weight_revision_is_gone_without_state_change(triad_env, weights):
+    """Weights are fixed at training (ADR 0082): no body reaches a revision."""
     env = triad_env
     add_peer(env)
     assert login(env.client).status_code == 200
     before = snapshot(env)
-    r = revise(env, weights)
-    assert r.status_code in (400, 422), (r.status_code, r.text)
+    for body in (weights, V2_WEIGHTS):
+        r = revise(env, body)
+        assert r.status_code in (404, 405), (r.status_code, r.text)
     assert snapshot(env) == before
 
 
-
-
-def test_string_numbers_observed(triad_env):
-    env = triad_env
-    add_peer(env)
-    assert login(env.client).status_code == 200
-    r = revise(env, ["0.1", "0.2", "0.7"])
-    print("STRING_WEIGHTS_STATUS", r.status_code, r.text[:200])
-
-
-def test_revision_only_from_latest_and_unique_version(triad_env, monkeypatch):
-    env = triad_env
-    add_peer(env)
-    assert login(env.client).status_code == 200
-    assert revise(env, V2_WEIGHTS).status_code == 201
-    before = snapshot(env)
-    assert revise(env, V1_WEIGHTS, 1).status_code == 409
-    assert snapshot(env) == before
-    # stale reader race: both think v1 is latest
-    monkeypatch.setattr(svc, "is_latest", lambda db, c: True)
-    r = revise(env, [1, 0, 0], 1)
-    assert r.status_code == 409, (r.status_code, r.text)
-    assert snapshot(env) == before
-    assert revise(env, [1, 0, 0], 2).status_code in (201, 409)
-
-
-def test_stale_revision_does_not_disturb_activation(triad_env, monkeypatch):
-    env = triad_env
-    assert login(env.client, "administrador").status_code == 200
-    assert activate_triad(env).status_code == 200
-    assert revise(env, V2_WEIGHTS).status_code == 201
-    assert active_flags(env) == ([], [2])
-    before = snapshot(env)
-    monkeypatch.setattr(svc, "is_latest", lambda db, c: True)
-    assert revise(env, [1, 0, 0], 1).status_code == 409
-    assert active_flags(env) == ([], [2])
-    assert snapshot(env) == before
 
 
 def test_researcher_cannot_activate_no_state_change(triad_env):
@@ -161,9 +126,6 @@ def test_active_unique_across_tables(triad_env):
     # failed single-model activation keeps the active triad
     assert env.client.post("/api/training/models/999/activate", headers={"Origin": ORIGIN}).json()["success"] is False
     assert active_flags(env) == ([], [1])
-    assert revise(env, V2_WEIGHTS).status_code == 201
-    assert revise(env, [0.2, 0.2, 0.6], 2).status_code == 201
-    assert active_flags(env) == ([], [3])
     with env.sessions() as db:
         assert db.query(TriadComposition).filter_by(activo=True).count() == 1
 
@@ -234,12 +196,13 @@ def test_training_history_exposes_only_latest_authorized_composition(triad_env):
     env = triad_env
     add_peer(env)
     assert login(env.client, "investigador").status_code == 200
-    assert revise(env, V2_WEIGHTS).status_code == 201
+    stored_version(env, V2_WEIGHTS)
     response = env.client.get("/api/training/history")
     assert response.status_code == 200
     body = response.json()
     assert {item["id"] for item in body["history"]} >= {1, 2, 3}
     assert body["compositions"] == [{"id": 2, "version": 2, "job_id": "job-1",
+                                    "name": "Aves Chilenas · Tríada 1 — AudioCNN + AudioCNN + AudioCNN", "architectures": ["AudioCNN"] * 3,
                                     "components": [{"id_modelo": 1, "weight": V2_WEIGHTS[0]},
                                                    {"id_modelo": 2, "weight": V2_WEIGHTS[1]},
                                                    {"id_modelo": 3, "weight": V2_WEIGHTS[2]}],
@@ -291,8 +254,8 @@ def test_training_history_exposes_joint_evaluation_of_the_exact_composition(tria
     assert evaluation["val"]["metrics"]["accuracy"] == .5 and evaluation["val"]["rejection_rate"] == 0
     assert evaluation["test"] == {"status": "failed", "sample_count": 2, "metrics": None, "rejection_rate": None,
                                   "error_reason": "Checkpoint cambió durante inferencia"}
-    # A weight revision is a new composition: it does not inherit version 1 reports.
-    assert revise(env, V2_WEIGHTS).status_code == 201
+    # A stored later version is another composition: it does not inherit version 1 reports.
+    stored_version(env, V2_WEIGHTS)
     latest, = env.client.get("/api/training/history").json()["compositions"]
     assert (latest["id"], latest["evaluation"]) == (2, {"val": None, "test": None})
     assert login(env.client, "peer").status_code == 200
@@ -346,10 +309,14 @@ def test_training_history_keeps_explicit_jobs_and_ignores_invalid_compositions(t
     assert body["history"] == before.json()["history"]
     assert {item["id"] for item in body["history"]} >= {1, 2, 3, 4, 5, 6}
     assert body["compositions"] == [
-        {"id": 1, "version": 1, "job_id": "job-1", "components": [
+        {"id": 1, "version": 1, "job_id": "job-1",
+         "name": "Aves Chilenas · Tríada 1 — AudioCNN + AudioCNN + AudioCNN", "architectures": ["AudioCNN"] * 3,
+         "components": [
             {"id_modelo": 1, "weight": V1_WEIGHTS[0]}, {"id_modelo": 2, "weight": V1_WEIGHTS[1]},
             {"id_modelo": 3, "weight": V1_WEIGHTS[2]}], "evaluation": {"val": None, "test": None}},
-        {"id": 2, "version": 1, "job_id": "job-2", "components": [
+        {"id": 2, "version": 1, "job_id": "job-2",
+         "name": "Aves Chilenas · Tríada 2 — AudioCNN + AudioCNN + AudioCNN", "architectures": ["AudioCNN"] * 3,
+         "components": [
             {"id_modelo": 4, "weight": .2}, {"id_modelo": 5, "weight": .3},
             {"id_modelo": 6, "weight": .5}], "evaluation": {"val": None, "test": None}},
     ]
@@ -361,7 +328,7 @@ def test_history_isolated_per_version(triad_env):
     assert login(env.client).status_code == 200
     catalogue(env)
     a = predict(env, triad_key(1), "v1.wav").json()
-    assert revise(env, V2_WEIGHTS).status_code == 201
+    stored_version(env, V2_WEIGHTS)
     catalogue(env)
     b = predict(env, triad_key(2), "v2.wav").json()
     h1 = env.client.get("/api/inference/history", params={"model_id": triad_key(1)}).json()["items"]

@@ -423,7 +423,7 @@ def test_triad_trained_with_evaluated_components_is_published_as_one_model(catal
     triad = next(model for model in payload["models"] if model["id"] == key)
     assert triad["dataset"] == "Motores"
     assert triad["dataset_name"] == "engine_diagnostics"
-    assert triad["name"] == "Motores · Tríada combinada (versión 1)"
+    assert triad["name"].startswith("Motores · Tríada 1 — ")
     assert triad["version"] == 1
 
 

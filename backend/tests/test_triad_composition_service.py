@@ -66,6 +66,28 @@ def test_inadmissible_components_create_nothing(sessions, ids, dataset_id):
     assert rows(sessions) == []
 
 
+def test_ordinals_number_training_jobs_within_each_dataset(sessions):
+    with sessions() as db:
+        first = initial(db, job_id="job-a")
+        second = initial(db, job_id="job-b", weights=(0.2, 0.3, 0.5))
+        # A later stored version of job-a and another dataset's job keep their own numbering.
+        db.add_all([
+            TriadComposition(dataset_id=10, partition_version="p1", job_id="job-a", version=2, previous_id=first.id,
+                             first_model_id=1, second_model_id=2, third_model_id=3, first_weight=.1,
+                             second_weight=.1, third_weight=.8, created_at=first.created_at),
+            TriadComposition(dataset_id=20, partition_version="p1", job_id="job-c", version=1,
+                             first_model_id=1, second_model_id=2, third_model_id=3, first_weight=.1,
+                             second_weight=.1, third_weight=.8, created_at=first.created_at),
+        ])
+        db.commit()
+        assert service.triad_ordinals(db) == {first.id: 1, second.id: 2, 3: 1, 4: 1}
+
+
+def test_display_name_identifies_dataset_ordinal_and_architectures():
+    assert service.triad_display_name("Aves Chilenas", 2, ["EfficientNet-B0", "ConvNeXt-Nano", "ResNet-34d"]) == (
+        "Aves Chilenas · Tríada 2 — EfficientNet-B0 + ConvNeXt-Nano + ResNet-34d")
+
+
 @pytest.mark.parametrize("key, expected", [("fama_triad_7", 7), ("fama_triad_0", None), ("fama_triad_07", None),
                                            ("fama_triad_-1", None), ("fama_triad_x", None),
                                            ("fama_triad_99999999999", None), ("fama_trained_model_7", None),

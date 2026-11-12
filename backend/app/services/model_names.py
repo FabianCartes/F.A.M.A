@@ -3,6 +3,13 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
+DATASET_LABELS = {"AvesChilenas": "Aves Chilenas", "engine_diagnostics": "Motores"}
+
+
+def dataset_label(dataset_name):
+    """Display label of a verified dataset name; ``Dataset no verificado`` when unknown."""
+    return DATASET_LABELS.get(dataset_name, dataset_name) if dataset_name else "Dataset no verificado"
+
 
 def model_display_names(models):
     """Calculate history-compatible display versions over the full persisted set.
@@ -11,7 +18,7 @@ def model_display_names(models):
     filename versions retain the legacy rule: they do not advance the counter.
     Unlinked rows retain legacy grouping, but their dataset is not verified.
     """
-    labels = {"AvesChilenas": "Aves Chilenas", "engine_diagnostics": "Motores"}
+    labels = DATASET_LABELS
     counts = defaultdict(int)
     result = {}
 

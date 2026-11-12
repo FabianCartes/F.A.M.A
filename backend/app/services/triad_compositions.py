@@ -85,6 +85,34 @@ def latest_compositions(db) -> list:
             .order_by(TriadComposition.id).all())
 
 
+def triad_ordinals(db) -> dict:
+    """Presentation ordinal of every composition: the n-th training job of its dataset.
+
+    Jobs are numbered by their first stored row, so every version of a job shares its
+    number. The ordinal is not an identity; ``fama_triad_<id>`` remains the key.
+    """
+    ordinals, jobs, counts = {}, {}, {}
+    for row in (db.query(TriadComposition.id, TriadComposition.dataset_id, TriadComposition.job_id)
+                .order_by(TriadComposition.id)):
+        job = (row.dataset_id, row.job_id)
+        if job not in jobs:
+            counts[row.dataset_id] = counts.get(row.dataset_id, 0) + 1
+            jobs[job] = counts[row.dataset_id]
+        ordinals[row.id] = jobs[job]
+    return ordinals
+
+
+def triad_display_name(dataset_label: str, ordinal: int, architectures: Sequence) -> str:
+    """``<Dataset> · Tríada <n> — <arch 1> + <arch 2> + <arch 3>``."""
+    return f"{dataset_label} · Tríada {ordinal} — {' + '.join(architectures)}"
+
+
+def component_architectures(composition: TriadComposition, models_by_id) -> list:
+    """Ordered component architectures from their ``Modelo`` rows."""
+    return [getattr(models_by_id.get(model_id), "arquitectura", None) or "Arquitectura no registrada"
+            for model_id in component_ids(composition)]
+
+
 def _latest_version(db, job_id: str) -> int:
     return db.query(func.max(TriadComposition.version)).filter(TriadComposition.job_id == job_id).scalar() or 0
 
