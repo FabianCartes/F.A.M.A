@@ -188,3 +188,13 @@ it("conserva el título genérico de la ficha con un servidor que no envía el n
   fireEvent.click(within(row).getByRole("button", { name: "Ficha Técnica" }));
   expect(within(screen.getByTestId("modal-ficha-tecnica")).getByRole("heading", { name: "Ficha técnica de la tríada" })).toBeDefined();
 });
+
+it("indica en la fila de la tríada que la sincronización con GCS se hace en la ficha técnica", async () => {
+  await setup(models, [composition]);
+  const row = await screen.findByRole("row", { name: /Miembro 1.*Miembro 2.*Miembro 3/ });
+  expect(within(row).queryByRole("button", { name: "Sincronizar en GCS" })).toBeNull();
+  fireEvent.click(within(row).getByRole("button", { name: "Sincronizar en ficha técnica" }));
+  const sheet = within(screen.getByTestId("modal-ficha-tecnica"));
+  // The sheet holds one GCS sync action per component checkpoint.
+  expect(sheet.getAllByRole("button", { name: /Sincronizar en GCS|Sincronizado/ })).toHaveLength(3);
+});

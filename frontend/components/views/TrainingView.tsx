@@ -2767,6 +2767,12 @@ export default function TrainingView() {
                 </td>
                 <td className="col-span-3 md:py-3 md:text-right md:pr-2">
                   <div className="flex flex-wrap items-center gap-2 md:justify-end">
+                    {/* Each component checkpoint is synchronized from the technical sheet. */}
+                    <button type="button" onClick={() => { setSelectedGroup(group); setSelectedModelModal(group.members[0]); }}
+                      title="Abre la ficha técnica para sincronizar con GCS el checkpoint de cada componente."
+                      className="text-[11px] px-2.5 py-1 rounded border transition-colors bg-emerald-600 text-white font-semibold border-emerald-600 hover:bg-emerald-500">
+                      Sincronizar en ficha técnica
+                    </button>
                     <TechnicalSheetButton onClick={() => { setSelectedGroup(group); setSelectedModelModal(group.members[0]); }} />
                   </div>
                 </td>
