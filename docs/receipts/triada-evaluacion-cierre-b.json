@@ -1,0 +1,28 @@
+{
+  "receipt": "triada-evaluacion-cierre-b",
+  "date": "2026-11-12",
+  "scope": "Evaluación conjunta de tríadas estándar para entrenamientos nuevos (S1-S6 de docs/arquitectura/triada-evaluacion-plan.md, S4 según L7)",
+  "baseline": "1892b73",
+  "candidate": "3227b1e",
+  "commits": ["78f90d6", "93f4523", "d5fe723", "3227b1e"],
+  "observed_checks": [
+    {"command": "run_isolated_training_checks.py tests/test_triad_evaluations.py", "result": "17 passed", "by": ["writer", "independent_verifier", "parent_spot_check"]},
+    {"command": "run_isolated_training_checks.py tests/test_triad_access_regressions.py", "result": "27 passed", "by": ["writer", "independent_verifier"]},
+    {"command": "run_isolated_training_checks.py tests/test_training_history_metadata.py", "result": "11 passed", "by": ["writer", "independent_verifier"]},
+    {"command": "run_isolated_training_checks.py tests/test_schema_head.py", "result": "6 passed", "by": ["independent_verifier"]},
+    {"command": "run_isolated_training_checks.py tests/test_triad_predictor.py", "result": "33 passed", "by": ["independent_verifier"]},
+    {"command": "pytest test_training_persistence test_training_flow test_triad_evaluations test_triad_composition_service test_training_history_metadata", "result": "232 passed", "by": ["writer", "independent_verifier"]},
+    {"command": "pytest test_schema_migrations test_model_evaluations test_recording_evaluator", "result": "85 passed, 14 skipped (PostgreSQL)", "by": ["independent_verifier"], "note": "Archivos incompatibles con las guardas del runner aislado; ejecutados con pytest directo."},
+    {"command": "npm test -- --run", "result": "79 files / 664 tests passed", "by": ["writer"]},
+    {"command": "npx tsc --noEmit --incremental false; eslint focal; npm run build -- --webpack", "result": "exit 0", "by": ["writer"], "note": "El build modificó tsconfig.json; se revirtió."}
+  ],
+  "differential": "Entrenamientos de 1 y 2 modelos: filas model_evaluation e historial idénticos entre base y candidato salvo ruido de tiempo. Tríada: solo cambian las líneas finales del log previstas.",
+  "verdict": {"S1": "pass (backend)", "S2": "pass", "S3": "pass", "S4": "pass", "S5": "pass", "S6": "pass"},
+  "blockers": [],
+  "advisories": [
+    "Una detención solicitada durante la evaluación conjunta no se respeta; el trabajo termina como completed, igual que la estructura de la base. Ruta no ejercitada.",
+    "Tres componentes con pesos que no suman 1 no registran composición ni evaluación conjunta; comportamiento heredado de la base."
+  ],
+  "not_verified": ["PostgreSQL real", "GPU", "navegador", "datos reales", "GCS", "Docker Python 3.12"],
+  "out_of_scope": "Acción explícita para evaluar composiciones existentes o pesos revisados."
+}

@@ -1,5 +1,7 @@
 # Traspaso: evaluación conjunta de la tríada estándar (entrega B)
 
+> Estado vigente: B implementada para entrenamientos nuevos (commits 78f90d6–3227b1e, [ADR 0081](../adr/0081-intentos-de-evaluacion-conjunta-de-triadas.md), [recibo](../receipts/triada-evaluacion-cierre-b.json)). Lo siguiente es el registro histórico del alcance investigado; la acción explícita para composiciones existentes o pesos revisados sigue fuera de alcance.
+
 Este traspaso describe el alcance investigado de B, que permanece en pausa y no está implementada. A está cerrada dentro del alcance sintético/frontend: identificación, historial agrupado y ficha conjunta, con 139 pruebas backend previamente observadas, 662 pruebas frontend nuevas, tipos/lint/build y verificación independiente aprobados. Los dos fallos de sincronización de pruebas se conservan como cortes históricos; no modificaron producción. Estado en [el plan de A](triada-presentacion-plan.md), [recibo de cierre](../receipts/triada-presentacion-cierre-a.json) y [verificación histórica T1](../receipts/triada-presentacion-verificacion-a.json). Código A en commits locales 5e7417e, 7bff776 y 8e09e66; sin push/PR. No reanudar B automáticamente.
 
 ## Estado de partida
