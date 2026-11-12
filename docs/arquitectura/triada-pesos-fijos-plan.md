@@ -1,0 +1,28 @@
+# Tríada estándar: pesos fijos de entrenamiento y resultados visibles
+
+Objetivo: retirar la revisión de pesos posterior al entrenamiento y mostrar la evaluación conjunta de cada tríada en Predicción y Entrenamiento, con una identificación que distinga tríadas del mismo dataset. Rama `feat/triad-presentation`, base `c32af7c`; commits locales por unidad, sin push ni PR.
+Comprobaciones: runner aislado de backend (pytest directo para los archivos incompatibles con sus guardas), Vitest, TypeScript, ESLint focal y build webpack aislado (revertir el `tsconfig.json` que modifica el build).
+
+## Specs
+
+- S1 — Pesos fijos. Requisito: «recortemos esa parte de cambiar los pesos y que estos queden fijos de entrenamiento». Los porcentajes solo se eligen al configurar el entrenamiento (sin cambios en ese editor). Se retira la revisión posterior: endpoint `POST /api/triad-compositions/{id}/weights`, servicio `revise_weights` y la edición en Predicción. Las filas de composición existentes, incluidas versiones > 1, no se modifican ni se borran; la lectura y la activación por administrador siguen disponibles.
+- S2 — Resultados visibles. Requisito: «se deben mostrar los resultados». `/api/models` expone para `fama_triad_<id>` el informe conjunto guardado de su composición (validación y prueba), con el mismo formato de evaluaciones que los modelos individuales y la misma autorización por dataset. La lectura no ejecuta inferencia.
+- S3 — Evaluación final de una tríada en Predicción: título de composición, aviso «Métricas por grabación de la salida combinada; no es un promedio de los componentes», tabla Validación/Prueba con Accuracy, F1 macro y Correspondencia. La correspondencia compara el digest del ensamble del informe con el digest actual de checkpoints, pesos y clases. Estados sin métricas: «Evaluación conjunta en curso», «Evaluación conjunta fallida» con motivo y «Esta tríada no tiene evaluación conjunta» (tríadas creadas antes de la evaluación automática).
+- S4 — Panel «Composición de la tríada» de solo lectura. Requisitos: «se debe utilizar la misma fuente de letra, en vez de decir fama_trained_model y un numero, decir la arquitectura de cada modelo», «se debe informar los % actuales». Cada componente muestra arquitectura y porcentaje fijo; sin `font-mono` ni campos editables ni botón de guardado. La respuesta de composición agrega `architecture` por componente (campo nuevo).
+- S5 — Identificación. Requisito: diferenciar tríadas «con las mismas arquitecturas, o con otras». Nombre visible `<Dataset> · Tríada <n>` con las tres arquitecturas, partición y fecha de entrenamiento como detalle; `n` es un correlativo por dataset en orden de creación del trabajo. Se usa igual en el selector de Predicción, el historial y la ficha; no cambia `fama_triad_<id>` ni otros IDs técnicos. Supuesto pendiente de confirmación: formato propuesto «Aves Chilenas · Tríada 2 — EfficientNet-B0 + ConvNeXt-Nano + ResNet-34d».
+- S6 — Fuera de alcance: acción explícita de reevaluación, caché de probabilidades, vista previa de pesos, cambios del flujo de entrenamiento o de publicación/activación, datos reales, GCS real, despliegue remoto.
+
+## Tasks
+
+- T1 | S1 | pending | inline | Retirar endpoint, servicio, tipos y llamadas de revisión; conservar lectura/activación y filas existentes. ADR 0082 que sustituye la parte de revisión de ADR 0070.
+- T2 | S2,S3 | pending | inline | Catálogo de evaluaciones para tríadas desde `TriadEvaluationService` y digest actual del ensamble en los metadatos del predictor.
+- T3 | S5 | pending | inline | Nombre visible de tríada en registro e historial (`compositions` agrega nombre y arquitecturas).
+- T4 | S3,S4,S5 | pending | inline | Predicción: panel de solo lectura y evaluación final de tríada; Entrenamiento: fila/ficha con el nombre nuevo.
+- T5 | S1-S6 | pending | inline + verificación independiente | Suites, diferencial de modelos individuales, recibo, índice y KANBAN; aplicación local y reinicio con el procedimiento del perfil nativo.
+
+## Log
+
+- L1 — Solicitud: «Lo pense y por temas de tiempo, mejor recortemos esa parte de cambiar los pesos y que estos queden fijos de entrenamiento, haz el plan. Tambien tener en cuenta que se deben mostrar los resultados».
+- L2 — Evidencia previa: los pesos no intervienen en el entrenamiento de cada componente; solo se registran en log/checkpoint y en la composición (`backend/app/services/training.py`). `evaluation_catalogue` solo resuelve `fama_trained_model_<id>`. El nombre visible actual es `<Dataset> · Tríada combinada (versión N)`, donde N es la versión de pesos (`registry.py`), por lo que dos tríadas del mismo dataset se confunden. Consumidores de la revisión: `routes/triad_compositions.py`, `services/triad_compositions.py`, `lib/api/triadCompositions.ts`, `TriadCompositionPanel.tsx`, `PredictionView.tsx` (`selectRevisedTriad`) y pruebas `test_triad_api`, `test_triad_composition_service`, `test_triad_evaluations`, `test_api_model_availability`, `test_checkpoint_backup`, `PredictionView.triad.test.tsx`.
+- L3 — Consecuencia en el entorno local: la composición #1 ya está en versión 2 y no tiene intentos conjuntos; seguirá utilizable para inferencia y mostrará «Esta tríada no tiene evaluación conjunta». Una tríada entrenada después mostrará métricas.
+- L4 — Riesgo previsto: item 3 (retiro de un endpoint consumido y campos nuevos en `/api/models` y composición) e item 2 (lecturas autorizadas por dataset). Sin migración nueva. Estimación aproximada: 500–600 líneas en cuatro commits.
