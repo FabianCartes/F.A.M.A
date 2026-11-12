@@ -19,7 +19,8 @@ import { CheckpointSyncButton, useCheckpointSyncStatus } from "@/components/trai
 import { SheetRows, audioPhysicsRows, hyperparameterRows } from "@/components/training/TechnicalSheetRows";
 import DatasetConfirmationDialog from "@/components/ingestion/DatasetConfirmationDialog";
 import { PARAMETER_EXPLANATIONS } from "@/lib/constants/parameterExplanations";
-import { groupTriadHistory, type TriadHistoryGroup } from "@/components/training/triadHistory";
+import { groupTriadHistory, jointMetric, jointStatusLabel, type TriadHistoryGroup } from "@/components/training/triadHistory";
+import JointEvaluationSection from "@/components/training/JointEvaluationSection";
 
 // ============================================================================
 // INTERFACES DEL DOMINIO DE ENTRENAMIENTO (RF_04, CU_INV_02, CU_INV_03)
@@ -2744,7 +2745,7 @@ export default function TrainingView() {
               {groups.map(group => <tr key={`triad-${group.composition.id}`} className="grid grid-cols-3 gap-x-3 gap-y-2 py-3 md:table-row md:py-0">
                 <td className="col-span-3 md:py-3 text-gray-200">{group.members.map(member => <div key={member.id}>{member.name || member.architecture}</div>)}</td>
                 <td className="col-span-3 md:py-3 text-gray-400">{group.members[0].dataset || group.members[0].dataset_name || "Sin dataset declarado"}</td>
-                <td className="md:py-3 text-amber-400">Sin evaluación conjunta</td>
+                <td className={jointMetric(group.composition.evaluation?.val, "accuracy") !== null ? "md:py-3 text-emerald-400" : "md:py-3 text-amber-400"}>{jointStatusLabel(group.composition.evaluation?.val)}</td>
                 <td className="col-span-3 md:py-3 text-gray-500">—</td>
                 <td className="col-span-3 md:py-3 md:text-right"><button type="button" className="text-cyan-300" onClick={() => { setSelectedGroup(group); setSelectedModelModal(group.members[0]); }}>Ficha Técnica</button></td>
               </tr>)}
@@ -2786,6 +2787,7 @@ export default function TrainingView() {
                 </button>
               </div>
 
+              {selectedGroup && <JointEvaluationSection evaluation={selectedGroup.composition.evaluation} />}
               {(selectedGroup ? selectedGroup.members : [selectedModelModal]).map((original, index) => {
                 const selectedModelModal = original;
                 return <section key={original.id}>

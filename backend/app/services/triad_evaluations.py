@@ -17,7 +17,7 @@ from app.schemas.evaluation import TriadEvaluationIdentity, strict_json, triad_e
 from app.services.recording_evaluator import RecordingEvaluator
 from app.services.triad_compositions import component_ids, component_weights
 
-__all__ = ["TriadEvaluationService", "evaluate_composition", "triad_ensemble_sha256"]
+__all__ = ["TriadEvaluationService", "evaluate_composition", "joint_evaluation_summary", "triad_ensemble_sha256"]
 
 
 class TriadEvaluationService:
@@ -125,6 +125,19 @@ def _serialize(row):
         if value is not None:
             result[name] = (value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value).isoformat()
     return strict_json(result)
+
+
+def joint_evaluation_summary(attempts_by_split):
+    """Public read shape per split: status and counts, metrics only for a completed report."""
+    def summary(attempt):
+        if attempt is None:
+            return None
+        report = attempt["report"] if attempt["status"] == "completed" else None
+        return {"status": attempt["status"], "sample_count": attempt["sample_count"],
+                "metrics": report["metrics"] if report else None,
+                "rejection_rate": report["rejection"]["rate"] if report else None,
+                "error_reason": attempt["error_reason"]}
+    return {split: summary(attempts_by_split.get(split)) for split in ("val", "test")}
 
 
 def evaluate_composition(session_factory, composition_id, *, predictor, checkpoint_paths, recordings,

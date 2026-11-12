@@ -111,3 +111,39 @@ it("conserva modelos individuales sin metadatos y con pesos inválidos", async (
   expect(screen.getByRole("row", { name: /Miembro 3/ })).toBeDefined();
   expect(screen.queryByText("Sin evaluación conjunta")).toBeNull();
 });
+
+const completed = (accuracy: number) => ({ status: "completed", sample_count: 40, rejection_rate: 0.05, error_reason: null,
+  metrics: { accuracy, f1_macro: 0.8, balanced_accuracy: 0.81, precision_macro: 0.8, recall_macro: 0.81, f1_weighted: 0.8 } });
+
+it("muestra la exactitud conjunta de validación en la fila y val/test diferenciados en la ficha", async () => {
+  await setup(models, [{ ...composition, evaluation: { val: completed(0.8375), test: completed(0.9) } }]);
+  const row = await screen.findByRole("row", { name: /Miembro 1.*Miembro 2.*Miembro 3/ });
+  expect(within(row).getByText("83.75%")).toBeDefined();
+  expect(within(row).queryByText("Sin evaluación conjunta")).toBeNull();
+  fireEvent.click(within(row).getByRole("button", { name: "Ficha Técnica" }));
+  const joint = within(within(screen.getByTestId("modal-ficha-tecnica")).getByRole("region", { name: "Evaluación conjunta" }));
+  expect(joint.getByText("Validación")).toBeDefined();
+  expect(joint.getByText("Prueba")).toBeDefined();
+  expect(joint.getByText("83.75%")).toBeDefined();
+  expect(joint.getByText("90.00%")).toBeDefined();
+  expect(joint.getAllByText("40 grabaciones")).toHaveLength(2);
+});
+
+it("distingue pendiente, fallo y ausencia sin inventar precisión", async () => {
+  const more = models.map(m => ({ ...m, id: m.id + 3, name: `Otro ${m.id}` }));
+  await setup([...models, ...more], [
+    { ...composition, evaluation: { val: { status: "running", sample_count: 40, metrics: null, rejection_rate: null, error_reason: null }, test: null } },
+    { ...composition, id: 6, job_id: "job-b", components: composition.components.map(c => ({ ...c, id_modelo: c.id_modelo + 3 })),
+      evaluation: { val: { status: "failed", sample_count: 40, metrics: null, rejection_rate: null, error_reason: "Checkpoint cambió durante inferencia" },
+        test: { status: "completed", sample_count: 40, metrics: { accuracy: "alta" }, rejection_rate: 0, error_reason: null } } },
+  ]);
+  const pending = await screen.findByRole("row", { name: /Miembro 1.*Miembro 2.*Miembro 3/ });
+  expect(within(pending).getByText("Evaluación conjunta pendiente")).toBeDefined();
+  const failed = screen.getByRole("row", { name: /Otro 1.*Otro 2.*Otro 3/ });
+  expect(within(failed).getByText("Evaluación conjunta fallida")).toBeDefined();
+  fireEvent.click(within(failed).getByRole("button", { name: "Ficha Técnica" }));
+  const joint = within(within(screen.getByTestId("modal-ficha-tecnica")).getByRole("region", { name: "Evaluación conjunta" }));
+  expect(joint.getByText("Checkpoint cambió durante inferencia")).toBeDefined();
+  expect(joint.getByText("Sin informe válido")).toBeDefined();
+  expect(joint.queryByText(/%/)).toBeNull();
+});

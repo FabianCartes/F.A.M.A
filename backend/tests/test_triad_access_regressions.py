@@ -242,11 +242,61 @@ def test_training_history_exposes_only_latest_authorized_composition(triad_env):
     assert body["compositions"] == [{"id": 2, "version": 2, "job_id": "job-1",
                                     "components": [{"id_modelo": 1, "weight": V2_WEIGHTS[0]},
                                                    {"id_modelo": 2, "weight": V2_WEIGHTS[1]},
-                                                   {"id_modelo": 3, "weight": V2_WEIGHTS[2]}]}]
+                                                   {"id_modelo": 3, "weight": V2_WEIGHTS[2]}],
+                                    "evaluation": {"val": None, "test": None}}]
     assert login(env.client, "peer").status_code == 200
     response = env.client.get("/api/training/history")
     assert response.status_code == 200
     assert response.json()["compositions"] == []
+
+
+def _joint_attempt(db, composition_id, split, status, predicted=None):
+    from datetime import datetime, timezone
+    from ml_core.classification_metrics import calculate_classification_report
+    from app.models.triad_composition import TriadCompositionEvaluation
+    from app.services.recording_evaluator import REJECTION_LABEL
+    composition = db.get(TriadComposition, composition_id)
+    now = datetime.now(timezone.utc)
+    report = (calculate_classification_report(["b", "a"], predicted, ["b", "a"], rejection_label=REJECTION_LABEL)
+              if status == "completed" else None)
+    db.add(TriadCompositionEvaluation(
+        composition_id=composition_id, composition_version=composition.version,
+        component_model_ids=[composition.first_model_id, composition.second_model_id, composition.third_model_id],
+        checkpoint_sha256s=["a" * 64] * 3,
+        weights=[composition.first_weight, composition.second_weight, composition.third_weight],
+        schema_version=2, evaluator_version="recording-v1", checkpoint_sha256="f" * 64, dataset="AvesChilenas",
+        split=split, manifest_sha256="d" * 64, classes=["b", "a"], predictor_config={}, preprocessing_config={},
+        aggregation_config={}, sample_count=2, report=report, status=status,
+        error_reason="Checkpoint cambió durante inferencia" if status == "failed" else None,
+        created_at=now, started_at=now if status != "pending" else None,
+        finished_at=now if status in ("completed", "failed") else None))
+    db.commit()
+
+
+def test_training_history_exposes_joint_evaluation_of_the_exact_composition(triad_env, monkeypatch):
+    from app import main
+    env = triad_env
+    add_peer(env)
+    with env.sessions() as db:
+        _joint_attempt(db, 1, "val", "completed", ["b", "b"])
+        _joint_attempt(db, 1, "test", "failed")
+    assert login(env.client, "investigador").status_code == 200
+    def forbidden(*args, **kwargs):
+        raise AssertionError("history must not load or run a predictor")
+    from app.services.predictors.trained_predictor import TrainedModelPredictor
+    monkeypatch.setattr(env.registry, "get", forbidden)
+    monkeypatch.setattr(TrainedModelPredictor, "predict", forbidden)
+    evaluation = env.client.get("/api/training/history").json()["compositions"][0]["evaluation"]
+    assert evaluation["val"]["status"] == "completed" and evaluation["val"]["sample_count"] == 2
+    assert evaluation["val"]["metrics"]["accuracy"] == .5 and evaluation["val"]["rejection_rate"] == 0
+    assert evaluation["test"] == {"status": "failed", "sample_count": 2, "metrics": None, "rejection_rate": None,
+                                  "error_reason": "Checkpoint cambió durante inferencia"}
+    # A weight revision is a new composition: it does not inherit version 1 reports.
+    assert revise(env, V2_WEIGHTS).status_code == 201
+    latest, = env.client.get("/api/training/history").json()["compositions"]
+    assert (latest["id"], latest["evaluation"]) == (2, {"val": None, "test": None})
+    assert login(env.client, "peer").status_code == 200
+    assert env.client.get("/api/training/history").json()["compositions"] == []
 
 
 def test_training_history_keeps_explicit_jobs_and_ignores_invalid_compositions(triad_env, monkeypatch):
@@ -298,10 +348,10 @@ def test_training_history_keeps_explicit_jobs_and_ignores_invalid_compositions(t
     assert body["compositions"] == [
         {"id": 1, "version": 1, "job_id": "job-1", "components": [
             {"id_modelo": 1, "weight": V1_WEIGHTS[0]}, {"id_modelo": 2, "weight": V1_WEIGHTS[1]},
-            {"id_modelo": 3, "weight": V1_WEIGHTS[2]}]},
+            {"id_modelo": 3, "weight": V1_WEIGHTS[2]}], "evaluation": {"val": None, "test": None}},
         {"id": 2, "version": 1, "job_id": "job-2", "components": [
             {"id_modelo": 4, "weight": .2}, {"id_modelo": 5, "weight": .3},
-            {"id_modelo": 6, "weight": .5}]},
+            {"id_modelo": 6, "weight": .5}], "evaluation": {"val": None, "test": None}},
     ]
 
 

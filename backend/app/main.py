@@ -1293,6 +1293,11 @@ def get_training_history(request: Request, response: Response, db: Session = Dep
                              "job_id": composition.job_id,
                              "components": [{"id_modelo": model_id, "weight": weight}
                                             for model_id, weight in zip(ids, weights)]})
+    from app.services.triad_evaluations import TriadEvaluationService, joint_evaluation_summary
+    attempts = TriadEvaluationService(db).latest_by_split([item["id"] for item in compositions])
+    for item in compositions:
+        # Stored attempts of this exact composition only; reading never runs inference.
+        item["evaluation"] = joint_evaluation_summary(attempts.get(item["id"], {}))
     return {"history": history, "compositions": compositions}
 
 
