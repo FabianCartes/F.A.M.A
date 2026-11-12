@@ -1,0 +1,366 @@
+{
+  "scope": "Delivery A: dataset identification, grouped standard-triad history and joint technical sheet; B paused",
+  "base_commit": "4e39664cc9b5664b5d3f3edabb8170709c3c309e",
+  "branch": "feat/triad-presentation",
+  "overall_verdict": "completed_with_synthetic_frontend_checks_and_declared_limits",
+  "completed_behavior": [
+    "Dataset visual metadata for standard triad prediction selector",
+    "Latest authorized composition metadata alongside unchanged individual history",
+    "One history row per complete valid explicit composition; invalid/orphan rows preserved",
+    "Architecture sections with existing individual details and current composition weights",
+    "Sin evaluación conjunta; no mean of component accuracies",
+    "Existing per-component checkpoint sync action; simulated checks only"
+  ],
+  "backend": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 <validated-python> tests/run_isolated_training_checks.py <one-file> -q",
+    "mode": "each file in a fresh process; not the historical combined suite",
+    "files": [
+      {
+        "file": "tests/test_triad_access_regressions.py",
+        "passed": 26,
+        "exit_code": 0
+      },
+      {
+        "file": "tests/test_training_history_metadata.py",
+        "passed": 11,
+        "exit_code": 0
+      },
+      {
+        "file": "tests/test_api_model_catalogue.py",
+        "passed": 69,
+        "exit_code": 0
+      },
+      {
+        "file": "tests/test_triad_predictor.py",
+        "passed": 33,
+        "exit_code": 0
+      }
+    ],
+    "passed": 139,
+    "deselected": 0,
+    "sqlite": "in-memory",
+    "network": "blocked",
+    "protected_paths_unchanged": true
+  },
+  "frontend": {
+    "suite": {
+      "command": "npm test -- --run",
+      "exit_code": 0,
+      "files_passed": 79,
+      "files_failed": 0,
+      "tests_passed": 662,
+      "tests_failed": 0
+    },
+    "typescript": {
+      "command": "npx --no-install tsc --noEmit --incremental false",
+      "exit_code": 0
+    },
+    "lint": {
+      "command": "npx --no-install eslint <eight changed TypeScript files>",
+      "exit_code": 0
+    },
+    "build": {
+      "command": "NEXT_TELEMETRY_DISABLED=1 FAMA_NEXT_DIST_DIR=.next-a-callback npm run build -- --webpack",
+      "exit_code": 0
+    }
+  },
+  "independent": {
+    "initial": {
+      "task": "mwcvl4br-a-rlep",
+      "http_passed": 26,
+      "react_passed": 5,
+      "blockers": [
+        "Grouped row showed canonical dataset instead of visual label",
+        "Joint sheet showed member version instead of composition version"
+      ]
+    },
+    "correction": {
+      "task": "mwcvo2bo-b-bvwx",
+      "both_regressions_red": true,
+      "red_exit_code": 1,
+      "green_passed": 12,
+      "green_exit_code": 0,
+      "typecheck_exit_code": 0,
+      "lint_exit_code": 0
+    },
+    "limited_reverification": {
+      "task": "mwcvsnrz-c-1bdw",
+      "command": "npm test -- --run components/views/__tests__/TrainingViewTriadHistory.test.tsx -t 'prioriza el dataset visual|identifica la ficha conjunta|probe independiente'",
+      "exit_code": 0,
+      "passed": 3,
+      "filtered_out": 5,
+      "blockers_resolved": true
+    }
+  },
+  "baseline_contrast": {
+    "file": "components/views/__tests__/DatasetImportRejectionReason.test.tsx",
+    "mode": "one file per tree, not a repeat of the full suite",
+    "base": {
+      "passed": 6,
+      "report_success": true,
+      "exit_code": null,
+      "limit": "Test process exit not persisted before parent reporter parser failed; JSON test report recovered without rerun."
+    },
+    "candidate": {
+      "passed": 6,
+      "exit_code": 0
+    },
+    "conclusion": "Full-suite failure not reproduced by this bounded contrast; baseline full-suite failure and absence of regression are not established."
+  },
+  "shared_module_differential": {
+    "module": "frontend/components/training/TechnicalSheetRows.tsx",
+    "interface": "hyperparameterRows(item), existing standalone call without composition override",
+    "fixtures": [
+      "recorded zero weight and training settings",
+      "recorded nonzero weight",
+      "missing metadata",
+      "null metadata"
+    ],
+    "base_and_candidate_outputs_identical": true,
+    "exit_code": 0,
+    "stderr_empty": true,
+    "committed_test_reads_git_history": false
+  },
+  "snapshot": {
+    "files": 615,
+    "bytes": 9898919,
+    "max_total_bytes": 67108864,
+    "max_file_bytes": 8388608,
+    "source": "allowlisted working tree bytes including new frontend files",
+    "operational_data_copied": false,
+    "dependencies": "existing interpreter and individually linked frontend packages; private caches",
+    "source_hashes_match": true
+  },
+  "not_verified": [
+    "Browser interaction against running app",
+    "Real GCS operations",
+    "Real training/evaluation or model quality",
+    "GPU",
+    "PostgreSQL",
+    "Docker/Python3.12"
+  ],
+  "delivery": {
+    "strategy": "feature-branch-chain",
+    "base": "4e39664cc9b5664b5d3f3edabb8170709c3c309e",
+    "verification_tip": "8e09e663581063bdbc7a5e999fb99084e9e4e923",
+    "commits_created": [
+      {
+        "id": "5e7417e02e041b0858eee905ab7452f73032f40d",
+        "specs": [
+          "S1",
+          "S5"
+        ],
+        "purpose": "Prediction dataset/version identification"
+      },
+      {
+        "id": "7bff776eb9dd08880681e8d14c5917402510fb23",
+        "specs": [
+          "S7",
+          "S8"
+        ],
+        "purpose": "Test-only asynchronous request/callback synchronization"
+      },
+      {
+        "id": "8e09e663581063bdbc7a5e999fb99084e9e4e923",
+        "specs": [
+          "S2",
+          "S3",
+          "S4",
+          "S5"
+        ],
+        "purpose": "Authorized grouped history and joint technical sheet"
+      }
+    ],
+    "documentation": "Closure documentation and this receipt recorded in a final local documentation unit",
+    "push": false,
+    "pull_request": false,
+    "B_implemented": false
+  },
+  "decision_needed": null,
+  "source_sha256": {
+    "backend/app/main.py": "4b4810a09b1355f8e769bffc183b0cb1caed57f63d80e9c5dc5ffdb3c07269bf",
+    "backend/app/services/registry.py": "d65d420b1885eec21354bdadb8e0aa96b45c3dc666782370507f9fb8caf31e18",
+    "backend/tests/test_api_model_catalogue.py": "1789bc2cf6bbfd03ec9510114f6201485c90705c7f27fa0d257e6ded9035cd5d",
+    "backend/tests/test_triad_access_regressions.py": "e5f0e1a8a8d9e8d490d124126de1b5eab458efe1cce440139acbc38317703367",
+    "frontend/components/prediction/PredictionModelSelector.tsx": "b313aae7acf3126c9f7412f99d4149eba33a147a04a8549ff32e1a112230687f",
+    "frontend/components/prediction/__tests__/PredictionModelSelector.test.tsx": "3f96d946be55a7445460ff657a1c314b1659e0c1b28e13af483233094c628f82",
+    "frontend/components/training/TechnicalSheetRows.tsx": "bc1d6161c0ff13e3d8e99a34ca4ac1c1ec6b7a51557673d0ebb4995b22338417",
+    "frontend/components/views/TrainingView.tsx": "e85e9eab525b458f60f0289be887a2468a0e0da0b1b553300463be00635d3922",
+    "frontend/components/training/triadHistory.ts": "933be7418b3c682f9dd98e6fa43d2a772454845cc9a74d0be806a3e7cc6f1439",
+    "frontend/components/views/__tests__/TrainingViewTriadHistory.test.tsx": "d4d7f738159df69062faf882b3451a6c6d7847117c23769a93ad077a7e91fe38",
+    "frontend/components/views/__tests__/DatasetImportAutomatic.test.tsx": "ab2a1bab161889a3fb32296ed1341dfeca59d5979e07f0c7920475ba25e8ba73",
+    "frontend/components/views/__tests__/DatasetImportRejectionReason.test.tsx": "2856327428a62672df46651a42302a2478440384c4fe754dd3a0194ab8ec0c60"
+  },
+  "latest_verification": "final_after_callback_wait",
+  "followup_after_test_synchronization": {
+    "scope": "Authorized correction only in DatasetImportRejectionReason.test.tsx; production unchanged",
+    "change": "waitFor confirms first issues request assigned its resolver; signal must not be aborted before identity change. Existing abort and no-stale-response assertions retained.",
+    "focal": {
+      "command": "npm test -- --run components/views/__tests__/DatasetImportRejectionReason.test.tsx",
+      "passed": 6,
+      "exit_code": 0
+    },
+    "full_suite": {
+      "command": "npm test -- --run",
+      "files_passed": 78,
+      "files_failed": 1,
+      "tests_passed": 661,
+      "tests_failed": 1,
+      "exit_code": 1,
+      "previous_failing_file_now_passed": true,
+      "failure": {
+        "file": "components/views/__tests__/DatasetImportAutomatic.test.tsx",
+        "test": "shows uploaded GCS audios after validation while the automatic job publishes",
+        "line": 170,
+        "message": "expected last vi.fn() call to have been called with ['Birds']",
+        "expected": "Birds",
+        "received": null
+      }
+    },
+    "typescript": {
+      "command": "npx --no-install tsc --noEmit --incremental false",
+      "exit_code": 0
+    },
+    "lint": {
+      "command": "npx --no-install eslint <seven changed TypeScript files>",
+      "exit_code": 0
+    },
+    "build": {
+      "command": "NEXT_TELEMETRY_DISABLED=1 FAMA_NEXT_DIST_DIR=.next-a-handshake npm run build -- --webpack",
+      "exit_code": 0
+    },
+    "snapshot": {
+      "files": 177,
+      "bytes": 2439859,
+      "cap_bytes": 67108864,
+      "max_file_bytes": 8388608,
+      "working_tree_frontend_source_hashes_unchanged": true,
+      "dependencies": "existing individual package links, private caches and separate empty npm user/global config"
+    },
+    "assessment": {
+      "operation": "assess",
+      "risk": "medium",
+      "nativeRisk": "unassessable",
+      "rdd": "off",
+      "independentVerifier": false,
+      "reason": "Test-only correction; earlier independent verification of A production remains separately recorded. Native unassessable due untracked files."
+    },
+    "tdd": "No new production change or meaningful production RED. Earlier full-suite TypeError and controlled diagnostic evidence retained; no fabricated fresh RED.",
+    "new_failure_scope": "New finding outside the single authorized test correction. Not investigated or changed; no automatic full-suite retry.",
+    "new_test_source_sha256": "2856327428a62672df46651a42302a2478440384c4fe754dd3a0194ab8ec0c60"
+  },
+  "historical_frontend_before_stabilization": {
+    "suite": {
+      "command": "npm test -- --run",
+      "exit_code": 1,
+      "files_passed": 78,
+      "files_failed": 1,
+      "tests_passed": 661,
+      "tests_failed": 1,
+      "failure": {
+        "file": "components/views/__tests__/DatasetImportRejectionReason.test.tsx",
+        "test": "aborts obsolete requests without displaying another identity's reasons",
+        "error": "TypeError: finish is not a function",
+        "line": 66
+      }
+    },
+    "typescript": {
+      "command": "npx --no-install tsc --noEmit --incremental false",
+      "exit_code": 0
+    },
+    "lint": {
+      "command": "npx --no-install eslint <six changed TypeScript files>",
+      "exit_code": 0
+    },
+    "build": {
+      "command": "NEXT_TELEMETRY_DISABLED=1 FAMA_NEXT_DIST_DIR=.next-a-final npm run build -- --webpack",
+      "exit_code": 0
+    }
+  },
+  "final_after_callback_wait": {
+    "authorized_change": "One existing immediate callback assertion replaced by await waitFor; waitFor already imported. No new production changes.",
+    "focal": {
+      "command": "npm test -- --run components/views/__tests__/DatasetImportAutomatic.test.tsx",
+      "passed": 6,
+      "exit_code": 0
+    },
+    "full_verification": {
+      "suite": {
+        "command": "npm test -- --run",
+        "exit_code": 0,
+        "files_passed": 79,
+        "files_failed": 0,
+        "tests_passed": 662,
+        "tests_failed": 0
+      },
+      "typescript": {
+        "command": "npx --no-install tsc --noEmit --incremental false",
+        "exit_code": 0
+      },
+      "lint": {
+        "command": "npx --no-install eslint <eight changed TypeScript files>",
+        "exit_code": 0
+      },
+      "build": {
+        "command": "NEXT_TELEMETRY_DISABLED=1 FAMA_NEXT_DIST_DIR=.next-a-callback npm run build -- --webpack",
+        "exit_code": 0
+      }
+    },
+    "snapshot": {
+      "files": 177,
+      "bytes": 2439880,
+      "max_total_bytes": 67108864,
+      "max_file_bytes": 8388608,
+      "dependencies": "existing individually linked packages, private caches, no real data",
+      "source_hashes_match_working_tree": true
+    },
+    "diagnostic_evidence": {
+      "root_class": "Visible DOM commit does not imply passive effect already completed",
+      "original_tests": 6,
+      "temporary_probes": 1,
+      "exit_code": 0,
+      "trace": {
+        "publishing_dom_commit": {
+          "last_callback": null,
+          "previous_callbacks": [
+            null
+          ]
+        },
+        "before_cleanup": [
+          null,
+          "Birds"
+        ],
+        "after_cleanup": [
+          null,
+          "Birds",
+          null
+        ]
+      },
+      "historical_full_suite_order_reconstructed": false
+    },
+    "assessment": {
+      "operation": "assess",
+      "risk": "medium",
+      "nativeRisk": "unassessable",
+      "rdd": "off",
+      "independentVerifier": false,
+      "reason": "Single test-only correction; prior independent verification of A production preserved separately."
+    },
+    "verification_commit": "8e09e663581063bdbc7a5e999fb99084e9e4e923"
+  },
+  "historical_process_limits": [
+    "Frontend grouping had RED before implementation; details/sync rules lacked separate RED despite passing coverage",
+    "Initial parent frontend checks did not start: npm user/global configs both pointed to /dev/null; after distinct empty files, suite/types/lint/build ran",
+    "Baseline contrast reporter initially expected JSON on stdout, but Vitest wrote a JSON artifact; recovered report without rerunning base test",
+    "Historical backend combined order-dependent failure and timeout remain historical failures, not new passes",
+    "Global frontend suite is not approved; no second global rerun or unrelated test fix performed"
+  ],
+  "verification_limits": [
+    "Backend139 tests are earlier observed checks of unchanged source, not a fresh backend run in the final callback step",
+    "Full frontend verification is one final observed run of79files/662tests after authorized fixes, not a guarantee of future scheduling",
+    "Independent reverification ran3cases with5filtered-out cases; full final suite has no filtered-out cases",
+    "Initial grouping had RED; some details/sync coverage was added after implementation without separate RED per rule",
+    "Test-only stabilizations have no new production RED; historical failures and diagnostic schedules remain distinct",
+    "RDD disabled; native assessment unassessable due untracked files at assessment time; no native review lifecycle executed"
+  ]
+}

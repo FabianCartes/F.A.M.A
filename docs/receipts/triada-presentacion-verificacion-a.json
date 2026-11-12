@@ -1,0 +1,192 @@
+{
+  "scope": "Verification of current delivery A; product unchanged; B excluded",
+  "base_commit": "4e39664cc9b5664b5d3f3edabb8170709c3c309e",
+  "branch": "feat/triad-presentation",
+  "overall_verdict": "partial_delivery_not_approved",
+  "snapshot": {
+    "source": "current working tree including tracked modifications",
+    "files": 614,
+    "bytes": 9921652,
+    "limit_bytes": 67108864,
+    "source_sha256": {
+      "backend/app/services/registry.py": "d65d420b1885eec21354bdadb8e0aa96b45c3dc666782370507f9fb8caf31e18",
+      "backend/tests/test_api_model_catalogue.py": "1789bc2cf6bbfd03ec9510114f6201485c90705c7f27fa0d257e6ded9035cd5d",
+      "frontend/components/prediction/PredictionModelSelector.tsx": "b313aae7acf3126c9f7412f99d4149eba33a147a04a8549ff32e1a112230687f",
+      "frontend/components/prediction/__tests__/PredictionModelSelector.test.tsx": "3f96d946be55a7445460ff657a1c314b1659e0c1b28e13af483233094c628f82"
+    },
+    "live_code_matches_snapshot": true,
+    "excluded": "operational data, untracked hidden runtimes, checkpoints, credentials, .venv",
+    "dependencies": "existing validated interpreter and individually linked node packages; caches private"
+  },
+  "preparation_limits": [
+    "Initial allowlist refused tracked mp3 fixture before copying; corrected to admit tracked test fixtures only",
+    "Initial baseline preparation refused tsconfig changed by Next build inside snapshot; no tests ran; corrected baseline to backend-only"
+  ],
+  "backend_combined": {
+    "command": "$FAMA_PYTHON tests/run_isolated_training_checks.py tests/test_api_model_catalogue.py tests/test_triad_predictor.py tests/test_training_history_metadata.py -q",
+    "timeout_seconds": 180,
+    "result": {
+      "status": "failed",
+      "process_exit_code": 1,
+      "deselected_cases": [],
+      "nonpassing_reports": [
+        {
+          "nodeid": "tests/test_triad_predictor.py::test_full_vectors_choose_nonwinning_class_and_keep_single_output",
+          "phase": "call",
+          "outcome": "failed",
+          "duration_seconds": 0.029
+        }
+      ],
+      "private_scratch_cleanup": true,
+      "protected_paths_unchanged": true,
+      "only_sqlite_synthetic_cpu": true,
+      "network_live_db_forbidden": true,
+      "passed_calls": 69
+    },
+    "limit": "69 catalogue calls passed before predictor failure; history not reached"
+  },
+  "backend_per_process": {
+    "command": "$FAMA_PYTHON tests/run_isolated_training_checks.py <one file> -q",
+    "timeout_seconds_each": 90,
+    "files": [
+      "tests/test_triad_predictor.py",
+      "tests/test_training_history_metadata.py"
+    ],
+    "results": [
+      {
+        "status": "passed",
+        "process_exit_code": 0,
+        "deselected_cases": [],
+        "nonpassing_reports": [],
+        "private_scratch_cleanup": true,
+        "protected_paths_unchanged": true,
+        "only_sqlite_synthetic_cpu": true,
+        "network_live_db_forbidden": true,
+        "passed_calls": 33
+      },
+      {
+        "status": "passed",
+        "process_exit_code": 0,
+        "deselected_cases": [],
+        "nonpassing_reports": [],
+        "private_scratch_cleanup": true,
+        "protected_paths_unchanged": true,
+        "only_sqlite_synthetic_cpu": true,
+        "network_live_db_forbidden": true,
+        "passed_calls": 11
+      }
+    ]
+  },
+  "frontend": {
+    "vitest": {
+      "command": "npm test -- --run",
+      "files_passed": 78,
+      "tests_passed": 655,
+      "exit": 0
+    },
+    "typescript": {
+      "command": "npx tsc --noEmit --incremental false",
+      "exit": 0
+    },
+    "lint_focal": {
+      "command": "npx eslint components/prediction/PredictionModelSelector.tsx components/prediction/__tests__/PredictionModelSelector.test.tsx",
+      "exit": 0
+    },
+    "build": {
+      "command": "NEXT_TELEMETRY_DISABLED=1 FAMA_NEXT_DIST_DIR=.next-verify-a npm run build -- --webpack",
+      "exit": 0
+    }
+  },
+  "independent": {
+    "task": "mwcu4bh9-9-f594",
+    "existing_http_cases_passed": 3,
+    "temporary_public_activation_probe_passed": 1,
+    "probe_only_in_snapshot": true,
+    "component_state": "standard_component_evaluated",
+    "activation_http_status": 200,
+    "activation_body": {
+      "success": false,
+      "error": "Modelo nuevo sin evaluación estándar val/test completada; activación/publicación bloqueada."
+    },
+    "public_reads_unchanged": [
+      "history",
+      "composition",
+      "catalogue"
+    ],
+    "limit": "probe did not establish published-default composition; unimplemented T2 interactions not exercised"
+  },
+  "parent_spot_check": {
+    "cases": [
+      "test_assignment_authorizes_a_revision_that_creates_the_next_version",
+      "test_unassigned_user_neither_lists_nor_predicts_with_the_composition",
+      "test_assigned_user_sees_the_composition_as_one_metadata_only_model"
+    ],
+    "passed": 3,
+    "exit": 0
+  },
+  "order_failure_comparison": {
+    "results": [
+      {
+        "label": "base",
+        "exit": 1,
+        "calls": [
+          [
+            "tests/test_api_model_catalogue.py::test_triad_trained_with_evaluated_components_is_published_as_one_model",
+            "passed"
+          ],
+          [
+            "tests/test_triad_predictor.py::test_full_vectors_choose_nonwinning_class_and_keep_single_output",
+            "failed"
+          ]
+        ],
+        "same_failure_message": true,
+        "cleanup": true,
+        "stderr": ""
+      },
+      {
+        "label": "candidate",
+        "exit": 1,
+        "calls": [
+          [
+            "tests/test_api_model_catalogue.py::test_triad_trained_with_evaluated_components_is_published_as_one_model",
+            "passed"
+          ],
+          [
+            "tests/test_triad_predictor.py::test_full_vectors_choose_nonwinning_class_and_keep_single_output",
+            "failed"
+          ]
+        ],
+        "same_failure_message": true,
+        "cleanup": true,
+        "stderr": ""
+      }
+    ],
+    "comparison": {
+      "base_and_candidate_same_exit": true,
+      "same_public_test_outcomes": true,
+      "same_failure_message": true,
+      "copied_files": 438
+    }
+  },
+  "specs": {
+    "S1": "positive catalogue/selector evidence for T1",
+    "S2": "not implemented",
+    "S3": "not implemented",
+    "S4": "not implemented; grouped placeholder missing",
+    "S5": "positive focal access/latest/component rejection; T2 interactions unavailable",
+    "S6": "B/live operations excluded; handoff exists"
+  },
+  "remaining": [
+    "T2 grouped row",
+    "T2 combined technical sheet with current weights",
+    "Sin evaluación conjunta placeholder",
+    "T2 integration including simulated per-component sync"
+  ],
+  "limits": [
+    "No product edits, commits, push, services or real cloud/model operations",
+    "No live browser proof; Python3.14.8 not Docker3.12 proof",
+    "Historical30s timeout remains failed; original suite not retried",
+    "Combined backend suite remains failed; base also fails; per-file suites pass",
+    "Runtime stream handling not patched; preparation avoids oversized copy"
+  ]
+}
