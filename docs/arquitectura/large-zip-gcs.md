@@ -1,5 +1,5 @@
 # Large ZIP imports and GCS reconstruction — implementation log
-Objective: implement the user-confirmed [complete original plan](large-zip-gcs-plan.md) incrementally, starting with normalized metadata, without raising production limits first.
+Objective: implement the user-confirmed [complete original plan](../historico/arquitectura/large-zip-gcs-plan.md) incrementally, starting with normalized metadata, without raising production limits first.
 Branch: `feat/dataset-zip-import`. Route: inline implementation, independent high-risk verification. Delivery: feature-branch-chain (user confirmed); no remote operations. Checks: isolated Python runner, rendered frontend tests and static checks.
 
 ## Specs

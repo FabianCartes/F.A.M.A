@@ -69,6 +69,6 @@ El runner protegido comprobó 68 casos de migración/CLI/sync/ejecución local, 
 
 La evaluación nativa no pudo determinar el riesgo por archivos no rastreados no declarados; no equivale a aprobación. El cierre independiente, sus comandos y cualquier fallo o corrección del vector se registran en el recibo.
 
-- [Plan y seguimiento](../arquitectura/gcs-sync-consumer-plan.md)
+- [Plan y seguimiento](../historico/arquitectura/gcs-sync-consumer-plan.md)
 - [Recibo de sincronización](../receipts/gcs-sync-consumer.json)
 - [Conexión GCS previa](gcs-mvp-local.md)

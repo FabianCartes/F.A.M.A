@@ -298,7 +298,7 @@ competidores, resetear pendientes o reparticionar para ocultar el fallo.
 
 ## Qué demuestra la evidencia disponible
 
-El [tablero](../KANBAN.md) registra 557 pruebas aisladas integradas aprobadas,
+El [tablero](../historico/seguimiento/KANBAN.md) registra 557 pruebas aisladas integradas aprobadas,
 con cobertura de dos dominios; no son toda la suite ni prueba de datos operativos,
 dependencias desplegadas o aprobación nativa integral. El tablero identifica
 cada revisión nativa consumida y su rango exacto: un recibo no cubre otros archivos

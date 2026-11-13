@@ -1,6 +1,6 @@
 # Actualización oficial a 0004 — 25 de octubre de 2026
 
-Estado: aplicada y comprobada. F.A.M.A. funciona en `http://localhost:3010/`, con backend 8010, proxy Cloud SQL 5434, base `fama_oficial`, bucket `fama-audio-records-2026` y runtime existente. El código de aplicación es `54bdaaf`, rama `fix/afinamiento-integral`, en la carpeta habitual `C:/Users/local-user/Desktop/F.A.M.A`. La copia de integración deja de ser el checkout de trabajo. [Recibo de esta operación](../receipts/actualizacion_oficial_0004_20261025.json).
+Estado: aplicada y comprobada. F.A.M.A. funciona en `http://localhost:3010/`, con backend 8010, proxy Cloud SQL 5434, base `fama_oficial`, bucket `fama-audio-records-2026` y runtime existente. El código de aplicación es `54bdaaf`, rama `fix/afinamiento-integral`, en la carpeta habitual `C:/Users/local-user/Desktop/F.A.M.A`. La copia de integración deja de ser el checkout de trabajo. [Recibo de esta operación](../../receipts/actualizacion_oficial_0004_20261025.json).
 
 ## Operación y verificación
 
@@ -42,7 +42,7 @@ Las pruebas sintéticas de integración del día 24 siguen siendo evidencia hist
 
 Ambas copias se restauraron en bases nuevas de un PostgreSQL 16 local temporal, sin red ni puertos publicados. Cada tabla coincidió por recuento y SHA-256 de todas sus filas; cada secuencia coincidió por valor y estado. Se montaron solamente los archivos SQL privados de solo lectura, que contienen las filas y hashes de autenticación de la base; no se montaron ADC ni secretos de conexión. El contenedor temporal fue retirado y los contenedores ajenos se conservaron.
 
-La referencia local `codex/official-runtime-20261024` conserva el código anterior `aa53e09`. Para volver a él también se necesita restaurar una base compatible con 0003 desde el respaldo previo; cambiar de rama por sí solo no revierte la base. Preparar un destino separado y permisos con el operador, siguiendo [respaldo y restauración](respaldo_y_restauracion_postgresql.md). No se ensayó una restauración destructiva sobre la base activa ni PITR administrado de Cloud SQL. Retención y copia SQL fuera de este equipo siguen pendientes.
+La referencia local `codex/official-runtime-20261024` conserva el código anterior `aa53e09`. Para volver a él también se necesita restaurar una base compatible con 0003 desde el respaldo previo; cambiar de rama por sí solo no revierte la base. Preparar un destino separado y permisos con el operador, siguiendo [respaldo y restauración](../../manuales/respaldo_y_restauracion_postgresql.md). No se ensayó una restauración destructiva sobre la base activa ni PITR administrado de Cloud SQL. Retención y copia SQL fuera de este equipo siguen pendientes.
 
 Los dumps, perfiles y material de mantenimiento están protegidos y excluidos de Git y del contexto Docker. Los recibos públicos contienen huellas y resultados, nunca las filas, contraseñas, cookies o tokens.
 

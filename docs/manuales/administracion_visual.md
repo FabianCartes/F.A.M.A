@@ -1,6 +1,6 @@
 # Administración visual de cuentas y acceso
 
-**20 de octubre de 2026. Rama `fix/afinamiento-integral`.** Continuación de ACCESO-4A sobre las sesiones y contratos existentes de ADR 0052–0039. El cierre de pruebas y sus límites se registran en [KANBAN](../KANBAN.md).
+**20 de octubre de 2026. Rama `fix/afinamiento-integral`.** Continuación de ACCESO-4A sobre las sesiones y contratos existentes de ADR 0052–0039. El cierre de pruebas y sus límites se registran en [KANBAN](../historico/seguimiento/KANBAN.md).
 
 ## Mi cuenta
 
@@ -51,7 +51,7 @@ Devuelve `user_id`, `datasets` (`dataset_id`, `name`, `assigned`), `total`, `lim
 
 ## Verificación y límites
 
-Las pruebas de interfaz recorren la entrada real de la aplicación con HTTP simulado. Las del nuevo inventario recorren el router con cookies y SQLite temporal. Incluyen roles, mutaciones confirmadas, cambio de contraseña/revocación, recuperación efímera, errores, asignaciones, respuestas tardías, cursor y limpieza explícita. Resultados exactos en [KANBAN](../KANBAN.md).
+Las pruebas de interfaz recorren la entrada real de la aplicación con HTTP simulado. Las del nuevo inventario recorren el router con cookies y SQLite temporal. Incluyen roles, mutaciones confirmadas, cambio de contraseña/revocación, recuperación efímera, errores, asignaciones, respuestas tardías, cursor y limpieza explícita. Resultados exactos en [KANBAN](../historico/seguimiento/KANBAN.md).
 
 Cierre: 115 pruebas backend aprobadas en cinco archivos; frontend completo 296 aprobadas en 29 archivos. Los 17 casos nuevos están incluidos en ese total; su ejecución focal posterior al refuerzo de una espera también pasó. TypeScript sin emisión/incremental y ESLint focal finalizaron sin diagnósticos. Las ejecuciones parciales anteriores no se suman como pruebas adicionales.
 

@@ -21,4 +21,4 @@ Decodificación estructural no certifica clase, silencio, ruido, calidad, aptitu
 
 La suma de contenidos queda acotada, pero existen copias, buffers del decoder y spooling multipart anterior al manejador: no se garantiza RAM total de 256 MiB, límite de tráfico/disk en el parser ni defensa frente a todas las cargas adversarias. CPU/tiempo de descompresión, concurrencia, rate limiting, límites ASGI/proxy y controles de acceso siguen pendientes antes de exposición. No se instala ni cambia dependencias ni se opera cloud/BD real.
 
-Pruebas públicas con WAV/FLAC/OGG/MP3 sintéticos, caso FLAC truncado con cabecera legible, límites inclusivos y sin transferencias previas; Compose config aislado sin daemon. Evidencia en [KANBAN](../KANBAN.md).
+Pruebas públicas con WAV/FLAC/OGG/MP3 sintéticos, caso FLAC truncado con cabecera legible, límites inclusivos y sin transferencias previas; Compose config aislado sin daemon. Evidencia en [KANBAN](../historico/seguimiento/KANBAN.md).

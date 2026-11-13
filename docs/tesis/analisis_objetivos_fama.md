@@ -1,7 +1,7 @@
 # Análisis de Objetivos del Proyecto F.A.M.A.
 ### Estado del código vs. Tesis — Revisión histórica del 2 y actualización acotada del 15–17 de octubre de 2026
 
-La revisión histórica del 2 de octubre distingue **implementado** (código presente), **evidencia histórica** (resultados registrados en recibos) y **pendiente de validación** (comportamiento aún no acreditado en el entorno objetivo). En esa revisión no se ejecutaron pruebas, contenedores ni benchmarks. Se conserva debajo como antecedente; no debe leerse como inventario vigente de cada defecto. Los pendientes actuales se mantienen en [KANBAN.md](../KANBAN.md).
+La revisión histórica del 2 de octubre distingue **implementado** (código presente), **evidencia histórica** (resultados registrados en recibos) y **pendiente de validación** (comportamiento aún no acreditado en el entorno objetivo). En esa revisión no se ejecutaron pruebas, contenedores ni benchmarks. Se conserva debajo como antecedente; no debe leerse como inventario vigente de cada defecto. Los pendientes actuales se mantienen en [KANBAN.md](../historico/seguimiento/KANBAN.md).
 
 ## Actualización vigente de alcance limitado — 15 de octubre de 2026
 
@@ -34,7 +34,7 @@ La revisión histórica del 2 de octubre distingue **implementado** (código pre
 - Backend acotado de AFIN-25: **371 PASS**, una prueba de calidad Chucao real deseleccionada, 24 archivos; tres deprecaciones. No es la suite global.
 - Frontend completo de AFIN-25: **249 PASS/23 archivos**, TypeScript y ESLint focal sin diagnósticos. Node observado 22.20.0 sigue fuera del requisito del jsdom instalado; PASS no acredita compatibilidad oficial del runtime.
 - Contenedores/configuración: **10 PASS** con Compose config y Docker CLI/API simulada. Sin nuevo build/arranque de servicios ni validación GPU.
-- Las regresiones aisladas no usan datos/BD/GCS/pesos reales, migraciones, push o despliegue. La excepción autorizada de benchmark se describe a continuación. Evidencia e interfaces en [KANBAN](../KANBAN.md); estado para retomar en [manual operativo de pendientes](../manuales/estado_actual_y_pendientes.md).
+- Las regresiones aisladas no usan datos/BD/GCS/pesos reales, migraciones, push o despliegue. La excepción autorizada de benchmark se describe a continuación. Evidencia e interfaces en [KANBAN](../historico/seguimiento/KANBAN.md); estado para retomar en [manual operativo de pendientes](../manuales/estado_actual_y_pendientes.md).
 
 ### Suplemento autorizado de benchmark local — 16 de octubre de 2026
 

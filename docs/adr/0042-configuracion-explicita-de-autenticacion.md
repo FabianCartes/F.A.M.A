@@ -19,4 +19,4 @@ Las variables se leen en el proceso; la clave JWT se captura al importar el mód
 
 La plantilla contiene campos vacíos, no credenciales listas para usar. La corrección posterior de [ADR 0043](0043-configuracion-runtime-y-contexto-sin-credenciales.md) propaga estas variables mediante Compose y excluye JSON del contexto backend; editar `backend/.env` no configura por sí solo un contenedor que no monta ese archivo. Sin build, despliegue ni cambios sobre datos/credenciales reales. Login y permisos permanecen pospuestos a la etapa de funcionalidades nuevas por decisión del usuario.
 
-Evidencia por interfaces públicas en [KANBAN.md](../KANBAN.md): entorno de importación limpio sin dotenv, claves/credenciales sintéticas y SQLite temporal; no prueba configuración del despliegue real.
+Evidencia por interfaces públicas en [KANBAN.md](../historico/seguimiento/KANBAN.md): entorno de importación limpio sin dotenv, claves/credenciales sintéticas y SQLite temporal; no prueba configuración del despliegue real.

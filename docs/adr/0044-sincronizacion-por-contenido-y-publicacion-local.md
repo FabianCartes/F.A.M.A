@@ -19,4 +19,4 @@ No hay transacción distribuida entre archivos y BD, locks de escritores concurr
 
 Este cambio corresponde a `sync_dataset_to_local`. La subida, estimaciones de sincronización del catálogo por conteos, validación de rutas/formatos y metadatos acústicos prefijados siguen como correcciones separadas. Tampoco certifica particiones listas para entrenar ni calidad de audio. SDK/metadatos del proveedor siguen determinando la versión leída; no se promete un snapshot cloud inmutable.
 
-Interfaces públicas acordadas: sincronización y lectura de datasets de entrenamiento. Pruebas con adaptador GCS falso, archivos locales temporales y SQLite, sin datos/servicios reales; resultados en [KANBAN.md](../KANBAN.md).
+Interfaces públicas acordadas: sincronización y lectura de datasets de entrenamiento. Pruebas con adaptador GCS falso, archivos locales temporales y SQLite, sin datos/servicios reales; resultados en [KANBAN.md](../historico/seguimiento/KANBAN.md).

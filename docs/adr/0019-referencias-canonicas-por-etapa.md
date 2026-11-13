@@ -61,6 +61,6 @@ Al migrar consumidores, esta decisión sustituye la inferencia legacy de Aves as
 
 ## Alcance implementado y continuación
 
-CANON-1 incorpora módulo, [pruebas públicas aisladas](../../backend/tests/test_dataset_references.py) e índice documental. Productores/base `AudioRecordingMetadata` (CANON-2), entrenamiento/mezcla/ingesta (CANON-3), feedback (CANON-4), conversión offline (CANON-5) y retirada integrada de dependencias legacy (CANON-6) siguen pendientes en el [tablero](../KANBAN.md). Los lectores actuales no han cambiado y los índices históricos todavía pueden carecer de etapa; no se declara resuelto el error real ni completado el flujo integral.
+CANON-1 incorpora módulo, [pruebas públicas aisladas](../../backend/tests/test_dataset_references.py) e índice documental. Productores/base `AudioRecordingMetadata` (CANON-2), entrenamiento/mezcla/ingesta (CANON-3), feedback (CANON-4), conversión offline (CANON-5) y retirada integrada de dependencias legacy (CANON-6) siguen pendientes en el [tablero](../historico/seguimiento/KANBAN.md). Los lectores actuales no han cambiado y los índices históricos todavía pueden carecer de etapa; no se declara resuelto el error real ni completado el flujo integral.
 
 No se autoriza conversión real, reset, escritura BD/GCS, eliminación de enlaces, despliegue ni operación de servicios. El rollback de CANON-1 comprende solo módulo, pruebas, este ADR y su entrada/contador del índice documental; no revierte datos ni los cambios previos de feedback, Predicción o tablero.

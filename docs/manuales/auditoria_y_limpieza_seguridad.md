@@ -90,7 +90,7 @@ El lote acota filas y resultados, no tiempo, RAM total, IO o duración de locks.
 
 Pruebas públicas en `backend/tests/test_security_audit.py`: privacidad, roles/origen, paginación por cursor, eventos de negocio, no duplicación de idempotentes/429, fallos de persistencia y rollback, lotes repetibles, datos vigentes preservados, renovación concurrente de cuota y retención exacta. BD SQLite temporal con FKs, fuentes sintéticas y ningún lifespan productivo.
 
-Focal observada: **32 PASS**, una deprecación (102,49 s). Regresión conjunta y límites de su alcance en [KANBAN](../KANBAN.md). Una prueba concurrente SQLite no reproduce ni certifica todos los intercalados de PostgreSQL; no se declara suite global verde ni se cierran los fallos anteriores de portabilidad/catálogo.
+Focal observada: **32 PASS**, una deprecación (102,49 s). Regresión conjunta y límites de su alcance en [KANBAN](../historico/seguimiento/KANBAN.md). Una prueba concurrente SQLite no reproduce ni certifica todos los intercalados de PostgreSQL; no se declara suite global verde ni se cierran los fallos anteriores de portabilidad/catálogo.
 
 Tras esa focal se reprodujo un GET administrativo con `Origin` ajeno que respondía 200, y se corrigió a 403 mediante la validación compartida. La prueba nueva pasó y se lanzó un cierre conjunto posterior con esa protección incluida; no se suma como si fuera parte de la primera focal.
 

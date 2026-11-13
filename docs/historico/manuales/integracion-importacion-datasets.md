@@ -2,12 +2,12 @@
 
 T8 conecta la evidencia de los cortes anteriores con un recorrido reproducible de
 recepción a descarga. No cambia límites, contratos ni producción. El cierre vigente,
-commits y comprobaciones pendientes se mantienen en el [seguimiento canónico](../arquitectura/large-zip-gcs.md).
+commits y comprobaciones pendientes se mantienen en el [seguimiento canónico](../../arquitectura/large-zip-gcs.md).
 Esta guía no autoriza operaciones sobre datos, bases, GCS o servicios reales.
 
 ## Recorrido del usuario
 
-1. Seleccionar **un ZIP** en el [panel de importación](importacion-datasets-zip.md).
+1. Seleccionar **un ZIP** en el [panel de importación](../../manuales/importacion-datasets-zip.md).
    No dividirlo manualmente: el cliente envía fragmentos secuenciales.
 2. Si se interrumpe la recepción, recuperar la importación y volver a seleccionar
    el ZIP original. El cliente compara todos los hashes del prefijo reconocido
@@ -21,7 +21,7 @@ Esta guía no autoriza operaciones sobre datos, bases, GCS o servicios reales.
 6. Admitir exportación sobre esa revisión completa. Esperar `succeeded`, preparar
    el enlace HTTPS externo y navegar nativamente. El navegador no ensambla un Blob.
    Reintentos por rangos y renovación requieren credenciales vigentes.
-7. Ejecutar mantenimiento explícito según el [manual de trabajos](trabajos-importacion-datasets.md).
+7. Ejecutar mantenimiento explícito según el [manual de trabajos](../../manuales/trabajos-importacion-datasets.md).
    Reservas liberadas no equivalen a espacio físico recuperado. Leer los contadores
    de fallo y ocupado; no borrar staging ni referencias manualmente para desbloquear.
 
@@ -38,7 +38,7 @@ simuladas. No prueba emisión/validación real de tokens de acceso.
 | Un ZIP; reanudación sin retransmisión completa; prefijo diferente rechazado | Recorrido nuevo: tres fragmentos reconocidos, nuevo consumidor HTTP, hashes de todo el prefijo, rechazo409 de fragmento intermedio alterado sin cambio del dump y envío exclusivo del sufijo. Verificación real del cliente en `DatasetImportReceiptRegressions.test.tsx`. |
 | Límites exactos, exceso de un byte/archivo; duplicados internos/destino; confirmaciones competidoras | Evidencia específica ya registrada de T3d/T4: módulos `test_dataset_import_quotas.py`, `test_dataset_zip_validation.py` y pruebas públicas de importación; no se declara una nueva ejecución completa de esos cortes. |
 | Rechazados sin publicación ni sincronización; confirmación explícita | El rechazo de prefijo no cambia estado; la validación integral no crea dataset; confirmar publica exactamente60/600miembros; sincronizar es otra admisión. Pruebas específicas de objetos/manifiestos inválidos siguen en T4/T6/T7. |
-| Contención efectiva del procesamiento no confiable | Procedimiento separado T4 y [ADR0035](../adr/0035-contained-zip-validation.md). La fixture integral sustituye el validador por el sintético cooperativo: el runner original prohíbe subprocesos. **Esta prueba no es evidencia nueva del sandbox OS.** |
+| Contención efectiva del procesamiento no confiable | Procedimiento separado T4 y [ADR0035](../../adr/0035-contained-zip-validation.md). La fixture integral sustituye el validador por el sintético cooperativo: el runner original prohíbe subprocesos. **Esta prueba no es evidencia nueva del sandbox OS.** |
 | Reinicio sin duplicación; rename antes de commit; trabajos independientes | Pruebas entre procesos T2e y T5 registradas en el manual de trabajos. T8 recrea cliente/ejecutor y recupera un lease perdido después de crear un objeto; no mata procesos ni simula fallo físico. |
 | Respuestas y DOM acotados | Páginas de50/200, rechazo de201, muestra<=5; consultas contadas por HTTP para60/600archivos. Panel renderizado recorre todas las páginas sin acumular filas ni confirmar/sincronizar implícitamente. |
 | Trabajo antiguo activo; limpieza/reanudación concurrentes | Evidencia específica de leases/callbacks T2/T5 y rangos activos T7. T8 limpia después de finalizar; no agrega una nueva carrera concurrente. La advertencia `R4-cleanup-open-race` queda como seguimiento separado. |
@@ -62,7 +62,7 @@ CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 OMP_NUM_THREADS=1 MKL_N
 El runner original bloquea red, credenciales y SQLite persistente, crea temporales
 privados y limita cada fase a30s. Debe informar `protected_paths_unchanged`,
 `private_scratch_cleanup` y exit0. No cambiarlo ni cambiar `training_host_guard.py`.
-El audit guard no equivale a un sandbox OS; véase el [procedimiento aislado](integracion-flujo-entrenamiento.md#reproducir-comprobaciones-aisladas).
+El audit guard no equivale a un sandbox OS; véase el [procedimiento aislado](../../manuales/integracion-flujo-entrenamiento.md#reproducir-comprobaciones-aisladas).
 
 Desde `frontend/`, sin servidor ni navegador externo:
 
@@ -125,8 +125,8 @@ dataset, nombre/descripción, totales y miembros con rutas original/canónica, c
 procedencia, hash, tamaño y clave/generación de objeto. El exportador verifica la
 versión y cada miembro; no aceptar una versión desconocida ni inferir compatibilidad
 por el nombre del archivo. Los WAV mantienen sus bytes, sin conversión de dominio.
-Véanse [ADR0037](../adr/0037-immutable-dataset-revision-manifests.md) y
-[ADR0038](../adr/0038-complete-zip-exports-native-sessions.md).
+Véanse [ADR0037](../../adr/0037-immutable-dataset-revision-manifests.md) y
+[ADR0038](../../adr/0038-complete-zip-exports-native-sessions.md).
 
 Para restaurar una **copia descargable**, consultar la revisión propia completa y
 exportarla desde su referencia verificada; no elegir claves arbitrarias del bucket.

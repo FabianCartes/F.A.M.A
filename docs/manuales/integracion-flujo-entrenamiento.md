@@ -1,6 +1,6 @@
 # Integración del flujo de entrenamiento en la carpeta principal
 
-> Actualización del 15 de octubre de 2026: la [consolidación de worktrees](consolidacion-worktrees.md)
+> Actualización del 15 de octubre de 2026: la [consolidación de worktrees](../historico/manuales/consolidacion-worktrees.md)
 > incorpora selector de semilla UI/API, ejecución spawn y runner autocontenido. Los registros de
 > integración que siguen describen sus árboles históricos, no la verificación actual.
 Destino: `/workspace/fama`, rama `fix/prediction-view-truthfulness`, HEAD inicial `d9c374fa3467fea4307b54ed6bdb644839c45dcc`. Origen: `283bf212e94bea21826b45badd457e2fe22a0d2e`.
@@ -77,7 +77,7 @@ El selector y la tarjeta muestran los pesos en el orden del manifiesto, por ejem
 
 El historial pertenece al ID exacto de la composición: una revisión de pesos no hereda predicciones de la anterior ni de sus componentes. Su lectura comprueba propietario, dataset y vínculo del descriptor persistido mediante ruta, tamaño y SHA; no fabrica una asociación individual ni requiere cargar pesos neuronales o evaluar de nuevo. Conserva la guarda de referencias locales de audio del propietario. Un historial vacío devuelve 200; una composición ajena o no verificable devuelve 404 y una petición sin autenticación devuelve 401.
 
-Límites: comprobado con pruebas sintéticas en CPU y SQLite en memoria; no acredita entrenamiento real, GPU, PostgreSQL, calidad de modelos ni concurrencia multiproceso. Una evaluación fallida puede dejar un manifiesto o un registro pendiente no visibles que requieren limpieza operativa. Decisión de identidad: [ADR 0076](../adr/0076-identidad-inmutable-de-composiciones-importadas.md); seguimiento: [plan de tríada](../arquitectura/triad-training-inference-plan.md).
+Límites: comprobado con pruebas sintéticas en CPU y SQLite en memoria; no acredita entrenamiento real, GPU, PostgreSQL, calidad de modelos ni concurrencia multiproceso. Una evaluación fallida puede dejar un manifiesto o un registro pendiente no visibles que requieren limpieza operativa. Decisión de identidad: [ADR 0076](../adr/0076-identidad-inmutable-de-composiciones-importadas.md); seguimiento: [plan de tríada](../historico/arquitectura/triad-training-inference-plan.md).
 
 ### Reproducir comprobaciones aisladas
 
@@ -102,7 +102,7 @@ Ejecutar ese modo con el comando anterior y, después, la suite de nueve archivo
 
 Actualización del 15 de octubre de 2026 sobre HEAD `95cae81fe2d06f10c8ddbf029322716545592ed5`, con Python 3.14.7 y cambios documentales locales preservados. El usuario confirma operativo entrenamiento → inferencia → agregar al dataset; las comprobaciones siguientes no son una nueva ejecución operacional del ciclo ni resuelven DATA-6.
 
-1. Repetir los ocho selectores explícitos de la [consolidación](consolidacion-worktrees.md#verificación-nueva-tras-integrar-spawn). Resultado nuevo: **320 PASS**, cero skips/deselecciones, dos advertencias FFT de señales sintéticas cortas; 29,51 s.
+1. Repetir los ocho selectores explícitos de la [consolidación](../historico/manuales/consolidacion-worktrees.md#verificación-nueva-tras-integrar-spawn). Resultado nuevo: **320 PASS**, cero skips/deselecciones, dos advertencias FFT de señales sintéticas cortas; 29,51 s.
 2. Con el mismo prefijo de entorno e intérprete, ejecutar el grupo de consumidores:
 
 ```bash

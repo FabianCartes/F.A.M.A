@@ -47,7 +47,7 @@ No se ejecutaron migraciones sobre PostgreSQL local ni Cloud SQL. Las tablas ORM
 
 Pruebas públicas en `backend/tests/test_account_management.py`, con SQLite de archivo, conexiones independientes, FKs habilitadas y clientes HTTP de prueba. Incluyen revocación permanente, protección del último administrador, degradación concurrente, consumo único/caducidad exacta/reemisión de recuperación, rollback con reintento, campos/paginación/origen inválidos y creación administrada. Se reprodujo y corrigió una sesión emitida con contraseña antigua durante un cambio concurrente; no se interpreta esa prueba SQLite como validación PostgreSQL.
 
-Resultados de la regresión en [KANBAN](../KANBAN.md). Siguen pendientes UI de acceso/cuentas/recuperación y SlicedWaves, límites persistentes de intentos/emisión, auditoría sin secretos, limpieza de expirados, setup protegido, migraciones y validación de producción. Los fallos de portabilidad/catálogo de la unidad anterior no se consideran resueltos por estas pruebas.
+Resultados de la regresión en [KANBAN](../historico/seguimiento/KANBAN.md). Siguen pendientes UI de acceso/cuentas/recuperación y SlicedWaves, límites persistentes de intentos/emisión, auditoría sin secretos, limpieza de expirados, setup protegido, migraciones y validación de producción. Los fallos de portabilidad/catálogo de la unidad anterior no se consideran resueltos por estas pruebas.
 
 **Cierre observado:** 144 pruebas aprobadas en siete archivos, tres deprecaciones (229,94 s); incluye 29 casos de gestión de cuentas y regresión de sesiones, autenticación y recursos asignados. Sin exclusiones en esta selección. No incluye los archivos de portabilidad/catálogo pendientes de la unidad anterior ni acredita la suite completa.
 

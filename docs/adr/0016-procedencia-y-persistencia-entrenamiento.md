@@ -29,7 +29,7 @@ El flujo podía entrenar con Aves aunque se solicitara otro dataset, registrar m
 
 ## Evidencia y continuación
 
-ENTRENAMIENTO-1 (`09a7e22`) y ENTRENAMIENTO-2 (`b4ad280`, complemento documental `38fcd23`) cuentan con comprobaciones independientes de 64 y 84 pruebas respectivamente y revisiones nativas aprobadas/reconocidas, según el [tablero](../KANBAN.md). Esta documentación no reejecuta esas pruebas ni atribuye aprobación al candidato documental actual.
+ENTRENAMIENTO-1 (`09a7e22`) y ENTRENAMIENTO-2 (`b4ad280`, complemento documental `38fcd23`) cuentan con comprobaciones independientes de 64 y 84 pruebas respectivamente y revisiones nativas aprobadas/reconocidas, según el [tablero](../historico/seguimiento/KANBAN.md). Esta documentación no reejecuta esas pruebas ni atribuye aprobación al candidato documental actual.
 
 No acredita despliegue, entrenamiento real, calidad general, GPU, PostgreSQL real ni escrituras GCS. Tras autorización explícita, el siguiente paso es un smoke test de un modelo individual sin borrar históricos: comprobar FK, checkpoint/payload/hash, historial/métricas e inferencia. La curación GCS/local se valida por separado y requiere su propia autorización de escritura.
 

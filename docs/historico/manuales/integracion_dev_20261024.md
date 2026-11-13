@@ -10,7 +10,7 @@ La integración utiliza particiones independientes de entrenamiento, validación
 
 Se resolvieron 19 conflictos iniciales y diferencias de comportamiento que no producían conflictos textuales. Permanecen las sesiones HttpOnly revocables, asignaciones, propiedad de trabajos, autonomía investigadora y activación explícita por el administrador. La importación/exportación ZIP usa esas sesiones. Se mantienen la inferencia con límites, identidad de checkpoints, entrenamiento en procesos y evaluación independiente de dev. Los repartos nuevos tienen tres grupos sin compartir grabaciones/grupos conocidos; los manifiestos 80/20 se conservan como historia.
 
-La revisión aditiva `0004_integration` reúne 37 tablas de negocio, tres marcadores iniciales de control y 14 secuencias PostgreSQL; `alembic_version` permanece sin escritura para la aplicación. El arranque no crea tablas. La migración desde `0003_autonomy`, la instalación nueva y los permisos diarios se comprobaron en PostgreSQL 16 temporal. La decisión y sus límites están en [ADR 0069](../adr/0069-integracion-de-acceso-evaluacion-y-datasets.md).
+La revisión aditiva `0004_integration` reúne 37 tablas de negocio, tres marcadores iniciales de control y 14 secuencias PostgreSQL; `alembic_version` permanece sin escritura para la aplicación. El arranque no crea tablas. La migración desde `0003_autonomy`, la instalación nueva y los permisos diarios se comprobaron en PostgreSQL 16 temporal. La decisión y sus límites están en [ADR 0069](../../adr/0069-integracion-de-acceso-evaluacion-y-datasets.md).
 
 Los 17 ADR de acceso/instalación pasan de 0034–0050 a 0052–0068 para conservar los ADR de dev. Se actualizan enlaces Markdown; los recibos JSON anteriores mantienen sus rutas y huellas históricas.
 
@@ -31,7 +31,7 @@ Los nueve SKIP de plataforma/Compose de Linux se cubrieron en Windows. Seis caso
 
 Los fallos intermedios se conservaron en los logs privados del laboratorio: contextos HTTP antiguos sin identidad, fixtures de esquema incompletas, prefijos históricos de datasets y expectativas de activación. Se corrigieron sin quitar las guardas de autenticación, origen, confinamiento ni activación. Un primer ensayo de los lanzadores POSIX ejecutado como root fue rechazado correctamente; repetido como UID 10001 pasó sin cambiar su protección.
 
-El [recibo](../receipts/integracion_dev_20261024.json) registra selectores, recuentos, huellas, repeticiones, omisiones y versiones. Los logs completos quedan en `.pytest_cache/dev-integration-tools/results` del checkout original y en `.pytest_cache`/archivos `.vitest-*` del worktree; no se publican credenciales ni cachés.
+El [recibo](../../receipts/integracion_dev_20261024.json) registra selectores, recuentos, huellas, repeticiones, omisiones y versiones. Los logs completos quedan en `.pytest_cache/dev-integration-tools/results` del checkout original y en `.pytest_cache`/archivos `.vitest-*` del worktree; no se publican credenciales ni cachés.
 
 ## Entorno del laboratorio y reproducción
 

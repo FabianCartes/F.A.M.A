@@ -1,6 +1,6 @@
 # Entrenamiento de ZIP publicados y lectura de modelos importados históricos
 
-> **Nota de sustitución (2026-11-11):** el entrenamiento desde el catálogo privado fue sustituido por el catálogo estándar con `partition_version`; ver [ADR 0078](../adr/0078-gcs-como-fuente-unica-y-publicacion-del-zip.md). Para importar y publicar el ZIP, ver [Importar datasets ZIP](importacion-datasets-zip.md).
+> **Nota de sustitución (2026-11-11):** el entrenamiento desde el catálogo privado fue sustituido por el catálogo estándar con `partition_version`; ver [ADR 0078](../../adr/0078-gcs-como-fuente-unica-y-publicacion-del-zip.md). Para importar y publicar el ZIP, ver [Importar datasets ZIP](../../manuales/importacion-datasets-zip.md).
 
 **Estado vigente — integración MVP d:** la entrada paralela de entrenamiento importado está retirada. Los nuevos entrenamientos usan el dataset publicado en el catálogo estándar y una `partition_version`. No se crean snapshots ni preparaciones importadas desde HTTP o desde el servicio de entrenamiento. **Los modelos y artefactos históricos se conservan para lectura; no se borran tablas, filas, checkpoints ni almacenes.**
 
@@ -26,7 +26,7 @@ Ejemplo de contrato, no autorización para ejecutar trabajos operacionales:
 
 Para una tríada fija use `is_tri_model: true` sobre esa misma versión estándar. La versión conserva referencias y hashes; si cambia la copia local de audio se rechaza con un error de contenido local. Publicar o particionar no demuestra independencia estadística ni calidad del modelo. Un ZIP sin metadata de grabación no recupera por sí solo esa procedencia.
 
-El flujo CSV estándar con `prepared_version` y su selección histórica explícita no se retira con este cambio. Consulte [integración del flujo de entrenamiento](integracion-flujo-entrenamiento.md) para sus prerrequisitos y límites.
+El flujo CSV estándar con `prepared_version` y su selección histórica explícita no se retira con este cambio. Consulte [integración del flujo de entrenamiento](../../manuales/integracion-flujo-entrenamiento.md) para sus prerrequisitos y límites.
 
 ## Contratos retirados
 
@@ -63,6 +63,6 @@ Esta retirada no migra ni elimina tablas/datos, no ejecuta GC, no transfiere pro
 - [Plan vigente de integración MVP d](../arquitectura/integracion-mvp-d-snapshots-plan.md).
 - [Snapshots locales históricos](snapshots-locales-entrenamiento.md).
 - [Preparaciones importadas históricas](preparacion-datasets-importados.md).
-- [Plan histórico T1–T5 y su Log](../arquitectura/entrenamiento-datasets-importados-plan.md), [ADR 0071](../adr/0071-preparacion-local-de-datasets-importados.md) y [ADR 0072](../adr/0072-procedencia-durable-de-entrenamiento-importado.md).
+- [Plan histórico T1–T5 y su Log](../arquitectura/entrenamiento-datasets-importados-plan.md), [ADR 0071](../../adr/0071-preparacion-local-de-datasets-importados.md) y [ADR 0072](../../adr/0072-procedencia-durable-de-entrenamiento-importado.md).
 
 Los recibos T1–T5 documentan cortes anteriores, no la vigencia de sus entradas retiradas. Las comprobaciones de integración d usan SQLite en memoria, ZIP/WAV y checkpoints CPU sintéticos, proceso de entrenamiento diferido y el runner aislado. Los artefactos históricos sintéticos sirven para probar lectura e inferencia sin volver a abrir la entrada retirada; sus pesos no acreditan aprendizaje ni calidad ML. Los comandos y resultados nuevos deben consultarse en el cierre de d, sin atribuirles Docker/Python 3.12, GPU, PostgreSQL real, servicios remotos o entrenamiento operacional.

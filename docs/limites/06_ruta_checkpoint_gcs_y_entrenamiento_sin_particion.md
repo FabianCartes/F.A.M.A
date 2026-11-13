@@ -11,7 +11,7 @@
 
 ### Comportamiento observado
 
-Tras `POST /api/training/models/{id}/checkpoint/backup`, el objeto real en el bucket es `models/checkpoints/sha256/<hash>.pt` (prefijo `CLOUD_PREFIX` en [`checkpoints.py`](../../backend/app/services/checkpoints.py)), mientras que `modelo.ruta_binario_gcp` conserva `models/fama_…_best.pt`. Hallazgo registrado como L14 del [plan de la etapa g](../arquitectura/integracion-mvp-g-base-integracion-plan.md).
+Tras `POST /api/training/models/{id}/checkpoint/backup`, el objeto real en el bucket es `models/checkpoints/sha256/<hash>.pt` (prefijo `CLOUD_PREFIX` en [`checkpoints.py`](../../backend/app/services/checkpoints.py)), mientras que `modelo.ruta_binario_gcp` conserva `models/fama_…_best.pt`. Hallazgo registrado como L14 del [plan de la etapa g](../historico/arquitectura/integracion-mvp-g-base-integracion-plan.md).
 
 ### Por qué no se corrige el valor
 

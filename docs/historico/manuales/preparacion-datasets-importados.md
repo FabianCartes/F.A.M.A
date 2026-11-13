@@ -8,7 +8,7 @@
 
 Módulo callable independiente: `backend/training/imported_dataset_preparation.py`.
 Implementa T2 del [plan](../arquitectura/entrenamiento-datasets-importados-plan.md)
-y el contrato del [ADR 0071](../adr/0071-preparacion-local-de-datasets-importados.md).
+y el contrato del [ADR 0071](../../adr/0071-preparacion-local-de-datasets-importados.md).
 No modifica ZIP, admisión, catálogo, loaders legacy, UI, base de datos ni entrenamiento.
 T3 deberá integrar un consumidor de este formato; **estos CSV no son compatibles
 por sí solos con `load_prepared_dataset`**. Preparar no inicia un job ni acredita
@@ -156,7 +156,7 @@ Host Python 3.14.8, SQLite en memoria, WAV sintéticos, red bloqueada, scratch/c
 privados, runner/guard/inventario originales sin editar. No acredita Docker 3.12,
 PostgreSQL, entrenamiento real, calidad ML, GPU ni datos existentes.
 Cada ejecución tiene JSON con comando exacto/exit y stdout/stderr crudos separados
-en [`imported-training-t2-tdd/`](../receipts/imported-training-t2-tdd/).
+en [`imported-training-t2-tdd/`](../../receipts/imported-training-t2-tdd/).
 
 | Evidencia | RED observado (exit 1) | GREEN observado (exit 0) |
 | --- | --- | --- |
@@ -181,7 +181,7 @@ esto no equivale a ejecutar la suite combinada sobre el candidato final.
 Todos estos stderr están vacíos; cero skips/deselecciones; runner confirma limpieza,
 SQLite memoria, red bloqueada y hashes de sus 30 rutas protegidas.
 
-**Suite combinada ejecutada por el padre** mediante `bash_background`, job-2: **exit 0, 138 passed, 1 deselected in 24.84s**. La deselección corresponde exactamente al caso CLI indicado abajo y no cuenta como PASS. Runner: 96 conexiones SQLite memoria, red bloqueada, 30 rutas protegidas intactas y limpieza del scratch PASS. El diagnóstico argparse de destino existente observado en la salida pertenece a una prueba negativa esperada del legacy, no a un fallo de suite. Log crudo combinado stdout/stderr: [T2 combined](../receipts/imported-training-t2-combined.log).
+**Suite combinada ejecutada por el padre** mediante `bash_background`, job-2: **exit 0, 138 passed, 1 deselected in 24.84s**. La deselección corresponde exactamente al caso CLI indicado abajo y no cuenta como PASS. Runner: 96 conexiones SQLite memoria, red bloqueada, 30 rutas protegidas intactas y limpieza del scratch PASS. El diagnóstico argparse de destino existente observado en la salida pertenece a una prueba negativa esperada del legacy, no a un fallo de suite. Log crudo combinado stdout/stderr: [T2 combined](../../receipts/imported-training-t2-combined.log).
 
 Comando exacto, desde `backend/`:
 
@@ -223,9 +223,9 @@ stderr vacío, cero deselecciones y guardas/30 hashes/limpieza aprobados en los 
 El padre sustituyó únicamente la barrera dependiente de scheduling por un interleaving determinista en la llamada de filesystem: otro creador crea el directorio antes del segundo mkdir real, que devuelve FileExistsError. El test público comprueba creación, reselección e integridad; se conserva además el test original de dos hilos. No se atribuye una causa no acreditada al segundo participante ausente del intento 20.
 
 - 21-focused: **exit 0, 6 passed in 1.73s**, stderr vacío, cero deselecciones, seis conexiones SQLite memoria, 30 rutas protegidas intactas y cleanup PASS. Incluye el caso determinista, el test original de dos hilos, ambos ganadores adversariales y las dos regresiones T1. Sus resultados reemplazan el pendiente de ejecución de los casos adversariales, no borran el fallo 20.
-- Suite final poscorrección job-3: **exit 0, 141 passed, 1 deselected in 24.69s**; 99 conexiones SQLite memoria, 30 rutas protegidas intactas y cleanup PASS. Mismo comando combinado anterior y misma exclusión CLI explícita. [Log final](../receipts/imported-training-t2-final-combined.log). La suite 138 PASS anterior corresponde al código previo al fix.
+- Suite final poscorrección job-3: **exit 0, 141 passed, 1 deselected in 24.69s**; 99 conexiones SQLite memoria, 30 rutas protegidas intactas y cleanup PASS. Mismo comando combinado anterior y misma exclusión CLI explícita. [Log final](../../receipts/imported-training-t2-final-combined.log). La suite 138 PASS anterior corresponde al código previo al fix.
 - Recheck independiente limitado del mismo verificador, tarea `mw1euouo-a-9bvm`: **unavailable**, error del agente `assistant reported an error`; consulta de resultado no recuperó más evidencia. No hay nuevo veredicto independiente ni resultado de tests atribuible a ese recheck. No se relanza, no se cambia de modelo y no se interpreta el fallo del agente como defecto de código ni aprobación.
 
-**Disposición:** se continúa con el cierre y el commit local con la limitación del recheck independiente documentada. T2 se cierra como módulo callable probado en estado sintético; no como aprobación independiente posterior al fix ni como review nativa. No se inicia más verificación, T3 ni operaciones reales por este cierre. Evidencia consolidada: [recibo T2](../receipts/imported-training-t2-verification.json). Commit de unidad: `73526d6f4ab0c52bc9bc7a16d43994155692794a`.
+**Disposición:** se continúa con el cierre y el commit local con la limitación del recheck independiente documentada. T2 se cierra como módulo callable probado en estado sintético; no como aprobación independiente posterior al fix ni como review nativa. No se inicia más verificación, T3 ni operaciones reales por este cierre. Evidencia consolidada: [recibo T2](../../receipts/imported-training-t2-verification.json). Commit de unidad: `73526d6f4ab0c52bc9bc7a16d43994155692794a`.
 
 ASSESS del rango comprometido exacto contra `e1f3a31c0b216f300fd9fbb9f83cbc84832d264e` quedó unavailable por archivos no rastreados ajenos; nativeRisk unassessable, escalación item2high y sin `reviewDue` ni continuación de revisión. No se inició review ni hubo aprobación nativa. El `diff --cached --check` completo devolvió exit2 por espacios finales originales en logs crudos de pytest; se conservaron sin alteración. La comprobación de código/documentación excluyendo esos logs aprobó con exit0. Ocho rutas ajenas/protegidas coinciden con baseline.

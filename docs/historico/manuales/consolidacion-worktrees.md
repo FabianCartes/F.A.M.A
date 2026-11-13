@@ -101,7 +101,7 @@ aislado del runner. No cuentan como pruebas aprobadas.
 No se acredita con estos resultados entrenamiento real, CUDA, PostgreSQL de
 despliegue, navegador ni suite global. Los comandos y salidas están en el respaldo;
 el resumen versionable está en
-[`worktree-consolidation.json`](../receipts/worktree-consolidation.json).
+[`worktree-consolidation.json`](../../receipts/worktree-consolidation.json).
 
 ## Cierre de los doce worktrees restantes
 
@@ -109,7 +109,7 @@ el resumen versionable está en
 
 Se integró el candidato de `fama-frontend-contract` por comportamiento sobre el
 principal, conservando sus raíces externas, rechazo de pesos ausentes y guardas.
-El [ADR 0024](../adr/0024-entrenamiento-aislado-spawn.md) registra el diseño y sus
+El [ADR 0024](../../adr/0024-entrenamiento-aislado-spawn.md) registra el diseño y sus
 límites. Las pruebas reprodujeron la cancelación IPC ignorada, la evaluación tras
 cancelar después del registro y el hijo huérfano al fallar el supervisor; los tres
 recorridos quedaron corregidos.

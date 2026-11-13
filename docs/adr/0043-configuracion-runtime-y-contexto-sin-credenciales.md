@@ -17,4 +17,4 @@ Se probaron las interfaces públicas confirmadas: `docker compose config` sobre 
 
 RED confirmó ausencia de variables runtime y envío del JSON sintético con el nombre usado en Compose. GREEN verificó exclusión del nombre legado, nombre arbitrario y archivo anidado, preservando Python/YAML. No se interpreta que una imagen histórica haya filtrado claves ni que un build real/BuildKit o despliegue completo esté probado. Docker Engine estaba inactivo y no se inició.
 
-Por decisión posterior del usuario, funcionalidades nuevas de login, registro administrado y permisos quedan fuera de esta etapa. Seguimiento y resultados en [KANBAN.md](../KANBAN.md).
+Por decisión posterior del usuario, funcionalidades nuevas de login, registro administrado y permisos quedan fuera de esta etapa. Seguimiento y resultados en [KANBAN.md](../historico/seguimiento/KANBAN.md).

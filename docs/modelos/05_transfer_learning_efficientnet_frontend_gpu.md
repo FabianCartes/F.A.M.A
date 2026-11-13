@@ -10,7 +10,7 @@
 
 ## 1. Resumen Ejecutivo y Comparativa de Impacto
 
-En la Iteración 5 se abordó el límite de representatividad evidenciado en el baseline (`AudioCNN`, 4 capas convolucionales planas), el cual sufría de un techo estructural en torno a 54% de exactitud y un grave colapso inter-clases documentado en `docs/problemas_conocidos/01_solapamiento_de_clases_bioacusticas.md`.
+En la Iteración 5 se abordó el límite de representatividad evidenciado en el baseline (`AudioCNN`, 4 capas convolucionales planas), el cual sufría de un techo estructural en torno a 54% de exactitud y un grave colapso inter-clases documentado en `docs/limites/01_solapamiento_de_clases_bioacusticas.md`.
 
 La solución arquitectónica integró tres pilares:
 1. **Front-End en GPU (`torchaudio`):** Extracción de espectrogramas Mel a 128 bandas directamente en VRAM, eliminando el cuello de botella de CPU (*GPU Starvation*).

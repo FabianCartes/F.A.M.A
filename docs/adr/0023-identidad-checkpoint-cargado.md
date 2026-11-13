@@ -12,4 +12,4 @@ Se decidió bloquear la predicción cuando el modelo persistido no tiene hash es
 - Un archivo cambiado después de cargar A no puede cambiar retroactivamente la procedencia de la instancia A ni de sus resultados.
 - La publicación principal de entrenamiento ya utiliza nombres únicos y publicación sin sobrescritura. Se conserva; no se migran checkpoints ni se modifican scripts experimentales.
 - No se introduce una migración de esquema, regularización de registros, activación de modelos o despliegue automático.
-- La implementación y su evidencia se siguen en [identidad-checkpoint-cargado](../arquitectura/identidad-checkpoint-cargado.md). No se afirma verificación completada hasta cerrar esas comprobaciones.
+- La implementación y su evidencia se siguen en [identidad-checkpoint-cargado](../historico/arquitectura/identidad-checkpoint-cargado.md). No se afirma verificación completada hasta cerrar esas comprobaciones.

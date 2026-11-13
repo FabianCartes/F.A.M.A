@@ -1,6 +1,6 @@
 # Base de integración local `fama_pruebas` (PostgreSQL 16.15 en Docker)
 
-Prepara desde cero una base vacía con el esquema vigente (`0007_triad_evaluation`), los roles y permisos del flujo de Cloud SQL y, después, el primer administrador. Sigue la etapa g de la integración mvp ([plan](../arquitectura/integracion-mvp-g-base-integracion-plan.md)). No toca `fama_oficial`, `fama_db` de `docker-compose.yml` ni otros contenedores.
+Prepara desde cero una base vacía con el esquema vigente (`0007_triad_evaluation`), los roles y permisos del flujo de Cloud SQL y, después, el primer administrador. Sigue la etapa g de la integración mvp ([plan](../historico/arquitectura/integracion-mvp-g-base-integracion-plan.md)). No toca `fama_oficial`, `fama_db` de `docker-compose.yml` ni otros contenedores.
 
 ## Requisitos
 
@@ -90,4 +90,4 @@ docker volume rm fama-g-pruebas-data
 
 - La versión 16.15 viene de los recibos de octubre de la instancia `fama-postgres-pruebas`; si Cloud SQL actualizó la versión menor, la consola puede mostrar otra.
 - Esta base valida migraciones, roles y permisos en PostgreSQL real, no Cloud SQL (proxy, IAM, copias administradas).
-- Las pruebas automatizadas de PostgreSQL usan un contenedor desechable aparte; ver «Comprobaciones» en el [plan de la etapa g](../arquitectura/integracion-mvp-g-base-integracion-plan.md).
+- Las pruebas automatizadas de PostgreSQL usan un contenedor desechable aparte; ver «Comprobaciones» en el [plan de la etapa g](../historico/arquitectura/integracion-mvp-g-base-integracion-plan.md).

@@ -51,7 +51,7 @@ No iniciar el backend productivo solo para mirar el diseño: su lifespan existen
 
 Pruebas renderizadas en `frontend/components/auth/__tests__/` y `frontend/app/__tests__/session*.test.tsx`, con HTTP/router/WebGL/media query simulados. Se prueban gate inicial, cookie confirmada, identidad discordante, 401/403/429/503, tiempo de espera, foco/cambio de identidad, logout, extracción de capacidad y liberación gráfica. No es una captura visual ni una conexión real entre Next y FastAPI.
 
-TypeScript sin emisión/incremental y ESLint focal sin diagnósticos. Focal de acceso: **30 PASS/cinco archivos**; cierre completo en [KANBAN](../KANBAN.md). Node observado **22.20.0** sigue fuera del requisito del jsdom instalado; no se cambió runtime ni se relajaron versiones para ocultarlo.
+TypeScript sin emisión/incremental y ESLint focal sin diagnósticos. Focal de acceso: **30 PASS/cinco archivos**; cierre completo en [KANBAN](../historico/seguimiento/KANBAN.md). Node observado **22.20.0** sigue fuera del requisito del jsdom instalado; no se cambió runtime ni se relajaron versiones para ocultarlo.
 
 **Cierre observado:** frontend completo **279 PASS/28 archivos** (85,04 s), sin exclusiones. Incluye las 30 pruebas de acceso, no se suman como si fueran adicionales a ese total. La regresión inicial detectó una expectativa de HTTP que no incluía las nuevas opciones de seguridad; ahora exige `credentials=same-origin`, `cache=no-store`, `redirect=error`, método GET y señal de abort. No se repitieron suites backend ni benchmarks reales para este bloque; sus recibos y resultados conservan su alcance histórico.
 

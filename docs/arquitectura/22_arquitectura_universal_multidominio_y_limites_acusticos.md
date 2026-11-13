@@ -6,9 +6,9 @@
 * **Documentos Base de Referencia:**
   * Tesis de Grado: [`docs/memoria_proyecto_titulo_2026_1.md`](../tesis/)
   * Análisis de Objetivos: [`docs/analisis_objetivos_fama.md`](../tesis/analisis_objetivos_fama.md)
-  * Subsistema Modular de Entrenamiento: [`docs/19_subsistema_entrenamiento_modular_rdd.md`](./19_subsistema_entrenamiento_modular_rdd.md)
-  * Modelo de Producto y Operación: [`docs/20_modelo_de_producto_despliegue_y_arquitectura_operativa.md`](./20_modelo_de_producto_despliegue_y_arquitectura_operativa.md)
-  * Problema Conocido 02 (Límites de Generalización): [`docs/problemas_conocidos/02_limites_generalizacion_universal_y_conjunto_abierto.md`](./problemas_conocidos/02_limites_generalizacion_universal_y_conjunto_abierto.md)
+  * Subsistema Modular de Entrenamiento: [`docs/19_subsistema_entrenamiento_modular_rdd.md`](../historico/arquitectura/19_subsistema_entrenamiento_modular_rdd.md)
+  * Modelo de Producto y Operación: [`docs/20_modelo_de_producto_despliegue_y_arquitectura_operativa.md`](20_modelo_de_producto_despliegue_y_arquitectura_operativa.md)
+  * Problema Conocido 02 (Límites de Generalización): [`docs/limites/02_limites_generalizacion_universal_y_conjunto_abierto.md`](./limites/02_limites_generalizacion_universal_y_conjunto_abierto.md)
 
 ---
 

@@ -1,6 +1,6 @@
 # Interpretar la identidad del checkpoint en Predicción
 
-La procedencia del checkpoint cargado permite identificar el archivo del que se construyó la instancia predictora. No equivale a comprobar continuamente los parámetros en memoria ni certifica la calidad del modelo. Implementación y comprobaciones en [el contrato de seguimiento](../arquitectura/identidad-checkpoint-cargado.md).
+La procedencia del checkpoint cargado permite identificar el archivo del que se construyó la instancia predictora. No equivale a comprobar continuamente los parámetros en memoria ni certifica la calidad del modelo. Implementación y comprobaciones en [el contrato de seguimiento](../historico/arquitectura/identidad-checkpoint-cargado.md).
 
 ## Qué muestra cada identidad
 

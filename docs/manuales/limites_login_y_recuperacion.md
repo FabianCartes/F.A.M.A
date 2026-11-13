@@ -55,7 +55,7 @@ No se limita aquí el tamaño del cuerpo HTTP previo al parsing, ni se cubren to
 
 Pruebas HTTP en `backend/tests/test_access_limits.py`: normalización, cuotas por peer/destino/emisor, 429/Retry-After, configuración insegura, vencimiento exacto, no consumo parcial, origen no permitido, concurrencia y persistencia desde otro proceso Python. BD de archivo SQLite temporal con FKs, sin lifespan productivo, red externa ni activos reales. Los tests existentes de commits de credenciales se ajustan para fallar después de la reserva, no en lugar de la mutación que pretenden verificar.
 
-Resultados de cierre en [KANBAN](../KANBAN.md). No son evidencia de concurrencia PostgreSQL/Cloud SQL, rendimiento hasta pantalla, navegador, proxy real ni seguridad integral de producción. Auditoría, limpieza y login/SlicedWaves siguen separados.
+Resultados de cierre en [KANBAN](../historico/seguimiento/KANBAN.md). No son evidencia de concurrencia PostgreSQL/Cloud SQL, rendimiento hasta pantalla, navegador, proxy real ni seguridad integral de producción. Auditoría, limpieza y login/SlicedWaves siguen separados.
 
 **Cierre observado:** 172 PASS en ocho archivos, tres avisos de deprecación (287,05 s), sin exclusiones en esta selección. Incluye 28 casos de cuotas y regresión de cuentas, sesiones, autenticación y permisos; no sustituye los fallos conocidos de otras selecciones ni acredita la suite global.
 

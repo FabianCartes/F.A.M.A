@@ -26,7 +26,7 @@ Objetos antes aceptados con nombres no portables se rechazan ahora; corregirlos 
 
 La unidad inicial cubre la descarga por el servicio. La extensión siguiente incorpora nombres de subida y respuestas HTTP; otros lectores, formatos de audio y límites de peticiones siguen pendientes. Tampoco certifica seguridad de despliegue.
 
-Pruebas públicas con GCS falso y temporales: escapes POSIX/Windows, prefijos ajenos, componentes vacíos, jerarquías anidadas, nombres Unicode y junctions Windows reales creadas/eliminadas exclusivamente dentro de las fixtures. En otras plataformas la fixture usa symlinks; solo se ejecutó aquí Windows. Evidencia: [KANBAN](../KANBAN.md).
+Pruebas públicas con GCS falso y temporales: escapes POSIX/Windows, prefijos ajenos, componentes vacíos, jerarquías anidadas, nombres Unicode y junctions Windows reales creadas/eliminadas exclusivamente dentro de las fixtures. En otras plataformas la fixture usa symlinks; solo se ejecutó aquí Windows. Evidencia: [KANBAN](../historico/seguimiento/KANBAN.md).
 
 ## Extensión: nombres de subida y validación HTTP (14 de octubre de 2026)
 

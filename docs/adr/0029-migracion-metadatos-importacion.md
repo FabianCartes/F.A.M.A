@@ -10,4 +10,4 @@ Historical `synced` flags lack object generation evidence. Retain them in the un
 
 Alternatives rejected: destructive JSON removal before verification, partially activated rows, or retaining complete collection responses indefinitely. The trade-off is temporary duplicate metadata and an offline writer window. Legacy JSON loads remain necessary during this one-time migration; it is not a bounded-memory benchmark. This step verifies metadata equivalence, not WAV contents on disk, GCS objects, PostgreSQL deployment behavior or worker recovery.
 
-See [implementation log](../arquitectura/large-zip-gcs.md) and [operator procedure](../manuales/migracion-metadatos-importacion.md).
+See [implementation log](../arquitectura/large-zip-gcs.md) and [operator procedure](../historico/manuales/migracion-metadatos-importacion.md).

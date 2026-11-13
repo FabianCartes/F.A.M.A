@@ -1,6 +1,6 @@
 # Catálogo, pesos y arranque del nodo oficial
 
-**Actualización oficial aplicada, 25 de octubre:** `fama_oficial` está en `0004_integration` y la carpeta habitual ejecuta `fix/afinamiento-integral` (`54bdaaf`). Login real, permisos, GCS, datasets, dashboard y catálogo de seis modelos comprobados; cinco hashes históricos completados tras contrastarlos con GCS. Respaldos anterior/posterior restaurados y verificados en laboratorio aislado. Perfil, contraseñas e índices conservados. [Operación y límites](actualizacion_oficial_0004_20261025.md), [recibo](../receipts/actualizacion_oficial_0004_20261025.json).
+**Actualización oficial aplicada, 25 de octubre:** `fama_oficial` está en `0004_integration` y la carpeta habitual ejecuta `fix/afinamiento-integral` (`54bdaaf`). Login real, permisos, GCS, datasets, dashboard y catálogo de seis modelos comprobados; cinco hashes históricos completados tras contrastarlos con GCS. Respaldos anterior/posterior restaurados y verificados en laboratorio aislado. Perfil, contraseñas e índices conservados. [Operación y límites](actualizacion_oficial_0004_20261025.md), [recibo](../../receipts/actualizacion_oficial_0004_20261025.json).
 
 **Actualización: 24 de octubre de 2026. Rama: `fix/afinamiento-integral`.** El perfil nativo oficial quedó completado y arrancado en `http://localhost:3010`, con PostgreSQL `fama_oficial` y bucket `fama-audio-records-2026`. Inicio de sesión, selección de modelo e inventario comprobados en el navegador; los cortes anteriores permanecen en sus recibos.
 
@@ -26,7 +26,7 @@ Se registraron `AvesChilenas` y `engine_diagnostics` en SQL con sus objetos fís
 
 ## Modelos y predeterminado
 
-La instalación habilita expresamente `chilean-birds-ensemble` mediante `FAMA_ENSEMBLES_JSON`. Una base sin declaración y sin modelos SQL conserva el catálogo vacío. Una activación SQL posterior conserva su prioridad al reiniciar. [ADR 0068](../adr/0068-declaracion-explicita-de-ensambles-por-instalacion.md).
+La instalación habilita expresamente `chilean-birds-ensemble` mediante `FAMA_ENSEMBLES_JSON`. Una base sin declaración y sin modelos SQL conserva el catálogo vacío. Una activación SQL posterior conserva su prioridad al reiniciar. [ADR 0068](../../adr/0068-declaracion-explicita-de-ensambles-por-instalacion.md).
 
 Se desactivaron únicamente los indicadores simultáneos de los cinco modelos heredados, IDs 2–6. Sus filas y pesos permanecen seleccionables. La coincidencia de etiquetas no se convirtió en vínculo de entrenamiento: sus datasets históricos siguen sin relación acreditada.
 
@@ -54,7 +54,7 @@ Las predicciones históricas con nombre simple no se convierten en fuentes admin
 
 Quedan las condiciones del servidor universitario (sistema, dominio/HTTPS, recursos y acceso a GCP), respaldo SQL externo con destino/retención acordados y los pesos industriales faltantes. El entorno oficial inicial funciona en este PC y no expone puertos a otros equipos. El proceso nativo usa servidor de desarrollo frontend; el despliegue institucional requiere preparar su arranque de servicio.
 
-[Recibo del corte previo](../receipts/traslado_historia_confirmado_y_pesos_20261024.json), [recibo de publicación y arranque](../receipts/catalogo_oficial_publicado_20261024.json), [preparación general](preparacion_entorno_oficial.md), [traslado/adopción](traslado_historia_y_adopcion.md).
+[Recibo del corte previo](../../receipts/traslado_historia_confirmado_y_pesos_20261024.json), [recibo de publicación y arranque](../../receipts/catalogo_oficial_publicado_20261024.json), [preparación general](../../manuales/preparacion_entorno_oficial.md), [traslado/adopción](traslado_historia_y_adopcion.md).
 
 ## Cierre de la comprobación local
 
@@ -64,4 +64,4 @@ Durante esta revisión se detectó un límite de 2000 objetos en la cabecera del
 
 El respaldo final local de inicio, `backend/installation/cloud-oficial/backups/oficial-inicio-20261024/`, contiene 161105 bytes, SHA-256 `1bcc6c9c2593d09dffc27c77dce4980fb27ad8eb8d05e510710edf58f6f50818`. Se restauró mediante el módulo público en PostgreSQL 16 desechable: 17 tablas, nueve secuencias, huellas completas y `0003_autonomy` coincidentes. Incluye 2607 audios, tres datasets, cinco modelos, 31 predicciones históricas, cuenta recuperada y eventos de adopción/recuperación/login. La primera llamada del ensayo omitió argumentos del módulo; no ejecutó restauración y retiró su laboratorio. El segundo ensayo usó la interfaz correcta y verificó el respaldo. Ambos contenedores propios fueron retirados; los cuatro anteriores conservaron identidad y estado.
 
-[Evidencia del bucket](../images/catalogo_oficial_20261024.png), [inventario visible](../images/datasets_oficiales_20261024.png).
+[Evidencia del bucket](../../images/catalogo_oficial_20261024.png), [inventario visible](../../images/datasets_oficiales_20261024.png).

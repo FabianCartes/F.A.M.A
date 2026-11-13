@@ -11,7 +11,7 @@ F.A.M.A. es un framework MLOps híbrido para clasificación acústica multidomin
 | `backend/app/` | API FastAPI, esquemas, servicios y persistencia de la aplicación. |
 | `backend/training/` | Componentes de entrenamiento ML; comprobar sus consumidores antes de cambiar contratos. |
 | `frontend/` | Interfaz Next.js/React. Consultar también `frontend/AGENTS.md` y las guías locales que indique. |
-| `docs/` | Documentación clasificada por contenido; índice en `docs/README.md` y seguimiento activo en `docs/KANBAN.md`. |
+| `docs/` | Documentación clasificada por contenido; índice en `docs/README.md`; documentación retirada en `docs/historico/`. |
 
 * Antes de editar, revisar `git status` y las diferencias de los archivos afectados. Preservar cambios locales y archivos no rastreados ajenos a la tarea.
 * Consultar los `AGENTS.md` específicos del área que se vaya a modificar.
@@ -72,7 +72,7 @@ Toda documentación de proyecto que se redacte debe quedar bajo `docs/`. Elegir 
 | Memoria formal del proyecto de título y análisis de sus objetivos | `docs/tesis/` |
 | Evidencia reproducible legible por máquinas (recibos JSON) | `docs/receipts/` |
 | Diagramas, gráficos y matrices de confusión para los documentos | `docs/images/` |
-| Tablero activo de tareas y seguimiento del proyecto | `docs/KANBAN.md` |
+| Documentación retirada: planes cerrados, traspasos, bitácoras fechadas y tableros anteriores | `docs/historico/` (misma subcarpeta de origen) |
 | Vista general de directorios e índice documental | `docs/README.md` |
 
 * No crear ni usar `odd/` como destino documental ni abrir carpetas paralelas fuera de `docs/`.
@@ -119,7 +119,7 @@ Consultar `frontend/package.json` para las versiones vigentes y las instruccione
 ### Backend
 
 * Las dependencias se declaran en `backend/requirements.txt`; la imagen de `backend/Dockerfile` usa Python 3.12. Una prueba con otro intérprete no valida automáticamente la imagen.
-* Para comprobaciones de entrenamiento, seguir el procedimiento y sus prerrequisitos en [`integracion-flujo-entrenamiento.md`](docs/manuales/integracion-flujo-entrenamiento.md), junto con la actualización de [`consolidacion-worktrees.md`](docs/manuales/consolidacion-worktrees.md). Usar el runner local `backend/tests/run_isolated_training_checks.py` con selectores pertinentes y un intérprete validado.
+* Para comprobaciones de entrenamiento, seguir el procedimiento y sus prerrequisitos en [`integracion-flujo-entrenamiento.md`](docs/manuales/integracion-flujo-entrenamiento.md), junto con la actualización de [`consolidacion-worktrees.md`](docs/historico/manuales/consolidacion-worktrees.md). Usar el runner local `backend/tests/run_isolated_training_checks.py` con selectores pertinentes y un intérprete validado.
 * Ese procedimiento usa SQLite en memoria, datos/modelos CPU sintéticos, temporales y cachés privados, red bloqueada y límites de tiempo. Su guarda de aplicación no equivale a un sandbox del sistema operativo ni valida GPU, PostgreSQL real o calidad de modelos.
 * No instalar ni cambiar entornos por inercia ante un fallo: identificar primero si falta un prerrequisito o existe una regresión.
 
@@ -138,5 +138,5 @@ Consultar `frontend/package.json` para las versiones vigentes y las instruccione
 
 * Mantener la bitácora viva en `docs/manuales/bitacora_acceso_e_instalacion.md` al avanzar en acceso, GCP e instalación. Registrar tanto el trabajo del operador humano como el de Codex, con responsable, resultado, evidencia y siguiente paso.
 * Distinguir confirmaciones del operador, comprobaciones observadas, implementación y tareas pendientes. Conservar los recibos previos como cortes históricos; registrar las nuevas verificaciones en el recibo de su etapa bajo `docs/receipts/`.
-* Actualizar `docs/KANBAN.md`, el plan y el estado para retomar cuando cambie el avance. No registrar contraseñas, códigos temporales, tokens, cookies ni contenido de credenciales.
+* Actualizar el plan y el estado para retomar cuando cambie el avance. No registrar contraseñas, códigos temporales, tokens, cookies ni contenido de credenciales.
 * Durante la recuperación administrada, evitar volcados completos de la página o del árbol de accesibilidad que puedan incluir el enlace secreto. Observar solo controles/estados filtrados; el operador copia y consume el enlace localmente. No leer el portapapeles ni guardar capturas con el token.

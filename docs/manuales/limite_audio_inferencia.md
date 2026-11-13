@@ -91,7 +91,7 @@ Las comprobaciones del alcance modificado pasaron; la suite completa conserva un
 
 ## Activación y reversión (solo instrucciones; no ejecutadas)
 
-Tras autorización operativa, seguir los requisitos de UID/GID y servicios del [manual Docker](./guia_despliegue_operativo_docker.md). Desde la raíz:
+Tras autorización operativa, seguir los requisitos de UID/GID y servicios del [manual Docker](guia_despliegue_operativo_docker.md). Desde la raíz:
 
 ```bash
 docker compose build backend frontend

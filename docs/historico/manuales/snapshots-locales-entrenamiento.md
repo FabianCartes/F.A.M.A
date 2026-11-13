@@ -8,7 +8,7 @@ El resto de este documento describe el contrato y la evidencia **históricos de 
 
 ## Alcance T1 (histórico)
 
-Implementa la base local de S1–S2/S8 del [plan](../arquitectura/entrenamiento-datasets-importados-plan.md), conforme al [ADR 0071](../adr/0071-preparacion-local-de-datasets-importados.md). No agrega endpoints, catálogo de entrenamiento, admisión, trabajos, splits ni entrenamiento. No modifica el importador ZIP ni el contrato remoto `DatasetRevision.complete`.
+Implementa la base local de S1–S2/S8 del [plan](../arquitectura/entrenamiento-datasets-importados-plan.md), conforme al [ADR 0071](../../adr/0071-preparacion-local-de-datasets-importados.md). No agrega endpoints, catálogo de entrenamiento, admisión, trabajos, splits ni entrenamiento. No modifica el importador ZIP ni el contrato remoto `DatasetRevision.complete`.
 
 ## Interfaz pública
 
@@ -60,7 +60,7 @@ La migración de esquema no concede permisos a la cuenta de aplicación. Además
 
 La concesión se aplicó seleccionando la base mediante la configuración privada del operador, sin credenciales en argumentos, documentación o logs. El script retirado admitía bases `fama_training_dev_<14 dígitos>`, exige una cuenta de aplicación sin atributos administrativos y rechaza permisos preexistentes para cambiar la identidad/propietario/revisión. No crea roles, no concede `DELETE`, no cambia la identidad del snapshot y no concede `UPDATE` de tabla completa. Se puede aplicar de nuevo: la concesión es idempotente y queda persistida en PostgreSQL para **todos los datasets presentes y futuros**. No depende de la sesión de UI ni de un contenedor de API; debe incluirse al aprovisionar o restaurar otro entorno con esta cuenta limitada.
 
-Verificar después con la identidad real de la aplicación los cinco `has_column_privilege(..., 'UPDATE')`, la ausencia de permisos para modificar identidad/propietario/revisión y un `EXPLAIN UPDATE` sobre los cinco campos con `WHERE false`. No usar `EXPLAIN ANALYZE`: este último sí ejecuta la consulta. Un test SQLite no valida concesiones PostgreSQL. El recibo de la corrección conectada es [snapshot-permissions-repair.json](../receipts/snapshot-permissions-repair.json).
+Verificar después con la identidad real de la aplicación los cinco `has_column_privilege(..., 'UPDATE')`, la ausencia de permisos para modificar identidad/propietario/revisión y un `EXPLAIN UPDATE` sobre los cinco campos con `WHERE false`. No usar `EXPLAIN ANALYZE`: este último sí ejecuta la consulta. Un test SQLite no valida concesiones PostgreSQL. El recibo de la corrección conectada es [snapshot-permissions-repair.json](../../receipts/snapshot-permissions-repair.json).
 
 Retener conjuntamente DB y raíz durable. Un snapshot `ready` se recupera por su ID con identidad y clases originales. No hay GC ni borrado de fuentes. Ante fallo antes del rename se limpia únicamente el staging creado por esa llamada. Ante fallo/crash después del rename y antes del commit queda un directorio retenido y una fila no consumible; T1 no lo promueve automáticamente ni sustituye su cohorte. Requiere diagnóstico operacional autorizado, no volver a crear silenciosamente la cohorte bajo la misma identidad. Las filas `building` y los directorios huérfanos no tienen recolector automático.
 
@@ -72,7 +72,7 @@ Comandos ejecutados desde `backend/`, con `bash timeout=30`; ningún timeout. Pr
 PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED=1 DATABASE_URL=sqlite:// CUDA_VISIBLE_DEVICES='' PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /workspace/fama/.venv/bin/python tests/run_isolated_training_checks.py
 ```
 
-El cierre conserva la limitación de evidencia sin fabricar registros retrospectivos; esta disposición no concede consentimiento nativo de revisión ni operaciones reales. Recibo consolidado: [verificación T1](../receipts/imported-training-t1-verification.json).
+El cierre conserva la limitación de evidencia sin fabricar registros retrospectivos; esta disposición no concede consentimiento nativo de revisión ni operaciones reales. Recibo consolidado: [verificación T1](../../receipts/imported-training-t1-verification.json).
 
 Las salidas completas stdout/stderr y códigos están en el transcript de herramientas del worker; este manual conserva selectores, resultado y extractos, no es una exportación de los logs crudos. Los scratch indicados fueron limpiados por el runner, no son archivos de evidencia retenidos.
 

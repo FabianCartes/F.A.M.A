@@ -17,7 +17,7 @@ La subida anterior abortaba al primer error de transferencia y podía dejar obje
 
 No añade idempotencia de peticiones, retries automáticos, atomicidad, backfill, control de concurrencia, validación acústica ni límites de carga. Una llamada sin archivos mantiene el comportamiento previo de operación vacía; no acredita datos disponibles. `db_persisted=true` solo confirma la transacción de registros, no que todas las transferencias hayan funcionado ni que los audios sean válidos para entrenar.
 
-No se añade interfaz nueva de subida. Pruebas por servicio, lectura pública de datasets y HTTP con adaptador GCS falso/SQLite; sin datos/servicios reales. Evidencia en [KANBAN](../KANBAN.md).
+No se añade interfaz nueva de subida. Pruebas por servicio, lectura pública de datasets y HTTP con adaptador GCS falso/SQLite; sin datos/servicios reales. Evidencia en [KANBAN](../historico/seguimiento/KANBAN.md).
 
 ## Extensión: estado global de sincronización y presentación (AFIN-18)
 

@@ -14,7 +14,7 @@ Con la consolidación de la Fase 3 en el backend (orquestador FastAPI con subida
 1. **Acoplamiento Rígido de Modelo:**  
    El servicio actual (`AudioPredictorService`) está atado de manera fija a `AudioCNN` y a los pesos de `augmented_best.pt` (61.69% accuracy), ignorando el catálogo de modelos de mayor rendimiento ya validados en el repositorio (como el Super-Ensamble Tri-Modelo de 88.68% F1 definido en el [ADR 0010](0010_tri_modelo_heterogeneo_resnet34d.md)).
 2. **Inflexibilidad ante Futuros Dominios y Datasets:**  
-   Como se identificó en el análisis de límites bioacústicos ([`docs/problemas_conocidos/02_limites_generalizacion_universal_y_conjunto_abierto.md`](../problemas_conocidos/02_limites_generalizacion_universal_y_conjunto_abierto.md)), el soporte de nuevos datasets (e.g. paisajes sonoros PAM a 32 kHz o clasificación multi-etiqueta) requiere desacoplar la física de preprocesamiento, la red neuronal y la función de decodificación/etiquetado.
+   Como se identificó en el análisis de límites bioacústicos ([`docs/limites/02_limites_generalizacion_universal_y_conjunto_abierto.md`](../limites/02_limites_generalizacion_universal_y_conjunto_abierto.md)), el soporte de nuevos datasets (e.g. paisajes sonoros PAM a 32 kHz o clasificación multi-etiqueta) requiere desacoplar la física de preprocesamiento, la red neuronal y la función de decodificación/etiquetado.
 3. **Restricción Crítica de Producción (GCP y Base de Datos):**  
    Cualquier refactorización para habilitar la selección de modelos debe garantizar **cero regresiones en la integración con Google Cloud Storage** (`upload_audio_to_gcp`) y mantener la retrocompatibilidad del endpoint `POST /api/predict`, permitiendo auditar qué modelo ejecutó cada inferencia en PostgreSQL.
 

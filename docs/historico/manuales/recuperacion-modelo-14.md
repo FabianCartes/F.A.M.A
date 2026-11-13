@@ -12,14 +12,14 @@ Antes del cambio se comparó el runtime desplegado con los informes 5/6 del mode
 El checkpoint tenía el SHA y tamaño registrados correctos. No había diferencias
 de parámetros de preprocesamiento ni de agregación.
 
-El [ADR 0025](../adr/0025-compatibilidad-semantica-evaluacion.md) separa compatibilidad
+El [ADR 0025](../../adr/0025-compatibilidad-semantica-evaluacion.md) separa compatibilidad
 semántica y huellas del código. Se reconstruyó la imagen del backend y se recreó
 su contenedor; el SHA del guard desplegado coincide con el checkout. No se
 reentrenó ni se modificó el checkpoint para recuperar disponibilidad.
 
 ## Reevaluación real
 
-Se ejecutaron primero el preflight y después la [reevaluación explícita](reevaluacion-modelos.md)
+Se ejecutaron primero el preflight y después la [reevaluación explícita](../../manuales/reevaluacion-modelos.md)
 con los siguientes argumentos, más una URL PostgreSQL explícita obtenida del entorno
 del contenedor y normalizada sin imprimir credenciales:
 
@@ -120,7 +120,7 @@ docker run --rm --network none --user "$(id -u):$(id -g)" \
 Para el probe se conserva el mismo contenedor/comando Python y se sustituye la
 lista de selectores y opciones pytest por `--ambient-import-probe`.
 
-Evidencia acotada e identidades: [recibo de recuperación](../receipts/model14-recovery.json).
+Evidencia acotada e identidades: [recibo de recuperación](../../receipts/model14-recovery.json).
 Entrega en commit local autorizada tras confirmar el funcionamiento del modelo,
 sin publicación remota. El cambio preexistente en `AGENTS.md` se incluyó por
 autorización explícita posterior.

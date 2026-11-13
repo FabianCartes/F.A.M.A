@@ -10,7 +10,7 @@
 ## 1. Contexto y Problema
 
 El pipeline inicial de clasificación bioacústica de 15 especies de aves chilenas (PoC) alcanzó su techo estructural con la arquitectura plana de 4 capas convolucionales (`AudioCNN`):
-1. **Límite de Capacidad y Solapamiento de Clases:** En un benchmark de 10 ejecuciones independientes, `AudioCNN` estancó su rendimiento en **$54.68\% \pm 2.67\%$ de Accuracy** y **$55.82\% \pm 3.00\%$ de F1-Score macro**, presentando colapso sistemático en especies acústicamente similares (*Fío-fío* a $22.50\%$ F1, *Tijeral* a $27.48\%$ F1) canibalizadas por especies emparentadas (*Canastero*, *Turca*) y clases sumidero (*Tordo*, *Zorzal*), tal como se documentó en `docs/problemas_conocidos/01_solapamiento_de_clases_bioacusticas.md`.
+1. **Límite de Capacidad y Solapamiento de Clases:** En un benchmark de 10 ejecuciones independientes, `AudioCNN` estancó su rendimiento en **$54.68\% \pm 2.67\%$ de Accuracy** y **$55.82\% \pm 3.00\%$ de F1-Score macro**, presentando colapso sistemático en especies acústicamente similares (*Fío-fío* a $22.50\%$ F1, *Tijeral* a $27.48\%$ F1) canibalizadas por especies emparentadas (*Canastero*, *Turca*) y clases sumidero (*Tordo*, *Zorzal*), tal como se documentó en `docs/limites/01_solapamiento_de_clases_bioacusticas.md`.
 2. **Inanición de GPU (*GPU Starvation*):** La extracción de espectrogramas Mel en CPU vía `librosa` toma ~300 ms por lote mientras la GPU procesa en ~5 ms, alargando la época a ~35 segundos e infrautilizando la GPU dedicada (`NVIDIA RTX 2050`).
 3. **Resolución Espectral Insuficiente:** 64 bandas Mel comprimen armónicos sutiles en frecuencias medias-altas ($>4\text{ kHz}$), impidiendo la separación de firmas bioacústicas complejas.
 

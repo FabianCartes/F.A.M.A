@@ -60,7 +60,7 @@ No se han acordado umbrales de calidad, balance mínimo, folds definitivos ni re
 
 ## Tasks
 
-T0 está completada únicamente como investigación y diseño; evidencia y decisiones más abajo y en el [ADR 0071](../adr/0071-preparacion-local-de-datasets-importados.md). T1 está implementada y verificada en estado sintético aislado, con límites de evidencia registrados; T2 está implementada con verificación funcional y limitación independiente aceptada; T3–T4 están cerradas funcionalmente dentro de los límites registrados; T5–T7 son tareas **futuras**, no resultados aprobados. Una tarea incluye su código, pruebas y documentación relacionados; no separar escritores de código/pruebas del mismo comportamiento. Los paths son candidatos que deben estrecharse tras T0, no permiso para editar directorios completos.
+T0 está completada únicamente como investigación y diseño; evidencia y decisiones más abajo y en el [ADR 0071](../../adr/0071-preparacion-local-de-datasets-importados.md). T1 está implementada y verificada en estado sintético aislado, con límites de evidencia registrados; T2 está implementada con verificación funcional y limitación independiente aceptada; T3–T4 están cerradas funcionalmente dentro de los límites registrados; T5–T7 son tareas **futuras**, no resultados aprobados. Una tarea incluye su código, pruebas y documentación relacionados; no separar escritores de código/pruebas del mismo comportamiento. Los paths son candidatos que deben estrecharse tras T0, no permiso para editar directorios completos.
 
 | ID | Specs | Estado | Resultado y superficie candidata | Dependencias / comprobación de cierre |
 | --- | --- | --- | --- | --- |
@@ -141,7 +141,7 @@ Primera versión confirmada (S8): WAV supervisado de etiqueta única, preparaci�
 
 `DatasetMember` conserva clase, ruta, import de origen, hash y tamaño, pero no identidad explícita de grabación/grupo (`backend/app/models/dataset_import_metadata.py:44–55`). Se exige mapa explícito de grabación/grupo validado y vinculado al snapshot (S6); si falta, indicar pendiente de metadatos y no preparar splits afirmando independencia. No deducir independencia del nombre ni del hash. La procedencia del mapa debe conservarse; su existencia no certifica la verdad de las anotaciones.
 
-Se exige cobertura de todas las clases en train/val/test, con objetivo 80/10/10 por grupos (S7); si es inviable, explicar imposibilidad estructural. Menos de 10 grabaciones independientes sigue siendo solo advertencia. Decisión y alternativas en el [ADR 0071](../adr/0071-preparacion-local-de-datasets-importados.md).
+Se exige cobertura de todas las clases en train/val/test, con objetivo 80/10/10 por grupos (S7); si es inviable, explicar imposibilidad estructural. Menos de 10 grabaciones independientes sigue siendo solo advertencia. Decisión y alternativas en el [ADR 0071](../../adr/0071-preparacion-local-de-datasets-importados.md).
 
 T0 queda cerrada: checkout reconciliado, dos contratos trazados, diseño mínimo de persistencia/estabilidad definido y decisiones humanas recibidas. La frecuencia, canales, ventana y preprocesamiento efectivos se concretan en el perfil versionado compatible con la arquitectura en T2; no se inventa aquí un valor universal. Esquema, códigos de error y pruebas de carreras/retención siguen siendo implementación T1–T6, no brechas que esta lectura declare resueltas. No hay autorización para iniciarlas por cerrar T0.
 
@@ -207,7 +207,7 @@ No se ejecutaron estas pruebas al redactar el plan. Los archivos son candidatos,
 
 Candidatos backend: `test_training_flow.py`, `test_training_service.py`, `test_training_persistence.py`, `test_api_training.py`, `test_dataset_preparation.py`, `test_recording_evaluator.py`, `test_trained_predictor.py`, `test_dataset_import_execution.py`, `test_dataset_import_manifests.py` y regresiones de consumidores que realmente se modifiquen. Frontend: pruebas del cliente/esquemas y `TrainingView.test.tsx`, preservando la corrección local previa de parámetros individuales y el comportamiento duo/trío.
 
-**Procedimiento:** leer [integración del flujo](../manuales/integracion-flujo-entrenamiento.md) y [consolidación](../manuales/consolidacion-worktrees.md); revisar fixtures y prerrequisitos del runner antes de seleccionar módulos. Usar el runner `backend/tests/run_isolated_training_checks.py` con SQLite en memoria, CPU/audio sintéticos, temporales privados y red bloqueada. No debilitar `training_host_guard.py` ni instalar por inercia. Un selector aceptado no acredita que su fixture sea hermética; no ejecutar una suite global a ciegas.
+**Procedimiento:** leer [integración del flujo](../../manuales/integracion-flujo-entrenamiento.md) y [consolidación](../manuales/consolidacion-worktrees.md); revisar fixtures y prerrequisitos del runner antes de seleccionar módulos. Usar el runner `backend/tests/run_isolated_training_checks.py` con SQLite en memoria, CPU/audio sintéticos, temporales privados y red bloqueada. No debilitar `training_host_guard.py` ni instalar por inercia. Un selector aceptado no acredita que su fixture sea hermética; no ejecutar una suite global a ciegas.
 
 Forma de comando **futura, no ejecutada en esta planificación**, desde `backend/`:
 

@@ -1,6 +1,6 @@
 # ADR 0022: Evaluaciones finales estandarizadas
 
-> **Nota de vigencia — retiro del entrenamiento legacy:** este documento conserva decisiones y resultados históricos. Los scripts standalone, las recetas de entrenamiento y las CLI PoC que menciona fueron retirados; no son instrucciones operativas vigentes. El entrenamiento soportado parte de la UI y `POST /api/training/start`. Los módulos importables compartidos y la evaluación independiente se conservan. Véase la [revisión actual de FastAPI y entrenamiento](../arquitectura/revision-fastapi.md).
+> **Nota de vigencia — retiro del entrenamiento legacy:** este documento conserva decisiones y resultados históricos. Los scripts standalone, las recetas de entrenamiento y las CLI PoC que menciona fueron retirados; no son instrucciones operativas vigentes. El entrenamiento soportado parte de la UI y `POST /api/training/start`. Los módulos importables compartidos y la evaluación independiente se conservan. Véase la [revisión actual de FastAPI y entrenamiento](../historico/arquitectura/revision-fastapi.md).
 
 * **Estado:** EVAL-1 a EVAL-6B cerrados en los alcances documentados. EVAL-6B reevaluó #11 en `fama_db` de desarrollo; la calidad resultó baja y no está aprobada. La tabla nueva se verificó en solo lectura, no se probó upgrade de tabla v1. API/browser desplegados y suite backend global (12 FAIL/5 SKIP) siguen pendientes.
 * **Área:** Informes finales de clasificación multiclase de aves y motores.
@@ -13,7 +13,7 @@ históricas ambiguas cambien el significado del resultado. EVAL-1 implementa sol
 `calculate_classification_report(y_true, y_pred, classes)` en
 [`classification_metrics.py`](../../backend/ml_core/classification_metrics.py), con
 biblioteca estándar y sin inferencia, agregación de ventanas, BD ni archivos.
-El [tablero](../KANBAN.md#evaluaciones-finales-estandarizadas) gobierna la continuación.
+El [tablero](../historico/seguimiento/KANBAN.md#evaluaciones-finales-estandarizadas) gobierna la continuación.
 
 ## Contrato del informe v1
 

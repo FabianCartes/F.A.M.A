@@ -26,4 +26,4 @@ La latencia inicial ficticia 0.14s se retira. El contador existente pasa a «Úl
 
 ## Límites
 
-No unifica los dos caminos de inferencia, no valida criptográficamente archivos/versiones, orden de etiquetas, compatibilidad semántica, calidad, atomicidad de reload o lecturas concurrentes. No cambia deserialización de cargas explícitas ni garantiza seguridad completa del filesystem. Listados de datasets/clases y política de catálogo conservan sus límites previos. No se reejecutan activos reales ni se modifican datos/servicios; evidencia e interfaces de pruebas sintéticas en [KANBAN](../KANBAN.md).
+No unifica los dos caminos de inferencia, no valida criptográficamente archivos/versiones, orden de etiquetas, compatibilidad semántica, calidad, atomicidad de reload o lecturas concurrentes. No cambia deserialización de cargas explícitas ni garantiza seguridad completa del filesystem. Listados de datasets/clases y política de catálogo conservan sus límites previos. No se reejecutan activos reales ni se modifican datos/servicios; evidencia e interfaces de pruebas sintéticas en [KANBAN](../historico/seguimiento/KANBAN.md).

@@ -1,6 +1,6 @@
 # ADR 0081: Intentos de evaluación conjunta de composiciones de tríada
 
-Fecha: 2026-11-11. Estado: aceptado en el [plan B de evaluación conjunta](../arquitectura/triada-evaluacion-plan.md) (S2–S4).
+Fecha: 2026-11-11. Estado: aceptado en el [plan B de evaluación conjunta](../historico/arquitectura/triada-evaluacion-plan.md) (S2–S4).
 
 ## Contexto
 

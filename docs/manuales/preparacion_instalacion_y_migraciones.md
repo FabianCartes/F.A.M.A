@@ -63,7 +63,7 @@ python -m app.schema status
 python -m app.schema upgrade --apply
 ```
 
-Su downgrade falla de forma explícita. Antes de actualizar, hay que tener un respaldo verificado y detener los escritores. Después hay que volver a ejecutar `scripts/permisos_tablas_pruebas.sql` o `scripts/permisos_tablas_oficial.sql`, que ahora exigen 0005 y cubren `triad_composition`. Los scripts `scripts/migrate_*.py` ya no existen: el esquema se crea y se actualiza solo con Alembic. En la [etapa g](../arquitectura/integracion-mvp-g-base-integracion-plan.md) se aplicó por primera vez en PostgreSQL 16.15 local; reveló y corrigió dos rechazos de la base migrada (restricción con `double precision` y número fijo de secuencias). Ver también el [recibo de la etapa f](../receipts/integracion-mvp-f.json) y el [ADR 0070](../adr/0070-revision-0005-y-composicion-versionada-de-triadas.md).
+Su downgrade falla de forma explícita. Antes de actualizar, hay que tener un respaldo verificado y detener los escritores. Después hay que volver a ejecutar `scripts/permisos_tablas_pruebas.sql` o `scripts/permisos_tablas_oficial.sql`, que ahora exigen 0005 y cubren `triad_composition`. Los scripts `scripts/migrate_*.py` ya no existen: el esquema se crea y se actualiza solo con Alembic. En la [etapa g](../historico/arquitectura/integracion-mvp-g-base-integracion-plan.md) se aplicó por primera vez en PostgreSQL 16.15 local; reveló y corrigió dos rechazos de la base migrada (restricción con `double precision` y número fijo de secuencias). Ver también el [recibo de la etapa f](../receipts/integracion-mvp-f.json) y el [ADR 0070](../adr/0070-revision-0005-y-composicion-versionada-de-triadas.md).
 
 ## Identidades y arranque
 

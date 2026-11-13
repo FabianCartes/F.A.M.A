@@ -14,10 +14,10 @@ Mantener ambos duplicaba permisos, inventario, entrenamiento y predicción, y el
 ## Decisión
 
 - GCS es la fuente única de datasets. No hay catálogo privado por dueño.
-- Confirmar un ZIP lo publica en `datasets/{ds}/{clase}/` (objetos creados con `if_generation_match=0`) y en `conjunto_datos`/`audio`, reutilizando la subida existente. El nombre del dataset es único global (409 si existe). La copia local queda en `raw_data_dir/{ds}/{clase}/` como copia ya sincronizada. Si la publicación falla, la importación sigue local y el trabajo se reintenta sin duplicar (etapa c, [plan](../arquitectura/integracion-mvp-c-publicacion-plan.md)).
+- Confirmar un ZIP lo publica en `datasets/{ds}/{clase}/` (objetos creados con `if_generation_match=0`) y en `conjunto_datos`/`audio`, reutilizando la subida existente. El nombre del dataset es único global (409 si existe). La copia local queda en `raw_data_dir/{ds}/{clase}/` como copia ya sincronizada. Si la publicación falla, la importación sigue local y el trabajo se reintenta sin duplicar (etapa c, [plan](../historico/arquitectura/integracion-mvp-c-publicacion-plan.md)).
 - Pueden importar administradores e investigadores (decisión 10). El importador queda asignado al dataset (decisión 2); el administrador lo asigna a los demás. El acceso es por rol y asignación, sin excepciones por dueño de importación.
-- El entrenamiento de un ZIP publicado usa el catálogo estándar con `partition_version` (etapa d, [plan](../arquitectura/integracion-mvp-d-snapshots-plan.md)). El plan original preveía snapshots sobre la copia sincronizada; en d se retiró la entrada importada y en f se retiraron del código las tablas de snapshots ([ADR 0070](0070-revision-0005-y-composicion-versionada-de-triadas.md)).
-- La sesión es solo por cookie; se elimina la vía Bearer (decisión 4, etapa a, [plan](../arquitectura/integracion-mvp-sesion-cookie-plan.md)).
+- El entrenamiento de un ZIP publicado usa el catálogo estándar con `partition_version` (etapa d, [plan](../historico/arquitectura/integracion-mvp-d-snapshots-plan.md)). El plan original preveía snapshots sobre la copia sincronizada; en d se retiró la entrada importada y en f se retiraron del código las tablas de snapshots ([ADR 0070](0070-revision-0005-y-composicion-versionada-de-triadas.md)).
+- La sesión es solo por cookie; se elimina la vía Bearer (decisión 4, etapa a, [plan](../historico/arquitectura/integracion-mvp-sesion-cookie-plan.md)).
 
 ## Alternativas descartadas
 

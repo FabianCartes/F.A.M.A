@@ -16,4 +16,4 @@ El selector podía elegir un modelo sin pesos, incluso por defecto, y el backend
 
 La comprobación no reserva archivos ni elimina carreras entre verificación y lectura. Un checkpoint presente pero corrupto/incompatible, o un fallo posterior, puede descubrirse después de una subida; no hay compensación cloud ni transacción distribuida nuevas. No se descargan/reparan pesos ni se modifica GCS, datos o modelos históricos.
 
-La UI distingue disponibilidad reportada de «pesos verificados» o inferencia garantizada. Los términos están definidos en el [glosario](../arquitectura/CONTEXT.md), y los resultados de pruebas en [KANBAN.md](../KANBAN.md). La validación usa adaptadores/HTTP controlados, no redes entrenadas, GPU ni servicios reales.
+La UI distingue disponibilidad reportada de «pesos verificados» o inferencia garantizada. Los términos están definidos en el [glosario](../arquitectura/CONTEXT.md), y los resultados de pruebas en [KANBAN.md](../historico/seguimiento/KANBAN.md). La validación usa adaptadores/HTTP controlados, no redes entrenadas, GPU ni servicios reales.

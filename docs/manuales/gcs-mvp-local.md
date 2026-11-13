@@ -39,7 +39,7 @@ La salida general permite iniciar conexiones a destinos distintos de Google. Fue
 - Sin entrenamiento, inferencia, prueba de rendimiento, restore real ni calificación de producción. La recuperación está preparada conservando el contenedor anterior, pero no se ejecutó un rollback.
 - El indicador global de almacenamiento actualmente lista como máximo2000objetos; no tratar `total_objects` de `/status` como inventario completo. Los conteos por dataset se comprobaron por separado.
 
-Recibo: [gcs-mvp-integration.json](../receipts/gcs-mvp-integration.json). Plan y antecedentes, incluidos fallos y recuperación de comparadores: [gcs-mvp-integration-plan.md](../arquitectura/gcs-mvp-integration-plan.md).
+Recibo: [gcs-mvp-integration.json](../receipts/gcs-mvp-integration.json). Plan y antecedentes, incluidos fallos y recuperación de comparadores: [gcs-mvp-integration-plan.md](../historico/arquitectura/gcs-mvp-integration-plan.md).
 
 ## No activar una cola por accidente
 

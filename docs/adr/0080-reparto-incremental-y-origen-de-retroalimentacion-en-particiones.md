@@ -1,6 +1,6 @@
 # ADR 0080: Reparto incremental y origen de la retroalimentación en las particiones
 
-Fecha: 2026-11-11. Estado: aceptado en el [plan de mejoras de particiones](../arquitectura/particiones-mejoras-plan.md) (S1–S3, decisiones 1 y 2).
+Fecha: 2026-11-11. Estado: aceptado en el [plan de mejoras de particiones](../historico/arquitectura/particiones-mejoras-plan.md) (S1–S3, decisiones 1 y 2).
 
 ## Contexto
 

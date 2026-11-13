@@ -1,6 +1,6 @@
 # ADR 0082: Pesos fijos de entrenamiento en tríadas estándar
 
-Fecha: 2026-11-12. Estado: aceptado en el [plan de pesos fijos](../arquitectura/triada-pesos-fijos-plan.md) (S1). Sustituye la parte de revisión de pesos de [ADR 0070](0070-revision-0005-y-composicion-versionada-de-triadas.md); el resto de ADR 0070 sigue vigente.
+Fecha: 2026-11-12. Estado: aceptado en el [plan de pesos fijos](../historico/arquitectura/triada-pesos-fijos-plan.md) (S1). Sustituye la parte de revisión de pesos de [ADR 0070](0070-revision-0005-y-composicion-versionada-de-triadas.md); el resto de ADR 0070 sigue vigente.
 
 ## Contexto
 

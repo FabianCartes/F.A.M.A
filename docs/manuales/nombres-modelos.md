@@ -1,6 +1,6 @@
 # Nombres de modelos en entrenamiento y predicción
 
-Los modelos persistidos comparten el rótulo `Dataset · Arquitectura (vN)` en el historial de entrenamiento, catálogo, activación, resultado y registro de sesión de predicción. Seguimiento: issue #2 del repositorio configurado y [KANBAN](../KANBAN.md#nombres-coherentes-de-modelos--issue-2).
+Los modelos persistidos comparten el rótulo `Dataset · Arquitectura (vN)` en el historial de entrenamiento, catálogo, activación, resultado y registro de sesión de predicción. Seguimiento: issue #2 del repositorio configurado y [KANBAN](../historico/seguimiento/KANBAN.md#nombres-coherentes-de-modelos--issue-2).
 
 ## Interpretación
 

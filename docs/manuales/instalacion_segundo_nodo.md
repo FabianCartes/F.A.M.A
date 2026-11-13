@@ -73,7 +73,7 @@ Se transfieren los archivos de audio, CSV y checkpoints necesarios. Las carpetas
    Proteger el archivo `application_default_credentials.json` que genere su equipo. No transferir el ADC ni utilizar la cuenta personal de otro operador.
 3. Preparar su perfil mediante `app.node prepare`, usando esos destinos, su propio ADC y la contraseña del usuario SQL de aplicación introducida localmente. El comando pide la contraseña sin eco y genera las claves de su nodo. Preparar las rutas según su sistema operativo y añadir la declaración del ensamble.
 4. Iniciar el proxy con su ADC en loopback 5434 y preparar una raíz propia con `app.node runtime --directory`. Transferir a esa raíz los datos y pesos verificados.
-5. Completar la vinculación local a la base ya existente mediante el procedimiento de [adopción de administrador existente](traslado_historia_y_adopcion.md#adopción-local-posterior-al-traslado-y-a-preparar-archivos). No crear otra primera cuenta ni trasladar/copiar la base que ya contiene la historia. La preparación local se verifica con un administrador activo existente; no es otra migración SQL.
+5. Completar la vinculación local a la base ya existente mediante el procedimiento de [adopción de administrador existente](../historico/manuales/traslado_historia_y_adopcion.md#adopción-local-posterior-al-traslado-y-a-preparar-archivos). No crear otra primera cuenta ni trasladar/copiar la base que ya contiene la historia. La preparación local se verifica con un administrador activo existente; no es otra migración SQL.
 6. Arrancar backend y frontend con origen `http://localhost:3010` y proxy web a 8010. Iniciar sesión con su cuenta propia y comprobar disponibilidad, datasets y modelos. Con rol administrador y los cinco pesos correctos, se esperan seis opciones: Super-Ensamble y cinco individuales.
 
 La sección siguiente concreta el perfil nativo Linux. Elegir la carpeta de su clon; no ejecutar literalmente rutas `C:/Users/local-user/...` en otro equipo. La distribución Linux y la arquitectura del equipo no se han indicado: la instalación de Python, Node.js, gcloud y el proxy debe corresponder a ese sistema.
@@ -179,6 +179,6 @@ El ADC del operador, sus secretos/JWT/claves de límites, contraseña administra
 - [ADC local e impersonación, documentación de Google](https://docs.cloud.google.com/docs/authentication/set-up-adc-local-dev-environment?hl=en).
 - [Permisos de impersonación](https://docs.cloud.google.com/docs/authentication/use-service-account-impersonation).
 - [Requisitos del Cloud SQL Auth Proxy](https://docs.cloud.google.com/sql/docs/postgres/sql-proxy).
-- [Estado oficial aplicado y recuperación](actualizacion_oficial_0004_20261025.md).
+- [Estado oficial aplicado y recuperación](../historico/manuales/actualizacion_oficial_0004_20261025.md).
 
 La política IAM y la cuenta web se verificaron el 4 de noviembre, con los límites del recibo. No acreditan programas instalados ni un nodo Linux funcionando. La entrega de credenciales requiere un canal privado. Las contraseñas no forman parte de esta guía ni de los recibos.

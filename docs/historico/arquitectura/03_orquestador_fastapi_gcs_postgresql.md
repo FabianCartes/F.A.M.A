@@ -205,7 +205,7 @@ La inicialización del servidor ejecuta automáticamente `Base.metadata.create_a
 
 ## 7. Aseguramiento de Calidad y Pruebas Automatizadas (TDD)
 
-Bajo las directrices de desarrollo definidas en [`AGENTS.md`](../../AGENTS.md), la totalidad del código fue probado mediante pruebas unitarias e integración con `pytest`:
+Bajo las directrices de desarrollo definidas en [`AGENTS.md`](../../../AGENTS.md), la totalidad del código fue probado mediante pruebas unitarias e integración con `pytest`:
 
 ```text
 ============================= test session starts =============================

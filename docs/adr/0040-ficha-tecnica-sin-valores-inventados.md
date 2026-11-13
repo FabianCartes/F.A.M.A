@@ -19,4 +19,4 @@ Un checkpoint ausente, corrupto, fuera de raíz, con metadatos inválidos o en u
 
 La consulta añade acceso local a los artefactos. No comprueba el SHA-256 registrado, no congela archivos contra cambios concurrentes ni certifica compatibilidad de red, capacidad de inferencia o calidad acústica. El tamaño de BD puede describir el artefacto registrado y no sus bytes actuales. PostgreSQL/GCS reales, GPU y navegador real quedan fuera de la verificación.
 
-Interfaces públicas confirmadas: `TrainingService.get_history`, `trainingApi.getHistory` y `TrainingView` renderizada. Evidencia y límites operativos en [KANBAN.md](../KANBAN.md).
+Interfaces públicas confirmadas: `TrainingService.get_history`, `trainingApi.getHistory` y `TrainingView` renderizada. Evidencia y límites operativos en [KANBAN.md](../historico/seguimiento/KANBAN.md).

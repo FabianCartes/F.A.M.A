@@ -11,7 +11,7 @@
 
 ## 1. Motivación y Principio Arquitectónico (Concepts > Code)
 
-En la Iteración anterior, el modelo convolucional plano (`AudioCNN`, 4 capas secuenciales) demostró un techo de aprendizaje asintótico en torno al **54.68% ± 2.67% de Accuracy**, sufriendo el fenómeno patológico denominado **"Efecto Flores"** (`docs/problemas_conocidos/01_solapamiento_de_clases_bioacusticas.md`). Dicho problema no era una anomalía estadística soluble con más épocas de entrenamiento, sino una **deficiencia estructural de representación**:
+En la Iteración anterior, el modelo convolucional plano (`AudioCNN`, 4 capas secuenciales) demostró un techo de aprendizaje asintótico en torno al **54.68% ± 2.67% de Accuracy**, sufriendo el fenómeno patológico denominado **"Efecto Flores"** (`docs/limites/01_solapamiento_de_clases_bioacusticas.md`). Dicho problema no era una anomalía estadística soluble con más épocas de entrenamiento, sino una **deficiencia estructural de representación**:
 
 1. **Falta de Capacidad y Campo Receptivo Rígido:** Las convoluciones planas de 4 capas carecen del campo receptivo y la profundidad no lineal necesarios para desenredar especies biológicamente emparentadas que comparten formantes espectrales cercanos (*Furnariidae*, *Rhinocryptidae*).
 2. **GPU Starvation:** La extracción espectral en CPU con `librosa` (~300 ms por audio) estrangulaba el flujo de datos hacia la GPU, limitando la exploración de arquitecturas más profundas.
@@ -157,7 +157,7 @@ de interfaces vigentes. Los orquestadores `train_pipeline` y `run_benchmark` fue
 retirados, incluidas sus CLI y la reexportación de entrenamiento desde `ml_core.train`.
 El entrenamiento actual parte de la UI → `POST /api/training/start` →
 `TrainingService`; las clases y helpers compartidos de inferencia/evaluación se
-conservan. Véase la [revisión actual de FastAPI y entrenamiento](../arquitectura/revision-fastapi.md).
+conservan. Véase la [revisión actual de FastAPI y entrenamiento](../historico/arquitectura/revision-fastapi.md).
 
 La implementación experimental se organizó según principios de **Clean Code**, **Deep Modules** y **TDD**:
 

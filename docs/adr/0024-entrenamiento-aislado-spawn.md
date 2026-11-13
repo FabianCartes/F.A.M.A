@@ -65,5 +65,5 @@ sintético con BD temporal en archivo, checkpoint e informes `val`/`test`, inclu
 cancelaciones durante validación y tras registro. La factoría externa del modelo
 se sustituye por un clasificador diminuto; no se descargan pesos.
 
-Véase [consolidación local](../manuales/consolidacion-worktrees.md) para los
+Véase [consolidación local](../historico/manuales/consolidacion-worktrees.md) para los
 comandos, resultados y límites de la verificación.

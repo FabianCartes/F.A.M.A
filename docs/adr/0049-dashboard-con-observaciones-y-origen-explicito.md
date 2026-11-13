@@ -21,4 +21,4 @@ Las fichas por dominio conservan valores de referencia ya existentes, ahora con 
 
 Una actualización fallida advierte que se conserva la última lectura y deja de confirmar salud actual; la falta de respuesta de hardware no se convierte en CPU normal/cero observado. No añade parser exhaustivo, sincronización entre polls concurrentes, SLA de refresco, probes de servicios, timestamps de auditoría ni garantías de producción.
 
-Se prefirió etiquetar las referencias antes que borrarlas como resultados históricos, pero se retiraron curvas/eventos ficticios porque aparentaban actividad observada. El manual y contraste de objetivos deben distinguir esta corrección de otras fuentes pendientes de estado/ensamble/inventario. Evidencia pública y límites operacionales: [KANBAN](../KANBAN.md).
+Se prefirió etiquetar las referencias antes que borrarlas como resultados históricos, pero se retiraron curvas/eventos ficticios porque aparentaban actividad observada. El manual y contraste de objetivos deben distinguir esta corrección de otras fuentes pendientes de estado/ensamble/inventario. Evidencia pública y límites operacionales: [KANBAN](../historico/seguimiento/KANBAN.md).
