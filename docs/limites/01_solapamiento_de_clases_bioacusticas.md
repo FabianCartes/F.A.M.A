@@ -45,7 +45,7 @@ En F.A.M.A., el benchmark de 10 ejecuciones independientes demostró que **no se
 
 A partir de 10 entrenamientos y evaluaciones consecutivas sobre el conjunto de prueba fijo (154 muestras estratificadas, ~10 por especie), se consolidó la matriz de confusión promedio:
 
-![Matriz de Confusión Promedio Benchmark](benchmark_confusion_matrix.png)
+![Matriz de Confusión Promedio Benchmark](../images/benchmark_confusion_matrix.png)
 
 ### Resumen de F1-Score y Grado de Separabilidad por Especie:
 
