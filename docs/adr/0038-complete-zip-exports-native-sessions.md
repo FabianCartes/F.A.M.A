@@ -1,7 +1,7 @@
 # ADR 0038: Complete ZIP64 exports and renewable native download sessions
 
 Date: 2026-10-17
-Status: Accepted for local T7 implementation; verification and delivery remain in the [implementation log](../arquitectura/large-zip-gcs.md).
+Status: Accepted for local T7 implementation; verification and delivery remain in the [implementation log](../historico/arquitectura/large-zip-gcs.md).
 
 T6 publishes immutable revision manifests, not downloadable ZIPs. Browser-native
 navigation cannot attach the application's Bearer header, and the existing Next

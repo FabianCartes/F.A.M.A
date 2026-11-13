@@ -51,5 +51,5 @@ repetida; su política de retención se resolverá con limpieza posterior.
 Esta entrega no cambia el contrato HTTP ni elimina aún `mutation.lock`. Tampoco
 implementa reclamación, heartbeat, fencing ni el worker: los campos preparados
 para ellos no acreditan esas garantías. La evidencia de procesos usa SQLite
-privado, no PostgreSQL operacional. Véanse el [seguimiento](../arquitectura/large-zip-gcs.md)
+privado, no PostgreSQL operacional. Véanse el [seguimiento](../historico/arquitectura/large-zip-gcs.md)
 y el [procedimiento](../manuales/trabajos-importacion-datasets.md).

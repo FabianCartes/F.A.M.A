@@ -37,13 +37,7 @@ Diseño de sistemas, componentes, pipelines y arquitectura MLOps, junto con el g
 - [`18_soporte_multimodelo_backend_rdd.md`](arquitectura/18_soporte_multimodelo_backend_rdd.md): Informe Técnico: Arquitectura Multi-Modelo Desacoplada (Strategy + Model Registry) y Aislamiento de Persistencia Cloud en Backend FastAPI (RDD)
 - [`20_modelo_de_producto_despliegue_y_arquitectura_operativa.md`](arquitectura/20_modelo_de_producto_despliegue_y_arquitectura_operativa.md): 20. Modelo de Producto, Estrategia de Despliegue, Concurrencia y Arquitectura Operativa de F.A.M.A.
 - [`22_arquitectura_universal_multidominio_y_limites_acusticos.md`](arquitectura/22_arquitectura_universal_multidominio_y_limites_acusticos.md): 22. Arquitectura Universal Multi-Dominio sin Código y Límites Físico-Computacionales de F.A.M.A.
-- [`22_propuesta_vista_ayuda_y_centro_de_conocimiento.md`](arquitectura/22_propuesta_vista_ayuda_y_centro_de_conocimiento.md): Propuesta y Especificación: Vista de Ayuda y Centro de Conocimiento F.A.M.A. (`HelpView`)
 - [`CONTEXT.md`](arquitectura/CONTEXT.md): Glosario de F.A.M.A.
-- [`data6-identidad-preparacion.md`](arquitectura/data6-identidad-preparacion.md): DATA-6 — Identidad de preparación y agrupación curada
-- [`feedback-crecimiento-datasets-plan.md`](arquitectura/feedback-crecimiento-datasets-plan.md): Feedback revisado y crecimiento del dataset
-- [`large-zip-gcs.md`](arquitectura/large-zip-gcs.md): Large ZIP imports and GCS reconstruction — implementation log
-- [`sincronizacion-checkpoints-y-ficha-plan.md`](arquitectura/sincronizacion-checkpoints-y-ficha-plan.md): Modelos: sincronización de checkpoints con GCS y ficha técnica completa
-- [`zip-worker-repair-plan.md`](arquitectura/zip-worker-repair-plan.md): ZIP worker repair — connected MVP
 
 ### [`manuales/`](manuales/) — Manuales
 
@@ -85,7 +79,6 @@ Instrucciones de uso, instalación, despliegue y operación.
 - [`limites_login_y_recuperacion.md`](manuales/limites_login_y_recuperacion.md): Límites de login y recuperación — backend
 - [`manual_usuario_plataforma.md`](manuales/manual_usuario_plataforma.md): Manual de Usuario y Operación de la Plataforma F.A.M.A.
 - [`nombres-modelos.md`](manuales/nombres-modelos.md): Nombres de modelos en entrenamiento y predicción
-- [`operacion-local-coleccion.md`](manuales/operacion-local-coleccion.md): Operación local de una colección trasladada
 - [`particiones_versionadas.md`](manuales/particiones_versionadas.md): Preparar y utilizar particiones versionadas
 - [`permisos_aplicacion_postgresql.md`](manuales/permisos_aplicacion_postgresql.md): Permisos de aplicación en PostgreSQL de pruebas (etapa 6)
 - [`permisos_recursos_asignados.md`](manuales/permisos_recursos_asignados.md): Permisos sobre recursos asignados
@@ -97,7 +90,6 @@ Instrucciones de uso, instalación, despliegue y operación.
 - [`preparacion-automatica-dataset.md`](manuales/preparacion-automatica-dataset.md): Preparación automática del dataset — MVP
 - [`preparacion_entorno_oficial.md`](manuales/preparacion_entorno_oficial.md): Preparación del entorno oficial
 - [`preparacion_instalacion_y_migraciones.md`](manuales/preparacion_instalacion_y_migraciones.md): Preparación de instalación y migraciones (etapa 1)
-- [`presupuesto-fisico-importacion-dev.md`](manuales/presupuesto-fisico-importacion-dev.md): Presupuesto físico de importación: integración opt-in sin activación
 - [`recuperacion_emergencia_administrador.md`](manuales/recuperacion_emergencia_administrador.md): Recuperación de emergencia del administrador
 - [`reevaluacion-modelos.md`](manuales/reevaluacion-modelos.md): Reevaluación explícita de modelos MAIN
 - [`respaldo_y_recuperacion_checkpoints.md`](manuales/respaldo_y_recuperacion_checkpoints.md): Respaldo y recuperación de checkpoints
@@ -106,7 +98,6 @@ Instrucciones de uso, instalación, despliegue y operación.
 - [`sesiones_web_y_acceso_administrado.md`](manuales/sesiones_web_y_acceso_administrado.md): Sesiones web y acceso administrado — implementación parcial
 - [`trabajos-importacion-datasets.md`](manuales/trabajos-importacion-datasets.md): Trabajos locales de importación ZIP
 - [`transferencias-datasets.md`](manuales/transferencias-datasets.md): Transferencias de datasets
-- [`traslado-local-almacenamiento.md`](manuales/traslado-local-almacenamiento.md): Traslado local fuera de línea
 - [`usuarios_postgresql_pruebas.md`](manuales/usuarios_postgresql_pruebas.md): Usuarios PostgreSQL de pruebas (etapa 4)
 - [`validacion_mp3_y_curvas_entrenamiento.md`](manuales/validacion_mp3_y_curvas_entrenamiento.md): Subida de MP3 y rótulo de épocas del entrenamiento
 - [`versiones-preparadas-dataset.md`](manuales/versiones-preparadas-dataset.md): Preparar y seleccionar una versión identificada del dataset

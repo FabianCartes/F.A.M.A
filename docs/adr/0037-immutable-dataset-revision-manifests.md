@@ -1,7 +1,7 @@
 # ADR 0037: Durable dataset revisions and immutable reconstruction manifests
 
 Date: 2026-10-17
-Status: Accepted for local T6 implementation; verification and delivery status remain in the [implementation log](../arquitectura/large-zip-gcs.md).
+Status: Accepted for local T6 implementation; verification and delivery status remain in the [implementation log](../historico/arquitectura/large-zip-gcs.md).
 
 ## Context
 

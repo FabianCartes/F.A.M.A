@@ -2,7 +2,7 @@
 
 T8 conecta la evidencia de los cortes anteriores con un recorrido reproducible de
 recepción a descarga. No cambia límites, contratos ni producción. El cierre vigente,
-commits y comprobaciones pendientes se mantienen en el [seguimiento canónico](../../arquitectura/large-zip-gcs.md).
+commits y comprobaciones pendientes se mantienen en el [seguimiento canónico](../arquitectura/large-zip-gcs.md).
 Esta guía no autoriza operaciones sobre datos, bases, GCS o servicios reales.
 
 ## Recorrido del usuario

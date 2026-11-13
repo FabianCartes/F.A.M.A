@@ -2,7 +2,7 @@
 
 > **Histórico.** El script `scripts.migrate_dataset_import_metadata` y su prueba fueron retirados: las tablas normalizadas las crean las revisiones Alembic (`python -m app.schema upgrade --apply`). Los comandos de las secciones «Safe inspection», «Authorized maintenance procedure» y «Reproduce synthetic checks» ya no existen y se conservan solo como registro; no los ejecute. El contrato HTTP de abajo sigue vigente.
 
-The explicit backfill adds normalized metadata and verifies equivalence while retaining `ImportedDataset.files` and `DatasetImport.preview` unchanged. **Running the migration does not activate a new application version or increase ZIP limits.** The T1b working-tree runtime reads/writes normalized records and must be deployed together with its paginated client. Implementation checks and pending acceptance are recorded in the [tracking document](../../arquitectura/large-zip-gcs.md); no live migration or deployment is authorized by these instructions.
+The explicit backfill adds normalized metadata and verifies equivalence while retaining `ImportedDataset.files` and `DatasetImport.preview` unchanged. **Running the migration does not activate a new application version or increase ZIP limits.** The T1b working-tree runtime reads/writes normalized records and must be deployed together with its paginated client. Implementation checks and pending acceptance are recorded in the [tracking document](../arquitectura/large-zip-gcs.md); no live migration or deployment is authorized by these instructions.
 
 ## Safe inspection
 

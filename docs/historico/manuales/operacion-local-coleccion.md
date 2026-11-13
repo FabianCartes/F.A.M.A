@@ -76,7 +76,7 @@ No reemplaza la aceptación operativa del bundle Next real y la colección copia
 
 ## Instancia dedicada verificada
 
-El [recibo operacional](../receipts/local-collection-operation.json) registra la
+El [recibo operacional](../../receipts/local-collection-operation.json) registra la
 aceptación local del código `40dbd76`: dos ciclos reales con Next/API/worker,
 seis páginas y 1.194 audios únicos en 15 clases (8.523.910.642 bytes), dos
 muestras descargadas con tamaño/SHA correcto en cada ciclo, exclusión del

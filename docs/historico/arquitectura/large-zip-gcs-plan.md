@@ -1,6 +1,6 @@
 # Plan de implementación: importación segura de ZIP grandes y reconstrucción desde GCS
 
-> Copia del plan original completo proporcionado por el usuario el 16 de octubre de 2026. Su estado inicial es histórico: prevalece el [seguimiento actual](../../arquitectura/large-zip-gcs.md), con T1a implementada y verificada, T1b pendiente al recibir este texto y estrategia `feature-branch-chain` confirmada. Este documento no acredita implementación ni autorización operacional.
+> Copia del plan original completo proporcionado por el usuario el 16 de octubre de 2026. Su estado inicial es histórico: prevalece el [seguimiento actual](large-zip-gcs.md), con T1a implementada y verificada, T1b pendiente al recibir este texto y estrategia `feature-branch-chain` confirmada. Este documento no acredita implementación ni autorización operacional.
 
 Estado: plan consolidado para implementar en otra sesión. No representa funcionalidades ya implementadas.
 

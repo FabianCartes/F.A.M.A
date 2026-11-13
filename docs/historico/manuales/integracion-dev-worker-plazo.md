@@ -5,7 +5,7 @@ Rama aislada `feat/zip-dev-first-block`, base `adecb01868940421fb44ca56194439908
 ## Actualización T6.3 (alcance posterior, no reescribe la evidencia histórica)
 
 El builder compartido ahora permite `FAMA_IMPORT_STORAGE_PROFILE` opcional para
-HTTP/worker; ver [contrato físico](../../manuales/presupuesto-fisico-importacion-dev.md). No se
+HTTP/worker; ver [contrato físico](presupuesto-fisico-importacion-dev.md). No se
 modifican dominio `(0,3600]`, default300, flag explícito900, watch/local-only,
 cleanup o señales. El perfil inválido rechaza antes de construir engine con la
 salida genérica existente; help explica la variable sin alterar salidas normales.
