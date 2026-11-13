@@ -61,7 +61,7 @@ Evaluar directamente un modelo entrenado con Softmax sobre grabaciones focales f
 ---
 
 ### 2.4 La Rigidez de Formantes y el Fallo de Augmentation Tonal Sintético
-* Como quedó demostrado en el experimento del [ADR 0009](../adr/0009_pitch_shift_espectral_gpu_augmentation.md) e [Informe 14](../14_pitch_shift_espectral_gpu_rdd.md), la traslación tonal sintética (*Pitch Shift* de $\pm 1$ semitono) provocó una caída de Macro F1 de **88.44% a 83.71%**.
+* Como quedó demostrado en el experimento del [ADR 0009](../adr/0009_pitch_shift_espectral_gpu_augmentation.md) e [Informe 14](../modelos/14_pitch_shift_espectral_gpu_rdd.md), la traslación tonal sintética (*Pitch Shift* de $\pm 1$ semitono) provocó una caída de Macro F1 de **88.44% a 83.71%**.
 * **Causa Biológica:** En la avifauna paseriforme (especialmente suboscinas como *Scytalopus* o *Sylviorthorhynchus*), los individuos emiten silbidos y trinos en **formantes de frecuencia rígidos y de ancho de banda ultra-estrecho**. Alterar artificialmente la frecuencia fundamental destruye la firma diagnóstica, induciendo a la red a confundir especies que cohabitan en frecuencias adyacentes.
 
 ---

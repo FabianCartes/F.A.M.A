@@ -6,7 +6,7 @@
 * **Documentos Base de Referencia:**
   * Tesis de Grado: [`docs/memoria_proyecto_titulo_2026_1.md`](../tesis/)
   * Análisis de Objetivos: [`docs/analisis_objetivos_fama.md`](../tesis/analisis_objetivos_fama.md)
-  * Arquitectura del Super-Ensamble: [`docs/17_arquitectura_super_ensamble_y_modelos_preentrenados.md`](./17_arquitectura_super_ensamble_y_modelos_preentrenados.md)
+  * Arquitectura del Super-Ensamble: [`docs/17_arquitectura_super_ensamble_y_modelos_preentrenados.md`](../modelos/17_arquitectura_super_ensamble_y_modelos_preentrenados.md)
 
 ---
 

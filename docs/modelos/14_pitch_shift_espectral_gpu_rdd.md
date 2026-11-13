@@ -4,11 +4,11 @@
 **Fecha:** Septiembre 2026  
 **Fase:** Iteración 14 - Data Augmentation Espectral en GPU (Spectral Pitch Shift)  
 **Checkpoints Clave:**  
-1. [`checkpoints/convnext_nano_pitchshift_35e_best.pt`](../checkpoints/convnext_nano_pitchshift_35e_best.pt) (ConvNeXt-Nano 35 épocas, focal gamma=2.0, Mixup, Pitch Shift $\pm 2$ bins, $p=0.3$, pipeline GPU)  
-2. [`checkpoints/convnext_nano_35e_best.pt`](../checkpoints/convnext_nano_35e_best.pt) (ConvNeXt-Nano 35 épocas sin Pitch Shift, baseline previo)  
-3. [`checkpoints/efficientnet_gpu_pipeline_35e_best.pt`](../checkpoints/efficientnet_gpu_pipeline_35e_best.pt) (EfficientNet-B0 GAP estándar, 35 épocas)  
+1. [`checkpoints/convnext_nano_pitchshift_35e_best.pt`](../../checkpoints/convnext_nano_pitchshift_35e_best.pt) (ConvNeXt-Nano 35 épocas, focal gamma=2.0, Mixup, Pitch Shift $\pm 2$ bins, $p=0.3$, pipeline GPU)  
+2. [`checkpoints/convnext_nano_35e_best.pt`](../../checkpoints/convnext_nano_35e_best.pt) (ConvNeXt-Nano 35 épocas sin Pitch Shift, baseline previo)  
+3. [`checkpoints/efficientnet_gpu_pipeline_35e_best.pt`](../../checkpoints/efficientnet_gpu_pipeline_35e_best.pt) (EfficientNet-B0 GAP estándar, 35 épocas)  
 **Test Set:** 154 grabaciones independientes de Xeno-Canto v3 (*Zero Recordist Leakage*, 15 especies de aves chilenas)  
-**Metodología:** ADR ([`docs/adr/0009_pitch_shift_espectral_gpu_augmentation.md`](./adr/0009_pitch_shift_espectral_gpu_augmentation.md)) + TDD + RDD  
+**Metodología:** ADR ([`docs/adr/0009_pitch_shift_espectral_gpu_augmentation.md`](../adr/0009_pitch_shift_espectral_gpu_augmentation.md)) + TDD + RDD  
 
 ---
 
@@ -39,12 +39,12 @@ En la Iteración 14 se implementó y validó el **Desplazamiento Tonal Espectral
    * La regularización fue óptima en generalización de validación (90.60% Val Acc en época 35), pero en el conjunto de prueba independiente con distribución no sesgada, el ensamble calibrado sin pitch shift (88.44% F1) retiene el título de método campeón.
 
 3. **Recomendación Operativa:**
-   * Mantener el checkpoint campeón [`convnext_nano_35e_best.pt`](../checkpoints/convnext_nano_35e_best.pt) en el ensamble de producción con EfficientNet (ADR 0008, 88.44% Macro F1).
+   * Mantener el checkpoint campeón [`convnext_nano_35e_best.pt`](../../checkpoints/convnext_nano_35e_best.pt) en el ensamble de producción con EfficientNet (ADR 0008, 88.44% Macro F1).
    * La capacidad de `GPUSpecAugment` con `--pitch-shift-bins` y `--pitch-shift-prob` queda incorporada en el codebase como herramienta configurable para escenarios de datasets desbalanceados con alta varianza intraespecífica.
 
 ---
 
 ## 3. Artefactos Generados
 
-* Matriz de confusión ConvNeXt-Nano con Pitch Shift: [`docs/images/cm_convnext_pitchshift_dense_hop100_max.png`](./images/cm_convnext_pitchshift_dense_hop100_max.png)
-* Matriz de confusión Ensamble Calibrado con Pitch Shift: [`docs/images/cm_ensemble_calibrated_pitchshift_max.png`](./images/cm_ensemble_calibrated_pitchshift_max.png)
+* Matriz de confusión ConvNeXt-Nano con Pitch Shift: [`docs/images/cm_convnext_pitchshift_dense_hop100_max.png`](../images/cm_convnext_pitchshift_dense_hop100_max.png)
+* Matriz de confusión Ensamble Calibrado con Pitch Shift: [`docs/images/cm_ensemble_calibrated_pitchshift_max.png`](../images/cm_ensemble_calibrated_pitchshift_max.png)

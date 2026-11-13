@@ -3,7 +3,7 @@
 * **Fecha de Registro:** 2026-09-07  
 * **Área:** Machine Learning, Bioacústica Computacional, Deep Learning, Inferencia y Despliegue  
 * **Conjunto de Evaluación Oficial:** `data/test.csv` (154 grabaciones de campo independientes, 15 especies de aves chilenas, particionadas con blindaje estricto contra fuga de grabadores / *Zero Recordist Leakage*).  
-* **ADRs Relacionados:** [ADR 0001](./adr/0001_migracion_efficientnet_frontend_gpu.md), [ADR 0004](./adr/0004_gem_pooling_bioacoustic_efficientnet.md), [ADR 0006](./adr/0006_ensemble_multimodelo_inferencia.md), [ADR 0007](./adr/0007_ensamble_heterogeneo_convnext_efficientnet.md), [ADR 0008](./adr/0008_calibracion_optima_pesos_ensamble_heterogeneo.md), [ADR 0009](./adr/0009_pitch_shift_espectral_gpu_augmentation.md), [ADR 0010](./adr/0010_tri_modelo_heterogeneo_resnet34d.md).
+* **ADRs Relacionados:** [ADR 0001](../adr/0001_migracion_efficientnet_frontend_gpu.md), [ADR 0004](../adr/0004_gem_pooling_bioacoustic_efficientnet.md), [ADR 0006](../adr/0006_ensemble_multimodelo_inferencia.md), [ADR 0007](../adr/0007_ensamble_heterogeneo_convnext_efficientnet.md), [ADR 0008](../adr/0008_calibracion_optima_pesos_ensamble_heterogeneo.md), [ADR 0009](../adr/0009_pitch_shift_espectral_gpu_augmentation.md), [ADR 0010](../adr/0010_tri_modelo_heterogeneo_resnet34d.md).
 
 ---
 
@@ -27,7 +27,7 @@ En las etapas tempranas del proyecto F.A.M.A., se diseñó un modelo convolucion
 
 ## 2. Detalle de los 3 Modelos Pre-entrenados Integrados
 
-Para conformar el sistema titular de producción, se seleccionaron e integraron **tres familias topológicas contrastantes** a través de la biblioteca especializada `timm` (*PyTorch Image Models*), envueltas bajo la abstracción unificada [`BioacousticModel`](../backend/poc/train.py):
+Para conformar el sistema titular de producción, se seleccionaron e integraron **tres familias topológicas contrastantes** a través de la biblioteca especializada `timm` (*PyTorch Image Models*), envueltas bajo la abstracción unificada [`BioacousticModel`](../../backend/poc/train.py):
 
 ```mermaid
 graph TD
@@ -52,7 +52,7 @@ graph TD
 
 ### Modelo 1: **EfficientNet-B0** (`efficientnet_b0`)
 * **Topología:** Convoluciones invertidas con cuello de botella (*Mobile Inverted Bottleneck Conv*, MBConv), kernels pequeños combinados ($3\times 3$ y $5\times 5$), bloques de atención por canal *Squeeze-and-Excitation* (SE) y activaciones no lineales suaves *SiLU*.
-* **Modificación Bioacústica Exclusiva:** Se reemplazó el `AdaptiveAvgPool2d` original por un cabezal de **Pooling Generalizado de Medias ([`GeM`](../backend/poc/preprocess.py))** con exponente entrenable ($p=3.0$). Esto evita que los cantos breves se diluyan en los momentos de silencio.
+* **Modificación Bioacústica Exclusiva:** Se reemplazó el `AdaptiveAvgPool2d` original por un cabezal de **Pooling Generalizado de Medias ([`GeM`](../../backend/poc/preprocess.py))** con exponente entrenable ($p=3.0$). Esto evita que los cantos breves se diluyan en los momentos de silencio.
 * **Por qué se eligió:** Es un modelo ultra-liviano (~5.3M parámetros) que destaca por su estabilidad y su habilidad para reconocer firmas de textura y modulación en el rango medio del espectro.
 * **Rendimiento Individual:** **84.38% Macro F1** / **85.56% Macro Precision**.
 * **Ponderación en el Ensamble:** **55% ($w = 0.55$)**.
@@ -83,7 +83,7 @@ graph TD
 
 ## 3. El Orquestador de Inferencia: `EnsembleClassifier`
 
-En [`backend/poc/evaluate.py`](../backend/poc/evaluate.py), se implementó la clase **`EnsembleClassifier(nn.Module)`**, la cual opera como un clasificador unificado transparente:
+En [`backend/poc/evaluate.py`](../../backend/poc/evaluate.py), se implementó la clase **`EnsembleClassifier(nn.Module)`**, la cual opera como un clasificador unificado transparente:
 
 ### Mecanismo de Fusión Tardía (*Soft Voting* Ponderado):
 Cada modelo $k \in \{1, 2, 3\}$ procesa el espectrograma y produce un vector de *logits* $z_k$. Estos logits se transforman en probabilidades mediante la función Softmax:
@@ -92,7 +92,7 @@ $$P_k = \text{Softmax}(z_k)$$
 El ensamble calcula la distribución de probabilidad combinada mediante la suma ponderada:
 $$P_{\text{ensamble}} = w_{\text{Eff}} \cdot P_{\text{Eff}} + w_{\text{Conv}} \cdot P_{\text{Conv}} + w_{\text{Res}} \cdot P_{\text{Res}}$$
 
-Donde los pesos óptimos calibrados ([ADR 0008](./adr/0008_calibracion_optima_pesos_ensamble_heterogeneo.md) y [ADR 0010](./adr/0010_tri_modelo_heterogeneo_resnet34d.md)) son:
+Donde los pesos óptimos calibrados ([ADR 0008](../adr/0008_calibracion_optima_pesos_ensamble_heterogeneo.md) y [ADR 0010](../adr/0010_tri_modelo_heterogeneo_resnet34d.md)) son:
 $$\mathbf{w} = [0.55, \; 0.30, \; 0.15], \quad \sum w_i = 1.0$$
 
 Para mantener compatibilidad total con cualquier métrica o función de pérdida estándar (principio de sustitución de Liskov), el ensamble devuelve:
@@ -107,11 +107,11 @@ $$\hat{z}_{\text{ensamble}} = \log(P_{\text{ensamble}})$$
 
 Además de los modelos, la rama incorporó 4 subsistemas críticos de ingeniería de audio y computación acelerada:
 
-### A. Saneamiento y Transcodificación de Audio ([`backend/poc/sanitize.py`](../backend/poc/sanitize.py))
+### A. Saneamiento y Transcodificación de Audio ([`backend/poc/sanitize.py`](../../backend/poc/sanitize.py))
 * **Supresión a nivel C:** Los archivos MP3 extraídos de repositorios públicos a menudo contienen metadatos inválidos que producían advertencias nativas de `libmpg123` ensuciando la consola. Se encapsuló la carga redirigiendo temporalmente el descriptor de archivos `stderr` (`os.dup2(tmp, 2)`).
 * **Conversión Concurrente:** Función `sanitize_dataset` con `ProcessPoolExecutor` que transcodifica masivamente a formato estándar WAV PCM_16 mono a 22,050 Hz con normalización pico en $[-1.0, 1.0]$ para impedir clipping.
 
-### B. Preprocesamiento Directo en GPU ([`backend/poc/preprocess.py`](../backend/poc/preprocess.py))
+### B. Preprocesamiento Directo en GPU ([`backend/poc/preprocess.py`](../../backend/poc/preprocess.py))
 * **`GPUAudioFrontEnd`:** Módulo `nn.Module` de `torchaudio` que recibe la forma de onda pura en VRAM y realiza en paralelo:
   1. STFT (ventana Hann, $N_{\text{fft}} = 1024$, hop = 512).
   2. Banco de filtros Mel de 128 bandas calibrado para aves chilenas ($f_{\text{min}} = 800$ Hz, $f_{\text{max}} = 10,000$ Hz).
@@ -120,11 +120,11 @@ Además de los modelos, la rama incorporó 4 subsistemas críticos de ingenierí
 * **Impacto:** Reduce el tiempo de cómputo por época de ~18 minutos en CPU a menos de 4 minutos en GPU (**aceleración 4x**).
 
 ### C. Estrategias de Aumento y Regularización
-* **Pérdida Focal Multiclase ([`FocalLoss`](../backend/poc/train.py)):** Modula la entropía cruzada mediante $(1 - p_t)^\gamma$ ($\gamma = 2.0$), penalizando con mayor fuerza los ejemplos difíciles y reduciendo el sobreajuste en clases dominantes.
+* **Pérdida Focal Multiclase ([`FocalLoss`](../../backend/poc/train.py)):** Modula la entropía cruzada mediante $(1 - p_t)^\gamma$ ($\gamma = 2.0$), penalizando con mayor fuerza los ejemplos difíciles y reduciendo el sobreajuste en clases dominantes.
 * **Mixup Espectral en GPU:** Mezcla pares aleatorios de tensores espectrales y sus etiquetas según una distribución $\text{Beta}(\alpha=0.2)$, suavizando las fronteras de decisión.
-* **Ablación de Pitch Shift Espectral ([ADR 0009](./adr/0009_pitch_shift_espectral_gpu_augmentation.md)):** Se investigó experimentalmente el desplazamiento de tono sintético ($\pm 1$ semitono). Se descubrió que aves passeriformes chilenas (*Sylviorthorhynchus*, *Aphrastura*) emiten notas silbadas en formantes muy estrechos; trasladar el tono generó confusión con especies vecinas (el F1 bajó a 83.71%), por lo que se mantuvo modular en código pero se desactivó del modelo campeón.
+* **Ablación de Pitch Shift Espectral ([ADR 0009](../adr/0009_pitch_shift_espectral_gpu_augmentation.md)):** Se investigó experimentalmente el desplazamiento de tono sintético ($\pm 1$ semitono). Se descubrió que aves passeriformes chilenas (*Sylviorthorhynchus*, *Aphrastura*) emiten notas silbadas en formantes muy estrechos; trasladar el tono generó confusión con especies vecinas (el F1 bajó a 83.71%), por lo que se mantuvo modular en código pero se desactivó del modelo campeón.
 
-### D. Inferencia Robusta: Ventaneo Denso + Micro-Batching ([`backend/poc/evaluate.py`](../backend/poc/evaluate.py))
+### D. Inferencia Robusta: Ventaneo Denso + Micro-Batching ([`backend/poc/evaluate.py`](../../backend/poc/evaluate.py))
 * **Dense TTA (Multi-Crop):** La inferencia divide grabaciones de campo largas en ventanas de 5.0 segundos que se solapan cada 1.0 segundo (`hop_seconds=1.0`), tomando la probabilidad máxima observada (`mode="max"`). Esto garantiza detectar a un ave incluso si solo emite una llamada breve al inicio o al final del audio.
 * **Micro-Batching de Memoria ($\mathcal{O}(1)$ VRAM):** Audios extensos (> 2 minutos) generan más de 120 ventanas. Para prevenir caídas por *Out of Memory* (CUDA OOM) en GPUs de 4 GB, el evaluador procesa las ventanas en micro-lotes fijos (`max_window_batch_size=32`), garantizando consumo de memoria plano e invariable sin importar la longitud del audio.
 

@@ -79,4 +79,4 @@ El servicio [`upload_audio_to_gcp`](../../backend/app/services/storage.py) perma
 
 El desarrollo se ejecutará bajo **Test-Driven Development (TDD)** complementado con **Receipt-Driven Development (RDD)**:
 * Cada fase requerirá pruebas en rojo antes del código de producción.
-* La validación final generará un informe técnico de hito ([`docs/18_soporte_multimodelo_backend_rdd.md`](../18_soporte_multimodelo_backend_rdd.md)) con evidencia auditable (*receipts*): salida de `pytest` (100% pasando), pruebas de llamada HTTP (`curl`/`TestClient`) a `/api/models` y `/api/predict`, y verificación de inserción en base de datos.
+* La validación final generará un informe técnico de hito ([`docs/18_soporte_multimodelo_backend_rdd.md`](../arquitectura/18_soporte_multimodelo_backend_rdd.md)) con evidencia auditable (*receipts*): salida de `pytest` (100% pasando), pruebas de llamada HTTP (`curl`/`TestClient`) a `/api/models` y `/api/predict`, y verificación de inserción en base de datos.

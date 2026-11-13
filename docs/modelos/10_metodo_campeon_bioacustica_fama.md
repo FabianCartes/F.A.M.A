@@ -4,7 +4,7 @@
 
 **Proyecto:** Framework MLOps Híbrido para Clasificación de Audio (F.A.M.A.)  
 **Fecha:** Septiembre 2026  
-**Checkpoint Oficial:** [`checkpoints/efficientnet_gpu_pipeline_35e_best.pt`](../checkpoints/efficientnet_gpu_pipeline_35e_best.pt)  
+**Checkpoint Oficial:** [`checkpoints/efficientnet_gpu_pipeline_35e_best.pt`](../../checkpoints/efficientnet_gpu_pipeline_35e_best.pt)  
 **Dominio:** 15 Especies de Aves de Chile (Dataset Xeno-canto v3 con estricto *Zero Recordist Leakage*)  
 **Métricas en Test Set (154 Muestras Independientes):**
 * **Macro F1-Score:** **83.76%**
@@ -58,7 +58,7 @@ graph TD
 * **Problema resuelto:** Inanición de GPU (*GPU Starvation*). Calcular `librosa` en CPU tomaba ~350 ms por lote mientras la GPU esperaba ociosa.
 * **Solución:**
   * CPU sólo aplica I/O y aumentaciones temporales en el tensor 1D `[110250]`.
-  * [`GPUAudioFrontEnd`](../backend/poc/preprocess.py) extrae el espectrograma Mel en lote directamente en VRAM usando `torchaudio`.
+  * [`GPUAudioFrontEnd`](../../backend/poc/preprocess.py) extrae el espectrograma Mel en lote directamente en VRAM usando `torchaudio`.
   * **Rango de frecuencia focalizado:** $f_{\min} = 800.0\text{ Hz}$ a $f_{\max} = 10.000\text{ Hz}$ sobre 128 bandas Mel (filtra el ruido de baja frecuencia de viento/tráfico y enfoca la capacidad representativa en el rango acústico real de las aves).
   * **Normalización Z-score por instancia:** Media 0 y desviación estándar 1 calculada en GPU para cada muestra en $<0.05\text{ ms}$.
 * **Impacto:** Redujo el tiempo de entrenamiento de **19m 46s a 04m 45s** (4.2x de aceleración).

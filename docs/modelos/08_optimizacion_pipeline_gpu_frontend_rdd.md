@@ -36,10 +36,10 @@ A través de una reestructuración desacoplada del pipeline de datos:
 ## 2. Diagnóstico Técnico: Inanición de GPU (*GPU Starvation*)
 
 ### Causa Raíz
-En las iteraciones previas, [`AudioDataset.__getitem__`](backend/poc/train.py#L161-L216) calculaba `extract_mel_spectrogram` invocando `librosa.feature.melspectrogram` en CPU para cada muestra individual en cada época a través de 4 workers de `multiprocessing`.
+En las iteraciones previas, [`AudioDataset.__getitem__`](../../backend/poc/train.py#L161-L216) calculaba `extract_mel_spectrogram` invocando `librosa.feature.melspectrogram` en CPU para cada muestra individual en cada época a través de 4 workers de `multiprocessing`.
 
 * **Latencia de CPU por muestra:** ~25–35 ms por audio. Con un lote de 16 audios, el tiempo de preparación por batch oscilaba entre **300 y 450 ms**.
-* **Latencia de GPU por lote:** El paso *forward + backward* de [`BioacousticEfficientNet`](backend/poc/train.py#L306-L355) en la RTX 2050 Mobile toma únicamente **~12–15 ms**.
+* **Latencia de GPU por lote:** El paso *forward + backward* de [`BioacousticEfficientNet`](../../backend/poc/train.py#L306-L355) en la RTX 2050 Mobile toma únicamente **~12–15 ms**.
 * **Diagnóstico:** La GPU pasaba el **96% del tiempo ociosa** esperando que los workers de CPU terminaran de calcular la Transformada de Fourier de Tiempo Corto (STFT) y los bancos de filtros Mel.
 
 ---
@@ -75,14 +75,14 @@ graph LR
 * Mantiene retrocompatibilidad determinista cuando `return_raw_waveform=False`.
 
 ### 2. `GPUAudioFrontEnd` con Normalización Z-Score en Lote
-* Implementado en [`backend/poc/preprocess.py`](backend/poc/preprocess.py#L180-L230) como un `nn.Module` basado en `torchaudio.transforms.MelSpectrogram` y `AmplitudeToDB`.
+* Implementado en [`backend/poc/preprocess.py`](../../backend/poc/preprocess.py#L180-L230) como un `nn.Module` basado en `torchaudio.transforms.MelSpectrogram` y `AmplitudeToDB`.
 * Recibe el lote completo `[B, 110250]` y ejecuta la STFT, el banco de filtros Mel de 128 bandas (`f_min=800 Hz`, `f_max=10000 Hz`) y la escala logarítmica en decibelios en paralelo.
 * Aplica normalización z-score por instancia en VRAM:
   $$\mathbf{X}_{\text{norm}} = \frac{\mathbf{X}_{\text{dB}} - \mu}{\sigma + 10^{-6}}$$
   garantizando media cero y varianza unitaria en menos de 0.05 ms por lote.
 
 ### 3. `GPUSpecAugment` Nativo y Vectorizado
-* Implementado en [`backend/poc/preprocess.py`](backend/poc/preprocess.py#L233-L260) integrando `T.FrequencyMasking(freq_mask_param=8, iid_masks=True)` y `T.TimeMasking(time_mask_param=16, iid_masks=True)`.
+* Implementado en [`backend/poc/preprocess.py`](../../backend/poc/preprocess.py#L233-L260) integrando `T.FrequencyMasking(freq_mask_param=8, iid_masks=True)` y `T.TimeMasking(time_mask_param=16, iid_masks=True)`.
 * Al usar máscaras independientes (`iid_masks=True`), cada muestra del lote recibe una perturbación espectral diferente en tiempo de ejecución sin bucles secuenciales de Python.
 
 ### 4. Portabilidad Universal (Notebooks con y sin GPU dedicada)
@@ -94,7 +94,7 @@ graph LR
 
 ## 4. Validación TDD: Cero Regresiones
 
-Bajo la metodología estricta de TDD (*Red → Green → Refactor*), se expandió la suite de pruebas unitarias e integración en [`backend/tests/`](backend/tests/):
+Bajo la metodología estricta de TDD (*Red → Green → Refactor*), se expandió la suite de pruebas unitarias e integración en [`backend/tests/`](../../backend/tests/):
 
 * `test_audio_dataset_raw_waveform`: Valida que `AudioDataset` entregue tensores 1D `[110250]` y preserve aumentaciones estocásticas en entrenamiento.
 * `test_gpu_spec_augment`: Valida que `GPUSpecAugment` opere sobre tensores 4D `[B, 1, 128, 216]`, respete el modo `eval()` siendo idempotente y aplique máscaras en modo `train()`.
@@ -120,15 +120,15 @@ Bajo la metodología estricta de TDD (*Red → Green → Refactor*), se expandi�
 | **Iter 8** | `EfficientNet-B0` + GPU Front-End + **TTA Max** | 35 | **04m 45s** | **~8.0s** | **83.12%** | **83.76%** | **85.13%** |
 
 ### Visualizaciones de Desempeño Generadas
-* **Matriz de Confusión Sin TTA:** [`docs/images/cm_gpu_pipeline_35e_no_tta.png`](images/cm_gpu_pipeline_35e_no_tta.png)
-* **Matriz de Confusión TTA Mean:** [`docs/images/cm_gpu_pipeline_35e_tta_mean.png`](images/cm_gpu_pipeline_35e_tta_mean.png)
-* **Matriz de Confusión TTA Max (Récord):** [`docs/images/cm_gpu_pipeline_35e_tta_max.png`](images/cm_gpu_pipeline_35e_tta_max.png)
+* **Matriz de Confusión Sin TTA:** [`docs/images/cm_gpu_pipeline_35e_no_tta.png`](../images/cm_gpu_pipeline_35e_no_tta.png)
+* **Matriz de Confusión TTA Mean:** [`docs/images/cm_gpu_pipeline_35e_tta_mean.png`](../images/cm_gpu_pipeline_35e_tta_mean.png)
+* **Matriz de Confusión TTA Max (Récord):** [`docs/images/cm_gpu_pipeline_35e_tta_max.png`](../images/cm_gpu_pipeline_35e_tta_max.png)
 
 ---
 
 ## 6. Ablación de Régimen Extendido: Por Qué Superar 35 Épocas Degrada el Modelo
 
-Para determinar empíricamente si extender el régimen de entrenamiento permitía extraer mayor capacidad de [`BioacousticEfficientNet`](backend/poc/train.py#L306-L355), se ejecutó una corrida de **64 épocas** manteniendo exactamente los mismos hiperparámetros (Mixup $\alpha=0.2$, $p=0.5$, SpecAugment, Focal Loss $\gamma=2.0$, AdamW $lr=10^{-4}$).
+Para determinar empíricamente si extender el régimen de entrenamiento permitía extraer mayor capacidad de [`BioacousticEfficientNet`](../../backend/poc/train.py#L306-L355), se ejecutó una corrida de **64 épocas** manteniendo exactamente los mismos hiperparámetros (Mixup $\alpha=0.2$, $p=0.5$, SpecAugment, Focal Loss $\gamma=2.0$, AdamW $lr=10^{-4}$).
 
 ### Comparativa RDD: 35 Épocas vs 64 Épocas
 
@@ -156,5 +156,5 @@ Para determinar empíricamente si extender el régimen de entrenamiento permití
 ## 7. Conclusión y Modelo de Producción
 
 1. **GPU Starvation Erradicada:** La GPU opera de manera continua sin periodos de espera ociosa, reduciendo los ciclos de entrenamiento de **19m46s a 04m45s** (aceleración de 4.2x).
-2. **Modelo Definitivo de Producción:** El checkpoint oficial del proyecto queda fijado en [`checkpoints/efficientnet_gpu_pipeline_35e_best.pt`](checkpoints/efficientnet_gpu_pipeline_35e_best.pt) con **83.76% de Macro F1 y 83.12% de Accuracy** con TTA Max.
+2. **Modelo Definitivo de Producción:** El checkpoint oficial del proyecto queda fijado en [`checkpoints/efficientnet_gpu_pipeline_35e_best.pt`](../../checkpoints/efficientnet_gpu_pipeline_35e_best.pt) con **83.76% de Macro F1 y 83.12% de Accuracy** con TTA Max.
 3. **Regla de Entrenamiento:** Queda formalmente prohibido entrenar por más de 35 épocas bajo esta configuración, al haberse demostrado que induce sobreajuste y deteriora la generalización.

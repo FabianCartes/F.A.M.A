@@ -6,10 +6,10 @@
 **Fecha:** Septiembre 2026  
 **Fase:** Iteración 12 - Fusión de Modelos con Diversidad Estructural (*Ensemble Learning*)  
 **Checkpoints Evaluados:**  
-1. [`checkpoints/efficientnet_gpu_pipeline_35e_best.pt`](../checkpoints/efficientnet_gpu_pipeline_35e_best.pt) (EfficientNet-B0 con GAP, peso: 0.80)  
-2. [`checkpoints/efficientnet_gem_35e_best.pt`](../checkpoints/efficientnet_gem_35e_best.pt) (EfficientNet-B0 con GeM Pooling $p \approx 3.0$, peso: 0.20)  
+1. [`checkpoints/efficientnet_gpu_pipeline_35e_best.pt`](../../checkpoints/efficientnet_gpu_pipeline_35e_best.pt) (EfficientNet-B0 con GAP, peso: 0.80)  
+2. [`checkpoints/efficientnet_gem_35e_best.pt`](../../checkpoints/efficientnet_gem_35e_best.pt) (EfficientNet-B0 con GeM Pooling $p \approx 3.0$, peso: 0.20)  
 **Test Set:** 154 grabaciones independientes de Xeno-Canto v3 (*Zero Recordist Leakage*, 15 especies de aves chilenas)  
-**Metodología:** ADR ([`docs/adr/0006_ensemble_multimodelo_inferencia.md`](./adr/0006_ensemble_multimodelo_inferencia.md)) + TDD + RDD  
+**Metodología:** ADR ([`docs/adr/0006_ensemble_multimodelo_inferencia.md`](../adr/0006_ensemble_multimodelo_inferencia.md)) + TDD + RDD  
 
 ---
 
@@ -90,7 +90,7 @@ Promedio Macro                 85.7%    85.9%    85.1%       154   NUEVO RÉCORD
 
 ## 5. Artefactos y Conclusiones
 
-1. **Matriz de Confusión Oficial:** Guardada en [`docs/images/cm_ensemble_gap_gem_dense_hop100_max.png`](./images/cm_ensemble_gap_gem_dense_hop100_max.png).
+1. **Matriz de Confusión Oficial:** Guardada en [`docs/images/cm_ensemble_gap_gem_dense_hop100_max.png`](../images/cm_ensemble_gap_gem_dense_hop100_max.png).
 2. **Suite de Pruebas Automatizadas:** 61 pruebas unitarias e integración en verde (`.venv/bin/pytest backend/tests`).
 3. **Validación de Principios de Software:** El módulo profundo `EnsembleClassifier` respeta el Principio de Sustitución de Liskov, permitiendo invocarlo de forma transparente desde el CLI:
    ```bash

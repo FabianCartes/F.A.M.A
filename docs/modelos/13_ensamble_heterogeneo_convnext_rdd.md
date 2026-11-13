@@ -6,11 +6,11 @@
 **Fecha:** Septiembre 2026  
 **Fase:** Iteración 13 - Ensamble Heterogéneo con Diversidad de Inductores Bioacústicos  
 **Checkpoints Clave:**  
-1. [`checkpoints/convnext_nano_35e_best.pt`](../checkpoints/convnext_nano_35e_best.pt) (ConvNeXt-Nano 35 épocas, focal gamma=2.0, Mixup, pipeline GPU)  
-2. [`checkpoints/efficientnet_gpu_pipeline_35e_best.pt`](../checkpoints/efficientnet_gpu_pipeline_35e_best.pt) (EfficientNet-B0 con GAP estándar, 35 épocas)  
-3. [`checkpoints/efficientnet_gem_35e_best.pt`](../checkpoints/efficientnet_gem_35e_best.pt) (EfficientNet-B0 con GeM Pooling $p \approx 3.0$)  
+1. [`checkpoints/convnext_nano_35e_best.pt`](../../checkpoints/convnext_nano_35e_best.pt) (ConvNeXt-Nano 35 épocas, focal gamma=2.0, Mixup, pipeline GPU)  
+2. [`checkpoints/efficientnet_gpu_pipeline_35e_best.pt`](../../checkpoints/efficientnet_gpu_pipeline_35e_best.pt) (EfficientNet-B0 con GAP estándar, 35 épocas)  
+3. [`checkpoints/efficientnet_gem_35e_best.pt`](../../checkpoints/efficientnet_gem_35e_best.pt) (EfficientNet-B0 con GeM Pooling $p \approx 3.0$)  
 **Test Set:** 154 grabaciones independientes de Xeno-Canto v3 (*Zero Recordist Leakage*, 15 especies de aves chilenas)  
-**Metodología:** ADR ([`docs/adr/0007_ensamble_heterogeneo_convnext_efficientnet.md`](./adr/0007_ensamble_heterogeneo_convnext_efficientnet.md)) + TDD + RDD  
+**Metodología:** ADR ([`docs/adr/0007_ensamble_heterogeneo_convnext_efficientnet.md`](../adr/0007_ensamble_heterogeneo_convnext_efficientnet.md)) + TDD + RDD  
 
 ---
 
@@ -116,10 +116,10 @@ Accuracy General                                 86.4%       154
 ## 5. Artefactos y Matrices de Confusión
 
 Los siguientes artefactos quedaron generados y versionados en el repositorio:
-1. **Checkpoint ConvNeXt-Nano:** [`checkpoints/convnext_nano_35e_best.pt`](../checkpoints/convnext_nano_35e_best.pt) (172 MB).
-2. **Matriz de Confusión ConvNeXt-Nano Individual:** [`docs/images/cm_convnext_nano_35e_dense_hop100_max.png`](./images/cm_convnext_nano_35e_dense_hop100_max.png).
-3. **Matriz de Confusión Ensamble Bi-Modelo Campeón:** [`docs/images/cm_ensemble_effnet_convnext_max.png`](./images/cm_ensemble_effnet_convnext_max.png).
-4. **Matriz de Confusión Ensamble Tri-Modelo:** [`docs/images/cm_ensemble_tri_model_max.png`](./images/cm_ensemble_tri_model_max.png).
+1. **Checkpoint ConvNeXt-Nano:** [`checkpoints/convnext_nano_35e_best.pt`](../../checkpoints/convnext_nano_35e_best.pt) (172 MB).
+2. **Matriz de Confusión ConvNeXt-Nano Individual:** [`docs/images/cm_convnext_nano_35e_dense_hop100_max.png`](../images/cm_convnext_nano_35e_dense_hop100_max.png).
+3. **Matriz de Confusión Ensamble Bi-Modelo Campeón:** [`docs/images/cm_ensemble_effnet_convnext_max.png`](../images/cm_ensemble_effnet_convnext_max.png).
+4. **Matriz de Confusión Ensamble Tri-Modelo:** [`docs/images/cm_ensemble_tri_model_max.png`](../images/cm_ensemble_tri_model_max.png).
 5. **Suite de Pruebas Automatizadas:** 63 pruebas unitarias y de integración pasando al 100% (`.venv/bin/pytest backend/tests`).
 
 ---

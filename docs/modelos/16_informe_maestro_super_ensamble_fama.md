@@ -8,9 +8,9 @@
 **Metodología:** ADR + TDD (*Test-Driven Development*) + RDD (*Result-Driven Development*)  
 **Test Set Oficial:** 154 grabaciones independientes de Xeno-Canto v3 (*Zero Recordist Leakage*, 15 especies de aves chilenas)  
 **Checkpoints del Super-Ensamble Campeón:**
-1. [`checkpoints/convnext_nano_35e_best.pt`](../checkpoints/convnext_nano_35e_best.pt) (ConvNeXt-Nano, peso: 0.30)
-2. [`checkpoints/efficientnet_gpu_pipeline_35e_best.pt`](../checkpoints/efficientnet_gpu_pipeline_35e_best.pt) (EfficientNet-B0 GAP, peso: 0.55)
-3. [`checkpoints/resnet34d_35e_best.pt`](../checkpoints/resnet34d_35e_best.pt) (ResNet34d, peso: 0.15)
+1. [`checkpoints/convnext_nano_35e_best.pt`](../../checkpoints/convnext_nano_35e_best.pt) (ConvNeXt-Nano, peso: 0.30)
+2. [`checkpoints/efficientnet_gpu_pipeline_35e_best.pt`](../../checkpoints/efficientnet_gpu_pipeline_35e_best.pt) (EfficientNet-B0 GAP, peso: 0.55)
+3. [`checkpoints/resnet34d_35e_best.pt`](../../checkpoints/resnet34d_35e_best.pt) (ResNet34d, peso: 0.15)
 
 ---
 
@@ -33,17 +33,17 @@ Este documento sintetiza la culminación de la fase de experimentación y refina
 
 ## 2. Síntesis de los Tres Puntos de Optimización
 
-### Punto 1: Calibración Óptima de Pesos y Micro-Batching de VRAM ([ADR 0008](./adr/0008_calibracion_optima_pesos_ensamble_heterogeneo.md))
+### Punto 1: Calibración Óptima de Pesos y Micro-Batching de VRAM ([ADR 0008](../adr/0008_calibracion_optima_pesos_ensamble_heterogeneo.md))
 * **Problema:** Los ensamble homogéneos previos utilizaban ponderaciones simétricas arbitrarias (50/50 o 60/40), desaprovechando la mayor precisión intrínseca de los modelos con *large-kernel* y arriesgando picos de memoria VRAM (OOM) en grabaciones de campo de más de 60 segundos con ventaneo denso.
 * **Solución:** Calibración de la superficie de probabilidades dando mayor ponderación a la red con kernels $7\times 7$ y división de las $N$ ventanas temporales en micro-lotes de tamaño fijo (`max_window_batch_size=32`).
 * **Impacto:** Salto inmediato a **88.44% F1 y 90.76% Precision**, con consumo de VRAM $O(1)$ seguro para despliegue productivo.
 
-### Punto 2: Investigación Bioacústica y Ablación de Spectral Pitch Shift ([ADR 0009](./adr/0009_pitch_shift_espectral_gpu_augmentation.md))
+### Punto 2: Investigación Bioacústica y Ablación de Spectral Pitch Shift ([ADR 0009](../adr/0009_pitch_shift_espectral_gpu_augmentation.md))
 * **Hipótesis:** Evaluar si el desplazamiento tonal sintético ($\pm 1.0$ semitono) en GPU mitigaba la confusión en especies difíciles con pocas muestras (como Tapaculo o Churrín del sur).
 * **Hallazgo Bioacústico Crítico:** A diferencia del habla humana, muchas aves passeriformes chilenas (*Sylviorthorhynchus desmursii* - Tijeral, *Sylviorthorhynchus yanacensis* - Colilarga) emiten silbidos puros en formantes rígidos de ancho de banda ultra-estrecho. La traslación tonal espectral de $\pm 2$ bins Mel degradó el F1 a 83.71% al confundir llamadas diagnósticas con especies vecinas.
 * **Decisión Metodológica (*Concepts > Code*):** Se preservó el código como costura configurable pero se descartó para el modelo titular, manteniendo la integridad armónica de las grabaciones de campo.
 
-### Punto 3: Integración de ResNet34d y Super-Ensamble Tri-Modelo ([ADR 0010](./adr/0010_tri_modelo_heterogeneo_resnet34d.md))
+### Punto 3: Integración de ResNet34d y Super-Ensamble Tri-Modelo ([ADR 0010](../adr/0010_tri_modelo_heterogeneo_resnet34d.md))
 * **Hipótesis:** Fusionar tres familias topológicamente ortogonales para erradicar la correlación residual de errores:
   1. *Inverted Residuals* convolucionales $3\times 3/5\times 5$ con SiLU (EfficientNet-B0).
   2. *Depthwise* $7\times 7$ tipo Transformer con LayerNorm y GELU (ConvNeXt-Nano).
@@ -116,5 +116,5 @@ Para desplegar o replicar de forma oficial el sistema campeón en cualquier ento
 ### Propiedades Garantizadas del Sistema:
 1. **Cero Fuga de Grabador (*Zero Recordist Leakage*):** Validación cruzada y evaluación blindada sobre grabadores independientes.
 2. **Memoria $\mathcal{O}(1)$ Acotada:** El *micro-batching* procesa ventanas en bloques de 32, previniendo caídas por memoria en audios de hasta 10 minutos.
-3. **Desacoplamiento de Componentes:** Todas las arquitecturas heredan de [`BioacousticModel`](../backend/poc/train.py) y operan de forma transparente a través de [`EnsembleClassifier`](../backend/poc/evaluate.py).
-4. **Cero Regresiones:** Suite completa de **69 pruebas automatizadas pasando al 100%** en [`backend/tests/`](../backend/tests/).
+3. **Desacoplamiento de Componentes:** Todas las arquitecturas heredan de [`BioacousticModel`](../../backend/poc/train.py) y operan de forma transparente a través de [`EnsembleClassifier`](../../backend/poc/evaluate.py).
+4. **Cero Regresiones:** Suite completa de **69 pruebas automatizadas pasando al 100%** en [`backend/tests/`](../../backend/tests/).

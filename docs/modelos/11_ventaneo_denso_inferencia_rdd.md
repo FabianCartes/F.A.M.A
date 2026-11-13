@@ -3,9 +3,9 @@
 **Proyecto:** Framework MLOps Híbrido para Clasificación de Audio (F.A.M.A.)  
 **Fecha:** Septiembre 2026  
 **Fase:** Iteración 11 - Optimización de Inferencia vía Ventaneo Temporal Denso  
-**Checkpoint Oficial Evaluado:** [`checkpoints/efficientnet_gpu_pipeline_35e_best.pt`](../checkpoints/efficientnet_gpu_pipeline_35e_best.pt)  
+**Checkpoint Oficial Evaluado:** [`checkpoints/efficientnet_gpu_pipeline_35e_best.pt`](../../checkpoints/efficientnet_gpu_pipeline_35e_best.pt)  
 **Test Set:** 154 grabaciones independientes de Xeno-Canto v3 (*Zero Recordist Leakage*, 15 especies de aves chilenas)  
-**Metodología:** ADR ([`docs/adr/0005_ventaneo_denso_hop_temporal.md`](./adr/0005_ventaneo_denso_hop_temporal.md)) + TDD (*Test-Driven Development*) + RDD (*Result-Driven Development*)  
+**Metodología:** ADR ([`docs/adr/0005_ventaneo_denso_hop_temporal.md`](../adr/0005_ventaneo_denso_hop_temporal.md)) + TDD (*Test-Driven Development*) + RDD (*Result-Driven Development*)  
 
 ---
 

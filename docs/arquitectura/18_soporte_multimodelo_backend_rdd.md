@@ -3,7 +3,7 @@
 **Proyecto:** Framework MLOps Híbrido para Clasificación de Audio (F.A.M.A.)  
 **Fecha:** Septiembre 2026  
 **Fase:** Hito 18 - Refactorización de Backend: Arquitectura Multi-Modelo y Trazabilidad  
-**Metodología:** ADR ([`docs/adr/0011_soporte_multimodelo_registry_strategy.md`](./adr/0011_soporte_multimodelo_registry_strategy.md)) + TDD Estricto + RDD (Receipt-Driven Development)  
+**Metodología:** ADR ([`docs/adr/0011_soporte_multimodelo_registry_strategy.md`](../adr/0011_soporte_multimodelo_registry_strategy.md)) + TDD Estricto + RDD (Receipt-Driven Development)  
 **Branch:** `feat/backend-multi-model-support`  
 
 ---
@@ -20,10 +20,10 @@ El sistema ahora soporta la selección dinámica de modelos mediante el parámet
 
 ### Receipt 1: Trazabilidad de Base de Datos y DTOs de Transporte
 Se desacoplaron las capas de persistencia y transporte:
-1. **Entidad ORM SQLAlchemy ([`backend/app/models/prediction.py`](../backend/app/models/prediction.py)):**
+1. **Entidad ORM SQLAlchemy ([`backend/app/models/prediction.py`](../../backend/app/models/prediction.py)):**
    - Incorporación de la columna `modelo_id = Column(String(100), nullable=True, default="chilean-birds-cnn")`.
    - Compatibilidad total con registros históricos previos.
-2. **DTOs Pydantic v2 ([`backend/app/schemas/`](../backend/app/schemas/)):**
+2. **DTOs Pydantic v2 ([`backend/app/schemas/`](../../backend/app/schemas/)):**
    - `ModelMetadata` y `ModelListResponse` para catálogo de modelos.
    - `PredictionResult` (objeto de valor interno) y `PredictionResponse` (contrato JSON HTTP).
 
@@ -37,9 +37,9 @@ backend/tests/test_schemas.py ...                                        [100%]
 ---
 
 ### Receipt 2: Módulo Profundo `AudioPredictor` y Catálogo `ModelRegistry`
-Se implementó la costura (*seam*) abstracta [`AudioPredictor`](../backend/app/services/predictors/base.py) y el catálogo en memoria [`ModelRegistry`](../backend/app/services/registry.py):
-* **`AudioCNNPredictor` ([`cnn_predictor.py`](../backend/app/services/predictors/cnn_predictor.py)):** Extraído limpiamente desde `main.py`. Encapsula el remuestreo a $22.050\text{ Hz}$, detección de silencios por RMS, discriminación de ruido no-biológico por planitud espectral y calibración de temperatura ($T=1.5$).
-* **`ChileanBirdsEnsemblePredictor` ([`ensemble_predictor.py`](../backend/app/services/predictors/ensemble_predictor.py)):** Segundo adaptador que integra el Super-Ensamble Tri-Modelo (ConvNeXt-Nano 50% + EfficientNet-B0 25% + ResNet34d 25%) bajo Dense TTA y Late Fusion, con carga perezosa (*lazy loading*) para optimizar el consumo de VRAM.
+Se implementó la costura (*seam*) abstracta [`AudioPredictor`](../../backend/app/services/predictors/base.py) y el catálogo en memoria [`ModelRegistry`](../../backend/app/services/registry.py):
+* **`AudioCNNPredictor` ([`cnn_predictor.py`](../../backend/app/services/predictors/cnn_predictor.py)):** Extraído limpiamente desde `main.py`. Encapsula el remuestreo a $22.050\text{ Hz}$, detección de silencios por RMS, discriminación de ruido no-biológico por planitud espectral y calibración de temperatura ($T=1.5$).
+* **`ChileanBirdsEnsemblePredictor` ([`ensemble_predictor.py`](../../backend/app/services/predictors/ensemble_predictor.py)):** Segundo adaptador que integra el Super-Ensamble Tri-Modelo (ConvNeXt-Nano 50% + EfficientNet-B0 25% + ResNet34d 25%) bajo Dense TTA y Late Fusion, con carga perezosa (*lazy loading*) para optimizar el consumo de VRAM.
 * **Resolución Dinámica:** `registry.get(model_id)` con fallback determinista al modelo por defecto (`chilean-birds-cnn`) y error controlado `ModelNotFoundError`.
 
 *Evidencia de Pruebas Unitarias:*
@@ -53,14 +53,14 @@ backend/tests/test_ensemble_predictor.py ..                              [100%]
 ---
 
 ### Receipt 3: Aislamiento de Persistencia Cloud (GCS) y API REST
-El orquestador [`backend/app/main.py`](../backend/app/main.py) fue completamente saneado de dependencias directas de PyTorch, delegando la inferencia al `ModelRegistry` inyectado mediante `Depends(get_model_registry)`:
+El orquestador [`backend/app/main.py`](../../backend/app/main.py) fue completamente saneado de dependencias directas de PyTorch, delegando la inferencia al `ModelRegistry` inyectado mediante `Depends(get_model_registry)`:
 
 1. **`GET /api/models`:** Retorna el catálogo con metadatos técnicos y modelo por defecto.
 2. **`POST /api/predict`:**
    - Si `model_id` es inválido: Responde `404 Not Found` de forma temprana, **garantizando que no se suba ningún archivo innecesario a Google Cloud Storage**.
    - Si `model_id` es omitido: Ejecuta el modelo por defecto manteniendo el contrato JSON histórico.
    - Si `model_id` es explícito: Resuelve la estrategia adecuada y registra la inferencia auditada en PostgreSQL.
-   - Persistencia GCS: El servicio [`upload_audio_to_gcp`](../backend/app/services/storage.py) permanece 100% aislado e invariante.
+   - Persistencia GCS: El servicio [`upload_audio_to_gcp`](../../backend/app/services/storage.py) permanece 100% aislado e invariante.
 
 *Evidencia de Pruebas de Integración (FastAPI TestClient):*
 ```text

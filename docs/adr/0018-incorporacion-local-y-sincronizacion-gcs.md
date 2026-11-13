@@ -88,5 +88,5 @@ o filesystem puede prolongarlo. No se abandona un hilo fingiendo cancelación.
 - [Manual del flujo](../manuales/flujo_revision_audios.md): contratos y resolución de fallos.
 - [Próximos pasos operativos](../manuales/flujo_revision_audios.md#próximos-pasos-del-operador): autorización y conservación de evidencia.
 - [Aprobación local](../../backend/app/services/feedback.py), [cola durable](../../backend/app/services/feedback_sync.py) y [worker](../../backend/app/services/feedback_sync_worker.py).
-- [Migración aditiva opcional](../../backend/scripts/migrate_feedback_sync.py).
+- Migración aditiva opcional (`backend/scripts/migrate_feedback_sync.py`, retirado en `59bb632`; las bases se preparan con Alembic).
 - [ADR 0016](0016-procedencia-y-persistencia-entrenamiento.md): procedencia y persistencia del entrenamiento.
