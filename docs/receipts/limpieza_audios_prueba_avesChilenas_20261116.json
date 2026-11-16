@@ -1,0 +1,31 @@
+{
+  "stage": "limpieza-audios-prueba-AvesChilenas",
+  "date": "2026-11-16",
+  "reason": "La preparación de particiones rechazaba el dataset: «Una misma grabación tiene clases distintas; revisa sus etiquetas antes de preparar particiones.»",
+  "cause": "tres audios de prueba del 2026-09-09 en clases con mayúscula duplicadas; canastero_01.wav y chucao_01.wav eran idénticos (SHA-256 4c3ecebdd78de314cfe9dbeea27a95c4d8b5f72d5a59dc0f23e93f3ce53be8ab) con etiquetas Canastero y Chucao",
+  "removed": [
+    {"id_audio": 2, "file": "Canastero/canastero_01.wav", "class": "Canastero", "bytes": 44144},
+    {"id_audio": 3, "file": "Chucao/chucao_01.wav", "class": "Chucao", "bytes": 44144},
+    {"id_audio": 4, "file": "Churrín de la Mocha/test_churrin_mocha_01.wav", "class": "Churrín de la Mocha", "bytes": 2231468, "sha256": "011fb84def5a1dcce63f3635d94c4bb0c65c6e9a602971c1c71f47ab383e8aa1"}
+  ],
+  "dependencies_checked": "sin llaves foráneas hacia la tabla audio",
+  "backup": {
+    "folder": "backend/installation/cloud-oficial/backups/pre-limpieza-audios-20261116 (privada, excluida de Git)",
+    "database": {"result": "database_backup_created", "revision": "0007_triad_evaluation", "tables": 40, "archive_sha256": "9629363d247d4e8d8f5140d5405751c737bce10021bef117924728116c300a55"},
+    "gcs_objects": "copias de los tres objetos con SHA-256 verificado",
+    "local_files": "copias locales retiradas conservadas en la misma carpeta"
+  },
+  "sql": {"transaction": "DELETE de audio 2-4 con identidades verificadas y recálculo de conjunto_datos 2",
+          "before": {"cantidad_audios": 1220, "tamano_total_bytes": 5478671962},
+          "after": {"cantidad_audios": 1217, "tamano_total_bytes": 5476352206, "classes": 15}},
+  "gcs": "tres objetos eliminados de datasets/AvesChilenas/ (bucket sin versionado; soft delete de 7 días)",
+  "verification": {"sql_gcs_local_audios": 1217, "gcs_class_prefixes": 15,
+                   "partition_preview": {"entries": 1217, "excluded": 0, "warnings": [], "version": "66ef36d45364a7a981835c0546b5a6a7ab1d12f8a54930ceeff115be5e507fb2"}},
+  "engine_diagnostics_review": {
+    "sql_rows": 1386, "gcs_objects": 1386, "only_sql": 0, "only_gcs": 0, "size_mismatch": 0, "class_folder_mismatch": 0,
+    "classes": 13, "near_duplicate_class_names": 0, "format": "WAV mono", "decode_errors": 0, "silent_or_empty": 0, "non_finite": 0,
+    "sample_rates": {"44100": 1367, "24000": 16, "48000": 3}, "duration_seconds": {"min": 1.5, "median": 1.5, "max": 1.7},
+    "exact_duplicates": 0, "conflicting_labels": 0,
+    "observations": ["hash_archivo y frecuencia_muestreo vacíos en SQL para todas las filas", "frecuencias mixtas; el pipeline remuestrea", "nombres de clase con espacios"]
+  }
+}

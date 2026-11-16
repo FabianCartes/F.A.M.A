@@ -1,0 +1,157 @@
+{
+  "stage": "actualizacion-0007-fama-oficial",
+  "date": "2026-11-16",
+  "purpose": "Respaldo, ensayo y actualización real de fama_oficial desde 0004_integration hacia 0007_triad_evaluation",
+  "cloud_sql": {
+    "project": "proyectotesis-fama",
+    "instance": "fama-postgres-pruebas",
+    "server_version": "16.15",
+    "databases_in_instance": [
+      "postgres",
+      "fama_oficial",
+      "fama_pruebas"
+    ],
+    "automated_backups_enabled": true,
+    "point_in_time_recovery_enabled": true,
+    "on_demand_backup": {
+      "id": "1794863709794",
+      "status": "SUCCESSFUL",
+      "scope": "instancia completa",
+      "description": "pre-0007 fama_oficial 2026-11-16"
+    }
+  },
+  "application_credential": {
+    "user": "fama_oficial_app",
+    "action": "contraseña restablecida con gcloud sql users set-password a solicitud del operador",
+    "reason": "el equipo que conservaba el perfil oficial anterior ya no está disponible",
+    "storage": "archivo privado 0600 bajo backend/installation/ (excluido de Git); valor no registrado",
+    "verification": "login de solo lectura: fama_oficial, revisión 0004_integration"
+  },
+  "profile": {
+    "path": "backend/installation/cloud-oficial (excluido de Git)",
+    "result": "configuration_prepared",
+    "proxy": "cloud-sql-proxy 127.0.0.1:5434 con credenciales gcloud del operador",
+    "code_used": "84ea7df (fix/afinamiento-integral, cabeza de migraciones 0004_integration)",
+    "code_reason": "la CLI de backup exige schema_current; el código de mvp espera 0007_triad_evaluation y rechazaría la base en 0004"
+  },
+  "logical_backup": {
+    "result": "database_backup_created",
+    "folder": "backend/installation/cloud-oficial/backups/pre-0007-20261116 (privada, excluida de Git)",
+    "created_at": "2026-11-16T21:22:06.965764+00:00",
+    "revision": "0004_integration",
+    "pg_major": 16,
+    "tools": "pg_dump/pg_restore 16.15 de la imagen oficial postgres:16.15 mediante Docker",
+    "archive_sha256": "c82e92256aded02bbdc90043bd9707e9702d084291448e8e00ac5efdb812a3d4",
+    "archive_bytes": 228783,
+    "tables": 38,
+    "sequences": 14,
+    "total_rows": 2682,
+    "selected_row_counts": {
+      "usuario": 2,
+      "conjunto_datos": 3,
+      "audio": 2607,
+      "modelo": 5,
+      "prediccion": 31,
+      "sesion_web": 2
+    }
+  },
+  "restore_rehearsal": {
+    "result": "database_restore_verified",
+    "target": "PostgreSQL 16.15 local desechable, puerto solo en loopback, base fama_restore_20261116",
+    "verified": "tablas, secuencias y revisión coinciden con el manifiesto; comprobación de esquema schema_current",
+    "tables": 38,
+    "revision": "0004_integration"
+  },
+  "not_done": [
+    "no se levantaron backend/frontend ni se probó login web sobre la base actualizada",
+    "no se ensayó PITR ni restauración administrada de Cloud SQL",
+    "los respaldos lógicos permanecen solo en este equipo; falta copia fuera del equipo"
+  ],
+  "migration_rehearsal": {
+    "target": "PostgreSQL 16.15 local desechable; base fama_oficial con roles de scripts/preparar_roles_oficial.sql; dump restaurado como fama_oficial_migrador (38/38 tablas de su propiedad)",
+    "pre_check": "inventario idéntico al manifiesto; app.schema status = schema_outdated 0004_integration",
+    "code": "mvp 149bcfc",
+    "upgrade": "app.schema upgrade --apply como fama_oficial_migrador: schema_current 0007_triad_evaluation (1,3 s)",
+    "permissions": "scripts/permisos_tablas_oficial.sql como migrador: runtime_permissions_ready",
+    "data_comparison": {
+      "tables_before_after": [
+        38,
+        40
+      ],
+      "sequences_before_after": [
+        14,
+        16
+      ],
+      "new_tables": {
+        "triad_composition": 0,
+        "triad_composition_evaluation": 0
+      },
+      "row_counts_changed": [],
+      "previous_sequences_equal": true,
+      "row_hash_changed": [
+        "conjunto_datos: solo por la columna nueva descripcion (NULL en 3/3 filas); sin ella las filas coinciden"
+      ]
+    },
+    "application_role_check": {
+      "schema": "schema_current 0007_triad_evaluation",
+      "node_check": {
+        "database": "database_connected",
+        "storage": "storage_read_connected"
+      }
+    },
+    "not_done": [
+      "no se aplicó a fama_oficial real",
+      "no se levantaron backend/frontend ni se probó login sobre la copia"
+    ]
+  },
+  "migrator_credential": {
+    "user": "fama_oficial_migrador",
+    "action": "contraseña restablecida con gcloud sql users set-password a solicitud del operador",
+    "storage": "archivo privado 0600 bajo backend/installation/ (excluido de Git); valor no registrado",
+    "verification": "login de solo lectura correcto"
+  },
+  "production_upgrade": {
+    "pre_check": {
+      "other_connections": 0,
+      "inventory_equal_to_pre_backup": true,
+      "status": "schema_outdated 0004_integration"
+    },
+    "upgrade": "app.schema upgrade --apply como fama_oficial_migrador (código mvp 149bcfc): schema_current 0007_triad_evaluation (51,5 s por proxy)",
+    "permissions": "scripts/permisos_tablas_oficial.sql como migrador: runtime_permissions_ready",
+    "data_comparison": {
+      "tables_before_after": [
+        38,
+        40
+      ],
+      "sequences_before_after": [
+        14,
+        16
+      ],
+      "new_tables": {
+        "triad_composition": 0,
+        "triad_composition_evaluation": 0
+      },
+      "row_counts_changed": [],
+      "previous_sequences_equal": true,
+      "row_hash_changed": [
+        "conjunto_datos: solo por la columna nueva descripcion (NULL en 3/3 filas); sin ella coincide con el respaldo"
+      ]
+    },
+    "application_role_check": {
+      "schema": "schema_current 0007_triad_evaluation",
+      "node_check": {
+        "database": "database_connected",
+        "storage": "storage_read_connected"
+      }
+    },
+    "post_backup": {
+      "result": "database_backup_created",
+      "folder": "backend/installation/cloud-oficial/backups/post-0007-20261116 (privada)",
+      "archive_sha256": "1554d275308973859510dad21a44388176c136f5dbb4f0c95fdf150e9168fe01",
+      "tables": 40,
+      "revision": "0007_triad_evaluation",
+      "restore_rehearsal": "database_restore_verified en PostgreSQL 16.15 local desechable"
+    },
+    "rollback": "restaurar pre-0007-20261116 en una base nueva y usar código 0004 (84ea7df), o la copia administrada 1794863709794; volver de rama no revierte la base"
+  }
+}
