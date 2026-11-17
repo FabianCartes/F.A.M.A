@@ -427,6 +427,36 @@ def test_triad_trained_with_evaluated_components_is_published_as_one_model(catal
     assert triad["version"] == 1
 
 
+def test_startup_registry_makes_the_active_triad_of_evaluated_components_the_default(catalogue, monkeypatch):
+    from app.services.triad_compositions import activate_composition, create_initial_composition
+    _, _, _, engine = catalogue
+    for model_id in (421, 422, 423):
+        seed_standard_model(catalogue, model_id, state="standard_component_evaluated")
+    install_torch_metadata_adapter(monkeypatch)
+    from app.services.predictors import trained_predictor, triad_predictor
+    monkeypatch.setattr(triad_predictor, "TrainedModelPredictor", trained_predictor.TrainedModelPredictor)
+    monkeypatch.setattr(trained_predictor.TrainedModelPredictor, "classes",
+                        property(lambda self: self._meta.classes), raising=False)
+    with Session(engine) as db:
+        dataset_id = db.get(Modelo, 421).id_conjunto_datos
+        for model_id in (422, 423):
+            db.get(Modelo, model_id).id_conjunto_datos = dataset_id
+        db.commit()
+        composition = create_initial_composition(db, job_id="job-startup", dataset_id=dataset_id, partition_version=None,
+                                                 components=[(421, 0.5), (422, 0.3), (423, 0.2)], author_id=None)
+        activate_composition(db, composition)
+        key = f"fama_triad_{composition.id}"
+
+    # The startup path (register_from_db), before any catalogue request.
+    fresh = ModelRegistry()
+    with Session(engine) as db:
+        fresh.register_from_db(db, checkpoints_root=main.training_service.checkpoints_dir)
+
+    assert fresh.get_default_model_id() == key
+    assert fresh.get().model_id == key
+    assert key not in fresh._blocked_db_aliases
+
+
 def test_catalogue_exposes_sanitized_reason_for_incompatible_runtime_configuration(catalogue, monkeypatch):
     client, _, _, _ = seed_standard_model(catalogue, 399, fault="coherent_wrong_config")
     install_torch_metadata_adapter(monkeypatch)

@@ -680,11 +680,21 @@ class ModelRegistry:
                 is_standard = str(getattr(m, "estado", "") or "").startswith("standard_")
                 if is_standard:
                     try:
-                        from app.services.standard_evaluation_guard import require_standard_reports
-                        require_standard_reports(m, db, ckpt_file.parent if ckpt_file else checkpoints_root)
+                        from app.services.standard_evaluation_guard import select_admitted_standard_pair
+                        select_admitted_standard_pair(m, db, ckpt_file.parent if ckpt_file else checkpoints_root,
+                                                      triad_component=_is_triad_component(m))
                     except Exception:
                         self._discard_invalid_standard_predictor(model_key)
                         continue
+                if _is_triad_component(m):
+                    # Same rule as publish_from_db: verified, but only reachable through its triad,
+                    # so it stays out of the selectable catalogue, its aliases and the default.
+                    cached = self._db_predictors.get(model_key)
+                    if cached is None or getattr(cached, "expected_checkpoint_sha256", None) != expected_hash:
+                        self._discard_invalid_standard_predictor(model_key)
+                        self._apply_display_name(pred, names[m.id_modelo])
+                        self._db_predictors[model_key] = pred
+                    continue
 
                 is_active = bool(m.activo)
                 cached = self._db_predictors.get(model_key)
