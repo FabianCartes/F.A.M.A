@@ -968,3 +968,50 @@ def test_fsync_failure_never_confirms_approval_and_can_retry(local_workflow, mon
     assert len(w.service.get_pending_feedback(w.db)) == 1
     monkeypatch.setattr(os, "fsync", fsync)
     assert FeedbackService(w.service.raw_data_dir).approve_feedback(w.db, 1)["local_status"] == "incorporated"
+
+
+def _register_catalogued_audio(w, content, *, name="seed.wav", label="Canastero", dataset="AvesChilenas"):
+    from app.models.dataset import Audio, ConjuntoDatos
+    row = ConjuntoDatos(nombre=dataset, ruta_gcp=f"datasets/{dataset}/", estado="incorporado_local",
+                        cantidad_audios=1, tamano_total_bytes=len(content))
+    w.db.add(row)
+    w.db.flush()
+    w.db.add(Audio(id_conjunto_datos=row.id_conjunto_datos, nombre_archivo=name,
+                   ruta_gcp=f"datasets/{dataset}/canastero/{name}", clase=label,
+                   hash_archivo=hashlib.sha256(content).hexdigest(), tamano_bytes=len(content),
+                   frecuencia_muestreo=8000, duracion_segundos=.1))
+    w.db.commit()
+
+
+def _catalogue_state(w):
+    from app.models.dataset import Audio, ConjuntoDatos
+    return (w.db.query(Audio).count(),
+            [(d.nombre, d.cantidad_audios, d.tamano_total_bytes) for d in w.db.query(ConjuntoDatos)])
+
+
+def test_catalogued_duplicate_content_in_any_class_stays_pending_without_publication(local_workflow):
+    w = local_workflow
+    _register_catalogued_audio(w, w.audio)
+    before = _catalogue_state(w)
+    with pytest.raises(HTTPException) as error:
+        w.service.approve_feedback(w.db, 1)
+    assert error.value.status_code == 409
+    assert "ya está incorporado" in error.value.detail
+    assert _catalogue_state(w) == before
+    assert w.service.get_pending_feedback(w.db)[0]["procesado"] is False
+    assert FeedbackSyncQueue().get(w.db, 1) is None
+    assert not (w.service.raw_data_dir / ".feedback_1.json").exists()
+    assert not list(w.service.raw_data_dir.rglob("feedback_1.wav*"))
+    assert not (w.service.raw_data_dir / "AvesChilenas/metadata.csv").exists()
+
+
+def test_catalogued_audio_with_different_content_does_not_block_incorporation(local_workflow):
+    w = local_workflow
+    _register_catalogued_audio(w, b"different content")
+    result = w.service.approve_feedback(w.db, 1)
+    assert result["status"] == "approved"
+    assert (w.service.raw_data_dir / "AvesChilenas/rayadito/feedback_1.wav").read_bytes() == w.audio
+    assert _catalogue_state(w)[0] == 2
+    # Replaying the same feedback keeps working: its own catalogue row is not a duplicate.
+    assert FeedbackService(w.service.raw_data_dir).approve_feedback(w.db, 1)["status"] == "approved"
+    assert _catalogue_state(w)[0] == 2

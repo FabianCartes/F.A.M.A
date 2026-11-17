@@ -487,8 +487,12 @@ class FeedbackService:
                                 or sources[0].get("curation_source_id", "")):
                             raise ValueError("Invalid curation source: require an original canonical bird recording")
                     canonical_path = f"{storage_class}/{filename}"
-                    if any(row.get("hash_archivo") == digest
-                           and row["file_path"] != canonical_path for row in rows):
+                    registered_elsewhere = db.query(Audio.id_audio).join(
+                        ConjuntoDatos, ConjuntoDatos.id_conjunto_datos == Audio.id_conjunto_datos
+                    ).filter(ConjuntoDatos.nombre == stored_dataset, Audio.hash_archivo == digest,
+                             Audio.nombre_archivo != filename).first() is not None
+                    if registered_elsewhere or any(row.get("hash_archivo") == digest
+                                                   and row["file_path"] != canonical_path for row in rows):
                         raise HTTPException(
                             status_code=409,
                             detail="El audio exacto ya está incorporado en otra fila del dataset; permanece pendiente.",
