@@ -383,7 +383,14 @@ class TrainingService:
                         "db_id": ds.id_conjunto_datos,
                     })
                     if include_unavailable:
+                        # Same local count the datasets view shows as "En este equipo"; unsupported
+                        # names are never resolved against the filesystem.
+                        local = (ingestion_service.list_local_datasets(dataset_names={ds.nombre})
+                                 if compatible else [])
+                        local_audio_count = local[0]["local_file_count"] if local else 0
                         datasets[-1].update({
+                            "local_audio_count": local_audio_count,
+                            "local_available": local_audio_count > 0,
                             "source_type": "legacy",
                             "record_id": f"legacy:{ds.id_conjunto_datos}",
                             "eligible": compatible,

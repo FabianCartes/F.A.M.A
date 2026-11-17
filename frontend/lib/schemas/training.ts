@@ -51,6 +51,9 @@ export const TrainingCatalogDatasetSchema = TrainingDatasetSchema.extend({
   eligible: z.boolean(),
   eligibility_state: z.enum(['blocked', 'current_flow_compatible']),
   reasons: z.array(z.string()),
+  // Same local count the datasets view shows as "En este equipo"; absent on older servers.
+  local_audio_count: z.number().optional(),
+  local_available: z.boolean().optional(),
 });
 export type TrainingCatalogDataset = z.infer<typeof TrainingCatalogDatasetSchema>;
 export const TrainingCatalogResponseSchema = z.object({datasets:z.array(TrainingCatalogDatasetSchema)});

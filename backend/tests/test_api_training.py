@@ -484,6 +484,26 @@ def test_catalog_includes_new_registered_dataset_for_training(client, training_e
     assert [entry["id"] for entry in response.json()["datasets"]] == ["FAMA_Prueba_Aves", "engine_diagnostics"]
 
 
+def test_catalog_reports_local_audio_count_per_dataset(client, training_env, monkeypatch):
+    from app.services.ingestion import ingestion_service
+    _, sessions, root, _ = training_env
+    monkeypatch.setattr(ingestion_service, "local_base_dir", root / "raw")
+    register(sessions, "WithLocalCopy")
+    (root / "raw" / "WithLocalCopy" / "Fixture").mkdir(parents=True)
+    for index in range(3):
+        (root / "raw" / "WithLocalCopy" / "Fixture" / f"a{index}.wav").write_bytes(b"x")
+    (root / "raw" / "WithLocalCopy" / "notes.txt").write_text("not audio")
+    register(sessions, "WithoutLocalCopy")
+    response = client.get("/api/training/datasets?include_unavailable=true")
+    assert response.status_code == 200
+    entries = {entry["id"]: entry for entry in response.json()["datasets"]}
+    assert entries["WithLocalCopy"]["local_audio_count"] == 3
+    assert entries["WithLocalCopy"]["local_available"] is True
+    assert entries["WithoutLocalCopy"]["local_audio_count"] == 0
+    assert entries["WithoutLocalCopy"]["local_available"] is False
+    assert entries["WithoutLocalCopy"]["eligible"] is True
+
+
 def test_new_empty_dataset_does_not_invent_training_classes(client, training_env):
     _, sessions, _, _ = training_env
     register(sessions, "FAMA_Nuevo")

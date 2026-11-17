@@ -59,3 +59,19 @@ it('preserves selection and keyboard navigation while searching the registered c
  expect(select).toHaveBeenCalledTimes(2);
  expect(transport).toHaveBeenCalledTimes(1);
 });
+it('marks only the datasets without a local copy and keeps them selectable',async()=>{
+ const base={source_type:'legacy',eligible:true,eligibility_state:'current_flow_compatible',reasons:[],audio_count:9,class_count:3};
+ vi.stubGlobal('fetch',vi.fn(async()=>Response.json({datasets:[
+  {...base,id:'Local',name:'Local',record_id:'legacy:1',local_audio_count:9,local_available:true},
+  {...base,id:'AvesChilenas',name:'AvesChilenas',record_id:'legacy:2',local_audio_count:0,local_available:false},
+  {...base,id:'Legacy',name:'Legacy',record_id:'legacy:3'},
+ ]})));
+ const select=vi.fn();render(<TrainingDatasetSelector onSelect={select}/>);
+ fireEvent.click(screen.getByRole('combobox',{name:'Dataset para entrenamiento'}));
+ const missing=await screen.findByRole('option',{name:'AvesChilenas — sin copia local, descárgalo primero'});
+ expect(screen.getByRole('option',{name:'Local'})).toBeTruthy();
+ expect(screen.getByRole('option',{name:'Legacy'})).toBeTruthy();
+ expect(screen.getAllByText(/sin copia local/)).toHaveLength(1);
+ fireEvent.click(missing);
+ expect(select).toHaveBeenCalledWith(expect.objectContaining({record_id:'legacy:2',local_available:false}));
+});

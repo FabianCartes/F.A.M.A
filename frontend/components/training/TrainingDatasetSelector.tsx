@@ -6,6 +6,7 @@ import type { TrainingCatalogDataset } from '@/lib/schemas/training';
 export type CatalogSelection = TrainingCatalogDataset;
 const identity = (row: CatalogSelection) => row.record_id;
 const label = (row: CatalogSelection) => row.name;
+const optionLabel = (row: CatalogSelection) => row.local_available === false ? `${row.name} — sin copia local, descárgalo primero` : row.name;
 
 export default function TrainingDatasetSelector({onSelect, disabled=false, defaultName}: {
   onSelect:(row:CatalogSelection)=>void; disabled?:boolean;
@@ -54,7 +55,7 @@ export default function TrainingDatasetSelector({onSelect, disabled=false, defau
           className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-2 text-xs text-gray-200 focus:border-emerald-600"/>
         <ul id={listId} role="listbox" aria-label="Datasets disponibles" className="max-h-60 overflow-y-auto mt-1">
           {matches.map((row,index)=><li id={`${listId}-${index}`} key={identity(row)} role="option" aria-selected={!!selected&&identity(selected)===identity(row)} onMouseEnter={()=>setActive(index)} onMouseDown={event=>event.preventDefault()} onClick={()=>choose(row)}
-            className={`px-3 py-2 text-xs text-gray-200 rounded-lg cursor-pointer ${active===index?'bg-[#23252e]':''}`}>{label(row)}</li>)}
+            className={`px-3 py-2 text-xs text-gray-200 rounded-lg cursor-pointer ${active===index?'bg-[#23252e]':''}`}>{optionLabel(row)}</li>)}
         </ul>
         {!matches.length&&!error&&<p className="px-3 py-2 text-xs text-gray-400">No hay datasets que coincidan con la búsqueda.</p>}
       </div>}
