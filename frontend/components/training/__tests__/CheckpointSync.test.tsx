@@ -1,15 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { CheckpointSyncButton } from '../CheckpointSync';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { CheckpointSyncButton, useCheckpointSyncStatus } from '../CheckpointSync';
 
 const originalFetch = global.fetch;
 const result = (action: string) => ({ model_id: 1, filename: 'sample.pt', sha256: 'a'.repeat(64), size_bytes: 20000,
   local: 'valid', cloud: 'available', generation: '17', transfer_verified: true, action });
 afterEach(() => { cleanup(); global.fetch = originalFetch; });
 
-function renderButton(synced = false) {
+function renderButton(synced = false, remoteOnly = false) {
   const onSynced = vi.fn();
-  render(<CheckpointSyncButton modelId={1} synced={synced} onSynced={onSynced} />);
+  render(<CheckpointSyncButton modelId={1} synced={synced} remoteOnly={remoteOnly} onSynced={onSynced} />);
   return onSynced;
 }
 
@@ -60,5 +60,50 @@ describe('Sincronizar checkpoint', () => {
     expect((screen.getByRole('button', { name: 'Sincronizando…' }) as HTMLButtonElement).disabled).toBe(true);
     await act(async () => { resolve(new Response(JSON.stringify(result('already_synced')))); });
     expect(screen.getByRole('dialog', { name: 'Checkpoint sincronizado' })).toBeTruthy();
+  });
+});
+
+describe('Rótulo según las copias disponibles', () => {
+  it('ofrece «Descargar desde GCS» cuando solo existe el respaldo remoto y rotula «Descargando…» al trabajar', async () => {
+    let resolve: (response: Response) => void = () => { throw new Error('request not started'); };
+    global.fetch = vi.fn(() => new Promise<Response>(done => { resolve = done; }));
+    renderButton(false, true);
+    expect(screen.queryByRole('button', { name: 'Sincronizar en GCS' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Descargar desde GCS' }));
+    expect((screen.getByRole('button', { name: 'Descargando…' }) as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => { resolve(new Response(JSON.stringify(result('restored')))); });
+    expect(screen.getByRole('dialog', { name: 'Checkpoint sincronizado' })).toBeTruthy();
+  });
+
+  it('mantiene «Sincronizar en GCS» cuando hay copia local', () => {
+    renderButton(false, false);
+    expect(screen.getByRole('button', { name: 'Sincronizar en GCS' })).toBeTruthy();
+  });
+
+  function Probe() {
+    const { remoteOnly, markSynced } = useCheckpointSyncStatus([1, 2, 3]);
+    return <>{[1, 2, 3].map(id => <span key={id} data-testid={`m${id}`}>{remoteOnly.has(id) ? 'remote' : 'other'}</span>)}
+      <button onClick={() => markSynced(1)}>marcar</button></>;
+  }
+
+  it('solo marca como remoto el modelo sin copia local pero con respaldo, y deja de hacerlo al sincronizar', async () => {
+    global.fetch = vi.fn(async () => new Response(JSON.stringify({ models: [
+      { model_id: 1, synced: false, local: false, remote: true },
+      { model_id: 2, synced: false, local: true, remote: false },
+      { model_id: 3, synced: false },
+    ] })));
+    render(<Probe />);
+    await waitFor(() => expect(screen.getByTestId('m1').textContent).toBe('remote'));
+    expect(screen.getByTestId('m2').textContent).toBe('other');
+    expect(screen.getByTestId('m3').textContent).toBe('other');
+    fireEvent.click(screen.getByRole('button', { name: 'marcar' }));
+    expect(screen.getByTestId('m1').textContent).toBe('other');
+  });
+
+  it('mantiene «Sincronizar en GCS» si GCS no se puede consultar', async () => {
+    global.fetch = vi.fn(async () => new Response('{}', { status: 503 }));
+    render(<Probe />);
+    await act(async () => { await Promise.resolve(); });
+    expect(['m1', 'm2', 'm3'].map(id => screen.getByTestId(id).textContent)).toEqual(['other', 'other', 'other']);
   });
 });

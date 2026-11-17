@@ -333,12 +333,19 @@ def test_sync_status_lists_synced_state_with_one_cloud_listing(checkpoint_http):
         db.commit()
     before = f.client.get(STATUS)
     assert before.status_code == 200, before.text
-    assert before.json() == {'models': [{'model_id': 3, 'synced': False}, {'model_id': 4, 'synced': False}]}
+    assert before.json() == {'models': [
+        {'model_id': 3, 'synced': False, 'local': True, 'remote': False},
+        {'model_id': 4, 'synced': False, 'local': False, 'remote': False}]}
     assert sync(f.client).status_code == 200
     f.cloud.listings = 0
     after = f.client.get(STATUS).json()['models']
-    assert after == [{'model_id': 3, 'synced': True}, {'model_id': 4, 'synced': False}]
+    assert after == [{'model_id': 3, 'synced': True, 'local': True, 'remote': True},
+                     {'model_id': 4, 'synced': False, 'local': False, 'remote': False}]
     assert f.cloud.listings == 1
+    f.file.unlink()  # Remote-only: the download case.
+    assert f.client.get(STATUS).json()['models'][0] == {
+        'model_id': 3, 'synced': False, 'local': False, 'remote': True}
+    f.file.write_bytes(f.content)
     f.file.write_bytes(b'short')  # Size mismatch: not synced, no hashing in the batch check.
     assert f.client.get(STATUS).json()['models'][0]['synced'] is False
 

@@ -32,7 +32,8 @@ def sync_states(models, root):
     """Cheap per-model "synced" flags: one GCS listing and local sizes, no hashing.
 
     Bytes are only verified by ``CheckpointCopies.sync``; this never claims more than
-    that both copies exist with the registered size.
+    that the copies exist with the registered size. ``local`` and ``remote`` report each
+    copy separately so the UI can tell a download (remote only) from an upload.
     """
     remote = {blob.name: blob.size for blob in
               storage.Client().list_blobs(storage_bucket(), prefix=CLOUD_PREFIX, timeout=30)}
@@ -41,10 +42,12 @@ def sync_states(models, root):
         try:
             copies = CheckpointCopies(model, root)
         except CheckpointConflict:
-            synced = False
+            local = remote_present = False
         else:
-            synced = remote.get(copies.key) == model.tamano_bytes and copies._local_size_matches()
-        states.append({'model_id': model.id_modelo, 'synced': synced})
+            local = copies._local_size_matches()
+            remote_present = remote.get(copies.key) == model.tamano_bytes
+        states.append({'model_id': model.id_modelo, 'synced': local and remote_present,
+                       'local': local, 'remote': remote_present})
     return states
 
 

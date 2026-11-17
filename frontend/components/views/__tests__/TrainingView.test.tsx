@@ -13,6 +13,18 @@ async function choosePartition() {
 describe("TrainingView (Dynamic Ensemble Selector)", () => {
   const originalFetch = global.fetch;
 
+  it("rotula «Descargar desde GCS» en el historial cuando solo existe el respaldo remoto", async () => {
+    const existing = global.fetch;
+    global.fetch = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      if (String(input).includes("/checkpoints/sync-status")) {
+        return new Response(JSON.stringify({ models: [{ model_id: 1, synced: false, local: false, remote: true }] }));
+      }
+      return existing(input, options);
+    });
+    await act(async () => { render(<TrainingView />); });
+    expect((await screen.findAllByRole("button", { name: "Descargar desde GCS" })).length).toBeGreaterThan(0);
+  });
+
   it("sincroniza desde la fila del historial y saca las copias de la ficha técnica", async () => {
     const existing = global.fetch;
     const requested: string[] = [];

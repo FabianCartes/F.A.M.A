@@ -2690,7 +2690,7 @@ export default function TrainingView() {
               Historial de Modelos Guardados
             </span>
             <p className="text-[11px] text-gray-500">
-              Modelos registrados. «Sincronizar en GCS» comprueba las copias del checkpoint y respalda o recupera la que falte en GCS o en este equipo.
+              Modelos registrados. «Sincronizar en GCS» comprueba las copias del checkpoint y respalda la que falte en GCS; «Descargar desde GCS» aparece cuando solo existe el respaldo y recupera la copia local de este equipo.
             </p>
           </div>
 
@@ -2765,7 +2765,7 @@ export default function TrainingView() {
                         : <span className="text-gray-500">—</span>}
                     </td>
                     <td className="col-span-2 md:py-3 md:pr-3">
-                      <CheckpointSyncButton modelId={item.id} synced={checkpointSync.synced.has(item.id)}
+                      <CheckpointSyncButton modelId={item.id} synced={checkpointSync.synced.has(item.id)} remoteOnly={checkpointSync.remoteOnly.has(item.id)}
                         onSynced={action => { checkpointSync.markSynced(item.id); if (action === "restored") void fetchHistory(); }} />
                     </td>
                     <td className="text-right md:py-3 md:pr-2">
@@ -2846,7 +2846,7 @@ export default function TrainingView() {
               {(selectedGroup ? selectedGroup.members : [selectedModelModal]).map((original, index) => {
                 const selectedModelModal = original;
                 return <section key={original.id}>
-                {selectedGroup && <div className="flex items-center justify-between mb-3"><h3 className="text-white font-semibold">{original.architecture} · métricas individuales</h3><CheckpointSyncButton modelId={original.id} synced={checkpointSync.synced.has(original.id)} onSynced={action => { checkpointSync.markSynced(original.id); if (action === "restored") void fetchHistory(); }} /></div>}
+                {selectedGroup && <div className="flex items-center justify-between mb-3"><h3 className="text-white font-semibold">{original.architecture} · métricas individuales</h3><CheckpointSyncButton modelId={original.id} synced={checkpointSync.synced.has(original.id)} remoteOnly={checkpointSync.remoteOnly.has(original.id)} onSynced={action => { checkpointSync.markSynced(original.id); if (action === "restored") void fetchHistory(); }} /></div>}
               {/* 3 Tarjetas de Especificaciones */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
                 {/* 1) Hiperparámetros de Entrenamiento */}

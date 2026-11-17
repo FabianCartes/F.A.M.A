@@ -12,7 +12,9 @@ const syncSchema = z.object({
   cloud: z.literal("available"),
   transfer_verified: z.literal(true),
 });
-const statusSchema = z.object({ models: z.array(z.object({ model_id: z.number().int(), synced: z.boolean() })) });
+const statusSchema = z.object({ models: z.array(z.object({
+  model_id: z.number().int(), synced: z.boolean(), local: z.boolean().optional(), remote: z.boolean().optional(),
+})) });
 
 export type SyncAction = z.infer<typeof syncSchema>["action"];
 
@@ -25,11 +27,13 @@ const FALLBACK = "No se pudo sincronizar el checkpoint. Revisa GCS, la conexión
 
 /**
  * Batch "synced" flags for the listed models. The flag only means both copies exist with the
- * registered size; when GCS cannot be queried every model keeps the "Sincronizar en GCS" label.
+ * registered size. `remoteOnly` lists models with the GCS backup but no local copy (the action
+ * downloads them); when GCS cannot be queried every model keeps the "Sincronizar en GCS" label.
  */
 export function useCheckpointSyncStatus(modelIds: number[]) {
   const key = modelIds.join(",");
   const [synced, setSynced] = useState<ReadonlySet<number>>(new Set());
+  const [remoteOnly, setRemoteOnly] = useState<ReadonlySet<number>>(new Set());
   useEffect(() => {
     if (!key) return;
     const controller = new AbortController();
@@ -38,23 +42,29 @@ export function useCheckpointSyncStatus(modelIds: number[]) {
         const response = await apiFetch(`${API_BASE_URL}/api/training/models/checkpoints/sync-status`, { signal: controller.signal });
         const parsed = statusSchema.safeParse(response.ok ? await response.json() : null);
         if (!controller.signal.aborted) {
-          setSynced(new Set(parsed.success ? parsed.data.models.filter(model => model.synced).map(model => model.model_id) : []));
+          const models = parsed.success ? parsed.data.models : [];
+          setSynced(new Set(models.filter(model => model.synced).map(model => model.model_id)));
+          setRemoteOnly(new Set(models.filter(model => model.local === false && model.remote === true).map(model => model.model_id)));
         }
       } catch {
-        if (!controller.signal.aborted) setSynced(new Set());
+        if (!controller.signal.aborted) { setSynced(new Set()); setRemoteOnly(new Set()); }
       }
     })();
     return () => controller.abort();
   }, [key]);
-  const markSynced = useCallback((modelId: number) => setSynced(previous => new Set(previous).add(modelId)), []);
-  return { synced, markSynced };
+  const markSynced = useCallback((modelId: number) => {
+    setSynced(previous => new Set(previous).add(modelId));
+    setRemoteOnly(previous => { const next = new Set(previous); next.delete(modelId); return next; });
+  }, []);
+  return { synced, remoteOnly, markSynced };
 }
 
 type Outcome = { ok: true; message: string } | { ok: false; message: string };
 
-export function CheckpointSyncButton({ modelId, synced, onSynced }: {
+export function CheckpointSyncButton({ modelId, synced, remoteOnly = false, onSynced }: {
   modelId: number;
   synced: boolean;
+  remoteOnly?: boolean;
   onSynced: (action: SyncAction) => void;
 }) {
   const [busy, setBusy] = useState(false);
@@ -98,9 +108,12 @@ export function CheckpointSyncButton({ modelId, synced, onSynced }: {
     : "bg-emerald-600 text-white font-semibold border-emerald-600 hover:bg-emerald-500";
   return <>
     <button ref={trigger} type="button" disabled={busy} onClick={() => void synchronize()}
-      title={synced ? "Ambas copias registradas; presiona para verificarlas de nuevo." : "Comprueba las copias y sincroniza el checkpoint con GCS."}
+      title={synced ? "Ambas copias registradas; presiona para verificarlas de nuevo."
+        : remoteOnly ? "Sin copia local: descarga el checkpoint desde GCS y verifica su tamaño y SHA-256."
+        : "Comprueba las copias y sincroniza el checkpoint con GCS."}
       className={`text-[11px] px-2.5 py-1 rounded border transition-colors disabled:opacity-50 disabled:cursor-wait ${style}`}>
-      {busy ? "Sincronizando…" : synced ? "Sincronizado" : "Sincronizar en GCS"}
+      {busy ? (remoteOnly && !synced ? "Descargando…" : "Sincronizando…")
+        : synced ? "Sincronizado" : remoteOnly ? "Descargar desde GCS" : "Sincronizar en GCS"}
     </button>
     {outcome && <DatasetConfirmationDialog title={outcome.ok ? "Checkpoint sincronizado" : "No se pudo sincronizar"}
       onClose={close} returnFocus={trigger}>
