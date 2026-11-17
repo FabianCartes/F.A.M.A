@@ -25,7 +25,7 @@ class Cloud:
         return self
 
     def blob(self, name, **kwargs):
-        return Blob(self, name)
+        return Blob(self, name, chunk_size=kwargs.get("chunk_size"))
 
     def get_blob(self, name, **kwargs):
         if self.failure:
@@ -40,8 +40,9 @@ class Cloud:
 
 
 class Blob:
-    def __init__(self, cloud, name):
+    def __init__(self, cloud, name, chunk_size=None):
         self.cloud, self.name = cloud, name
+        self.chunk_size = chunk_size
         self.generation = 17
         self.size = len(cloud.objects.get(name, b""))
         self.content_encoding = None
@@ -53,6 +54,7 @@ class Blob:
         if self.name in self.cloud.objects:
             raise PreconditionFailed("already exists")
         self.cloud.objects[self.name] = Path(filename).read_bytes()
+        self.cloud.upload_chunk_sizes = [*getattr(self.cloud, "upload_chunk_sizes", []), self.chunk_size]
         self.size = len(self.cloud.objects[self.name])
 
     def download_to_filename(self, filename, *, if_generation_match, **kwargs):
@@ -165,13 +167,19 @@ def test_failed_backup_verification_is_not_reported_as_success(checkpoint_http):
     assert not list(f.root.glob('.checkpoint-*'))
 
 
-def test_unavailable_cloud_is_sanitized_and_allows_a_retry(checkpoint_http):
+def test_unavailable_cloud_is_sanitized_and_allows_a_retry(checkpoint_http, caplog):
     f = checkpoint_http
     f.cloud.failure = RuntimeError('private SQL or credential detail')
     for action in ('', '/backup', '/restore'):
-        response = f.client.get(BASE) if not action else f.client.post(BASE + action, headers={'Origin': ORIGIN})
+        caplog.clear()
+        with caplog.at_level('WARNING', logger='app.routes.checkpoints'):
+            response = f.client.get(BASE) if not action else f.client.post(BASE + action, headers={'Origin': ORIGIN})
         assert response.status_code == 503
         assert 'private' not in response.text
+        # The response stays generic; the server log keeps the cause for diagnosis.
+        logged = [record for record in caplog.records if record.name == 'app.routes.checkpoints']
+        assert logged and logged[0].exc_info[0] is RuntimeError
+        assert 'model 3' in logged[0].getMessage()
     f.cloud.failure = None
     assert f.client.post(BASE + '/backup', headers={'Origin': ORIGIN}).status_code == 200
 
@@ -362,3 +370,10 @@ def test_sync_status_only_lists_accessible_models_and_sanitizes_failures(checkpo
     assert f.client.get(STATUS).json() == {'models': []}
     f.client.cookies.clear()
     assert f.client.get(STATUS).status_code == 401
+
+
+def test_large_checkpoints_upload_in_bounded_chunks(checkpoint_http):
+    # One request per 8 MiB chunk keeps the per-request socket timeout from bounding the whole file.
+    f = checkpoint_http
+    assert sync(f.client).status_code == 200
+    assert f.cloud.upload_chunk_sizes == [8 * 1024 * 1024]

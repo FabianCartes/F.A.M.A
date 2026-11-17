@@ -26,6 +26,9 @@ def identity(path):
 
 
 CLOUD_PREFIX = 'models/checkpoints/sha256/'
+# Upload in resumable chunks: the socket timeout bounds each request, so a single
+# whole-file request would require every checkpoint to upload within that timeout.
+UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024
 
 
 def sync_states(models, root):
@@ -139,7 +142,7 @@ class CheckpointCopies:
             blob = bucket.get_blob(self.key, timeout=30)
             if blob is None:
                 try:
-                    bucket.blob(self.key).upload_from_filename(str(snapshot), if_generation_match=0,
+                    bucket.blob(self.key, chunk_size=UPLOAD_CHUNK_BYTES).upload_from_filename(str(snapshot), if_generation_match=0,
                         content_type='application/octet-stream', checksum='auto', timeout=60)
                 except PreconditionFailed:
                     pass  # A concurrent retry may have published the same content-addressed object.

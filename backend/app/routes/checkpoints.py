@@ -1,4 +1,6 @@
 """Authenticated, dataset-authorized checkpoint copy operations."""
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.models.training import Modelo
@@ -23,12 +25,19 @@ def copies(model_id: int, access: ResourceAccess = Depends(resource_access)):
         raise HTTPException(503, 'No se pudo preparar el acceso a las copias del modelo.') from None
 
 
+logger = logging.getLogger(__name__)
+
+
 def run(operation):
     try:
         return operation()
     except CheckpointConflict as error:
         raise HTTPException(409, str(error)) from None
     except Exception:
+        # The response stays generic; the cause is kept in the server log for diagnosis.
+        model = getattr(getattr(operation, '__self__', None), 'model', None)
+        logger.warning('Checkpoint %s failed for model %s', getattr(operation, '__name__', 'operation'),
+                       getattr(model, 'id_modelo', '?'), exc_info=True)
         raise HTTPException(503, 'No se pudo comprobar o transferir el checkpoint. Revisa GCS, la conexión y el espacio local; puedes reintentar.') from None
 
 

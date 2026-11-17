@@ -15,7 +15,7 @@ import { getChartPaths, ChartOptions } from "@/lib/utils/trainingChart";
 import InfoTooltip from "@/components/common/InfoTooltip";
 import DatasetPartitions from "@/components/training/DatasetPartitions";
 import { usePartitionNames } from "@/components/training/usePartitionNames";
-import { CheckpointSyncButton, useCheckpointSyncStatus } from "@/components/training/CheckpointSync";
+import { CheckpointSyncButton, TriadCheckpointSyncButton, useCheckpointSyncStatus } from "@/components/training/CheckpointSync";
 import { SheetRows, audioPhysicsRows, hyperparameterRows } from "@/components/training/TechnicalSheetRows";
 import DatasetConfirmationDialog from "@/components/ingestion/DatasetConfirmationDialog";
 import { PARAMETER_EXPLANATIONS } from "@/lib/constants/parameterExplanations";
@@ -2793,11 +2793,10 @@ export default function TrainingView() {
                     : <span className="text-gray-500">—</span>}
                 </td>
                 <td className="col-span-2 md:py-3 md:pr-3">
-                  {/* Each component checkpoint is synchronized from the technical sheet. */}
-                  <span title="La ficha técnica sincroniza con GCS el checkpoint de cada componente."
-                    className="block max-w-[7rem] text-[11px] leading-tight text-emerald-300 whitespace-normal">
-                    Sincronizar en ficha técnica
-                  </span>
+                  {/* Syncs the three component checkpoints; the technical sheet keeps one action per component. */}
+                  <TriadCheckpointSyncButton models={group.members.map(member => ({ id: member.id, label: member.architecture }))}
+                    allSynced={group.members.every(member => checkpointSync.synced.has(member.id))}
+                    onSynced={(modelId, action) => { checkpointSync.markSynced(modelId); if (action === "restored") void fetchHistory(); }} />
                 </td>
                 <td className="text-right md:py-3 md:pr-2">
                   <TechnicalSheetButton onClick={() => { setSelectedGroup(group); setSelectedModelModal(group.members[0]); }} />
