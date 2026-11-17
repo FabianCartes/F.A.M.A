@@ -79,6 +79,18 @@ describe('background GCS to local download in the ingestion view', () => {
     expect(calls.filter(call => call.includes('/sync/operations/')).length).toBe(polls);
   });
 
+  it('shows the verdict derived from the finished download in the dataset row', async () => {
+    const content_check = { level: 'download', status: 'match', local_count: null, gcs_count: 1220, matching: 1220, missing_local: 0,
+      only_local: null, size_mismatch: 0, checksum_mismatch: 0, unverified: 0, failed: 0 };
+    replies.poll = [{ body: finished('completed', { result: { status: 'completed', total_downloaded: 1220, total_skipped: 0, total_failed: 0,
+      total_preprocessed: 0, results: [{ dataset: 'AvesChilenas', downloaded: 1220, skipped: 0, failed: 0, preprocessed: 0, db_persisted: true, content_check }] } }) }];
+    await open(); await startDownload(); await tick();
+    expect(screen.getByText('Coincide (contenido verificado en la descarga)')).toBeDefined();
+    fireEvent.click(refresh());
+    await tick(0);
+    expect(screen.queryByText('Coincide (contenido verificado en la descarga)')).toBeNull();
+  });
+
   it('reports a partial end with its new, skipped and failed counts', async () => {
     replies.poll = [{ body: finished('partial', { result: { status: 'partial', total_downloaded: 1200, total_skipped: 5, total_failed: 15, total_preprocessed: 0,
       results: [{ dataset: 'AvesChilenas', downloaded: 1200, skipped: 5, failed: 15, preprocessed: 0, db_persisted: true }] } }) }];

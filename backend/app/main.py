@@ -64,7 +64,7 @@ from app.services.ingestion import (
     ingestion_service, IngestionValidationError, IngestionConfigurationError,
     IngestionPayloadTooLarge, IngestionAudioError, IngestionDatasetUnavailable,
 )
-from app.services.dataset_comparison import compare_dataset_content
+from app.services.dataset_comparison import verify_dataset_content
 from app.services.dataset_download import DatasetDownloads, DownloadInProgress, summarize_results
 from app.services.training import training_service
 from app.services.dashboard import dashboard_service
@@ -1044,9 +1044,9 @@ def list_ingestion_dataset_files(
 
 
 @app.post("/api/ingestion/datasets/{dataset_name}/compare")
-def compare_ingestion_dataset(dataset_name: str, db: Session = Depends(get_db),
+def compare_ingestion_dataset(dataset_name: str,
                               access: ResourceAccess = Depends(resource_access)):
-    """Compare local and GCS audio (count, size, registered SHA-256) on explicit request.
+    """Verify local audio against the GCS checksums (MD5/CRC32C) on explicit request.
 
     Same authorization and name validation as the download endpoints. It reads
     and hashes local files but never writes or transfers anything.
@@ -1057,7 +1057,7 @@ def compare_ingestion_dataset(dataset_name: str, db: Session = Depends(get_db),
     except IngestionValidationError:
         raise HTTPException(status_code=422, detail="Nombre de dataset inválido.") from None
     try:
-        return compare_dataset_content(ingestion_service, dataset_name, db)
+        return verify_dataset_content(ingestion_service, dataset_name)
     except IngestionDatasetUnavailable:
         raise HTTPException(status_code=409, detail="El dataset no contiene audios en el bucket actual.") from None
     except Exception:

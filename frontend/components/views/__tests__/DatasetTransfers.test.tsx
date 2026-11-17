@@ -33,8 +33,10 @@ it.each([
   expect(cells[3].textContent).toBe(count === 3 ? '—' : 'Cantos del sur');
   expect(cells[4].textContent).toContain('2 audios');
   expect(cells[5].textContent).toContain(cloud);
-  if (count && count > 0) expect(within(cells[5]).getByText('Contenido sin comparar')).toBeDefined();
-  else expect(within(row).queryByText('Contenido sin comparar')).toBeNull();
+  // The permanent «Contenido sin comparar» notice is gone: with no server check there is no claim at all.
+  expect(within(row).queryByText('Contenido sin comparar')).toBeNull();
+  if (count && count > 0) expect(within(cells[5]).getByRole('button', { name: 'Verificar contenido de Muestra' })).toBeDefined();
+  else expect(within(row).queryByRole('button', { name: 'Verificar contenido de Muestra' })).toBeNull();
   expect(screen.getAllByRole('table')).toHaveLength(1);
   expect(requests.some(path => path.includes('/imports/datasets'))).toBe(false);
   expect(screen.queryByRole('button', { name: 'Subir selección a GCS' })).toBeNull();

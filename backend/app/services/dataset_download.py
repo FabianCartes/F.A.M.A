@@ -11,6 +11,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
+from app.services.dataset_comparison import download_content_check
 from app.services.ingestion import IngestionDatasetUnavailable, IngestionValidationError
 
 logger = logging.getLogger(__name__)
@@ -148,6 +149,7 @@ class DatasetDownloads:
                 with session_factory() as db:
                     result = service.sync_dataset_to_local(
                         name, preprocess=operation.preprocess, db=db, progress=report)
+                result["content_check"] = download_content_check(result)
                 with self._lock:
                     operation.results.append(result)
                     operation.counts[name].update(

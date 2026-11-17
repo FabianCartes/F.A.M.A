@@ -10,6 +10,7 @@ import {
 } from "@/lib/api/feedbackApi";
 import { PendingFeedbackItem } from "@/lib/schemas/feedback";
 import FeedbackSyncPanel from "@/components/feedback/FeedbackSyncPanel";
+import type { ContentCheck } from "@/lib/schemas/ingestion";
 import DatasetInventory, { type DatasetItem, cloudCount, withCloudCount } from "@/components/ingestion/DatasetInventory";
 import DatasetUpload, { type UploadLimits } from "@/components/ingestion/DatasetUpload";
 import DatasetCatalogue from "@/components/ingestion/DatasetCatalogue";
@@ -45,6 +46,7 @@ interface SyncDatasetResult {
   db_persisted?: boolean;
   preprocess_info?: { failed?: number } | null;
   files?: { cleanup_pending?: boolean }[];
+  content_check?: ContentCheck | null;
 }
 
 /** Estado de una descarga GCS → Local que corre en el servidor. */
@@ -117,6 +119,8 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
   // Lista de datasets en GCS
   const [datasets, setDatasets] = useState<DatasetItem[]>([]);
   const [publishingDataset, setPublishingDataset] = useState<string | null>(null);
+  // Verdict of the last finished download per dataset; cleared by the next download or a manual refresh.
+  const [downloadChecks, setDownloadChecks] = useState<Record<string, ContentCheck>>({});
   const [pendingSync, setPendingSync] = useState<{ targets: DatasetItem[]; estimatedSize: string | null } | null>(null);
   const syncTrigger = useRef<HTMLButtonElement | null>(null);
   const [isLoadingDatasets, setIsLoadingDatasets] = useState<boolean>(true);
@@ -422,6 +426,8 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
       });
 
       const results: SyncDatasetResult[] = data.results || [];
+      setDownloadChecks(previous => ({ ...previous, ...Object.fromEntries(
+        results.filter(item => item.content_check).map(item => [item.dataset, item.content_check as ContentCheck])) }));
       for (const item of results) {
         if (item.failed > 0) {
           addLog("ERROR", `Dataset '${item.dataset}': ${item.failed} error(es) en la descarga.`);
@@ -535,6 +541,7 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
   const startSync = async (targets: DatasetItem[]) => {
     setPendingSync(null);
     setIsSyncing(true);
+    setDownloadChecks(previous => Object.fromEntries(Object.entries(previous).filter(([name]) => !targets.some(dataset => dataset.name === name))));
     downloadNames.current = Object.fromEntries(targets.map(dataset => [dataset.id, dataset.name]));
     const label = targets.map(dataset => dataset.name).join(", ");
     setTransferStatus({ message: `Descarga en curso · GCS → Local: ${label}. Iniciando la descarga en el servidor.`, error: false });
@@ -732,7 +739,8 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
       <DatasetUpload datasets={datasets} canCreate={administrator && canCreateDataset} busy={isSyncing}
         onUploaded={fetchDatasets} onBusyChange={setIsUploading} limits={uploadLimits} />
       <DatasetInventory datasets={datasets} loading={isLoadingDatasets} busy={isSyncing || isUploading}
-        onRefresh={fetchDatasets} onDownload={handleSync} onInspect={handleInspectDataset} />
+        downloadChecks={downloadChecks} onRefresh={() => { setDownloadChecks({}); void fetchDatasets(); }}
+        onDownload={handleSync} onInspect={handleInspectDataset} />
       {pendingSync && <DatasetConfirmationDialog title="Descargar desde GCS" onClose={closeSyncDialog} returnFocus={syncTrigger}>
         <ul className="space-y-1">{pendingSync.targets.map(dataset => <li key={dataset.id}>{syncPlan(dataset)}</li>)}</ul>
         <p>La descarga compara el contenido y omite los audios que ya coinciden.{pendingSync.estimatedSize ? ` Tamaño máximo: ${pendingSync.estimatedSize}.` : ""} No inicia ningún entrenamiento.</p>

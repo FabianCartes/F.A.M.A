@@ -163,3 +163,34 @@ def test_a_thread_that_cannot_start_does_not_leave_the_dataset_locked(monkeypatc
     service.release.set()
     retried = start(downloads, service)
     assert retried["state"] == "running"
+
+
+def finished_result(downloads, service, result):
+    service.results["AvesChilenas"] = {"dataset": "AvesChilenas", "preprocessed": 0, "db_persisted": True,
+                                       "db_error": None, **result}
+    operation = start(downloads, service)
+    service.release.set()
+    assert wait_for(lambda: downloads.snapshot(operation["operation_id"])["state"] != "running")
+    return downloads.snapshot(operation["operation_id"])["result"]["results"][0]
+
+
+def test_finished_download_exposes_a_verification_summary_without_another_hashing_pass():
+    downloads, service = DatasetDownloads(), FakeService()
+    files = [{"status": "downloaded", "verified": True}] * 2 + [{"status": "skipped", "verified": True}]
+
+    result = finished_result(downloads, service, {"downloaded": 2, "skipped": 1, "failed": 0, "files": files})
+
+    assert result["content_check"] == {
+        "level": "download", "status": "match", "local_count": None, "gcs_count": 3, "missing_local": 0,
+        "only_local": None, "size_mismatch": 0, "checksum_mismatch": 0, "unverified": 0, "matching": 3, "failed": 0}
+
+
+def test_download_summary_counts_failed_and_unverified_files():
+    downloads, service = DatasetDownloads(), FakeService()
+    files = [{"status": "downloaded", "verified": False}, {"status": "skipped", "verified": True},
+             {"status": "error"}]
+
+    check = finished_result(downloads, service, {"downloaded": 1, "skipped": 1, "failed": 1, "files": files})["content_check"]
+
+    assert check["status"] == "differences"
+    assert (check["matching"], check["unverified"], check["failed"], check["gcs_count"]) == (1, 1, 1, 3)

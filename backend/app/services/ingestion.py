@@ -14,6 +14,7 @@ from google.cloud import storage
 from google.api_core.exceptions import PreconditionFailed
 from app.configuration import get_configuration, storage_bucket
 from app.services.audio_hashing import sha256_file
+from app.services.dataset_comparison import compare_content
 
 
 class IngestionValidationError(ValueError):
@@ -233,11 +234,13 @@ class IngestionService:
                     "total_size_bytes": 0,
                     "last_modified": None,
                     "latest_dt": None,
+                    "blobs": {},
                 }
             item = datasets_map[ds_name]
             item["classes_set"].add(class_name)
             item["file_count"] += 1
             item["total_size_bytes"] += (blob.size or 0)
+            item["blobs"][blob.name.split("/", 2)[2]] = blob
             if blob.updated:
                 if item["latest_dt"] is None or blob.updated > item["latest_dt"]:
                     item["latest_dt"] = blob.updated
@@ -250,6 +253,7 @@ class IngestionService:
             data["classes"] = classes
             data["class_count"] = len(classes)
             data.pop("latest_dt", None)
+            cloud_blobs = data.pop("blobs")
 
             # Buscar directorio local
             local_ds_dir = self.local_base_dir / ds_name
@@ -259,12 +263,20 @@ class IngestionService:
                     local_ds_dir = slug_dir
 
             local_files = []
+            content_check = None
             if local_ds_dir.is_dir():
                 # Conteo recursivo de audios en todas las subclases locales
                 local_files = [
                     f for f in local_ds_dir.rglob("*")
                     if f.is_file() and f.suffix.lower() in (".wav", ".mp3", ".flac", ".ogg")
                 ]
+                if local_files:
+                    try:
+                        content_check = compare_content(
+                            self, cloud_blobs, {f.relative_to(local_ds_dir).as_posix(): f for f in local_files},
+                            checksum=False)
+                    except OSError:
+                        content_check = None
             else:
                 # Si el dataset es AvesChilenas y las especies están directamente en data/raw/
                 for c in classes:
@@ -291,6 +303,7 @@ class IngestionService:
             data["source"] = "gcs"
             data["gcs_available"] = True
             data["gcs_file_count"] = data["file_count"]
+            data["content_check"] = content_check
             result.append(data)
 
         # Si GCS está conectado, fusionar los datasets de GCS con los locales
@@ -748,6 +761,7 @@ class IngestionService:
                         "class_name": class_name,
                         "status": "skipped",
                         "reason": "already_up_to_date",
+                        "verified": True,
                         "size": dest_path.stat().st_size,
                         "object_key": blob.name,
                     })
@@ -763,8 +777,8 @@ class IngestionService:
                 if type(expected_size) is int and observed_size != expected_size:
                     raise ValueError("Downloaded content does not match provider size")
                 checksums = (getattr(blob, "md5_hash", None), getattr(blob, "crc32c", None))
-                if (any(isinstance(value, str) and value for value in checksums)
-                        and not self._matches_remote_content(temporary, blob)):
+                has_checksum = any(isinstance(value, str) and value for value in checksums)
+                if has_checksum and not self._matches_remote_content(temporary, blob):
                     raise ValueError("Downloaded content does not match provider checksum")
                 temporary.replace(dest_path)
                 downloaded += 1
@@ -772,6 +786,7 @@ class IngestionService:
                     "filename": filename,
                     "class_name": class_name,
                     "status": "downloaded",
+                    "verified": has_checksum,
                     "size": observed_size,
                     "object_key": blob.name,
                 })
