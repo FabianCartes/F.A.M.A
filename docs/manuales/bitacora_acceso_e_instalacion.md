@@ -561,6 +561,12 @@ La CLI de respaldo exige un esquema vigente para su propio código; se ejecutó 
 
 **Operación:** respaldo lógico previo `pre-retiro-modelos-historicos-20261116`; comprobación de hashes y de ausencia de métricas, evaluaciones, tríadas o versiones dependientes; borrado de las cinco filas en una transacción. `prediccion` no tiene llave foránea hacia `modelo` y conserva sus 31 filas. Los pesos permanecen en `operator_backups/checkpoints/sha256/` de GCS. Queda el modelo 7 (EfficientNet-B0, `standard_eval_completed`), con respaldo en `models/checkpoints/sha256/`. [Recibo](../receipts/retiro_modelos_historicos_20261116.json).
 
+## Retiro de un duplicado incorporado por feedback — 16 de noviembre
+
+**Hallazgo:** una predicción de prueba con `canastero3.wav` y su corrección a `canastero` incorporaron `canastero/feedback_2.wav`, idéntico byte a byte a `canastero/feedback_20.wav` (presente desde el 15 de octubre). La incorporación de feedback solo comprueba el nombre de archivo, no el contenido. El audio probado ya pertenecía al dataset, por lo que esa predicción no sirve como evaluación del modelo 7.
+
+**Operación aprobada por el operador:** respaldo previo `pre-retiro-duplicado-feedback-20261116` (base, archivo y `metadata.csv`); se retiró `feedback_2.wav` (audio 2608) de SQL, GCS, disco local y `metadata.csv`. Se conservó `feedback_20.wav` porque pertenece a la partición `66ef36d4…` del modelo 7. Resultado: 1217 audios coincidentes; vista previa de particiones sin exclusiones ni avisos. La retroalimentación 2 y la predicción 32 se conservan; su sincronización indica ahora `db_persisted=false` y no debe reincorporarse. [Recibo](../receipts/retiro_duplicado_feedback_20261116.json).
+
 ## Pendientes conservados
 
 - Definir equipo/acceso y preparar recursos/perfil/catálogo oficiales, seguido del cambio con verificación acotada. Recuperación del operador y respaldo/restauración lógica SQL ya ensayados localmente; políticas de copias administradas, retención, ubicación independiente y recuperación del destino oficial siguen en preparación operativa. Directorios persistentes y respaldo de checkpoints ya comprobados. Registrar procedencia desconocida sigue siendo manual y no hay prueba final independiente. La duplicación `Chucao`/`chucao` se resolvió el 16 de noviembre al retirar los tres audios de prueba. E8-04/E8-11 están corregidas; el recorrido acotado investigador conserva su evidencia previa.

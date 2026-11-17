@@ -1,0 +1,12 @@
+{
+  "stage": "retiro-duplicado-feedback-AvesChilenas",
+  "date": "2026-11-16",
+  "cause": "la retroalimentación 2 (predicción 32, archivo enviado canastero3.wav, etiqueta corregida canastero) se incorporó como canastero/feedback_2.wav con bytes idénticos a canastero/feedback_20.wav, ya presente desde 2026-10-15",
+  "sha256": "ae9e6ff33bd3e26cc0c3526914fcbe1e26c4f0d3f89a63fd799aa0feeb5b4461",
+  "code_finding": "backend/app/services/feedback.py solo comprueba si existe un audio con el mismo nombre de archivo; no compara el SHA-256 con el resto del dataset",
+  "choice": "se retiró feedback_2.wav (audio 2608); feedback_20.wav pertenece a la partición guardada 66ef36d45364a7a981835c0546b5a6a7ab1d12f8a54930ceeff115be5e507fb2 usada por el modelo 7",
+  "backup": {"folder": "backend/installation/cloud-oficial/backups/pre-retiro-duplicado-feedback-20261116 (privada, excluida de Git)", "result": "database_backup_created", "archive_sha256": "0629ce4a8093a774bc983d09e00584e97db550a4ac838bf8e9187d68f5d4f570", "local_copies": ["feedback_2.wav", "metadata.csv"]},
+  "changes": {"sql": "audio 2608 eliminado; conjunto_datos 2 de 1218 a 1217 audios (5476352206 bytes)", "gcs": "datasets/AvesChilenas/canastero/feedback_2.wav eliminado", "local": "archivo eliminado y su fila retirada de metadata.csv"},
+  "verification": {"sql_gcs_local_audios": 1217, "partition_preview": {"entries": 1217, "excluded": 0, "warnings": []}, "saved_partition_66ef36d4": "sigue listada (733/242/242)"},
+  "preserved": "retroalimentación 2, predicción 32 y su audio en raw_audios/; la vista de sincronización de feedback muestra ahora db_persisted=false para la retroalimentación 2"
+}
