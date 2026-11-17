@@ -1,0 +1,28 @@
+{
+ "stage": "retiro-duplicado-feedback-gatos-y-perros-pruebas",
+ "date": "2026-11-17",
+ "environment": "fama_pruebas (Cloud SQL de pruebas) y bucket fama-pruebas",
+ "cause": "la retroalimentación 2 se incorporó como dog/feedback_2.wav con bytes idénticos a dog/dog_barking_0.wav (plan 23, R8), antes de la deduplicación por contenido de S12",
+ "sha256": "ded06f70635fa82f54eb7dd2e48a99c8fcd2d1399f73274bee507f89643b5246",
+ "choice": "se retiró feedback_2.wav (audio 298) y se conservó dog/dog_barking_0.wav (audio 186); ninguna partición guardada (local ni en la base) referencia feedback_2.wav y no hay claves foráneas hacia audio",
+ "backup": {
+  "folder": "<perfil privado de pruebas>/backups/pre-retiro-duplicado-feedback-20261117 (fuera del repositorio)",
+  "method": "pg_dump 16.15 en formato custom (imagen postgres:16.15) contra el proxy local, porque app.node backup rechazó el pg_dump 18 del sistema con backup_major_version_mismatch",
+  "archive_sha256": "c4656f7390ac8603982a90e05cc459385f0f94ead15b961fd2127a2c8da62b8f",
+  "pg_restore_list_table_data_entries": 40,
+  "local_copies": [
+   "feedback_2.wav",
+   "metadata.csv"
+  ]
+ },
+ "changes": {
+  "sql": "audio 298 eliminado; conjunto_datos 2 recalculado desde sus filas: de 278 a 277 audios (61418986 bytes)",
+  "gcs": "datasets/gatos y perros/dog/feedback_2.wav eliminado con precondición de generación",
+  "local": "archivo eliminado y su fila retirada de metadata.csv"
+ },
+ "verification": {
+  "sql_gcs_local_audios": 277,
+  "original_preserved": "dog/dog_barking_0.wav presente en SQL y en disco"
+ },
+ "preserved": "el registro feedback_sync de la retroalimentación 2 se conserva, como en el retiro de la instalación oficial del 2026-11-16"
+}
