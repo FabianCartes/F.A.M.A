@@ -94,6 +94,18 @@ class _AcceptedAudioDataset(AudioDataset):
 class TrainingAdmissionError(ValueError):
     """A start rejection already worded for the person who requested it."""
 
+
+_LOCAL_AUDIO_SUFFIXES = {".wav", ".mp3", ".flac", ".ogg"}
+
+
+def _has_local_audio(raw_dir: Path) -> bool:
+    """True when the dataset's raw folder holds at least one supported audio file."""
+    try:
+        return raw_dir.is_dir() and any(
+            path.suffix.lower() in _LOCAL_AUDIO_SUFFIXES and path.is_file() for path in raw_dir.rglob("*"))
+    except OSError:
+        return False
+
 def _recorded(value, kind):
     """Return a checkpoint value only when it has the expected type; never guess defaults."""
     if kind is bool:
@@ -501,6 +513,12 @@ class TrainingService:
             # The internal path and OS error stay in the server log; the user gets the next step.
             logging.getLogger(__name__).warning(
                 "Dataset %r: preparación ausente o inválida en %s: %s", dataset_name, prepared_dir, exc)
+            # Same criterion as the catalog's «sin copia local» mark: no supported audio under raw.
+            if not _has_local_audio(raw_dir):
+                raise TrainingAdmissionError(
+                    f"El dataset «{dataset_name}» no tiene copia local en este equipo. "
+                    "Descárgalo desde GCS en «Gestión de audios» y vuelve a iniciar el entrenamiento."
+                ) from exc
             if isinstance(exc, FileNotFoundError) or not prepared_dir.exists():
                 raise TrainingAdmissionError(
                     f"El dataset «{dataset_name}» todavía no tiene una partición preparada para entrenar. "

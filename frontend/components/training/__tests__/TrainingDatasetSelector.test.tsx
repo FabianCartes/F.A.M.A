@@ -59,7 +59,7 @@ it('preserves selection and keyboard navigation while searching the registered c
  expect(select).toHaveBeenCalledTimes(2);
  expect(transport).toHaveBeenCalledTimes(1);
 });
-it('marks only the datasets without a local copy and keeps them selectable',async()=>{
+it('marks the datasets without a local copy and blocks their selection',async()=>{
  const base={source_type:'legacy',eligible:true,eligibility_state:'current_flow_compatible',reasons:[],audio_count:9,class_count:3};
  vi.stubGlobal('fetch',vi.fn(async()=>Response.json({datasets:[
   {...base,id:'Local',name:'Local',record_id:'legacy:1',local_audio_count:9,local_available:true},
@@ -72,6 +72,19 @@ it('marks only the datasets without a local copy and keeps them selectable',asyn
  expect(screen.getByRole('option',{name:'Local'})).toBeTruthy();
  expect(screen.getByRole('option',{name:'Legacy'})).toBeTruthy();
  expect(screen.getAllByText(/sin copia local/)).toHaveLength(1);
+ expect(missing.getAttribute('aria-disabled')).toBe('true');
+ expect(missing.classList.contains('text-gray-500')).toBe(true);
+ expect(missing.classList.contains('cursor-not-allowed')).toBe(true);
+ expect(screen.getByRole('option',{name:'Local'}).getAttribute('aria-disabled')).toBeNull();
+ expect(screen.getByRole('option',{name:'Legacy'}).getAttribute('aria-disabled')).toBeNull();
  fireEvent.click(missing);
- expect(select).toHaveBeenCalledWith(expect.objectContaining({record_id:'legacy:2',local_available:false}));
+ expect(select).not.toHaveBeenCalled();
+ const search=screen.getByLabelText('Buscar dataset por nombre');
+ fireEvent.change(search,{target:{value:'Aves'}});
+ fireEvent.keyDown(search,{key:'Enter'});
+ expect(select).not.toHaveBeenCalled();
+ expect(screen.getByRole('combobox',{name:'Dataset para entrenamiento'}).textContent).toBe('Buscar o seleccionar dataset…');
+ fireEvent.change(search,{target:{value:''}});
+ fireEvent.click(screen.getByRole('option',{name:'Local'}));
+ expect(select).toHaveBeenCalledWith(expect.objectContaining({record_id:'legacy:1'}));
 });

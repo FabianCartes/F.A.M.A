@@ -122,7 +122,8 @@ def test_catalog_opt_in_lists_registered_legacy_without_claiming_audio_readiness
     assert blocked["reasons"] == ["incompatible_configuration"]
     assert blocked["classes"] == []
     assert blocked["class_count"] is None
-    with pytest.raises(ValueError, match="no tiene una partición preparada"):
+    # The class folder has no audio yet, so the rejection names the missing local copy.
+    with pytest.raises(ValueError, match="no tiene copia local en este equipo"):
         service.start_training(candidate["id"])
     assert service.get_progress()["status"] == "failed"
     with pytest.raises(ValueError, match="Invalid dataset name"):
@@ -224,7 +225,7 @@ def test_invalid_or_unprepared_identity_is_rejected_before_scheduling(training_e
 
     service, sessions, _, thread = training_env
     register(sessions, name)
-    with pytest.raises(ValueError, match="Invalid dataset name" if name.startswith("../") else "no tiene una partición preparada"):
+    with pytest.raises(ValueError, match="Invalid dataset name" if name.startswith("../") else "no tiene copia local en este equipo"):
         service.start_training(name)
     progress = service.get_progress()
     assert progress["status"] == "failed"
@@ -602,8 +603,11 @@ def test_training_catalog_offers_registered_identities_and_no_implicit_local_dat
 
 
 def test_missing_preparation_is_explained_in_plain_language_without_internal_paths(training_env):
-    service, sessions, _, _ = training_env
+    service, sessions, root, _ = training_env
     register(sessions, "AvesChilenas")
+    local_copy = root / "raw" / "AvesChilenas" / "Fixture"
+    local_copy.mkdir(parents=True)
+    (local_copy / "a.wav").write_bytes(b"x")
     with pytest.raises(ValueError) as error:
         service.start_training("AvesChilenas")
     assert str(error.value) == (
@@ -611,3 +615,20 @@ def test_missing_preparation_is_explained_in_plain_language_without_internal_pat
         "En «Particiones de entrenamiento», crea o selecciona una partición guardada y vuelve a iniciar el entrenamiento.")
     assert service.get_progress()["status"] == "failed"
     assert service.get_progress()["error_message"] == str(error.value)
+
+
+def test_missing_local_copy_is_reported_instead_of_a_missing_partition(training_env):
+    service, sessions, root, thread = training_env
+    register(sessions, "WithoutLocalCopy")
+    (root / "raw" / "WithoutLocalCopy").mkdir(parents=True)
+    (root / "raw" / "WithoutLocalCopy" / "notes.txt").write_text("not audio")
+    with pytest.raises(ValueError) as error:
+        service.start_training("WithoutLocalCopy")
+    assert str(error.value) == (
+        "El dataset «WithoutLocalCopy» no tiene copia local en este equipo. "
+        "Descárgalo desde GCS en «Gestión de audios» y vuelve a iniciar el entrenamiento.")
+    progress = service.get_progress()
+    assert progress["status"] == "failed"
+    assert progress["job_id"] is None
+    assert progress["error_message"] == str(error.value)
+    thread.assert_not_called()
