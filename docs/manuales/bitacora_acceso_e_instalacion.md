@@ -555,6 +555,12 @@ La CLI de respaldo exige un esquema vigente para su propio código; se ejecutó 
 
 **Operación aprobada por el operador:** respaldo lógico previo (`pre-limpieza-audios-20261116`) y copia de los tres objetos; eliminación en una transacción de las filas `audio` 2–4 (sin llaves foráneas dependientes) con recálculo de `conjunto_datos` 2; eliminación de los tres objetos de GCS y retiro de las copias locales a la carpeta del respaldo. Resultado: 1217 audios y 15 clases coincidentes en SQL, GCS y copia local; la vista previa de particiones incluye 1217 audios, sin exclusiones ni avisos. Revisión de `engine_diagnostics` sin cambios: 1386 audios coincidentes, 13 clases, WAV mono decodificables, sin duplicados ni etiquetas en conflicto; `hash_archivo` y frecuencia vacíos en SQL. [Recibo](../receipts/limpieza_audios_prueba_avesChilenas_20261116.json).
 
+## Retiro de los modelos históricos del historial — 16 de noviembre
+
+**Decisión del operador:** retirar los modelos 2–6 (EfficientNet-B0, ConvNeXt-Nano y ResNet34d de 35 épocas, Augmented Data Best y Baseline Best) y reentrenar una tríada sobre AvesChilenas depurado. Motivos: sin dataset asociado, precisión guardada como fracción, sin agrupación de tríada y pesos fuera del prefijo de sincronización.
+
+**Operación:** respaldo lógico previo `pre-retiro-modelos-historicos-20261116`; comprobación de hashes y de ausencia de métricas, evaluaciones, tríadas o versiones dependientes; borrado de las cinco filas en una transacción. `prediccion` no tiene llave foránea hacia `modelo` y conserva sus 31 filas. Los pesos permanecen en `operator_backups/checkpoints/sha256/` de GCS. Queda el modelo 7 (EfficientNet-B0, `standard_eval_completed`), con respaldo en `models/checkpoints/sha256/`. [Recibo](../receipts/retiro_modelos_historicos_20261116.json).
+
 ## Pendientes conservados
 
 - Definir equipo/acceso y preparar recursos/perfil/catálogo oficiales, seguido del cambio con verificación acotada. Recuperación del operador y respaldo/restauración lógica SQL ya ensayados localmente; políticas de copias administradas, retención, ubicación independiente y recuperación del destino oficial siguen en preparación operativa. Directorios persistentes y respaldo de checkpoints ya comprobados. Registrar procedencia desconocida sigue siendo manual y no hay prueba final independiente. La duplicación `Chucao`/`chucao` se resolvió el 16 de noviembre al retirar los tres audios de prueba. E8-04/E8-11 están corregidas; el recorrido acotado investigador conserva su evidencia previa.

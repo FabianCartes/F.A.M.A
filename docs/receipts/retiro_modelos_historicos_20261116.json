@@ -1,0 +1,18 @@
+{
+  "stage": "retiro-modelos-historicos-fama-oficial",
+  "date": "2026-11-16",
+  "decision": "retirar del historial los modelos 2-6; se reentrenará una tríada sobre AvesChilenas depurado",
+  "reasons": ["sin dataset asociado («Dataset no verificado»)", "precisión guardada como fracción (0.88) y mostrada como 0.88 %", "no se agrupan como tríada en el historial", "pesos fuera del prefijo de sincronización y sin copia local en el nodo actual"],
+  "removed_models": [
+    {"id_modelo": 2, "arquitectura": "EfficientNet-B0 (35 epoch)", "hash_binario": "79ce8e3e574296e360814b89151cf5666ab0b1050e297baed06b3762dfef94b6"},
+    {"id_modelo": 3, "arquitectura": "ConvNeXt-Nano (35 epoch)", "hash_binario": "f3ea78451c9ec5677c0e28c47063217ea9d5068eac4bac6b34115094a042a064"},
+    {"id_modelo": 4, "arquitectura": "ResNet34d (35 epoch)", "hash_binario": "da5a79625906be7bc4f732c7f55e065a56b2368460756e7f306e815c18b0da5f"},
+    {"id_modelo": 5, "arquitectura": "Augmented Data Best", "hash_binario": "dc2264a7abcba11adba101e5f02c394349ddcff2d2e71a0c43f099c7cf20f430"},
+    {"id_modelo": 6, "arquitectura": "Baseline Best", "hash_binario": "ff22fc9baaf0324583bfa7993e45142bfa74e4552ff11985ef66a10f241dbb8c"}
+  ],
+  "dependencies_checked": {"metrica_entrenamiento": 0, "model_evaluation": 0, "triad_composition": 0, "modelo.actualizacion_de": 0, "prediccion": "sin llave foránea hacia modelo; 31 predicciones conservadas"},
+  "backup": {"folder": "backend/installation/cloud-oficial/backups/pre-retiro-modelos-historicos-20261116 (privada, excluida de Git)", "result": "database_backup_created", "revision": "0007_triad_evaluation", "tables": 40, "archive_sha256": "958ab5d076f811e63541193e3c56f28c7015ea9b8e474181eb8574283432ec48"},
+  "gcs": "pesos conservados en operator_backups/checkpoints/sha256/<hash>.pt (cinco objetos comprobados)",
+  "result": {"remaining_models": [{"id_modelo": 7, "arquitectura": "EfficientNet-B0", "estado": "standard_eval_completed"}], "predictions": 31},
+  "follow_up": "el Super-Ensamble sigue definido en backend/app/main.py por nombres de archivo de los checkpoints históricos"
+}
