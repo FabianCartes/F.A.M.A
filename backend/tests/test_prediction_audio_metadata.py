@@ -53,7 +53,6 @@ def test_public_http_audio_limit_before_external_effects(test_db, monkeypatch, s
     registry = ModelRegistry()
     registry.register(predictor, is_default=True)
     monkeypatch.setattr(main, "upload_audio_to_gcp", uploader)
-    monkeypatch.setattr(main.ensemble_service, "get_status", lambda **kwargs: {})
     main.app.dependency_overrides[main.get_model_registry] = lambda: registry
     try:
         # No context manager: do not run startup/lifespan or discover real models.
@@ -103,7 +102,6 @@ def test_inference_persists_original_name_and_reception_before_read(test_db, mon
     monkeypatch.setattr(main, "datetime", Clock, raising=False)
     uploaded = AsyncMock(return_value=True)
     monkeypatch.setattr(main, "upload_audio_to_gcp", uploaded)
-    monkeypatch.setattr(main.ensemble_service, "get_status", lambda **kwargs: {})
     predictor = ContractPredictor("fake-model")
     predictor.metadata.dataset_name = "AvesChilenas"
     registry = ModelRegistry()

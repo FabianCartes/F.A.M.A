@@ -225,6 +225,7 @@ ADR numerados secuencialmente. Un ADR reemplazado conserva su ubicación y decla
 - [`0080-reparto-incremental-y-origen-de-retroalimentacion-en-particiones.md`](adr/0080-reparto-incremental-y-origen-de-retroalimentacion-en-particiones.md): ADR 0080: Reparto incremental y origen de la retroalimentación en las particiones
 - [`0081-intentos-de-evaluacion-conjunta-de-triadas.md`](adr/0081-intentos-de-evaluacion-conjunta-de-triadas.md): ADR 0081: Intentos de evaluación conjunta de composiciones de tríada
 - [`0082-pesos-fijos-de-entrenamiento-en-triadas.md`](adr/0082-pesos-fijos-de-entrenamiento-en-triadas.md): ADR 0082: Pesos fijos de entrenamiento en tríadas estándar
+- [`0083-retiro-del-super-ensamble-fijo.md`](adr/0083-retiro-del-super-ensamble-fijo.md): ADR 0083: Retiro del Super-Ensamble fijo y de su estado legacy
 
 ### [`receipts/`](receipts/) — Evidencia reproducible
 

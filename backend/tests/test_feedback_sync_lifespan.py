@@ -13,7 +13,6 @@ def test_application_lifespan_recovers_without_blocking_and_awaits_inflight(work
     entered = threading.Event()
     release = threading.Event()
     finished = threading.Event()
-    startup = []
 
     def upload(*args, **kwargs):
         entered.set()
@@ -22,7 +21,6 @@ def test_application_lifespan_recovers_without_blocking_and_awaits_inflight(work
         return True
 
     worker = FeedbackSyncWorker(w.sessions, w.service.raw_data_dir, uploader=upload)
-    monkeypatch.setattr(main.ensemble_service, 'load_models', lambda: startup.append('models'))
     monkeypatch.setattr(database, 'SessionLocal', w.sessions)
     def forbidden_seed(db):
         raise AssertionError('El arranque funcional no debe crear administradores')
@@ -38,7 +36,6 @@ def test_application_lifespan_recovers_without_blocking_and_awaits_inflight(work
                 break
             await asyncio.sleep(.01)
         assert entered.is_set(), 'Startup must launch an immediate recovery pass'
-        assert startup == ['models']
         closing = asyncio.create_task(context.__aexit__(None, None, None))
         await asyncio.sleep(.02)
         assert worker.stopping.is_set()

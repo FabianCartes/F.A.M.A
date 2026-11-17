@@ -339,16 +339,11 @@ def test_predict_reports_only_execution_members(
     predictor = ExecutionPredictor("execution-model")
     predictor._meta.metrics = {"optimal_weights": {"catalogue-only": 1.0}}
     mock_registry.register(predictor)
-    # Global readiness belongs to a different predictor and is not execution evidence.
-    with patch("app.main.ensemble_service.get_status", return_value={
-        "active_models": [{"name": "Unrelated model", "weight": 1.0}],
-        "is_fallback": True,
-    }):
-        response = client.post(
-            "/api/predict?model_id=execution-model",
-            data={"dataset_name": "unrelated-domain"},
-            files={"file": ("canto.wav", create_dummy_wav_bytes(), "audio/wav")},
-        )
+    response = client.post(
+        "/api/predict?model_id=execution-model",
+        data={"dataset_name": "unrelated-domain"},
+        files={"file": ("canto.wav", create_dummy_wav_bytes(), "audio/wav")},
+    )
 
     assert response.status_code == 200
     data = response.json()

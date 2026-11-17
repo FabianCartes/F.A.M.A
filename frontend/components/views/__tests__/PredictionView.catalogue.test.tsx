@@ -102,7 +102,6 @@ beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.includes("/api/models")) return catalogue();
-    if (url.includes("/api/model-info")) return new Response(null, { status: 503 });
     if (url.includes("/api/predict")) return predict();
     throw new Error(`HTTP no previsto: ${url}`);
   }));
@@ -980,35 +979,5 @@ describe("U7Independent", () => {
     expect(JSON.parse(String(calls("/api/feedback")[0][1]?.body))).toEqual({
       id_prediccion: 901, fue_correcta: false, etiqueta_corregida: "Rayadito",
     });
-  });
-
-  it.each([
-    ["legacy_bioacoustic_service", true, "AvesChilenas", true],
-    ["other_service", true, "AvesChilenas", false],
-    ["legacy_bioacoustic_service", false, "AvesChilenas", false],
-    ["legacy_bioacoustic_service", true, "engine_diagnostics", false],
-  ])("isolates legacy scope=%s supported=%s domain=%s", async (scope, supported, domain, visible) => {
-    const ensemble = { ...bird, id: "bird-ensemble" };
-    catalogue = async () => response([ensemble, { ...engine, id: "engine-ensemble" }], ensemble.id);
-    const originalFetch = fetch;
-    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, options?: RequestInit) =>
-      String(input).includes("/api/model-info") ? Response.json({ state_scope: scope, domain_supported: supported,
-        selected_domain: domain, device: "legacy-device", triad_status: [{ name: "Legacy component",
-          is_ready: true, is_loaded: false, is_registered: true, weights_available: false, weight: 0.7,
-          accuracy: 0, metrics_source: "database_record", recorded_checkpoint: "registered.pt", loaded_checkpoint: null }],
-      }) : originalFetch(input, options)));
-    await show();
-    expect(Boolean(screen.queryByRole("article", { name: "Legacy component" }))).toBe(visible);
-    if (visible) {
-      const card = within(screen.getByRole("article", { name: "Legacy component" }));
-      for (const text of ["Registro BD: Registrado", "Archivo local: Ausente", "No cargado", "Peso cargado: No disponible", "0.0%", "registered.pt"]) {
-        expect(card.getByText(text)).toBeDefined();
-      }
-    }
-    await chooseModel(engine.name);
-    if (domain !== "engine_diagnostics") expect(screen.queryByRole("article", { name: "Legacy component" })).toBeNull();
-    expect(calls("/api/predict")).toHaveLength(0);
-    expect(calls("/api/model-info").some(([url]) => String(url).includes("dataset_name=engine_diagnostics"))).toBe(true);
-    expect(vi.mocked(fetch).mock.calls.every(([, options]) => !options?.method || options.method === "GET")).toBe(true);
   });
 });

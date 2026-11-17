@@ -1,5 +1,7 @@
 # ADR 0051: Estado legacy pasivo y ejecución atribuida
 
+**Nota (2026-11-17):** la lectura pasiva de `GET /api/model-info` y `SuperEnsembleService` se retiraron por [ADR 0083](0083-retiro-del-super-ensamble-fijo.md). La atribución de la ejecución sigue vigente.
+
 **Integration note (2026-10-20):** `modelos_ejecutados` identifies the invoked predictor. The existing `dev` contract for `modelos_activos` is preserved: only result-level participant/weight evidence populates it; it is not an alias of the invoked predictor. A non-mock annotation does not erase an explicit fallback role.
 
 **Estado:** Aceptado. **Fecha:** 17 de octubre de 2026.

@@ -11,7 +11,7 @@ import asyncio
 from functools import partial
 from time import perf_counter
 from pathlib import Path
-from typing import Optional, Tuple, List
+from typing import Optional, List
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
@@ -19,8 +19,6 @@ from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Form, Que
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session, sessionmaker
-import torch
-import torch.nn as nn
 import numpy as np
 
 # ============================================================================
@@ -29,32 +27,6 @@ import numpy as np
 _BACKEND_ROOT = Path(__file__).resolve().parent.parent
 if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
-
-# Importación de componentes de inferencia y modelos desde ml_core (o poc como fallback)
-try:
-    from ml_core.evaluate import (
-        EnsembleClassifier,
-        predict_audio_tta,
-        load_checkpoint_model,
-    )
-    from ml_core.preprocess import (
-        compute_rms,
-        TARGET_SR,
-        DURATION_SECONDS,
-    )
-    from ml_core.train import BioacousticModel
-except ImportError:
-    from poc.evaluate import (
-        EnsembleClassifier,
-        predict_audio_tta,
-        load_checkpoint_model,
-    )
-    from poc.preprocess import (
-        compute_rms,
-        TARGET_SR,
-        DURATION_SECONDS,
-    )
-    from poc.train import BioacousticModel
 
 from app.middleware.inference_limits import InferenceLimits
 from app.services.inference_execution import InferenceExecution
@@ -97,373 +69,6 @@ AudioPredictorService = AudioCNNPredictor
 
 
 # ============================================================================
-# CONSTANTES Y CONFIGURACIÓN DEL SUPER-ENSAMBLE TRI-MODELO
-# ============================================================================
-SPECIES_CLASSES: List[str] = [
-    "Canastero", "Chercán", "Chincol", "Chucao", "Churrín de la Mocha",
-    "Churrín del sur", "Colilarga", "Fío-fío", "Picaflor chico", "Rayadito",
-    "Tapaculo", "Tijeral", "Tordo", "Turca", "Zorzal patagónico",
-]
-
-# Ponderaciones oficiales calibradas del Super-Ensamble Tri-Modelo (ADR 0008, ADR 0010)
-# 55% EfficientNet-B0 + 30% ConvNeXt-Nano + 15% ResNet34d
-ENSEMBLE_WEIGHTS: List[float] = [0.55, 0.30, 0.15]
-
-
-# ============================================================================
-# SERVICIO DE INFERENCIA: SUPER-ENSAMBLE TRI-MODELO HETEROGÉNEO
-# ============================================================================
-class SuperEnsembleService:
-    """
-    Servicio de inferencia bioacústica de alto rendimiento basado en el
-    Super-Ensamble Tri-Modelo Heterogéneo (EfficientNet-B0, ConvNeXt-Nano, ResNet34d).
-    Instanciado una sola vez en el ciclo de vida (lifespan) de FastAPI.
-    """
-
-    def __init__(self, checkpoints_dir: Optional[Path] = None):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        from training.paths import get_checkpoints_dir
-        self.checkpoints_dir = Path(checkpoints_dir) if checkpoints_dir is not None else get_checkpoints_dir()
-        self.classes: List[str] = SPECIES_CLASSES
-        self.weights: List[float] = ENSEMBLE_WEIGHTS
-        self.ensemble: Optional[EnsembleClassifier] = None
-        self.fallback_model: Optional[nn.Module] = None
-        self.is_fallback: bool = False
-        self.active_models_info: List[dict] = []
-
-    def _find_checkpoint(
-        self,
-        filename: str,
-        extra_dirs: Optional[List[Path]] = None,
-    ) -> Optional[Path]:
-        """
-        Busca un archivo de checkpoint en múltiples rutas candidatas:
-        1. extra_dirs (si se provee para pruebas o configuración explícita).
-        2. self.checkpoints_dir (backend/checkpoints).
-        3. Raíz del repositorio / checkpoints (_BACKEND_ROOT.parent / "checkpoints").
-        """
-        candidates: List[Path] = []
-        if extra_dirs:
-            candidates.extend(extra_dirs)
-        if self.checkpoints_dir:
-            candidates.append(self.checkpoints_dir)
-        from app.runtime import runtime_root
-        if runtime_root() is None:
-            candidates.append(_BACKEND_ROOT.parent / "checkpoints")
-
-        for d in candidates:
-            target = d / filename
-            if target.exists():
-                return target
-        return None
-
-    def _checkpoint_available(self, route: str) -> Optional[bool]:
-        """Metadata-only presence in configured roots; remote/untrusted paths unknown."""
-        if not isinstance(route, str) or "://" in route:
-            return None
-        path = Path(route)
-        from app.runtime import runtime_root
-        roots = [self.checkpoints_dir]
-        if runtime_root() is None:
-            roots.append(_BACKEND_ROOT.parent / "checkpoints")
-        if not path.is_absolute() and path.parts and path.parts[0] == "models":
-            path = Path(*path.parts[1:])
-        if path.suffix.lower() != ".pt" or ".." in path.parts:
-            return None
-        candidates = [path] if path.is_absolute() else [root / path for root in roots]
-        checked = False
-        unknown = False
-        for candidate in candidates:
-            try:
-                if not any(candidate.absolute().is_relative_to(root.absolute()) for root in roots):
-                    continue
-                if not any(candidate.resolve().is_relative_to(root.resolve()) for root in roots):
-                    continue
-                checked = True
-                if candidate.is_file() and candidate.stat().st_size > 0:
-                    return True
-            except (OSError, RuntimeError):
-                unknown = True
-        return None if unknown or not checked else False
-
-    def load_models(self) -> None:
-        """
-        Carga los 3 modelos heterogéneos si los checkpoints .pt existen en disco.
-        Si no existen (por estar en .gitignore), conmuta automáticamente al checkpoint
-        entrenado disponible (augmented_best.pt) para garantizar predicciones reales
-        con alta confianza en lugar de números aleatorios.
-        """
-        effnet_ckpt = self._find_checkpoint("efficientnet_gpu_pipeline_35e_best.pt")
-        convnext_ckpt = self._find_checkpoint("convnext_nano_35e_best.pt")
-        resnet_ckpt = self._find_checkpoint("resnet34d_35e_best.pt")
-        augmented_ckpt = self._find_checkpoint("augmented_best.pt")
-
-        self.active_models_info = []
-
-        # Caso 1: Al menos uno o todos los checkpoints del Super-Ensamble existen
-        if effnet_ckpt or convnext_ckpt or resnet_ckpt:
-            models: List[nn.Module] = []
-            active_weights: List[float] = []
-
-            if effnet_ckpt:
-                m_eff, ckpt_data = load_checkpoint_model(effnet_ckpt, self.device)
-                self.classes = ckpt_data.get("classes", self.classes)
-                models.append(m_eff)
-                active_weights.append(0.55)
-                self.active_models_info.append({
-                    "name": "EfficientNet-B0",
-                    "weight": 0.55,
-                    "checkpoint": effnet_ckpt.name,
-                })
-                print(f"[SuperEnsemble] Checkpoint cargado: {effnet_ckpt.name}")
-
-            if convnext_ckpt:
-                m_conv, _ = load_checkpoint_model(convnext_ckpt, self.device)
-                models.append(m_conv)
-                active_weights.append(0.30)
-                self.active_models_info.append({
-                    "name": "ConvNeXt-Nano",
-                    "weight": 0.30,
-                    "checkpoint": convnext_ckpt.name,
-                })
-                print(f"[SuperEnsemble] Checkpoint cargado: {convnext_ckpt.name}")
-
-            if resnet_ckpt:
-                m_res, _ = load_checkpoint_model(resnet_ckpt, self.device)
-                models.append(m_res)
-                active_weights.append(0.15)
-                self.active_models_info.append({
-                    "name": "ResNet34d",
-                    "weight": 0.15,
-                    "checkpoint": resnet_ckpt.name,
-                })
-                print(f"[SuperEnsemble] Checkpoint cargado: {resnet_ckpt.name}")
-
-            self.ensemble = EnsembleClassifier(models=models, weights=active_weights)
-            self.ensemble.to(self.device).eval()
-            self.is_fallback = False
-            print(f"[SuperEnsemble] Super-Ensamble listo en {self.device} con {len(models)} modelo(s).")
-
-        # Caso 2: Checkpoint entrenado disponible en disco (augmented_best.pt)
-        elif augmented_ckpt:
-            from poc.train import AudioCNN
-            ckpt = torch.load(augmented_ckpt, map_location=self.device)
-            self.classes = ckpt.get("classes", self.classes)
-            self.fallback_model = AudioCNN(num_classes=len(self.classes))
-            self.fallback_model.load_state_dict(ckpt["model_state_dict"])
-            self.fallback_model.to(self.device).eval()
-            self.is_fallback = True
-            self.active_models_info = [{
-                "name": "AudioCNN (Baseline)",
-                "weight": 1.0,
-                "checkpoint": augmented_ckpt.name,
-            }]
-            print(
-                f"[SuperEnsemble] AVISO: Los archivos .pt del tri-modelo no están en disco. "
-                f"Conmutando a checkpoint entrenado de respaldo '{augmented_ckpt.name}' para predicciones con pesos reales."
-            )
-        else:
-            self.is_fallback = True
-            print("[SuperEnsemble] AVISO: No se encontraron checkpoints entrenados.")
-
-    def get_status(self, dataset_name: Optional[str] = None, db: Optional[Session] = None, access=None) -> dict:
-        """
-        Observa el servicio bioacústico legacy sin cargar, activar ni inferir.
-        Registro, presencia de archivo y carga en memoria son hechos separados.
-        is_ready conserva compatibilidad como alias de carga, no prueba de inferencia.
-        """
-        # Determinar dataset objetivo
-        available_datasets = (training_service.get_available_datasets(db=db) if access is None
-                              else training_service.get_available_datasets(db=db, access=access))
-        available_domains = [d["id"] for d in available_datasets]
-        target_ds = dataset_name or "AvesChilenas"
-        domain_supported = target_ds == "AvesChilenas"
-        normalize_arch = lambda name: name.lower().replace("-", "").replace("_", "")
-        loaded = {}
-        if target_ds == "AvesChilenas" and self.ensemble is not None and not self.is_fallback:
-            for index, info in enumerate(self.active_models_info):
-                if index < len(self.ensemble.models):
-                    loaded[normalize_arch(info["name"])] = {
-                        **info, "weight": self.ensemble.weights[index],
-                    }
-
-        # Obtener clases del dataset objetivo
-        target_ds_info = next((d for d in available_datasets if d["id"] == target_ds), None)
-        if domain_supported and (loaded or (self.is_fallback and self.fallback_model is not None)):
-            classes, classes_source = self.classes, "service_loaded_metadata_unverified"
-        elif target_ds_info and target_ds_info.get("classes"):
-            classes, classes_source = target_ds_info["classes"], "dataset_listing_unverified"
-        else:
-            classes = self.classes if domain_supported else []
-            classes_source = "configured_or_cached_reference" if domain_supported else None
-
-        triad_config = [
-            {"name": "EfficientNet-B0", "filename": "efficientnet_gpu_pipeline_35e_best.pt"},
-            {"name": "ConvNeXt-Nano", "filename": "convnext_nano_35e_best.pt"},
-            {"name": "ResNet-34d", "filename": "resnet34d_35e_best.pt"},
-        ]
-        if not domain_supported:
-            triad_config = []
-
-        triad_status = []
-        for item in triad_config:
-            arch = item["name"]
-            weight = None
-            is_ready = False
-            accuracy = None
-            loss = None
-            checkpoint_name = None
-            recorded_checkpoint = None
-            loaded_checkpoint = None
-            updated_at = None
-            is_registered = None
-            weights_available = self._checkpoint_available(item["filename"])
-            weights_source = "configured_candidate"
-
-            # 1. Buscar en PostgreSQL si hay registro para este dataset
-            if db is not None:
-                try:
-                    model_rec = db.query(Modelo).join(
-                        ConjuntoDatos, Modelo.id_conjunto_datos == ConjuntoDatos.id_conjunto_datos
-                    ).filter(
-                        Modelo.arquitectura == arch, ConjuntoDatos.nombre == target_ds
-                    ).order_by(Modelo.precision.desc(), Modelo.id_modelo.desc()).first()
-
-                    if model_rec:
-                        checkpoint_name = Path(model_rec.ruta_binario_gcp).name
-                        recorded_checkpoint = checkpoint_name
-                        weights_available = self._checkpoint_available(model_rec.ruta_binario_gcp)
-                        weights_source = "registered_reference"
-                        updated_at = model_rec.fecha_entrenamiento.isoformat() if model_rec.fecha_entrenamiento else None
-                        accuracy = model_rec.precision
-                        loss = model_rec.perdida
-                        is_registered = True
-                    else:
-                        is_registered = False
-                except Exception:
-                    db.rollback()
-
-            # Loaded state comes from observed in-memory models, never DB presence.
-            active_match = loaded.get(normalize_arch(arch))
-            if active_match:
-                is_ready = True
-                checkpoint_name = active_match["checkpoint"]
-                loaded_checkpoint = checkpoint_name
-                weight = active_match["weight"]
-                weights_available = self._checkpoint_available(active_match["checkpoint"])
-                weights_source = "loaded_checkpoint_file"
-
-            triad_status.append({
-                "name": arch,
-                "weight": weight,
-                "is_ready": is_ready,
-                "is_registered": is_registered,
-                "is_loaded": is_ready,
-                "weights_available": weights_available,
-                "weights_source": weights_source,
-                "accuracy": accuracy,
-                "loss": loss,
-                "checkpoint": checkpoint_name,
-                "recorded_checkpoint": recorded_checkpoint,
-                "loaded_checkpoint": loaded_checkpoint,
-                "metrics_source": "database_record" if is_registered is True else None,
-                "updated_at": updated_at,
-            })
-
-        ensemble_ready = bool(triad_status) and all(m["is_ready"] for m in triad_status)
-        ready_count = sum(1 for m in triad_status if m["is_ready"])
-
-        if ensemble_ready:
-            active_mode = "ensemble"
-            model_name = "Super-Ensamble Tri-Modelo"
-        elif ready_count > 1:
-            active_mode = "partial_ensemble"
-            model_name = f"Ensamble parcial ({ready_count} modelos cargados)"
-        elif ready_count > 0:
-            active_mode = "individual"
-            ready_first = next(m for m in triad_status if m["is_ready"])
-            model_name = f"{ready_first['name']} (Modo Individual)"
-        elif domain_supported and self.is_fallback and self.fallback_model is not None:
-            active_mode = "fallback"
-            model_name = "AudioCNN (Fallback)"
-        else:
-            active_mode = "unavailable"
-            model_name = None
-
-        missing_models = [m["name"] for m in triad_status if not m["is_ready"]]
-        active_models = [
-            {"name": m["name"], "weight": m["weight"], "checkpoint": m["checkpoint"]}
-            for m in triad_status if m["is_loaded"]
-        ]
-        if active_mode == "fallback":
-            active_models = list(self.active_models_info)
-
-        return {
-            "state_scope": "legacy_bioacoustic_service",
-            "domain_supported": domain_supported,
-            "selected_domain": target_ds,
-            "available_domains": available_domains,
-            "ensemble_ready": ensemble_ready,
-            "active_mode": active_mode,
-            "missing_models": missing_models,
-            "triad_status": triad_status,
-            "is_fallback": bool(domain_supported and self.is_fallback and self.fallback_model is not None),
-            "model_name": model_name,
-            "device": str(self.device),
-            "active_models": active_models,
-            "total_classes": len(classes),
-            "classes": classes,
-            "classes_source": classes_source,
-        }
-
-    def predict(
-        self,
-        audio_file_path: Path,
-        hop_seconds: float = 1.0,
-        max_window_batch_size: int = 32,
-    ) -> Tuple[str, float]:
-        """
-        Ejecuta inferencia bioacústica densa TTA con micro-batching sobre el audio temporal.
-        """
-        if self.ensemble is None and self.fallback_model is None:
-            self.load_models()
-
-        if self.is_fallback and self.fallback_model is not None:
-            from poc.preprocess import load_and_fix_length, extract_mel_spectrogram
-            waveform = load_and_fix_length(audio_file_path, target_sr=TARGET_SR, duration_seconds=DURATION_SECONDS)
-            mel = extract_mel_spectrogram(waveform, sr=TARGET_SR, n_mels=64)
-            mel_tensor = torch.from_numpy(mel).unsqueeze(0).unsqueeze(0).float().to(self.device)
-            with torch.no_grad():
-                out = self.fallback_model(mel_tensor)
-                probs = torch.softmax(out / 1.5, dim=1)
-                confidence, pred_idx = torch.max(probs, dim=1)
-                predicted_class = self.classes[pred_idx.item()]
-                conf_val = round(float(confidence.item()), 4)
-                return predicted_class, conf_val
-
-        pred_idx, probs = predict_audio_tta(
-            model=self.ensemble,
-            audio_input=audio_file_path,
-            n_mels=128,
-            mode="max",
-            device=self.device,
-            target_sr=TARGET_SR,
-            duration_seconds=DURATION_SECONDS,
-            hop_seconds=hop_seconds,
-            max_window_batch_size=max_window_batch_size,
-        )
-
-        confidence = float(probs[pred_idx].item())
-        conf_val = round(confidence, 4)
-        predicted_class = self.classes[pred_idx]
-        return predicted_class, conf_val
-
-
-# Instancia global del servicio de inferencia
-ensemble_service = SuperEnsembleService()
-
-
-# ============================================================================
 # CICLO DE VIDA (LIFESPAN / STARTUP): CARGA ÚNICA EN MEMORIA
 # ============================================================================
 def _prewarm_model_metadata(*, isolated: bool = False):
@@ -483,20 +88,15 @@ def _prewarm_model_metadata(*, isolated: bool = False):
 
 @asynccontextmanager
 async def lifespan(app_instance: FastAPI):
-    """
-    Carga el Super-Ensamble Tri-Modelo en memoria una única vez al iniciar
-    el servidor FastAPI, evitando recargas redundantes en peticiones HTTP.
-    Isolated precalienta solo metadatos; omite ensemble, seed y workers.
+    """Precalienta los metadatos del catálogo y arranca el worker de feedback.
+
+    Isolated precalienta solo metadatos; omite seed y workers.
     """
     if _APP_STARTUP_POLICY == "isolated":
         _prewarm_model_metadata(isolated=True)
         yield
         return
 
-    try:
-        ensemble_service.load_models()
-    except Exception as init_err:
-        print(f"[Startup Warning] Excepción al inicializar SuperEnsemble: {init_err}")
     from app.database import SessionLocal
     _prewarm_model_metadata()
     worker = FeedbackSyncWorker(SessionLocal, feedback_service.raw_data_dir)
@@ -567,27 +167,6 @@ def health_check():
 # Public liveness and authentication routes above retain their own policies.
 app.router.dependencies.append(Depends(current_web_user))
 app.router.route_class = WebAuthRoute
-
-
-# ============================================================================
-# ENDPOINTS DE INFORMACIÓN Y ESTADO DEL SUPER-ENSAMBLE
-# ============================================================================
-@app.get(
-    "/api/model-info",
-    summary="Estado pasivo del servicio bioacústico legacy, sin carga de pesos",
-)
-def get_model_info(
-    dataset_name: Optional[str] = None,
-    db: Session = Depends(get_db),
-    access: ResourceAccess = Depends(resource_access),
-):
-    """Observación acotada del servicio legacy; no representa activación del catálogo."""
-    access.require_dataset(dataset_name)
-    result = ensemble_service.get_status(dataset_name=dataset_name, db=db,
-                                         access=None if access.administrator else access)
-    if not access.administrator:
-        result["available_domains"] = [name for name in result.get("available_domains", []) if name in access.names]
-    return result
 
 
 # ============================================================================

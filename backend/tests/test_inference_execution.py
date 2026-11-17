@@ -16,7 +16,6 @@ AUDIO = synthetic_wav()
 @pytest.fixture
 def external_adapters(test_db, monkeypatch):
     monkeypatch.setattr(main, "upload_audio_to_gcp", AsyncMock(return_value=True))
-    monkeypatch.setattr(main.ensemble_service, "get_status", lambda **kwargs: {})
     predictor = SimpleNamespace(
         model_id="fake", dataset_name="AvesChilenas", has_weights=True,
         metadata=SimpleNamespace(name="Synthetic inference fixture"),

@@ -250,7 +250,6 @@ def test_researcher_inventory_is_registered_and_scoped_not_global_cloud(function
     assert response.status_code == 200
     assert [row["id"] for row in response.json()["datasets"]] == ["AvesChilenas"]
     assert client.get("/api/ingestion/status").status_code == 403
-    assert client.get("/api/model-info?dataset_name=engine_diagnostics").status_code == 404
 
 
 def test_dashboard_and_training_history_filter_before_checkpoint_reads(functional, monkeypatch, tmp_path):
@@ -439,7 +438,7 @@ def test_every_functional_operation_rejects_anonymous_requests(functional):
             response = client.request(method, path, headers={"Origin": ORIGIN})
             assert response.status_code == 401, (method, path, response.text)
             operations.append((method, path))
-    assert len(operations) == 28
+    assert len(operations) == 27
 
 
 def test_sync_states_are_filtered_before_limit_and_ignore_unverified_legacy(functional):

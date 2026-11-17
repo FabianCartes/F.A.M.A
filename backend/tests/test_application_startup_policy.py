@@ -70,8 +70,6 @@ def startup_boundary(monkeypatch):
         previous_attribute = app.__dict__.pop("main", absent)
         try:
             module = importlib.import_module("app.main")
-            monkeypatch.setattr(module.ensemble_service, "load_models",
-                                lambda: effects.append("preload"))
             yield module.app
         finally:
             sys.modules.pop("app.main", None)
@@ -97,7 +95,7 @@ def test_isolated_startup_serves_public_health_without_startup_effects(startup_b
             response = client.get("/health")
             assert response.status_code == 200
             assert response.json() == {"status": "ok"}
-            assert effects == [], "Isolated lifespan must not preload, seed or construct a worker"
+            assert effects == [], "Isolated lifespan must not seed or construct a worker"
         assert effects == [], "Isolated shutdown must not own a feedback worker"
 
 
@@ -112,8 +110,8 @@ def test_normal_startup_preserves_bootstrap_and_lifespan(startup_boundary, monke
         assert effects == ["schema"]
         with TestClient(application) as client:
             assert client.get("/health").json() == {"status": "ok"}
-            assert effects == ["schema", "preload", "seed", "worker", "worker_enter"]
-        assert effects == ["schema", "preload", "seed", "worker", "worker_enter", "worker_exit"]
+            assert effects == ["schema", "seed", "worker", "worker_enter"]
+        assert effects == ["schema", "seed", "worker", "worker_enter", "worker_exit"]
 
 
 @pytest.mark.parametrize("policy", ["", "ISOLATED", " isolated", "isolated ", "disabled"])

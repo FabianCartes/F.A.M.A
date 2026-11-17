@@ -15,7 +15,7 @@ if str(_BACKEND_ROOT) not in sys.path:
 # app.main synchronizes tables at import; HTTP contract collection must not
 # connect to the default database or read dotenv configuration.
 with patch("dotenv.load_dotenv", return_value=False), patch("sqlalchemy.MetaData.create_all"):
-    from app.main import app, ensemble_service, SPECIES_CLASSES
+    from app.main import app
     from app.database import get_db
 from app.schemas.model_info import ModelMetadata
 from app.schemas.prediction import PredictionResult
@@ -35,7 +35,9 @@ class ContractPredictor(AudioPredictor):
             description="Deterministic predictor for endpoint contract tests only",
             target_sr=22050,
             duration_seconds=2.0,
-            classes=list(SPECIES_CLASSES),
+            classes=["Canastero", "Chercán", "Chincol", "Chucao", "Churrín de la Mocha",
+                     "Churrín del sur", "Colilarga", "Fío-fío", "Picaflor chico", "Rayadito",
+                     "Tapaculo", "Tijeral", "Tordo", "Turca", "Zorzal patagónico"],
         )
         self.unavailable = unavailable
         self.is_fallback = False
@@ -89,11 +91,7 @@ def mock_db_session():
 @pytest.fixture
 def client(mock_db_session, controlled_registry, monkeypatch, tmp_path):
     """Exercise routes without startup model loading or database admin seeding."""
-    # Real passive status implementation, with only temporary artifact roots.
-    from app import main as main_module
     monkeypatch.setattr("torch.cuda.is_available", lambda: False)
-    monkeypatch.setattr(main_module, "_BACKEND_ROOT", tmp_path / "backend")
-    monkeypatch.setattr(main_module, "ensemble_service", main_module.SuperEnsembleService(checkpoints_dir=tmp_path / "weights"))
     previous_overrides = app.dependency_overrides.copy()
     app.dependency_overrides[get_db] = lambda: mock_db_session
     app.dependency_overrides[get_model_registry] = lambda: controlled_registry
@@ -167,55 +165,11 @@ def test_predict_success_contract(mock_gcp, client, mock_db_session):
     mock_db_session.refresh.assert_called_once_with(saved)
 
 
-def test_ensemble_service_weights_and_configuration():
-    """Verifica que el servicio tenga calibrados los pesos 0.55, 0.30 y 0.15."""
-    assert ensemble_service.weights == [0.55, 0.30, 0.15]
-    assert len(ensemble_service.classes) == 15
-
-
-def test_get_model_info(client):
-    """Verifica el endpoint GET /api/model-info para monitoreo de modelos activos."""
-    response = client.get("/api/model-info")
-    assert response.status_code == 200
-    data = response.json()
-    assert "is_fallback" in data
-    assert "model_name" in data
-    assert "active_models" in data
-    assert "total_classes" in data
-    assert data["total_classes"] == 15
-    assert isinstance(data["active_models"], list)
-    assert "triad_status" in data
-    assert "ensemble_ready" in data
-    assert "selected_domain" in data
-    assert len(data["triad_status"]) == 3
-
-
-def test_get_model_info_custom_dataset(client):
-    """Verifica GET /api/model-info con dataset_name para evaluar modelos faltantes."""
-    response = client.get("/api/model-info?dataset_name=MaquinariaMinas")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["selected_domain"] == "MaquinariaMinas"
-    assert "triad_status" in data
-    assert "missing_models" in data
-    assert isinstance(data["missing_models"], list)
-
-
-def test_super_ensemble_service_find_checkpoint(tmp_path):
-    """Verifica que _find_checkpoint busque tanto en directorio explícito como en rutas candidatas."""
-    from app.main import SuperEnsembleService
-
-    # Crear una carpeta alternativa simulando checkpoints de la raíz
-    alt_dir = tmp_path / "root_checkpoints"
-    alt_dir.mkdir()
-    dummy_ckpt = alt_dir / "custom_model.pt"
-    dummy_ckpt.write_bytes(b"dummy")
-
-    service = SuperEnsembleService(checkpoints_dir=tmp_path / "non_existent")
-    # Inyectar alt_dir como una ruta candidata adicional
-    found = service._find_checkpoint("custom_model.pt", extra_dirs=[alt_dir])
-    assert found == dummy_ckpt
-    assert found.exists()
+@pytest.mark.parametrize("query", ["", "?dataset_name=AvesChilenas"])
+def test_legacy_super_ensemble_status_route_is_retired(client, query):
+    """Prediction publishes trained models and triads; the hardcoded legacy ensemble is gone."""
+    response = client.get(f"/api/model-info{query}")
+    assert response.status_code == 404
 
 
 @patch("app.main.upload_audio_to_gcp", new_callable=AsyncMock)
@@ -296,3 +250,24 @@ def test_predict_real_chucao_quality(mock_gcp, client, controlled_registry):
     assert data.get("is_fallback") is False
     assert "detalles" in data
     assert data["detalles"].get("is_mock") is False
+
+
+def test_reported_fallback_role_is_not_erased_by_nonmock_annotation(client, controlled_registry, monkeypatch):
+    class ReportedFallback(ContractPredictor):
+        def __init__(self):
+            super().__init__("reported-fallback")
+            self.is_fallback = True
+
+        def predict(self, path):
+            result = super().predict(path)
+            result.detalles["is_mock"] = False  # Contract observation, not a real benchmark.
+            return result
+
+    controlled_registry.register(ReportedFallback(), is_default=True)
+    monkeypatch.setattr("app.main.upload_audio_to_gcp", AsyncMock(return_value=True))
+
+    response = client.post("/api/predict", files={"file": ("synthetic.wav", create_dummy_wav_bytes(), "audio/wav")})
+
+    assert response.status_code == 200
+    assert response.json()["modelo_id"] == "reported-fallback"
+    assert response.json()["is_fallback"] is True

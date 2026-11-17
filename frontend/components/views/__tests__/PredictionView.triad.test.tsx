@@ -30,7 +30,6 @@ beforeEach(() => {
   transport = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.includes("/api/models")) return catalogueOf(models);
-    if (url.includes("/api/model-info")) return new Response(null, { status: 503 });
     if (url.endsWith("/api/triad-compositions/7")) return json(composition(7, 1, [0.5, 0.3, 0.2]));
     if (url.endsWith("/api/triad-compositions/8")) return json(composition(8, 2, [0.6, 0.3, 0.1]));
     if (url.includes("/api/inference/history")) return json({ items: [], next_cursor: null });

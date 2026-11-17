@@ -11,7 +11,7 @@ from sqlalchemy.pool import StaticPool
 # Reuse the controlled predictor and valid in-memory WAV, not the mocked DB fixture.
 from tests.test_api_predict import ContractPredictor, create_dummy_wav_bytes
 from app.database import Base, get_db
-from app.main import app, ensemble_service
+from app.main import app
 from app.services import registry as registry_module, storage
 from app.services.feedback import feedback_service
 from app.services.registry import ModelRegistry, get_model_registry
@@ -76,7 +76,6 @@ def review_api(tmp_path, monkeypatch):
     predictor._metadata = predictor.metadata.model_copy(update={"dataset_name": "AvesChilenas"})
     registry.register(predictor, is_default=True)
     monkeypatch.setattr(registry_module, "_global_model_registry", registry)
-    monkeypatch.setattr(ensemble_service, "load_models", lambda: None)
     bucket = ByteBucket()
     monkeypatch.setattr(storage.storage, "Client", lambda: bucket)
     raw = tmp_path / "raw"

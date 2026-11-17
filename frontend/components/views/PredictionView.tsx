@@ -20,46 +20,6 @@ interface AudioWaveformStats {
   points: { min: number; max: number }[];
 }
 
-interface ActiveModelInfo {
-  name: string;
-  weight: number;
-  checkpoint: string | null;
-}
-
-interface TriadModelStatus {
-  name: string;
-  weight: number | null;
-  is_ready: boolean;
-  is_loaded?: boolean;
-  is_registered?: boolean | null;
-  weights_available?: boolean | null;
-  weights_source?: string;
-  recorded_checkpoint?: string | null;
-  loaded_checkpoint?: string | null;
-  metrics_source?: string | null;
-  accuracy: number | null;
-  loss: number | null;
-  checkpoint: string | null;
-  updated_at: string | null;
-}
-
-interface BackendModelStatus {
-  is_fallback: boolean;
-  model_name: string | null;
-  device: string;
-  active_models: ActiveModelInfo[];
-  total_classes: number;
-  classes: string[];
-  selected_domain?: string;
-  available_domains?: string[];
-  ensemble_ready?: boolean;
-  active_mode?: "ensemble" | "partial_ensemble" | "individual" | "fallback" | "unavailable";
-  state_scope?: string;
-  domain_supported?: boolean;
-  missing_models?: string[];
-  triad_status?: TriadModelStatus[];
-}
-
 interface PredictionResponse {
   detalles?: { dataset_name?: string | null; loaded_checkpoint_sha256?: unknown; device?: string | null } | null;
   filename: string;
@@ -540,7 +500,6 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [classFilter, setClassFilter] = useState<string>("all");
-  const [modelStatusSnapshot, setModelStatus] = useState<(BackendModelStatus & { requestedDomain: string }) | null>(null);
   const [availableModels, setAvailableModels] = useState<RegisteredModel[]>([]);
   const [selectionState, setSelectionState] = useState({ modelId: "", evaluationDialogOpen: false, evaluationDialogModelId: null as string | null });
   const selectedModelId = selectionState.modelId;
@@ -614,7 +573,6 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
     }
   }, [closeEvaluationDialog]);
 
-  const modelStatus = modelStatusSnapshot?.requestedDomain === selectedDomain ? modelStatusSnapshot : null;
 
   const isEngineModel = useMemo(() => {
     return selectedDomain === "engine_diagnostics";
@@ -624,9 +582,6 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
     return (selectedModelId || "").toLowerCase().includes("ensemble");
   }, [selectedModelId]);
 
-  const legacyStatusMatches = modelStatus?.state_scope === "legacy_bioacoustic_service"
-    && modelStatus.domain_supported === true && modelStatus.selected_domain === selectedDomain;
-  const legacyTriad = legacyStatusMatches ? modelStatus?.triad_status || [] : [];
 
   const currentClasses = useMemo(() => {
     if (selectedModel?.classes && selectedModel.classes.length > 0) {
@@ -739,30 +694,6 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [authenticated, sessionCurrent]);
-
-  useEffect(() => {
-    if (!authenticated || !selectedDomain || !privateApiSameOrigin()) return;
-    let cancelled = false;
-    async function fetchModelStatus() {
-      try {
-        const url = selectedDomain
-          ? `${API_BASE_URL}/api/model-info?dataset_name=${encodeURIComponent(selectedDomain)}`
-          : `${API_BASE_URL}/api/model-info`;
-        const res = await fetch(url);
-        if (res.ok) {
-          const data = (await res.json()) as BackendModelStatus;
-          if (!cancelled) setModelStatus({ ...data, requestedDomain: selectedDomain });
-        } else if (!cancelled) {
-          setModelStatus(null);
-        }
-      } catch (err) {
-        if (!cancelled) setModelStatus(null);
-        console.warn("No se pudo conectar a /api/model-info:", err);
-      }
-    }
-    fetchModelStatus();
-    return () => { cancelled = true; };
-  }, [authenticated, selectedDomain]);
 
   useEffect(() => {
     return () => {
@@ -1288,96 +1219,7 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
         </div>
       </div>
 
-      {/* Panel de Estado y Preparación de la Tríada o Especificaciones Individuales */}
-      {isEnsemble ? (
-        <section aria-label="Estado del ensamble legacy" className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#23252e]">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-lg bg-blue-950/50 border border-blue-800/40 text-blue-400">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-bold text-white">
-                    Estado observado del servicio bioacústico legacy
-                  </h2>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-950/80 border border-emerald-800/80 text-emerald-400 flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    {legacyStatusMatches ? `${legacyTriad.filter(model => model.is_loaded === true).length} componente(s) de tríada cargados` : "Carga no comprobada"}
-                  </span>
-                </div>
-                <p className="text-[11px] text-gray-400 mt-0.5">
-                  Observación puntual, no salud en tiempo real. Esta consulta no activa modelos ni certifica la composición o la inferencia del predictor seleccionado.
-                </p>
-              </div>
-            </div>
-
-            <div className="text-[11px] text-gray-400 flex items-center gap-2 font-mono">
-              <span className="bg-[#101114] px-2 py-1 rounded border border-[#23252e]">
-                Dispositivo configurado: {legacyStatusMatches ? modelStatus?.device || "No disponible" : "No disponible"}
-              </span>
-              <span className="bg-[#101114] px-2 py-1 rounded border border-[#23252e]">
-                {classesCount} {isEngineModel ? "fallas mecánicas" : "especies"}
-              </span>
-            </div>
-          </div>
-
-          {legacyStatusMatches && modelStatus?.is_fallback === true && (
-            <p className="text-xs text-amber-300">
-              Fallback cargado en el servicio legacy: {modelStatus.model_name || "nombre no disponible"}. No confirma uso por el predictor seleccionado.
-            </p>
-          )}
-
-          {/* Las 3 tarjetas de arquitectura de la Tríada */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {legacyTriad.length === 0 && <p className="text-xs text-gray-400">Estado del servicio legacy no disponible para esta selección.</p>}
-            {legacyTriad.map((model) => (
-              <article aria-label={model.name}
-                key={model.name}
-                className="rounded-lg p-3.5 border transition-all bg-[#111215] border-[#252834]"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-white font-mono">{model.name}</span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-950/60 border border-blue-800/50 text-blue-300 font-semibold">
-                    Peso cargado: {model.is_loaded === true && model.weight != null ? `${Math.round(model.weight * 100)}%` : "No disponible"}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between text-[11px] mb-2">
-                  <span className="text-gray-400">Carga observada:</span>
-                  <span className="text-gray-300 font-medium">
-                    {model.is_loaded === true ? "Cargado en memoria" : model.is_loaded === false ? "No cargado" : "No comprobada"}
-                  </span>
-                </div>
-                <p className="text-[10px] text-gray-400">Registro BD: {model.is_registered === true ? "Registrado" : model.is_registered === false ? "Sin registro" : "No comprobado"}</p>
-                <p className="text-[10px] text-gray-400">Archivo local: {model.weights_available === true ? "Presente, contenido no validado" : model.weights_available === false ? "Ausente" : "No comprobado"}</p>
-                <p className="text-[10px] text-gray-400">Referencia consultada: {model.weights_source === "loaded_checkpoint_file" ? "Archivo del modelo cargado" : model.weights_source === "registered_reference" ? "Registro BD" : model.weights_source === "configured_candidate" ? "Candidato configurado" : "No disponible"}</p>
-
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#1e2028] text-[10px]">
-                  <div>
-                    <span className="text-gray-500 block">Accuracy registrada (BD)</span>
-                    <span className="font-mono font-semibold text-white">
-                      {model.metrics_source === "database_record" && model.accuracy != null ? `${Number(model.accuracy).toFixed(1)}%` : "No disponible"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-gray-500 block">Checkpoint registrado</span>
-                    <span
-                      className="font-mono text-gray-300 truncate block"
-                      title={model.recorded_checkpoint || "No disponible"}
-                    >
-                      {model.recorded_checkpoint || "No disponible"}
-                    </span>
-                  </div>
-                </div>
-                <p className="text-[10px] text-gray-400 truncate" title={model.loaded_checkpoint || "No disponible"}>Checkpoint cargado: {model.loaded_checkpoint || "No disponible"}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-      ) : (
+      {/* Especificaciones del modelo o ensamble seleccionado */}
         <div className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#23252e]">
             <div className="flex items-center gap-2.5">
@@ -1389,11 +1231,11 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
               <div>
                 <div className="flex items-center gap-2">
                   <h2 className="text-sm font-bold text-white">
-                    Especificaciones del Modelo Individual Seleccionado
+                    {isEnsemble ? "Especificaciones del Ensamble Seleccionado" : "Especificaciones del Modelo Individual Seleccionado"}
                   </h2>
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-950/80 border border-blue-800/80 text-blue-400 flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-                    Modelo Autónomo Standalone
+                    {isEnsemble ? "Ensamble declarado en la instalación" : "Modelo Autónomo Standalone"}
                   </span>
                 </div>
                 <p className="text-[11px] text-gray-400 mt-0.5">
@@ -1446,7 +1288,6 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
 
           </div>
         </div>
-      )}
 
       {/* Fila 1: Modelo seleccionado + Cargar Audio */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

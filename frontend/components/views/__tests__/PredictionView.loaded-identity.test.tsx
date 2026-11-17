@@ -89,7 +89,6 @@ beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.includes("/api/models")) return catalogueResponse(models);
-    if (url.includes("/api/model-info")) return new Response(null, { status: 503 });
     if (url.includes("/api/predict")) return predict();
     throw new Error(`HTTP no previsto: ${url}`);
   }));

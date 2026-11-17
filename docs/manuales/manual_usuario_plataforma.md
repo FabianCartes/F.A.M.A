@@ -472,19 +472,14 @@ No se efectuaron despliegue, reset, migración, cambios GCS ni entrenamiento rea
 Las verificaciones de almacenamiento y reparación histórica continúan separadas y requieren su propia autorización.
 La decisión y sus alternativas están en el [ADR 0017](../adr/0017-disponibilidad-y-activacion-modelos.md).
 
-#### 6.1.4. Estado legacy y atribución de la respuesta
+#### 6.1.4. Atribución de la respuesta
 
-GET `/api/model-info` es lectura pasiva del servicio bioacústico legacy: no deserializa pesos ni prueba inferencia. No existe `/api/ensemble/status` y no se añade otra ruta. `state_scope`/`domain_supported` evitan atribuir su estado a un predictor industrial o a otro modelo del catálogo.
+`GET /api/model-info` y el Super-Ensamble fijo que describía se retiraron el 17 de noviembre de 2026 ([ADR 0083](../adr/0083-retiro-del-super-ensamble-fijo.md)); la ruta responde 404. Predicción describe el modelo, la tríada o el ensamble declarado seleccionado con los datos de `GET /api/models`. La disponibilidad del selector sigue exigiendo `has_weights=true`, con revalidación posterior en POST.
 
-- **Registro:** `is_registered` true/false/null describe la consulta de una fila enlazada al dataset/arquitectura; no se toma texto de clase como asociación ni se presta una fila de otro dominio. Accuracy/loss son de ese registro BD, no del objeto cargado.
-- **Archivo:** `weights_available` describe archivo local no vacío dentro de raíces admitidas, sin validar contenido. `weights_source` identifica la referencia consultada. Remoto, ruta no cubierta o error no se convierten en ausencia confirmada.
-- **Carga:** `is_loaded` observa módulos en memoria del servicio. El alias legado `is_ready` y `ensemble_ready` solo resumen esa carga, no operatividad, calidad, activación o vigencia de versiones. Dos componentes son ensamble parcial. Un flag fallback sin módulo no prueba respaldo disponible.
-- **Procedencia:** `recorded_checkpoint`/`loaded_checkpoint` separan archivos potencialmente distintos. Las clases llevan fuente y pueden ser referencias/listados/cachés no verificados; no sustituyen validación del contrato completo ni orden de etiquetas.
-- **Vista:** sin estado de ámbito/dominio coincidente, no se inventan tarjetas. Presencia, registro y carga se muestran separados; un fallback legacy observado no se atribuye al predictor seleccionado. La disponibilidad del selector sigue exigiendo `has_weights=true`, con revalidación posterior en POST.
 - **Ejecución:** la respuesta de predicción identifica al predictor invocado por `modelo_id`, `modelo` y `modelos_ejecutados`. `modelos_activos` es alias de compatibilidad, no lista de componentes con ponderaciones ni activación. Puede haber retorno de filtros antes de la red: invocación no prueba forward. El rol fallback no se elimina por `is_mock=false`.
 - **Tiempo:** «Última solicitud» empieza sin medición y luego usa el contador HTTP existente hasta recibir respuesta; no incluye necesariamente lectura JSON/render ni acredita ≤3 s hasta pantalla. No se reutilizan 0.14 s o cifras de benchmark como placeholder.
 
-Clientes anteriores deben manejar null, pesos desconocidos y modos unavailable/partial_ensemble, y no interpretar aliases legados como salud global. Concurrencia/reload atómico, identidad por versión/hash y parser exhaustivo siguen pendientes. Véase [ADR 0051](../adr/0051-estado-legacy-pasivo-y-ejecucion-atribuida.md).
+Concurrencia/reload atómico, identidad por versión/hash y parser exhaustivo siguen pendientes. Véase [ADR 0051](../adr/0051-estado-legacy-pasivo-y-ejecucion-atribuida.md) para la atribución de la ejecución.
 
 ### 6.2. Inspección Acústica con Oscilograma Interactivo
 Al arrastrar o seleccionar un archivo de audio:

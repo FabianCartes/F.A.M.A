@@ -57,7 +57,6 @@ def test_lifespan_prewarm_precedes_readiness(catalogue, monkeypatch, policy):
     _, registry, _, engine = catalogue
     events = []
     monkeypatch.setattr(main, "_APP_STARTUP_POLICY", policy)
-    monkeypatch.setattr(main.ensemble_service, "load_models", lambda: events.append("ensemble"))
     monkeypatch.setattr(auth, "seed_initial_admin", lambda db: events.append("seed"))
     monkeypatch.setattr(database, "SessionLocal", lambda: Session(engine))
     monkeypatch.setattr(main, "initialize_model_registry", lambda **kwargs: registry, raising=False)
@@ -76,7 +75,7 @@ def test_lifespan_prewarm_precedes_readiness(catalogue, monkeypatch, policy):
             events.append("ready")
     asyncio.run(run())
     assert events == (["warm", "ready"] if policy == "isolated" else
-                      ["ensemble", "warm", "worker", "ready", "stop"])
+                      ["warm", "worker", "ready", "stop"])
 
 
 @pytest.mark.parametrize("metadata_only", [True, False])
@@ -108,7 +107,6 @@ def test_prewarm_failure_is_sanitized_and_readiness_continues(catalogue, monkeyp
     from app import database
     _, registry, _, engine = catalogue
     monkeypatch.setattr(main, "_APP_STARTUP_POLICY", policy)
-    monkeypatch.setattr(main.ensemble_service, "load_models", lambda: None)
     monkeypatch.setattr(database, "SessionLocal", lambda: Session(engine))
     monkeypatch.setattr(main, "initialize_model_registry", lambda **kwargs: registry, raising=False)
     monkeypatch.setattr(main, "get_model_registry", lambda: registry)

@@ -21,7 +21,6 @@ async function preparePrediction({ classes = ['alarm', 'normal'], dbId = 201, da
   const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit): Promise<Response> => {
     const url = String(input);
     if (url.includes('/api/models')) return { ok: true, json: async () => ({ models: mockModels.map(m => m.id === 'machine-model' ? { ...m, classes } : m) }) } as Response;
-    if (url.includes('/api/model-info')) return { ok: false } as Response;
     if (url.includes('/api/predict')) return predictionResponse();
     if (url.endsWith('/api/feedback')) return feedbackResponse();
     throw new Error(`Unexpected URL ${url} ${options?.method}`);
@@ -339,58 +338,23 @@ describe('PredictionView validation and responsive controls', () => {
     expect(screen.queryByText(/Super-Ensamble Activo/)).toBeNull();
     expect(screen.queryAllByText(/88\.68%|88\.31%|81\.44%/)).toHaveLength(0);
     expect(screen.queryByText(/Tiempo total de solicitud:/)).toBeNull();
-    expect(screen.getByText('Estado del servicio legacy no disponible para esta selección.')).toBeDefined();
     expect(within(modelOptions()).getByRole('option', { name: mockModels[0].name })).toBeDefined();
   });
 
-  it('renders registration, local availability and observed load as separate facts', async () => {
-    const status = { state_scope: 'legacy_bioacoustic_service', domain_supported: true, selected_domain: 'AvesChilenas',
-      device: 'cpu', active_mode: 'individual', ensemble_ready: false, is_fallback: false,
-      model_name: 'ConvNeXt-Nano (Modo Individual)', active_models: [], total_classes: 2, classes: ['Chucao', 'Rayadito'],
-      triad_status: [
-        { name: 'EfficientNet-B0', weight: null, is_ready: false, is_loaded: false, is_registered: true,
-          weights_available: false, weights_source: 'registered_reference', accuracy: 0, loss: 0,
-          recorded_checkpoint: 'registered.pt', loaded_checkpoint: null, metrics_source: 'database_record' },
-        { name: 'ConvNeXt-Nano', weight: 1, is_ready: true, is_loaded: true, is_registered: true,
-          weights_available: true, weights_source: 'loaded_checkpoint_file', accuracy: null, loss: null,
-          recorded_checkpoint: 'different.pt', loaded_checkpoint: 'loaded.pt', metrics_source: 'database_record' },
-        { name: 'ResNet-34d', weight: null, is_ready: false, is_loaded: false, is_registered: null,
-          weights_available: null, accuracy: null, loss: null, recorded_checkpoint: null, loaded_checkpoint: null },
-      ] };
-    global.fetch = vi.fn(async input => ({ ok: true, json: async () => String(input).includes('/api/models')
-      ? { models: mockModels } : status }) as Response);
+  it('describes a declared ensemble from the catalogue and never queries the retired legacy status', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ models: mockModels }) }) as Response);
+    global.fetch = fetchMock;
 
     await act(async () => { render(<PredictionView />); });
 
-    const state = within(screen.getByRole('region', { name: 'Estado del ensamble legacy' }));
-    const registered = within(state.getByRole('article', { name: 'EfficientNet-B0' }));
-    expect(registered.getByText('Registro BD: Registrado')).toBeDefined();
-    expect(registered.getByText('Archivo local: Ausente')).toBeDefined();
-    expect(registered.getByText('No cargado')).toBeDefined();
-    expect(registered.getByText('0.0%')).toBeDefined();
-    expect(registered.getByText('registered.pt')).toBeDefined();
-    const loaded = within(state.getByRole('article', { name: 'ConvNeXt-Nano' }));
-    expect(loaded.getByText('Cargado en memoria')).toBeDefined();
-    expect(loaded.getByText('Peso cargado: 100%')).toBeDefined();
-    expect(loaded.getByText('different.pt')).toBeDefined();
-    expect(loaded.getByText('Checkpoint cargado: loaded.pt')).toBeDefined();
-    expect(screen.queryByText(/Entrenado y Operativo|Tríada Completa Habilitada/)).toBeNull();
-  });
-
-  it('does not fabricate industrial components when the legacy service does not cover that domain', async () => {
-    const engine = { ...mockModels[2], id: 'car-engine-diagnostics-super-ensemble', name: 'Engine ensemble' };
-    global.fetch = vi.fn(async input => ({ ok: true, json: async () => String(input).includes('/api/models')
-      ? { models: [...mockModels, engine] }
-      : { state_scope: 'legacy_bioacoustic_service', domain_supported: false, selected_domain: 'engine_diagnostics',
-          triad_status: [], active_models: [], classes: [], total_classes: 0, model_name: null, device: 'cpu', is_fallback: false } }) as Response);
-    await act(async () => { render(<PredictionView />); });
-
-    await chooseModel(engine.name);
-
-    expect(screen.getByText('Estado del servicio legacy no disponible para esta selección.')).toBeDefined();
-    expect(screen.queryAllByText('Entrenado y Operativo')).toHaveLength(0);
-    expect(screen.queryByText('Peso cargado: 40%')).toBeNull();
-    expect(within(modelOptions()).getByRole('option', { name: engine.name })).toBeDefined();
+    expect(screen.getByText('Especificaciones del Ensamble Seleccionado')).toBeDefined();
+    expect(screen.getByText('Ensamble declarado en la instalación')).toBeDefined();
+    expect(screen.queryByRole('region', { name: 'Estado del ensamble legacy' })).toBeNull();
+    expect(screen.queryByText(/servicio legacy|servicio bioacústico legacy/)).toBeNull();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/api/model-info'))).toBe(false);
+    await chooseModel(mockModels[1].name);
+    expect(screen.getByText('Especificaciones del Modelo Individual Seleccionado')).toBeDefined();
+    expect(screen.getByText('Modelo Autónomo Standalone')).toBeDefined();
   });
 
   it('uses the execution list rather than unrelated legacy active-component labels', async () => {
@@ -426,22 +390,6 @@ describe('PredictionView validation and responsive controls', () => {
     expect((screen.getByRole('button', { name: /Ejecutar inferencia/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it('reports an observed legacy fallback without attributing it to the selected predictor', async () => {
-    const status = { state_scope: 'legacy_bioacoustic_service', domain_supported: true, selected_domain: 'AvesChilenas',
-      device: 'cpu', active_mode: 'fallback', ensemble_ready: false, is_fallback: true, model_name: 'AudioCNN (Fallback)',
-      active_models: [{ name: 'AudioCNN', weight: 1, checkpoint: 'augmented_best.pt' }], total_classes: 2,
-      classes: ['Chucao', 'Rayadito'], triad_status: ['EfficientNet-B0', 'ConvNeXt-Nano', 'ResNet-34d'].map(name => ({
-        name, weight: null, is_ready: false, is_loaded: false, is_registered: false, weights_available: false,
-        accuracy: null, loss: null, checkpoint: null, updated_at: null })) };
-    global.fetch = vi.fn(async input => ({ ok: true, json: async () => String(input).includes('/api/models')
-      ? { models: mockModels } : status }) as Response);
-
-    await act(async () => { render(<PredictionView />); });
-
-    expect(screen.getByText(/Fallback cargado en el servicio legacy: AudioCNN/)).toBeDefined();
-    expect(screen.getByText(/No confirma uso por el predictor seleccionado/)).toBeDefined();
-    expect(screen.queryAllByText('Entrenado y Operativo')).toHaveLength(0);
-  });
 });
 
 // Independent U7 / S4 baseline-preservation regression.

@@ -56,7 +56,6 @@ from training.paths import get_raw_data_dir,get_processed_data_dir,get_checkpoin
 from app.services.ingestion import IngestionService
 from app.services.training import TrainingService
 from app.services.feedback import FeedbackService
-from app.main import SuperEnsembleService
 from app.services.predictors.ensemble_predictor import ChileanBirdsEnsemblePredictor
 from app.services.predictors.engine_ensemble_predictor import EngineEnsemblePredictor
 birds=ChileanBirdsEnsemblePredictor()
@@ -65,7 +64,6 @@ print(json.dumps({'raw':str(get_raw_data_dir()),'processed':str(get_processed_da
  'prepared':str(get_prepared_data_dir('gatos y perros')),'prepared_read':str(get_training_prepared_read_dir('gatos y perros')),
  'checkpoints':str(get_checkpoints_dir()),'ingestion':str(IngestionService().local_base_dir),
  'training':str(TrainingService().checkpoints_dir),'feedback':str(FeedbackService().raw_data_dir),
- 'ensemble':str(SuperEnsembleService().checkpoints_dir),
  'predictor_paths':[str(p) for p in birds.checkpoint_paths+list(engines.checkpoint_paths.values())]}))
 '''
     environment = {key: value for key, value in os.environ.items()
@@ -84,7 +82,6 @@ print(json.dumps({'raw':str(get_raw_data_dir()),'processed':str(get_processed_da
         'prepared_read': str(target / 'data/prepared/gatos y perros'),
         'checkpoints': str(target / 'checkpoints'), 'ingestion': str(target / 'data/raw'),
         'training': str(target / 'checkpoints'), 'feedback': str(target / 'data/raw'),
-        'ensemble': str(target / 'checkpoints'),
     }
 
 
@@ -126,37 +123,6 @@ def test_two_nodes_cannot_use_the_same_root_at_the_same_time(tmp_path):
         os.environ.clear()
         os.environ.update(previous_environment)
         activate_configuration(previous)
-
-
-def test_managed_node_does_not_discover_a_weight_from_the_old_repository(tmp_path):
-    selected = configured_node(tmp_path)
-    target = tmp_path / 'persistent'
-    assert node('--config-dir', selected, 'runtime', '--directory', target).returncode == 0
-    # Real module under another source tree; the only old checkpoint is synthetic test data.
-    copied = tmp_path / 'old-project/backend/app/main.py'
-    copied.parent.mkdir(parents=True)
-    shutil.copy2(Path(__file__).resolve().parents[1] / 'app/main.py', copied)
-    old_weights = tmp_path / 'old-project/checkpoints'
-    old_weights.mkdir()
-    (old_weights / 'efficientnet_gpu_pipeline_35e_best.pt').write_bytes(b'not an environment weight')
-    program = '''
-import importlib.util,json,sys
-from app.configuration import activate_configuration,load_configuration
-activate_configuration(load_configuration({'FAMA_CONFIG_DIR':sys.argv[1]}),replace_environment=True)
-spec=importlib.util.spec_from_file_location('isolated_operational',sys.argv[2])
-module=importlib.util.module_from_spec(spec)
-sys.modules[spec.name]=module
-spec.loader.exec_module(module)
-print(json.dumps(module.SuperEnsembleService().get_status()['triad_status']))
-'''
-    environment = {key: value for key, value in os.environ.items()
-                   if key.upper() in {'PATH','SYSTEMROOT','TEMP','TMP'}}
-    environment['PYTHON_DOTENV_DISABLED'] = '1'
-    result = subprocess.run([sys.executable, '-c', program, str(selected), str(copied)],
-                            cwd=Path(__file__).resolve().parents[1], env=environment,
-                            capture_output=True, text=True, timeout=180)
-    assert result.returncode == 0, result.stderr
-    assert all(item['weights_available'] is False for item in json.loads(result.stdout.splitlines()[-1]))
 
 
 def test_windows_launcher_validates_selected_paths_without_starting_servers(tmp_path):
