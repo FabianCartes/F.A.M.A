@@ -275,6 +275,35 @@ def test_publication_requires_explicit_reevaluation_for_other_contracts(isolated
     assert not registry.has_model("fama_trained_model_75")
 
 
+@pytest.mark.parametrize("evaluated, running", [("2.14.0+cpu", "2.14.0+cu130"), ("2.14.0+cu130", "2.14.0"),
+                                                 ("2.14.0", "2.14.0+cpu")])
+def test_publication_ignores_the_torch_local_build_suffix(isolated_db, monkeypatch, evaluated, running):
+    from app.services import standard_evaluation_guard
+
+    db, checkpoints = isolated_db
+    monkeypatch.setattr(standard_evaluation_guard.torch, "__version__", evaluated)
+    model = seed_standard_model(db, checkpoints, 79)
+    monkeypatch.setattr(standard_evaluation_guard.torch, "__version__", running)
+    registry = ModelRegistry()
+    assert registry.publish_from_db(db, checkpoints_root=checkpoints) == []
+    assert registry.has_model(f"fama_trained_model_{model.id_modelo}")
+
+
+def test_publication_still_requires_reevaluation_for_another_torch_release(isolated_db, monkeypatch):
+    from app.services import standard_evaluation_guard
+
+    db, checkpoints = isolated_db
+    monkeypatch.setattr(standard_evaluation_guard.torch, "__version__", "2.14.0+cpu")
+    seed_standard_model(db, checkpoints, 80)
+    monkeypatch.setattr(standard_evaluation_guard.torch, "__version__", "2.15.0+cpu")
+    registry = ModelRegistry()
+    assert registry.publish_from_db(db, checkpoints_root=checkpoints) == [{
+        "model_id": "fama_trained_model_80", "code": "standard_evaluation_invalid",
+        "reason": "runtime_configuration_incompatible",
+    }]
+    assert not registry.has_model("fama_trained_model_80")
+
+
 def test_publication_requires_reevaluation_after_semantic_contract_change(isolated_db, monkeypatch):
     from app.services import standard_evaluation_guard
 

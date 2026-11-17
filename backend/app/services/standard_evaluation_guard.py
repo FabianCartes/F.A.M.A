@@ -297,6 +297,15 @@ def _json_matches(actual, expected) -> bool:
         expected, sort_keys=True, separators=(",", ":"), allow_nan=False)
 
 
+def _without_torch_build(config: dict) -> dict:
+    """Compare torch by release only: the local build label (``+cpu``, ``+cu130``) does not
+    change the predictor contract. Stored reports keep the full version as provenance."""
+    versions = config.get("runtime_versions")
+    if type(versions) is not dict or type(versions.get("torch")) is not str:
+        return config
+    return {**config, "runtime_versions": {**versions, "torch": versions["torch"].split("+", 1)[0]}}
+
+
 def _effective_predictor_config_matches(actual, expected) -> bool:
     if type(actual) is not dict:
         return False
@@ -305,7 +314,7 @@ def _effective_predictor_config_matches(actual, expected) -> bool:
     expected = dict(expected)
     effective.pop("implementation_provenance", None)
     expected.pop("implementation_provenance", None)
-    return _json_matches(effective, expected)
+    return _json_matches(_without_torch_build(effective), _without_torch_build(expected))
 
 
 def require_standard_reports(target, db, checkpoints_root: Path) -> None:
