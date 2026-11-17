@@ -124,6 +124,9 @@ const ARCHITECTURE_PRESETS: Record<
   },
 };
 
+// Intervalo de refresco de la telemetría de hardware durante un entrenamiento.
+const HARDWARE_POLL_MS = 3000;
+
 export default function TrainingView() {
   const mounted = useRef(true);
   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
@@ -765,6 +768,22 @@ export default function TrainingView() {
     }
   }, []);
 
+
+  // Refrescar la telemetría mientras se entrena, sin solapar solicitudes
+  useEffect(() => {
+    if (!isTraining) return;
+    let inFlight = false;
+    const timer = setInterval(async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        await fetchHardware();
+      } finally {
+        inFlight = false;
+      }
+    }, HARDWARE_POLL_MS);
+    return () => clearInterval(timer);
+  }, [isTraining, fetchHardware]);
 
   // Cargar historial de modelos desde PostgreSQL
   const fetchHistory = useCallback(async () => {

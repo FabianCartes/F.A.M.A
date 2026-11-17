@@ -43,7 +43,7 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
 
   it("shows no progress error when the backend reports no own training visible", async () => {
     const existing = vi.mocked(global.fetch).getMockImplementation()!;
-    vi.mocked(global.fetch).mockImplementation(async (input: any, options?: any) => {
+    vi.mocked(global.fetch).mockImplementation(async (input: RequestInfo | URL, options?: RequestInit) => {
       if (String(input).includes("/api/training/progress")) {
         return {ok: true, json: async () => ({
           status: "idle", job_id: null, seed: 42, is_tri_model: false, current_model_index: 1, total_models: 1,
@@ -51,7 +51,7 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
           composition_model_id: null, composition_sha256: null, current_phase: "training", epoch: 0,
           total_epochs: 0, train_loss: 0, val_loss: 0, train_acc: 0, val_acc: 0, metrics_history: [],
           logs: [], elapsed_seconds: 0, error_message: null,
-        })} as any;
+        })} as unknown as Response;
       }
       return existing(input, options);
     });
@@ -331,6 +331,58 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
       expect(screen.getByText("Época 1 de 1")).toBeDefined();
       expect(screen.getByText("Punto 1/1")).toBeDefined();
       expect(screen.queryByText("Punto 1/10")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("refreshes hardware telemetry while training runs and stops once it ends", async () => {
+    const defaultFetch = global.fetch;
+    let status = "training";
+    let vramUsed = 1;
+    global.fetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.includes("/api/training/progress")) {
+        return { ok: true, json: async () => ({ status, epoch: 1, total_epochs: 5, logs: [] }) };
+      }
+      if (url.includes("/api/training/hardware")) {
+        return { ok: true, json: async () => ({
+          cuda_available: true, device_name: "NVIDIA RTX 4090", vram_total_gb: 24,
+          vram_used_gb: vramUsed, vram_percent: 5, status: "ready",
+        }) };
+      }
+      return defaultFetch(url, init);
+    });
+    const hardwareCalls = () => vi.mocked(global.fetch).mock.calls
+      .filter(([url]) => String(url).includes("/api/training/hardware")).length;
+    vi.useFakeTimers();
+    try {
+      await act(async () => { render(<TrainingView />); });
+      expect(screen.getByText(/1 \/ 24 GB/)).toBeDefined();
+      const afterInit = hardwareCalls();
+      vramUsed = 2;
+      await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+      expect(hardwareCalls()).toBeGreaterThan(afterInit);
+      expect(screen.getByText(/2 \/ 24 GB/)).toBeDefined();
+
+      status = "completed";
+      await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+      const afterEnd = hardwareCalls();
+      await act(async () => { await vi.advanceTimersByTimeAsync(15000); });
+      expect(hardwareCalls()).toBe(afterEnd);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not poll hardware telemetry while idle", async () => {
+    vi.useFakeTimers();
+    try {
+      await act(async () => { render(<TrainingView />); });
+      const count = () => vi.mocked(global.fetch).mock.calls
+        .filter(([url]) => String(url).includes("/api/training/hardware")).length;
+      expect(count()).toBe(1);
+      await act(async () => { await vi.advanceTimersByTimeAsync(15000); });
+      expect(count()).toBe(1);
     } finally {
       vi.useRealTimers();
     }
