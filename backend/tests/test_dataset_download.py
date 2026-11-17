@@ -25,11 +25,16 @@ class FakeService:
         self.calls = []
         self.fail_with = None
         self.results = {}
+        self.progress = None
+
+    def report_phase(self, phase):
+        self.progress({"total": 4, "downloaded": 1, "skipped": 0, "failed": 0, "phase": phase})
 
     def sync_dataset_to_local(self, name, preprocess=False, db=None, progress=None):
         self.calls.append((name, preprocess, db))
+        self.progress = progress
         if progress:
-            progress({"total": 4, "downloaded": 1, "skipped": 0, "failed": 0})
+            progress({"total": 4, "downloaded": 1, "skipped": 0, "failed": 0, "phase": "files"})
             self.reported.set()
         assert self.release.wait(5)
         if self.fail_with:
@@ -65,6 +70,20 @@ def test_running_operation_reports_downloaded_and_total_while_it_runs():
     assert snapshot["datasets"] == ["AvesChilenas"]
     assert (snapshot["downloaded"], snapshot["total"], snapshot["processed"]) == (1, 4, 1)
     assert snapshot["result"] is None
+    service.release.set()
+
+
+def test_snapshot_exposes_the_phase_reported_by_the_service():
+    downloads, service = DatasetDownloads(), FakeService()
+    operation = start(downloads, service)
+    assert service.reported.wait(5)
+    assert downloads.snapshot(operation["operation_id"])["phase"] == "files"
+
+    service.report_phase("database")
+
+    snapshot = downloads.snapshot(operation["operation_id"])
+    assert snapshot["phase"] == "database"
+    assert (snapshot["downloaded"], snapshot["total"]) == (1, 4)
     service.release.set()
 
 

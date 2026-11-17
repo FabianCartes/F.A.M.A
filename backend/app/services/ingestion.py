@@ -672,8 +672,10 @@ class IngestionService:
         RF_02: omite únicamente contenido confirmado mediante checksum del proveedor.
         RF_03: Si preprocess=True, extrae tensores matemáticos y espectrogramas Mel.
         Persistencia: Si db es provisto, sincroniza 'conjunto_datos' y 'audio' en PostgreSQL.
-        Progreso: si progress es provisto, se invoca con {total, downloaded, skipped, failed}
-        antes de cada objeto y al terminar la transferencia; su fallo no la interrumpe.
+        Progreso: si progress es provisto, se invoca con {total, downloaded, skipped, failed, phase}
+        antes de cada objeto y al terminar la transferencia; su fallo no la interrumpe. La fase es
+        "files" durante la transferencia, "preprocessing" durante el preprocesamiento y
+        "database" mientras se registran los audios en la base de datos.
         """
         self.validate_dataset_names([dataset_name])
         client = self._get_client()
@@ -701,13 +703,14 @@ class IngestionService:
         skipped = 0
         failed = 0
         processed_files = []
+        phase = "files"
 
         def report():
             if progress is None:
                 return
             try:
                 progress({"total": len(candidates), "downloaded": downloaded,
-                          "skipped": skipped, "failed": failed})
+                          "skipped": skipped, "failed": failed, "phase": phase})
             except Exception:
                 pass  # Progress is advisory; it never aborts a transfer.
 
@@ -812,6 +815,8 @@ class IngestionService:
         preprocessed_count = 0
         prep_info = None
         if preprocess and downloaded + skipped > 0:
+            phase = "preprocessing"
+            report()
             prep_info = self.preprocess_dataset_to_tensors(dataset_name)
             preprocessed_count = prep_info.get("processed", 0)
 
@@ -820,6 +825,8 @@ class IngestionService:
         db_error = None
         hash_conflicts: List[str] = []
         if db is not None:
+            phase = "database"
+            report()
             try:
                 from app.models.dataset import ConjuntoDatos, Audio
                 from sqlalchemy import func
@@ -852,61 +859,66 @@ class IngestionService:
                     ds.ruta_gcp = gcp_path
                     db.flush()
 
-                for f in accepted_files:
-                    fname = f.get("filename")
-                    cname = f.get("class_name", "General")
-                    fsize = f.get("size", 0)
-                    object_route = f"gs://{self.bucket_name}/{f['object_key']}"
-                    local_path = self._filesystem_path(target_base_dir / Path(f["object_key"][len(prefix):]))
-                    sample_rate, duration = self._read_audio_metadata(local_path)
-                    try:
-                        local_hash = sha256_file(local_path)
-                    except OSError:
-                        local_hash = None
-                    audio_obj = (
-                        db.query(Audio)
-                        .filter_by(id_conjunto_datos=ds.id_conjunto_datos, ruta_gcp=object_route)
-                        .first()
-                    )
-                    if audio_obj is None and f["object_key"] == prefix + fname:
-                        legacy_key = prefix + "General/" + fname
-                        # A real General object owns its row, regardless of listing order.
-                        if legacy_key not in object_keys:
-                            legacy_rows = db.query(Audio).filter_by(
+                # One query loads every row of the dataset; each file is then resolved in
+                # memory so the statement count never grows with the number of audios.
+                rows_by_route: Dict[str, List[Any]] = {}
+                for row in db.query(Audio).filter_by(id_conjunto_datos=ds.id_conjunto_datos).all():
+                    rows_by_route.setdefault(row.ruta_gcp, []).append(row)
+
+                with db.no_autoflush:
+                    for f in accepted_files:
+                        fname = f.get("filename")
+                        cname = f.get("class_name", "General")
+                        fsize = f.get("size", 0)
+                        object_route = f"gs://{self.bucket_name}/{f['object_key']}"
+                        local_path = self._filesystem_path(target_base_dir / Path(f["object_key"][len(prefix):]))
+                        sample_rate, duration = self._read_audio_metadata(local_path)
+                        try:
+                            local_hash = sha256_file(local_path)
+                        except OSError:
+                            local_hash = None
+                        existing = rows_by_route.get(object_route)
+                        audio_obj = existing[0] if existing else None
+                        if audio_obj is None and f["object_key"] == prefix + fname:
+                            legacy_key = prefix + "General/" + fname
+                            legacy_route = f"gs://{self.bucket_name}/{legacy_key}"
+                            # A real General object owns its row, regardless of listing order.
+                            if legacy_key not in object_keys:
+                                legacy_rows = rows_by_route.get(legacy_route, [])
+                                if legacy_rows:
+                                    if (len(legacy_rows) != 1
+                                            or legacy_rows[0].clase != "General"
+                                            or legacy_rows[0].nombre_archivo != fname):
+                                        raise ValueError("Ambiguous legacy flat object identity")
+                                    audio_obj = legacy_rows[0]
+                                    audio_obj.ruta_gcp = object_route
+                                    del rows_by_route[legacy_route]
+                                    rows_by_route.setdefault(object_route, []).append(audio_obj)
+                        if audio_obj is None:
+                            audio_obj = Audio(
                                 id_conjunto_datos=ds.id_conjunto_datos,
-                                ruta_gcp=f"gs://{self.bucket_name}/{legacy_key}",
-                            ).all()
-                            if legacy_rows:
-                                if (len(legacy_rows) != 1
-                                        or legacy_rows[0].clase != "General"
-                                        or legacy_rows[0].nombre_archivo != fname):
-                                    raise ValueError("Ambiguous legacy flat object identity")
-                                audio_obj = legacy_rows[0]
-                                audio_obj.ruta_gcp = object_route
-                    if audio_obj is None:
-                        audio_obj = Audio(
-                            id_conjunto_datos=ds.id_conjunto_datos,
-                            nombre_archivo=fname,
-                            ruta_gcp=object_route,
-                            clase=cname,
-                            frecuencia_muestreo=sample_rate,
-                            duracion_segundos=duration,
-                            tamano_bytes=fsize,
-                            hash_archivo=local_hash,
-                        )
-                        db.add(audio_obj)
-                    else:
-                        if local_hash is not None:
-                            if audio_obj.hash_archivo is None:
-                                audio_obj.hash_archivo = local_hash
-                            elif audio_obj.hash_archivo != local_hash:
-                                # Keep the stored value; surface the conflict to the caller.
-                                hash_conflicts.append(fname)
-                        audio_obj.clase = cname
-                        audio_obj.frecuencia_muestreo = sample_rate
-                        audio_obj.duracion_segundos = duration
-                        if fsize > 0:
-                            audio_obj.tamano_bytes = fsize
+                                nombre_archivo=fname,
+                                ruta_gcp=object_route,
+                                clase=cname,
+                                frecuencia_muestreo=sample_rate,
+                                duracion_segundos=duration,
+                                tamano_bytes=fsize,
+                                hash_archivo=local_hash,
+                            )
+                            db.add(audio_obj)
+                            rows_by_route.setdefault(object_route, []).append(audio_obj)
+                        else:
+                            if local_hash is not None:
+                                if audio_obj.hash_archivo is None:
+                                    audio_obj.hash_archivo = local_hash
+                                elif audio_obj.hash_archivo != local_hash:
+                                    # Keep the stored value; surface the conflict to the caller.
+                                    hash_conflicts.append(fname)
+                            audio_obj.clase = cname
+                            audio_obj.frecuencia_muestreo = sample_rate
+                            audio_obj.duracion_segundos = duration
+                            if fsize > 0:
+                                audio_obj.tamano_bytes = fsize
 
                 # Failures do not erase previously accepted rows or their counters.
                 db.flush()

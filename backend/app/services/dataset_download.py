@@ -63,6 +63,7 @@ class _Operation:
         self.preprocess = preprocess
         self.state = "running"
         self.current: Optional[str] = None
+        self.phase = "files"
         self.counts: Dict[str, Dict[str, int]] = {}
         self.results: List[Dict[str, Any]] = []
         self.result: Optional[Dict[str, Any]] = None
@@ -82,6 +83,7 @@ class _Operation:
             "downloaded": downloaded,
             "skipped": skipped,
             "failed": failed,
+            "phase": self.phase,
             "processed": downloaded + skipped + failed,
             "total": total("total"),
             "started_at": self.started_at,
@@ -140,11 +142,13 @@ class DatasetDownloads:
             for name in operation.datasets:
                 with self._lock:
                     operation.current = name
+                    operation.phase = "files"
                     operation.counts.setdefault(name, {"total": 0, "downloaded": 0, "skipped": 0, "failed": 0})
 
                 def report(counts, name=name):
                     with self._lock:
                         operation.counts[name].update({key: int(counts.get(key, 0)) for key in operation.counts[name]})
+                        operation.phase = str(counts.get("phase", operation.phase))
 
                 with session_factory() as db:
                     result = service.sync_dataset_to_local(

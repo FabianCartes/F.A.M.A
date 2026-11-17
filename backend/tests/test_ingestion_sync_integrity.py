@@ -651,7 +651,59 @@ def test_progress_callback_reports_total_then_each_processed_file(sync_environme
     result = service.sync_dataset_to_local("AvesChilenas", progress=lambda counts: reports.append(dict(counts)))
 
     assert result["downloaded"] == 1 and result["skipped"] == 1 and result["failed"] == 1
-    assert reports[0] == {"total": 3, "downloaded": 0, "skipped": 0, "failed": 0}
-    assert reports[-1] == {"total": 3, "downloaded": 1, "skipped": 1, "failed": 1}
+    assert reports[0] == {"total": 3, "downloaded": 0, "skipped": 0, "failed": 0, "phase": "files"}
+    assert reports[-1] == {"total": 3, "downloaded": 1, "skipped": 1, "failed": 1, "phase": "files"}
     processed = [sum(r[key] for key in ("downloaded", "skipped", "failed")) for r in reports]
     assert processed == sorted(processed) and set(r["total"] for r in reports) == {3}
+
+
+def _select_count_for_present_files(tmp_path, monkeypatch, count):
+    from sqlalchemy import event
+    blobs = []
+
+    class ClientFixture:
+        def list_blobs(self, *args, **kwargs):
+            return list(blobs)
+
+    monkeypatch.setattr("google.cloud.storage.Client", ClientFixture)
+    service = IngestionService(bucket_name="fixture-bucket", local_base_dir=tmp_path / "raw",
+                               local_processed_dir=tmp_path / "processed")
+    folder = tmp_path / "raw" / "AvesChilenas" / "Chucao"
+    folder.mkdir(parents=True)
+    for index in range(count):
+        blobs.append(BlobFixture(b"AAAA", f"datasets/AvesChilenas/Chucao/audio{index}.wav"))
+        (folder / f"audio{index}.wav").write_bytes(b"AAAA")
+    engine, sessions = _hash_environment(service, monkeypatch)
+    statements = []
+    try:
+        with sessions() as db:
+            assert service.sync_dataset_to_local("AvesChilenas", db=db)["skipped"] == count
+            event.listen(engine, "before_cursor_execute",
+                         lambda conn, cur, statement, *rest: statements.append(statement))
+            result = service.sync_dataset_to_local("AvesChilenas", db=db)
+        assert result["db_persisted"] is True and result["skipped"] == count
+        return sum(1 for statement in statements if statement.lstrip().upper().startswith("SELECT"))
+    finally:
+        engine.dispose()
+
+
+def test_database_phase_select_count_does_not_grow_with_the_number_of_files(tmp_path, monkeypatch):
+    few = _select_count_for_present_files(tmp_path / "few", monkeypatch, 3)
+    many = _select_count_for_present_files(tmp_path / "many", monkeypatch, 30)
+    assert many == few
+
+
+def test_progress_reports_files_phase_then_database_phase(sync_environment, monkeypatch):
+    service, blobs, local = sync_environment
+    blobs.append(BlobFixture(b"AAAA"))
+    engine, sessions = _hash_environment(service, monkeypatch)
+    reports = []
+    try:
+        with sessions() as db:
+            service.sync_dataset_to_local("AvesChilenas", db=db, progress=lambda counts: reports.append(dict(counts)))
+    finally:
+        engine.dispose()
+    phases = [report["phase"] for report in reports]
+    assert phases[0] == "files" and phases[-1] == "database"
+    assert phases == sorted(phases, key=["files", "database"].index)
+    assert reports[-1]["total"] == 1 and reports[-1]["skipped"] + reports[-1]["downloaded"] == 1

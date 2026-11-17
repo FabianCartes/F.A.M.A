@@ -59,6 +59,8 @@ interface DownloadSnapshot {
   failed: number;
   processed: number;
   total: number;
+  /** Etapa de la descarga: transferencia, preprocesamiento o registro en la base de datos. */
+  phase?: "files" | "preprocessing" | "database";
   error: string | null;
   result: {
     status: string;
@@ -394,9 +396,11 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
   const showDownloadProgress = useCallback((snapshot: DownloadSnapshot) => {
     lastDownload.current = snapshot;
     const names = snapshot.datasets.map(id => downloadNames.current[id] ?? id).join(", ");
-    const progress = snapshot.total > 0
-      ? `Descargando ${snapshot.processed} / ${snapshot.total} audios.`
-      : "Preparando la lista de audios.";
+    const count = `${snapshot.processed} / ${snapshot.total} audios`;
+    const progress = snapshot.total <= 0 ? "Preparando la lista de audios."
+      : snapshot.phase === "database" ? `Registrando en la base de datos… ${count}.`
+      : snapshot.phase === "preprocessing" ? `Preprocesando audios… ${count}.`
+      : `Descargando ${count}.`;
     setTransferStatus({ message: `Descarga en curso · GCS → Local: ${names}. ${progress}`, error: false });
     setSyncProgress(previous => ({ ...previous, downloaded: snapshot.downloaded, skipped: snapshot.skipped,
       failed: snapshot.failed, total: snapshot.total }));

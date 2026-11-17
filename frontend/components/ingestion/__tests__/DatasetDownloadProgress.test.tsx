@@ -65,6 +65,16 @@ describe('background GCS to local download in the ingestion view', () => {
     expect(calls).toContain('POST /api/ingestion/sync/start');
   });
 
+  it('shows the database registration notice instead of a frozen count while the phase is database', async () => {
+    replies.poll = [{ body: { ...running(1220), phase: 'database' } }];
+    await open();
+    await startDownload();
+    await tick();
+    expect(screen.getByText(/Registrando en la base de datos… 1220 \/ 1220 audios/)).toBeDefined();
+    expect(screen.queryByText(/Descargando 1220 \/ 1220/)).toBeNull();
+    expect(refresh().hasAttribute('disabled')).toBe(true);
+  });
+
   it('shows the end notice, releases Actualizar and refreshes the counts when the operation ends', async () => {
     replies.poll = [{ body: running(340) }, { body: finished('completed') }];
     await open();
