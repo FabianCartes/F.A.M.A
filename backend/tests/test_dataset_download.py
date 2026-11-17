@@ -147,3 +147,19 @@ def test_summary_matches_the_synchronous_endpoint_semantics():
     assert summarize_results([clean])["status"] == "completed"
     assert summarize_results([{**clean, "db_error": "x"}])["status"] == "partial"
     assert summarize_results([{"downloaded": 0, "skipped": 0, "failed": 2, "preprocessed": 0}])["status"] == "failed"
+
+
+def test_a_thread_that_cannot_start_does_not_leave_the_dataset_locked(monkeypatch):
+    downloads, service = DatasetDownloads(), FakeService()
+
+    def refuse(self):
+        raise RuntimeError("can't start new thread")
+
+    monkeypatch.setattr(threading.Thread, "start", refuse)
+    with pytest.raises(RuntimeError):
+        start(downloads, service)
+    assert downloads.active() == []
+    monkeypatch.undo()
+    service.release.set()
+    retried = start(downloads, service)
+    assert retried["state"] == "running"

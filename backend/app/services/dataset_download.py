@@ -111,8 +111,13 @@ class DatasetDownloads:
             self._operations[operation.id] = operation
             self._prune()
             first = operation.snapshot()
-        threading.Thread(target=self._run, args=(operation, service, session_factory),
-                         name=f"dataset-download-{operation.id[:8]}", daemon=True).start()
+        try:
+            threading.Thread(target=self._run, args=(operation, service, session_factory),
+                             name=f"dataset-download-{operation.id[:8]}", daemon=True).start()
+        except Exception as error:
+            # Without a worker nobody would ever finish it: release the datasets now.
+            self._finish(operation, "failed", error=_error_message(error))
+            raise
         return first
 
     def snapshot(self, operation_id: str) -> Optional[Dict[str, Any]]:
