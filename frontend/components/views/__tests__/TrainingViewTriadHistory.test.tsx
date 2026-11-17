@@ -99,7 +99,7 @@ it("mantiene trabajos distintos y deja visibles grupos incompletos o inválidos"
   expect(screen.getByRole("row", { name: /Huérfano/ })).toBeDefined();
 });
 
-it("muestra detalles individuales, pesos actuales y sincroniza cada checkpoint desde la ficha conjunta", async () => {
+it("muestra en la ficha conjunta los detalles individuales y los pesos actuales", async () => {
   await setup(models, [composition]);
   const row = await screen.findByRole("row", { name: /Miembro 1.*Miembro 2.*Miembro 3/ });
   fireEvent.click(within(row).getByRole("button", { name: "Ficha Técnica" }));
@@ -112,10 +112,6 @@ it("muestra detalles individuales, pesos actuales y sincroniza cada checkpoint d
     expect(within(section).getByText("AdamW")).toBeDefined();
     expect(within(section).getByText("Pérdida (Loss):")).toBeDefined();
   }
-  const beta = sheet.getByRole("heading", { name: "Beta · métricas individuales" }).closest("section")!;
-  fireEvent.click(within(beta).getByRole("button", { name: "Sincronizar en GCS" }));
-  expect(await screen.findByRole("dialog", { name: "Checkpoint sincronizado" })).toBeDefined();
-  expect(vi.mocked(global.fetch).mock.calls.some(([url, options]) => String(url).includes("/models/2/checkpoint/sync") && options?.method === "POST")).toBe(true);
 });
 
 it("actualiza los grupos al recargar el historial", async () => {
@@ -189,7 +185,7 @@ it("conserva el título genérico de la ficha con un servidor que no envía el n
   expect(within(screen.getByTestId("modal-ficha-tecnica")).getByRole("heading", { name: "Ficha técnica de la tríada" })).toBeDefined();
 });
 
-it("sincroniza desde la fila los tres checkpoints de la tríada y conserva los botones de la ficha", async () => {
+it("sincroniza desde la fila los tres checkpoints de la tríada y no repite la acción en la ficha", async () => {
   await setup(models, [composition]);
   const row = await screen.findByRole("row", { name: /Miembro 1.*Miembro 2.*Miembro 3/ });
   expect(within(row).queryByText("Sincronizar en ficha técnica")).toBeNull();
@@ -202,8 +198,9 @@ it("sincroniza desde la fila los tres checkpoints de la tríada y conserva los b
   fireEvent.click(screen.getByRole("button", { name: "Cerrar" }));
   fireEvent.click(within(row).getByRole("button", { name: "Ficha Técnica" }));
   const sheet = within(screen.getByTestId("modal-ficha-tecnica"));
-  // The sheet still holds one GCS sync action per component checkpoint.
-  expect(sheet.getAllByRole("button", { name: /Sincronizar en GCS|Sincronizado/ })).toHaveLength(3);
+  // The row is the single sync action for a triad; the sheet only shows each component.
+  expect(sheet.getAllByRole("heading", { name: /métricas individuales/ })).toHaveLength(3);
+  expect(sheet.queryByRole("button", { name: /Sincronizar en GCS|Sincronizado|Descargar desde GCS/ })).toBeNull();
 });
 
 it("separa la columna Sincronizar de la columna Acción para modelos individuales y tríadas", async () => {

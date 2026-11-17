@@ -2845,7 +2845,8 @@ export default function TrainingView() {
               {(selectedGroup ? selectedGroup.members : [selectedModelModal]).map((original, index) => {
                 const selectedModelModal = original;
                 return <section key={original.id}>
-                {selectedGroup && <div className="flex items-center justify-between mb-3"><h3 className="text-white font-semibold">{original.architecture} · métricas individuales</h3><CheckpointSyncButton modelId={original.id} synced={checkpointSync.synced.has(original.id)} remoteOnly={checkpointSync.remoteOnly.has(original.id)} onSynced={action => { checkpointSync.markSynced(original.id); if (action === "restored") void fetchHistory(); }} /></div>}
+                {/* The triad row holds the single sync action for its three checkpoints. */}
+                {selectedGroup && <div className="mb-3"><h3 className="text-white font-semibold">{original.architecture} · métricas individuales</h3></div>}
               {/* 3 Tarjetas de Especificaciones */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
                 {/* 1) Hiperparámetros de Entrenamiento */}
