@@ -807,3 +807,24 @@ def test_failed_new_job_does_not_expose_previous_execution_snapshot(client, pers
     assert progress["models_config"] == []
     assert progress["train_acc"] == 0
     assert progress["val_acc"] == 0
+
+
+def test_progress_api_is_neutral_for_a_researcher_viewing_a_foreign_job(client):
+    """GET /api/training/progress answers 200 with idle and no foreign job data."""
+    from app.main import app, resource_access
+    from app.services.training import training_service
+    from types import SimpleNamespace
+    training_service.current_job_id = "foreign-job"
+    training_service.status = "training"
+    training_service._job_user_id = 1
+    training_service._job_dataset_name = "Secret"
+    training_service.logs = [{"message": "secret log"}]
+    app.dependency_overrides[resource_access] = lambda: SimpleNamespace(
+        user=SimpleNamespace(id=2), administrator=False, names={"Other"})
+    try:
+        response = client.get("/api/training/progress")
+    finally:
+        app.dependency_overrides.pop(resource_access, None)
+    assert response.status_code == 200
+    assert response.json()["status"] == "idle" and response.json()["job_id"] is None
+    assert "foreign-job" not in response.text and "secret" not in response.text.lower()

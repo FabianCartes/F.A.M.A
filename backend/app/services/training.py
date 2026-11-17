@@ -381,13 +381,31 @@ class TrainingService:
                 or self._job_dataset_name not in allowed_datasets):
             raise PermissionError("Job not owned or dataset no longer assigned")
 
+    @staticmethod
+    def _neutral_progress() -> Dict[str, Any]:
+        """Idle-shaped progress payload that carries nothing from any job."""
+        return {
+            "status": "idle", "job_id": None, "seed": 42, "is_tri_model": False,
+            "current_model_index": 1, "total_models": 1, "current_architecture": "",
+            "models_config": [], "component_results": [], "ensemble_available": False,
+            "composition_model_id": None, "composition_sha256": None, "current_phase": "training",
+            "epoch": 0, "total_epochs": 0, "train_loss": 0.0, "val_loss": 0.0,
+            "train_acc": 0.0, "val_acc": 0.0, "metrics_history": [], "logs": [],
+            "elapsed_seconds": 0.0, "error_message": None,
+        }
+
     def get_progress(self, *, user_id=None, administrator=False,
                      allowed_datasets=None) -> Dict[str, Any]:
         """
         Retorna una instantánea del progreso del entrenamiento en tiempo real para el sondeo de la UI.
         """
         with self._lock:
-            self._authorize_job(user_id, administrator, allowed_datasets)
+            try:
+                self._authorize_job(user_id, administrator, allowed_datasets)
+            except PermissionError:
+                # Reading is not an action on the job: a foreign job is reported as
+                # "no own training visible" without any of its fields.
+                return self._neutral_progress()
             elapsed = round(time.time() - self.start_timestamp, 1) if self.start_timestamp else 0.0
             return deepcopy({
                 "status": self.status,

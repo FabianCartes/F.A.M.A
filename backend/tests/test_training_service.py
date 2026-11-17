@@ -419,3 +419,36 @@ def test_pretrained_constructor_failure_fails_job_without_untrained_retry(execut
     assert history(service, sessions) == []
     assert progress['metrics_history'] == []
     assert list(service.checkpoints_dir.iterdir()) == []
+
+
+def _foreign_job(training_service):
+    training_service.start_training("AvesChilenas", user_id=1)
+    return training_service.get_progress(administrator=True)
+
+
+def test_progress_of_a_foreign_job_is_neutral_for_a_researcher(training_service):
+    """A non-owner sees an idle-shaped payload with no field of the foreign job."""
+    foreign = _foreign_job(training_service)
+    assert foreign["status"] == "training" and foreign["job_id"]
+
+    seen = training_service.get_progress(user_id=2, allowed_datasets={"AvesChilenas"})
+
+    assert seen["status"] == "idle"
+    assert seen["job_id"] is None
+    assert seen["logs"] == [] and seen["metrics_history"] == []
+    assert seen["models_config"] == [] and seen["component_results"] == []
+    assert set(seen) == set(foreign)
+    assert foreign["job_id"] not in repr(seen)
+
+
+def test_progress_of_an_own_job_is_unchanged_for_owner_and_admin(training_service):
+    foreign = _foreign_job(training_service)
+    owner = training_service.get_progress(user_id=1, allowed_datasets={"AvesChilenas"})
+    assert owner == foreign
+    assert training_service.get_progress(user_id=2, administrator=True) == foreign
+
+
+def test_stopping_a_foreign_job_is_still_forbidden(training_service):
+    _foreign_job(training_service)
+    with pytest.raises(PermissionError):
+        training_service.stop_training(user_id=2, allowed_datasets={"AvesChilenas"})

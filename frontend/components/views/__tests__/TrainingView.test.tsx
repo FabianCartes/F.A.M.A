@@ -41,6 +41,26 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     expect(screen.queryByRole("button", { name: "Comprobar copias" })).toBeNull();
   });
 
+  it("shows no progress error when the backend reports no own training visible", async () => {
+    const existing = vi.mocked(global.fetch).getMockImplementation()!;
+    vi.mocked(global.fetch).mockImplementation(async (input: any, options?: any) => {
+      if (String(input).includes("/api/training/progress")) {
+        return {ok: true, json: async () => ({
+          status: "idle", job_id: null, seed: 42, is_tri_model: false, current_model_index: 1, total_models: 1,
+          current_architecture: "", models_config: [], component_results: [], ensemble_available: false,
+          composition_model_id: null, composition_sha256: null, current_phase: "training", epoch: 0,
+          total_epochs: 0, train_loss: 0, val_loss: 0, train_acc: 0, val_acc: 0, metrics_history: [],
+          logs: [], elapsed_seconds: 0, error_message: null,
+        })} as any;
+      }
+      return existing(input, options);
+    });
+    await act(async () => { render(<TrainingView />); });
+    await screen.findAllByRole("button", { name: "Sincronizar en GCS" });
+    expect(screen.queryByText(/No se pudo consultar el progreso/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /Reintentar consulta de progreso/ })).toBeNull();
+  });
+
   beforeEach(() => {
     vi.resetAllMocks();
     global.fetch = vi.fn().mockImplementation(async (url: string) => {
