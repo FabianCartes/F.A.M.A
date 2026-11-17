@@ -9,7 +9,7 @@ import google_crc32c
 import soundfile as sf
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any, Tuple, Callable
 from google.cloud import storage
 from google.api_core.exceptions import PreconditionFailed
 from app.configuration import get_configuration, storage_bucket
@@ -651,6 +651,7 @@ class IngestionService:
         dataset_name: str,
         preprocess: bool = False,
         db: Optional[Any] = None,
+        progress: Optional[Callable[[Dict[str, int]], None]] = None,
     ) -> Dict[str, Any]:
         """
         Descarga los archivos de un dataset desde GCS a local manteniendo la estructura
@@ -658,6 +659,8 @@ class IngestionService:
         RF_02: omite únicamente contenido confirmado mediante checksum del proveedor.
         RF_03: Si preprocess=True, extrae tensores matemáticos y espectrogramas Mel.
         Persistencia: Si db es provisto, sincroniza 'conjunto_datos' y 'audio' en PostgreSQL.
+        Progreso: si progress es provisto, se invoca con {total, downloaded, skipped, failed}
+        antes de cada objeto y al terminar la transferencia; su fallo no la interrumpe.
         """
         self.validate_dataset_names([dataset_name])
         client = self._get_client()
@@ -686,7 +689,17 @@ class IngestionService:
         failed = 0
         processed_files = []
 
+        def report():
+            if progress is None:
+                return
+            try:
+                progress({"total": len(candidates), "downloaded": downloaded,
+                          "skipped": skipped, "failed": failed})
+            except Exception:
+                pass  # Progress is advisory; it never aborts a transfer.
+
         for blob in blobs:
+            report()
             if blob.name.startswith(prefix) and blob.name.endswith("/"):
                 continue  # GCS directory markers are not files.
             parts = blob.name.split("/")
@@ -777,6 +790,8 @@ class IngestionService:
                         temporary.unlink(missing_ok=True)
                     except OSError:
                         processed_files[-1]["cleanup_pending"] = True
+
+        report()
 
         # Preprocesamiento tensorial opcional (RF_03)
         preprocessed_count = 0

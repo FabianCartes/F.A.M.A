@@ -42,13 +42,18 @@ it.each([
 
 it('refreshes without transfer and downloads only confirmed selections without preprocessing', async () => {
   const posts: string[] = [];
+  const result = { status: 'completed', total_downloaded: 2, total_skipped: 0, total_failed: 0, results: [] };
+  const snapshot = { operation_id: 'op', datasets: ['Aves'], downloaded: 0, skipped: 0, failed: 0, processed: 0, total: 2, error: null };
   global.fetch = vi.fn(async (input, init) => {
     const path = new URL(String(input), 'http://localhost').pathname;
     if (init?.method === 'POST') posts.push(String(init.body));
     const body = path.endsWith('/datasets') ? { datasets: ['Aves', 'Motor'].map(id => ({ id, name: id,
       file_count: 2, local_file_count: 0, total_size_bytes: 20, is_synced: false, source: 'gcs', gcs_available: true })) }
       : path.endsWith('/status') ? { connected: true, bucket: 'test', total_objects: 4, total_bytes: 40 }
-      : { status: 'completed', total_downloaded: 2, total_skipped: 0, total_failed: 0, results: [] };
+      : path === '/api/ingestion/sync/start' ? { ...snapshot, state: 'running', result: null }
+      : path === '/api/ingestion/sync/active' ? { operations: [] }
+      : path.startsWith('/api/ingestion/sync/operations/') ? { ...snapshot, state: 'completed', result }
+      : {};
     return Response.json(body);
   });
   const confirm = vi.spyOn(window, 'confirm');
@@ -72,7 +77,7 @@ it('refreshes without transfer and downloads only confirmed selections without p
   await waitFor(() => expect(posts).toEqual([JSON.stringify({ datasets: ['Aves'], preprocess: false })]));
   expect(screen.queryByRole('dialog')).toBeNull();
   expect(confirm).not.toHaveBeenCalled();
-  await screen.findByText(/Descarga completada · GCS → Local: Aves/);
+  await screen.findByText(/Descarga completada · GCS → Local: Aves/, {}, { timeout: 4000 });
 });
 
 it('explains that a dataset already complete locally only gets its changed audios', async () => {

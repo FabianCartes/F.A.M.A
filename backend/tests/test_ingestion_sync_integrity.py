@@ -635,3 +635,23 @@ def test_sync_backfills_null_hash_of_already_present_file_and_keeps_conflicts(sy
             assert result["hash_conflicts"] == ["audio.wav"]
     finally:
         engine.dispose()
+
+
+def test_progress_callback_reports_total_then_each_processed_file(sync_environment):
+    service, blobs, local = sync_environment
+    blobs.extend([
+        BlobFixture(b"first", "datasets/AvesChilenas/Chucao/a.wav"),
+        BlobFixture(b"second", "datasets/AvesChilenas/Chucao/b.wav"),
+        BlobFixture(b"third", "datasets/AvesChilenas/Chucao/c.wav"),
+    ])
+    (local.parent / "a.wav").write_bytes(b"first")  # Already up to date: skipped.
+    blobs[2].fail = True
+    reports = []
+
+    result = service.sync_dataset_to_local("AvesChilenas", progress=lambda counts: reports.append(dict(counts)))
+
+    assert result["downloaded"] == 1 and result["skipped"] == 1 and result["failed"] == 1
+    assert reports[0] == {"total": 3, "downloaded": 0, "skipped": 0, "failed": 0}
+    assert reports[-1] == {"total": 3, "downloaded": 1, "skipped": 1, "failed": 1}
+    processed = [sum(r[key] for key in ("downloaded", "skipped", "failed")) for r in reports]
+    assert processed == sorted(processed) and set(r["total"] for r in reports) == {3}

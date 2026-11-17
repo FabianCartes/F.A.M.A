@@ -428,7 +428,7 @@ def test_every_functional_operation_rejects_anonymous_requests(functional):
             response = client.request(method, path, headers={"Origin": ORIGIN})
             assert response.status_code == 401, (method, path, response.text)
             operations.append((method, path))
-    assert len(operations) == 24
+    assert len(operations) == 27
 
 
 def test_sync_states_are_filtered_before_limit_and_ignore_unverified_legacy(functional):

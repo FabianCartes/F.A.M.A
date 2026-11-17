@@ -10,6 +10,15 @@ const privateCatalogFixture = (input: RequestInfo | URL) => {
   if (path === '/api/ingestion/imports/datasets') return { datasets: [], next_cursor: null, total: 0, snapshot: 'empty' };
   return undefined;
 };
+// Background download: start answers at once; the poll reports the terminal state with the sync result.
+const syncFixture = (input: RequestInfo | URL, result: { status: string }) => {
+  const path = new URL(String(input), 'http://localhost').pathname;
+  const snapshot = { operation_id: 'op', datasets: ['AvesChilenas'], downloaded: 0, skipped: 0, failed: 0, processed: 0, total: 1, error: null };
+  if (path === '/api/ingestion/sync/start') return { ...snapshot, state: 'running', result: null };
+  if (path === '/api/ingestion/sync/active') return { operations: [] };
+  if (path.startsWith('/api/ingestion/sync/operations/')) return { ...snapshot, state: result.status, result };
+  return undefined;
+};
 const mockStatus = { connected: true, bucket: 'fama-audio-records-2026', total_objects: 120, total_bytes: 10485760, error: null };
 const mockDatasets = [{ id: 'AvesChilenas', name: 'AvesChilenas', file_count: 45, classes: ['Chucao', 'rayadito'], total_size_bytes: 25000000, last_modified: null, local_file_count: 45, is_synced: null, source: 'gcs', gcs_available: true, gcs_file_count: 45, gcs_size_bytes: 25000000, local_size_bytes: 25000000 }];
 const item = { id_retroalimentacion: 42, id_prediccion: 101, dataset_name: 'AvesChilenas', ruta_audio_prueba: 'test.wav', audio_filename: 'test.wav', etiqueta_predicha: 'Chincol', etiqueta_corregida: 'Chucao', confianza: 0.942, fue_correcta: false, procesado: false, id_usuario: 1 };
@@ -132,7 +141,7 @@ describe('IngestionView persisted inference dataset and curation', () => {
     fireEvent.click(screen.getAllByRole('checkbox')[1]);
     await act(async () => { fireEvent.click(download); });
     await act(async () => { fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Descargar' })); });
-    const sync = vi.mocked(global.fetch).mock.calls.find(([url, options]) => String(url).endsWith('/api/ingestion/sync') && options?.method === 'POST');
+    const sync = vi.mocked(global.fetch).mock.calls.find(([url, options]) => String(url).endsWith('/api/ingestion/sync/start') && options?.method === 'POST');
     expect(sync).toBeDefined();
     expect(JSON.parse(String(sync?.[1]?.body))).toEqual({ datasets: ['AvesChilenas'], preprocess: false });
   });
@@ -456,14 +465,13 @@ describe('IngestionView persisted inference dataset and curation', () => {
     const partial = { status: 'partial', total_downloaded: 1, total_skipped: 0, total_failed: 0, total_preprocessed: 0,
       results: [{ dataset: 'AvesChilenas', downloaded: 1, skipped: 0, failed: 0, db_persisted: false,
         db_error: 'No se pudieron guardar los registros de ingesta.' }] };
-    global.fetch = vi.fn(async input => ({ ok: true, json: async () => privateCatalogFixture(input) ?? (String(input).includes('/sync') ? partial
+    global.fetch = vi.fn(async input => ({ ok: true, json: async () => privateCatalogFixture(input) ?? syncFixture(input, partial) ?? (String(input).includes('/sync') ? partial
       : String(input).includes('/datasets') ? { datasets: mockDatasets } : mockStatus) }) as Response);
     await open();
     await act(async () => { fireEvent.click(within(screen.getByRole('table')).getAllByRole('checkbox')[0]); });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Descargar desde GCS' })); });
     await act(async () => { fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Descargar' })); });
-
-
+    await screen.findByText(/Descarga (completada|parcial|fallida) ·/, {}, { timeout: 4000 });
     expect(screen.getByText(/Sincronización parcial:/)).toBeDefined();
     expect(screen.getByText(/persistencia en BD no confirmada/)).toBeDefined();
     expect(screen.queryByText(/Sincronización completada:/)).toBeNull();
@@ -478,14 +486,13 @@ describe('IngestionView persisted inference dataset and curation', () => {
       total_failed: sample.failed, total_preprocessed: 0,
       results: [{ dataset: 'AvesChilenas', downloaded: sample.downloaded, skipped: 0, failed: sample.failed,
         db_persisted: sample.persisted, preprocess_info: { failed: sample.preprocessing } }] };
-    global.fetch = vi.fn(async input => ({ ok: true, json: async () => privateCatalogFixture(input) ?? (String(input).includes('/sync') ? result
+    global.fetch = vi.fn(async input => ({ ok: true, json: async () => privateCatalogFixture(input) ?? syncFixture(input, result) ?? (String(input).includes('/sync') ? result
       : String(input).includes('/datasets') ? { datasets: mockDatasets } : mockStatus) }) as Response);
     await open();
     await act(async () => { fireEvent.click(within(screen.getByRole('table')).getAllByRole('checkbox')[0]); });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Descargar desde GCS' })); });
     await act(async () => { fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Descargar' })); });
-
-
+    await screen.findByText(/Descarga (completada|parcial|fallida) ·/, {}, { timeout: 4000 });
     expect(screen.getByText(sample.summary)).toBeDefined();
     expect(screen.queryByText(/Sincronización completada:/)).toBeNull();
     if (sample.preprocessing) expect(screen.getByText(/1 error\(es\) en preprocesamiento/)).toBeDefined();
@@ -496,14 +503,13 @@ describe('IngestionView persisted inference dataset and curation', () => {
     const result = { status: 'partial', total_downloaded: 1, total_skipped: 0, total_failed: 1, total_preprocessed: 0,
       results: [{ dataset: 'AvesChilenas', downloaded: 1, skipped: 0, failed: 1, db_persisted: true,
         files: [{ status: 'error', cleanup_pending: true }] }] };
-    global.fetch = vi.fn(async input => ({ ok: true, json: async () => privateCatalogFixture(input) ?? (String(input).includes('/sync') ? result
+    global.fetch = vi.fn(async input => ({ ok: true, json: async () => privateCatalogFixture(input) ?? syncFixture(input, result) ?? (String(input).includes('/sync') ? result
       : String(input).includes('/datasets') ? { datasets: mockDatasets } : mockStatus) }) as Response);
     await open();
     await act(async () => { fireEvent.click(within(screen.getByRole('table')).getAllByRole('checkbox')[0]); });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Descargar desde GCS' })); });
     await act(async () => { fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Descargar' })); });
-
-
+    await screen.findByText(/Descarga (completada|parcial|fallida) ·/, {}, { timeout: 4000 });
     expect(screen.getByText(/limpieza de temporales pendiente/)).toBeDefined();
     expect(screen.getByText(/Sincronización parcial:/)).toBeDefined();
   });
@@ -512,14 +518,13 @@ describe('IngestionView persisted inference dataset and curation', () => {
     const result = { status: 'completed', total_downloaded: 1, total_skipped: 0, total_failed: 0, total_preprocessed: 1,
       results: [{ dataset: 'AvesChilenas', downloaded: 1, skipped: 0, failed: 0, preprocessed: 1,
         db_persisted: true, preprocess_info: { failed: 0 } }] };
-    global.fetch = vi.fn(async input => ({ ok: true, json: async () => privateCatalogFixture(input) ?? (String(input).includes('/sync') ? result
+    global.fetch = vi.fn(async input => ({ ok: true, json: async () => privateCatalogFixture(input) ?? syncFixture(input, result) ?? (String(input).includes('/sync') ? result
       : String(input).includes('/datasets') ? { datasets: mockDatasets } : mockStatus) }) as Response);
     await open();
     await act(async () => { fireEvent.click(within(screen.getByRole('table')).getAllByRole('checkbox')[0]); });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Descargar desde GCS' })); });
     await act(async () => { fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Descargar' })); });
-
-
+    await screen.findByText(/Descarga (completada|parcial|fallida) ·/, {}, { timeout: 4000 });
     expect(screen.getByText(/Sincronización completada:/)).toBeDefined();
     expect(screen.getByText(/Registrado y actualizado en PostgreSQL/)).toBeDefined();
     expect(screen.queryByText(/Sincronización parcial:/)).toBeNull();

@@ -33,7 +33,9 @@ beforeEach(() => {
   if (url.endsWith("/api/training/hardware")) return response({}, 503);
   if (url.endsWith("/api/ingestion/status")) return response({ connected: false, bucket: "synthetic", total_objects: 0, total_bytes: 0 });
   if (url.endsWith("/api/ingestion/datasets")) return response({ datasets });
-  if (url.endsWith("/api/ingestion/sync")) return response(syncData, syncStatus);
+  if (url.endsWith("/api/ingestion/sync/start")) return response({ operation_id: "op", state: "running", datasets: [dataset.id], downloaded: 0, skipped: 0, failed: 0, processed: 0, total: 1, error: null, result: null }, syncStatus);
+  if (url.endsWith("/api/ingestion/sync/active")) return response({ operations: [] });
+  if (url.endsWith("/api/ingestion/sync/operations/op")) return response({ operation_id: "op", state: (syncData as { status: string }).status, datasets: [dataset.id], downloaded: 1, skipped: 0, failed: 0, processed: 1, total: 1, error: null, result: syncData });
   if (url.endsWith("/api/ingestion/imports/access")) return response({ development_mode: false });
   if (url.includes("/feedback")) return response([]);
   throw new Error(`Unexpected simulated request: ${url}`);
@@ -116,8 +118,8 @@ describe("S1/S4 per-stage persistence completion", () => {
   fireEvent.click(screen.getByRole("button", { name: "Descargar desde GCS" }));
   fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Descargar" }));
   const exact = `Sincronización ${expected}: 1 archivo(s) descargados, 0 omitidos, 0 tensores procesados, ${downloadFailed} errores de descarga.`;
-  expect(await screen.findByText(exact)).toBeDefined();
-  const request = calls.find(c => c.url.endsWith("/api/ingestion/sync"));
+  expect(await screen.findByText(exact, {}, { timeout: 4000 })).toBeDefined();
+  const request = calls.find(c => c.url.endsWith("/api/ingestion/sync/start"));
   expect(request?.method).toBe("POST");
   expect(JSON.parse(String(request?.body))).toEqual({ datasets: [dataset.id], preprocess: false });
   await waitFor(() => expect(screen.getByRole("button", { name: "Descargar desde GCS" }).hasAttribute("disabled")).toBe(false));

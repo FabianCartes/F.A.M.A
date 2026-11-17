@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Form, Query, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 import torch
 import torch.nn as nn
 import numpy as np
@@ -64,6 +64,7 @@ from app.services.ingestion import (
     ingestion_service, IngestionValidationError, IngestionConfigurationError,
     IngestionPayloadTooLarge, IngestionAudioError, IngestionDatasetUnavailable,
 )
+from app.services.dataset_download import DatasetDownloads, DownloadInProgress, summarize_results
 from app.services.training import training_service
 from app.services.dashboard import dashboard_service
 from app.services.feedback import feedback_service
@@ -953,6 +954,9 @@ def validate_ingestion_segment(value: str) -> str:
     return value
 
 
+dataset_downloads = DatasetDownloads()
+
+
 class SyncRequest(BaseModel):
     datasets: List[str]
     preprocess: bool = False
@@ -1050,10 +1054,6 @@ def sync_ingestion_datasets(req: SyncRequest, db: Session = Depends(get_db),
     for name in req.datasets:
         access.require_dataset(name)
     results = []
-    total_dl = 0
-    total_skip = 0
-    total_fail = 0
-    total_prep = 0
 
     try:
         ingestion_service.validate_dataset_names(req.datasets)
@@ -1068,24 +1068,59 @@ def sync_ingestion_datasets(req: SyncRequest, db: Session = Depends(get_db),
         except IngestionValidationError:
             raise HTTPException(status_code=422, detail="Destino de dataset inválido.") from None
         results.append(res)
-        total_dl += res.get("downloaded", 0)
-        total_skip += res.get("skipped", 0)
-        total_fail += res.get("failed", 0)
-        total_prep += res.get("preprocessed", 0)
 
-    has_errors = total_fail > 0 or any(
-        item.get("db_error") or (item.get("preprocess_info") or {}).get("failed", 0) > 0
-        for item in results
-    )
-    status = ("partial" if total_dl + total_skip + total_prep > 0 else "failed") if has_errors else "completed"
-    return {
-        "status": status,
-        "results": results,
-        "total_downloaded": total_dl,
-        "total_skipped": total_skip,
-        "total_failed": total_fail,
-        "total_preprocessed": total_prep,
-    }
+    return summarize_results(results)
+
+
+def _visible_download(access: ResourceAccess, snapshot):
+    """A download is visible to exactly the accounts that may sync all its datasets."""
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Recurso no encontrado o no asignado.")
+    for name in snapshot["datasets"]:
+        access.require_dataset(name)
+    return snapshot
+
+
+@app.post("/api/ingestion/sync/start", status_code=202)
+def start_ingestion_download(req: SyncRequest, db: Session = Depends(get_db),
+                             access: ResourceAccess = Depends(resource_access)):
+    """Start the GCS -> local download in the background; poll the returned operation.
+
+    Same authorization and validation as the synchronous ``POST /api/ingestion/sync``,
+    which stays available for callers that can hold one long request.
+    """
+    if not req.datasets:
+        raise HTTPException(status_code=422, detail="Selecciona al menos un dataset.")
+    for name in req.datasets:
+        access.require_dataset(name)
+    try:
+        ingestion_service.validate_dataset_names(req.datasets)
+    except IngestionValidationError:
+        raise HTTPException(status_code=422, detail="Nombres de dataset inválidos.") from None
+    try:
+        return dataset_downloads.start(
+            ingestion_service, req.datasets, preprocess=req.preprocess,
+            session_factory=sessionmaker(bind=db.get_bind()))
+    except DownloadInProgress as running:
+        raise HTTPException(status_code=409, detail={
+            "message": "Ya hay una descarga en curso para este dataset.",
+            "operation_id": running.operation_id}) from None
+
+
+@app.get("/api/ingestion/sync/active")
+def list_active_ingestion_downloads(access: ResourceAccess = Depends(resource_access)):
+    """Running downloads the account may see, so a reloaded page can re-attach."""
+    visible = []
+    for snapshot in dataset_downloads.active():
+        if access.administrator or set(snapshot["datasets"]) <= access.names:
+            visible.append(snapshot)
+    return {"operations": visible}
+
+
+@app.get("/api/ingestion/sync/operations/{operation_id}")
+def get_ingestion_download(operation_id: str, access: ResourceAccess = Depends(resource_access)):
+    """Server-side state of one download, independent of the request that started it."""
+    return _visible_download(access, dataset_downloads.snapshot(operation_id))
 
 
 @app.post("/api/ingestion/preprocess")

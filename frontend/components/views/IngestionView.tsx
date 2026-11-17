@@ -47,6 +47,31 @@ interface SyncDatasetResult {
   files?: { cleanup_pending?: boolean }[];
 }
 
+/** Estado de una descarga GCS → Local que corre en el servidor. */
+interface DownloadSnapshot {
+  operation_id: string;
+  state: "running" | "completed" | "partial" | "failed";
+  datasets: string[];
+  downloaded: number;
+  skipped: number;
+  failed: number;
+  processed: number;
+  total: number;
+  error: string | null;
+  result: {
+    status: string;
+    results?: SyncDatasetResult[];
+    total_downloaded?: number;
+    total_skipped?: number;
+    total_failed?: number;
+    total_preprocessed?: number;
+  } | null;
+}
+
+const DOWNLOAD_POLL_MS = 2000;
+// About one minute of consecutive failures before the view stops waiting.
+const DOWNLOAD_POLL_MAX_FAILURES = 30;
+
 interface LogEntry {
   id: string;
   timestamp: string;
@@ -102,6 +127,10 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
   // Descarga bloqueante GCS → Local; la preparación por modelo es independiente.
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [transferStatus, setTransferStatus] = useState<{ message: string; error: boolean } | null>(null);
+
+  const [downloadId, setDownloadId] = useState<string | null>(null);
+  const downloadNames = useRef<Record<string, string>>({});
+  const lastDownload = useRef<DownloadSnapshot | null>(null);
 
   const [syncProgress, setSyncProgress] = useState<{
     downloaded: number;
@@ -358,37 +387,32 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
   };
   const closeSyncDialog = useCallback(() => setPendingSync(null), []);
 
-  const startSync = async (targets: DatasetItem[]) => {
-    setPendingSync(null);
-    setIsSyncing(true);
-    setTransferStatus({ message: `Descarga en curso · GCS → Local: ${targets.map(dataset => dataset.name).join(", ")}. Esperando respuesta del servidor.`, error: false });
-    addLog("INFO", `Descargando [GCS → Local]: ${targets.map(dataset => dataset.name).join(", ")}.`);
+  const showDownloadProgress = useCallback((snapshot: DownloadSnapshot) => {
+    lastDownload.current = snapshot;
+    const names = snapshot.datasets.map(id => downloadNames.current[id] ?? id).join(", ");
+    const progress = snapshot.total > 0
+      ? `Descargando ${snapshot.processed} / ${snapshot.total} audios.`
+      : "Preparando la lista de audios.";
+    setTransferStatus({ message: `Descarga en curso · GCS → Local: ${names}. ${progress}`, error: false });
+    setSyncProgress(previous => ({ ...previous, downloaded: snapshot.downloaded, skipped: snapshot.skipped,
+      failed: snapshot.failed, total: snapshot.total }));
+  }, []);
 
-    let totalDownload = 0;
-    let totalSkip = 0;
-    let totalFail = 0;
-    let totalPrep = 0;
-
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/ingestion/sync`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          datasets: targets.map(dataset => dataset.id),
-          preprocess: false,
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error(`Error en el servidor: HTTP ${res.status}`);
-      }
-
-      const data = await res.json();
-      totalDownload = data.total_downloaded || 0;
-      totalSkip = data.total_skipped || 0;
-      totalFail = data.total_failed || 0;
-      totalPrep = data.total_preprocessed || 0;
-
+  // Fin de la operación: aviso, liberación de Actualizar y recuentos al día.
+  const finishDownload = useCallback(async (snapshot: DownloadSnapshot | null, reason?: string) => {
+    const names = (snapshot?.datasets ?? lastDownload.current?.datasets ?? [])
+      .map(id => downloadNames.current[id] ?? id).join(", ");
+    const data = snapshot?.result ?? null;
+    const failureText = snapshot?.error ?? reason;
+    if (failureText || !data) {
+      const errMsg = failureText ?? "El servidor no informó el resultado de la descarga.";
+      setTransferStatus({ message: `No se confirmó la descarga · GCS → Local: ${names}. ${errMsg}`, error: true });
+      addLog("ERROR", `Fallo en el proceso de sincronización: ${errMsg}`);
+    } else {
+      const totalDownload = data.total_downloaded || 0;
+      const totalSkip = data.total_skipped || 0;
+      const totalFail = data.total_failed || 0;
+      const totalPrep = data.total_preprocessed || 0;
       setSyncProgress({
         downloaded: totalDownload,
         skipped: totalSkip,
@@ -436,14 +460,113 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
       addLog(failed ? "ERROR" : complete ? "SUCCESS" : "WARN",
         `Sincronización ${failed ? "fallida" : complete ? "completada" : "parcial"}: ${totalDownload} archivo(s) descargados, ${totalSkip} omitidos, ${totalPrep} tensores procesados, ${totalFail} errores de descarga.`
       );
+      setTransferStatus({ message: `Descarga ${failed ? "fallida" : complete ? "completada" : "parcial"} · GCS → Local: ${names}. ${totalDownload} descargados, ${totalSkip} omitidos, ${totalFail} errores. Consulta el detalle en la consola.`, error: !complete });
+    }
+    lastDownload.current = null;
+    setDownloadId(null);
+    setIsSyncing(false);
+    await fetchDatasets();
+  }, [addLog, fetchDatasets]);
 
-      setTransferStatus({ message: `Descarga ${failed ? "fallida" : complete ? "completada" : "parcial"} · GCS → Local: ${targets.map(dataset => dataset.name).join(", ")}. ${totalDownload} descargados, ${totalSkip} omitidos, ${totalFail} errores. Consulta el detalle en la consola.`, error: !complete });
-      await fetchDatasets();
+  // Consulta el estado real de la operación hasta que termina; un fallo aislado no la detiene.
+  useEffect(() => {
+    if (!downloadId) return;
+    let cancelled = false;
+    let failures = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const poll = async () => {
+      let next = true;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/ingestion/sync/operations/${encodeURIComponent(downloadId)}`);
+        if (cancelled) return;
+        if (res.status === 404) {
+          next = false;
+          void finishDownload(null, "El servidor ya no conoce esta descarga; actualiza para ver los recuentos reales.");
+        } else if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        } else {
+          const snapshot: DownloadSnapshot = await res.json();
+          if (cancelled) return;
+          failures = 0;
+          if (snapshot.state === "running") {
+            showDownloadProgress(snapshot);
+          } else {
+            next = false;
+            void finishDownload(snapshot);
+          }
+        }
+      } catch {
+        if (cancelled) return;
+        failures += 1;
+        if (failures >= DOWNLOAD_POLL_MAX_FAILURES) {
+          next = false;
+          void finishDownload(null, "No se pudo consultar el estado de la descarga; actualiza para ver los recuentos reales.");
+        }
+      }
+      if (next && !cancelled) timer = setTimeout(poll, DOWNLOAD_POLL_MS);
+    };
+    timer = setTimeout(poll, DOWNLOAD_POLL_MS);
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
+  }, [downloadId, finishDownload, showDownloadProgress]);
+
+  // Al abrir la vista, retoma una descarga que sigue en curso en el servidor.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/ingestion/sync/active`);
+        if (!res.ok || cancelled) return;
+        const data: { operations?: DownloadSnapshot[] } = await res.json();
+        const running = data.operations?.find(item => item.state === "running");
+        if (!running || cancelled) return;
+        setIsSyncing(true);
+        showDownloadProgress(running);
+        setDownloadId(running.operation_id);
+        addLog("INFO", "Se retomó una descarga GCS → Local que sigue en curso en el servidor.");
+      } catch {
+        // Without the active list the view simply starts idle.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [addLog, showDownloadProgress]);
+
+  // La descarga corre en el servidor; la vista consulta su estado real en lugar de
+  // depender de una única solicitud larga que un proxy o la red pueden cortar.
+  const startSync = async (targets: DatasetItem[]) => {
+    setPendingSync(null);
+    setIsSyncing(true);
+    downloadNames.current = Object.fromEntries(targets.map(dataset => [dataset.id, dataset.name]));
+    const label = targets.map(dataset => dataset.name).join(", ");
+    setTransferStatus({ message: `Descarga en curso · GCS → Local: ${label}. Iniciando la descarga en el servidor.`, error: false });
+    addLog("INFO", `Descargando [GCS → Local]: ${label}.`);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/ingestion/sync/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          datasets: targets.map(dataset => dataset.id),
+          preprocess: false,
+        }),
+      });
+      if (res.status === 409) {
+        // Another download already covers a requested dataset: follow it.
+        const detail = (await res.json().catch(() => null))?.detail;
+        if (typeof detail?.operation_id === "string") {
+          addLog("INFO", "Ya había una descarga en curso para el dataset; se muestra su avance.");
+          setDownloadId(detail.operation_id);
+          return;
+        }
+      }
+      if (!res.ok) {
+        throw new Error(`Error en el servidor: HTTP ${res.status}`);
+      }
+      const operation: DownloadSnapshot = await res.json();
+      showDownloadProgress(operation);
+      setDownloadId(operation.operation_id);
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      setTransferStatus({ message: `No se confirmó la descarga · GCS → Local: ${targets.map(dataset => dataset.name).join(", ")}. ${errMsg}`, error: true });
+      setTransferStatus({ message: `No se confirmó la descarga · GCS → Local: ${label}. ${errMsg}`, error: true });
       addLog("ERROR", `Fallo en el proceso de sincronización: ${errMsg}`);
-    } finally {
       setIsSyncing(false);
     }
   };
