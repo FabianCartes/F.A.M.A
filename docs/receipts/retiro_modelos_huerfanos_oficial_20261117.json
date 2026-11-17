@@ -1,0 +1,32 @@
+{
+  "fecha": "2026-11-17",
+  "base": "fama_oficial",
+  "motivo": "Componentes de un entrenamiento de tríada interrumpido por una desconexión de la base al registrar el tercer modelo; quedaron registrados sin composición de tríada y sin copia en GCS.",
+  "modelos_retirados": [
+    {"id_modelo": 8, "arquitectura": "EfficientNet-B0", "estado": "standard_component_evaluated", "tamano_bytes": 16717549,
+     "sha256": "1ddb635c510377883d3dcd1348c38c2cadb0b3774a55b1356aa50525e7981029"},
+    {"id_modelo": 9, "arquitectura": "ConvNeXt-Nano", "estado": "standard_component_evaluated", "tamano_bytes": 60215641,
+     "sha256": "71e17b237f888761038ed1683905d10a131b758ada0d4930c9845f654d754416"}
+  ],
+  "dependencias_previas": {
+    "metrica_entrenamiento": 10, "model_evaluation": 4, "triad_composition": 0, "prediccion": 0
+  },
+  "backup": {
+    "folder": "backend/installation/cloud-oficial/backups/pre-retiro-modelos-8-9-20261117 (privado, excluido de Git)",
+    "method": "pg_dump 16.15 en formato custom (imagen postgres:16.15) contra el proxy local",
+    "archive_bytes": 252194,
+    "archive_sha256": "92d503a15910cee2f48218bf203245040fb02eb62b4f971abb82ebe0a3b49c07",
+    "pg_restore_list_table_data_entries": 40,
+    "checkpoints_copiados": ["fama_46a6f8b6fd5341f6bdc4f021df38fff0_best.pt", "fama_f099cab17e3c4d9e83a70b7c81bf4ec2_best.pt"],
+    "checkpoints_sha256_coinciden_con_registro": true
+  },
+  "operacion": [
+    "DELETE model_evaluation WHERE id_modelo IN (8, 9): 4 filas",
+    "DELETE modelo WHERE id_modelo IN (8, 9) AND activo = false: 2 filas; metrica_entrenamiento eliminada en cascada (0 restantes)",
+    "Eliminación de los dos checkpoints del runtime oficial"
+  ],
+  "resultado": {
+    "modelos_restantes": [7, 10, 11, 12],
+    "gcs": "sin cambios: los modelos retirados no tenían copia en el bucket"
+  }
+}
