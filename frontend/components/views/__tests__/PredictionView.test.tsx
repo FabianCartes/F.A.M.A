@@ -314,7 +314,7 @@ describe('PredictionView validation and responsive controls', () => {
     expect(select.querySelector('span')?.className).toContain('truncate');
     expect(select.parentElement?.className).toContain('min-w-0');
     expect(screen.queryByText(/Tiempo total de solicitud:/)).toBeNull();
-    expect(options.getByRole('group', { name: 'Mis modelos' })).toBeDefined();
+    expect(options.getByRole('group', { name: 'Modelos individuales' })).toBeDefined();
     expect(options.getAllByRole('group')).toHaveLength(1);
     expect(screen.getByText(/Audios de 5\.0s a 22\.050 Hz/)).toBeDefined();
     await chooseModel(mockModels[2].name);
@@ -342,7 +342,7 @@ describe('PredictionView validation and responsive controls', () => {
   });
 
   it('describes a declared ensemble from the catalogue and never queries the retired legacy status', async () => {
-    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ models: mockModels }) }) as Response);
+    const fetchMock = vi.fn<typeof fetch>(async () => ({ ok: true, json: async () => ({ models: mockModels }) }) as Response);
     global.fetch = fetchMock;
 
     await act(async () => { render(<PredictionView />); });

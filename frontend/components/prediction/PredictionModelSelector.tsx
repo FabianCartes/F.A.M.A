@@ -69,7 +69,7 @@ export default function PredictionModelSelector({ models, value, onChange }: {
     if (!(model.name || model.id).toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())) continue;
     const details = triadModelDetails(model);
     const key = details.datasetId && details.datasetName ? `dataset:${details.datasetId}` : "other";
-    if (!groups.has(key)) groups.set(key, { label: key === "other" ? "Mis modelos" : details.datasetName!, models: [] });
+    if (!groups.has(key)) groups.set(key, { label: key === "other" ? "Modelos individuales" : details.datasetName!, models: [] });
     groups.get(key)!.models.push(model);
   }
   for (const [key, group] of groups) {

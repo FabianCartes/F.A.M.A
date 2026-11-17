@@ -1194,7 +1194,7 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
               <span className="font-bold text-white">
                 {isEngineModel
                   ? "Grupo seleccionado: Diagnóstico Acústico de Motores"
-                  : selectedDomain === 'AvesChilenas' ? "Grupo seleccionado: Bioacústica de Aves Chilenas" : "Grupo seleccionado: Mis modelos"}
+                  : selectedDomain === 'AvesChilenas' ? "Grupo seleccionado: Bioacústica de Aves Chilenas" : "Grupo seleccionado: Modelos individuales"}
               </span>
               <span
                 className={`text-[10px] font-mono px-2 py-0.5 rounded font-semibold border ${

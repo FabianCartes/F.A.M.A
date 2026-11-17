@@ -9,7 +9,7 @@ vi.mock('@/components/auth/SessionBoundary', () => ({ useOptionalWebSession: () 
 const model = { id: 'owned-opaque', name: 'Mi clasificador', classes: ['ants', 'zebra'], dataset_name: 'custom-private', has_weights: true };
 beforeEach(() => { session.user = null; vi.restoreAllMocks(); URL.createObjectURL = vi.fn(() => 'blob:test'); URL.revokeObjectURL = vi.fn(); });
 
-it('does not request a private catalogue or infer anonymously; login lists arbitrary private classes in Mis modelos', async () => {
+it('does not request a private catalogue or infer anonymously; login lists arbitrary private classes in Modelos individuales', async () => {
   const fetcher = vi.fn(async () => Response.json({ models: [model], default_model_id: '' }));
   global.fetch = fetcher;
   const view = render(<PredictionView />);
@@ -18,7 +18,7 @@ it('does not request a private catalogue or infer anonymously; login lists arbit
   session.user = { id: 1 }; confirmApiSession();
   await act(async () => { view.rerender(<PredictionView />); });
   modelOptions();
-  expect(screen.getByRole('group', { name: 'Mis modelos' })).toBeDefined();
+  expect(screen.getByRole('group', { name: 'Modelos individuales' })).toBeDefined();
   expect((screen.getByLabelText('Modelo:') as HTMLButtonElement).value).toBe(model.id);
   const call = (fetcher.mock.calls as unknown as [string, RequestInit][]).find(([url]) => url.includes('/api/models'))!;
   expect(call[0]).toMatch(/\/api\/models$/);
