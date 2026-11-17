@@ -1015,3 +1015,42 @@ def test_catalogued_audio_with_different_content_does_not_block_incorporation(lo
     # Replaying the same feedback keeps working: its own catalogue row is not a duplicate.
     assert FeedbackService(w.service.raw_data_dir).approve_feedback(w.db, 1)["status"] == "approved"
     assert _catalogue_state(w)[0] == 2
+
+
+def _register_unhashed_row(w, content, *, name="dog_barking_0.wav", label="Canastero"):
+    from app.models.dataset import Audio, ConjuntoDatos
+    path = w.service.raw_data_dir / "AvesChilenas" / "canastero" / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
+    row = ConjuntoDatos(nombre="AvesChilenas", ruta_gcp="datasets/AvesChilenas/", estado="sincronizado",
+                        cantidad_audios=1, tamano_total_bytes=len(content))
+    w.db.add(row)
+    w.db.flush()
+    w.db.add(Audio(id_conjunto_datos=row.id_conjunto_datos, nombre_archivo=name,
+                   ruta_gcp=f"gs://test-bucket/datasets/AvesChilenas/canastero/{name}", clase=label,
+                   hash_archivo=None, tamano_bytes=len(content)))
+    w.db.commit()
+
+
+def test_duplicate_of_row_without_hash_is_detected_from_local_file(local_workflow):
+    w = local_workflow
+    _register_unhashed_row(w, w.audio)
+    before = _catalogue_state(w)
+    with pytest.raises(HTTPException) as error:
+        w.service.approve_feedback(w.db, 1)
+    assert error.value.status_code == 409
+    assert error.value.detail == "El audio exacto ya está incorporado en otra fila del dataset; permanece pendiente."
+    assert _catalogue_state(w) == before
+    assert w.service.get_pending_feedback(w.db)[0]["procesado"] is False
+    assert not list(w.service.raw_data_dir.rglob("feedback_1.wav*"))
+    assert not (w.service.raw_data_dir / "AvesChilenas/metadata.csv").exists()
+
+
+def test_nonduplicate_with_unhashed_rows_still_incorporates_and_backfills(local_workflow):
+    from app.models.dataset import Audio
+    w = local_workflow
+    _register_unhashed_row(w, b"different content")
+    assert w.service.approve_feedback(w.db, 1)["status"] == "approved"
+    hashes = {a.nombre_archivo: a.hash_archivo for a in w.db.query(Audio)}
+    assert hashes["dog_barking_0.wav"] == hashlib.sha256(b"different content").hexdigest()
+    assert hashes["feedback_1.wav"] == hashlib.sha256(w.audio).hexdigest()

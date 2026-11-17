@@ -590,3 +590,48 @@ def test_locked_temporary_reports_cleanup_pending_without_aborting_batch(sync_en
             interrupted.handle.close()
         if interrupted.temporary is not None:
             interrupted.temporary.unlink(missing_ok=True)
+
+
+def _hash_environment(service, monkeypatch):
+    monkeypatch.setattr(training, "get_raw_data_dir", lambda name=None: service.local_base_dir / (name or ""))
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    return engine, sessionmaker(bind=engine)
+
+
+def test_sync_records_sha256_of_downloaded_files(sync_environment, monkeypatch):
+    from app.models.dataset import Audio
+    service, blobs, local = sync_environment
+    blobs.append(BlobFixture(b"AAAA"))
+    engine, sessions = _hash_environment(service, monkeypatch)
+    try:
+        with sessions() as db:
+            assert service.sync_dataset_to_local("AvesChilenas", db=db)["downloaded"] == 1
+            row, = db.query(Audio).all()
+            assert row.hash_archivo == hashlib.sha256(b"AAAA").hexdigest()
+    finally:
+        engine.dispose()
+
+
+def test_sync_backfills_null_hash_of_already_present_file_and_keeps_conflicts(sync_environment, monkeypatch):
+    from app.models.dataset import Audio
+    service, blobs, local = sync_environment
+    blobs.append(BlobFixture(b"AAAA"))
+    engine, sessions = _hash_environment(service, monkeypatch)
+    try:
+        with sessions() as db:
+            service.sync_dataset_to_local("AvesChilenas", db=db)
+            row, = db.query(Audio).all()
+            row.hash_archivo = None
+            db.commit()
+            result = service.sync_dataset_to_local("AvesChilenas", db=db)
+            assert result["skipped"] == 1
+            assert db.query(Audio).one().hash_archivo == hashlib.sha256(b"AAAA").hexdigest()
+            # A different stored hash is never overwritten silently.
+            db.query(Audio).one().hash_archivo = "f" * 64
+            db.commit()
+            result = service.sync_dataset_to_local("AvesChilenas", db=db)
+            assert db.query(Audio).one().hash_archivo == "f" * 64
+            assert result["hash_conflicts"] == ["audio.wav"]
+    finally:
+        engine.dispose()

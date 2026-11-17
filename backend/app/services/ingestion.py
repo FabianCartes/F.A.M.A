@@ -13,6 +13,7 @@ from typing import Optional, List, Dict, Any, Tuple
 from google.cloud import storage
 from google.api_core.exceptions import PreconditionFailed
 from app.configuration import get_configuration, storage_bucket
+from app.services.audio_hashing import sha256_file
 
 
 class IngestionValidationError(ValueError):
@@ -787,6 +788,7 @@ class IngestionService:
         # Persistencia en base de datos PostgreSQL (Tablas 6.4 y 6.5)
         db_persisted = False
         db_error = None
+        hash_conflicts: List[str] = []
         if db is not None:
             try:
                 from app.models.dataset import ConjuntoDatos, Audio
@@ -827,6 +829,10 @@ class IngestionService:
                     object_route = f"gs://{self.bucket_name}/{f['object_key']}"
                     local_path = self._filesystem_path(target_base_dir / Path(f["object_key"][len(prefix):]))
                     sample_rate, duration = self._read_audio_metadata(local_path)
+                    try:
+                        local_hash = sha256_file(local_path)
+                    except OSError:
+                        local_hash = None
                     audio_obj = (
                         db.query(Audio)
                         .filter_by(id_conjunto_datos=ds.id_conjunto_datos, ruta_gcp=object_route)
@@ -856,9 +862,16 @@ class IngestionService:
                             frecuencia_muestreo=sample_rate,
                             duracion_segundos=duration,
                             tamano_bytes=fsize,
+                            hash_archivo=local_hash,
                         )
                         db.add(audio_obj)
                     else:
+                        if local_hash is not None:
+                            if audio_obj.hash_archivo is None:
+                                audio_obj.hash_archivo = local_hash
+                            elif audio_obj.hash_archivo != local_hash:
+                                # Keep the stored value; surface the conflict to the caller.
+                                hash_conflicts.append(fname)
                         audio_obj.clase = cname
                         audio_obj.frecuencia_muestreo = sample_rate
                         audio_obj.duracion_segundos = duration
@@ -889,6 +902,7 @@ class IngestionService:
             "preprocess_info": prep_info,
             "db_persisted": db_persisted,
             "db_error": db_error,
+            "hash_conflicts": hash_conflicts,
         }
 
     def upload_files_to_gcs(

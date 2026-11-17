@@ -404,7 +404,10 @@ def test_only_job_owner_or_administrator_can_observe_and_stop_training(functiona
     assert client.put("/api/access/users/3/datasets/10", headers={"Origin": ORIGIN}).status_code == 200
     assert client.post("/api/auth/login", headers={"Origin": ORIGIN},
                        json={"email": "peer@example.test", "password": PASSWORD}).status_code == 200
-    assert client.get("/api/training/progress").status_code == 403
+    peer_progress = client.get("/api/training/progress")
+    assert peer_progress.status_code == 200
+    assert peer_progress.json()["status"] == "idle" and peer_progress.json()["job_id"] is None
+    assert job_id not in peer_progress.text
     assert client.post("/api/training/stop", headers={"Origin": ORIGIN}).status_code == 403
     assert login(client).status_code == 200
     assert client.get("/api/training/progress").json()["job_id"] == job_id

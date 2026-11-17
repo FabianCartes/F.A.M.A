@@ -32,6 +32,7 @@ from app.models.dataset import Audio, ConjuntoDatos
 from app.configuration import get_configuration
 from app.services import storage
 from app.services.feedback_sync import FeedbackSyncQueue
+from app.services.audio_hashing import backfill_null_hashes
 from dataset_references import resolve_reference, reference_from_path
 
 logger = logging.getLogger(__name__)
@@ -487,6 +488,10 @@ class FeedbackService:
                                 or sources[0].get("curation_source_id", "")):
                             raise ValueError("Invalid curation source: require an original canonical bird recording")
                     canonical_path = f"{storage_class}/{filename}"
+                    catalogued = db.query(ConjuntoDatos.id_conjunto_datos).filter(
+                        ConjuntoDatos.nombre == stored_dataset).scalar()
+                    if catalogued is not None:
+                        backfill_null_hashes(db, catalogued, stored_dataset, dataset)
                     registered_elsewhere = db.query(Audio.id_audio).join(
                         ConjuntoDatos, ConjuntoDatos.id_conjunto_datos == Audio.id_conjunto_datos
                     ).filter(ConjuntoDatos.nombre == stored_dataset, Audio.hash_archivo == digest,
