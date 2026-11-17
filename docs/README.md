@@ -37,6 +37,7 @@ Diseño de sistemas, componentes, pipelines y arquitectura MLOps, junto con el g
 - [`18_soporte_multimodelo_backend_rdd.md`](arquitectura/18_soporte_multimodelo_backend_rdd.md): Informe Técnico: Arquitectura Multi-Modelo Desacoplada (Strategy + Model Registry) y Aislamiento de Persistencia Cloud en Backend FastAPI (RDD)
 - [`20_modelo_de_producto_despliegue_y_arquitectura_operativa.md`](arquitectura/20_modelo_de_producto_despliegue_y_arquitectura_operativa.md): 20. Modelo de Producto, Estrategia de Despliegue, Concurrencia y Arquitectura Operativa de F.A.M.A.
 - [`22_arquitectura_universal_multidominio_y_limites_acusticos.md`](arquitectura/22_arquitectura_universal_multidominio_y_limites_acusticos.md): 22. Arquitectura Universal Multi-Dominio sin Código y Límites Físico-Computacionales de F.A.M.A.
+- [`23_plan_correccion_pendientes_operacion.md`](arquitectura/23_plan_correccion_pendientes_operacion.md): 23. Plan de corrección de los pendientes operacionales 7–14
 - [`CONTEXT.md`](arquitectura/CONTEXT.md): Glosario de F.A.M.A.
 
 ### [`manuales/`](manuales/) — Manuales
