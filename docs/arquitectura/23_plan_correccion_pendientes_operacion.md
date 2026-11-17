@@ -19,9 +19,9 @@ Pruebas backend: `cd backend && PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED
 
 | ID | Spec | Bloque | Ruta | Estado | Commit |
 | --- | --- | --- | --- | --- | --- |
-| T1 | S13 | A | delegada (worker, en paralelo con T2) | pendiente | — |
-| T2 | S12 | A | delegada (worker, en paralelo con T1) | pendiente | — |
-| T3 | S9 | A | delegada (worker; comparte `training.py` con T1, va después) | pendiente | — |
+| T1 | S13 | A | delegada (worker, en paralelo con T2) | hecha y verificada | `42be745` |
+| T2 | S12 | A | delegada (worker, en paralelo con T1) | hecha | `b6d8d0a` |
+| T3 | S9 | A | delegada (worker; comparte `training.py` con T1, va después) | hecha | este commit |
 | T4 | S10 | B | delegada (worker) | pendiente | — |
 | T5 | S8 | C | delegada (worker) | pendiente | — |
 | T6 | S14 | C | delegada (worker) | pendiente | — |
@@ -32,3 +32,7 @@ Pruebas backend: `cd backend && PYTHONDONTWRITEBYTECODE=1 PYTHON_DOTENV_DISABLED
 
 - R1: Origen: puntos 7–14 de `estado_actual_y_pendientes.md` §2, a resolver en el orden A (13, 12, 9), B (10), C (8, 14, 7), D (11).
 - R2: Línea base de la rama (sin cambios): `test_training_service.py`, `test_api_training.py`, `test_api_feedback.py` y `test_feedback_local_approval.py` dan 157 aprobadas y 14 fallidas, todas en `test_api_training.py`; la primera falla porque la respuesta del historial incluye `compositions`. Sin `GCS_BUCKET_NAME`, 41 casos de `test_feedback_local_approval.py` fallan con `storage_configuration_missing`. Se registran como fallos previos y no se atribuyen a este plan.
+- R3: T1: `get_progress` devuelve un estado `idle` sin campos del trabajo cuando `_authorize_job` rechaza la lectura; `stop_training` conserva el 403. La vista Entrenamiento ya trata ese estado como inactivo, por lo que solo se añadió una prueba de regresión en el frontend. Pruebas: `test_training_service.py` y `test_api_training.py` dan 67 aprobadas y los mismos 14 fallos previos. Riesgo: punto 2 (guarda de permisos); se encarga una verificación independiente.
+- R4: T2: la comprobación por `metadata.csv` existe desde el commit `db10baa` y no detectó el duplicado del 16 de noviembre; la causa probable es una fila sin `hash_archivo` en el CSV, sin confirmar contra la base oficial. La aprobación consulta además `Audio.hash_archivo` en el registro SQL del dataset destino y responde 409 con el mismo detalle que la interfaz ya traduce («Este audio ya esta presente en el conjunto de datos de destino»), sin cambios en el frontend. Pruebas de feedback: 110 aprobadas. `test_imported_feedback_api.py` falla 7/7 también en la base.
+- R5: Verificación independiente de T1 sobre instantáneas de `10365f5` y `42be745`: sin bloqueos. El investigador no recibe campos del trabajo ajeno; las respuestas de administrador y dueño son idénticas a la base; `_authorize_job` solo se usa en `get_progress` y `stop_training`, y este último conserva el 403. No se probó una solicitud sin autenticar ni el frontend contra un backend real.
+- R6: T3: `get_hardware_status` lee memoria y temperatura del dispositivo con NVML (`nvidia-ml-py`, añadido a `backend/requirements.txt`) y, sin NVML, con `torch.cuda.mem_get_info`; las claves de la respuesta no cambian, pero `vram_used_gb` pasa a ser la memoria usada en todo el dispositivo. Pruebas con NVML simulado: 5 aprobadas. Comprobación en la GPU local (4 GiB): con un proceso hijo que reserva 1 GiB, la ruta `mem_get_info` informa 1,15 GiB usados, mientras `memory_allocated` del proceso de la API marca 0. Tras instalar `nvidia-ml-py` 13.615.71 en `.venv-gpu`, la ruta NVML informa 4,0 GiB totales, 0,27 GiB usados y 46 °C en reposo; `nvidia-smi` informa 3 MiB usados, porque el `used` de NVML v1 incluye memoria reservada por el controlador. Riesgo: punto 5 (dependencia nueva, sin versión fijada).

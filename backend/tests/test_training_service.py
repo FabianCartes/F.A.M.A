@@ -452,3 +452,112 @@ def test_stopping_a_foreign_job_is_still_forbidden(training_service):
     _foreign_job(training_service)
     with pytest.raises(PermissionError):
         training_service.stop_training(user_id=2, allowed_datasets={"AvesChilenas"})
+
+
+GIB = 1024 ** 3
+
+
+def _fake_cuda(monkeypatch, *, allocated=0, reserved=0, free=None, total=8 * GIB):
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "get_device_name", lambda i=0: "Fake GPU")
+    monkeypatch.setattr(
+        torch.cuda, "get_device_properties",
+        lambda i=0: type("P", (), {"total_memory": total})(),
+    )
+    monkeypatch.setattr(torch.cuda, "memory_allocated", lambda i=0: allocated)
+    monkeypatch.setattr(torch.cuda, "memory_reserved", lambda i=0: reserved)
+    if free is not None:
+        monkeypatch.setattr(torch.cuda, "mem_get_info", lambda i=0: (free, total))
+
+
+def _fake_pynvml(monkeypatch, *, used, total, temp=55, fail_on=None):
+    import sys
+    import types
+
+    calls = {"shutdown": 0}
+    mod = types.ModuleType("pynvml")
+    mod.NVML_TEMPERATURE_GPU = 0
+
+    def step(name, value=None):
+        def fn(*args, **kwargs):
+            if fail_on == name:
+                raise RuntimeError(f"NVML failure in {name}")
+            return value
+        return fn
+
+    mod.nvmlInit = step("init")
+    mod.nvmlDeviceGetHandleByIndex = step("handle", object())
+    mod.nvmlDeviceGetMemoryInfo = step(
+        "memory", types.SimpleNamespace(used=used, total=total, free=total - used)
+    )
+    mod.nvmlDeviceGetTemperature = step("temp", temp)
+
+    def shutdown():
+        calls["shutdown"] += 1
+
+    mod.nvmlShutdown = shutdown
+    monkeypatch.setitem(sys.modules, "pynvml", mod)
+    return calls
+
+
+def test_hardware_reports_device_level_vram_and_temperature_from_nvml(training_service, monkeypatch):
+    _fake_cuda(monkeypatch, allocated=0, reserved=0, total=8 * GIB)
+    calls = _fake_pynvml(monkeypatch, used=2 * GIB, total=8 * GIB, temp=61)
+
+    hw = training_service.get_hardware_status()
+
+    assert hw["cuda_available"] is True
+    assert hw["vram_total_gb"] == 8.0
+    assert hw["vram_used_gb"] == 2.0
+    assert hw["vram_percent"] == 25.0
+    assert hw["temperature_c"] == 61
+    assert calls["shutdown"] == 1
+
+
+def test_hardware_falls_back_to_mem_get_info_when_nvml_is_absent(training_service, monkeypatch):
+    import sys
+
+    _fake_cuda(monkeypatch, allocated=0, reserved=0, free=6 * GIB, total=8 * GIB)
+    monkeypatch.setitem(sys.modules, "pynvml", None)  # import raises ImportError
+
+    hw = training_service.get_hardware_status()
+
+    assert hw["vram_total_gb"] == 8.0
+    assert hw["vram_used_gb"] == 2.0
+    assert hw["vram_percent"] == 25.0
+    assert hw["temperature_c"] is None
+
+
+def test_hardware_survives_nvml_errors_and_still_shuts_down(training_service, monkeypatch):
+    _fake_cuda(monkeypatch, free=4 * GIB, total=8 * GIB)
+    calls = _fake_pynvml(monkeypatch, used=0, total=8 * GIB, fail_on="memory")
+
+    hw = training_service.get_hardware_status()
+
+    assert hw["vram_used_gb"] == 4.0
+    assert hw["vram_percent"] == 50.0
+    assert hw["temperature_c"] == 55
+    assert calls["shutdown"] == 1
+
+
+def test_hardware_survives_nvml_init_failure(training_service, monkeypatch):
+    _fake_cuda(monkeypatch, free=4 * GIB, total=8 * GIB)
+    _fake_pynvml(monkeypatch, used=0, total=8 * GIB, fail_on="init")
+
+    hw = training_service.get_hardware_status()
+
+    assert hw["vram_used_gb"] == 4.0
+    assert hw["temperature_c"] is None
+
+
+def test_hardware_without_cuda_reports_host_memory(training_service, monkeypatch):
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+
+    hw = training_service.get_hardware_status()
+
+    assert hw["cuda_available"] is False
+    assert hw["device_name"].startswith("CPU Node Host (")
+    assert hw["temperature_c"] is None
+    assert hw["vram_total_gb"] > 0
+    assert hw["vram_percent"] == hw["host_ram_percent"]
+    assert set(hw) >= {"vram_total_gb", "vram_used_gb", "vram_percent", "temperature_c", "load_level", "status"}

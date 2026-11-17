@@ -240,6 +240,42 @@ class TrainingService:
     def _is_stop_requested(self):
         return self._stop_requested or (self._stop_event is not None and self._stop_event.is_set())
 
+    @staticmethod
+    def _read_device_memory_and_temperature():
+        """Device-level (total_gb, used_gb, temperature_c) so memory held by the spawned
+        training child process is counted. Prefers NVML; falls back to mem_get_info."""
+        gib = 1024 ** 3
+        total_b = used_b = temp_c = None
+        try:
+            import pynvml
+            pynvml.nvmlInit()
+            try:
+                handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+                try:
+                    info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+                    total_b, used_b = int(info.total), int(info.used)
+                except Exception:
+                    pass
+                try:
+                    temp_c = int(pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU))
+                except Exception:
+                    temp_c = None
+            finally:
+                try:
+                    pynvml.nvmlShutdown()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        if total_b is None or used_b is None:
+            try:
+                free_b, total_b = torch.cuda.mem_get_info(0)
+                used_b = total_b - free_b
+            except Exception:
+                total_b = torch.cuda.get_device_properties(0).total_memory
+                used_b = max(torch.cuda.memory_allocated(0), torch.cuda.memory_reserved(0))
+        return total_b / gib, used_b / gib, temp_c
+
     def get_hardware_status(self) -> Dict[str, Any]:
         """
         Retorna la telemetría de hardware para el monitor de entrenamiento (Figura 6.8).
@@ -257,18 +293,8 @@ class TrainingService:
         temp_c = None
         if cuda_avail:
             device_name = torch.cuda.get_device_name(0)
-            total_mem = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-            allocated = torch.cuda.memory_allocated(0) / (1024**3)
-            reserved = torch.cuda.memory_reserved(0) / (1024**3)
-            used_mem = max(allocated, reserved)
+            total_mem, used_mem, temp_c = self._read_device_memory_and_temperature()
             mem_pct = round((used_mem / total_mem) * 100, 1) if total_mem > 0 else 0.0
-            try:
-                import pynvml
-                pynvml.nvmlInit()
-                handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-                temp_c = int(pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU))
-            except Exception:
-                temp_c = None
         else:
             device_name = f"CPU Node Host ({cpu_cores} núcleos)"
             total_mem = host_ram_total
