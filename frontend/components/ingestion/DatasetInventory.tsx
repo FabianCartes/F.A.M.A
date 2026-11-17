@@ -2,6 +2,8 @@
 
 import { useRef, useState } from "react";
 import DatasetConfirmationDialog from "./DatasetConfirmationDialog";
+import { compareDataset } from "@/lib/api/ingestionApi";
+import type { DatasetComparison } from "@/lib/schemas/ingestion";
 
 const DESCRIPTION_PREVIEW = 100;
 
@@ -72,6 +74,22 @@ function uncompared(item: DatasetItem): boolean {
   return cloud != null && cloud > 0 && item.local_file_count != null && item.local_file_count > 0;
 }
 
+/** Plain-language lines for one finished comparison. */
+function comparisonLines(result: DatasetComparison): { text: string; ok: boolean }[] {
+  const unverified = result.hash_unverified > 0 ? [{ text: `${result.hash_unverified} sin huella registrada`, ok: false }] : [];
+  if (result.status === "match") {
+    return result.hash_unverified === 0
+      ? [{ text: "Coincide (recuento, tamaño y huellas registradas)", ok: true }]
+      : [{ text: "Coincide en recuento y tamaño · " + unverified[0].text, ok: true }];
+  }
+  return [
+    ...(result.missing_local ? [`Faltan ${result.missing_local} en local`] : []),
+    ...(result.missing_gcs ? [`${result.missing_gcs} solo en local`] : []),
+    ...(result.size_mismatch ? [`${result.size_mismatch} con tamaño distinto`] : []),
+    ...(result.hash_mismatch ? [`${result.hash_mismatch} con huella distinta`] : []),
+  ].map(text => ({ text, ok: false })).concat(unverified);
+}
+
 interface Props {
   datasets: DatasetItem[];
   loading: boolean;
@@ -81,8 +99,33 @@ interface Props {
   onInspect: (name: string) => void;
 }
 
+function ComparisonStatus({ name, outcome, comparing, disabled, onCompare }: {
+  name: string; outcome?: DatasetComparison | string; comparing: boolean; disabled: boolean; onCompare: () => void;
+}) {
+  const compareButton = <button type="button" onClick={onCompare} disabled={disabled} aria-label={`${outcome ? "Volver a comparar" : "Comparar"} contenido de ${name}`}
+    className="text-[10px] text-blue-300 hover:text-blue-200 underline underline-offset-2 disabled:opacity-40">{comparing ? "Comparando…" : outcome ? "Volver a comparar" : "Comparar contenido"}</button>;
+  return <div className="mt-1 space-y-0.5">
+    {typeof outcome === "string" ? <p className="text-[10px] text-red-300">{outcome}</p>
+      : outcome ? comparisonLines(outcome).map(line => <p key={line.text} className={`text-[10px] ${line.ok ? "text-emerald-300" : "text-amber-300"}`}>{line.text}</p>)
+        : <p className="text-[10px] text-amber-300">Contenido sin comparar</p>}
+    {compareButton}
+  </div>;
+}
+
 export default function DatasetInventory({ datasets, loading, busy, onRefresh, onDownload, onInspect }: Props) {
   const [selected, setSelected] = useState<string[]>([]);
+  // Results belong to the listing they were computed against; a refresh discards them.
+  const [comparison, setComparison] = useState<{ listing: DatasetItem[]; results: Record<string, DatasetComparison | string> }>({ listing: datasets, results: {} });
+  const [comparing, setComparing] = useState<string | null>(null);
+  const results = comparison.listing === datasets ? comparison.results : {};
+  async function compare(name: string) {
+    setComparing(name);
+    let outcome: DatasetComparison | string;
+    try { outcome = await compareDataset(name); }
+    catch (error) { outcome = error instanceof Error ? error.message : "No se pudo comparar el contenido."; }
+    setComparison(previous => ({ listing: datasets, results: { ...(previous.listing === datasets ? previous.results : {}), [name]: outcome } }));
+    setComparing(null);
+  }
   const selection = datasets.filter(item => selected.includes(item.id));
   const anySelected = selection.length > 0;
   const downloadable = anySelected && selection.every(item => (cloudCount(item) ?? 0) > 0);
@@ -131,7 +174,8 @@ export default function DatasetInventory({ datasets, loading, busy, onRefresh, o
                   <td className="p-2 align-top max-w-64 text-gray-300 break-words"><DescriptionCell name={item.name} description={item.description} /></td>
                   <td className="p-2 align-top whitespace-nowrap"><p>{item.local_file_count == null ? "Sin consultar" : `${item.local_file_count} audios`}</p><p className="text-gray-500 mt-1">{bytes(localBytes)}</p></td>
                   <td className="p-2 align-top whitespace-nowrap"><p>{cloud == null ? "Sin consultar" : `${cloud} audios`}</p><p className="text-gray-500 mt-1">{bytes(cloudBytes)}</p>
-                    {uncompared(item) && <p className="mt-1 text-[10px] text-amber-300">Contenido sin comparar</p>}</td>
+                    {uncompared(item) && <ComparisonStatus name={item.name} outcome={results[item.name]} comparing={comparing === item.name}
+                      disabled={busy || comparing !== null} onCompare={() => compare(item.name)} />}</td>
                   <td className="p-2 align-top text-right"><button type="button" onClick={() => onInspect(item.id)} className="px-2 py-1 rounded bg-[#1c1e24] border border-[#2d303b] text-gray-300 hover:text-white whitespace-nowrap">Ver archivos</button></td>
                 </tr>;
               })}

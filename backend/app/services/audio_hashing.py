@@ -16,13 +16,17 @@ def sha256_file(path: Path, chunk_size: int = CHUNK_SIZE) -> str:
     return digest.hexdigest()
 
 
-def _local_file(audio: Audio, dataset_name: str, root: Path) -> Optional[Path]:
+def relative_audio_path(audio: Audio, dataset_name: str) -> str:
+    """Path of a registered audio below its dataset root, as stored in ``ruta_gcp``."""
     marker = f"datasets/{dataset_name}/"
     route = audio.ruta_gcp or ""
     if marker in route:
-        relative = route.split(marker, 1)[1]
-    else:
-        relative = f"{audio.clase}/{audio.nombre_archivo}"
+        return route.split(marker, 1)[1]
+    return f"{audio.clase}/{audio.nombre_archivo}"
+
+
+def _local_file(audio: Audio, dataset_name: str, root: Path) -> Optional[Path]:
+    relative = relative_audio_path(audio, dataset_name)
     parts = relative.split("/")
     if not relative or any(part in ("", ".", "..") for part in parts):
         return None

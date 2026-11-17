@@ -153,6 +153,17 @@ def test_dataset_files_and_whole_sync_batch_are_authorized_before_io(functional,
     assert client.get("/api/ingestion/datasets/AvesChilenas/files").status_code == 404
 
 
+def test_unassigned_researcher_cannot_compare_a_dataset(functional, monkeypatch):
+    client, _ = functional
+    compared = []
+    monkeypatch.setattr(main, "ingestion_service", SimpleNamespace(
+        validate_dataset_names=lambda names: None, _get_client=lambda: compared.append(1)))
+    assert login(client).status_code == 200
+    response = client.post("/api/ingestion/datasets/AvesChilenas/compare", headers={"Origin": ORIGIN})
+    assert response.status_code == 404
+    assert compared == []
+
+
 def test_unassigned_upload_does_not_transfer_or_decode(functional, monkeypatch):
     client, _ = functional
     monkeypatch.setattr(main, "ingestion_service", SimpleNamespace())
@@ -428,7 +439,7 @@ def test_every_functional_operation_rejects_anonymous_requests(functional):
             response = client.request(method, path, headers={"Origin": ORIGIN})
             assert response.status_code == 401, (method, path, response.text)
             operations.append((method, path))
-    assert len(operations) == 27
+    assert len(operations) == 28
 
 
 def test_sync_states_are_filtered_before_limit_and_ignore_unverified_legacy(functional):
