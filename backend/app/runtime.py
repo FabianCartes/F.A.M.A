@@ -3,11 +3,17 @@ import hashlib
 import json
 import os
 import tempfile
+import time
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 
 from app.configuration import ConfigurationError, get_configuration
+
+# A restart can begin while the previous process is still exiting and holds the lock;
+# wait this long for it before reporting the root as in use by another node.
+_LOCK_WAIT_SECONDS = 15
+_LOCK_RETRY_SECONDS = 0.2
 
 
 def runtime_root(configuration=None):
@@ -104,15 +110,20 @@ class RuntimeDirectory:
         except OSError:
             raise ConfigurationError('runtime_lock_unavailable') from None
         try:
-            try:
-                if os.name == 'nt':
-                    import msvcrt
-                    msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
-                else:
-                    import fcntl
-                    fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except OSError:
-                raise ConfigurationError('runtime_in_use') from None
+            deadline = time.monotonic() + _LOCK_WAIT_SECONDS
+            while True:
+                try:
+                    if os.name == 'nt':
+                        import msvcrt
+                        msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
+                    else:
+                        import fcntl
+                        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except OSError:
+                    if time.monotonic() >= deadline:
+                        raise ConfigurationError('runtime_in_use') from None
+                    time.sleep(_LOCK_RETRY_SECONDS)
             yield self
         finally:
             os.close(descriptor)

@@ -99,9 +99,12 @@ def test_another_database_cannot_claim_files_and_failed_selection_preserves_inst
     assert 'FAMA_RUNTIME_DIR' not in load_configuration({'FAMA_CONFIG_DIR': str(second)}).values
 
 
-def test_two_nodes_cannot_use_the_same_root_at_the_same_time(tmp_path):
+def test_two_nodes_cannot_use_the_same_root_at_the_same_time(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
     from app.node import create_node_app
+    import app.runtime
+
+    monkeypatch.setattr(app.runtime, '_LOCK_WAIT_SECONDS', 0.3)
 
     selected = configured_node(tmp_path)
     target = tmp_path / 'persistent'
@@ -118,6 +121,35 @@ def test_two_nodes_cannot_use_the_same_root_at_the_same_time(tmp_path):
                 assert response.json() == {'code': 'runtime_in_use'}
         # Shutdown releases ownership; the next node is blocked only by this fixture's missing security.
         with TestClient(create_node_app(str(selected))) as restarted:
+            assert restarted.get('/ready').json() == {'code': 'configuration_incomplete'}
+    finally:
+        os.environ.clear()
+        os.environ.update(previous_environment)
+        activate_configuration(previous)
+
+
+def test_a_node_waits_for_a_previous_process_that_is_still_releasing_the_root(tmp_path, monkeypatch):
+    if os.name == 'nt':
+        pytest.skip('flock en POSIX')
+    import fcntl
+    import threading
+    from fastapi.testclient import TestClient
+    from app.node import create_node_app
+    import app.runtime
+
+    monkeypatch.setattr(app.runtime, '_LOCK_WAIT_SECONDS', 5)
+    selected = configured_node(tmp_path)
+    target = tmp_path / 'persistent'
+    assert node('--config-dir', selected, 'runtime', '--directory', target).returncode == 0
+    previous_process = os.open(target / '.fama-runtime.lock', os.O_CREAT | os.O_RDWR, 0o600)
+    fcntl.flock(previous_process, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    threading.Timer(0.5, os.close, args=(previous_process,)).start()
+    from app.configuration import get_configuration, activate_configuration
+    previous = get_configuration()
+    previous_environment = os.environ.copy()
+    try:
+        with TestClient(create_node_app(str(selected))) as restarted:
+            # Blocked only by this fixture's missing security, not by the released lock.
             assert restarted.get('/ready').json() == {'code': 'configuration_incomplete'}
     finally:
         os.environ.clear()
