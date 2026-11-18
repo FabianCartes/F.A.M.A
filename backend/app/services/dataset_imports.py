@@ -52,7 +52,7 @@ class DatasetImports:
         self.root = Path(root)
         self.limits = limits or ImportLimits.from_environment()
 
-    def _initialize(self):
+    def _initialize(self, *, durable=True):
         if not self.root.is_absolute() or self.root != self.root.resolve():
             reject(503, "El almacenamiento de importaciones no es una ruta física válida.")
         for parent in (self.root, *self.root.parents):
@@ -64,6 +64,8 @@ class DatasetImports:
             if path.is_symlink():
                 reject(503, "Almacenamiento no válido.")
             path.mkdir(mode=0o700, exist_ok=True)
+        if not durable:
+            return
         # mkdir(parents=True) may have introduced any ancestor. Re-sync the
         # entire physical chain on every attempt, including recovery after a
         # prior failed fsync; existence alone is not durability evidence.
@@ -71,8 +73,13 @@ class DatasetImports:
             _durable_directory(directory)
 
     @contextmanager
-    def mutation(self, db, key=None):
-        self._initialize()
+    def mutation(self, db, key=None, *, durable=True):
+        """Own the store and the import's lock; ``durable=False`` skips the ancestry fsync.
+
+        Recording a failure writes only database rows, so it must not depend on the
+        storage durability whose failure it records.
+        """
+        self._initialize(durable=durable)
         lock_name = "mutation.lock" if key is None else "import-" + hashlib.sha256(key.encode()).hexdigest() + ".lock"
         fd = os.open(self.root / lock_name, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
         try:

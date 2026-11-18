@@ -217,7 +217,7 @@ class ImportJobQueue:
         with self.sessions() as db, db.begin():
             # Filesystem ownership precedes the queue gate, as in admission and
             # cleanup. The failed job and source close in the same transaction.
-            mutation = (import_service.mutation(db, attempt["import_id"])
+            mutation = (import_service.mutation(db, attempt["import_id"], durable=False)
                         if import_service is not None and error else nullcontext())
             with mutation:
                 row, now = self._current(db, attempt)

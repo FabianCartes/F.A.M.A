@@ -66,7 +66,8 @@ def test_equivalent_previews_must_reconcile_at_publication(imports, tmp_path):
     assert client.get("/api/ingestion/imports/datasets").json() == before
 
 
-def test_storage_ancestry_is_durable_before_publication_and_retried(imports, tmp_path, monkeypatch):
+def test_storage_ancestry_failure_is_recorded_and_a_new_import_publishes_durably(
+        imports, tmp_path, monkeypatch):
     from app.services import dataset_imports as module
     client, service, _, _ = imports
     job = prepare(client, tmp_path)
@@ -80,16 +81,20 @@ def test_storage_ancestry_is_durable_before_publication_and_retried(imports, tmp
         return original(path)
 
     monkeypatch.setattr(module, "_durable_directory", fail_root_parent)
+    # Recording the failure must not depend on the durability that just failed.
     assert confirm(client, job).json()["status"] == "failed"
-    assert confirm(client, job).json()["status"] == "failed"
-    assert attempts.count(service.root.parent) == 2
+    assert service.root.parent in attempts
+    # 77c005c: a failure before publication cancels the request and keeps nothing published.
+    assert client.get(f"/api/ingestion/imports/{job['id']}").json()["status"] == "cancelled"
+    assert confirm(client, job).status_code == 409
     assert client.get("/api/ingestion/imports/datasets").json()["datasets"] == []
     recorded = []
     def record_sync(path):
         recorded.append(path)
         return original(path)
     monkeypatch.setattr(module, "_durable_directory", record_sync)
-    assert confirm(client, job).json()["added_count"] == 1
+    retry = prepare(client, tmp_path, key="request-2")
+    assert confirm(client, retry).json()["added_count"] == 1
     assert all(parent in recorded for parent in (service.root, *service.root.parents))
 
 
