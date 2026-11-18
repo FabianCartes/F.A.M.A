@@ -33,6 +33,9 @@ def isolated_db(tmp_path, monkeypatch):
             self.expected_checkpoint_sha256 = expected_checkpoint_sha256
             self._meta.dataset_name = dataset_name
 
+        def load_weights(self):
+            """Startup loads the active model's weights; this metadata fixture has none."""
+
         @property
         def is_default(self):
             return self._meta.is_default

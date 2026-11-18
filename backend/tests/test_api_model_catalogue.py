@@ -15,6 +15,9 @@ from app.models.training import Modelo
 from ml_core.classification_metrics import calculate_classification_report
 from app.services.registry import ModelRegistry, get_model_registry
 from app.services.predictors.trained_predictor import TrainedModelPredictor
+# Bind triad_predictor's TrainedModelPredictor before any fixture patches that name; a first
+# import while patched would keep the fake class after monkeypatch restores the module.
+from app.services.predictors import triad_predictor  # noqa: F401
 from tests.test_model_registry import FakeAudioPredictor
 
 

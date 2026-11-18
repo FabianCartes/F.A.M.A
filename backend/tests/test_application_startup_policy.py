@@ -100,18 +100,20 @@ def test_isolated_startup_serves_public_health_without_startup_effects(startup_b
 
 
 @pytest.mark.parametrize("policy", [None, "normal"], ids=["default", "explicit-normal"])
-def test_normal_startup_preserves_bootstrap_and_lifespan(startup_boundary, monkeypatch, policy):
+def test_normal_startup_runs_the_worker_without_schema_or_seed(startup_boundary, monkeypatch, policy):
+    # ADR 0058: tables come from explicit Alembic revisions; import and startup run no DDL
+    # and create no administrator.
     fresh_application, effects = startup_boundary
     if policy is None:
         monkeypatch.delenv("FAMA_APP_STARTUP_POLICY", raising=False)
     else:
         monkeypatch.setenv("FAMA_APP_STARTUP_POLICY", policy)
     with fresh_application() as application:
-        assert effects == ["schema"]
+        assert effects == []
         with TestClient(application) as client:
             assert client.get("/health").json() == {"status": "ok"}
-            assert effects == ["schema", "seed", "worker", "worker_enter"]
-        assert effects == ["schema", "seed", "worker", "worker_enter", "worker_exit"]
+            assert effects == ["worker", "worker_enter"]
+        assert effects == ["worker", "worker_enter", "worker_exit"]
 
 
 @pytest.mark.parametrize("policy", ["", "ISOLATED", " isolated", "isolated ", "disabled"])

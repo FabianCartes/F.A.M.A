@@ -417,7 +417,7 @@ def test_training_entry_no_longer_admits_imported_sources(client, training_env):
     assert response.status_code == 422, response.text
     assert response.json() == {"detail": "Solicitud de autenticación inválida."}
     assert service.get_progress() == before
-    assert client.get("/api/training/history").json() == {"history": []}
+    assert client.get("/api/training/history").json() == {"history": [], "compositions": []}
     thread.assert_not_called()
 
 
@@ -431,7 +431,7 @@ def test_retired_catalog_option_is_rejected_without_side_effects(client, trainin
         "detail": "La opción include_imported fue retirada del catálogo de entrenamiento."
     }
     assert client.get("/api/training/progress").json() == before
-    assert client.get("/api/training/history").json() == {"history": []}
+    assert client.get("/api/training/history").json() == {"history": [], "compositions": []}
     process.assert_not_called()
 
 
@@ -450,7 +450,7 @@ def test_retired_selectors_never_fall_back_to_default_dataset(client, training_e
     assert response.status_code == 422, response.text
     assert response.json() == {"detail": "Solicitud de autenticación inválida."}
     assert client.get("/api/training/progress").json() == before
-    assert client.get("/api/training/history").json() == {"history": []}
+    assert client.get("/api/training/history").json() == {"history": [], "compositions": []}
     thread.assert_not_called()
 
 
@@ -469,7 +469,7 @@ def test_imported_preparation_routes_are_retired(client, training_env, method, p
     assert response.status_code == 404, response.text
     assert response.json() == {"detail": "Not Found"}
     assert service.get_progress() == before
-    assert client.get("/api/training/history").json() == {"history": []}
+    assert client.get("/api/training/history").json() == {"history": [], "compositions": []}
     process.assert_not_called()
 
 
