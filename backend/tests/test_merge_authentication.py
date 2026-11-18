@@ -1,6 +1,49 @@
 """Joined access through actual HTTP sessions; no remote services."""
 import pytest
-from tests.test_web_sessions import web, login, ORIGIN
+from tests.test_web_sessions import login, ORIGIN, PASSWORD
+
+
+@pytest.fixture
+def web(monkeypatch):
+    """Web sessions over an Alembic-migrated schema, which the import queue requires."""
+    import os
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from sqlalchemy.orm import sessionmaker
+    from app.configuration import activate_configuration, get_configuration, load_configuration
+    from app.database import get_db
+    from app.models.user import Usuario
+    from app.routes.auth import router
+    from app.services.auth import hash_password
+    from tests.http_security import configure_access_limits
+    from tests.schema_support import migrated_engine
+
+    configure_access_limits(monkeypatch)
+    monkeypatch.setenv("FAMA_WEB_ORIGIN", ORIGIN)
+    previous_configuration = get_configuration()
+    activate_configuration(load_configuration(dict(os.environ)))
+    engine = migrated_engine()
+    sessions = sessionmaker(bind=engine)
+    with sessions() as db:
+        for index, role in enumerate(("administrador", "investigador"), 1):
+            db.add(Usuario(id=index, email=f"{role}@example.test", password_hash=hash_password(PASSWORD),
+                           nombre_completo=role, rol=role, activo=True))
+        db.commit()
+
+    def isolated_db():
+        with sessions() as db:
+            yield db
+
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_db] = isolated_db
+    try:
+        with TestClient(app, base_url=ORIGIN, raise_server_exceptions=False) as client:
+            yield client, sessions
+    finally:
+        engine.dispose()
+        activate_configuration(previous_configuration)
+
 
 def test_zip_uses_revocable_cookie_and_checks_mutation_origin(web, tmp_path):
     from app.routes.dataset_imports import router, get_import_service

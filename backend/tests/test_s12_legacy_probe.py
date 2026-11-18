@@ -16,7 +16,7 @@ def test_legacy_transcript(layout_api, tmp_path):
     confirmation, _ = admit(request, source, "confirm", preview_token=ready["preview_token"])
     assert worker.run_once()
     imported = state(request, source)
-    assert imported["status"] == "imported" and imported["sync_status"] == "pending"
+    assert imported["status"] == "imported" and "sync_status" not in imported  # Private sync retired (5fdb717).
     trace.append(imported)
     trace.append(request("GET", B + "/datasets").json())
     files = request("GET", f"{B}/datasets/{imported["dataset_id"]}/files").json()

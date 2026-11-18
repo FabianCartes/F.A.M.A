@@ -36,7 +36,7 @@ def test_automatic_receipt_release_and_duplicate_replay(layout_api, tmp_path):
         job, operation = admit(request, source)
         assert worker.run_once()
         result = state(request, source)
-        assert result["status"] == "imported" and result["sync_status"] == "pending"
+        assert result["status"] == "imported" and "sync_status" not in result  # Private sync retired (5fdb717).
         assert result["added_count"] == (1 if index == 0 else 0)
         datasets.append(result["dataset_id"])
         assert request("GET", job["status_url"]).json()["kind"] == "preview"
@@ -51,5 +51,5 @@ def test_automatic_receipt_release_and_duplicate_replay(layout_api, tmp_path):
     files = request("GET", f"{B}/datasets/{datasets[0]}/files").json()["files"]
     assert len(files) == 1
     assert request("GET", f"{B}/datasets/{datasets[0]}/files/{files[0]["sha256"]}").content == audio
-    assert worker.storage is None
+    assert not hasattr(worker, "storage")  # Private sync storage retired (5fdb717).
     assert worker.queue.active_counts(1) == {"global": 0, "owner": 0}

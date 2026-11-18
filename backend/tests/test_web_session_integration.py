@@ -55,7 +55,7 @@ def test_logout_revokes_server_session_not_just_browser_cookie(client, web):
     assert client.get("/api/auth/me").status_code == 401
 
 
-def test_cookie_authenticates_imported_history_but_preserves_legacy_response(client, web):
+def test_cookie_authenticates_history_and_rejects_the_retired_imported_view(client, web):
     # Use the existing business fixture for legacy resource authorization only.
     from tests.http_security import administrator_http
     from app.main import app
@@ -67,10 +67,13 @@ def test_cookie_authenticates_imported_history_but_preserves_legacy_response(cli
         with administrator_http(app):
             before = business.get("/api/training/history").json()
             assert login(business).status_code == 200
-            response = business.get("/api/training/history?include_imported=true")
+            response = business.get("/api/training/history")
             assert response.status_code == 200, response.text
             assert response.json() == before
             assert response.headers["cache-control"] == "no-store"
+            retired = business.get("/api/training/history?include_imported=true")
+            assert retired.status_code == 422
+            assert retired.json() == {"detail": "El historial importado fue retirado."}
             assert business.get("/api/training/history", headers={"Authorization": "Bearer invalid"}).json() == before
     finally:
         business.close()

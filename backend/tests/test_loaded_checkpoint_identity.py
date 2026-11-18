@@ -31,6 +31,11 @@ class CountingPublicPredictor(AudioPredictor):
         return self._metadata
 
     @property
+    def model_id(self):
+        # Registry lookups check identity/visibility; only full metadata reads are counted.
+        return self._metadata.id
+
+    @property
     def is_default(self):
         return self._metadata.is_default
 

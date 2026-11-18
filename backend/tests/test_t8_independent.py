@@ -84,7 +84,7 @@ def test_all_collections_bound_queries_and_explicit_publication(imports, tmp_pat
         published = confirm(client, job)
         assert published.status_code == 200, published.text
         assert published.json()["added_count"] == total
-        assert published.json()["sync_status"] == "pending"
+        assert "sync_status" not in published.json()  # Private sync retired (5fdb717).
         dataset = published.json()["dataset_id"]
         member, _ = read(client, engine, f"{BASE}/datasets/{dataset}/files")
         assert member["total"] == total and len(member["files"]) == 50

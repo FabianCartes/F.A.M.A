@@ -46,7 +46,7 @@ def test_journal_retry_without_validator_or_source_zip(layout_api, tmp_path, mon
     final = state(request, source)
     assert final["status"] == "imported" and final["preview_token"] == journal["preview_token"]
     assert final["dataset_id"] == journal["dataset_id"] and final["added_count"] == 1
-    assert final["sync_status"] == "pending" and replacement.storage is None
+    assert "sync_status" not in final and not hasattr(replacement, "storage")  # Private sync retired (5fdb717).
     with worker.queue.sessions() as db:
         after = db.get(ImportSummary, source).preview
         assert (after["staging_attempt"], after["root"]) == (identity["staging_attempt"], identity["root"])
@@ -68,7 +68,7 @@ def test_rejected_archives_and_commands_keep_complete_state(layout_api, tmp_path
     job, _ = admit(request, source)
     assert worker.run_once()
     invalid = state(request, source)
-    assert invalid["status"] == "needs_correction" and invalid["dataset_id"] is None and invalid["added_count"] == 0
+    assert invalid["status"] == "cancelled" and invalid["dataset_id"] is None and invalid["added_count"] == 0
     issues = request("GET", f"{B}/{source}/issues").json()["issues"]
     assert any(i["severity"] == "error" and i["action"] for i in issues)
     assert request("GET", B + "/datasets").json()["datasets"] == []
