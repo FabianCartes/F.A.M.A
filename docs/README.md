@@ -95,6 +95,7 @@ Instrucciones de uso, instalación, despliegue y operación.
 - [`reevaluacion-modelos.md`](manuales/reevaluacion-modelos.md): Reevaluación explícita de modelos MAIN
 - [`respaldo_y_recuperacion_checkpoints.md`](manuales/respaldo_y_recuperacion_checkpoints.md): Respaldo y recuperación de checkpoints
 - [`respaldo_y_restauracion_postgresql.md`](manuales/respaldo_y_restauracion_postgresql.md): Respaldo y restauración de PostgreSQL
+- [`servidor-universitario-inferencia.md`](manuales/servidor-universitario-inferencia.md): Nodo de inferencia en el servidor universitario
 - [`sesion-web-importados.md`](manuales/sesion-web-importados.md): Sesión web para recursos importados
 - [`sesiones_web_y_acceso_administrado.md`](manuales/sesiones_web_y_acceso_administrado.md): Sesiones web y acceso administrado — implementación parcial
 - [`trabajos-importacion-datasets.md`](manuales/trabajos-importacion-datasets.md): Trabajos locales de importación ZIP

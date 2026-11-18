@@ -567,6 +567,42 @@ La CLI de respaldo exige un esquema vigente para su propio código; se ejecutó 
 
 **Operación aprobada por el operador:** respaldo previo `pre-retiro-duplicado-feedback-20261116` (base, archivo y `metadata.csv`); se retiró `feedback_2.wav` (audio 2608) de SQL, GCS, disco local y `metadata.csv`. Se conservó `feedback_20.wav` porque pertenece a la partición `66ef36d4…` del modelo 7. Resultado: 1217 audios coincidentes; vista previa de particiones sin exclusiones ni avisos. La retroalimentación 2 y la predicción 32 se conservan; su sincronización indica ahora `db_persisted=false` y no debe reincorporarse. [Recibo](../receipts/retiro_duplicado_feedback_20261116.json).
 
+## Servidor universitario: reconocimiento de solo lectura — 18 de noviembre
+
+**Responsables:** el operador entregó el acceso SSH (cuenta administradora, mediante VPN institucional) y autorizó un reconocimiento sin cambios; el asistente ejecutó solo comandos de lectura.
+
+**Observado:**
+
+- Ubuntu 24.04.5 LTS dentro de un **contenedor Docker** (`/.dockerenv`, PID 1 `bash`, sin systemd). Los procesos no se reinician solos si el contenedor se reinicia; tampoco es viable ejecutar Docker dentro.
+- 32 CPU y 204 GiB de RAM visibles (compartidos con el anfitrión); 85 GiB libres en `/` (81 % usado). **Sin GPU**: el entrenamiento correría en CPU.
+- Sin `python3`, `git`, `node`, `curl` ni servidor web instalados. PostgreSQL 16 local en ejecución, provisto por el servidor.
+- Salida a internet disponible hacia GCS, Cloud SQL Admin, PyPI y los repositorios de Ubuntu.
+- Un único puerto web publicado hacia el exterior; falta confirmar el puerto interno al que corresponde.
+
+**Decisiones del operador (18 de noviembre):** usar la base `fama_oficial` de Cloud SQL y el bucket oficial; el servidor solo hace inferencia con modelos ya respaldados en GCS, sin entrenamiento; el acceso web queda restringido a la red o VPN de la universidad.
+
+**Instalado (asistente):** `libsndfile1`, `ffmpeg`, Python 3.12.3 con entorno virtual en `/opt/fama/venv` (`torch 2.15.0+cpu`), Node.js 22.23.5 desde el paquete oficial verificado por SHA-256 en `/opt/node` y el código del commit `7e7b012` en `/opt/fama/app`. Ocupación: 2,0 GiB.
+
+**Restricciones adicionales observadas:**
+
+- El puerto web publicado corresponde al puerto 80 interno del contenedor (comprobado con un servidor temporal).
+- El backend solo admite orígenes `https://` o `http://localhost` (`backend/app/web_settings.py`); se requiere HTTPS para servir por la IP.
+- El arranque del contenedor (`/entrypoint.sh`) solo inicia SSH y PostgreSQL y redefine la contraseña administradora en cada inicio; no ofrece un punto de arranque para otros servicios.
+- El único volumen persistente es `/var/lib/postgresql`. El resto del sistema de archivos, incluido `/opt`, se conserva al reiniciar el contenedor, pero se perdería si se recreara desde su imagen.
+
+**Plan aprobado y ejecutado (asistente, 18 de noviembre):**
+
+1. Cuenta de servicio `fama-servidor-ubb` con `roles/cloudsql.client` en el proyecto y `roles/storage.objectUser` en el bucket oficial, igual que `fama-oficial-app`. Su llave quedó solo en el servidor (0600); la copia local temporal se borró.
+2. Cloud SQL Auth Proxy v2.26.2, verificado por SHA-256, en `127.0.0.1:5434`.
+3. Perfil preparado con `app.node prepare` (`fama_oficial`, origen `https://146.83.194.142:2064`); la contraseña SQL se transmitió por la entrada estándar y su archivo temporal se borró. `runtime` en `/opt/fama/runtime`; `check`: `database_connected` y `storage_read_connected`. Adopción del administrador existente (identificador 1): vista previa `history_adoption_ready` y aplicación `history_adopted`, sin crear cuentas ni cambiar contraseñas.
+4. Frontend compilado en modo producción con `API_URL=http://127.0.0.1:8010`.
+5. Certificado autofirmado de dos años y Caddy 2.6.2 con HTTPS en el puerto 80 interno.
+6. Arranque con `/opt/fama/iniciar.sh`.
+
+**Comprobado:** `/ready` `schema_current`; desde la VPN, `https://146.83.194.142:2064` responde 200, `/api/installation/status` `completed`, el login con credenciales inválidas responde 401 (el origen se acepta) y los procesos siguen activos tras cerrar SSH. Incidencia resuelta: `torchvision` de PyPI era incompatible con `torch` CPU y se reinstaló desde el índice CPU. Procedimiento: [nodo de inferencia en el servidor universitario](servidor-universitario-inferencia.md).
+
+**Pendiente (operador):** iniciar sesión, descargar desde GCS los checkpoints de los modelos y ejecutar una predicción de prueba. No se ejecuta entrenamiento en este nodo. Cambiar la contraseña administradora no persiste, porque el arranque del contenedor la restablece; la alternativa es autenticación por llave.
+
 ## Pendientes conservados
 
 - Definir equipo/acceso y preparar recursos/perfil/catálogo oficiales, seguido del cambio con verificación acotada. Recuperación del operador y respaldo/restauración lógica SQL ya ensayados localmente; políticas de copias administradas, retención, ubicación independiente y recuperación del destino oficial siguen en preparación operativa. Directorios persistentes y respaldo de checkpoints ya comprobados. Registrar procedencia desconocida sigue siendo manual y no hay prueba final independiente. La duplicación `Chucao`/`chucao` se resolvió el 16 de noviembre al retirar los tres audios de prueba. E8-04/E8-11 están corregidas; el recorrido acotado investigador conserva su evidencia previa.
