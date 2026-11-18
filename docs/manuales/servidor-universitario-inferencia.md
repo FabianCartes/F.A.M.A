@@ -60,8 +60,8 @@ Un nodo nuevo no tiene checkpoints locales. Desde **Entrenamiento → Historial 
 
 ## Problemas conocidos
 
-- `timm` instala `torchvision` desde PyPI, incompatible con `torch` CPU (`RuntimeError: operator torchvision::nms does not exist`). Reinstalar `torchvision` y `torchaudio` desde `https://download.pytorch.org/whl/cpu`.
-- Las evaluaciones guardan `runtime_versions` (`torch` sin sufijo de build, `numpy`, `librosa`) y el catálogo rechaza el modelo con «runtime del predictor incompatible con los informes» si el nodo usa otra versión (`backend/app/services/standard_evaluation_guard.py`). `backend/requirements.txt` no fija esas versiones; en este nodo se instalaron las del nodo evaluador: `torch==2.14.0`, `torchaudio==2.11.0`, `torchvision==0.29.0` (índice CPU), `numpy==2.5.3` y `librosa==1.0.0`.
+- `timm` instala `torchvision` desde PyPI, incompatible con `torch` CPU (`RuntimeError: operator torchvision::nms does not exist`). `backend/requirements.txt` ahora declara `torchvision==0.29.0`, pero la variante CPU debe resolverse desde el índice de PyTorch: `pip install -r backend/requirements.txt --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple`.
+- Las evaluaciones guardan `runtime_versions` (`torch` sin sufijo de build, `numpy`, `librosa`) y el catálogo rechaza el modelo con «runtime del predictor incompatible con los informes» si el nodo usa otra versión (`backend/app/services/standard_evaluation_guard.py`). `backend/requirements.txt` fija `torch==2.14.0`, `torchaudio==2.11.0`, `torchvision==0.29.0`, `numpy==2.5.3` y `librosa==1.0.0`, sin sufijo de build (`+cpu`, `+cuXXX`); la variante se elige con el índice de PyTorch. Una resolución `pip install --dry-run` contra el índice CPU seleccionó `torch-2.14.0+cpu`, `torchaudio-2.11.0+cpu` y `torchvision-0.29.0+cpu`.
 - Un checkpoint aún no descargado se informa como «checkpoint inválido o distinto de la identidad registrada»; descargarlo desde GCS lo resuelve.
 - Caddy no acepta `https://:80`; se declara `https_port 80` en las opciones globales.
 - Next.js renombra su proceso a `next-server`; el script lo detecta con ese nombre.

@@ -394,12 +394,10 @@ RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel
 # Copiar dependencias de requerimientos
 COPY requirements.txt /app/requirements.txt
 
-# Instalar PyTorch oficial con aceleración CUDA 12.4
-RUN python -m pip install --no-cache-dir \
-    torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
-
-# Instalar el resto de dependencias del framework
-RUN python -m pip install --no-cache-dir -r requirements.txt
+# Instalar las dependencias fijadas en requirements.txt. La variante de PyTorch
+# (CPU o CUDA) se elige con el índice; las versiones las fija requirements.txt.
+RUN python -m pip install --no-cache-dir -r requirements.txt \
+    --extra-index-url https://download.pytorch.org/whl/cu130
 
 # Copiar el código fuente completo del backend
 COPY . /app
@@ -413,6 +411,8 @@ EXPOSE 8000
 # Comando de arranque del servidor Uvicorn con recarga optimizada
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
 ```
+
+**Versiones de PyTorch y NumPy.** `backend/requirements.txt` fija `torch==2.14.0`, `torchaudio==2.11.0`, `torchvision==0.29.0`, `numpy==2.5.3` y `librosa==1.0.0`, las versiones con las que se evaluaron los modelos publicados (`runtime_versions`). Con otras versiones el catálogo rechaza los modelos con «runtime del predictor incompatible con los informes». La variante (CPU o CUDA) no forma parte del pin y se elige con el índice de PyTorch: `https://download.pytorch.org/whl/cpu` o `https://download.pytorch.org/whl/cu130`. El índice `cu124` ya no sirve para este pin, porque su última versión de `torch` es 2.6.0; se comprobó que `cu130` publica `torch==2.14.0`, `torchaudio==2.11.0` y `torchvision==0.29.0`. Esa comprobación fue una resolución con `pip install --dry-run`, no una instalación ni una ejecución con GPU. El controlador del host debe ser compatible con la variante elegida. La imagen base CUDA 12.4 de este ejemplo no se modificó y su compatibilidad con ruedas `cu130` no se verificó.
 
 ### 6.2. Dockerfile del Frontend (`frontend/Dockerfile`)
 
