@@ -67,6 +67,15 @@ ARCHITECTURE_PRESETS: Dict[str, Dict[str, Any]] = {
 TRIAD_ARCHITECTURES: List[str] = ["EfficientNet-B0", "ConvNeXt-Nano", "ResNet-34d"]
 ENGINE_TRIAD_ARCHITECTURES: List[str] = ["ResNet-34d", "EfficientNet-B0", "PANNs-CNN14"]
 
+# A dropped database connection (network or Cloud SQL proxy) is retried for a few
+# minutes before a finished model is discarded; any other error fails at once.
+DB_RETRY_SECONDS = 300
+DB_RETRY_DELAYS = (5, 10, 20, 30)
+
+
+def _wait_before_db_retry(seconds: float) -> None:
+    time.sleep(seconds)
+
 
 def _json_config(value):
     if value is None:
@@ -1402,63 +1411,78 @@ class TrainingService:
                 file_size, file_hash = self._write_checkpoint(checkpoint_path, checkpoint_payload)
 
                 # A checkpoint is successful only after its registration commits.
-                db = None
+                checkpoint_reference = f"models/{checkpoint_filename}"
                 commit_attempted = False
-                try:
+
+                def register_model() -> int:
+                    nonlocal commit_attempted
                     db = SessionLocal()
-                    dataset = db.query(ConjuntoDatos).filter_by(
-                        id_conjunto_datos=config["dataset_id"], nombre=dataset_name
-                    ).with_for_update().one_or_none()
-                    if dataset is None or dataset.nombre != dataset_name or config["dataset_id"] is None:
-                        raise RuntimeError("El dataset aceptado ya no tiene un registro de origen válido.")
-                    nuevo_modelo = Modelo(
-                        id_usuario=config.get("user_id"),
-                        id_conjunto_datos=config["dataset_id"],
-                        clase_objetivo=f"{len(classes)} Clases ({dataset_name})",
-                        arquitectura=arch,
-                        epocas=arch_epochs,
-                        tasa_aprendizaje=arch_lr,
-                        tamano_lote=arch_batch,
-                        precision=best_val_acc,
-                        perdida=checkpoint_val_loss,
-                        ruta_binario_gcp=f"models/{checkpoint_filename}",
-                        tamano_bytes=file_size,
-                        hash_binario=file_hash,
-                        activo=False,
-                        estado="standard_eval_pending",
+                    try:
+                        if commit_attempted:
+                            # An earlier attempt may have committed before its connection dropped.
+                            existing = db.query(Modelo).filter_by(ruta_binario_gcp=checkpoint_reference).first()
+                            if existing is not None:
+                                return existing.id_modelo
+                        dataset = db.query(ConjuntoDatos).filter_by(
+                            id_conjunto_datos=config["dataset_id"], nombre=dataset_name
+                        ).with_for_update().one_or_none()
+                        if dataset is None or dataset.nombre != dataset_name or config["dataset_id"] is None:
+                            raise RuntimeError("El dataset aceptado ya no tiene un registro de origen válido.")
+                        nuevo_modelo = Modelo(
+                            id_usuario=config.get("user_id"),
+                            id_conjunto_datos=config["dataset_id"],
+                            clase_objetivo=f"{len(classes)} Clases ({dataset_name})",
+                            arquitectura=arch,
+                            epocas=arch_epochs,
+                            tasa_aprendizaje=arch_lr,
+                            tamano_lote=arch_batch,
+                            precision=best_val_acc,
+                            perdida=checkpoint_val_loss,
+                            ruta_binario_gcp=f"models/{checkpoint_filename}",
+                            tamano_bytes=file_size,
+                            hash_binario=file_hash,
+                            activo=False,
+                            estado="standard_eval_pending",
 
-                    )
-                    db.add(nuevo_modelo)
-                    db.flush()
-
-                    model_metrics = [
-                        m for m in self.metrics_history
-                        if m.get("architecture") == arch and m.get("model_index") == idx + 1
-                    ]
-                    if not model_metrics:
-                        raise RuntimeError("No hay métricas de época para registrar el modelo.")
-                    for m in model_metrics:
-                        rec = MetricaEntrenamiento(
-                            id_modelo=nuevo_modelo.id_modelo,
-                            epoca=m["epoca"],
-                            precision=m["val_acc"],
-                            perdida=m["val_loss"],
-                            puntuacion_validacion=m["val_acc"],
-                            tiempo_epoca=m["tiempo_epoca"],
                         )
-                        db.add(rec)
+                        db.add(nuevo_modelo)
+                        db.flush()
 
-                    model_id = nuevo_modelo.id_modelo
-                    commit_attempted = True
-                    db.commit()
-                    registered_components.append((model_id, component_weight))
-                    self._add_log("SUCCESS", f"Checkpoint local {checkpoint_filename} ({file_size} bytes), modelo #{model_id} ({arch}) y métricas guardados.")
-                except Exception:
-                    if db is not None:
+                        model_metrics = [
+                            m for m in self.metrics_history
+                            if m.get("architecture") == arch and m.get("model_index") == idx + 1
+                        ]
+                        if not model_metrics:
+                            raise RuntimeError("No hay métricas de época para registrar el modelo.")
+                        for m in model_metrics:
+                            rec = MetricaEntrenamiento(
+                                id_modelo=nuevo_modelo.id_modelo,
+                                epoca=m["epoca"],
+                                precision=m["val_acc"],
+                                perdida=m["val_loss"],
+                                puntuacion_validacion=m["val_acc"],
+                                tiempo_epoca=m["tiempo_epoca"],
+                            )
+                            db.add(rec)
+
+                        registered_id = nuevo_modelo.id_modelo
+                        commit_attempted = True
+                        db.commit()
+                        return registered_id
+                    except Exception:
                         try:
                             db.rollback()
                         except Exception as rollback_error:
                             self._add_log("WARN", f"No se pudo confirmar rollback: {rollback_error}")
+                        raise
+                    finally:
+                        db.close()
+
+                try:
+                    model_id = self._retry_on_disconnect(register_model, "registrar el modelo")
+                    registered_components.append((model_id, component_weight))
+                    self._add_log("SUCCESS", f"Checkpoint local {checkpoint_filename} ({file_size} bytes), modelo #{model_id} ({arch}) y métricas guardados.")
+                except Exception:
                     # Commit may have succeeded before the connection reported an error.
                     # Delete only this job's newly published, proven unregistered file.
                     unregistered = not commit_attempted
@@ -1466,16 +1490,13 @@ class TrainingService:
                         try:
                             with SessionLocal() as verification:
                                 unregistered = verification.query(Modelo).filter_by(
-                                    ruta_binario_gcp=f"models/{checkpoint_filename}"
+                                    ruta_binario_gcp=checkpoint_reference
                                 ).first() is None
                         except Exception:
                             self._add_log("WARN", f"Checkpoint {checkpoint_filename} conservado: resultado de commit indeterminado.")
                     if unregistered:
                         checkpoint_path.unlink(missing_ok=True)
                     raise
-                finally:
-                    if db is not None:
-                        db.close()
 
                 # Registration is already durable. A late stop preserves it pending,
                 # without starting reports or changing the previously active model.
@@ -1527,19 +1548,41 @@ class TrainingService:
                 self.error_message = None if self.status == 'stopped' else str(exc)
             self._add_log("ERROR", f"Fallo catastrófico en el entrenamiento: {exc}")
 
+    def _retry_on_disconnect(self, operation, action: str):
+        """Run ``operation``, retrying only a dropped database connection for DB_RETRY_SECONDS.
+
+        ``operation`` must be safe to repeat: each attempt opens its own session.
+        """
+        from sqlalchemy.exc import OperationalError
+        delays = iter(DB_RETRY_DELAYS)
+        waited = 0
+        while True:
+            try:
+                return operation()
+            except OperationalError:
+                delay = next(delays, DB_RETRY_DELAYS[-1])
+                if self._is_stop_requested() or waited + delay > DB_RETRY_SECONDS:
+                    raise
+                self._add_log("WARN", f"Sin conexión con la base al {action}; reintento en {delay} s.")
+                _wait_before_db_retry(delay)
+                waited += delay
+
     def _register_triad_composition(self, config: Dict[str, Any], components: List[Any]) -> Optional[int]:
         """Create composition version 1 once the job's three components are registered.
 
         The component models are already durable; a failure here is reported but never
         turns the finished job into a failed one.
         """
-        try:
+        def register() -> int:
+            # Idempotent per job: a composition committed before a dropped connection is reused.
             with SessionLocal() as db:
-                composition = create_initial_composition(
+                return create_initial_composition(
                     db, job_id=config["job_id"], dataset_id=config["dataset_id"],
                     partition_version=(config["source"].get("partition_manifest") or {}).get("version"),
-                    components=components, author_id=config.get("user_id"))
-                composition_id = composition.id
+                    components=components, author_id=config.get("user_id")).id
+
+        try:
+            composition_id = self._retry_on_disconnect(register, "registrar la composición de la tríada")
             self._add_log("SUCCESS", f"Composición de tríada #{composition_id} (versión 1) registrada con los pesos de los checkpoints.")
             return composition_id
         except Exception as error:

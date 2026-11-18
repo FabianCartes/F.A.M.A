@@ -719,3 +719,104 @@ def test_joint_evaluation_failure_keeps_the_finished_job_and_its_components(pers
     assert len(new) == 3 and all(e['status'] == 'standard_component_evaluated' for e in new)
     assert all((service.checkpoints_dir / e['filename']).is_file() for e in new)
     assert any('No se pudo completar la evaluación conjunta' in log['message'] for log in service.logs)
+
+
+def connection_drop():
+    from sqlalchemy.exc import OperationalError
+    return OperationalError("COMMIT", {}, Exception("server closed the connection unexpectedly"))
+
+
+def registering(db):
+    return any(isinstance(row, Modelo) and row.estado == 'standard_eval_pending' for row in db.identity_map.values())
+
+
+@pytest.fixture
+def waits(monkeypatch):
+    recorded = []
+    monkeypatch.setattr(training, "_wait_before_db_retry", recorded.append)
+    return recorded
+
+
+def test_a_brief_disconnection_while_registering_is_retried_and_the_model_kept(persistence_env, waits):
+    service, sessions, _, _ = persistence_env
+    failures = []
+    def drop_twice(db):
+        if registering(db) and len(failures) < 2:
+            failures.append(True)
+            raise connection_drop()
+    event.listen(sessions, "before_commit", drop_twice)
+    start(service)
+    progress = service.get_progress()
+    assert progress["status"] == "completed", progress["error_message"]
+    entry, = history(service, sessions)
+    assert len(entry["metrics"]) == 1
+    assert (service.checkpoints_dir / entry["filename"]).is_file()
+    assert waits == [5, 10]
+    assert sum("Sin conexión con la base al registrar el modelo" in log["message"] for log in progress["logs"]) == 2
+
+
+def test_a_commit_lost_in_a_disconnection_is_not_registered_twice(persistence_env, waits):
+    service, sessions, _, _ = persistence_env
+    pending, lost = [], []
+    def mark_registration(db):
+        if registering(db):
+            pending.append(True)
+    def acknowledgement_lost(db):
+        if pending and not lost:
+            lost.append(True)
+            raise connection_drop()
+    event.listen(sessions, "before_commit", mark_registration)
+    event.listen(sessions, "after_commit", acknowledgement_lost)
+    start(service)
+    progress = service.get_progress()
+    assert progress["status"] == "completed", progress["error_message"]
+    entry, = history(service, sessions)
+    assert len(entry["metrics"]) == 1
+    assert waits == [5]
+
+
+def test_registration_gives_up_after_the_retry_window_without_leaving_the_checkpoint(persistence_env, waits):
+    service, sessions, _, _ = persistence_env
+    def always_down(db):
+        if registering(db):
+            raise connection_drop()
+    event.listen(sessions, "before_commit", always_down)
+    start(service)
+    progress = service.get_progress()
+    assert progress["status"] == "failed"
+    assert "server closed the connection unexpectedly" in progress["error_message"]
+    assert history(service, sessions) == []
+    assert list(service.checkpoints_dir.glob("*.pt")) == []
+    assert sum(waits) <= training.DB_RETRY_SECONDS
+    assert sum(waits) + 30 > training.DB_RETRY_SECONDS
+
+
+def test_other_registration_errors_are_not_retried(persistence_env, waits):
+    service, sessions, _, _ = persistence_env
+    def reject(db):
+        if registering(db):
+            raise RuntimeError("Synthetic DB commit failure")
+    event.listen(sessions, "before_commit", reject)
+    start(service)
+    assert service.get_progress()["status"] == "failed"
+    assert waits == []
+
+
+def test_a_brief_disconnection_while_creating_the_triad_is_retried(persistence_env, monkeypatch, waits):
+    service, sessions, _, _ = persistence_env
+    real = training.create_initial_composition
+    calls = []
+
+    def drop_once(*args, **kwargs):
+        calls.append(True)
+        if len(calls) == 1:
+            raise connection_drop()
+        return real(*args, **kwargs)
+    monkeypatch.setattr(training, "create_initial_composition", drop_once)
+    start(service, models=THREE_COMPONENTS)
+    assert service.get_progress()['status'] == 'completed', service.get_progress()['error_message']
+    composition, attempts = joint_attempts(sessions)
+    assert set(attempts) == {'val', 'test'}
+    assert waits == [5]
+    assert any('Sin conexión con la base al registrar la composición de la tríada' in log['message']
+               for log in service.logs)
