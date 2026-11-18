@@ -127,6 +127,11 @@ const ARCHITECTURE_PRESETS: Record<
 // Intervalo de refresco de la telemetría de hardware durante un entrenamiento.
 const HARDWARE_POLL_MS = 3000;
 
+/** Case- and accent-insensitive form used to search the model history. */
+function searchKey(text: string): string {
+  return text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().trim();
+}
+
 export default function TrainingView() {
   const mounted = useRef(true);
   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
@@ -667,8 +672,23 @@ export default function TrainingView() {
   const [history, setHistory] = useState<ModelHistoryItem[]>([]);
   const [compositions, setCompositions] = useState<unknown>([]);
   const groups = useMemo(() => groupTriadHistory(history, compositions), [history, compositions]);
+  const [historySearch, setHistorySearch] = useState("");
   const [selectedGroup, setSelectedGroup] = useState<TriadHistoryGroup | null>(null);
   const partitionNames = usePartitionNames(history);
+  // The history endpoint returns every authorized model, so filtering here searches all of them.
+  const { visibleModels, visibleGroups } = useMemo(() => {
+    const query = searchKey(historySearch);
+    const grouped = new Set(groups.flatMap(group => group.members.map(member => member.id)));
+    const matches = (item: (typeof history)[number]) => !query || [
+      item.name, item.architecture, `v${item.version || 1}`, item.dataset, item.dataset_name,
+      item.partition_version ? partitionNames[item.partition_version] : null,
+    ].some(field => field && searchKey(String(field)).includes(query));
+    return {
+      visibleModels: history.filter(item => !grouped.has(item.id) && matches(item)),
+      visibleGroups: groups.filter(group => !query || (group.composition.name && searchKey(group.composition.name).includes(query))
+        || group.members.some(matches)),
+    };
+  }, [history, groups, historySearch, partitionNames]);
   const checkpointSync = useCheckpointSyncStatus(useMemo(() => history.map(item => item.id), [history]));
   const [selectedModelModal, setSelectedModelModal] = useState<ModelHistoryItem | null>(null);
 
@@ -2500,6 +2520,18 @@ export default function TrainingView() {
           </button>
         </div>
 
+        <input
+          type="search"
+          aria-label="Buscar en el historial"
+          placeholder="Buscar por modelo, arquitectura, versión, dataset o partición…"
+          value={historySearch}
+          onChange={event => setHistorySearch(event.target.value)}
+          className="w-full rounded-lg border border-[#23252e] bg-[#101114] px-3 py-2 text-xs text-gray-200 placeholder:text-gray-500 focus:border-emerald-700 focus:outline-none"
+        />
+        {searchKey(historySearch) && visibleModels.length === 0 && visibleGroups.length === 0 && (
+          <p role="status" className="text-xs text-gray-400">Ningún modelo coincide con «{historySearch.trim()}».</p>
+        )}
+
         {/* Below md each row becomes a labelled card; the same markup is a table on wider screens. */}
         <div className="md:overflow-x-auto">
           <table className="w-full text-left text-xs block md:table">
@@ -2514,7 +2546,7 @@ export default function TrainingView() {
               </tr>
             </thead>
             <tbody className="block md:table-row-group divide-y divide-[#23252e]/60">
-              {history.filter(item => !groups.some(group => group.members.some(member => member.id === item.id))).map((item) => {
+              {visibleModels.map((item) => {
                 const isBirds =
                   item.dataset?.toLowerCase().includes("aves") ||
                   item.name?.toLowerCase().includes("aves") ||
@@ -2568,7 +2600,7 @@ export default function TrainingView() {
                   </tr>
                 );
               })}
-              {groups.map(group => {
+              {visibleGroups.map(group => {
                 // One training job uses a single partition; show it only when every member records the same one.
                 const partition = group.members[0].partition_version;
                 const sharedPartition = partition && group.members.every(member => member.partition_version === partition) ? partition : null;
