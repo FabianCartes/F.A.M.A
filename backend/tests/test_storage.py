@@ -2,6 +2,13 @@ import asyncio
 import pytest
 from google.api_core.exceptions import NotFound
 from app.services import storage
+from tests.storage_support import synthetic_bucket
+
+
+@pytest.fixture(autouse=True)
+def configured_bucket():
+    with synthetic_bucket():
+        yield
 
 
 @pytest.mark.parametrize("directories,label,expected", [
