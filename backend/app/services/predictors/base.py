@@ -53,6 +53,13 @@ class AudioPredictor(ABC):
         """Indica si el modelo cuenta con archivos de pesos (.pt) válidos en disco."""
         return True
 
+    def verify_checkpoint(self) -> None:
+        """Raise ModelWeightsError when on-disk weights no longer match their registered identity.
+
+        Called before any request side effect (upload, persistence). Predictors without a
+        registered checkpoint identity have nothing to verify.
+        """
+
     @abstractmethod
     def predict(self, audio_file_path: Path) -> PredictionResult:
         """

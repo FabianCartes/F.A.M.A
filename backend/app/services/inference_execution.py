@@ -11,7 +11,7 @@ from threading import Lock
 
 
 _LOGGER = logging.getLogger(__name__)
-_STAGES = {"ingress", "read", "validation", "upload", "predict", "persist", "total"}
+_STAGES = {"ingress", "read", "checkpoint", "validation", "upload", "predict", "persist", "total"}
 
 
 class InferenceExecution:

@@ -91,7 +91,7 @@ def test_success_emits_sanitized_stage_timings(external_adapters, monkeypatch, c
     assert asyncio.run(raw_request(request_body(AUDIO)))[0] == 200
     events = stage_events(caplog)
     assert {event["stage"] for event in events} == {
-        "ingress", "read", "validation", "upload", "predict", "persist", "total"
+        "ingress", "checkpoint", "read", "validation", "upload", "predict", "persist", "total"
     }
     assert len({event["id"] for event in events}) == 1
     for event in events:

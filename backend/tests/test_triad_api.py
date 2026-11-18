@@ -344,6 +344,8 @@ def test_changed_component_bytes_after_publication_reject_without_inventing_a_re
     env.checkpoints[3].write_bytes(env.checkpoints[3].read_bytes() + b"changed after publication")
     response = predict(env, triad_key())
     assert response.status_code == 503, response.text
+    assert "no coincide con el hash SHA-256 registrado" in response.json()["detail"]
+    main.upload_audio_to_gcp.assert_not_awaited()  # Refused before the audio leaves the node.
     with env.sessions() as db:
         assert db.query(Prediccion).count() == 0
 

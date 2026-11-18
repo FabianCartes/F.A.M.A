@@ -355,6 +355,24 @@ class TrainedModelPredictor(AudioPredictor):
     def has_weights(self) -> bool:
         return self.checkpoint_path.exists() and self.checkpoint_path.stat().st_size > 10000
 
+    def verify_checkpoint(self) -> None:
+        """Check the registered SHA-256 against the file without deserializing it.
+
+        Uses the stat-keyed digest cache (ADR 0077); inference still hashes the exact
+        snapshot it loads.
+        """
+        if self.expected_checkpoint_sha256 is None:
+            return
+        from app.services.checkpoint_digest import file_sha256
+        try:
+            digest = file_sha256(self.checkpoint_path)
+        except Exception as err:
+            raise ModelWeightsError("No se pudo leer el checkpoint para inferencia.") from err
+        if digest != self.expected_checkpoint_sha256:
+            raise ModelWeightsError(
+                "El checkpoint disponible no coincide con el hash SHA-256 registrado para este modelo."
+            )
+
     def _checkpoint_sha256(self) -> Optional[str]:
         """Hash the registered checkpoint file bytes without loading its tensor state."""
         from app.services.checkpoint_digest import file_sha256

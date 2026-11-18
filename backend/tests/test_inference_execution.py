@@ -18,6 +18,7 @@ def external_adapters(test_db, monkeypatch):
     monkeypatch.setattr(main, "upload_audio_to_gcp", AsyncMock(return_value=True))
     predictor = SimpleNamespace(
         model_id="fake", dataset_name="AvesChilenas", has_weights=True,
+        verify_checkpoint=lambda: None,
         metadata=SimpleNamespace(name="Synthetic inference fixture"),
     )
     main.app.dependency_overrides[main.get_model_registry] = lambda: SimpleNamespace(get=lambda _: predictor, get_default_model_id=lambda: "fake")

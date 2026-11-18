@@ -392,9 +392,12 @@ def test_predict_rejects_persisted_model_without_hash_before_persistence(
     )
     safe_client.close()
 
-    # Unverified database provenance is concealed before checkpoint admission.
-    assert response.status_code == 404
-    assert response.json() == {"detail": "Modelo no disponible."}
+    # A persisted model without a recorded hash is blocked, not hidden, before admission.
+    assert response.status_code == 503
+    assert response.json() == {"detail": (
+        "Modelo no disponible para inferencia: El modelo persistido 'fama_trained_model_712' "
+        "está bloqueado: falta el hash SHA-256 registrado del checkpoint.")}
+    assert str(tmp_path) not in response.text
     mock_upload.assert_not_awaited()
     mock_db.add.assert_not_called()
     mock_db.commit.assert_not_called()
@@ -437,8 +440,12 @@ def test_predict_rejects_replaced_persisted_checkpoint_without_saving_prediction
             files={"file": ("canto.wav", create_dummy_wav_bytes(), "audio/wav")},
         )
 
-    assert response.status_code == 404
-    assert response.json() == {"detail": "Modelo no disponible."}
+    # Replaced bytes are detected before the audio is uploaded or a prediction is stored.
+    assert response.status_code == 503
+    assert response.json() == {"detail": (
+        "Modelo no disponible para inferencia: El checkpoint disponible "
+        "no coincide con el hash SHA-256 registrado para este modelo.")}
+    assert str(tmp_path) not in response.text
     upload.assert_not_awaited()
     mock_db.add.assert_not_called()
     mock_db.commit.assert_not_called()

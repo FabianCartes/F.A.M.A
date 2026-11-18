@@ -58,6 +58,10 @@ class TriadPredictor(AudioPredictor):
         for component in self.components:
             component.load_weights()
 
+    def verify_checkpoint(self):
+        for component in self.components:
+            component.verify_checkpoint()
+
     def predict(self, audio_file_path: Path) -> PredictionResult:
         combined = np.zeros(len(self.classes), dtype=np.float64)
         hashes, rejections = [], []

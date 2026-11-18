@@ -356,6 +356,8 @@ async def predict_audio(
             raise ModelWeightsError("No se pudo comprobar la disponibilidad de pesos.") from availability_error
         if has_weights is not True:
             raise ModelWeightsError(f"Modelo '{predictor.model_id}': archivos de pesos no disponibles.")
+        # Refuse replaced weights before the audio is read, uploaded or persisted.
+        await lease.run(predictor.verify_checkpoint, stage="checkpoint")
         with lease.stage("read"):
             audio_buffer = bytearray()
             while True:
