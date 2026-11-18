@@ -252,6 +252,17 @@ def test_researcher_inventory_is_registered_and_scoped_not_global_cloud(function
     assert client.get("/api/ingestion/status").status_code == 403
 
 
+def test_storage_connection_check_requires_session_but_not_administrator(functional, monkeypatch):
+    client, _ = functional
+    monkeypatch.setattr(main, "ingestion_service", SimpleNamespace(
+        check_connection=lambda: {"connected": True, "reason": None}))
+    assert client.get("/api/ingestion/connection").status_code == 401
+    assign(client)
+    response = client.get("/api/ingestion/connection")
+    assert response.status_code == 200
+    assert response.json() == {"connected": True, "reason": None}
+
+
 def test_dashboard_and_training_history_filter_before_checkpoint_reads(functional, monkeypatch, tmp_path):
     from app.services import dashboard, training
     client, sessions = functional
@@ -438,7 +449,7 @@ def test_every_functional_operation_rejects_anonymous_requests(functional):
             response = client.request(method, path, headers={"Origin": ORIGIN})
             assert response.status_code == 401, (method, path, response.text)
             operations.append((method, path))
-    assert len(operations) == 27
+    assert len(operations) == 28
 
 
 def test_sync_states_are_filtered_before_limit_and_ignore_unverified_legacy(functional):

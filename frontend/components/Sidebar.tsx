@@ -29,22 +29,27 @@ export default function Sidebar({
   role = "investigador",
 }: SidebarProps) {
   const [hw, setHw] = useState<HardwareMini | null>(null);
-  const [isGcpConnected, setIsGcpConnected] = useState<boolean>(true);
+  // null until the storage check answers; the indicator stays hidden meanwhile.
+  const [isGcpConnected, setIsGcpConnected] = useState<boolean | null>(null);
   const [pendingFeedbackCount, setPendingFeedbackCount] = useState<number>(0);
 
   useEffect(() => {
     apiFetch(`${API_BASE_URL}/api/training/hardware`)
       .then((res) => {
-        if (res.ok) {
-          setIsGcpConnected(true);
-          return res.json();
-        }
+        if (res.ok) return res.json();
         return null;
       })
       .then((data) => {
         if (data) setHw(data);
       })
       .catch(() => null);
+
+    apiFetch(`${API_BASE_URL}/api/ingestion/connection`)
+      .then(async (res) => {
+        const data = res.ok ? await res.json() : null;
+        setIsGcpConnected(data?.connected === true);
+      })
+      .catch(() => setIsGcpConnected(false));
 
     const fetchStats = () => {
       getFeedbackStats()
@@ -222,7 +227,7 @@ export default function Sidebar({
         {/* GCP Status */}
         <div
           className={`flex items-center justify-between ${isCollapsed ? "md:justify-center md:gap-1.5" : ""}`}
-          title={isCollapsed ? `GCP: ${isGcpConnected ? "Conectado" : "Desconectado"}` : undefined}
+          title={isCollapsed && isGcpConnected !== null ? `GCP: ${isGcpConnected ? "Conectado" : "Desconectado"}` : undefined}
         >
           <div className={`flex items-center text-gray-400 gap-1.5 ${isCollapsed ? "md:gap-0" : ""}`}>
             <svg
@@ -240,7 +245,7 @@ export default function Sidebar({
             </svg>
             <span className={isCollapsed ? "md:sr-only" : ""}>GCP</span>
           </div>
-          {isCollapsed ? (
+          {isGcpConnected === null ? null : isCollapsed ? (
             <span
               className={`hidden md:inline-block w-2 h-2 rounded-full shrink-0 ${
                 isGcpConnected

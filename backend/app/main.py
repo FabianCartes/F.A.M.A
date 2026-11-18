@@ -575,6 +575,12 @@ def get_ingestion_status(access: ResourceAccess = Depends(resource_access)):
     return ingestion_service.get_storage_status()
 
 
+@app.get("/api/ingestion/connection")
+def get_ingestion_connection(access: ResourceAccess = Depends(resource_access)):
+    """Indica si el bucket de GCS responde, para cualquier usuario con sesión."""
+    return ingestion_service.check_connection()
+
+
 @app.get("/api/ingestion/datasets")
 def list_ingestion_datasets(access: ResourceAccess = Depends(resource_access)):
     """

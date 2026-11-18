@@ -386,3 +386,32 @@ def test_list_dataset_files_falls_back_to_local(tmp_path):
         assert "size_bytes" in first_file
         assert first_file["size_bytes"] > 0
 
+
+
+def _connection_service(tmp_path):
+    from app.services.ingestion import IngestionService
+    return IngestionService(bucket_name="test-bucket", local_base_dir=tmp_path / "raw",
+                            local_processed_dir=tmp_path / "processed")
+
+
+def test_check_connection_reads_a_single_object(tmp_path):
+    with patch("google.cloud.storage.Client") as client_cls:
+        client = client_cls.return_value
+        client.list_blobs.return_value = iter([MagicMock()])
+        assert _connection_service(tmp_path).check_connection() == {"connected": True, "reason": None}
+        client.list_blobs.assert_called_once_with("test-bucket", max_results=1, timeout=10)
+
+
+def test_check_connection_reports_failure_without_internal_detail(tmp_path):
+    with patch("google.cloud.storage.Client") as client_cls:
+        client_cls.return_value.list_blobs.side_effect = RuntimeError("/secret/credentials.json denied")
+        assert _connection_service(tmp_path).check_connection() == {"connected": False, "reason": "unreachable"}
+
+
+def test_check_connection_reports_missing_bucket_configuration(tmp_path):
+    from app.configuration import ConfigurationError
+    with patch("app.services.ingestion.storage_bucket", side_effect=ConfigurationError("storage_configuration_missing")), \
+         patch("google.cloud.storage.Client") as client_cls:
+        assert _connection_service(tmp_path).check_connection() == {
+            "connected": False, "reason": "storage_configuration_missing"}
+        client_cls.assert_not_called()

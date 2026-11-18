@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any, Tuple, Callable
 from google.cloud import storage
 from google.api_core.exceptions import PreconditionFailed
-from app.configuration import get_configuration, storage_bucket
+from app.configuration import ConfigurationError, get_configuration, storage_bucket
 from app.services.audio_hashing import sha256_file
 from app.services.dataset_comparison import compare_content
 
@@ -75,6 +75,21 @@ class IngestionService:
     def _get_client(self) -> storage.Client:
         storage_bucket(self.bucket_name)
         return storage.Client()
+
+    def check_connection(self) -> Dict[str, Any]:
+        """Cheap reachability check: lists one object, so object-level permissions suffice.
+
+        Only a reason code is returned; internal error details stay on the server.
+        """
+        try:
+            client = self._get_client()
+        except ConfigurationError:
+            return {"connected": False, "reason": "storage_configuration_missing"}
+        try:
+            next(iter(client.list_blobs(self.bucket_name, max_results=1, timeout=10)), None)
+        except Exception:
+            return {"connected": False, "reason": "unreachable"}
+        return {"connected": True, "reason": None}
 
     def get_storage_status(self) -> Dict[str, Any]:
         """

@@ -30,7 +30,7 @@ it("places the single named session and honest role in the sidebar above GCP and
   expect(request.mock.calls.some(([url]) => url.endsWith("/logout"))).toBe(true);
 });
 it("expands the collapsed user icon without logging out, retaining mobile details", async () => {
-  const request = vi.fn(async () => Response.json(user));
+  const request = vi.fn<(input: RequestInfo | URL) => Promise<Response>>(async () => Response.json(user));
   vi.stubGlobal("fetch", request);
   render(<SessionBoundary><Workspace collapsed /></SessionBoundary>);
   const expand = await screen.findByRole("button", { name: "Mostrar sesión de usuario" });
@@ -42,7 +42,12 @@ it("expands the collapsed user icon without logging out, retaining mobile detail
   fireEvent.click(expand);
   expect(screen.queryByRole("button", { name: "Mostrar sesión de usuario" })).toBeNull();
   expect(screen.getByRole("button", { name: "Cerrar sesión" })).toBeDefined();
-  expect(request).toHaveBeenCalledTimes(2); // session confirmation and existing hardware request only
+  // Session confirmation plus the sidebar's hardware and storage checks; expanding sends nothing (no logout).
+  const urls = request.mock.calls.map(([input]) => String(input));
+  expect(urls).toHaveLength(3);
+  expect(urls.some(url => url.includes("/api/training/hardware"))).toBe(true);
+  expect(urls.some(url => url.includes("/api/ingestion/connection"))).toBe(true);
+  expect(urls.some(url => url.includes("logout"))).toBe(false);
 });
 it("does not invent a session outside the authenticated provider", () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));

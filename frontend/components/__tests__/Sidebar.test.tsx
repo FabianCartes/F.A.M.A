@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { cleanup, render, screen, fireEvent } from "@testing-library/react";
 import Sidebar from "../Sidebar";
 
 vi.mock("@/lib/api/feedbackApi", () => ({
@@ -97,11 +97,14 @@ describe("Sidebar destinations", () => {
           json: () => Promise.resolve({ cuda_available: true, temperature_c: 45 }),
         });
       }
+      if (url.includes("/api/ingestion/connection")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ connected: true, reason: null }) });
+      }
       return Promise.resolve({ ok: false });
     });
 
     renderSidebar(true);
-    expect(screen.getByLabelText(/GCP Conectado/i)).toBeDefined();
+    expect(await screen.findByLabelText("GCP Conectado")).toBeDefined();
     const badge = await screen.findByTestId("hardware-badge-collapsed");
     expect(badge.textContent).toBe("GPU");
     expect(badge.className).toContain("text-cyan-400");
@@ -121,5 +124,58 @@ describe("Sidebar destinations", () => {
     renderSidebar(true);
     const badge = await screen.findByTestId("hardware-badge-collapsed");
     expect(badge.textContent).toBe("CPU");
+  });
+});
+
+describe("Sidebar GCP indicator", () => {
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  function mockConnection(connection: { ok: boolean; connected?: boolean } | "network-error") {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes("/api/training/hardware")) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ cuda_available: false }) });
+      }
+      if (url.includes("/api/ingestion/connection")) {
+        if (connection === "network-error") return Promise.reject(new TypeError("Failed to fetch"));
+        return Promise.resolve({
+          ok: connection.ok,
+          json: () => Promise.resolve({ connected: connection.connected, reason: connection.connected ? null : "unreachable" }),
+        });
+      }
+      return Promise.resolve({ ok: false });
+    });
+  }
+
+  it("asks the storage connection check instead of trusting the hardware response", async () => {
+    mockConnection({ ok: true, connected: false });
+    renderSidebar(false);
+    expect(await screen.findByText("Desconectado")).toBeDefined();
+    expect(screen.queryByText("Conectado")).toBeNull();
+    expect(vi.mocked(global.fetch).mock.calls.some(([url]) => String(url).includes("/api/ingestion/connection"))).toBe(true);
+  });
+
+  it("shows the bucket as connected when the check succeeds", async () => {
+    mockConnection({ ok: true, connected: true });
+    renderSidebar(false);
+    expect(await screen.findByText("Conectado")).toBeDefined();
+  });
+
+  it("reports disconnected when the check fails or cannot be reached", async () => {
+    mockConnection({ ok: false });
+    renderSidebar(true);
+    expect(await screen.findByLabelText("GCP Desconectado")).toBeDefined();
+    cleanup();
+    mockConnection("network-error");
+    renderSidebar(true);
+    expect(await screen.findByLabelText("GCP Desconectado")).toBeDefined();
+  });
+
+  it("shows no status before the check answers", () => {
+    global.fetch = vi.fn().mockReturnValue(new Promise(() => {}));
+    renderSidebar(false);
+    expect(screen.queryByText("Conectado")).toBeNull();
+    expect(screen.queryByText("Desconectado")).toBeNull();
   });
 });
