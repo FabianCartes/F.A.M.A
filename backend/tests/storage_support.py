@@ -21,3 +21,18 @@ def synthetic_bucket(name=TEST_BUCKET):
         yield name
     finally:
         activate_configuration(previous)
+
+
+SYNTHETIC_FREE_BYTES = 64 * 1024**3
+
+
+def synthetic_disk_capacity(monkeypatch, free=SYNTHETIC_FREE_BYTES):
+    """Make admission capacity a controlled prerequisite, not the developer disk's free space.
+
+    Default import reservations promise more than 10 GiB, so the real free space of the
+    test temporary directory would decide the result. Tests of the rejection set their own value.
+    """
+    from types import SimpleNamespace
+
+    monkeypatch.setattr("app.services.dataset_imports.shutil.disk_usage",
+                        lambda _: SimpleNamespace(free=free))

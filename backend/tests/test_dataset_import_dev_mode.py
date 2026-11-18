@@ -34,6 +34,8 @@ def local_imports(tmp_path, monkeypatch):
     with engine.connect() as connection:
         upgrade(connection)
     sessions = sessionmaker(bind=engine)
+    from tests.storage_support import synthetic_disk_capacity
+    synthetic_disk_capacity(monkeypatch)
     service = DatasetImports(tmp_path / "managed", limits=ImportLimits(free_bytes=1))
     app = FastAPI()
     app.include_router(router)

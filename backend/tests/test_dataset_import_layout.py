@@ -38,6 +38,8 @@ def layout_api(tmp_path, monkeypatch):
     with engine.connect() as connection:
         upgrade(connection)
     sessions = sessionmaker(bind=engine)
+    from tests.storage_support import synthetic_disk_capacity
+    synthetic_disk_capacity(monkeypatch)
     service = DatasetImports(tmp_path / "managed", limits=ImportLimits(free_bytes=1))
     app = FastAPI()
     app.include_router(router)
@@ -107,7 +109,7 @@ def test_new_import_rejects_nested_paths_and_cannot_override_fixed_root(layout_a
     with engine.connect() as db:
         assert "\n".join(db.connection.driver_connection.iterdump()) == before
     result = operation(request, worker, source, "preview", root="")
-    assert result["status"] == "needs_correction"
+    assert result["status"] == "cancelled"
     assert result["preview"]["layout"] == "class_folders"
     assert result["preview"]["error_count"] == 1
     assert result["issue_sample"] == [{"path": entry, "code": "class_folders_required", "severity": "error",

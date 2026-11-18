@@ -214,7 +214,7 @@ def test_invalid_automatic_archive_shows_diagnostics_without_partial_dataset(lay
     request, worker, _ = layout_api
     source, _ = create(request, tmp_path, entries)
     result, _, _ = run(request, worker, source)
-    assert result["status"] == "needs_correction"
+    assert result["status"] == "cancelled"
     assert result["dataset_id"] is None and result["added_count"] == 0
     assert result["preview"]["auto_import"] is True and result["preview"]["error_count"] > 0
     issues = request("GET", f"{BASE}/{source}/issues").json()["issues"]
@@ -248,7 +248,7 @@ def test_automatic_quota_and_existing_label_conflict_leave_target_unchanged(layo
         worker.service.limits = replace(limits, **quota)
         source, _ = create(request, tmp_path, entries, target=target)
         rejected, _, _ = run(request, worker, source)
-        assert rejected["status"] == "needs_correction" and rejected["added_count"] == 0
+        assert rejected["status"] == "cancelled" and rejected["added_count"] == 0
         issues = request("GET", f"{BASE}/{source}/issues").json()["issues"]
         assert code in [issue["code"] for issue in issues]
         assert all(issue["action"] for issue in issues if issue["severity"] == "error")
@@ -256,7 +256,10 @@ def test_automatic_quota_and_existing_label_conflict_leave_target_unchanged(layo
         assert request("GET", f"{BASE}/datasets/{target}/files").json() == files
 
 
-def test_interruption_before_journal_can_retry_validation(layout_api, tmp_path, monkeypatch):
+def test_local_failure_before_journal_cancels_without_partial_dataset(layout_api, tmp_path, monkeypatch):
+    # 77c005c: a local execution failure before publication cancels the request and keeps
+    # nothing published; the corrected ZIP is uploaded as a new import.
+
     request, worker, _ = layout_api
     source, _ = create(request, tmp_path, [("bird/a.wav", wav_bytes())])
     execution, _ = admit(request, source)
@@ -275,14 +278,13 @@ def test_interruption_before_journal_can_retry_validation(layout_api, tmp_path, 
         assert worker.run_once()
     assert interrupted
     assert request("GET", execution["status_url"]).json()["status"] == "failed"
-    before = state(request, source)
-    assert before["status"] == "validating" and before["preview_token"] is None
+    after = state(request, source)
+    assert after["status"] == "cancelled" and after["preview_token"] is None
     assert request("GET", BASE + "/datasets").json()["datasets"] == []
     retry = request("POST", execution["status_url"] + "/retry", body={"request_key": "retry"})
-    assert retry.status_code == 202
-    assert worker.run_once()
-    assert state(request, source)["status"] == "imported"
-    assert state(request, source)["added_count"] == 1
+    assert retry.status_code == 409, retry.text
+    assert not worker.run_once()
+    assert state(request, source)["status"] == "cancelled"
 
 
 @pytest.mark.parametrize("point", ["before_journal", "after_rename"])

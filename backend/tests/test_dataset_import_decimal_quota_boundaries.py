@@ -67,7 +67,7 @@ def test_decimal_target_quota_boundary(layout_api, tmp_path, shortfall):
                           for file in final_files]
             assert sorted(downloaded) == sorted([original, addition])
         else:
-            assert result["status"] == "needs_correction"
+            assert result["status"] == "cancelled"
             assert result["dataset_id"] is None and result["added_count"] == 0
             issues = request("GET", f"{BASE}/{source}/issues").json()["issues"]
             errors = [i for i in issues if i["severity"] == "error"]

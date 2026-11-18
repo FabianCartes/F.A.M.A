@@ -250,7 +250,7 @@ def test_published_zip_trains_through_a_partition_version_and_rejects_changed_lo
         assert rejected.status_code == 400, rejected.text
         assert "contenido local" in rejected.json()["detail"]
         assert client.get("/api/training/progress", headers=headers).json()["status"] == "failed"
-        assert client.get("/api/training/history", headers=headers).json() == {"history": []}
+        assert client.get("/api/training/history", headers=headers).json() == {"history": [], "compositions": []}
         process.assert_not_called()
         return
     admitted = client.post("/api/training/start", json=body, headers=headers)
@@ -261,7 +261,7 @@ def test_published_zip_trains_through_a_partition_version_and_rejects_changed_lo
     assert config["dataset_name"] == "Bosque"
     assert config["source"]["partition_manifest"]["version"] == saved["version"]
     assert len(config["models"]) == (3 if is_tri_model else 1)
-    assert client.get("/api/training/history", headers=headers).json() == {"history": []}
+    assert client.get("/api/training/history", headers=headers).json() == {"history": [], "compositions": []}
     assert client.post("/api/training/stop", headers=headers).status_code == 200
 
 

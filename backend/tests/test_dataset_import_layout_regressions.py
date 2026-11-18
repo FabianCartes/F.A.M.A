@@ -70,7 +70,7 @@ def test_bad_structure_and_root_override_never_publish_partial_content(layout_ap
         "detail": "El formato clase/audio.wav no admite seleccionar una raíz."})
     assert dump(engine) == before
     result, _ = run(request, worker, source, "preview", root="")
-    assert result["status"] == "needs_correction"
+    assert result["status"] == "cancelled"
     assert result["issue_sample"] == [{"path": path, "code": "class_folders_required",
         "severity": "error", "action": ACTION}]
     before = dump(engine)
@@ -132,7 +132,7 @@ def test_content_checks_still_block_confirmation_without_database_changes(layout
     request, worker, engine = layout_api
     source, _ = create(request, entries, "class_folders")
     state, _ = run(request, worker, source, "preview", root="")
-    assert state["status"] == "needs_correction"
+    assert state["status"] == "cancelled"
     assert state["issue_sample"][0]["code"] == code
     before = dump(engine)
     rejected = request("POST", f"{BASE}/{source}/confirm", body={"request_key": "no",

@@ -30,6 +30,8 @@ def imports(tmp_path, monkeypatch, request):
     from tests.schema_support import migrated_engine
     engine = migrated_engine()
     sessions = sessionmaker(bind=engine)
+    from tests.storage_support import synthetic_disk_capacity
+    synthetic_disk_capacity(monkeypatch)
     service = DatasetImports(tmp_path / "managed", limits=ImportLimits(free_bytes=1))
     app = FastAPI()
     app.include_router(router)
@@ -175,7 +177,7 @@ def test_duplicate_and_label_conflict_do_not_change_published_membership(imports
     assert repeated.json()["added_count"] == 0
     conflict = prepare(client, tmp_path, key="conflict", target_id=target,
                        entries=[("motor/a.wav", wav_bytes())])
-    assert conflict["status"] == "needs_correction"
+    assert conflict["status"] == "cancelled"
     assert confirm(client, conflict).status_code == 409
     assert client.get(f"/api/ingestion/imports/datasets/{target}/files").json() == before
 
@@ -194,8 +196,12 @@ def test_stale_preview_and_changed_request_are_rejected(imports, tmp_path):
     assert changed.status_code == 409
 
 
-def test_owner_is_required_for_every_import_and_dataset_operation(imports, tmp_path):
+def test_owner_is_required_for_every_import_and_dataset_operation(imports, tmp_path, monkeypatch):
     from app.routes.dataset_imports import get_import_user
+    from tests.http_security import configure_cookie_sessions
+    # Without web-session settings anonymous requests fail closed with 503; configure them
+    # so the anonymous case proves the 401 contract.
+    configure_cookie_sessions(monkeypatch)
     client, _, app, _ = imports
     job = prepare(client, tmp_path)
     target = confirm(client, job).json()["dataset_id"]
@@ -213,7 +219,9 @@ def test_owner_is_required_for_every_import_and_dataset_operation(imports, tmp_p
     assert client.post("/api/ingestion/imports", json={"request_key": "foreign", "name": "X", "target_id": target}).status_code == 404
     app.dependency_overrides.pop(get_import_user)
     assert client.get("/api/ingestion/imports").status_code == 401
-    assert client.post("/api/ingestion/imports", json={"request_key": "unauth", "name": "X"}).status_code == 401
+    from tests.http_security import COOKIE_ORIGIN
+    assert client.post("/api/ingestion/imports", headers={"Origin": COOKIE_ORIGIN},
+                       json={"request_key": "unauth", "name": "X"}).status_code == 401
 
 
 def test_cancel_expiry_and_cleanup_never_delete_confirmed_files(imports, tmp_path, monkeypatch):

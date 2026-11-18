@@ -53,7 +53,7 @@ def test_exact_dataset_boundary_and_one_unit_over_reject_without_publication(imp
     service.limits = replace(service.limits, dataset_bytes=2 * size - (dimension == "dataset_bytes"),
                              dataset_entries=1 if dimension == "dataset_entries" else 2)
     over = prepare(client, tmp_path, key="over", target_id=target, sample=2)
-    assert over["status"] == "needs_correction"
+    assert over["status"] == "cancelled"
     issues = client.get(f"{BASE}/{over['id']}/issues").json()["issues"]
     assert [i["code"] for i in issues if i["severity"] == "error"] == [code]
     assert confirm(client, over).status_code == 409
@@ -84,10 +84,15 @@ def test_confirmation_rechecks_effective_limits_at_both_gates(imports, tmp_path,
     assert catalog(client) == before
     assert not (service.root / "objects" / reviewed["id"]).exists()
     state = client.get(f"{BASE}/{reviewed['id']}").json()
-    assert state["status"] == ("ready" if phase == "before_journal" else "committing")
-    # A rejected journal remains recoverable once the operator restores capacity.
     service.limits = replace(service.limits, dataset_bytes=len(wav_bytes()))
     monkeypatch.undo()
+    if phase == "before_journal":
+        # 77c005c: a failure before publication cancels the request; retrying needs a new import.
+        assert state["status"] == "cancelled"
+        assert confirm(client, reviewed).status_code == 409
+        return
+    # A confirmation pending publication recovery is never cancelled automatically.
+    assert state["status"] == "committing"
     assert confirm(client, reviewed).json()["status"] == "imported"
 
 
@@ -160,7 +165,9 @@ def test_inconsistent_dataset_summary_fails_closed_without_repair(imports, tmp_p
 
 
 @pytest.mark.parametrize("when", ["preview", "confirm"])
-def test_quota_rejection_retains_reservation_until_safe_cancel_or_retry(imports, tmp_path, when):
+def test_quota_rejection_cancels_the_import_and_releases_its_reservation(imports, tmp_path, when):
+    # 77c005c: a definitive failure before publication cancels the request and releases
+    # its logical receipt reservation; a corrected ZIP starts a new import.
     client, service, _, sessions = imports
     receipt_schema(sessions)
     size = len(wav_bytes())
@@ -168,21 +175,17 @@ def test_quota_rejection_retains_reservation_until_safe_cancel_or_retry(imports,
         service.limits = replace(service.limits, dataset_bytes=size - 1)
     reviewed = receive(client, tmp_path, "reserved")
     url = f"{BASE}/{reviewed['id']}/receipt"
-    promise = client.get(url).json()["reserved_bytes"]
-    assert promise > 0
-    if when == "preview":
-        assert reviewed["status"] == "needs_correction"
-        assert confirm(client, reviewed).status_code == 409
-    else:
+    if when == "confirm":
+        assert client.get(url).json()["reserved_bytes"] > 0
         service.limits = replace(service.limits, dataset_bytes=size - 1)
         assert confirm(client, reviewed).json()["status"] == "failed"
-    assert client.get(url).json()["reserved_bytes"] == promise
+    state = client.get(f"{BASE}/{reviewed['id']}").json()
+    assert state["status"] == "cancelled"
+    assert client.get(url).json()["reserved_bytes"] == 0
     assert catalog(client)["datasets"] == []
     assert not (service.root / "objects" / reviewed["id"]).exists()
-    assert client.post(f"{BASE}/{reviewed['id']}/cancel").status_code == 200
-    assert client.get(url).json()["reserved_bytes"] == 0
-    assert client.post(f"{BASE}/{reviewed['id']}/cancel").status_code == 200
-    assert client.get(url).json()["reserved_bytes"] == 0
+    service.limits = replace(service.limits, dataset_bytes=size)
+    assert confirm(client, reviewed).status_code == 409
 
 
 def test_duplicate_collection_and_label_conflict_keep_previous_behavior_at_capacity(imports, tmp_path):
@@ -202,7 +205,7 @@ def test_duplicate_collection_and_label_conflict_keep_previous_behavior_at_capac
     assert client.get(f"{BASE}/{duplicate['id']}/receipt").json()["reserved_bytes"] == 0
     conflict = prepare(client, tmp_path, key="conflict", target_id=target,
                        entries=[("motor/a.wav", wav_bytes())])
-    assert conflict["status"] == "needs_correction"
+    assert conflict["status"] == "cancelled"
     issues = client.get(f"{BASE}/{conflict['id']}/issues").json()["issues"]
     assert [i["code"] for i in issues if i["severity"] == "error"] == ["label_conflict"]
     assert confirm(client, conflict).status_code == 409
@@ -293,4 +296,6 @@ def test_configured_dataset_limits_are_public_without_raising_archive_defaults(i
     assert response.status_code == 200
     limits = response.json()
     assert (limits["dataset_bytes"], limits["dataset_entries"]) == (900, 3)
-    assert (limits["received_bytes"], limits["expanded_bytes"], limits["entries"]) == (64 * 1024**2, 256 * 1024**2, 2000)
+    defaults = ImportLimits()
+    assert (limits["received_bytes"], limits["expanded_bytes"], limits["entries"]) == (
+        defaults.received_bytes, defaults.expanded_bytes, defaults.entries)
