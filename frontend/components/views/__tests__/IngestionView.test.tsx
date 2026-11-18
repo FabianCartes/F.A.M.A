@@ -189,7 +189,9 @@ describe('IngestionView persisted inference dataset and curation', () => {
     expect(queue().getByRole('columnheader', { name: 'Audio' })).toBeDefined();
     const name = queue().getByTitle(filename);
     expect(name.textContent).toBe(filename);
-    expect(name.classList.contains('truncate')).toBe(true);
+    // Desktop truncates long names; phones wrap them because there is no hover title.
+    expect(name.classList.contains('md:truncate')).toBe(true);
+    expect(name.classList.contains('break-all')).toBe(true);
     const local = new Date('2026-10-06T20:30:17+00:00').toLocaleString('es-CL', {
       year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit', second: '2-digit',
@@ -305,12 +307,42 @@ describe('IngestionView persisted inference dataset and curation', () => {
     vi.mocked(feedbackApi.getPendingFeedback).mockResolvedValueOnce([{ ...item, etiqueta_predicha: 'Rayadito', etiqueta_corregida: null, fue_correcta: true }]).mockResolvedValueOnce([]);
     await open();
     expect(queue().queryByRole('combobox')).toBeNull();
-    expect(queue().getByText('Dataset de inferencia')).toBeDefined();
-    expect(queue().getByText('AvesChilenas')).toBeDefined();
+    expect(queue().getByRole('columnheader', { name: 'Dataset' })).toBeDefined();
+    expect(queue().getByRole('cell', { name: 'AvesChilenas' })).toBeDefined();
     expect((incorporate() as HTMLButtonElement).disabled).toBe(false);
     await act(async () => { fireEvent.click(incorporate()); });
     expect(feedbackApi.approveFeedback).toHaveBeenCalledWith(42);
     expect(screen.getByTestId('curation-queue-empty')).toBeDefined();
+  });
+
+  it('names the queue columns plainly', async () => {
+    vi.mocked(feedbackApi.getPendingFeedback).mockResolvedValue([item]);
+    await open();
+    expect(queue().getAllByRole('columnheader').map(header => header.textContent)).toEqual([
+      'Audio', 'Etiqueta predicha', 'Etiqueta final', 'Confianza', 'Dataset', 'Acciones',
+    ]);
+  });
+
+  it('pages the queue twenty at a time, counts every pending audio and steps back from an emptied page', async () => {
+    const pending = (start: number, count: number) => Array.from({ length: count }, (_, index) => ({
+      ...item, id_retroalimentacion: 500 - start - index, audio_filename: `pendiente_${start + index}.wav` }));
+    vi.mocked(feedbackApi.getFeedbackStats).mockResolvedValue({ total_validated: 30, correct_count: 0,
+      corrected_count: 21, accuracy_rate: 0, pending_curation_count: 21, corrections_breakdown: [] });
+    vi.mocked(feedbackApi.getPendingFeedback)
+      .mockResolvedValueOnce(pending(0, 21)).mockResolvedValueOnce(pending(20, 1))
+      .mockResolvedValueOnce([]).mockResolvedValueOnce(pending(0, 20));
+    await open();
+    expect(queue().getByText('21 pendiente(s)')).toBeDefined();
+    expect(queue().getAllByRole('button', { name: 'Descartar de la cola' })).toHaveLength(20);
+    expect(vi.mocked(feedbackApi.getPendingFeedback)).toHaveBeenLastCalledWith(21, expect.any(AbortSignal), 0);
+    await act(async () => { fireEvent.click(queue().getByRole('button', { name: 'Página siguiente' })); });
+    expect(vi.mocked(feedbackApi.getPendingFeedback)).toHaveBeenLastCalledWith(21, expect.any(AbortSignal), 20);
+    expect(queue().getByText('pendiente_20.wav')).toBeDefined();
+    expect(queue().getByText('Página 2')).toBeDefined();
+    await act(async () => { fireEvent.click(discard()); });
+    expect(vi.mocked(feedbackApi.getPendingFeedback)).toHaveBeenLastCalledWith(21, expect.any(AbortSignal), 0);
+    expect(queue().getAllByRole('button', { name: 'Descartar de la cola' })).toHaveLength(20);
+    expect(queue().queryByRole('button', { name: 'Página siguiente' })).toBeNull();
   });
 
   it('renders corrected and correct pending recordings and refreshes after incorporation and discard', async () => {

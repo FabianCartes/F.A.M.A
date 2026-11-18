@@ -5,9 +5,12 @@ import { API_BASE_URL, apiFetch as fetch } from "@/lib/api";
 import { useOptionalWebSession } from "@/components/auth/SessionBoundary";
 import {
   getPendingFeedback,
+  getFeedbackStats,
   approveFeedback,
   rejectFeedback,
 } from "@/lib/api/feedbackApi";
+import PageControls, { PAGE_SIZE } from "@/components/common/PageControls";
+import { stackedCell, stackedRow, stackedTable } from "@/components/common/stackedTable";
 import { PendingFeedbackItem } from "@/lib/schemas/feedback";
 import FeedbackSyncPanel from "@/components/feedback/FeedbackSyncPanel";
 import type { ContentCheck } from "@/lib/schemas/ingestion";
@@ -155,6 +158,10 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
   const [queueLoadError, setQueueLoadError] = useState<string | null>(null);
   const [syncRefreshKey, setSyncRefreshKey] = useState(0);
   const queueGeneration = useRef(0);
+  const queueOffsetRef = useRef(0);
+  const [queueOffset, setQueueOffset] = useState(0);
+  const [queueHasNext, setQueueHasNext] = useState(false);
+  const [pendingTotal, setPendingTotal] = useState<number | null>(null);
   const queueRequest = useRef<AbortController | null>(null);
 
   const reportFeedbackError = (err: unknown) => {
@@ -273,16 +280,28 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
     return () => { controller.abort(); clearInterval(timer); };
   }, [publishingDataset]);
 
-  const fetchPendingFeedbacks = useCallback(async () => {
+  const fetchPendingFeedbacks = useCallback(async (requested: number = queueOffsetRef.current): Promise<void> => {
     const current = ++queueGeneration.current;
     queueRequest.current?.abort();
     const controller = new AbortController();
     queueRequest.current = controller;
     setIsLoadingFeedback(true);
+    // The total is informative: a failed count keeps the page usable.
+    void Promise.resolve().then(getFeedbackStats).then(stats => {
+      if (current === queueGeneration.current) setPendingTotal(stats?.pending_curation_count ?? null);
+    }, () => undefined);
     try {
-      const items = await getPendingFeedback(50, controller.signal);
+      let fetched = await getPendingFeedback(PAGE_SIZE + 1, controller.signal, requested);
+      // A page emptied by curation falls back to the previous page.
+      while (fetched.length === 0 && requested > 0 && current === queueGeneration.current && !controller.signal.aborted) {
+        requested = Math.max(0, requested - PAGE_SIZE);
+        fetched = await getPendingFeedback(PAGE_SIZE + 1, controller.signal, requested);
+      }
       if (current !== queueGeneration.current || controller.signal.aborted) return;
-      setPendingFeedbacks(items);
+      queueOffsetRef.current = requested;
+      setQueueOffset(requested);
+      setQueueHasNext(fetched.length > PAGE_SIZE);
+      setPendingFeedbacks(fetched.slice(0, PAGE_SIZE));
       setQueueLoadError(null);
     } catch (err: unknown) {
       if (current !== queueGeneration.current || controller.signal.aborted) return;
@@ -786,11 +805,11 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
 
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#1c1e24] text-emerald-400 border border-emerald-800/40">
-              {pendingFeedbacks.length} pendiente(s)
+              {pendingTotal ?? `${queueOffset + pendingFeedbacks.length}${queueHasNext ? "+" : ""}`} pendiente(s)
             </span>
             <button
               type="button"
-              onClick={fetchPendingFeedbacks}
+              onClick={() => void fetchPendingFeedbacks()}
               disabled={isLoadingFeedback}
               className="text-[11px] text-gray-400 hover:text-gray-200 transition-colors flex items-center gap-1 p-1 rounded hover:bg-[#1f2128]"
               title="Actualizar cola de curación"
@@ -849,18 +868,19 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
             </div>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
+          <div className="md:overflow-x-auto">
+            <table className={`${stackedTable} text-xs`}>
+              <thead className="hidden md:table-header-group">
                 <tr className="border-b border-[#23252e] text-gray-400">
                   <th className="pb-2.5 font-medium">Audio</th>
-                  <th className="pb-2.5 font-medium">Etiqueta Predicha</th>
-                  <th className="pb-2.5 font-medium">Etiqueta Validada / Corregida</th>
+                  <th className="pb-2.5 font-medium">Etiqueta predicha</th>
+                  <th className="pb-2.5 font-medium">Etiqueta final</th>
                   <th className="pb-2.5 font-medium">Confianza</th>
-                  <th className="pb-2.5 font-medium text-right pr-2">Acciones Human-in-the-Loop</th>
+                  <th className="pb-2.5 font-medium">Dataset</th>
+                  <th className="pb-2.5 font-medium text-right pr-2">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#23252e]/60">
+              <tbody className="block md:table-row-group md:divide-y md:divide-[#23252e]/60">
                 {pendingFeedbacks.map((item) => {
                   const filename = item.audio_filename?.trim() || "Nombre original no disponible";
                   const label = item.fue_correcta ? item.etiqueta_predicha : item.etiqueta_corregida;
@@ -869,20 +889,21 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
                   const isProcessing = processingFeedbackId === item.id_retroalimentacion;
 
                   return (
-                    <tr key={item.id_retroalimentacion} className="hover:bg-[#1c1e24]/40 transition-colors">
-                      <td className="py-3 font-medium text-gray-200">
-                        <span className="block font-mono text-gray-300 text-xs truncate max-w-xs" title={filename}>
+                    <tr key={item.id_retroalimentacion} className={`${stackedRow} md:hover:bg-[#1c1e24]/40 transition-colors`}>
+                      {/* On phones the file name heads the card, so it carries no side label. */}
+                      <td className="block pb-2 mb-1 border-b border-[#23252e]/60 font-medium text-gray-200 md:table-cell md:py-3 md:mb-0 md:border-0">
+                        <span className="block font-mono text-gray-300 text-xs break-all md:truncate md:max-w-xs" title={filename}>
                           {filename}
                         </span>
                         <span className="text-[10px] text-gray-500 font-mono block mt-0.5">
                           {uploadDateLabel(item.fecha_carga)}
                         </span>
                       </td>
-                      <td className="py-3 text-gray-400 font-mono text-xs">
+                      <td data-label="Predicha" className={`${stackedCell} md:py-3 text-gray-400 font-mono text-xs`}>
                         {item.etiqueta_predicha}
                       </td>
-                      <td className="py-3">
-                        <div className="flex items-center gap-1.5 flex-wrap">
+                      <td data-label="Final" className={`${stackedCell} md:py-3`}>
+                        <div className="flex items-center justify-end md:justify-start gap-1.5 flex-wrap">
                           <span
                             className={`px-2 py-0.5 rounded text-[11px] font-mono font-medium border ${
                               isCorrected
@@ -899,25 +920,23 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
                           )}
                         </div>
                       </td>
-                      <td className="py-3 font-mono text-gray-300 text-xs">
+                      <td data-label="Confianza" className={`${stackedCell} md:py-3 font-mono text-gray-300 text-xs`}>
                         {(item.confianza * 100).toFixed(1)}%
                       </td>
-                      <td className="py-3 text-right pr-2">
-                        <div className="mb-2 space-y-1 text-left">
-                          <span className="block text-gray-400">Dataset de inferencia</span>
-                          {item.dataset_name ? (
-                            <p className="font-mono text-emerald-300">{item.dataset_name}</p>
-                          ) : (
-                            <p className="text-[11px] text-amber-300">Sin dataset de inferencia asociado. No se puede incorporar este audio sin una asociación verificable; permanece pendiente o puedes descartarlo de la cola.</p>
-                          )}
-                          {!label && <p className="text-[11px] text-amber-300">No hay una clase validada disponible para incorporar este audio.</p>}
-                        </div>
-                        <div className="flex items-center justify-end gap-2">
+                      <td data-label="Dataset" className={`${stackedCell} md:py-3 font-mono text-emerald-300`}>
+                        {item.dataset_name || <span className="font-sans text-amber-300">Sin asociar</span>}
+                      </td>
+                      <td className="block pt-2 md:table-cell md:py-3 md:pt-3 md:text-right md:pr-2">
+                        {!item.dataset_name && (
+                          <p className="mb-2 text-left text-[11px] text-amber-300">Sin dataset de inferencia asociado. No se puede incorporar este audio sin una asociación verificable; permanece pendiente o puedes descartarlo de la cola.</p>
+                        )}
+                        {!label && <p className="mb-2 text-left text-[11px] text-amber-300">No hay una clase validada disponible para incorporar este audio.</p>}
+                        <div className="grid grid-cols-2 gap-2 md:flex md:items-center md:justify-end">
                           <button
                             type="button"
                             onClick={() => handleApprove(item)}
                             disabled={processingFeedbackId !== null || !canIncorporate}
-                            className="px-2.5 py-1 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 transition-colors shadow-sm flex items-center gap-1 cursor-pointer"
+                            className="justify-center px-2.5 py-2 md:py-1 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 transition-colors shadow-sm flex items-center gap-1 cursor-pointer"
                           >
                             {isProcessing ? (
                               <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -936,7 +955,7 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
                             type="button"
                             onClick={() => handleReject(item.id_retroalimentacion)}
                             disabled={processingFeedbackId !== null}
-                            className="px-2.5 py-1 rounded-lg text-xs font-semibold text-red-400 hover:text-red-300 bg-red-950/40 hover:bg-red-900/50 border border-red-800/60 disabled:opacity-40 transition-colors flex items-center gap-1 cursor-pointer"
+                            className="justify-center px-2.5 py-2 md:py-1 rounded-lg text-xs font-semibold text-red-400 hover:text-red-300 bg-red-950/40 hover:bg-red-900/50 border border-red-800/60 disabled:opacity-40 transition-colors flex items-center gap-1 cursor-pointer"
                           >
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -951,6 +970,10 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
               </tbody>
             </table>
           </div>
+        )}
+        {pendingFeedbacks.length > 0 && (
+          <PageControls offset={queueOffset} hasNext={queueHasNext} disabled={isLoadingFeedback || processingFeedbackId !== null}
+            onChange={next => void fetchPendingFeedbacks(next)} />
         )}
       </section>
 

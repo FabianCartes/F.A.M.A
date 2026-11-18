@@ -245,6 +245,32 @@ def test_get_pending_feedback(client, test_db, sample_prediction):
     assert "fecha_retroalimentacion" in item
 
 
+def test_pending_feedback_pages_with_offset_in_stable_order(client, test_db):
+    """GET /api/feedback/pending pages newest first; ties keep a stable id order."""
+    from datetime import datetime, timezone
+    same_time = datetime(2026, 11, 18, 12, 0, tzinfo=timezone.utc)
+    ids = []
+    for index in range(3):
+        pred = Prediccion(ruta_audio_prueba=f"audios_prueba/pagina_{index}.wav",
+                          etiqueta_predicha="Chincol", confianza=0.9, modelo_id="super-ensemble-tri-model")
+        test_db.add(pred)
+        test_db.commit()
+        feedback = Retroalimentacion(id_prediccion=pred.id_prediccion, fue_correcta=True,
+                                     procesado=False, fecha_retroalimentacion=same_time)
+        test_db.add(feedback)
+        test_db.commit()
+        ids.append(feedback.id_retroalimentacion)
+
+    first = client.get("/api/feedback/pending?limit=2")
+    second = client.get("/api/feedback/pending?limit=2&offset=2")
+
+    assert first.status_code == 200 and second.status_code == 200
+    assert [item["id_retroalimentacion"] for item in first.json()] == [ids[2], ids[1]]
+    assert [item["id_retroalimentacion"] for item in second.json()] == [ids[0]]
+    assert client.get("/api/feedback/pending?offset=3").json() == []
+    assert client.get("/api/feedback/pending?offset=-1").status_code == 422
+
+
 @pytest.mark.parametrize("with_metadata", [True, False])
 def test_pending_original_audio_metadata(client, test_db, sample_prediction, with_metadata):
     from datetime import datetime, timezone

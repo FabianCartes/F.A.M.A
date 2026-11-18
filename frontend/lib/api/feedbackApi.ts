@@ -132,12 +132,20 @@ export async function sendFeedback(payload: unknown): Promise<FeedbackResponse> 
   );
 }
 
+/** Query suffix for a later page; the first page keeps the historical URL. */
+function pageOffset(offset: number): string {
+  if (!Number.isInteger(offset) || offset < 0) {
+    throw new ValidationError("El desplazamiento debe ser un entero no negativo");
+  }
+  return offset > 0 ? `&offset=${offset}` : "";
+}
+
 /**
  * Fetches uncurated pending feedback items for human-in-the-loop review.
  */
-export async function getPendingFeedback(limit: number = 50, signal?: AbortSignal): Promise<PendingFeedbackItem[]> {
+export async function getPendingFeedback(limit: number = 50, signal?: AbortSignal, offset: number = 0): Promise<PendingFeedbackItem[]> {
   return request(
-    `${API_BASE_URL}/api/feedback/pending?limit=${limit}`,
+    `${API_BASE_URL}/api/feedback/pending?limit=${limit}${pageOffset(offset)}`,
     {
       method: "GET",
       signal,
@@ -147,12 +155,12 @@ export async function getPendingFeedback(limit: number = 50, signal?: AbortSigna
 }
 
 /** Read-only recent accepted records; refreshing never retries an upload. */
-export async function getFeedbackSync(limit: number = 50, signal?: AbortSignal): Promise<FeedbackSyncState[]> {
+export async function getFeedbackSync(limit: number = 50, signal?: AbortSignal, offset: number = 0): Promise<FeedbackSyncState[]> {
   if (!Number.isInteger(limit) || limit < 1 || limit > 500) {
     throw new ValidationError("El límite debe ser un entero entre 1 y 500");
   }
   return request(
-    `${API_BASE_URL}/api/feedback/sync?limit=${limit}`,
+    `${API_BASE_URL}/api/feedback/sync?limit=${limit}${pageOffset(offset)}`,
     { method: "GET", signal },
     (data) => FeedbackSyncListSchema.parse(data)
   );

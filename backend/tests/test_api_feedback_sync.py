@@ -64,6 +64,12 @@ def test_recent_accepted_states_are_bounded_read_only_and_separate_from_curation
         assert recent[1]['error_code'] == 'upload_failed'
         assert recent[1]['attempts'] == 1
         assert len(client.get('/api/feedback/pending').json()) == 1
+        paged = client.get('/api/feedback/sync?limit=1&offset=1')
+        assert paged.status_code == 200
+        assert [item['id_retroalimentacion'] for item in paged.json()] == [1]
+        assert client.get('/api/feedback/sync?offset=2').json() == []
+        for offset in ('-1', 'bad'):
+            assert client.get('/api/feedback/sync?offset=' + offset).status_code == 422
         for limit in ('0', '501', '-1', 'bad'):
             assert client.get('/api/feedback/sync?limit=' + limit).status_code == 422
         assert client.post('/api/feedback/sync').status_code == 405

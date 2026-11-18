@@ -160,4 +160,25 @@ describe('accepted feedback synchronization through the rendered panel', () => {
     expect(feedbackApi.getFeedbackSync).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole('region')).toBeNull();
   });
+  it('pages the record twenty at a time and offers the next page only when more exist', async () => {
+    const page = (start: number, count: number) => Array.from({ length: count }, (_, index) => ({
+      ...record, id_retroalimentacion: 100 - start - index, audio_filename: `audio_${start + index}.wav` }));
+    vi.mocked(feedbackApi.getFeedbackSync).mockResolvedValueOnce(page(0, 21)).mockResolvedValueOnce(page(20, 3));
+    await open();
+    expect(screen.getAllByRole('row').slice(1)).toHaveLength(20);
+    expect(screen.queryByText('audio_20.wav')).toBeNull();
+    expect((screen.getByRole('button', { name: 'Página anterior' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText('Página 1')).toBeDefined();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Página siguiente' })); });
+    expect(vi.mocked(feedbackApi.getFeedbackSync)).toHaveBeenLastCalledWith(21, expect.any(AbortSignal), 20);
+    expect(screen.getAllByRole('row').slice(1)).toHaveLength(3);
+    expect(screen.getByText('audio_20.wav')).toBeDefined();
+    expect(screen.getByText('Página 2')).toBeDefined();
+    expect((screen.getByRole('button', { name: 'Página siguiente' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('hides the page controls when everything fits in one page', async () => {
+    await open();
+    expect(screen.queryByRole('button', { name: 'Página siguiente' })).toBeNull();
+  });
 });

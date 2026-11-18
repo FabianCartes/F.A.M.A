@@ -16,6 +16,12 @@ describe("accepted local and cloud acknowledgement contract", () => {
       method: 'GET', signal: controller.signal, credentials: 'same-origin', cache: 'no-store', redirect: 'error',
     });
   });
+  it("requests a later page only when an offset is given", async () => {
+    respond([record]);
+    await getFeedbackSync(21, undefined, 20);
+    expect(global.fetch).toHaveBeenCalledWith(expect.stringMatching(/\/api\/feedback\/sync\?limit=21&offset=20$/), expect.anything());
+    await expect(getFeedbackSync(20, undefined, -1)).rejects.toThrow("El desplazamiento debe ser un entero no negativo");
+  });
   it("retains the real approval milestones, including replay acknowledgement", async () => {
     respond(approval);
     expect(await approveFeedback(7)).toMatchObject({ local_status: "incorporated", sync_status: "pending" });

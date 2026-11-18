@@ -235,6 +235,17 @@ describe("feedbackApi (TDD Contract Tests for RF_06 & Semi-Manual Curation)", ()
       );
     });
 
+    it("requests a later page only when an offset is given", async () => {
+      global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => [] });
+
+      await getPendingFeedback(21, undefined, 40);
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        `${API_BASE_URL}/api/feedback/pending?limit=21&offset=40`,
+        expect.objectContaining({ method: "GET" })
+      );
+    });
+
     it("throws ValidationError when response does not match expected schema", async () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,

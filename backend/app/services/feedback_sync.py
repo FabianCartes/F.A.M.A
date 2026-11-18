@@ -101,10 +101,12 @@ class FeedbackSyncQueue:
         db.flush()
         return _snapshot(row)
 
-    def recent(self, db, limit=50, access=None, *, prediction_ids=None):
+    def recent(self, db, limit=50, access=None, *, prediction_ids=None, offset=0):
         """Read-only accepted milestones, newest feedback first; no file/cloud IO."""
         if type(limit) is not int or not 1 <= limit <= 500:
             raise ValueError("Limit must be between 1 and 500")
+        if type(offset) is not int or offset < 0:
+            raise ValueError("Offset must be a non-negative integer")
         query = (db.query(FeedbackSync, Retroalimentacion)
                  .join(Retroalimentacion, FeedbackSync.id_retroalimentacion ==
                        Retroalimentacion.id_retroalimentacion)
@@ -115,7 +117,7 @@ class FeedbackSyncQueue:
         if prediction_ids is not None:
             query = query.filter(Retroalimentacion.id_prediccion.in_(prediction_ids))
         rows = (query.filter(Retroalimentacion.procesado.is_(True))
-                .order_by(FeedbackSync.id_retroalimentacion.desc()).limit(limit).all())
+                .order_by(FeedbackSync.id_retroalimentacion.desc()).offset(offset).limit(limit).all())
         from app.models.dataset import Audio, ConjuntoDatos
         names = {row.dataset_name for row, _ in rows}
         filenames = {f"feedback_{row.id_retroalimentacion}.wav" for row, _ in rows}

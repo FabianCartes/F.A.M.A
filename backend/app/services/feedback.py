@@ -148,7 +148,7 @@ class FeedbackService:
         ).first()
 
     def get_pending_feedback(self, db: Session, limit: int = 50, access=None, *,
-                             prediction_ids=None) -> List[Dict[str, Any]]:
+                             prediction_ids=None, offset: int = 0) -> List[Dict[str, Any]]:
         """
         Retrieve uncurated feedback records (procesado == False) with original prediction metadata.
         """
@@ -160,7 +160,10 @@ class FeedbackService:
             query = query.filter(Retroalimentacion.id_prediccion.in_(prediction_ids))
         results = (
             query.filter(Retroalimentacion.procesado == False)
-            .order_by(Retroalimentacion.fecha_retroalimentacion.desc())
+            # The id tie-breaker keeps pages disjoint when timestamps coincide.
+            .order_by(Retroalimentacion.fecha_retroalimentacion.desc(),
+                      Retroalimentacion.id_retroalimentacion.desc())
+            .offset(offset)
             .limit(limit)
             .all()
         )

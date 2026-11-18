@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getFeedbackSync } from "@/lib/api/feedbackApi";
 import type { FeedbackSyncState } from "@/lib/schemas/feedback";
+import PageControls, { PAGE_SIZE } from "@/components/common/PageControls";
+import { stackedCell, stackedRow, stackedTable } from "@/components/common/stackedTable";
 
 function author(id: number | null | undefined, name: string | null | undefined) {
   return name || (id ? `cuenta #${id}` : "autor sin registrar");
@@ -22,6 +24,9 @@ export default function FeedbackSyncPanel({ refreshKey, onSynced }: {
   onSynced?: () => void;
 }) {
   const [records, setRecords] = useState<FeedbackSyncState[]>([]);
+  const [offset, setOffset] = useState(0);
+  const [hasNext, setHasNext] = useState(false);
+  const pageOffset = useRef(0);
   const pending = useRef(new Set<number>());
   const synced = useRef(onSynced);
   useEffect(() => { synced.current = onSynced; }, [onSynced]);
@@ -30,15 +35,24 @@ export default function FeedbackSyncPanel({ refreshKey, onSynced }: {
   const generation = useRef(0);
   const request = useRef<AbortController | null>(null);
 
-  const refresh = useCallback(async (quiet = false) => {
+  const refresh = useCallback(async (quiet = false, requested = pageOffset.current) => {
     const current = ++generation.current;
     request.current?.abort();
     const controller = new AbortController();
     request.current = controller;
     if (!quiet) setLoading(true);
     try {
-      const next = await getFeedbackSync(50, controller.signal);
+      let fetched = await getFeedbackSync(PAGE_SIZE + 1, controller.signal, requested);
+      // A page emptied since the last read falls back to the previous page.
+      while (fetched.length === 0 && requested > 0 && current === generation.current && !controller.signal.aborted) {
+        requested = Math.max(0, requested - PAGE_SIZE);
+        fetched = await getFeedbackSync(PAGE_SIZE + 1, controller.signal, requested);
+      }
       if (current !== generation.current || controller.signal.aborted) return;
+      const next = fetched.slice(0, PAGE_SIZE);
+      pageOffset.current = requested;
+      setOffset(requested);
+      setHasNext(fetched.length > PAGE_SIZE);
       const arrived = next.some(record => record.sync_status === "synced" && pending.current.has(record.id_retroalimentacion));
       pending.current = new Set(next.filter(record => record.sync_status === "pending").map(record => record.id_retroalimentacion));
       setRecords(next);
@@ -86,14 +100,14 @@ export default function FeedbackSyncPanel({ refreshKey, onSynced }: {
   return (
     <section aria-label="Registro de audios incorporados" className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4 text-xs text-gray-300">
       <h2 className="text-sm font-bold text-white">Registro de audios incorporados</h2>
-      <p>Últimos 50 registros aceptados, separados de la cola de revisión. La incorporación local es un hito aceptado, no una auditoría física actual. Una copia cloud confirmada es un acuse durable, no una comprobación de existencia actual en GCS.</p>
+      <p>Registros aceptados, del más reciente al más antiguo y separados de la cola de revisión. La incorporación local es un hito aceptado, no una auditoría física actual. Una copia cloud confirmada es un acuse durable, no una comprobación de existencia actual en GCS.</p>
       {loading && <p role="status">Consultando registro de audios...</p>}
       {error && <p role="alert" className="text-amber-300">{error}</p>}
       {!loading && !error && records.length === 0 && <p role="status">No hay registros recientes de audios incorporados.</p>}
       {records.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left" aria-label="Estados de audios incorporados">
-            <thead>
+        <div className="md:overflow-x-auto">
+          <table className={stackedTable} aria-label="Estados de audios incorporados">
+            <thead className="hidden md:table-header-group">
               <tr className="border-b border-[#23252e]">
                 <th className="p-2">Dataset de destino</th>
                 <th className="p-2">Nombre del audio revisado</th>
@@ -102,20 +116,22 @@ export default function FeedbackSyncPanel({ refreshKey, onSynced }: {
                 <th className="p-2">Copia cloud</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="block md:table-row-group">
               {records.map(record => (
-                <tr key={record.id_retroalimentacion} className="border-b border-[#23252e]">
-                  <td className="p-2">
+                <tr key={record.id_retroalimentacion} className={`${stackedRow} md:border-b md:border-[#23252e]`}>
+                  <td data-label="Dataset" className={`${stackedCell} md:p-2`}>
                     {record.dataset_display_name || (record.dataset_name.startsWith('imported:')
                       ? 'Dataset privado' : record.dataset_name)}
                   </td>
-                  <td className="p-2">
-                    <p><span className="text-gray-400">Original: </span>{record.audio_filename || 'Nombre original no disponible'}</p>
-                    <p><span className="text-gray-400">En el dataset: </span>{record.incorporated_filename || 'Nombre de incorporación no disponible'}</p>
+                  <td data-label="Audio" className={`${stackedCell} md:p-2`}>
+                    <div className="min-w-0 break-words">
+                      <p><span className="text-gray-400">Original: </span>{record.audio_filename || 'Nombre original no disponible'}</p>
+                      <p><span className="text-gray-400">En el dataset: </span>{record.incorporated_filename || 'Nombre de incorporación no disponible'}</p>
+                    </div>
                   </td>
-                  <td className="p-2 text-emerald-300">Incorporado localmente</td>
-                  <td className="p-2"><p>{record.db_persisted === true ? "Registrado en PostgreSQL" : "Registro SQL sin confirmar"}</p><p className="text-gray-400 mt-1">{authorship(record)}</p>{record.incorporated_at && <p className="text-gray-500 mt-1">{new Date(record.incorporated_at).toLocaleString()}</p>}</td>
-                  <td className="p-2">
+                  <td data-label="Estado local" className={`${stackedCell} md:p-2 text-emerald-300`}>Incorporado localmente</td>
+                  <td data-label="Registro" className={`${stackedCell} md:p-2`}><div className="min-w-0"><p>{record.db_persisted === true ? "Registrado en PostgreSQL" : "Registro SQL sin confirmar"}</p><p className="text-gray-400 mt-1">{authorship(record)}</p>{record.incorporated_at && <p className="text-gray-500 mt-1">{new Date(record.incorporated_at).toLocaleString()}</p>}</div></td>
+                  <td data-label="Copia cloud" className={`${stackedCell} md:p-2`}>
                     <p>{record.sync_status === "synced" ? "Copia cloud confirmada" : "Pendiente de copia cloud"}</p>
                   </td>
                 </tr>
@@ -124,6 +140,8 @@ export default function FeedbackSyncPanel({ refreshKey, onSynced }: {
           </table>
         </div>
       )}
+      <PageControls offset={offset} hasNext={hasNext} disabled={loading}
+        onChange={next => void refresh(false, next)} />
     </section>
   );
 }

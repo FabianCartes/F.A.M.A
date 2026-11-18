@@ -1013,12 +1013,13 @@ def record_feedback(req: FeedbackCreateRequest, request: Request, response: Resp
 def get_feedback_sync_states(
     request: Request, response: Response,
     limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     access: ResourceAccess = Depends(resource_access),
 ):
     """Read recent accepted local milestones; never upload or change outcomes."""
     try:
-        return FeedbackSyncQueue().recent(db, limit=limit, access=access)
+        return FeedbackSyncQueue().recent(db, limit=limit, offset=offset, access=access)
     except HTTPException:
         raise
     except Exception:
@@ -1029,13 +1030,14 @@ def get_feedback_sync_states(
 def get_pending_feedback(
     request: Request, response: Response,
     limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     access: ResourceAccess = Depends(resource_access),
 ):
     """
     Retorna la lista de retroalimentaciones pendientes de curación semi-manual (procesado == False).
     """
-    return feedback_service.get_pending_feedback(db=db, limit=limit, access=access)
+    return feedback_service.get_pending_feedback(db=db, limit=limit, offset=offset, access=access)
 
 
 @app.post("/api/feedback/{id_retroalimentacion}/approve", response_model=ApproveFeedbackResponse)
