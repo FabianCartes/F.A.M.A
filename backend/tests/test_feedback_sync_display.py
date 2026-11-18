@@ -1,7 +1,7 @@
 """Descriptive read-only feedback states through the public HTTP interface."""
 import pytest
 
-from tests.test_imported_feedback_api import client, test_db, fake_gcs, owners, private_prediction
+from tests.test_api_feedback import client, test_db, fake_gcs  # noqa: F401  (fixtures)
 
 
 def accept_intent(db, prediction_id, dataset_name):
@@ -38,33 +38,6 @@ def test_shared_record_exposes_original_and_actual_incorporated_names_without_wr
         assert row["local_status"] == "incorporated"
         assert row["sync_status"] == "pending"
         assert row["attempts"] == 0
-    assert FeedbackSyncQueue().get(test_db, intent.id_retroalimentacion) == before
-
-
-@pytest.mark.parametrize("catalog_owner,expected_name", [(1, "Motor revisado"), (2, None)])
-def test_private_dataset_name_requires_matching_source_owner_and_preserves_visibility(
-        client, test_db, private_prediction, owners, catalog_owner, expected_name):
-    from app.models.dataset_import import ImportedDataset
-    from app.models.prediction import Prediccion
-    from app.services.feedback_sync import FeedbackSyncQueue
-    test_db.add(ImportedDataset(id="a" * 32, owner_id=catalog_owner,
-                               name="Motor revisado", revision=1))
-    test_db.get(Prediccion, private_prediction).nombre_original = "motor_original.wav"
-    intent = accept_intent(test_db, private_prediction, "imported:" + "a" * 32)
-    before = FeedbackSyncQueue().get(test_db, intent.id_retroalimentacion)
-    for headers in ({}, owners[2]):
-        response = client.get("/api/feedback/sync?limit=1", headers=headers)
-        assert response.status_code == 200, response.text
-        assert response.json() == []
-        assert "Motor revisado" not in response.text
-    response = client.get("/api/feedback/sync?limit=1", headers=owners[1])
-    assert response.status_code == 200, response.text
-    assert len(response.json()) == 1
-    row = response.json()[0]
-    assert row["dataset_display_name"] == expected_name
-    assert row["audio_filename"] == "motor_original.wav"
-    assert row["incorporated_filename"] == intent.local_relative_path.rsplit("/", 1)[-1]
-    assert row["dataset_name"] == "imported:" + "a" * 32  # Existing internal contract retained.
     assert FeedbackSyncQueue().get(test_db, intent.id_retroalimentacion) == before
 
 

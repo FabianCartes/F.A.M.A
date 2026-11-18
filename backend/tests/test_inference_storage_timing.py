@@ -13,6 +13,13 @@ from app.models.prediction import Prediccion
 from tests.test_api_feedback import test_db
 from tests.test_inference_execution import ASGIClient, AUDIO, external_adapters
 from tests.test_inference_input_limits import raw_request, request_body
+from tests.storage_support import synthetic_bucket
+
+
+@pytest.fixture(autouse=True)
+def configured_bucket():
+    with synthetic_bucket():
+        yield
 
 
 @pytest.mark.parametrize("late_error", [False, True])
@@ -100,7 +107,7 @@ def test_success_emits_sanitized_stage_timings(external_adapters, monkeypatch, c
         assert len(event["id"]) == 32 and all(c in "0123456789abcdef" for c in event["id"])
         assert event["duration_ms"] >= 0
         assert event["outcome"] == "ok"
-        assert event["worker_finished"] is (event["stage"] in {"validation", "upload", "predict"})
+        assert event["worker_finished"] is (event["stage"] in {"checkpoint", "validation", "upload", "predict"})
     assert "private-model" not in caplog.text
 
 

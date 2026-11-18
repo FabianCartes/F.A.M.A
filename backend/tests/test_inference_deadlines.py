@@ -14,6 +14,13 @@ from tests.test_inference_input_limits import raw_request, multipart, request_bo
 from tests.test_inference_storage_timing import stage_events
 from app.services import storage
 from app.models.prediction import Prediccion
+from tests.storage_support import synthetic_bucket
+
+
+@pytest.fixture(autouse=True)
+def configured_bucket():
+    with synthetic_bucket():
+        yield
 
 
 def test_partial_multipart_budget_returns_single_504_and_closes_spool(external_adapters, monkeypatch):

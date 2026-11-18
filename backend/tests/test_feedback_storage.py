@@ -15,6 +15,13 @@ from app.models.feedback import Retroalimentacion
 from app.services.feedback import FeedbackService
 from app.services.feedback_sync import FeedbackSyncQueue
 from app.services import storage
+from tests.storage_support import synthetic_bucket
+
+
+@pytest.fixture(autouse=True)
+def configured_bucket():
+    with synthetic_bucket():
+        yield
 
 
 @pytest.fixture

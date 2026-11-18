@@ -23,6 +23,13 @@ with patch("dotenv.load_dotenv", return_value=False):
     from app.services.feedback import FeedbackService
     from app.services.feedback_sync import FeedbackSyncQueue
 from training.datasets.local_folder import LocalFolderPAMIngestor
+from tests.storage_support import synthetic_bucket
+
+
+@pytest.fixture(autouse=True)
+def configured_bucket():
+    with synthetic_bucket():
+        yield
 
 
 @pytest.fixture

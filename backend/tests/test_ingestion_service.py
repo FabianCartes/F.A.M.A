@@ -40,13 +40,17 @@ def test_catalog_explicit_gcs_count_never_uses_local_fallback(tmp_path, online):
         rows = {row["name"]: row for row in service.list_datasets()}
     local_row = rows["LocalOnly"]
     assert local_row["file_count"] == local_row["local_file_count"] == 1
-    assert local_row["is_synced"] is True
+    # Since content comparison (c6c348a) a local-only copy is never reported as synced.
+    assert local_row["is_synced"] is False
+    assert local_row["sync_state"] == ("local_only" if online else "cloud_unavailable")
     assert local_row["source"] == "local"
     assert local_row["gcs_available"] is online
     assert local_row["gcs_file_count"] == (0 if online else None)
     shared_row = rows["Shared"]
     assert shared_row["file_count"] == shared_row["local_file_count"] == 1
-    assert shared_row["is_synced"] is True
+    # A copy present on both sides stays pending until its content is compared.
+    assert shared_row["is_synced"] is (None if online else False)
+    assert shared_row["sync_state"] == ("comparison_pending" if online else "cloud_unavailable")
     assert shared_row["source"] == ("gcs" if online else "local")
     assert shared_row["gcs_file_count"] == (1 if online else None)
 
