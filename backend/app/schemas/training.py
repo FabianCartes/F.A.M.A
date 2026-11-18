@@ -50,16 +50,6 @@ class AudioConfigSchema(BaseModel):
         return self
 
 
-class WindowingConfigSchema(BaseModel):
-    """
-    Configuración de ventaneo denso y agregación temporal para eventos de audio breves.
-    """
-    hop_seconds: float = Field(default=1.0, gt=0.0, description="Salto temporal entre ventanas consecutivas en segundos")
-    aggregation_mode: Literal["max", "mean"] = Field(default="max", description="Modo de agregación temporal")
-    gem_p: float = Field(default=3.0, ge=1.0, le=10.0, description="Exponente p para Generalized Mean Pooling (GeM)")
-    vad_threshold: float = Field(default=0.0, ge=0.0, le=1.0, description="Umbral de detección de actividad vocal / energética")
-
-
 class RegularizationConfigSchema(BaseModel):
     """
     Configuración de regularización, función de pérdida y aumentos espectrales.
@@ -68,7 +58,14 @@ class RegularizationConfigSchema(BaseModel):
     focal_gamma: float = Field(default=2.0, ge=0.0, description="Parámetro gamma de Focal Loss")
     mixup_enabled: bool = Field(default=False, description="Habilitar regularización Mixup")
     mixup_alpha: float = Field(default=0.2, ge=0.0, description="Parámetro alfa para distribución Beta en Mixup")
-    pitch_shift_enabled: bool = Field(default=False, description="Habilitar modulación de tono (Pitch Shift)")
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_pitch_shift(cls, data):
+        # Retired: the pipeline applies a fixed GPUSpecAugment, never Pitch Shift.
+        if isinstance(data, dict) and "pitch_shift_enabled" in data:
+            raise ValueError("pitch_shift_enabled fue retirado: el entrenamiento no aplica Pitch Shift.")
+        return data
 
 
 class ModelEnsembleItem(BaseModel):
@@ -97,7 +94,7 @@ class StartTrainingRequest(BaseModel):
     """
     Contrato de solicitud para iniciar el pipeline de entrenamiento.
     Permite composición dinámica de 1 a 3 modelos o retrocompatibilidad con arquitectura única/tríada fija,
-    y desacoplamiento del dominio acústico mediante AudioConfigSchema, WindowingConfigSchema y RegularizationConfigSchema.
+    y desacoplamiento del dominio acústico mediante AudioConfigSchema y RegularizationConfigSchema.
     """
     dataset_name: str = "AvesChilenas"
     partition_version: Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{64}$")
@@ -121,7 +118,6 @@ class StartTrainingRequest(BaseModel):
     )
     models: Optional[List[ModelEnsembleItem]] = None
     audio_config: Optional[AudioConfigSchema] = None
-    windowing_config: Optional[WindowingConfigSchema] = None
     regularization_config: Optional[RegularizationConfigSchema] = None
     _explicit_models: bool = False
 
@@ -131,6 +127,14 @@ class StartTrainingRequest(BaseModel):
         object.__setattr__(self, "_explicit_models", has_models)
 
     _reject_retired_selection = model_validator(mode="before")(reject_retired_selection)
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_windowing(cls, data):
+        # Retired: windowing/aggregation only describe inference, never training.
+        if isinstance(data, dict) and "windowing_config" in data:
+            raise ValueError("windowing_config fue retirado: el entrenamiento no aplica ventaneo ni agregación temporal.")
+        return data
 
     @model_validator(mode="after")
     def validate_and_normalize_models(self) -> "StartTrainingRequest":

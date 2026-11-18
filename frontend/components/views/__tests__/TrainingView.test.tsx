@@ -667,10 +667,11 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     expect(payload.audio_config).toBeDefined();
     expect(payload.audio_config.target_sr).toBe(32000);
     expect(payload.audio_config.f_max).toBe(16000);
-    expect(payload.windowing_config).toBeDefined();
-    expect(payload.windowing_config.hop_seconds).toBe(0.75);
+    // Retired: the pipeline never applied windowing or Pitch Shift; the backend rejects them.
+    expect(payload).not.toHaveProperty("windowing_config");
     expect(payload.regularization_config).toBeDefined();
     expect(payload.regularization_config.loss_type).toBe("cross_entropy");
+    expect(payload.regularization_config).not.toHaveProperty("pitch_shift_enabled");
   });
 
   it("displays Nyquist warning when f_max > target_sr / 2", async () => {
@@ -1036,60 +1037,47 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     expect(postCall).toBeUndefined();
   });
 
-  it("validates hop_seconds, gem_p, vad_threshold and focal_gamma inline without top banner when empty or out of range", async () => {
+  it("does not offer windowing, aggregation or Pitch Shift controls the pipeline never applied", async () => {
+    await act(async () => {
+      render(<TrainingView />);
+    });
+
+    for (const label of ["Salto Temporal (s)", "Exponente GeM (p)", "Umbral VAD Energético"]) {
+      expect(screen.queryByLabelText(label)).toBeNull();
+    }
+    expect(document.getElementById("aggregation_mode")).toBeNull();
+    expect(screen.queryByText("Pitch Shift")).toBeNull();
+    expect(screen.queryByText(/Ventaneo Denso/i)).toBeNull();
+  });
+
+  it("validates focal_gamma inline without top banner when empty or out of range", async () => {
     await act(async () => {
       render(<TrainingView />);
     });
     await choosePartition();
 
-    const hopInput = screen.getByLabelText("Salto Temporal (s)") as HTMLInputElement;
-    const gemInput = screen.getByLabelText("Exponente GeM (p)") as HTMLInputElement;
-    const vadInput = screen.getByLabelText("Umbral VAD Energético") as HTMLInputElement;
     const gammaInput = screen.getByLabelText("Parámetro Gamma (Focal)") as HTMLInputElement;
 
-    // 1. Dejar campos vacíos
     await act(async () => {
-      fireEvent.change(hopInput, { target: { value: "" } });
-      fireEvent.change(gemInput, { target: { value: "" } });
-      fireEvent.change(vadInput, { target: { value: "" } });
       fireEvent.change(gammaInput, { target: { value: "" } });
     });
-
-    expect(hopInput.value).toBe("");
-    expect(gemInput.value).toBe("");
-    expect(vadInput.value).toBe("");
     expect(gammaInput.value).toBe("");
 
-    // Intentar iniciar entrenamiento
     const startBtn = screen.getByText("Iniciar Entrenamiento Local (1 Modelo)");
     await act(async () => {
       fireEvent.click(startBtn);
     });
 
-    // Verificar que los errores se muestran inline debajo de cada casilla
-    expect(screen.getByText("El campo 'Salto Temporal' no puede estar vacío.")).toBeDefined();
-    expect(screen.getByText("El campo 'Exponente GeM (p)' no puede estar vacío.")).toBeDefined();
-    expect(screen.getByText("El campo 'Umbral VAD Energético' no puede estar vacío.")).toBeDefined();
     expect(screen.getByText("El campo 'Parámetro Gamma (Focal)' no puede estar vacío.")).toBeDefined();
-
-    // Comprobar que NO existe ningún banner grande superior con múltiples errores
     expect(screen.queryByTestId("physics-validation-banner")).toBeNull();
 
-    // 2. Probar valores fuera de rango: GeM = 0 (no permitido), hop = 0, vad = 2, gamma = 10
     await act(async () => {
-      fireEvent.change(hopInput, { target: { value: "0" } });
-      fireEvent.change(gemInput, { target: { value: "0" } });
-      fireEvent.change(vadInput, { target: { value: "2" } });
       fireEvent.change(gammaInput, { target: { value: "10" } });
     });
-
     await act(async () => {
       fireEvent.click(startBtn);
     });
 
-    expect(screen.getByText(/Salto Temporal: Debe ser entre 0.1 s y 10.0 s/i)).toBeDefined();
-    expect(screen.getByText(/Exponente GeM: Debe estar entre 1.0 y 10.0 \(no puede ser 0\)/i)).toBeDefined();
-    expect(screen.getByText(/Umbral VAD: Debe estar entre 0.0 y 1.0/i)).toBeDefined();
     expect(screen.getByText(/Parámetro Gamma: Debe estar entre 0.0 y 5.0/i)).toBeDefined();
   });
 

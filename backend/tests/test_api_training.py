@@ -713,7 +713,7 @@ def test_training_lifecycle_dynamic_ensemble(client):
 
 
 def test_start_training_api_passes_multi_domain_configs(client):
-    """Verifica que POST /api/training/start pase audio_config, windowing_config y regularization_config al servicio."""
+    """Verifica que POST /api/training/start pase audio_config y regularization_config al servicio."""
     with patch("app.services.training.training_service.start_training") as mock_start:
         mock_start.return_value = {
             "status": "started",
@@ -735,18 +735,11 @@ def test_start_training_api_passes_multi_domain_configs(client):
                 "n_fft": 1024,
                 "hop_length": 256,
             },
-            "windowing_config": {
-                "hop_seconds": 0.5,
-                "aggregation_mode": "max",
-                "gem_p": 3.0,
-                "vad_threshold": 0.05,
-            },
             "regularization_config": {
                 "loss_type": "focal",
                 "focal_gamma": 2.5,
                 "mixup_enabled": True,
                 "mixup_alpha": 0.3,
-                "pitch_shift_enabled": False,
             },
         }
         res = client.post("/api/training/start", json=payload)
@@ -757,7 +750,8 @@ def test_start_training_api_passes_multi_domain_configs(client):
         assert call_kwargs["dataset_name"] == "engine_diagnostics"
         assert call_kwargs["audio_config"]["target_sr"] == 16000
         assert call_kwargs["audio_config"]["f_max"] == 4000.0
-        assert call_kwargs["windowing_config"]["hop_seconds"] == 0.5
+        assert "windowing_config" not in call_kwargs
+        assert "pitch_shift_enabled" not in call_kwargs["regularization_config"]
         assert call_kwargs["regularization_config"]["loss_type"] == "focal"
         assert call_kwargs["regularization_config"]["focal_gamma"] == 2.5
 
@@ -848,3 +842,19 @@ def test_progress_api_is_neutral_for_a_researcher_viewing_a_foreign_job(client):
     assert response.status_code == 200
     assert response.json()["status"] == "idle" and response.json()["job_id"] is None
     assert "foreign-job" not in response.text and "secret" not in response.text.lower()
+
+
+@pytest.mark.parametrize("payload_extra", [
+    {"windowing_config": {"hop_seconds": 0.5, "aggregation_mode": "max", "gem_p": 3.0, "vad_threshold": 0.05}},
+    {"windowing_config": None},
+    {"regularization_config": {"loss_type": "focal", "pitch_shift_enabled": True}},
+    {"regularization_config": {"loss_type": "focal", "pitch_shift_enabled": False}},
+], ids=["windowing", "windowing-null", "pitch-shift-on", "pitch-shift-off"])
+def test_start_training_rejects_parameters_the_pipeline_does_not_apply(client, payload_extra):
+    with patch("app.services.training.training_service.start_training") as mock_start:
+        res = client.post("/api/training/start", json={
+            "dataset_name": "AvesChilenas", "architecture": "EfficientNet-B0", **payload_extra})
+    assert res.status_code == 422
+    # Web routes sanitize every validation error; the schema test pins the reason.
+    assert res.json() == {"detail": "Solicitud de autenticación inválida."}
+    mock_start.assert_not_called()

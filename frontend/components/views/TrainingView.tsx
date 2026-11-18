@@ -184,7 +184,7 @@ export default function TrainingView() {
     currentArch: "",
   });
 
-  // Estado de Física Acústica Multi-Dominio, Ventaneo Denso y Regularización
+  // Estado de Física Acústica Multi-Dominio y Regularización
   const [isPhysicsExpanded, setIsPhysicsExpanded] = useState<boolean>(true);
   const [domainPreset, setDomainPreset] = useState<AudioDomainPresetKey>("bioacoustics");
   const [targetSr, setTargetSr] = useState<number | string>(22050);
@@ -198,18 +198,11 @@ export default function TrainingView() {
   const [nFft, setNFft] = useState<number | string>(2048);
   const [hopLength, setHopLength] = useState<number | string>(512);
 
-  // Ventaneo Denso y Captura de Eventos Breves
-  const [hopSeconds, setHopSeconds] = useState<number | string>(1.0);
-  const [aggregationMode, setAggregationMode] = useState<"max" | "mean">("max");
-  const [gemP, setGemP] = useState<number | string>(3.0);
-  const [vadThreshold, setVadThreshold] = useState<number | string>(0.0);
-
   // Regularización y Función de Pérdida
   const [lossType, setLossType] = useState<"focal" | "cross_entropy">("focal");
   const [focalGamma, setFocalGamma] = useState<number | string>(2.0);
   const [mixupEnabled, setMixupEnabled] = useState<boolean>(true);
   const [mixupAlpha, setMixupAlpha] = useState<number | string>(0.2);
-  const [pitchShiftEnabled, setPitchShiftEnabled] = useState<boolean>(false);
 
   const handleApplyPreset = (key: AudioDomainPresetKey) => {
     setDomainPreset(key);
@@ -217,9 +210,6 @@ export default function TrainingView() {
     clearFieldError("duration_seconds");
     clearFieldError("f_min");
     clearFieldError("f_max");
-    clearFieldError("hop_seconds");
-    clearFieldError("gem_p");
-    clearFieldError("vad_threshold");
     clearFieldError("focal_gamma");
     const cfg = AUDIO_DOMAIN_PRESETS[key];
     if (key !== "custom") {
@@ -230,15 +220,10 @@ export default function TrainingView() {
       setNMels(cfg.n_mels);
       setNFft(cfg.n_fft);
       setHopLength(cfg.hop_length);
-      setHopSeconds(cfg.hop_seconds);
-      setAggregationMode(cfg.aggregation_mode);
-      setGemP(cfg.gem_p);
-      setVadThreshold(cfg.vad_threshold);
       setLossType(cfg.loss_type);
       setFocalGamma(cfg.focal_gamma);
       setMixupEnabled(cfg.mixup);
       setMixupAlpha(cfg.mixup_alpha);
-      setPitchShiftEnabled(cfg.pitch_shift);
     }
   };
 
@@ -255,9 +240,6 @@ export default function TrainingView() {
           duration_seconds: "Duración de Ventana",
           f_min: "Frecuencia Mínima",
           f_max: "Frecuencia Máxima",
-          hop_seconds: "Salto Temporal",
-          gem_p: "Exponente GeM (p)",
-          vad_threshold: "Umbral VAD Energético",
           focal_gamma: "Parámetro Gamma (Focal)",
         };
         let label = fieldNamesMap[field] || field;
@@ -356,15 +338,6 @@ export default function TrainingView() {
           }
         }
         break;
-      case "hop_seconds":
-        if (isNaN(num) || num < 0.1 || num > 10.0) error = "Salto Temporal: Debe ser entre 0.1 s y 10.0 s.";
-        break;
-      case "gem_p":
-        if (isNaN(num) || num < 1.0 || num > 10.0) error = "Exponente GeM: Debe estar entre 1.0 y 10.0 (no puede ser 0).";
-        break;
-      case "vad_threshold":
-        if (isNaN(num) || num < 0.0 || num > 1.0) error = "Umbral VAD: Debe estar entre 0.0 y 1.0.";
-        break;
       case "focal_gamma":
         if (isNaN(num) || num < 0.0 || num > 5.0) error = "Parámetro Gamma: Debe estar entre 0.0 y 5.0.";
         break;
@@ -428,9 +401,6 @@ export default function TrainingView() {
         duration_seconds: "Duración de Ventana",
         f_min: "Frecuencia Mínima",
         f_max: "Frecuencia Máxima",
-        hop_seconds: "Salto Temporal",
-        gem_p: "Exponente GeM (p)",
-        vad_threshold: "Umbral VAD Energético",
         focal_gamma: "Parámetro Gamma (Focal)",
       };
       let label = fieldNamesMap[field] || field;
@@ -1015,37 +985,10 @@ export default function TrainingView() {
       duration_seconds: true,
       f_min: true,
       f_max: true,
-      hop_seconds: true,
-      gem_p: true,
-      vad_threshold: true,
       focal_gamma: true,
     }));
 
-    // 7. Validar Ventaneo Denso y Regularización (hop_seconds, gem_p, vad_threshold, focal_gamma)
-    const hopStr = String(hopSeconds).trim();
-    const numHop = parseFloat(hopStr);
-    if (hopStr === "" || isNaN(numHop)) {
-      errors.hop_seconds = "El campo 'Salto Temporal' no puede estar vacío.";
-    } else if (numHop < 0.1 || numHop > 10.0) {
-      errors.hop_seconds = "Salto Temporal: Debe ser entre 0.1 s y 10.0 s.";
-    }
-
-    const gemStr = String(gemP).trim();
-    const numGem = parseFloat(gemStr);
-    if (gemStr === "" || isNaN(numGem)) {
-      errors.gem_p = "El campo 'Exponente GeM (p)' no puede estar vacío.";
-    } else if (numGem < 1.0 || numGem > 10.0) {
-      errors.gem_p = "Exponente GeM: Debe estar entre 1.0 y 10.0 (no puede ser 0).";
-    }
-
-    const vadStr = String(vadThreshold).trim();
-    const numVad = parseFloat(vadStr);
-    if (vadStr === "" || isNaN(numVad)) {
-      errors.vad_threshold = "El campo 'Umbral VAD Energético' no puede estar vacío.";
-    } else if (numVad < 0.0 || numVad > 1.0) {
-      errors.vad_threshold = "Umbral VAD: Debe estar entre 0.0 y 1.0.";
-    }
-
+    // 7. Validar Regularización (focal_gamma)
     if (lossType === "focal") {
       const gammaStr = String(focalGamma).trim();
       const numGamma = parseFloat(gammaStr);
@@ -1181,18 +1124,11 @@ export default function TrainingView() {
             n_fft: typeof nFft === "number" ? nFft : parseInt(String(nFft), 10) || 2048,
             hop_length: typeof hopLength === "number" ? hopLength : parseInt(String(hopLength), 10) || 512,
           },
-          windowing_config: {
-            hop_seconds: typeof hopSeconds === "number" ? hopSeconds : parseFloat(String(hopSeconds)) || 1.0,
-            aggregation_mode: aggregationMode,
-            gem_p: typeof gemP === "number" ? gemP : parseFloat(String(gemP)) || 3.0,
-            vad_threshold: typeof vadThreshold === "number" ? vadThreshold : parseFloat(String(vadThreshold)) || 0.0,
-          },
           regularization_config: {
             loss_type: lossType,
             focal_gamma: typeof focalGamma === "number" ? focalGamma : parseFloat(String(focalGamma)) || 2.0,
             mixup_enabled: mixupEnabled,
             mixup_alpha: typeof mixupAlpha === "number" ? mixupAlpha : parseFloat(String(mixupAlpha)) || 0.2,
-            pitch_shift_enabled: pitchShiftEnabled,
           },
         }),
       });
@@ -1430,7 +1366,7 @@ export default function TrainingView() {
                 Física de Audio y Adaptación al Dominio
               </span>
               <span className="text-[11px] text-gray-400">
-                Espectrograma Mel ({targetSr} Hz, {durationSeconds}s, {fMin}-{fMax} Hz) · Ventaneo denso · Regularización
+                Espectrograma Mel ({targetSr} Hz, {durationSeconds}s, {fMin}-{fMax} Hz) · Regularización
               </span>
             </div>
           </div>
@@ -1643,136 +1579,10 @@ export default function TrainingView() {
               </div>
             </div>
 
-            {/* Grid 2: Ventaneo Denso y Captura de Eventos Breves */}
+            {/* Grid 2: Regularización y Pérdida */}
             <div>
               <span className="text-[11px] text-gray-400 font-semibold block mb-2">
-                2. Ventaneo Denso y Agregación Temporal
-              </span>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div>
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <label htmlFor="hop_seconds" className="text-[11px] text-gray-400 font-medium">
-                      Salto Temporal (s)
-                    </label>
-                    <InfoTooltip id="hop_seconds" {...PARAMETER_EXPLANATIONS.hop_seconds} />
-                  </div>
-                  <input
-                    id="hop_seconds"
-                    type="number"
-                    value={hopSeconds}
-                    disabled={isTraining}
-                    min={0.1}
-                    max={10.0}
-                    step={0.1}
-                    onChange={(e) => {
-                      setDomainPreset("custom");
-                      setHopSeconds(e.target.value);
-                      validateFieldOnChange("hop_seconds", e.target.value);
-                    }}
-                    onBlur={(e) => validateFieldOnBlur("hop_seconds", e.target.value)}
-                    className={`w-full bg-[#111215] border ${
-                      fieldErrors.hop_seconds ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200" : "border-[#23252e]"
-                    } rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500`}
-                  />
-                  {fieldErrors.hop_seconds && (
-                    <span className="text-[10px] text-red-400 mt-1 block">
-                      {fieldErrors.hop_seconds}
-                    </span>
-                  )}
-                </div>
-
-                <div>
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <label htmlFor="aggregation_mode" className="text-[11px] text-gray-400 font-medium">
-                      Agregación Temporal
-                    </label>
-                    <InfoTooltip id="aggregation_mode" {...PARAMETER_EXPLANATIONS.aggregation_mode} />
-                  </div>
-                  <select
-                    id="aggregation_mode"
-                    value={aggregationMode}
-                    disabled={isTraining}
-                    onChange={(e) => {
-                      setDomainPreset("custom");
-                      setAggregationMode(e.target.value as "max" | "mean");
-                    }}
-                    className="w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500"
-                  >
-                    <option value="max">Max-Pooling (Eventos Breves)</option>
-                    <option value="mean">Mean-Pooling (Fondo Continuo)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <label htmlFor="gem_p" className="text-[11px] text-gray-400 font-medium">
-                      Exponente GeM (p)
-                    </label>
-                    <InfoTooltip id="gem_p" {...PARAMETER_EXPLANATIONS.gem_p} />
-                  </div>
-                  <input
-                    id="gem_p"
-                    type="number"
-                    value={gemP}
-                    disabled={isTraining}
-                    min={1.0}
-                    max={10.0}
-                    step={0.5}
-                    onChange={(e) => {
-                      setDomainPreset("custom");
-                      setGemP(e.target.value);
-                      validateFieldOnChange("gem_p", e.target.value);
-                    }}
-                    onBlur={(e) => validateFieldOnBlur("gem_p", e.target.value)}
-                    className={`w-full bg-[#111215] border ${
-                      fieldErrors.gem_p ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200" : "border-[#23252e]"
-                    } rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500`}
-                  />
-                  {fieldErrors.gem_p && (
-                    <span className="text-[10px] text-red-400 mt-1 block">
-                      {fieldErrors.gem_p}
-                    </span>
-                  )}
-                </div>
-
-                <div>
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <label htmlFor="vad_threshold" className="text-[11px] text-gray-400 font-medium">
-                      Umbral VAD Energético
-                    </label>
-                    <InfoTooltip id="vad_threshold" {...PARAMETER_EXPLANATIONS.vad_threshold} />
-                  </div>
-                  <input
-                    id="vad_threshold"
-                    type="number"
-                    value={vadThreshold}
-                    disabled={isTraining}
-                    min={0.0}
-                    max={1.0}
-                    step={0.01}
-                    onChange={(e) => {
-                      setDomainPreset("custom");
-                      setVadThreshold(e.target.value);
-                      validateFieldOnChange("vad_threshold", e.target.value);
-                    }}
-                    onBlur={(e) => validateFieldOnBlur("vad_threshold", e.target.value)}
-                    className={`w-full bg-[#111215] border ${
-                      fieldErrors.vad_threshold ? "border-red-500 ring-1 ring-red-500/50 bg-red-950/20 text-red-200" : "border-[#23252e]"
-                    } rounded-lg px-3 py-1.5 text-xs text-gray-200 font-mono focus:outline-none focus:border-teal-500`}
-                  />
-                  {fieldErrors.vad_threshold && (
-                    <span className="text-[10px] text-red-400 mt-1 block">
-                      {fieldErrors.vad_threshold}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Grid 3: Regularización y Pérdida */}
-            <div>
-              <span className="text-[11px] text-gray-400 font-semibold block mb-2">
-                3. Regularización y Función de Pérdida
+                2. Regularización y Función de Pérdida
               </span>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
@@ -1849,22 +1659,6 @@ export default function TrainingView() {
                     <InfoTooltip id="mixup" {...PARAMETER_EXPLANATIONS.mixup} />
                   </div>
 
-                  <div className="flex items-center gap-1.5">
-                    <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-300">
-                      <input
-                        type="checkbox"
-                        checked={pitchShiftEnabled}
-                        disabled={isTraining}
-                        onChange={(e) => {
-                          setDomainPreset("custom");
-                          setPitchShiftEnabled(e.target.checked);
-                        }}
-                        className="rounded bg-[#111215] border-[#23252e] text-teal-500 focus:ring-0"
-                      />
-                      <span>Pitch Shift</span>
-                    </label>
-                    <InfoTooltip id="pitch_shift" {...PARAMETER_EXPLANATIONS.pitch_shift} />
-                  </div>
                 </div>
               </div>
             </div>

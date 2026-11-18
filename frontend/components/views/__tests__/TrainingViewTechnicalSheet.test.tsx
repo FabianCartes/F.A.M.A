@@ -77,7 +77,7 @@ describe("Ficha técnica del historial", () => {
     expect(sheet.getByText("Precisión (Val Acc):")).toBeDefined();
   });
 
-  it("muestra todos los hiperparámetros y la física del audio registrados", async () => {
+  it("muestra todos los hiperparámetros y la física del audio registrados, marcando los no aplicados", async () => {
     const sheet = await openSheet({
       ...historicalModel,
       hyperparameters: { learning_rate: 0.002, batch_size: 8, optimizer: "AdamW", loss_type: "Focal Loss",
@@ -90,10 +90,10 @@ describe("Ficha técnica del historial", () => {
 
     for (const [label, value] of [
       ["Weight Decay:", "0.05"], ["Early Stopping:", "Activo (paciencia 5 épocas)"], ["Focal Gamma:", "2"],
-      ["Mixup:", "Activo (α 0.2)"], ["Pitch Shift:", "Desactivado"], ["Semilla:", "7"],
+      ["Mixup:", "Activo (α 0.2)"], ["Pitch Shift:", "Desactivado · no aplicado"], ["Semilla:", "7"],
       ["Inicialización:", "Preentrenado"], ["Época del checkpoint:", "4"], ["Peso en la tríada:", "0.5"],
-      ["Hop Length:", "128 muestras"], ["Salto entre ventanas:", "0.5 s"], ["Agregación temporal:", "mean (GeM p 3)"],
-      ["Umbral VAD:", "0.1"],
+      ["Hop Length:", "128 muestras"], ["Salto entre ventanas:", "0.5 s · no aplicado"],
+      ["Agregación temporal:", "mean (GeM p 3) · no aplicado"], ["Umbral VAD:", "0.1 · no aplicado"],
     ]) {
       const row = sheet.getByText(label).parentElement!;
       expect(within(row).getByText(value)).toBeDefined();
@@ -102,8 +102,15 @@ describe("Ficha técnica del historial", () => {
 
   it("indica los parámetros que un checkpoint antiguo no registró", async () => {
     const sheet = await openSheet(historicalModel);
-    for (const label of ["Weight Decay:", "Early Stopping:", "Semilla:", "Hop Length:", "Salto entre ventanas:"]) {
+    for (const label of ["Weight Decay:", "Early Stopping:", "Semilla:", "Hop Length:"]) {
       expect(within(sheet.getByText(label).parentElement!).getByText("No registrado")).toBeDefined();
+    }
+  });
+
+  it("omite los parámetros retirados cuando el modelo no los registró", async () => {
+    const sheet = await openSheet(historicalModel);
+    for (const label of ["Pitch Shift:", "Salto entre ventanas:", "Agregación temporal:", "Umbral VAD:"]) {
+      expect(sheet.queryByText(label)).toBeNull();
     }
   });
 });

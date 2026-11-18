@@ -12,15 +12,10 @@ export interface DomainPresetConfig {
   n_mels: number;
   n_fft: number;
   hop_length: number;
-  hop_seconds: number;
-  aggregation_mode: "max" | "mean";
-  gem_p: number;
-  vad_threshold: number;
   loss_type: "focal" | "cross_entropy";
   focal_gamma: number;
   mixup: boolean;
   mixup_alpha: number;
-  pitch_shift: boolean;
   label: string;
   description: string;
 }
@@ -34,15 +29,10 @@ export const AUDIO_DOMAIN_PRESETS: Record<AudioDomainPresetKey, DomainPresetConf
     n_mels: 128,
     n_fft: 2048,
     hop_length: 512,
-    hop_seconds: 1.0,
-    aggregation_mode: "max",
-    gem_p: 3.0,
-    vad_threshold: 0.0,
     loss_type: "focal",
     focal_gamma: 2.0,
     mixup: true,
     mixup_alpha: 0.2,
-    pitch_shift: false,
     label: "Bioacústica (Aves)",
     description: "Espectrogramas para fauna silvestre (800-10.000 Hz @ 22.05 kHz)",
   },
@@ -54,15 +44,10 @@ export const AUDIO_DOMAIN_PRESETS: Record<AudioDomainPresetKey, DomainPresetConf
     n_mels: 128,
     n_fft: 2048,
     hop_length: 512,
-    hop_seconds: 0.75,
-    aggregation_mode: "mean",
-    gem_p: 2.0,
-    vad_threshold: 0.0,
     loss_type: "cross_entropy",
     focal_gamma: 2.0,
     mixup: false,
     mixup_alpha: 0.2,
-    pitch_shift: false,
     label: "Diagnóstico Industrial",
     description: "Vibraciones mecánicas y armónicos de motores (50-16.000 Hz @ 32 kHz)",
   },
@@ -74,15 +59,10 @@ export const AUDIO_DOMAIN_PRESETS: Record<AudioDomainPresetKey, DomainPresetConf
     n_mels: 128,
     n_fft: 1024,
     hop_length: 256,
-    hop_seconds: 0.5,
-    aggregation_mode: "max",
-    gem_p: 3.0,
-    vad_threshold: 0.05,
     loss_type: "focal",
     focal_gamma: 2.0,
     mixup: false,
     mixup_alpha: 0.2,
-    pitch_shift: false,
     label: "Tos Médica",
     description: "Eventos breves de fonación y tos humana (50-4.000 Hz @ 16 kHz)",
   },
@@ -94,15 +74,10 @@ export const AUDIO_DOMAIN_PRESETS: Record<AudioDomainPresetKey, DomainPresetConf
     n_mels: 128,
     n_fft: 2048,
     hop_length: 512,
-    hop_seconds: 1.0,
-    aggregation_mode: "max",
-    gem_p: 3.0,
-    vad_threshold: 0.0,
     loss_type: "focal",
     focal_gamma: 2.0,
     mixup: false,
     mixup_alpha: 0.2,
-    pitch_shift: false,
     label: "Personalizado",
     description: "Configuración manual de hiperparámetros acústicos y ventaneo denso",
   },

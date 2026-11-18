@@ -210,7 +210,6 @@ from app.schemas.training import (
     StartTrainingRequest,
     VALID_ARCHITECTURES,
     AudioConfigSchema,
-    WindowingConfigSchema,
     RegularizationConfigSchema,
 )
 
@@ -447,54 +446,18 @@ def test_audio_config_schema_bounds_validation():
         AudioConfigSchema(f_max=50.0)
 
 
-def test_windowing_config_schema_valid_and_bounds():
-    win = WindowingConfigSchema(
-        hop_seconds=0.5,
-        aggregation_mode="max",
-        gem_p=3.0,
-        vad_threshold=0.05,
-    )
-    assert win.hop_seconds == 0.5
-    assert win.aggregation_mode == "max"
-    assert win.gem_p == 3.0
-    assert win.vad_threshold == 0.05
-
-    # hop_seconds <= 0.0 raises
-    with pytest.raises(ValidationError):
-        WindowingConfigSchema(hop_seconds=0.0)
-    with pytest.raises(ValidationError):
-        WindowingConfigSchema(hop_seconds=-0.5)
-
-    # aggregation_mode invalid
-    with pytest.raises(ValidationError):
-        WindowingConfigSchema(aggregation_mode="median")
-
-    # gem_p bounds: ge=1.0, le=10.0
-    with pytest.raises(ValidationError):
-        WindowingConfigSchema(gem_p=0.5)
-    with pytest.raises(ValidationError):
-        WindowingConfigSchema(gem_p=12.0)
-
-    # vad_threshold bounds: ge=0.0, le=1.0
-    with pytest.raises(ValidationError):
-        WindowingConfigSchema(vad_threshold=-0.1)
-    with pytest.raises(ValidationError):
-        WindowingConfigSchema(vad_threshold=1.5)
-
-
 def test_regularization_config_schema_valid_and_bounds():
     reg = RegularizationConfigSchema(
         loss_type="focal",
         focal_gamma=2.5,
         mixup_enabled=True,
         mixup_alpha=0.4,
-        pitch_shift_enabled=False,
     )
     assert reg.loss_type == "focal"
     assert reg.focal_gamma == 2.5
     assert reg.mixup_enabled is True
     assert reg.mixup_alpha == 0.4
-    assert reg.pitch_shift_enabled is False
+    assert not hasattr(reg, "pitch_shift_enabled")
 
     # loss_type invalid
     with pytest.raises(ValidationError):
@@ -519,38 +482,27 @@ def test_start_training_request_with_multi_domain_configs():
         n_fft=1024,
         hop_length=256,
     )
-    windowing = WindowingConfigSchema(
-        hop_seconds=0.5,
-        aggregation_mode="max",
-        gem_p=3.0,
-        vad_threshold=0.0,
-    )
     regularization = RegularizationConfigSchema(
         loss_type="focal",
         focal_gamma=2.0,
         mixup_enabled=False,
-        pitch_shift_enabled=False,
     )
 
     req = StartTrainingRequest(
         dataset_name="medical_cough",
         audio_config=audio,
-        windowing_config=windowing,
         regularization_config=regularization,
     )
 
     assert req.audio_config is not None
     assert req.audio_config.target_sr == 16000
     assert req.audio_config.f_max == 4000.0
-    assert req.windowing_config is not None
-    assert req.windowing_config.hop_seconds == 0.5
     assert req.regularization_config is not None
     assert req.regularization_config.loss_type == "focal"
 
     # Retrocompatibilidad: si no se proveen, son None
     req_default = StartTrainingRequest(dataset_name="AvesChilenas")
     assert req_default.audio_config is None
-    assert req_default.windowing_config is None
     assert req_default.regularization_config is None
 
 
@@ -667,3 +619,18 @@ def test_start_training_request_early_stopping():
 
 
 
+
+
+@pytest.mark.parametrize("data, reason", [
+    ({"windowing_config": {"hop_seconds": 0.5}},
+     "windowing_config fue retirado: el entrenamiento no aplica ventaneo ni agregación temporal."),
+    ({"windowing_config": None},
+     "windowing_config fue retirado: el entrenamiento no aplica ventaneo ni agregación temporal."),
+    ({"regularization_config": {"pitch_shift_enabled": True}},
+     "pitch_shift_enabled fue retirado: el entrenamiento no aplica Pitch Shift."),
+    ({"regularization_config": {"pitch_shift_enabled": False}},
+     "pitch_shift_enabled fue retirado: el entrenamiento no aplica Pitch Shift."),
+])
+def test_start_training_request_rejects_parameters_the_pipeline_does_not_apply(data, reason):
+    with pytest.raises(ValidationError, match=reason):
+        StartTrainingRequest(dataset_name="AvesChilenas", **data)

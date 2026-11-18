@@ -226,6 +226,7 @@ ADR numerados secuencialmente. Un ADR reemplazado conserva su ubicación y decla
 - [`0081-intentos-de-evaluacion-conjunta-de-triadas.md`](adr/0081-intentos-de-evaluacion-conjunta-de-triadas.md): ADR 0081: Intentos de evaluación conjunta de composiciones de tríada
 - [`0082-pesos-fijos-de-entrenamiento-en-triadas.md`](adr/0082-pesos-fijos-de-entrenamiento-en-triadas.md): ADR 0082: Pesos fijos de entrenamiento en tríadas estándar
 - [`0083-retiro-del-super-ensamble-fijo.md`](adr/0083-retiro-del-super-ensamble-fijo.md): ADR 0083: Retiro del Super-Ensamble fijo y de su estado legacy
+- [`0084-retiro-de-parametros-de-entrenamiento-no-aplicados.md`](adr/0084-retiro-de-parametros-de-entrenamiento-no-aplicados.md): ADR 0084: Retiro de los parámetros de entrenamiento que el pipeline no aplicaba
 
 ### [`receipts/`](receipts/) — Evidencia reproducible
 

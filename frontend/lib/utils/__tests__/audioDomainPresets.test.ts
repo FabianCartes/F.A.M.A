@@ -9,6 +9,13 @@ import {
 
 describe("Audio Domain Presets and Physics Validation", () => {
   it("defines standard domain presets with exact physical configurations", () => {
+    // Retired: presets no longer set windowing or Pitch Shift the pipeline never applied.
+    for (const preset of Object.values(AUDIO_DOMAIN_PRESETS)) {
+      for (const key of ["hop_seconds", "aggregation_mode", "gem_p", "vad_threshold", "pitch_shift"]) {
+        expect(preset).not.toHaveProperty(key);
+      }
+    }
+
     // Bioacoustics preset
     const bio = AUDIO_DOMAIN_PRESETS.bioacoustics;
     expect(bio.target_sr).toBe(22050);
@@ -18,12 +25,8 @@ describe("Audio Domain Presets and Physics Validation", () => {
     expect(bio.n_mels).toBe(128);
     expect(bio.n_fft).toBe(2048);
     expect(bio.hop_length).toBe(512);
-    expect(bio.hop_seconds).toBe(1.0);
-    expect(bio.aggregation_mode).toBe("max");
-    expect(bio.gem_p).toBe(3.0);
     expect(bio.loss_type).toBe("focal");
     expect(bio.mixup).toBe(true);
-    expect(bio.pitch_shift).toBe(false);
 
     // Industrial preset
     const ind = AUDIO_DOMAIN_PRESETS.industrial;
@@ -34,12 +37,8 @@ describe("Audio Domain Presets and Physics Validation", () => {
     expect(ind.n_mels).toBe(128);
     expect(ind.n_fft).toBe(2048);
     expect(ind.hop_length).toBe(512);
-    expect(ind.hop_seconds).toBe(0.75);
-    expect(ind.aggregation_mode).toBe("mean");
-    expect(ind.gem_p).toBe(2.0);
     expect(ind.loss_type).toBe("cross_entropy");
     expect(ind.mixup).toBe(false);
-    expect(ind.pitch_shift).toBe(false);
 
     // Medical cough preset
     const cough = AUDIO_DOMAIN_PRESETS.medical_cough;
@@ -50,12 +49,8 @@ describe("Audio Domain Presets and Physics Validation", () => {
     expect(cough.n_mels).toBe(128);
     expect(cough.n_fft).toBe(1024);
     expect(cough.hop_length).toBe(256);
-    expect(cough.hop_seconds).toBe(0.5);
-    expect(cough.aggregation_mode).toBe("max");
-    expect(cough.gem_p).toBe(3.0);
     expect(cough.loss_type).toBe("focal");
     expect(cough.mixup).toBe(false);
-    expect(cough.pitch_shift).toBe(false);
 
     // Custom preset exists
     expect(AUDIO_DOMAIN_PRESETS.custom).toBeDefined();

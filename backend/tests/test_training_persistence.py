@@ -124,19 +124,20 @@ def test_main_persists_two_final_reports_before_explicit_administrator_activatio
 
 
 def test_main_accepts_schema_configs_without_substituting_training_physics(persistence_env):
-    from app.schemas.training import AudioConfigSchema, WindowingConfigSchema, RegularizationConfigSchema
+    from app.schemas.training import AudioConfigSchema, RegularizationConfigSchema
     service, sessions, _, _ = persistence_env
     audio = AudioConfigSchema(target_sr=8000, duration_seconds=.5, n_mels=32,
                               n_fft=256, hop_length=64, f_min=0, f_max=4000)
-    windowing = WindowingConfigSchema(hop_seconds=.25, aggregation_mode='mean')
-    service.start_training('engine_diagnostics', architecture='fixture', epochs=1,
-                           audio_config=audio, windowing_config=windowing,
+    # The API no longer accepts windowing; a training request reaches the service without it.
+    service.start_training('engine_diagnostics', architecture='fixture', epochs=1, audio_config=audio,
                            regularization_config=RegularizationConfigSchema(loss_type='cross_entropy'))
     assert service.get_progress()['status'] == 'completed', service.get_progress()['error_message']
     entry, = history(service, sessions)
     payload = torch.load(service.checkpoints_dir / entry['filename'], weights_only=True)
     attempts = evaluations(sessions, entry['id'])
-    assert attempts[0]['predictor_config']['training_config']['windowing'] == windowing.model_dump()
+    assert attempts[0]['predictor_config']['training_config']['windowing'] is None
+    assert attempts[0]['predictor_config']['training_mismatch'] is False
+    assert not any('Discrepancia training/predictor' in line['message'] for line in service.get_progress()['logs'])
     assert attempts[0]['aggregation_config']['windowing'] == 'fixed-center-crop'
     assert payload['audio_config'] == audio.model_dump()
 

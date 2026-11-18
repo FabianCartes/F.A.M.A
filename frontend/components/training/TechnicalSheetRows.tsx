@@ -7,6 +7,9 @@ const present = <T,>(value: T | null | undefined): value is T => value !== null 
 const show = (value: number | string | null | undefined, suffix = "") => present(value) ? `${value}${suffix}` : MISSING;
 const toggle = (enabled: boolean | null | undefined, detail = "") =>
   !present(enabled) ? MISSING : enabled ? `Activo${detail}` : "Desactivado";
+// Retired parameters: older checkpoints recorded them, but training never applied them.
+const RETIRED = " · no aplicado";
+const retired = (label: string, value: string): Row[] => value === MISSING ? [] : [[label, value + RETIRED]];
 const INITIALIZATION: Record<string, string> = {
   pretrained_constructor: "Preentrenado",
   constructor_default: "Pesos por defecto del constructor",
@@ -22,7 +25,7 @@ export function hyperparameterRows(item: ModelHistoryItem, compositionWeight?: n
     ["Early Stopping:", toggle(h?.early_stopping, patience)],
     ["Focal Gamma:", show(h?.focal_gamma)],
     ["Mixup:", toggle(h?.mixup_enabled, mixup)],
-    ["Pitch Shift:", toggle(h?.pitch_shift_enabled)],
+    ...retired("Pitch Shift:", toggle(h?.pitch_shift_enabled)),
     ["Semilla:", show(h?.seed)],
     ["Inicialización:", present(h?.initialization_mode) ? INITIALIZATION[h.initialization_mode] ?? h.initialization_mode : MISSING],
     ["Época del checkpoint:", show(h?.checkpoint_epoch)],
@@ -30,16 +33,16 @@ export function hyperparameterRows(item: ModelHistoryItem, compositionWeight?: n
   ];
 }
 
-/** Audio physics not covered by the base rows: STFT hop and dense windowing. */
+/** Audio physics not covered by the base rows: STFT hop and recorded, never applied, windowing. */
 export function audioPhysicsRows(item: ModelHistoryItem): Row[] {
   const w = item.windowing ?? null;
   const aggregation = present(w?.aggregation_mode)
     ? `${w.aggregation_mode}${present(w.gem_p) ? ` (GeM p ${w.gem_p})` : ""}` : MISSING;
   return [
     ["Hop Length:", show(item.audio_specs?.hop_length, " muestras")],
-    ["Salto entre ventanas:", show(w?.hop_seconds, " s")],
-    ["Agregación temporal:", aggregation],
-    ["Umbral VAD:", show(w?.vad_threshold)],
+    ...retired("Salto entre ventanas:", show(w?.hop_seconds, " s")),
+    ...retired("Agregación temporal:", aggregation),
+    ...retired("Umbral VAD:", show(w?.vad_threshold)),
   ];
 }
 

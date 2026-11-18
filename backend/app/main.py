@@ -877,8 +877,6 @@ def start_training_pipeline(req: StartTrainingRequest, request: Request, respons
 
         if req.audio_config is not None:
             kwargs["audio_config"] = req.audio_config.model_dump()
-        if req.windowing_config is not None:
-            kwargs["windowing_config"] = req.windowing_config.model_dump()
         if req.regularization_config is not None:
             kwargs["regularization_config"] = req.regularization_config.model_dump()
 

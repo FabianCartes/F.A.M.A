@@ -51,50 +51,6 @@ export const PARAMETER_EXPLANATIONS: Record<string, ParameterExplanation> = {
       "Enfoca los filtros Mel exclusivamente en la región con energía acústica útil.",
     ],
   },
-  hop_seconds: {
-    title: "Desplazamiento Temporal (Dense Windowing)",
-    impact:
-      "Controla el solapamiento entre ventanas consecutivas al evaluar audios de larga duración durante la inferencia.",
-    usage:
-      "0.5 - 1.0s para detección temporal de alta precisión; 2.5s para clasificaciones globales rápidas.",
-    keyPoints: [
-      "Un salto menor genera más ventanas por audio, elevando el costo computacional.",
-      "Garantiza que eventos transitorios en los bordes de ventana no se pierdan.",
-    ],
-  },
-  aggregation_mode: {
-    title: "Modo de Agregación Temporal",
-    impact:
-      "Define la estrategia matemática para combinar las probabilidades predichas a lo largo de las múltiples ventanas de un audio.",
-    usage:
-      "Seleccionar 'max' para detectar eventos breves o anomalías súbitas; 'mean' para evaluar presencia sonora continua o dominante.",
-    keyPoints: [
-      "max: sensible a picos locales, ideal para alertas o llamados esporádicos.",
-      "mean: robusto ante falsos positivos aislados, ideal para fondo acústico.",
-    ],
-  },
-  gem_p: {
-    title: "Exponente GeM (Generalized Mean Pooling)",
-    impact:
-      "Generaliza el pooling global entre promedio aritmético (p=1) y máximo estricto (p -> infinito), enfatizando regiones activas clave.",
-    usage:
-      "Configurar en 3.0 (estándar en audio) para focalizar eventos acústicos relevantes sin saturar gradientes.",
-    keyPoints: [
-      "p = 1 equivale a Average Pooling.",
-      "p > 1 concentra la activación en patrones espectrales destacados.",
-    ],
-  },
-  vad_threshold: {
-    title: "Umbral de Actividad de Voz/Energía (VAD)",
-    impact:
-      "Filtra fragmentos de silencio o ruido de fondo que no alcancen el umbral de energía normalizado antes del procesamiento.",
-    usage:
-      "0.2 - 0.5 para descartar silencios en grabaciones de campo; 0.0 para desactivar y evaluar todo el audio sin descartes.",
-    keyPoints: [
-      "Reduce el tiempo de cómputo ignorando segmentos mudos.",
-      "Umbrales muy altos pueden descartar eventos acústicos de baja amplitud.",
-    ],
-  },
   loss_type: {
     title: "Función de Pérdida (Loss Function)",
     impact:
@@ -126,17 +82,6 @@ export const PARAMETER_EXPLANATIONS: Record<string, ParameterExplanation> = {
     keyPoints: [
       "Enseña al modelo a predecir incertidumbre proporcional ante mezclas sonoras.",
       "Evita que la red memorice ruido específico de fondo.",
-    ],
-  },
-  pitch_shift: {
-    title: "Aumento de Datos: Pitch Shift",
-    impact:
-      "Desplaza aleatoriamente el tono del audio hacia arriba o abajo en frecuencia sin modificar su duración temporal.",
-    usage:
-      "Activar en señales biológicas o de voz para simular variabilidad tímbrica entre individuos de una misma especie.",
-    keyPoints: [
-      "No recomendado en maquinaria donde frecuencias exactas corresponden a armónicos de rotación fija.",
-      "Aumenta la robustez ante diferencias de resonancia física.",
     ],
   },
 
