@@ -872,12 +872,12 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
             <table className={`${stackedTable} text-xs`}>
               <thead className="hidden md:table-header-group">
                 <tr className="border-b border-[#23252e] text-gray-400">
-                  <th className="pb-2.5 font-medium">Audio</th>
-                  <th className="pb-2.5 font-medium">Etiqueta predicha</th>
-                  <th className="pb-2.5 font-medium">Etiqueta final</th>
-                  <th className="pb-2.5 font-medium">Confianza</th>
-                  <th className="pb-2.5 font-medium">Dataset</th>
-                  <th className="pb-2.5 font-medium text-right pr-2">Acciones</th>
+                  <th className="px-2 pb-2.5 font-medium">Audio</th>
+                  <th className="px-2 pb-2.5 font-medium">Etiqueta predicha</th>
+                  <th className="px-2 pb-2.5 font-medium">Etiqueta final</th>
+                  <th className="px-2 pb-2.5 font-medium">Confianza</th>
+                  <th className="px-2 pb-2.5 font-medium">Dataset</th>
+                  <th className="pb-2.5 font-medium text-right px-2">Acciones</th>
                 </tr>
               </thead>
               <tbody className="block md:table-row-group md:divide-y md:divide-[#23252e]/60">
@@ -891,7 +891,7 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
                   return (
                     <tr key={item.id_retroalimentacion} className={`${stackedRow} md:hover:bg-[#1c1e24]/40 transition-colors`}>
                       {/* On phones the file name heads the card, so it carries no side label. */}
-                      <td className="block pb-2 mb-1 border-b border-[#23252e]/60 font-medium text-gray-200 md:table-cell md:py-3 md:mb-0 md:border-0">
+                      <td className="block pb-2 mb-1 border-b border-[#23252e]/60 font-medium text-gray-200 md:table-cell md:px-2 md:py-3 md:mb-0 md:border-0">
                         <span className="block font-mono text-gray-300 text-xs break-all md:truncate md:max-w-xs" title={filename}>
                           {filename}
                         </span>
@@ -899,10 +899,10 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
                           {uploadDateLabel(item.fecha_carga)}
                         </span>
                       </td>
-                      <td data-label="Predicha" className={`${stackedCell} md:py-3 text-gray-400 font-mono text-xs`}>
+                      <td data-label="Predicha" className={`${stackedCell} md:px-2 md:py-3 text-gray-400 font-mono text-xs`}>
                         {item.etiqueta_predicha}
                       </td>
-                      <td data-label="Final" className={`${stackedCell} md:py-3`}>
+                      <td data-label="Final" className={`${stackedCell} md:px-2 md:py-3`}>
                         <div className="flex items-center justify-end md:justify-start gap-1.5 flex-wrap">
                           <span
                             className={`px-2 py-0.5 rounded text-[11px] font-mono font-medium border ${
@@ -920,13 +920,13 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
                           )}
                         </div>
                       </td>
-                      <td data-label="Confianza" className={`${stackedCell} md:py-3 font-mono text-gray-300 text-xs`}>
+                      <td data-label="Confianza" className={`${stackedCell} md:px-2 md:py-3 font-mono text-gray-300 text-xs`}>
                         {(item.confianza * 100).toFixed(1)}%
                       </td>
-                      <td data-label="Dataset" className={`${stackedCell} md:py-3 font-mono text-emerald-300`}>
+                      <td data-label="Dataset" className={`${stackedCell} md:px-2 md:py-3 font-mono text-emerald-300`}>
                         {item.dataset_name || <span className="font-sans text-amber-300">Sin asociar</span>}
                       </td>
-                      <td className="block pt-2 md:table-cell md:py-3 md:pt-3 md:text-right md:pr-2">
+                      <td className="block pt-2 md:table-cell md:py-3 md:pt-3 md:text-right md:px-2">
                         {!item.dataset_name && (
                           <p className="mb-2 text-left text-[11px] text-amber-300">Sin dataset de inferencia asociado. No se puede incorporar este audio sin una asociación verificable; permanece pendiente o puedes descartarlo de la cola.</p>
                         )}

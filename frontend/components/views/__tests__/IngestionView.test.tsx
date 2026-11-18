@@ -323,6 +323,18 @@ describe('IngestionView persisted inference dataset and curation', () => {
     ]);
   });
 
+  it('separates the queue columns horizontally on desktop', async () => {
+    vi.mocked(feedbackApi.getPendingFeedback).mockResolvedValue([item]);
+    await open();
+    for (const name of ['Audio', 'Etiqueta predicha', 'Etiqueta final', 'Confianza', 'Dataset', 'Acciones']) {
+      expect(queue().getByRole('columnheader', { name }).className).toContain('px-2');
+    }
+    const row = incorporate().closest('tr') as HTMLElement;
+    const cells = within(row).getAllByRole('cell');
+    expect(cells).toHaveLength(6);
+    for (const cell of cells) expect(cell.className).toContain('md:px-2');
+  });
+
   it('pages the queue twenty at a time, counts every pending audio and steps back from an emptied page', async () => {
     const pending = (start: number, count: number) => Array.from({ length: count }, (_, index) => ({
       ...item, id_retroalimentacion: 500 - start - index, audio_filename: `pendiente_${start + index}.wav` }));
