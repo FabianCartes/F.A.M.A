@@ -219,9 +219,11 @@ def test_predict_inference_failure_never_persists_or_fabricates_success(
 
     assert response.status_code == expected_status
     assert set(response.json()) == {"detail"}
-    assert str(error) in response.json()["detail"]
     if expected_status == 503:
+        assert str(error) in response.json()["detail"]
         assert "failing-model" in response.json()["detail"]
+    else:
+        assert response.json()["detail"] == "Error durante el procesamiento del audio."
     assert not predictor.audio_path.exists()
     mock_upload.assert_awaited_once()
     mock_db.add.assert_not_called()
@@ -477,3 +479,24 @@ def test_predict_exposes_loaded_checkpoint_identity_in_details(
     assert response.json()["detalles"]["loaded_checkpoint_sha256"] == loaded_hash
     assert mock_db.add.called
     assert mock_db.commit.called
+
+
+@patch("app.main.upload_audio_to_gcp", new_callable=AsyncMock)
+def test_processing_failure_does_not_expose_internal_error_text(mock_upload, client, mock_db, mock_registry):
+    mock_upload.return_value = True
+    mock_registry.register(FailingPredictor(RuntimeError("/srv/secret/credentials.json unreadable")))
+    response = client.post("/api/predict?model_id=failing-model",
+                           files={"file": ("a.wav", create_dummy_wav_bytes(), "audio/wav")})
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Error durante el procesamiento del audio."
+    mock_db.add.assert_not_called()
+
+
+@patch("app.main.upload_audio_to_gcp", new_callable=AsyncMock)
+def test_database_failure_does_not_expose_internal_error_text(mock_upload, client, mock_db):
+    mock_upload.return_value = True
+    mock_db.commit.side_effect = RuntimeError("postgresql://fama:secret@db/fama refused")
+    response = client.post("/api/predict", files={"file": ("a.wav", create_dummy_wav_bytes(), "audio/wav")})
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Fallo al registrar la predicción en PostgreSQL."
+    mock_db.rollback.assert_called()

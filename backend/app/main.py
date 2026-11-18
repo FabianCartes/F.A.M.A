@@ -7,6 +7,7 @@ if _APP_STARTUP_POLICY not in {"normal", "isolated"}:
     raise ValueError("FAMA_APP_STARTUP_POLICY must be normal or isolated")
 
 import sys
+import logging
 import asyncio
 from functools import partial
 from time import perf_counter
@@ -29,6 +30,7 @@ if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
 
 from app.middleware.inference_limits import InferenceLimits
+from app.middleware.upload_limits import UploadBodyLimit
 from app.services.inference_execution import InferenceExecution
 from app.services.inference_input import InvalidInferenceAudio, validate_audio
 from app.services.storage import upload_audio_to_gcp
@@ -114,12 +116,24 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+logger = logging.getLogger(__name__)
 inference_execution = InferenceExecution()
 MAX_INFERENCE_BODY_BYTES = 110 * 1024 * 1024
 INFERENCE_WAIT_SECONDS = 270
 app.add_middleware(InferenceLimits, execution=inference_execution,
                    body_limit=lambda: MAX_INFERENCE_BODY_BYTES,
                    wait_seconds=lambda: INFERENCE_WAIT_SECONDS)
+
+# Multipart boundaries, part headers and form fields on top of the audio batch.
+MULTIPART_OVERHEAD_BYTES = 1024 * 1024
+
+
+def upload_body_limit():
+    """Raw upload body bound derived from the configured batch limit."""
+    return ingestion_service.get_upload_limits()[1] + MULTIPART_OVERHEAD_BYTES
+
+
+app.add_middleware(UploadBodyLimit, body_limit=upload_body_limit)
 
 # Configuración de CORS para permitir peticiones desde el frontend (Next.js)
 app.add_middleware(
@@ -441,7 +455,8 @@ async def predict_audio(
                 db.refresh(registro_prediccion)
                 db_id = registro_prediccion.id_prediccion
 
-        except Exception as db_save_err:
+        except Exception:
+            logger.exception("Prediction persistence failed")
             db.rollback()
             if local_key is not None:
                 # A failed response/refresh is not proof of a failed commit.
@@ -456,7 +471,7 @@ async def predict_audio(
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=("No fue posible registrar la predicción local." if local_store is not None
-                        else f"Fallo al registrar la predicción en PostgreSQL: {db_save_err}"),
+                        else "Fallo al registrar la predicción en PostgreSQL."),
             )
 
         # 6. Retorno del formato JSON enriquecido
@@ -510,11 +525,12 @@ async def predict_audio(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Modelo no disponible para inferencia: {weights_err}",
         )
-    except Exception as err:
+    except Exception:
         request_outcome = "error"
+        logger.exception("Audio prediction failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error durante el procesamiento del audio: {str(err)}",
+            detail="Error durante el procesamiento del audio.",
         )
     finally:
         if owns_lease:

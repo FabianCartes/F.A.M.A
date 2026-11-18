@@ -226,3 +226,18 @@ def test_service_cannot_bypass_structural_audio_validation(upload_environment):
                                     "AvesChilenas", db=db)
 
     assert objects == {}
+
+
+def test_http_bounds_raw_upload_body_before_the_route_parses_it(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app import main
+    monkeypatch.setenv("FAMA_UPLOAD_MAX_FILE_BYTES", "1000")
+    monkeypatch.setenv("FAMA_UPLOAD_MAX_BATCH_BYTES", "1000")
+    oversized = b"\0" * (1000 + main.MULTIPART_OVERHEAD_BYTES + 1)
+
+    # Anonymous: the route would answer 401; 413 proves the body bound ran first.
+    response = TestClient(main.app).post("/api/ingestion/upload", data={"dataset_name": "AvesChilenas"},
+                                         files={"files": ("audio.wav", oversized, "audio/wav")})
+
+    assert response.status_code == 413
+    assert response.json()["detail"] == "La carga supera los límites permitidos."
