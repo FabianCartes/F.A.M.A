@@ -162,6 +162,26 @@ describe('Sincronizar la tríada completa', () => {
     expect(onSynced).toHaveBeenLastCalledWith(6, 'uploaded');
   });
 
+  it('ofrece «Descargar desde GCS» cuando ningún modelo tiene copia local y rotula «Descargando…» al trabajar', async () => {
+    const pending: Array<() => void> = [];
+    global.fetch = vi.fn((input: RequestInfo | URL) => {
+      const id = requested(input);
+      return new Promise<Response>(done => { pending.push(() => done(synced(id))); });
+    });
+    render(<TriadCheckpointSyncButton models={models} allSynced={false} remoteOnly onSynced={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Sincronizar en GCS' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Descargar desde GCS' }));
+    const button = await screen.findByRole('button', { name: 'Descargando 1 / 3…' });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    for (let i = 0; i < 3; i++) await act(async () => { pending.shift()?.(); });
+    expect(await screen.findByRole('dialog', { name: 'Tríada sincronizada' })).toBeTruthy();
+  });
+
+  it('mantiene «Sincronizar en GCS» cuando algún modelo tiene copia local', () => {
+    render(<TriadCheckpointSyncButton models={models} allSynced={false} remoteOnly={false} onSynced={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Sincronizar en GCS' })).toBeTruthy();
+  });
+
   it('rotula «Sincronizado» cuando los tres modelos ya tienen ambas copias', () => {
     render(<TriadCheckpointSyncButton models={models} allSynced onSynced={vi.fn()} />);
     expect(screen.getByRole('button', { name: 'Sincronizado' })).toBeTruthy();

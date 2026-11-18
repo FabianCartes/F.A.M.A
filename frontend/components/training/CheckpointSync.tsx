@@ -139,9 +139,11 @@ type TriadFailure = { id: number; label: string; message: string };
  * Synchronizes every component checkpoint of a triad, one after another, and reports the
  * result in one dialog. A retry only repeats the models that failed.
  */
-export function TriadCheckpointSyncButton({ models, allSynced, onSynced }: {
+export function TriadCheckpointSyncButton({ models, allSynced, remoteOnly = false, onSynced }: {
   models: { id: number; label: string }[];
   allSynced: boolean;
+  /** True when no component has a local copy and all of them exist only in GCS. */
+  remoteOnly?: boolean;
   onSynced: (modelId: number, action: SyncAction) => void;
 }) {
   const [step, setStep] = useState<{ index: number; total: number } | null>(null);
@@ -172,9 +174,11 @@ export function TriadCheckpointSyncButton({ models, allSynced, onSynced }: {
   const ok = failures !== null && failures.length === 0;
   return <>
     <button ref={trigger} type="button" disabled={step !== null} onClick={() => void synchronize(models)}
-      title="Comprueba y sincroniza con GCS el checkpoint de cada modelo de la tríada."
+      title={remoteOnly && !allSynced ? "Sin copia local: descarga desde GCS el checkpoint de cada modelo de la tríada."
+        : "Comprueba y sincroniza con GCS el checkpoint de cada modelo de la tríada."}
       className={`${BUTTON_STYLE} ${allSynced ? SYNCED_STYLE : PENDING_STYLE}`}>
-      {step ? `Sincronizando ${step.index} / ${step.total}…` : allSynced ? "Sincronizado" : "Sincronizar en GCS"}
+      {step ? `${remoteOnly && !allSynced ? "Descargando" : "Sincronizando"} ${step.index} / ${step.total}…`
+        : allSynced ? "Sincronizado" : remoteOnly ? "Descargar desde GCS" : "Sincronizar en GCS"}
     </button>
     {failures !== null && <DatasetConfirmationDialog title={ok ? "Tríada sincronizada" : "No se pudo sincronizar la tríada"}
       onClose={close} returnFocus={trigger}>

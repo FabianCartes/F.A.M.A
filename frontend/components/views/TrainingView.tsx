@@ -2622,6 +2622,7 @@ export default function TrainingView() {
                   {/* Syncs the three component checkpoints; the technical sheet keeps one action per component. */}
                   <TriadCheckpointSyncButton models={group.members.map(member => ({ id: member.id, label: member.architecture }))}
                     allSynced={group.members.every(member => checkpointSync.synced.has(member.id))}
+                    remoteOnly={group.members.every(member => checkpointSync.remoteOnly.has(member.id))}
                     onSynced={(modelId, action) => { checkpointSync.markSynced(modelId); if (action === "restored") void fetchHistory(); }} />
                 </td>
                 <td className="text-right md:py-3 md:pr-2">
