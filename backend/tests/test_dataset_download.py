@@ -213,3 +213,63 @@ def test_download_summary_counts_failed_and_unverified_files():
 
     assert check["status"] == "differences"
     assert (check["matching"], check["unverified"], check["failed"], check["gcs_count"]) == (1, 1, 1, 3)
+
+
+class Clock:
+    def __init__(self):
+        self.now = 1000.0
+
+    def __call__(self):
+        return self.now
+
+
+STALLED = "La descarga dejó de avanzar durante 5 minutos; vuelve a intentarlo."
+
+
+def test_a_download_without_progress_for_five_minutes_fails_and_frees_its_dataset():
+    clock = Clock()
+    downloads, service = DatasetDownloads(clock=clock), FakeService()
+    operation = start(downloads, service)
+    assert service.reported.wait(5)
+
+    clock.now += 299
+    assert downloads.snapshot(operation["operation_id"])["state"] == "running"
+    clock.now += 2
+    snapshot = downloads.snapshot(operation["operation_id"])
+
+    assert (snapshot["state"], snapshot["error"]) == ("failed", STALLED)
+    assert snapshot["finished_at"]
+    assert downloads.active() == []
+    retry_service = FakeService()
+    retry_service.release.set()
+    retry = start(downloads, retry_service)  # the dataset is no longer locked
+    assert retry["state"] == "running"
+    service.release.set()
+    assert wait_for(lambda: downloads.snapshot(operation["operation_id"])["error"] == STALLED)
+
+
+def test_a_slow_download_that_keeps_reporting_progress_is_not_cut():
+    clock = Clock()
+    downloads, service = DatasetDownloads(clock=clock), FakeService()
+    operation = start(downloads, service)
+    assert service.reported.wait(5)
+    for _ in range(3):
+        clock.now += 240
+        service.report_phase("files")
+        assert downloads.snapshot(operation["operation_id"])["state"] == "running"
+    service.release.set()
+    assert wait_for(lambda: downloads.snapshot(operation["operation_id"])["state"] == "completed")
+
+
+def test_local_preprocessing_has_no_inactivity_limit():
+    clock = Clock()
+    downloads, service = DatasetDownloads(clock=clock), FakeService()
+    operation = start(downloads, service)
+    assert service.reported.wait(5)
+    service.report_phase("preprocessing")
+    clock.now += 3600
+    assert downloads.snapshot(operation["operation_id"])["state"] == "running"
+    service.report_phase("database")
+    clock.now += 301
+    assert downloads.snapshot(operation["operation_id"])["error"] == STALLED
+    service.release.set()

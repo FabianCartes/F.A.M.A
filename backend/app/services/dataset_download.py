@@ -7,6 +7,7 @@ interrupted by a restart is re-run by the client (matching audios are skipped).
 """
 import logging
 import threading
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
@@ -17,6 +18,12 @@ from app.services.ingestion import IngestionDatasetUnavailable, IngestionValidat
 logger = logging.getLogger(__name__)
 
 _RETAINED_FINISHED = 20
+# A transfer phase that reports nothing for this long is presumed hung (for example a socket
+# left half-open by a network cut). Its datasets are released so the download can be retried.
+# Local preprocessing reports no per-file progress, so it is not watched.
+_STALL_SECONDS = 300
+_WATCHED_PHASES = {"files", "database"}
+_STALLED_ERROR = "La descarga dejó de avanzar durante 5 minutos; vuelve a intentarlo."
 
 
 class DownloadInProgress(Exception):
@@ -70,6 +77,7 @@ class _Operation:
         self.error: Optional[str] = None
         self.started_at = datetime.now(timezone.utc).isoformat()
         self.finished_at: Optional[str] = None
+        self.last_progress = 0.0
 
     def snapshot(self) -> Dict[str, Any]:
         def total(key):
@@ -96,9 +104,10 @@ class _Operation:
 class DatasetDownloads:
     """Registry of download operations; at most one running operation per dataset."""
 
-    def __init__(self):
+    def __init__(self, clock: Callable[[], float] = time.monotonic):
         self._lock = threading.Lock()
         self._operations: Dict[str, _Operation] = {}
+        self._clock = clock
 
     def start(self, service: Any, datasets: List[str], *, preprocess: bool,
               session_factory: Callable[[], Any]) -> Dict[str, Any]:
@@ -107,7 +116,9 @@ class DatasetDownloads:
         Raises DownloadInProgress when any dataset is already downloading.
         """
         operation = _Operation(list(datasets), preprocess)
+        operation.last_progress = self._clock()
         with self._lock:
+            self._expire_stalled()
             for running in self._operations.values():
                 if running.state == "running" and set(running.datasets) & set(datasets):
                     raise DownloadInProgress(running.id)
@@ -125,12 +136,25 @@ class DatasetDownloads:
 
     def snapshot(self, operation_id: str) -> Optional[Dict[str, Any]]:
         with self._lock:
+            self._expire_stalled()
             operation = self._operations.get(operation_id)
             return operation.snapshot() if operation else None
 
     def active(self) -> List[Dict[str, Any]]:
         with self._lock:
+            self._expire_stalled()
             return [item.snapshot() for item in self._operations.values() if item.state == "running"]
+
+    def _expire_stalled(self):
+        """Fail running operations whose watched phase stopped advancing. Caller holds the lock."""
+        now = self._clock()
+        for operation in self._operations.values():
+            if (operation.state == "running" and operation.phase in _WATCHED_PHASES
+                    and now - operation.last_progress > _STALL_SECONDS):
+                logger.warning("Dataset download %s stalled in phase %s", operation.id, operation.phase)
+                operation.state = "failed"
+                operation.error = _STALLED_ERROR
+                operation.finished_at = datetime.now(timezone.utc).isoformat()
 
     def _prune(self):
         finished = [key for key, item in self._operations.items() if item.state != "running"]
@@ -143,12 +167,14 @@ class DatasetDownloads:
                 with self._lock:
                     operation.current = name
                     operation.phase = "files"
+                    operation.last_progress = self._clock()
                     operation.counts.setdefault(name, {"total": 0, "downloaded": 0, "skipped": 0, "failed": 0})
 
                 def report(counts, name=name):
                     with self._lock:
                         operation.counts[name].update({key: int(counts.get(key, 0)) for key in operation.counts[name]})
                         operation.phase = str(counts.get("phase", operation.phase))
+                        operation.last_progress = self._clock()
 
                 with session_factory() as db:
                     result = service.sync_dataset_to_local(
