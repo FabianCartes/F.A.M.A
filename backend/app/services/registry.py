@@ -391,10 +391,7 @@ class ModelRegistry:
                 basename = Path(unquote(uri.path) if uri.scheme else model.ruta_binario_gcp).name
                 expected_hash, hash_error = _persisted_checkpoint_hash(model)
                 if hash_error:
-                    if (source_owner is None and not self._legacy_rejection_identity(
-                            model, root, expected_hash, source_owner)):
-                        self._hide_unknown_identity(model)
-                        continue
+                    # Blocked and reported, as at startup (register_from_db), whatever its dataset.
                     self._block_db_model(model, key, basename, hash_error)
                     errors.append({"model_id": key, "code": hash_error})
                     continue
