@@ -1061,3 +1061,34 @@ def test_nonduplicate_with_unhashed_rows_still_incorporates_and_backfills(local_
     hashes = {a.nombre_archivo: a.hash_archivo for a in w.db.query(Audio)}
     assert hashes["dog_barking_0.wav"] == hashlib.sha256(b"different content").hexdigest()
     assert hashes["feedback_1.wav"] == hashlib.sha256(w.audio).hexdigest()
+
+
+def test_missing_dataset_folder_reports_download_requirement_without_writes(local_workflow):
+    w = local_workflow
+    dataset = w.service.raw_data_dir / "AvesChilenas"
+    dataset.rename(w.root / "moved_away")
+    with pytest.raises(HTTPException) as error:
+        w.service.approve_feedback(w.db, 1)
+    assert error.value.status_code == 422
+    assert error.value.detail == (
+        "El dataset «AvesChilenas» no está descargado en este equipo; "
+        "descárgalo desde Gestión de audios antes de incorporar el audio.")
+    assert w.calls == []
+    assert FeedbackSyncQueue().get(w.db, 1) is None
+    assert w.service.get_pending_feedback(w.db)[0]["procesado"] is False
+    assert not (w.service.raw_data_dir / ".feedback_1.json").exists()
+    assert not dataset.exists()
+    # Only the stable lock file may remain; no intent, audio or dataset folder is created.
+    assert [p.name for p in w.service.raw_data_dir.iterdir() if not p.name.endswith(".lock")] == []
+
+
+def test_unknown_class_in_existing_dataset_keeps_catalogue_message(local_workflow):
+    w = local_workflow
+    dataset = w.service.raw_data_dir / "AvesChilenas"
+    (dataset / "rayadito").rename(dataset / "otra_clase")
+    with pytest.raises(HTTPException) as error:
+        w.service.approve_feedback(w.db, 1)
+    assert error.value.status_code == 422
+    assert error.value.detail == "Clase desconocida en el catálogo local"
+    assert not (w.service.raw_data_dir / ".feedback_1.json").exists()
+    assert not list(dataset.rglob("feedback_1.wav*"))

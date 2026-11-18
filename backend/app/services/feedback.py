@@ -293,6 +293,10 @@ class FeedbackService:
 
     def _resolve_local_class(self, dataset: Path, label: str) -> str:
         """Local directories and verified canonical metadata establish class identity."""
+        if not dataset.exists():
+            raise ValueError(
+                f"El dataset «{dataset.name}» no está descargado en este equipo; "
+                "descárgalo desde Gestión de audios antes de incorporar el audio.")
         rows, _ = self._read_canonical_metadata(dataset)
         directories = set()
         if dataset.exists():
