@@ -21,6 +21,7 @@ import DatasetConfirmationDialog from "@/components/ingestion/DatasetConfirmatio
 import { PARAMETER_EXPLANATIONS } from "@/lib/constants/parameterExplanations";
 import { groupTriadHistory, jointMetric, jointStatusLabel, type TriadHistoryGroup } from "@/components/training/triadHistory";
 import JointEvaluationSection from "@/components/training/JointEvaluationSection";
+import DefaultModelControl from "@/components/training/DefaultModelControl";
 
 // ============================================================================
 // INTERFACES DEL DOMINIO DE ENTRENAMIENTO (RF_04, CU_INV_02, CU_INV_03)
@@ -2595,7 +2596,11 @@ export default function TrainingView() {
                         onSynced={action => { checkpointSync.markSynced(item.id); if (action === "restored") void fetchHistory(); }} />
                     </td>
                     <td className="text-right md:py-3 md:pr-2">
-                      <TechnicalSheetButton onClick={() => { setSelectedGroup(null); setSelectedModelModal(item); }} />
+                      <div className="inline-flex flex-wrap items-start justify-end gap-2">
+                        <DefaultModelControl kind="model" id={item.id} active={item.active === true}
+                          administrator={session?.rol === "administrador"} onActivated={fetchHistory} />
+                        <TechnicalSheetButton onClick={() => { setSelectedGroup(null); setSelectedModelModal(item); }} />
+                      </div>
                     </td>
                   </tr>
                 );
@@ -2626,7 +2631,11 @@ export default function TrainingView() {
                     onSynced={(modelId, action) => { checkpointSync.markSynced(modelId); if (action === "restored") void fetchHistory(); }} />
                 </td>
                 <td className="text-right md:py-3 md:pr-2">
-                  <TechnicalSheetButton onClick={() => { setSelectedGroup(group); setSelectedModelModal(group.members[0]); }} />
+                  <div className="inline-flex flex-wrap items-start justify-end gap-2">
+                    <DefaultModelControl kind="triad" id={group.composition.id} active={group.composition.active === true}
+                      administrator={session?.rol === "administrador"} onActivated={fetchHistory} />
+                    <TechnicalSheetButton onClick={() => { setSelectedGroup(group); setSelectedModelModal(group.members[0]); }} />
+                  </div>
                 </td>
               </tr>;
               })}

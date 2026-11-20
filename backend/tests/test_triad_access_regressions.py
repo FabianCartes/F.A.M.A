@@ -201,7 +201,7 @@ def test_training_history_exposes_only_latest_authorized_composition(triad_env):
     assert response.status_code == 200
     body = response.json()
     assert {item["id"] for item in body["history"]} >= {1, 2, 3}
-    assert body["compositions"] == [{"id": 2, "version": 2, "job_id": "job-1",
+    assert body["compositions"] == [{"id": 2, "version": 2, "job_id": "job-1", "active": False,
                                     "name": "Aves Chilenas · Tríada 1 — AudioCNN + AudioCNN + AudioCNN", "architectures": ["AudioCNN"] * 3,
                                     "components": [{"id_modelo": 1, "weight": V2_WEIGHTS[0]},
                                                    {"id_modelo": 2, "weight": V2_WEIGHTS[1]},
@@ -309,12 +309,12 @@ def test_training_history_keeps_explicit_jobs_and_ignores_invalid_compositions(t
     assert body["history"] == before.json()["history"]
     assert {item["id"] for item in body["history"]} >= {1, 2, 3, 4, 5, 6}
     assert body["compositions"] == [
-        {"id": 1, "version": 1, "job_id": "job-1",
+        {"id": 1, "version": 1, "job_id": "job-1", "active": False,
          "name": "Aves Chilenas · Tríada 1 — AudioCNN + AudioCNN + AudioCNN", "architectures": ["AudioCNN"] * 3,
          "components": [
             {"id_modelo": 1, "weight": V1_WEIGHTS[0]}, {"id_modelo": 2, "weight": V1_WEIGHTS[1]},
             {"id_modelo": 3, "weight": V1_WEIGHTS[2]}], "evaluation": {"val": None, "test": None}},
-        {"id": 2, "version": 1, "job_id": "job-2",
+        {"id": 2, "version": 1, "job_id": "job-2", "active": False,
          "name": "Aves Chilenas · Tríada 2 — AudioCNN + AudioCNN + AudioCNN", "architectures": ["AudioCNN"] * 3,
          "components": [
             {"id_modelo": 4, "weight": .2}, {"id_modelo": 5, "weight": .3},

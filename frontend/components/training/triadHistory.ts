@@ -20,6 +20,8 @@ export interface HistoryComposition {
   components: { id_modelo: number; weight: number }[];
   /** Stored joint reports of this exact composition; absent for older servers. */
   evaluation?: JointEvaluation;
+  /** Whether this composition is the installation default; absent for older servers. */
+  active?: boolean;
 }
 export interface TriadHistoryGroup {
   composition: HistoryComposition;
