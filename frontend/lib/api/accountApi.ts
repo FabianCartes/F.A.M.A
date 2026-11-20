@@ -14,22 +14,24 @@ async function send(path: string, options?: RequestInit): Promise<Response> {
   let response: Response;
   try { response = await apiFetch(`${API_BASE_URL}/api/${path}`, options); }
   catch { throw new AccountApiError("No se pudo confirmar la operación. Actualiza el estado antes de reintentar."); }
-  if (!response.ok) {
-    const messages: Record<number, string> = {
-      400: "Revisa los datos enviados. La operación no se completó.",
-      401: "La sesión expiró. Vuelve a iniciar sesión.",
-      403: "No tienes permiso para realizar esta operación.",
-      404: "El recurso ya no existe o no está disponible.",
-      409: "La operación entra en conflicto con el estado actual. Actualiza los datos antes de reintentar.",
-      422: "Los datos enviados no son válidos.",
-      429: "Demasiados intentos. Espera antes de volver a intentarlo.",
-      503: "El servicio no está disponible. No se pudo confirmar la operación.",
-    };
-    const retry = response.headers.get("Retry-After") ?? "";
-    throw new AccountApiError(messages[response.status] ?? "No se pudo confirmar la operación. Actualiza el estado antes de reintentar.",
-      response.status, response.status === 429 ? (/^\d+$/.test(retry) ? Math.min(86400, Math.max(1, Number(retry))) : 60) : 0);
-  }
+  if (!response.ok) failure(response);
   return response;
+}
+
+function failure(response: Response): never {
+  const messages: Record<number, string> = {
+    400: "Revisa los datos enviados. La operación no se completó.",
+    401: "La sesión expiró. Vuelve a iniciar sesión.",
+    403: "No tienes permiso para realizar esta operación.",
+    404: "El recurso ya no existe o no está disponible.",
+    409: "La operación entra en conflicto con el estado actual. Actualiza los datos antes de reintentar.",
+    422: "Los datos enviados no son válidos.",
+    429: "Demasiados intentos. Espera antes de volver a intentarlo.",
+    503: "El servicio no está disponible. No se pudo confirmar la operación.",
+  };
+  const retry = response.headers.get("Retry-After") ?? "";
+  throw new AccountApiError(messages[response.status] ?? "No se pudo confirmar la operación. Actualiza el estado antes de reintentar.",
+    response.status, response.status === 429 ? (/^\d+$/.test(retry) ? Math.min(86400, Math.max(1, Number(retry))) : 60) : 0);
 }
 
 function body(method: string, value?: unknown): RequestInit {
@@ -46,7 +48,16 @@ export async function listAccounts(offset: number, signal?: AbortSignal) {
 }
 
 export async function createAccount(value: { nombre_completo: string; email: string; password: string; rol: AccountUser["rol"] }, signal?: AbortSignal) {
-  return decode(await send("auth/register", { ...body("POST", value), signal }), userSchema);
+  let response: Response;
+  try { response = await apiFetch(`${API_BASE_URL}/api/auth/register`, { ...body("POST", value), signal }); }
+  catch { throw new AccountApiError("No se pudo confirmar la operación. Actualiza el estado antes de reintentar."); }
+  if (response.status === 400) {
+    // The backend explains a refused registration, e.g. an email that is already registered.
+    const detail = await response.json().then((data) => data?.detail, () => null);
+    if (typeof detail === "string" && detail.trim()) throw new AccountApiError(detail, 400);
+  }
+  if (!response.ok) failure(response);
+  return decode(response, userSchema);
 }
 
 export async function updateAccount(id: number, changes: Pick<AccountUser, "nombre_completo" | "rol" | "activo">, signal?: AbortSignal) {

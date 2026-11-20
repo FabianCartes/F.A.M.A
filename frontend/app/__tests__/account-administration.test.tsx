@@ -121,6 +121,26 @@ it("lets an administrator list and create accounts without retaining the initial
   expect((within(form).getByLabelText("Contraseña inicial") as HTMLInputElement).value).toBe("");
 });
 
+it("explains that the email is already registered and keeps the form data (CU_ADM_01 alternative flow)", async () => {
+  const request = vi.fn(async (url: string) => {
+    if (url.endsWith("/auth/me")) return json(administrator);
+    if (url.includes("/api/users?")) return json({ users: [administrator, researcher], total: 2, limit: 20, offset: 0 });
+    if (url.endsWith("/auth/register")) return json({ detail: "El correo electrónico 'researcher@example.test' ya se encuentra registrado." }, 400);
+    return json({ models: [], triad_status: [] });
+  });
+  vi.stubGlobal("fetch", request);
+  render(<Home />);
+  fireEvent.click(await screen.findByRole("button", { name: "Administración" }));
+  const form = await screen.findByRole("form", { name: "Crear cuenta" });
+  fireEvent.change(within(form).getByLabelText("Nombre completo"), { target: { value: "Repetida" } });
+  fireEvent.change(within(form).getByLabelText("Correo electrónico"), { target: { value: "researcher@example.test" } });
+  fireEvent.change(within(form).getByLabelText("Contraseña inicial"), { target: { value: "InitialPassword2026!" } });
+  fireEvent.click(within(form).getByRole("button", { name: "Crear cuenta" }));
+  const alert = await within(form).findByRole("alert");
+  expect(alert.textContent).toContain("ya se encuentra registrado");
+  expect((within(form).getByLabelText("Correo electrónico") as HTMLInputElement).value).toBe("researcher@example.test");
+});
+
 it("edits an existing account through the backend and refreshes its confirmed state", async () => {
   let person = { ...researcher };
   const request = vi.fn(async (url: string, options?: RequestInit) => {
