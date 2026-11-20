@@ -1,0 +1,136 @@
+{
+  "code": "docker_cpu_lab_and_gcp_writes_verified",
+  "date": "2026-11-09",
+  "branch": "fix/afinamiento-integral",
+  "base_commit": "84ea7dfb7aa5f8e6cd173a10752a346cd07ae424",
+  "operator_choice": "Completar el perfil Docker con PostgreSQL temporal y comprobar Cloud SQL por separado. CUDA queda para el equipo de Kevin.",
+  "source_sha256": {
+    "iniciar_fama.sh": "1385f2f1d89006b4a0764852ab8de1a871a924cdcb2b6b2a8645f381241e3445",
+    "iniciar_fama.bat": "52e9ace638111864fd49197ba9dd5609035798ed2f997802d72a861b38739d73",
+    "frontend/package-lock.json": "e9e4a95aabd1d868be6333a21b40219d632236e65dab94f07adb15ebc76e57eb"
+  },
+  "launchers": {
+    "actual_frontend_url": "http://127.0.0.1:13002",
+    "actual_backend_docs_url": "http://127.0.0.1:18082/docs",
+    "actual_installation_url": "http://127.0.0.1:13002/installation",
+    "bash_test_command": "bash tests/test_iniciar_fama.sh",
+    "bash_behavior_cases_passed": 41,
+    "bash_ready_before_and_after": [
+      "installation_required",
+      "schema_current"
+    ],
+    "cmd_custom_port_contract": "passed",
+    "cmd_unpublished_api_url_omitted": true,
+    "compose_unpublished_port_response": ":0",
+    "windows_line_endings": "CRLF mediante .gitattributes"
+  },
+  "frontend": {
+    "node_in_linux": "22.23.4",
+    "updated": {
+      "next": "16.4.5",
+      "eslint-config-next": "16.4.5",
+      "sharp": "0.35.5",
+      "source-map-js": "1.2.2"
+    },
+    "production_audit_command": "npm audit --omit=dev",
+    "production_audit_alerts_before": 3,
+    "production_audit_alerts_after": 0,
+    "full_audit_alerts_before": 17,
+    "full_audit_alerts_after": {
+      "total": 14,
+      "moderate": 10,
+      "high": 4
+    },
+    "docker_production_build": "passed",
+    "lint": "passed",
+    "initial_vitest": {
+      "passed": 475,
+      "timeouts": 4
+    },
+    "vitest_rerun": {
+      "command": "npm test -- --maxWorkers=2 --reporter=dot",
+      "passed": 479,
+      "failed": 0,
+      "files": 48
+    },
+    "validated_manifests_applied_to_checkout": true
+  },
+  "managed_installation": {
+    "result": "passed",
+    "profile": "Docker desechable en CPU con PostgreSQL 16 local y GCS real de pruebas",
+    "project": "fama-close-7d2a91c6-local",
+    "postgres_host_port_published": false,
+    "revision": "0004_integration",
+    "checks": [
+      "database_connected",
+      "storage_read_connected",
+      "schema_current",
+      "configuration_ready",
+      "initial_administrator_available",
+      "database_runtime_permissions_ready"
+    ],
+    "installation_page": 200,
+    "complete_code": "installation_completed",
+    "ready_before_restart": 503,
+    "ready_after_restart": 200,
+    "persisted_status": "completed",
+    "installer_closed": 410,
+    "auth_over_frontend_proxy": {
+      "login_page": 200,
+      "login": 200,
+      "administrator_session": 200,
+      "cookie_http_only": true,
+      "logout": 204,
+      "session_after_logout": 401
+    }
+  },
+  "real_cloud_test_environment": {
+    "project": "fama-close-7d2a91c6-pruebas",
+    "proxy": "2.26.2",
+    "services_healthy": [
+      "backend",
+      "frontend",
+      "cloud-sql-proxy"
+    ],
+    "installation_status": "required",
+    "readiness_http": 503,
+    "database": "fama_pruebas",
+    "revision_observed": "0003_autonomy",
+    "schema_check": "schema_outdated",
+    "database_migration_applied": false,
+    "sql": {
+      "runtime_user": "fama_app",
+      "table": "cuota_acceso",
+      "insert": true,
+      "select": true,
+      "update": true,
+      "delete": true,
+      "rollback_verified": true,
+      "synthetic_rows_remaining": 0
+    },
+    "gcs": {
+      "bucket": "fama-pruebas",
+      "object": "__fama_verificacion/docker/fama-close-7d2a91c6-771bf46986c446719de3335e51c4fe3a.txt",
+      "generation": "1794247660216651",
+      "upload": true,
+      "download_bytes_match": true,
+      "list": true,
+      "delete_generation": true,
+      "live_objects_remaining_for_prefix": 0,
+      "retention_policy_changed": false
+    },
+    "official_profile_or_data_changed": false
+  },
+  "cleanup": {
+    "docker_resources_remaining": 0,
+    "temporary_images_removed": true,
+    "temporary_workspace_removed": true,
+    "official_native_login_http": 200,
+    "checked_utc": "2026-11-09T18:17:34.0611233Z"
+  },
+  "limits": [
+    "El asistente completo y las escrituras remotas se comprobaron en recorridos separados.",
+    "Quedan activación Docker institucional, revisión de dependencias de desarrollo y validación CUDA en el equipo de Kevin.",
+    "Los cambios quedaron en el checkout local."
+  ]
+}

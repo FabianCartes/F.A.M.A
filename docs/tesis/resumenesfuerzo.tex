@@ -1,0 +1,59 @@
+\section{Resumen de esfuerzo}
+\label{anexo:resumen-esfuerzo}
+
+El esfuerzo de F.A.M.A. se expresa en horas-persona, que corresponden a
+la suma de las horas de trabajo de los integrantes del equipo. Según las
+cifras consolidadas en el capítulo~9, la planificación inicial consideró
+320 horas-persona y el esfuerzo real fue de 317 horas-persona. La
+Tabla~\ref{tab:esfuerzo-fama} presenta el desglose disponible del
+esfuerzo real y la participación de cada actividad en el total.
+
+\begin{table}[!htbp]
+    \centering
+    \caption{Esfuerzo planificado y real del equipo de F.A.M.A.}
+    \label{tab:esfuerzo-fama}
+    \small
+    \setlength{\tabcolsep}{4pt}
+    \renewcommand{\arraystretch}{1.15}
+    \begin{tabular}{@{}p{0.47\linewidth}rrr@{}}
+        \hline
+        \textbf{Actividad} & \shortstack[r]{\textbf{Planificado}\\(h-p)} &
+        \shortstack[r]{\textbf{Real}\\(h-p)} & \textbf{\% del real} \\
+        \hline
+        Desarrollo de software (programación, pruebas automatizadas y control de versiones)
+        & --- & 132 & 41,64\% \\
+        Elaboración de la memoria (redacción y corrección)
+        & --- & 185 & 58,36\% \\
+        \hline
+        \textbf{Total del equipo} & \textbf{320} & \textbf{317} & \textbf{100\%} \\
+        \hline
+    \end{tabular}
+    \par\smallskip
+    \parbox{0.97\linewidth}{\footnotesize
+    h-p significa horas-persona. El guion indica que la memoria
+    consigna la planificación únicamente como total del equipo.
+    El registro disponible agrupa el esfuerzo real por actividad,
+    sin separar horas por integrante o por tarea técnica.}
+\end{table}
+
+\subsection{Comparación con la planificación}
+
+El esfuerzo real quedó 3 horas-persona por debajo del total
+planificado, una desviación de $-0{,}94$\% respecto de las 320
+horas-persona previstas. Las conclusiones del proyecto señalan que el
+procesamiento tensorial, la estabilización del uso de memoria de la
+GPU y el manejo de concurrencia requirieron más dedicación técnica de
+la prevista. El desglose disponible permite observar la distribución
+entre desarrollo y elaboración de la memoria, mientras que la
+variación dentro de las tareas técnicas se describe cualitativamente.
+
+La carta Gantt del apartado~\ref{anexo:gantt} sitúa las actividades en
+el calendario y muestra los cambios en sus plazos. Este resumen
+cuantifica la dedicación acumulada del equipo. Por su parte, el
+apartado~\ref{anexo:estimacion-cu} aplica una tasa de referencia a los
+puntos de casos de uso para obtener un esfuerzo teórico de desarrollo.
+El presupuesto de 320 horas-persona corresponde a la planificación
+académica del equipo e incluye la elaboración de la memoria.
+
+% Fuente de las horas planificadas y reales: capítulo 9 de la memoria.
+% Participaciones: 132/317 y 185/317. Desviación: (317-320)/320.

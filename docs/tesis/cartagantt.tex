@@ -1,0 +1,99 @@
+\section{Carta Gantt con línea base y desviaciones}
+\label{anexo:gantt}
+
+La Tabla~\ref{tab:gantt-fama} presenta la planificación y la ejecución
+de las actividades de F.A.M.A. entre mayo y noviembre de 2026. La línea
+base se reconstruyó como propuesta a partir del plan de trabajo de la
+memoria. La ejecución se ubicó mediante el anteproyecto, las iteraciones
+descritas en el capítulo~7, los registros técnicos y las fechas
+confirmadas por el equipo. El inicio del levantamiento, del diseño y
+de la redacción se presenta con precisión mensual estimada.
+
+\begin{table}[!htbp]
+    \centering
+    \caption{Línea base propuesta y ejecución mensual de F.A.M.A.}
+    \label{tab:gantt-fama}
+    \small
+    \setlength{\tabcolsep}{3pt}
+    \renewcommand{\arraystretch}{1.13}
+    \newcommand{\ganttPlanFama}{\rule{\linewidth}{0.45ex}}
+    \newcommand{\ganttRealFama}{\rule{\linewidth}{1.05ex}}
+    \begin{tabular}{@{}p{0.35\linewidth}p{0.05\linewidth}*{7}{@{}p{0.08\linewidth}}@{}}
+        \hline
+        \textbf{Actividad} & &
+        \centering\textbf{May} & \centering\textbf{Jun} &
+        \centering\textbf{Jul} & \centering\textbf{Ago} &
+        \centering\textbf{Sep} & \centering\textbf{Oct} &
+        \centering\textbf{Nov}\tabularnewline
+        \hline
+        Levantamiento de información y requerimientos & P & \ganttPlanFama &  &  &  &  &  &  \\
+        & E & \ganttRealFama &  &  &  &  &  &  \\
+        \hline
+        Diseño de arquitectura, base de datos e interfaz & P &  & \ganttPlanFama & \ganttPlanFama &  &  &  &  \\
+        & E &  & \ganttRealFama & \ganttRealFama &  &  &  &  \\
+        \hline
+        Procesamiento acústico y entrenamiento & P &  &  &  & \ganttPlanFama & \ganttPlanFama &  &  \\
+        & E &  &  &  &  & \ganttRealFama &  &  \\
+        \hline
+        Integración web, servicios en la nube y retroalimentación & P &  &  &  &  & \ganttPlanFama &  &  \\
+        & E &  &  &  &  & \ganttRealFama & \ganttRealFama &  \\
+        \hline
+        Pruebas, ajustes y corrección de errores & P &  &  &  &  & \ganttPlanFama & \ganttPlanFama &  \\
+        & E &  &  &  &  & \ganttRealFama & \ganttRealFama & \ganttRealFama \\
+        \hline
+        Implantación y puesta en marcha local & P &  &  &  &  &  & \ganttPlanFama &  \\
+        & E &  &  &  &  &  & \ganttRealFama &  \\
+        \hline
+        Redacción y corrección de la tesis & P & \ganttPlanFama & \ganttPlanFama & \ganttPlanFama & \ganttPlanFama & \ganttPlanFama & \ganttPlanFama & \ganttPlanFama \\
+        & E & \ganttRealFama & \ganttRealFama & \ganttRealFama & \ganttRealFama & \ganttRealFama & \ganttRealFama & \ganttRealFama \\
+        \hline
+    \end{tabular}
+    \par\smallskip
+    \parbox{0.97\linewidth}{\footnotesize
+    P corresponde a la línea base propuesta (barra fina). E corresponde
+    a la ejecución reconstruida (barra gruesa). El último mes de cada
+    barra se interpreta al nivel de mes. En redacción, la barra E llega
+    al corte del 9 de noviembre de 2026 y la actividad permanece en curso.}
+\end{table}
+
+\subsection{Hitos y desviaciones observadas}
+
+El anteproyecto de mayo documentó los perfiles de usuario y los
+requerimientos iniciales. La definición oficial de la arquitectura, la
+base de datos y la interfaz se situó en julio, según la fecha confirmada
+por el equipo. En septiembre se registró la implementación de esa
+arquitectura en el código del proyecto.
+
+El 3 de septiembre se registró la primera versión del prototipo
+bioacústico en Git. La etapa de desarrollo del procesamiento acústico
+y entrenamiento se cerró en septiembre. El calendario propuesto
+consideraba su inicio en agosto, por lo que la ejecución se concentró
+en septiembre. Los ajustes posteriores de preparación de datos,
+evaluación y compatibilidad se reflejan en las actividades de
+integración y pruebas.
+
+La integración del backend con el almacenamiento en la nube y la
+base de datos tiene un primer registro el 4 de septiembre. La
+retroalimentación se incorporó durante ese mes y el corte de integración
+se realizó el 24 de octubre. En la comparación mensual, esta actividad
+se extendió hasta octubre. La preparación versionada de los datos y
+la evaluación con particiones separadas ampliaron las comprobaciones
+necesarias para verificar el flujo integrado.
+
+La preparación del entorno oficial comenzó el 23 de octubre y la
+actualización del nodo local se verificó el día 25. La puesta en marcha
+local quedó situada en octubre. Las pruebas continuaron después de ese
+hito y el 9 de noviembre se registró una comprobación adicional de
+arranque en Docker con CPU en un entorno aislado. La transferencia
+al servidor universitario queda pendiente de programación.
+
+% Fuentes de las fechas y del alcance.
+% Anteproyecto de título, versión Avance1, mayo de 2026.
+% Memoria actualizada, capítulos 7 a 9.
+% Julio y cierre del desarrollo en septiembre, confirmados por el autor.
+% Git e888d89 (3 de septiembre), f31c1dd (4 de septiembre).
+% Git 0bda3bb (retroalimentación, 27 de septiembre).
+% docs/manuales/integracion_dev_20261024.md
+% docs/manuales/preparacion_entorno_oficial.md
+% docs/manuales/actualizacion_oficial_0004_20261025.md
+% docs/receipts/comprobacion_docker_local_20261109.json

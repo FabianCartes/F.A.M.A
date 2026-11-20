@@ -1,0 +1,421 @@
+\chapter{Funcionalidad y endpoints}
+\label{ap:funcionalidad-endpoints}
+
+La interfaz web de F.A.M.A. utiliza la API HTTP del backend para gestionar
+sesiones, audios, entrenamientos y predicciones. Cada operación se
+identifica por su método y su ruta. Cuando una tabla indica un prefijo, la
+ruta completa se obtiene al concatenarlo con la ruta relativa. Las llaves
+identifican parámetros que se sustituyen por el nombre o identificador del
+recurso.
+
+Las consultas utilizan \texttt{GET}. Las solicitudes que inician una
+operación o registran información utilizan \texttt{POST}. Las rutas
+\texttt{PUT}, \texttt{PATCH} y \texttt{DELETE} se emplean para transferencias,
+asignaciones, modificaciones parciales o revocaciones según el recurso. La
+respuesta de una operación en segundo plano se interpreta junto con el
+estado del trabajo que devuelve la API.
+
+\section{Estado del nodo e instalación}
+
+La consulta \texttt{/health} comprueba que el proceso atiende solicitudes.
+La consulta \texttt{/ready} informa si el nodo puede ofrecer el servicio
+operativo según su configuración y esquema. El asistente se monta cuando
+existe un directorio de configuración. Sus operaciones de detalle y
+escritura requieren una autorización de instalación.
+
+\begin{table}[!htbp]
+    \centering
+    \caption{Estado del nodo y configuración inicial.}
+    \small
+    \setlength{\tabcolsep}{4pt}
+    \renewcommand{\arraystretch}{1.13}
+    \begin{tabular}{@{}p{0.13\linewidth}p{0.36\linewidth}p{0.45\linewidth}@{}}
+        \hline
+        \textbf{Método} & \textbf{Ruta} & \textbf{Funcionalidad} \\
+        \hline
+        \texttt{GET} & \texttt{/\allowbreak{}} & Devuelve un mensaje de estado del backend operativo. \\
+        \texttt{GET} & \texttt{/\allowbreak{}health} & Indica que el proceso HTTP responde. \\
+        \texttt{GET} & \texttt{/\allowbreak{}ready} & Informa si el nodo está listo según el estado de configuración y esquema. \\
+        \texttt{GET} & \texttt{/\allowbreak{}api/\allowbreak{}installation/\allowbreak{}status} & Consulta el estado general de la instalación. \\
+        \texttt{GET} & \texttt{/\allowbreak{}api/\allowbreak{}installation/\allowbreak{}state} & Consulta el detalle del asistente con autorización de instalación. \\
+        \texttt{POST} & \texttt{/\allowbreak{}api/\allowbreak{}installation/\allowbreak{}configuration} & Guarda la configuración del asistente autorizado. \\
+        \texttt{POST} & \texttt{/\allowbreak{}api/\allowbreak{}installation/\allowbreak{}check} & Comprueba la configuración y las condiciones necesarias para continuar. \\
+        \texttt{POST} & \texttt{/\allowbreak{}api/\allowbreak{}installation/\allowbreak{}complete} & Finaliza o reanuda el alta inicial y devuelve el estado de instalación. \\
+        \hline
+    \end{tabular}
+\end{table}
+
+\section{Acceso, cuentas y permisos}
+
+La sesión del navegador se establece mediante una cookie \texttt{HttpOnly}.
+Las operaciones de administración requieren una cuenta administradora.
+Las rutas del catálogo de datasets requieren sesión y permiten al
+investigador conocer el estado de su acceso o presentar una solicitud.
+Las decisiones y asignaciones se administran mediante las rutas del
+prefijo \texttt{/api/access}.
+
+\begin{table}[!htbp]
+    \centering
+    \caption{Autenticación y gestión de la sesión.}
+    \small
+    \setlength{\tabcolsep}{4pt}
+    \renewcommand{\arraystretch}{1.13}
+    \begin{tabular}{@{}p{0.13\linewidth}p{0.36\linewidth}p{0.45\linewidth}@{}}
+        \hline
+        \multicolumn{3}{@{}l@{}}{\textbf{Prefijo} \texttt{/\allowbreak{}api/\allowbreak{}auth}} \\
+        \hline
+        \textbf{Método} & \textbf{Ruta relativa} & \textbf{Funcionalidad} \\
+        \hline
+        \texttt{POST} & \texttt{/\allowbreak{}login} & Recibe correo y contraseña. Establece la sesión web y devuelve el perfil. \\
+        \texttt{GET} & \texttt{/\allowbreak{}me} & Consulta el perfil de la sesión vigente. \\
+        \texttt{POST} & \texttt{/\allowbreak{}logout} & Cierra la sesión web y responde con HTTP 204. \\
+        \texttt{POST} & \texttt{/\allowbreak{}change-password} & Cambia la contraseña de la cuenta autenticada e invalida su acceso de sesión. \\
+        \texttt{POST} & \texttt{/\allowbreak{}reset-password} & Restablece la contraseña mediante una credencial temporal de recuperación. \\
+        \texttt{POST} & \texttt{/\allowbreak{}register} & Crea una cuenta de investigador o administrador. Requiere rol administrador. \\
+        \hline
+    \end{tabular}
+\end{table}
+
+\begin{table}[!htbp]
+    \centering
+    \caption{Cuentas y seguridad.}
+    \small
+    \setlength{\tabcolsep}{4pt}
+    \renewcommand{\arraystretch}{1.13}
+    \begin{tabular}{@{}p{0.13\linewidth}p{0.36\linewidth}p{0.45\linewidth}@{}}
+        \hline
+        \multicolumn{3}{@{}l@{}}{\textbf{Prefijo} \texttt{/\allowbreak{}api}} \\
+        \hline
+        \textbf{Método} & \textbf{Ruta relativa} & \textbf{Funcionalidad} \\
+        \hline
+        \texttt{GET} & \texttt{/\allowbreak{}users} & Lista cuentas con paginación. \\
+        \texttt{PATCH} & \texttt{/\allowbreak{}users/\allowbreak{}\{user\_\allowbreak{}id\}} & Actualiza el nombre, el rol o el estado de una cuenta. \\
+        \texttt{POST} & \texttt{/\allowbreak{}users/\allowbreak{}\{user\_\allowbreak{}id\}/\allowbreak{}password-reset} & Emite un enlace temporal de recuperación de contraseña. \\
+        \texttt{GET} & \texttt{/\allowbreak{}security/\allowbreak{}audit} & Consulta los eventos de seguridad mediante una lista paginada. \\
+        \texttt{POST} & \texttt{/\allowbreak{}security/\allowbreak{}cleanup} & Retira registros expirados o fuera de retención en un lote acotado. \\
+        \hline
+    \end{tabular}
+\end{table}
+
+\begin{table}[!htbp]
+    \centering
+    \caption{Catálogo, solicitudes y asignaciones.}
+    \small
+    \setlength{\tabcolsep}{4pt}
+    \renewcommand{\arraystretch}{1.13}
+    \begin{tabular}{@{}p{0.13\linewidth}p{0.36\linewidth}p{0.45\linewidth}@{}}
+        \hline
+        \multicolumn{3}{@{}l@{}}{\textbf{Prefijo} \texttt{/\allowbreak{}api}} \\
+        \hline
+        \textbf{Método} & \textbf{Ruta relativa} & \textbf{Funcionalidad} \\
+        \hline
+        \texttt{GET} & \texttt{/\allowbreak{}datasets/\allowbreak{}catalogue} & Lista datasets registrados y el estado de acceso del usuario. \\
+        \texttt{POST} & \texttt{/\allowbreak{}datasets/\allowbreak{}\{dataset\_\allowbreak{}id\}/\allowbreak{}requests} & Registra una solicitud de acceso para el investigador. \\
+        \texttt{GET} & \texttt{/\allowbreak{}access/\allowbreak{}requests} & Lista solicitudes y permite filtrar su estado. \\
+        \texttt{POST} & \texttt{/\allowbreak{}access/\allowbreak{}requests/\allowbreak{}\{user\_\allowbreak{}id\}/\allowbreak{}\{dataset\_\allowbreak{}id\}/\allowbreak{}decision} & Aprueba o rechaza una solicitud. La aprobación concede la asignación correspondiente. \\
+        \texttt{GET} & \texttt{/\allowbreak{}access/\allowbreak{}users/\allowbreak{}\{user\_\allowbreak{}id\}/\allowbreak{}datasets} & Lista los datasets registrados y las asignaciones del usuario indicado. \\
+        \texttt{GET} & \texttt{/\allowbreak{}access/\allowbreak{}users/\allowbreak{}\{user\_\allowbreak{}id\}/\allowbreak{}datasets/\allowbreak{}\{dataset\_\allowbreak{}id\}} & Consulta una asignación específica. \\
+        \texttt{PUT} & \texttt{/\allowbreak{}access/\allowbreak{}users/\allowbreak{}\{user\_\allowbreak{}id\}/\allowbreak{}datasets/\allowbreak{}\{dataset\_\allowbreak{}id\}} & Concede acceso al dataset indicado. \\
+        \texttt{DELETE} & \texttt{/\allowbreak{}access/\allowbreak{}users/\allowbreak{}\{user\_\allowbreak{}id\}/\allowbreak{}datasets/\allowbreak{}\{dataset\_\allowbreak{}id\}} & Revoca la asignación y responde con HTTP 204. \\
+        \hline
+    \end{tabular}
+\end{table}
+
+\section{Gestión y preparación de conjuntos de datos}
+
+La API de ingesta permite consultar el inventario, cargar audios
+etiquetados, descargar desde GCS y preprocesar una selección local. El
+investigador trabaja sobre datasets asignados y el administrador puede
+gestionar el inventario general. El diagnóstico de conexión del asistente
+y el estado de ingesta se relacionan con \texttt{RF\_01}. La sincronización
+y el preprocesamiento corresponden a \texttt{RF\_02} y \texttt{RF\_03}.
+
+Las rutas de particiones permiten definir y recuperar una selección
+versionada de grabaciones para entrenamiento, validación y prueba. Guardar
+una versión fija la preparación que podrá seleccionarse al iniciar un
+trabajo.
+
+\begin{table}[!htbp]
+    \centering
+    \caption{Ingesta y preparación de audios.}
+    \small
+    \setlength{\tabcolsep}{4pt}
+    \renewcommand{\arraystretch}{1.13}
+    \begin{tabular}{@{}p{0.13\linewidth}p{0.36\linewidth}p{0.45\linewidth}@{}}
+        \hline
+        \multicolumn{3}{@{}l@{}}{\textbf{Prefijo} \texttt{/\allowbreak{}api/\allowbreak{}ingestion}} \\
+        \hline
+        \textbf{Método} & \textbf{Ruta relativa} & \textbf{Funcionalidad} \\
+        \hline
+        \texttt{GET} & \texttt{/\allowbreak{}status} & Consulta el estado de GCS y el inventario general. Requiere rol administrador. \\
+        \texttt{GET} & \texttt{/\allowbreak{}datasets} & Lista los datasets visibles y los límites de carga disponibles. \\
+        \texttt{GET} & \texttt{/\allowbreak{}datasets/\allowbreak{}\{dataset\_\allowbreak{}name\}/\allowbreak{}files} & Consulta el inventario y los metadatos disponibles del dataset. \\
+        \texttt{POST} & \texttt{/\allowbreak{}upload} & Recibe archivos y su destino mediante un formulario multipart. Carga los audios aceptados y registra sus metadatos. \\
+        \texttt{POST} & \texttt{/\allowbreak{}sync} & Sincroniza audios desde GCS al nodo. Puede solicitar preprocesamiento y devuelve el resultado por dataset. \\
+        \texttt{POST} & \texttt{/\allowbreak{}preprocess} & Genera tensores a partir de los audios locales seleccionados y devuelve los totales procesados y fallidos. \\
+        \hline
+    \end{tabular}
+\end{table}
+
+\begin{table}[!htbp]
+    \centering
+    \caption{Particiones versionadas.}
+    \small
+    \setlength{\tabcolsep}{4pt}
+    \renewcommand{\arraystretch}{1.13}
+    \begin{tabular}{@{}p{0.13\linewidth}p{0.36\linewidth}p{0.45\linewidth}@{}}
+        \hline
+        \multicolumn{3}{@{}l@{}}{\textbf{Prefijo} \texttt{/\allowbreak{}api/\allowbreak{}training/\allowbreak{}datasets/\allowbreak{}\{dataset\_\allowbreak{}name\}/\allowbreak{}partitions}} \\
+        \hline
+        \textbf{Método} & \textbf{Ruta relativa} & \textbf{Funcionalidad} \\
+        \hline
+        \texttt{GET} & \emph{Prefijo exacto} & Lista las versiones disponibles para el dataset. \\
+        \texttt{POST} & \texttt{/\allowbreak{}preview} & Calcula una propuesta de reparto con sus cantidades y advertencias. \\
+        \texttt{POST} & \emph{Prefijo exacto} & Guarda una versión a partir de una propuesta identificada. \\
+        \texttt{GET} & \texttt{/\allowbreak{}\{version\}} & Consulta el manifiesto de una versión de particiones. \\
+        \hline
+    \end{tabular}
+\end{table}
+
+\section{Entrenamiento y gestión de modelos}
+
+La operación de inicio recibe el dataset, los parámetros de entrenamiento
+y la identidad de la preparación cuando corresponde. Su respuesta indica
+el resultado de la admisión. La interfaz consulta el progreso para conocer
+la evolución y el estado final del trabajo, en el marco de
+\texttt{RF\_04}. El investigador puede consultar o detener su propio
+trabajo mientras conserva acceso al dataset. El administrador puede
+supervisar el trabajo del nodo.
+
+La activación se realiza mediante una operación administrativa explícita.
+El historial, las evaluaciones y las copias del checkpoint permiten
+revisar y recuperar un modelo. Las operaciones de copia requieren acceso
+al modelo y una identidad de artefacto verificable.
+
+\begin{table}[!htbp]
+    \centering
+    \caption{Entrenamiento y seguimiento.}
+    \small
+    \setlength{\tabcolsep}{4pt}
+    \renewcommand{\arraystretch}{1.13}
+    \begin{tabular}{@{}p{0.13\linewidth}p{0.36\linewidth}p{0.45\linewidth}@{}}
+        \hline
+        \multicolumn{3}{@{}l@{}}{\textbf{Prefijo} \texttt{/\allowbreak{}api/\allowbreak{}training}} \\
+        \hline
+        \textbf{Método} & \textbf{Ruta relativa} & \textbf{Funcionalidad} \\
+        \hline
+        \texttt{GET} & \texttt{/\allowbreak{}hardware} & Consulta la información disponible de CPU, GPU y memoria. \\
+        \texttt{GET} & \texttt{/\allowbreak{}datasets} & Lista los datasets accesibles que el servicio reconoce como fuentes de entrenamiento. \\
+        \texttt{POST} & \texttt{/\allowbreak{}start} & Valida la fuente y los parámetros e inicia el trabajo en segundo plano. \\
+        \texttt{GET} & \texttt{/\allowbreak{}progress} & Devuelve estado, avance por época, métricas y registros del trabajo. \\
+        \texttt{POST} & \texttt{/\allowbreak{}stop} & Solicita la detención cooperativa del entrenamiento activo. \\
+        \texttt{GET} & \texttt{/\allowbreak{}history} & Consulta el historial de modelos entrenados visible para la sesión. \\
+        \texttt{POST} & \texttt{/\allowbreak{}models/\allowbreak{}\{model\_\allowbreak{}id\}/\allowbreak{}activate} & Solicita la designación del modelo predeterminado. Requiere rol administrador. \\
+        \hline
+    \end{tabular}
+\end{table}
+
+\begin{table}[!htbp]
+    \centering
+    \caption{Copias de checkpoints.}
+    \small
+    \setlength{\tabcolsep}{4pt}
+    \renewcommand{\arraystretch}{1.13}
+    \begin{tabular}{@{}p{0.13\linewidth}p{0.36\linewidth}p{0.45\linewidth}@{}}
+        \hline
+        \multicolumn{3}{@{}l@{}}{\textbf{Prefijo} \texttt{/\allowbreak{}api/\allowbreak{}training/\allowbreak{}models/\allowbreak{}\{model\_\allowbreak{}id\}/\allowbreak{}checkpoint}} \\
+        \hline
+        \textbf{Método} & \textbf{Ruta relativa} & \textbf{Funcionalidad} \\
+        \hline
+        \texttt{GET} & \emph{Prefijo exacto} & Consulta el estado de las copias local y remota. \\
+        \texttt{POST} & \texttt{/\allowbreak{}backup} & Respalda el checkpoint local en GCS y verifica su identidad. \\
+        \texttt{POST} & \texttt{/\allowbreak{}restore} & Recupera y verifica una copia local a partir del respaldo de GCS. \\
+        \hline
+    \end{tabular}
+\end{table}
+
+\section{Predicción y retroalimentación}
+
+La predicción recibe un audio WAV mediante un formulario multipart. El
+identificador opcional del modelo se envía como parámetro de consulta.
+Cuando se completa la operación, la respuesta incluye el identificador
+del registro en PostgreSQL, la clase, la puntuación de confianza y la
+identidad del modelo utilizado. Esta operación se relaciona con
+\texttt{RF\_05}.
+
+Para \texttt{RF\_06}, la interfaz utiliza el identificador de predicción
+para registrar la confirmación o corrección. El autor de la
+retroalimentación se obtiene de la sesión. La incorporación local y la
+sincronización posterior con GCS tienen estados separados y se consultan
+mediante las rutas de revisión. El acceso a las predicciones y a sus
+aportes se limita a los recursos autorizados.
+
+\begin{table}[!htbp]
+    \centering
+    \caption{Predicción, catálogo y estadísticas.}
+    \small
+    \setlength{\tabcolsep}{4pt}
+    \renewcommand{\arraystretch}{1.13}
+    \begin{tabular}{@{}p{0.13\linewidth}p{0.36\linewidth}p{0.45\linewidth}@{}}
+        \hline
+        \multicolumn{3}{@{}l@{}}{\textbf{Prefijo} \texttt{/\allowbreak{}api}} \\
+        \hline
+        \textbf{Método} & \textbf{Ruta relativa} & \textbf{Funcionalidad} \\
+        \hline
+        \texttt{GET} & \texttt{/\allowbreak{}models} & Devuelve modelos visibles, clases, disponibilidad de pesos y evaluaciones registradas cuando están disponibles. \\
+        \texttt{GET} & \texttt{/\allowbreak{}model-info} & Consulta el estado observado del servicio bioacústico histórico. \\
+        \texttt{GET} & \texttt{/\allowbreak{}dashboard/\allowbreak{}stats} & Consulta las estadísticas operativas visibles según el acceso de la sesión. \\
+        \texttt{POST} & \texttt{/\allowbreak{}predict} & Recibe un WAV y un identificador opcional de modelo. Devuelve la clase, la confianza y el identificador de predicción. \\
+        \hline
+    \end{tabular}
+\end{table}
+
+\begin{table}[!htbp]
+    \centering
+    \caption{Retroalimentación y curación.}
+    \small
+    \setlength{\tabcolsep}{4pt}
+    \renewcommand{\arraystretch}{1.13}
+    \begin{tabular}{@{}p{0.13\linewidth}p{0.36\linewidth}p{0.45\linewidth}@{}}
+        \hline
+        \multicolumn{3}{@{}l@{}}{\textbf{Prefijo} \texttt{/\allowbreak{}api/\allowbreak{}feedback}} \\
+        \hline
+        \textbf{Método} & \textbf{Ruta relativa} & \textbf{Funcionalidad} \\
+        \hline
+        \texttt{POST} & \emph{Prefijo exacto} & Registra la confirmación o corrección de una predicción. Devuelve el identificador de la retroalimentación. \\
+        \texttt{GET} & \texttt{/\allowbreak{}pending} & Consulta los aportes pendientes de revisión. \\
+        \texttt{POST} & \texttt{/\allowbreak{}\{id\_\allowbreak{}retroalimentacion\}/\allowbreak{}approve} & Incorpora el aporte al dataset local y registra su estado de sincronización. \\
+        \texttt{POST} & \texttt{/\allowbreak{}\{id\_\allowbreak{}retroalimentacion\}/\allowbreak{}reject} & Registra el descarte del aporte de curación. \\
+        \texttt{GET} & \texttt{/\allowbreak{}sync} & Consulta el estado de sincronización de los aportes incorporados. \\
+        \texttt{GET} & \texttt{/\allowbreak{}stats} & Devuelve totales y distribución de validaciones y correcciones. \\
+        \hline
+    \end{tabular}
+\end{table}
+
+\section{Importación y exportación ZIP}
+
+El módulo ZIP se habilita en entornos POSIX con los procesos auxiliares
+configurados. En Windows nativo, la consulta de capacidad informa que el
+módulo está indisponible. El acceso a una importación o a un dataset
+importado se restringe al titular del recurso. La descarga de una exportación utiliza su propia
+autorización temporal.
+
+La importación puede recibir el ZIP completo o mediante fragmentos.
+Las rutas de previsualización, confirmación y sincronización admiten tareas
+en segundo plano. Una respuesta HTTP 202 indica que el trabajo fue
+aceptado. El cliente consulta la ruta de estado de la ejecución para
+conocer el resultado. La exportación también se solicita para una revisión
+identificada y se consulta hasta que el ZIP esté disponible.
+
+\begin{table}[!htbp]
+    \centering
+    \caption{Importación ZIP y recepción de archivos.}
+    \small
+    \setlength{\tabcolsep}{4pt}
+    \renewcommand{\arraystretch}{1.13}
+    \begin{tabular}{@{}p{0.13\linewidth}p{0.36\linewidth}p{0.45\linewidth}@{}}
+        \hline
+        \multicolumn{3}{@{}l@{}}{\textbf{Prefijo} \texttt{/\allowbreak{}api/\allowbreak{}ingestion/\allowbreak{}imports}} \\
+        \hline
+        \textbf{Método} & \textbf{Ruta relativa} & \textbf{Funcionalidad} \\
+        \hline
+        \texttt{GET} & \texttt{/\allowbreak{}access} & Consulta la disponibilidad del módulo y el estado de acceso. \\
+        \texttt{GET} & \texttt{/\allowbreak{}limits} & Consulta los límites de la importación. \\
+        \texttt{GET} & \texttt{/\allowbreak{}example.zip} & Descarga un archivo de ejemplo. \\
+        \texttt{POST} & \emph{Prefijo exacto} & Crea el registro de una importación. \\
+        \texttt{GET} & \emph{Prefijo exacto} & Lista las importaciones de la identidad autorizada. \\
+        \texttt{GET} & \texttt{/\allowbreak{}\{job\_\allowbreak{}id\}} & Consulta el estado del registro de importación. \\
+        \texttt{PUT} & \texttt{/\allowbreak{}\{job\_\allowbreak{}id\}/\allowbreak{}archive} & Recibe el ZIP completo como contenido binario de tipo application/zip. \\
+        \texttt{POST} & \texttt{/\allowbreak{}\{job\_\allowbreak{}id\}/\allowbreak{}receipt} & Reserva la recepción de un archivo para la importación. \\
+        \texttt{GET} & \texttt{/\allowbreak{}\{job\_\allowbreak{}id\}/\allowbreak{}receipt} & Consulta el estado de la recepción. \\
+        \texttt{PUT} & \texttt{/\allowbreak{}\{job\_\allowbreak{}id\}/\allowbreak{}receipt/\allowbreak{}chunks/\allowbreak{}\{index\}} & Envía un fragmento con su desplazamiento y huella. \\
+        \texttt{GET} & \texttt{/\allowbreak{}\{job\_\allowbreak{}id\}/\allowbreak{}receipt/\allowbreak{}chunks} & Consulta los fragmentos confirmados. \\
+        \texttt{POST} & \texttt{/\allowbreak{}\{job\_\allowbreak{}id\}/\allowbreak{}receipt/\allowbreak{}finalize} & Finaliza la recepción por fragmentos. \\
+        \texttt{POST} & \texttt{/\allowbreak{}\{job\_\allowbreak{}id\}/\allowbreak{}receipt/\allowbreak{}cancel} & Solicita cancelar la recepción asociada. \\
+        \hline
+    \end{tabular}
+\end{table}
+
+\begin{table}[!htbp]
+    \centering
+    \caption{Revisión y ejecución de importaciones ZIP.}
+    \small
+    \setlength{\tabcolsep}{4pt}
+    \renewcommand{\arraystretch}{1.13}
+    \begin{tabular}{@{}p{0.13\linewidth}p{0.36\linewidth}p{0.45\linewidth}@{}}
+        \hline
+        \multicolumn{3}{@{}l@{}}{\textbf{Prefijo} \texttt{/\allowbreak{}api/\allowbreak{}ingestion/\allowbreak{}imports/\allowbreak{}\{job\_\allowbreak{}id\}}} \\
+        \hline
+        \textbf{Método} & \textbf{Ruta relativa} & \textbf{Funcionalidad} \\
+        \hline
+        \texttt{POST} & \texttt{/\allowbreak{}preview} & Admite la validación y previsualización del archivo. \\
+        \texttt{GET} & \texttt{/\allowbreak{}files} & Consulta los archivos detectados durante la revisión. \\
+        \texttt{GET} & \texttt{/\allowbreak{}classes} & Consulta las clases detectadas durante la revisión. \\
+        \texttt{GET} & \texttt{/\allowbreak{}issues} & Consulta los problemas identificados durante la revisión. \\
+        \texttt{POST} & \texttt{/\allowbreak{}confirm} & Admite la publicación de una importación a partir de su previsualización. \\
+        \texttt{POST} & \texttt{/\allowbreak{}cancel} & Solicita cancelar la importación. \\
+        \texttt{POST} & \texttt{/\allowbreak{}sync} & Admite una tarea de sincronización de la importación con GCS. \\
+        \texttt{GET} & \texttt{/\allowbreak{}jobs/\allowbreak{}\{execution\_\allowbreak{}id\}} & Consulta el estado de una ejecución de la importación. \\
+        \texttt{POST} & \texttt{/\allowbreak{}jobs/\allowbreak{}\{execution\_\allowbreak{}id\}/\allowbreak{}cancel} & Solicita cancelar una ejecución. \\
+        \texttt{POST} & \texttt{/\allowbreak{}jobs/\allowbreak{}\{execution\_\allowbreak{}id\}/\allowbreak{}retry} & Admite el reintento de una ejecución fallida o cancelada con una nueva clave de solicitud. \\
+        \hline
+    \end{tabular}
+\end{table}
+
+\begin{table}[!htbp]
+    \centering
+    \caption{Datasets importados y exportación ZIP.}
+    \small
+    \setlength{\tabcolsep}{4pt}
+    \renewcommand{\arraystretch}{1.13}
+    \begin{tabular}{@{}p{0.13\linewidth}p{0.36\linewidth}p{0.45\linewidth}@{}}
+        \hline
+        \multicolumn{3}{@{}l@{}}{\textbf{Prefijo} \texttt{/\allowbreak{}api/\allowbreak{}ingestion/\allowbreak{}imports}} \\
+        \hline
+        \textbf{Método} & \textbf{Ruta relativa} & \textbf{Funcionalidad} \\
+        \hline
+        \texttt{GET} & \texttt{/\allowbreak{}datasets} & Lista los datasets importados visibles para el titular. \\
+        \texttt{GET} & \texttt{/\allowbreak{}datasets/\allowbreak{}\{dataset\_\allowbreak{}id\}/\allowbreak{}files} & Lista los archivos de un dataset importado. \\
+        \texttt{GET} & \texttt{/\allowbreak{}datasets/\allowbreak{}\{dataset\_\allowbreak{}id\}/\allowbreak{}files/\allowbreak{}\{sha256\}} & Descarga el WAV identificado por su huella. \\
+        \texttt{GET} & \texttt{/\allowbreak{}datasets/\allowbreak{}\{dataset\_\allowbreak{}id\}/\allowbreak{}revisions/\allowbreak{}\{revision\}} & Consulta una revisión del dataset importado. \\
+        \texttt{GET} & \texttt{/\allowbreak{}datasets/\allowbreak{}\{dataset\_\allowbreak{}id\}/\allowbreak{}revisions/\allowbreak{}\{revision\}/\allowbreak{}manifest} & Entrega el manifiesto de la revisión indicada. \\
+        \texttt{POST} & \texttt{/\allowbreak{}datasets/\allowbreak{}\{dataset\_\allowbreak{}id\}/\allowbreak{}revisions/\allowbreak{}\{revision\}/\allowbreak{}exports} & Solicita una exportación ZIP para la revisión indicada. \\
+        \texttt{GET} & \texttt{/\allowbreak{}datasets/\allowbreak{}\{dataset\_\allowbreak{}id\}/\allowbreak{}exports} & Consulta el historial de exportaciones del dataset. \\
+        \texttt{GET} & \texttt{/\allowbreak{}exports/\allowbreak{}\{export\_\allowbreak{}id\}} & Consulta el estado de una exportación. \\
+        \texttt{POST} & \texttt{/\allowbreak{}exports/\allowbreak{}\{export\_\allowbreak{}id\}/\allowbreak{}sessions} & Emite una sesión temporal para descargar el ZIP disponible. \\
+        \texttt{GET/HEAD} & \texttt{/\allowbreak{}exports/\allowbreak{}\{export\_\allowbreak{}id\}/\allowbreak{}download} & Descarga el ZIP o consulta sus cabeceras con autorización de descarga. \\
+        \hline
+    \end{tabular}
+\end{table}
+
+\section{Interpretación de respuestas}
+
+Los códigos HTTP y el estado de la operación se leen en conjunto.
+HTTP 201 indica creación o registro en las operaciones que lo declaran.
+HTTP 204 indica una respuesta exitosa sin cuerpo. HTTP 401 corresponde a
+credenciales o sesión inválidas y HTTP 403 a una operación denegada.
+HTTP 404 se utiliza para recursos inexistentes o fuera del acceso
+permitido. HTTP 409 informa un conflicto con el estado del recurso y
+HTTP 422 indica una solicitud que no cumple la validación. Las cargas
+pueden responder con HTTP 413 cuando exceden el límite y con HTTP 415
+cuando el tipo de contenido es incompatible con la ruta. HTTP 429
+señala que se alcanzó un límite de solicitudes. HTTP 503 indica
+indisponibilidad según el servicio, el modelo o la capacidad solicitada.
+
+En los trabajos de entrenamiento y las transferencias, la interfaz
+utiliza los campos de estado de la respuesta para distinguir el inicio,
+el avance, la finalización y los errores parciales.
+
+% Rutas contrastadas con las declaraciones del backend.
+% backend/app/entrypoint.py
+% backend/app/installation.py
+% backend/app/main.py
+% backend/app/routes/auth.py
+% backend/app/routes/users.py
+% backend/app/routes/security.py
+% backend/app/routes/access.py
+% backend/app/routes/partitions.py
+% backend/app/routes/checkpoints.py
+% backend/app/routes/import_capability.py
+% backend/app/routes/dataset_imports.py
+% backend/app/routes/dataset_exports.py

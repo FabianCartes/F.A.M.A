@@ -1,0 +1,328 @@
+\chapter{Casos de uso restantes}
+\label{ap:casos-de-uso-restantes}
+
+Este apéndice amplía los siete casos de uso que el capítulo~5 presenta
+de forma resumida. Se conservan sus identificadores y su orden para
+facilitar la consulta de los diagramas y la matriz de trazabilidad.
+Las fichas detallan la interacción de los actores con F.A.M.A. y
+distinguen las operaciones de la interfaz de las tareas que requieren
+acceso administrativo al nodo.
+
+\section{Gestionar cuenta y perfil}
+\label{cu:ses-02}
+
+\noindent\textbf{Identificador.} \texttt{CU\_SES\_02}.
+\textbf{Actores.} Investigador y administrador de sistemas.
+
+\noindent\textbf{Objetivo.} Consultar los datos de la cuenta y actualizar
+la contraseña de acceso.
+
+\noindent\textbf{Precondiciones.} El usuario tiene una sesión web vigente.
+Para cambiar su contraseña debe conocer la contraseña actual.
+
+\subsection*{Flujo principal}
+
+\noindent
+\begin{tabular}{@{}p{0.47\linewidth}p{0.48\linewidth}@{}}
+    \hline
+    \textbf{Actor} & \textbf{Aplicación} \\
+    \hline
+    1. Abre la vista \emph{Mi cuenta}. &
+    2. Muestra el nombre, el correo electrónico y el rol de la sesión. \\
+    3. Ingresa la contraseña actual, escribe y confirma la nueva, y solicita el cambio. &
+    4. Verifica la contraseña actual y la política de la nueva. Si se cumplen las condiciones, actualiza la credencial e invalida las sesiones de la cuenta. \\
+    5. Inicia sesión nuevamente con la contraseña actualizada. &
+    6. Verifica las credenciales y establece una nueva sesión. \\
+    \hline
+\end{tabular}
+
+\subsection*{Flujos alternativos}
+
+\begin{itemize}
+    \item \textbf{Solo consulta.} El usuario revisa su identidad y sale
+    de la vista sin modificar su contraseña.
+    \item \textbf{Cambio rechazado.} Si la contraseña actual es
+    incorrecta, la nueva no cumple la política o la confirmación
+    difiere, la aplicación informa el error y conserva la credencial.
+\end{itemize}
+
+\noindent\textbf{Postcondiciones.} La consulta conserva los datos de la
+cuenta. Si se completa el cambio, la nueva contraseña queda vigente y
+el acceso continúa mediante una sesión nueva.
+
+\noindent\textbf{Alcance actual.} La identidad se muestra en modo de
+consulta. La edición del nombre y la revisión de eventos de seguridad
+corresponden a funciones administrativas.
+
+\section{Seleccionar dataset para entrenamiento}
+\label{cu:inv-02}
+
+\noindent\textbf{Identificador.} \texttt{CU\_INV\_02}.
+\textbf{Actor principal.} Investigador.
+
+\noindent\textbf{Objetivo.} Elegir el conjunto de datos que se utilizará
+para configurar un entrenamiento acústico.
+
+\noindent\textbf{Precondiciones.} El investigador tiene una sesión
+vigente y acceso a un conjunto de datos registrado como fuente de
+entrenamiento.
+
+\subsection*{Flujo principal}
+
+\noindent
+\begin{tabular}{@{}p{0.47\linewidth}p{0.48\linewidth}@{}}
+    \hline
+    \textbf{Actor} & \textbf{Aplicación} \\
+    \hline
+    1. Abre la vista \emph{Entrenamiento y Métricas}. &
+    2. Consulta y muestra los conjuntos de datos visibles para la sesión, con sus cantidades y clases cuando están disponibles. \\
+    3. Selecciona el conjunto correspondiente al dominio acústico que desea estudiar. &
+    4. Conserva el identificador en el formulario y muestra la preparación que se puede configurar para ese conjunto. \\
+    5. Cuando corresponde, elige una versión de las particiones de entrenamiento, validación y prueba. &
+    6. Mantiene la versión asociada al conjunto seleccionado para enviarla con la solicitud de entrenamiento. \\
+    \hline
+\end{tabular}
+
+\subsection*{Flujos alternativos}
+
+\begin{itemize}
+    \item \textbf{Catálogo sin opciones.} Si no existen conjuntos
+    visibles, el investigador debe disponer de un conjunto registrado
+    y autorizado antes de continuar.
+    \item \textbf{Fuente local no utilizable.} Si faltan archivos,
+    la preparación es incompatible o el acceso cambió, la validación
+    de inicio rechaza el trabajo. El investigador puede corregir la
+    preparación o elegir otra fuente autorizada.
+\end{itemize}
+
+\noindent\textbf{Postcondiciones.} El formulario queda asociado al
+conjunto y, cuando se seleccionó, a su versión de particiones. El
+inicio y la validación de la fuente pertenecen a \texttt{CU\_INV\_03}.
+
+\section{Consultar historial y métricas}
+\label{cu:inv-04}
+
+\noindent\textbf{Identificador.} \texttt{CU\_INV\_04}.
+\textbf{Actor principal.} Investigador.
+
+\noindent\textbf{Objetivo.} Revisar los modelos registrados y las
+métricas conservadas de su entrenamiento.
+
+\noindent\textbf{Precondiciones.} El investigador tiene una sesión
+vigente. Para examinar una ficha debe existir un modelo visible para
+la cuenta.
+
+\subsection*{Flujo principal}
+
+\noindent
+\begin{tabular}{@{}p{0.47\linewidth}p{0.48\linewidth}@{}}
+    \hline
+    \textbf{Actor} & \textbf{Aplicación} \\
+    \hline
+    1. Consulta el historial desde la vista de entrenamiento. &
+    2. Recupera los modelos autorizados en PostgreSQL y los presenta desde el más reciente. \\
+    3. Abre la ficha del modelo que quiere revisar. &
+    4. Presenta los datos registrados, como arquitectura, conjunto de datos, épocas y métricas de acierto (\emph{accuracy}) y pérdida (\emph{loss}). Muestra la ficha del archivo de pesos cuando puede leer sus metadatos. \\
+    \hline
+\end{tabular}
+
+\subsection*{Flujos alternativos}
+
+\begin{itemize}
+    \item \textbf{Historial vacío.} La consulta puede devolver una
+    lista sin modelos visibles para la sesión.
+    \item \textbf{Ficha incompleta.} Si falta una métrica o el archivo
+    de pesos no está disponible para consultar sus metadatos, el
+    registro histórico se puede revisar con la información conservada.
+\end{itemize}
+
+\noindent\textbf{Postcondiciones.} El investigador obtiene los datos
+disponibles para comparar entrenamientos. La consulta mantiene el
+estado de activación de los modelos.
+
+\section{Seleccionar modelo activo}
+\label{cu:inv-05}
+
+\noindent\textbf{Identificador.} \texttt{CU\_INV\_05}.
+\textbf{Actor principal.} Investigador.
+\textbf{Actor secundario.} Administrador de sistemas para la designación
+del modelo predeterminado.
+
+\noindent\textbf{Objetivo.} Elegir un modelo para analizar una grabación
+desde la vista de predicción.
+
+\noindent\textbf{Precondiciones.} La sesión está vigente. El catálogo
+de inferencia ofrece un modelo autorizado con disponibilidad de pesos.
+
+\subsection*{Flujo principal}
+
+\noindent
+\begin{tabular}{@{}p{0.47\linewidth}p{0.48\linewidth}@{}}
+    \hline
+    \textbf{Actor} & \textbf{Aplicación} \\
+    \hline
+    1. Abre el selector de la vista de predicción. &
+    2. Consulta el catálogo y presenta los modelos visibles, con sus clases y la disponibilidad observada de sus pesos. \\
+    3. Selecciona el modelo correspondiente al tipo de grabación que desea analizar. &
+    4. Guarda la elección en la vista y utiliza el identificador seleccionado al solicitar una predicción. \\
+    \hline
+\end{tabular}
+
+\subsection*{Flujos alternativos}
+
+\begin{itemize}
+    \item \textbf{Pesos indisponibles.} El modelo queda fuera de la
+    selección cuando el catálogo no confirma sus pesos. Si existe un
+    respaldo verificable en GCS, un usuario con acceso puede solicitar
+    su restauración y volver a consultar el catálogo.
+    \item \textbf{Cambio del predeterminado.} El administrador solicita
+    la activación del modelo registrado mediante la API. El servicio
+    comprueba los informes de evaluación requeridos y actualiza la
+    designación en PostgreSQL. La disponibilidad para inferencia se
+    comprueba por separado en el catálogo y en la ejecución.
+\end{itemize}
+
+\noindent\textbf{Postcondiciones.} La elección del investigador queda
+asociada a su solicitud de predicción (\texttt{CU\_INV\_06}). El
+predeterminado del nodo cambia mediante la operación administrativa
+de activación.
+
+\section{Gestionar nodos de procesamiento local}
+\label{cu:adm-02}
+
+\noindent\textbf{Identificador.} \texttt{CU\_ADM\_02}.
+\textbf{Actor principal.} Administrador de sistemas.
+
+\noindent\textbf{Objetivo.} Revisar el estado del nodo y sus recursos
+de cómputo antes de operar el flujo acústico.
+
+\noindent\textbf{Precondiciones.} El administrador tiene una sesión
+vigente y puede acceder al panel del nodo en funcionamiento.
+
+\subsection*{Flujo principal}
+
+\noindent
+\begin{tabular}{@{}p{0.47\linewidth}p{0.48\linewidth}@{}}
+    \hline
+    \textbf{Actor} & \textbf{Aplicación} \\
+    \hline
+    1. Abre el panel general y consulta el estado del nodo. &
+    2. Recopila la disponibilidad de CUDA, los datos de CPU y RAM del equipo y, si detecta GPU, la memoria gráfica observada por el proceso. \\
+    3. Revisa el dispositivo detectado, la memoria y el nivel de carga para decidir si inicia un trabajo. &
+    4. Muestra la telemetría disponible y actualiza la lectura mediante consultas periódicas. \\
+    \hline
+\end{tabular}
+
+\subsection*{Flujos alternativos}
+
+\begin{itemize}
+    \item \textbf{CUDA no detectado.} La telemetría identifica el
+    entorno de CPU. El administrador puede revisar el acceso de la
+    aplicación a la GPU en el equipo anfitrión.
+    \item \textbf{Telemetría indisponible.} Si el panel no obtiene una
+    lectura, el administrador comprueba la comunicación con el
+    backend y vuelve a consultar.
+\end{itemize}
+
+\noindent\textbf{Postcondiciones.} El administrador dispone de un
+diagnóstico del nodo en el momento de la consulta. Los cambios de
+controladores o de configuración de hardware se realizan en el
+entorno de despliegue. El panel se utiliza para comprobar su efecto.
+
+\section{Gestionar recursos cloud}
+\label{cu:adm-03}
+
+\noindent\textbf{Identificador.} \texttt{CU\_ADM\_03}.
+\textbf{Actor principal.} Administrador de sistemas.
+\textbf{Actor secundario.} Google Cloud Storage (GCS).
+
+\noindent\textbf{Objetivo.} Comprobar la conexión del nodo con el
+\emph{bucket} configurado y consultar su inventario general.
+
+\noindent\textbf{Precondiciones.} El administrador tiene una sesión
+vigente. La consulta requiere un \emph{bucket} configurado, credenciales
+del servicio y conectividad hacia GCS.
+
+\subsection*{Flujo principal}
+
+\noindent
+\begin{tabular}{@{}p{0.47\linewidth}p{0.48\linewidth}@{}}
+    \hline
+    \textbf{Actor} & \textbf{Aplicación} \\
+    \hline
+    1. Abre la vista de ingesta y consulta el estado del almacenamiento remoto. &
+    2. Comprueba el rol de la cuenta y solicita a GCS el listado de objetos del \emph{bucket} configurado. \\
+    3. Revisa el estado de conexión y el tamaño del inventario. &
+    4. Informa el \emph{bucket}, el total de objetos y su tamaño acumulado cuando la consulta se completa. \\
+    \hline
+\end{tabular}
+
+\subsection*{Flujos alternativos}
+
+\begin{itemize}
+    \item \textbf{Conexión fallida.} Ante un problema de red, identidad,
+    permisos o configuración del \emph{bucket}, el servicio informa
+    que la conexión está indisponible.
+    \item \textbf{Configuración inicial o corrección.} Durante la
+    instalación, el operador autorizado puede definir el proyecto y
+    el \emph{bucket} en el asistente y ejecutar sus comprobaciones.
+    Los cambios de credenciales de GCS se aplican en el entorno del
+    nodo. Tras un ajuste, se vuelve a comprobar la conexión.
+\end{itemize}
+
+\noindent\textbf{Postcondiciones.} Queda disponible el resultado de la
+consulta de conexión y, si tuvo éxito, el inventario observado.
+Esta operación aporta evidencia para \texttt{RF\_01}.
+
+\section{Controlar ejecución de procesos}
+\label{cu:adm-05}
+
+\noindent\textbf{Identificador.} \texttt{CU\_ADM\_05}.
+\textbf{Actor principal.} Administrador de sistemas.
+
+\noindent\textbf{Objetivo.} Solicitar la detención de un entrenamiento
+en curso y comprobar su estado final.
+
+\noindent\textbf{Precondiciones.} El administrador tiene una sesión
+vigente y el nodo registra un entrenamiento activo.
+
+\subsection*{Flujo principal}
+
+\noindent
+\begin{tabular}{@{}p{0.47\linewidth}p{0.48\linewidth}@{}}
+    \hline
+    \textbf{Actor} & \textbf{Aplicación} \\
+    \hline
+    1. Revisa el progreso del entrenamiento y solicita detenerlo. &
+    2. Comprueba el permiso y el estado del trabajo. Registra una señal de detención cooperativa e informa que la solicitud está en curso. \\
+    3. Continúa consultando el estado de la ejecución. &
+    4. El proceso atiende la señal en un punto de control y el servicio refleja la detención cuando esta concluye. \\
+    \hline
+\end{tabular}
+
+\subsection*{Flujos alternativos}
+
+\begin{itemize}
+    \item \textbf{Trabajo ya finalizado.} Si ya no existe un
+    entrenamiento activo, el servicio devuelve el estado vigente e
+    informa que no hay un trabajo que detener.
+    \item \textbf{Detención pendiente.} La respuesta \texttt{stopping}
+    confirma la recepción de la solicitud. La detención se confirma
+    cuando la consulta de progreso devuelve \texttt{stopped}.
+\end{itemize}
+
+\noindent\textbf{Postcondiciones.} Cuando se confirma la detención, el
+trabajo deja de ejecutarse. Los modelos ya registrados se conservan.
+El modelo que estaba en entrenamiento puede quedar sin publicar.
+
+\noindent\textbf{Alcance actual.} La detención de entrenamiento es
+cooperativa. La cancelación de trabajos de importación ZIP se gestiona
+por separado desde su módulo, con los permisos del titular de la
+importación.
+
+% Fichas ampliadas de las tablas 5.2, 5.4, 5.6, 5.7, 5.11, 5.12 y 5.14.
+% Contraste con backend/app/main.py, backend/app/installation.py,
+% backend/app/routes/auth.py, backend/app/routes/checkpoints.py,
+% backend/app/services/training.py y backend/app/services/ingestion.py.
+% Vistas de referencia: AccountView, TrainingView, PredictionView,
+% DashboardView e IngestionView en frontend/components/.

@@ -1,0 +1,158 @@
+{
+  "date": "2026-11-09",
+  "branch": "fix/afinamiento-integral",
+  "checkout_head": "84ea7dfb7aa5f8e6cd173a10752a346cd07ae424",
+  "scope": "Verificación en proyectos Compose temporales. El laboratorio tomó las fuentes de HEAD y superpuso prepare_data.py, Compose y el lanzador del checkout.",
+  "docker": {
+    "engine": "29.9.1",
+    "context": "desktop-linux",
+    "compose": "5.6.0"
+  },
+  "launcher_ports": {
+    "status": "reproduced",
+    "command": "./iniciar_fama.sh --no-build --wait-timeout 90",
+    "published_ports": {
+      "frontend": "127.0.0.1:13002",
+      "backend": "127.0.0.1:18082"
+    },
+    "printed_urls": [
+      "http://localhost:3000/installation",
+      "http://localhost:3000",
+      "http://localhost:8000/docs"
+    ],
+    "frontend_login_http": 200,
+    "source_change_applied": false
+  },
+  "production_npm_audit": {
+    "command": "npm audit --omit=dev",
+    "lockfile_sha256": "f1f7aaad6feb802ac3f36805b38892b318922459152956d659556e47a1b99873",
+    "affected_packages": [
+      {
+        "package": "next",
+        "version": "16.3.4",
+        "severity": "critical",
+        "found_as_package_in_runtime": true,
+        "advisories": [
+          "GHSA-vcvr-r3jv-pc5j",
+          "GHSA-2464-fhr4-w9xw",
+          "GHSA-673q-mjm6-r5xr"
+        ]
+      },
+      {
+        "package": "sharp",
+        "version": "0.35.4",
+        "severity": "high",
+        "found_as_package_in_runtime": true,
+        "advisories": [
+          "GHSA-wq5f-xc86-pv6w"
+        ]
+      },
+      {
+        "package": "source-map-js",
+        "version": "1.2.1",
+        "severity": "high",
+        "found_as_package_in_runtime": false,
+        "advisories": [
+          "GHSA-68fv-2mgg-jv7q"
+        ]
+      }
+    ],
+    "runtime": "Node 22 Alpine, musl. La inspección de paquetes separados no determina el contenido de los bundles.",
+    "exploitability_demonstrated": false,
+    "candidate": {
+      "location": "copia temporal del frontend",
+      "versions": {
+        "next": "16.4.5",
+        "sharp": "0.35.5",
+        "source-map-js": "1.2.2"
+      },
+      "audit_alerts": 0,
+      "app_build_and_tests_run": false,
+      "applied_to_repository": false
+    }
+  },
+  "full_backend": {
+    "command": "docker build",
+    "result": "passed",
+    "dockerfile_sha256": "3b5f287b46bd6fb3fc566ee16837fb71632ec8864fbf021c93576ae6fc227379",
+    "requirements_sha256": "e2771b0185c7c60c98f6b7eca76665c6557ac8a2d8f8154c00fb412c748b3048",
+    "base_image": "python:3.12-slim",
+    "image_id": "sha256:6d28aa5cce4b8afdfb5dc6f028d5674346b9c4b9506bb722042d704b03f71888",
+    "image_reported_size_bytes": 11226258076,
+    "runtime_user": "10001:10001",
+    "isolated_cpu_check": {
+      "network": "none",
+      "database": "SQLite en memoria",
+      "python": "3.12.12",
+      "torch": "2.15.0+cu132",
+      "torchaudio": "2.11.1+cu132",
+      "torchvision": "0.29.2+cu132",
+      "pip_check": "passed",
+      "app_main_import": "passed",
+      "cpu_tensor_operation": "passed",
+      "cuda_available": false,
+      "exit_code": 0
+    }
+  },
+  "gpu": {
+    "status": "blocked_by_host",
+    "windows_detected_adapter": "Intel Iris Xe",
+    "probe": "docker run --rm --network none --gpus all --entrypoint nvidia-smi <imagen de prueba> -L",
+    "exit_code": 125,
+    "error": "nvidia-container-cli: initialization error: WSL environment detected but no adapters were found",
+    "cuda_workload_run": false,
+    "reference": "https://docs.docker.com/desktop/features/gpu/"
+  },
+  "cloud_compose": {
+    "status": "connectivity_and_preflight_passed",
+    "files": [
+      "docker-compose.yml",
+      "docker-compose.cloud.yml",
+      "overlay temporal CPU con puertos loopback y runtime separado"
+    ],
+    "full_backend_image_confirmed": true,
+    "cloud_sql_proxy_version": "2.26.2",
+    "cloud_sql_proxy_host_port_published": false,
+    "healthy_services": [
+      "frontend",
+      "backend",
+      "cloud-sql-proxy"
+    ],
+    "official_database": "fama_oficial",
+    "official_bucket": "fama-audio-records-2026",
+    "read_checks": {
+      "command": "python -m app.node check",
+      "cloud_sql": "database_connected",
+      "gcs_object_listing": "storage_read_connected",
+      "installation_schema": "schema_current",
+      "revision": "0004_integration",
+      "database_runtime_permissions": "database_runtime_permissions_ready"
+    },
+    "installation_frontend_http": 200,
+    "installation_status": "required",
+    "backend_ready_http": 503,
+    "backend_ready_code": "installation_required",
+    "history_adoption": {
+      "command": "python -m app.history_adoption --config-dir /run/fama/installation/docker --user-id 1",
+      "applied": false,
+      "result": "history_adoption_ready"
+    },
+    "official_profile_completed_by_test": false,
+    "official_database_or_bucket_writes": false,
+    "pending": [
+      "Finalizar el perfil Docker y verificar /ready y el acceso web con el perfil completado.",
+      "Comprobar la operación de escritura SQL/GCS que corresponda al entorno del despliegue."
+    ]
+  },
+  "cleanup": {
+    "local_projects_removed": [
+      "fama-verify-d8c7b386-ports",
+      "fama-verify-d8c7b386-cloud"
+    ],
+    "temporary_images_removed": true,
+    "temporary_workspace_removed": true,
+    "owned_docker_resources_remaining": 0,
+    "official_native_login_http": 200,
+    "checked_utc": "2026-11-09T17:51:38.7721012Z"
+  }
+}
