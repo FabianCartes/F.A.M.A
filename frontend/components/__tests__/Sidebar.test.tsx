@@ -49,6 +49,18 @@ describe("Sidebar destinations", () => {
     });
   });
 
+  it("groups the workflow destinations apart from the account destinations", () => {
+    render(<Sidebar activeTab="dashboard" onSelectTab={vi.fn()} isCollapsed={false}
+      onToggleCollapsed={vi.fn()} role="administrador" />);
+    const flow = screen.getByRole("group", { name: "Flujo" });
+    const account = screen.getByRole("group", { name: "Cuenta" });
+    DESTINATIONS.forEach((label) => {
+      expect(flow.contains(screen.getByRole("button", { name: label }))).toBe(true);
+    });
+    expect(account.contains(screen.getByRole("button", { name: "Mi cuenta" }))).toBe(true);
+    expect(account.contains(screen.getByRole("button", { name: "Administración" }))).toBe(true);
+  });
+
   it("marks the current destination for assistive technology", () => {
     renderSidebar(false);
     expect(screen.getByRole("button", { name: "Predicción" }).getAttribute("aria-current")).toBe(

@@ -5,15 +5,17 @@ import { useWebSession } from "@/components/auth/SessionBoundary";
 import { AccountApiError, createAccount, listAccounts, updateAccount, issueRecovery, type AccountUser } from "@/lib/api/accountApi";
 import { useRetryAfter } from "@/components/auth/useRetryAfter";
 import AssignmentPanel from "./AssignmentPanel";
+import { initialsOf } from "./AccountView";
 import SecurityPanel from "./SecurityPanel";
 import RequestsPanel from "./RequestsPanel";
+import { SkeletonRows } from "@/components/common/Skeleton";
 import "./management.css";
 
 export default function AdministrationView() {
   const { user } = useWebSession();
   const [section, setSection] = useState<"accounts" | "security" | "requests">("accounts");
   if (user.rol !== "administrador") return null;
-  return <div className="management"><header className="management-page-header"><div className="management-page-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="7" r="3" /><path d="M3 21v-3a6 6 0 0 1 12 0v3m1-17a3 3 0 0 1 0 6m5 11v-3a6 6 0 0 0-3-5" /></svg></div><div><h1>Administración</h1><p>Gestiona cuentas y recursos de la plataforma.</p></div></header>
+  return <div className="management"><header className="management-page-header"><div><p className="management-eyebrow">Gestión de la plataforma</p><h1>Administración</h1><p>Gestiona cuentas y recursos de la plataforma.</p></div></header>
     <nav className="management-tabs" aria-label="Secciones administrativas"><button type="button" aria-pressed={section === "accounts"} onClick={() => setSection("accounts")}>Cuentas y asignaciones</button><button type="button" aria-pressed={section === "requests"} onClick={() => setSection("requests")}>Solicitudes de datasets</button><button type="button" aria-pressed={section === "security"} onClick={() => setSection("security")}>Auditoría y mantenimiento</button></nav>
     {section === "accounts" ? <AccountsPanel /> : section === "requests" ? <RequestsPanel /> : <SecurityPanel />}</div>;
 }
@@ -34,21 +36,21 @@ function AccountsPanel() {
     return () => controller.abort();
   }, [offset, revision]);
   function reload(next = offset) { setError(""); setPage(null); setOffset(next); setRevision((value) => value + 1); }
-  return <><div className="management-grid">
-    <section className="management-card" aria-labelledby="accounts-list"><h2 id="accounts-list">Cuentas registradas</h2>
-      <button type="button" onClick={() => { setSelected(null); setNotice(""); reload(); }}>Actualizar cuentas</button>
+  return <div className="accounts-layout"><div className="accounts-column">
+    <CreateAccount onCreated={() => { setSelected(null); setNotice("Cuenta creada."); reload(0); }} />
+    <section className="management-card" aria-labelledby="accounts-list"><div className="account-section-heading"><h2 id="accounts-list">Cuentas registradas</h2>
+      <button type="button" className="management-quiet" onClick={() => { setSelected(null); setNotice(""); reload(); }}>Actualizar cuentas</button></div>
       {error && <p role="alert">{error}</p>}{notice && !selected && <p role="status">{notice}</p>}
-      {!page && !error && <p role="status">Cargando cuentas…</p>}
+      {!page && !error && <><p role="status">Cargando cuentas…</p><SkeletonRows rows={4} /></>}
       {page && <><div className="management-table"><table><caption className="sr-only">Cuentas registradas</caption><thead><tr><th>Persona</th><th>Rol</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>
-        {page.users.map((person) => <tr key={person.id} data-selected={selected?.id === person.id}><td>{person.nombre_completo}<br /><span>{person.email}</span></td><td>{person.rol === "administrador" ? "Administrador" : "Investigador"}</td><td>{person.activo ? "Activa" : "Suspendida"}</td><td><button type="button" aria-label={`Administrar a ${person.nombre_completo}`} aria-pressed={selected?.id === person.id} onClick={(event) => { selectionTrigger.current = event.currentTarget; setSelected(person); setNotice(""); }}>Administrar</button></td></tr>)}
+        {page.users.map((person) => <tr key={person.id} data-selected={selected?.id === person.id}><td><div className="person-cell"><span className="person-avatar" aria-hidden="true">{initialsOf(person.nombre_completo)}</span><div>{person.nombre_completo}{person.id === user.id && <span className="account-badge person-me">Tu cuenta</span>}<br /><span>{person.email}</span></div></div></td><td><span className={`account-badge ${person.rol === "administrador" ? "" : "account-badge-neutral"}`}>{person.rol === "administrador" ? "Administrador" : "Investigador"}</span></td><td><span className={`account-badge ${person.activo ? "account-badge-active" : "account-badge-rejected"}`}>{person.activo ? "Activa" : "Suspendida"}</span></td><td><button type="button" aria-label={`Administrar a ${person.nombre_completo}`} aria-pressed={selected?.id === person.id} onClick={(event) => { selectionTrigger.current = event.currentTarget; setSelected(person); setNotice(""); }}>Administrar</button></td></tr>)}
       </tbody></table></div>{page.users.length === 0 && <p>No hay cuentas en esta página.</p>}
         <div className="management-actions"><button type="button" disabled={offset === 0} onClick={() => { setSelected(null); setNotice(""); reload(Math.max(0, offset - 20)); }}>Cuentas anteriores</button><span>{page.total} cuentas</span><button type="button" disabled={offset + page.users.length >= page.total} onClick={() => { setSelected(null); setNotice(""); reload(offset + 20); }}>Cuentas siguientes</button></div></>}
     </section>
-    <CreateAccount onCreated={() => { setSelected(null); setNotice("Cuenta creada."); reload(0); }} />
-  </div>{selected && <AccountWorkspace key={selected.id} person={selected} notice={notice} onClose={() => { setSelected(null); selectionTrigger.current?.focus(); }} onUpdated={async (updated) => {
+  </div><div className="accounts-column accounts-detail">{selected ? <AccountWorkspace key={selected.id} person={selected} notice={notice} onClose={() => { setSelected(null); selectionTrigger.current?.focus(); }} onUpdated={async (updated) => {
     setSelected(updated); setNotice("Cuenta actualizada."); reload();
     if (updated.id === user.id) await refreshSession();
-  }} />}</>;
+  }} /> : <div className="account-detail-empty" aria-hidden="true"><span className="person-avatar">?</span><p>Elige «Administrar» en una cuenta para ver su perfil, sus accesos y la recuperación.</p></div>}</div></div>;
 }
 
 function AccountWorkspace({ person, notice, onUpdated, onClose }: { person: AccountUser; notice: string; onUpdated: (person: AccountUser) => Promise<void>; onClose: () => void }) {
@@ -58,7 +60,7 @@ function AccountWorkspace({ person, notice, onUpdated, onClose }: { person: Acco
   useEffect(() => { title.current?.focus(); }, []);
   return <section className="account-workspace" aria-label={`Administrar a ${person.nombre_completo}`}>
     <header className="account-workspace-header">
-      <div className="account-avatar" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4" /><path d="M5 21v-2a7 7 0 0 1 14 0v2" /></svg></div>
+      <div className="account-avatar" aria-hidden="true">{initialsOf(person.nombre_completo)}</div>
       <div className="account-person"><p className="management-eyebrow">Cuenta seleccionada</p><h2 ref={title} tabIndex={-1}>{person.nombre_completo}</h2><p>{person.email}</p>
         <div className="account-badges"><span className="account-badge">{person.rol === "administrador" ? "Administrador" : "Investigador"}</span><span className={`account-badge ${person.activo ? "account-badge-active" : "account-badge-suspended"}`}>{person.activo ? "Activa" : "Suspendida"}</span>{person.id === user.id && <span className="account-badge">Tu cuenta</span>}</div>
       </div>
@@ -170,12 +172,14 @@ function CreateAccount({ onCreated }: { onCreated: () => void }) {
     } catch (reason) { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "No se pudo confirmar la creación."); }
     finally { if (!controller.signal.aborted) setBusy(false); }
   }
-  return <section className="management-card"><h2>Crear cuenta</h2><p>La contraseña inicial debe entregarse a la persona por un canal seguro.</p>
+  return <section className="management-card" aria-labelledby="create-account-title"><h2 id="create-account-title">Crear cuenta</h2>
     <form className="management-form" aria-label="Crear cuenta" onSubmit={submit}>
-      <label htmlFor="create-name">Nombre completo</label><input id="create-name" required minLength={2} maxLength={150} disabled={busy} value={name} onChange={(e) => setName(e.target.value)} autoComplete="off" />
-      <label htmlFor="create-email">Correo electrónico</label><input id="create-email" type="email" required maxLength={150} disabled={busy} value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" />
-      <label htmlFor="create-password">Contraseña inicial</label><input id="create-password" type="password" required minLength={12} maxLength={1024} disabled={busy} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
-      <label htmlFor="create-role">Rol de la nueva cuenta</label><select id="create-role" disabled={busy} value={role} onChange={(e) => setRole(e.target.value as AccountUser["rol"])}><option value="investigador">Investigador</option><option value="administrador">Administrador</option></select>
-      {error && <p role="alert">{error}</p>}<button type="submit" className="management-primary" disabled={busy}>{busy ? "Creando…" : "Crear cuenta"}</button>
+      <div className="account-profile-fields">
+        <div className="account-field"><label htmlFor="create-name">Nombre completo</label><input id="create-name" required minLength={2} maxLength={150} disabled={busy} value={name} onChange={(e) => setName(e.target.value)} autoComplete="off" /></div>
+        <div className="account-field"><label htmlFor="create-email">Correo electrónico</label><input id="create-email" type="email" required maxLength={150} disabled={busy} value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" /></div>
+        <div className="account-field"><label htmlFor="create-password">Contraseña inicial</label><input id="create-password" type="password" required minLength={12} maxLength={1024} disabled={busy} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" /><p>La contraseña inicial debe entregarse a la persona por un canal seguro.</p></div>
+        <div className="account-field"><label htmlFor="create-role">Rol de la nueva cuenta</label><select id="create-role" disabled={busy} value={role} onChange={(e) => setRole(e.target.value as AccountUser["rol"])}><option value="investigador">Investigador</option><option value="administrador">Administrador</option></select><p>{role === "administrador" ? "Puede administrar cuentas y acceder a todos los datasets." : "Accede a los datasets que le concedas en Acceso a datasets."}</p></div>
+      </div>
+      {error && <p role="alert">{error}</p>}<div className="account-save-bar"><p>La contraseña inicial requiere al menos 12 caracteres.</p><button type="submit" className="management-primary" disabled={busy}>{busy ? "Creando…" : "Crear cuenta"}</button></div>
     </form></section>;
 }

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { API_BASE_URL, apiFetch } from "@/lib/api";
 import DatasetReview from "./DatasetReview";
+import { SkeletonRows } from "@/components/common/Skeleton";
 import { versionName as sharedVersionName, versionShares, versionShortName } from "@/lib/partitionVersions";
 
 const summarySchema = z.object({
@@ -118,7 +119,7 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect, w
   };
   const selectedVersion = versions.find(item => item.version === selected);
   const classes = [...new Set(preview?.entries.map(entry => entry.clase) ?? [])].sort();
-  const fieldClass = "w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-emerald-600 disabled:opacity-50";
+  const fieldClass = "w-full bg-[#111215] border border-[#23252e] rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-blue-500 disabled:opacity-50";
   return (
     <section aria-label="Particiones de entrenamiento" className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -133,7 +134,7 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect, w
         {message && <p role="status" className="text-xs text-emerald-300">{message}</p>}
         <section aria-label="Usar una partición guardada" className="rounded-lg border border-[#23252e] bg-[#111215]/60 p-4 space-y-3">
         <h3 className="text-xs font-semibold text-gray-200">Usar una partición guardada</h3>
-        {phase === "loading" && <p role="status" className="text-xs text-gray-400">Consultando versiones…</p>}
+        {phase === "loading" && <><p role="status" className="text-xs text-gray-400">Consultando versiones…</p><SkeletonRows rows={2} /></>}
         {phase !== "loading" && !versions.length && <p className="text-xs text-gray-400">Aún no hay particiones guardadas para este dataset. Crea una en el bloque siguiente.</p>}
         <label className="block text-xs text-gray-400">Versión para entrenar
           <select aria-label="Versión para entrenar" value={selected} disabled={locked} onChange={event => onSelect(event.target.value)} className={`${fieldClass} mt-1`}>
@@ -158,7 +159,7 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect, w
             <label className="text-xs text-gray-400">Validación (%)<input aria-label="Validación (%)" type="number" min={10} max={40} step={1} value={validation} disabled={locked} onChange={event => changePolicy(event.target.value, "validation")} className={`${fieldClass} mt-1`} /></label>
             <label className="text-xs text-gray-400">Prueba (%)<input aria-label="Prueba (%)" type="number" min={10} max={40} step={1} value={test} disabled={locked} onChange={event => changePolicy(event.target.value, "test")} className={`${fieldClass} mt-1`} /></label>
             <label className="text-xs text-gray-400">Semilla del reparto<input aria-label="Semilla del reparto" type="number" min={0} max={2147483647} step={1} value={seed} disabled={locked} onChange={event => changePolicy(event.target.value, "seed")} className={`${fieldClass} mt-1`} /></label>
-            <button type="button" disabled={locked} onClick={() => void prepare()} className="px-3 py-2 rounded-lg text-xs font-semibold border border-emerald-800 text-emerald-300 bg-emerald-950/30 disabled:opacity-50">{phase === "preview" ? "Calculando reparto…" : "Previsualizar reparto"}</button>
+            <button type="button" disabled={locked} onClick={() => void prepare()} className="px-3 py-2 rounded-lg text-xs font-semibold border border-blue-800 text-blue-300 bg-blue-950/40 hover:bg-blue-900/50 disabled:opacity-50">{phase === "preview" ? "Calculando reparto…" : "Previsualizar reparto"}</button>
           </div>
           {preview && <div className="rounded-lg bg-[#111215] border border-[#23252e] p-4 space-y-3">
             <p className="text-sm font-semibold text-gray-200">{preview.counts.train} para entrenamiento · {preview.counts.val} para validación · {preview.counts.test} para prueba</p>
@@ -181,7 +182,7 @@ export default function DatasetPartitions({ dataset, busy, selected, onSelect, w
               <ul className="list-disc pl-4 space-y-1">{preview.warnings.map(warning => <li key={warning}>{warning}</li>)}</ul>
               <label className="flex gap-2 items-start"><input type="checkbox" checked={acknowledged} disabled={locked} onChange={event => setAcknowledged(event.target.checked)} />He revisado las advertencias de esta partición</label>
             </div>}
-            <button type="button" disabled={locked || preview.warnings.length > 0 && !acknowledged} onClick={() => void prepare(true)} className="px-4 py-2 rounded-lg text-xs font-semibold bg-emerald-700 text-white hover:bg-emerald-600 disabled:opacity-40">{phase === "saving" ? "Guardando versión…" : "Guardar versión y seleccionarla"}</button>
+            <button type="button" disabled={locked || preview.warnings.length > 0 && !acknowledged} onClick={() => void prepare(true)} className="px-4 py-2 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-40">{phase === "saving" ? "Guardando versión…" : "Guardar versión y seleccionarla"}</button>
           </div>}
         </section>
       </>

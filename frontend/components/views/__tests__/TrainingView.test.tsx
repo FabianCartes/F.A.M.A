@@ -746,7 +746,7 @@ describe("TrainingView (Dynamic Ensemble Selector)", () => {
     expect(allBtn.className).toContain("bg-emerald-600");
   });
 
-  it("removes the 'Activar' button and 'Activo (Inferencia)' tag from the models table", async () => {
+  it("shows no activation control or legacy 'Activo (Inferencia)' tag without an administrator session", async () => {
     await act(async () => {
       render(<TrainingView />);
     });

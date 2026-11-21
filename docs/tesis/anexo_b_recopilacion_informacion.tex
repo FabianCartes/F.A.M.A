@@ -1,0 +1,113 @@
+\chapter{Recopilación de Información}
+\label{ap:recopilacion-informacion}
+
+Este apéndice reúne los antecedentes utilizados para caracterizar el trabajo de
+clasificación acústica, formular los requerimientos de F.A.M.A. y documentar
+decisiones durante su desarrollo. La información procede de la revisión de
+documentos técnicos y del análisis de registros de experimentación, pruebas y
+operación del sistema.
+
+\section{Revisión documental}
+
+La revisión de antecedentes permitió describir el flujo de trabajo del
+investigador, desde la obtención de grabaciones etiquetadas hasta la
+preparación de los datos, el entrenamiento y la revisión de predicciones.
+En la descripción del problema se identificaron dificultades para conservar
+la procedencia de los audios y relacionar las ejecuciones con sus resultados.
+Estos antecedentes sirvieron para delimitar las funciones de ingesta,
+preprocesamiento, entrenamiento, predicción y retroalimentación descritas en
+el capítulo~3.
+
+Se consultó la documentación de Google Cloud Storage, Cloud SQL y gestión de
+identidades y accesos, recogida en las referencias de la memoria. La revisión
+permitió identificar qué recursos se necesitan para conservar los archivos
+de audio, registrar sus metadatos y autorizar al nodo de procesamiento.
+También se revisaron los antecedentes técnicos sobre representación de audio
+y aprendizaje automático que sustentan la preparación de las señales para
+el entrenamiento local.
+
+La documentación interna complementó estas fuentes con decisiones propias
+del proyecto. El registro ADR~0013 describe la captura de confirmaciones y
+correcciones y la revisión de aportes antes de su incorporación. El
+ADR~0069 registra el acuerdo de mantener conjuntos separados de
+entrenamiento, validación y prueba, conservar juntos los grupos de
+grabaciones relacionados y reservar la activación del modelo predeterminado
+para una acción administrativa.
+
+\section{Registros de experimentación y observación técnica}
+
+En la prueba de concepto bioacústica, el equipo examinó grabaciones
+etiquetadas procedentes de Xeno-canto. El informe de septiembre de 2026
+conserva los criterios de selección de especies, calidad de los audios
+y procedencia de las grabaciones. El análisis del origen de los
+ejemplos permitió identificar un riesgo para la evaluación cuando audios
+relacionados quedan repartidos entre el entrenamiento y la prueba. Las
+decisiones posteriores fijaron la selección y distribución de grabaciones
+mediante versiones de particiones.
+
+El registro de integración del 24 de octubre de 2026 reúne comprobaciones
+realizadas por el equipo en un entorno de laboratorio, con datos sintéticos
+y bases PostgreSQL temporales. Se registraron resultados relativos a
+permisos, particiones, persistencia y activación de modelos. Estos ensayos
+aportaron información sobre el comportamiento del software bajo condiciones
+controladas.
+
+El registro de mantenimiento del 25 de octubre de 2026 documenta
+comprobaciones en el nodo local del proyecto conectado a los servicios
+oficiales. Se revisaron las conexiones con PostgreSQL y Google Cloud Storage,
+el acceso administrativo, el catálogo de modelos y el esquema de base de
+datos. También se contrastaron las copias restauradas en bases locales
+separadas. Estas observaciones sirvieron para detallar los pasos de
+preparación, verificación y recuperación del capítulo~8.
+
+\section{Aplicación de la información recopilada}
+
+\begin{description}
+    \item[Gestión de datos] La descripción del trabajo con grabaciones y la
+    revisión de los servicios cloud sustentaron la separación entre el
+    almacenamiento de archivos, el registro de metadatos y el procesamiento
+    local. Esta decisión se refleja en los requerimientos \texttt{RF\_01} y
+    \texttt{RF\_02}.
+
+    \item[Trazabilidad experimental] La revisión de los datos y las pruebas
+    de preparación respaldaron el registro de las particiones y su relación
+    con los modelos entrenados. Esta información se utiliza en el recorrido
+    de entrenamiento y evaluación asociado a \texttt{RF\_04}.
+
+    \item[Revisión de predicciones] La necesidad de registrar la
+    confirmación o corrección de una clase se formalizó en
+    \texttt{RF\_06}. El registro de decisiones distingue la captura de
+    retroalimentación, la revisión del aporte y su uso en una preparación
+    posterior.
+
+    \item[Operación del sistema] Los registros de acceso, conexión y
+    recuperación permitieron precisar las tareas del administrador y del
+    responsable técnico del nodo. La verificación del laboratorio y la
+    comprobación en el nodo local se documentaron por separado, junto con
+    las condiciones previstas para la implantación institucional.
+\end{description}
+
+\section{Respaldo documental y alcance}
+
+Los antecedentes se conservan en el repositorio del proyecto. El informe
+\emph{Primera prueba de concepto} respalda la selección de grabaciones.
+Los ADR~0013 y 0069 registran las decisiones sobre retroalimentación y
+preparación experimental. Los registros de integración del 24 de octubre y
+de actualización del nodo oficial del 25 de octubre documentan el entorno
+de comprobación, las operaciones observadas y sus resultados.
+
+El plan de trabajo del objetivo específico~2 contempla entrevistas y
+reuniones de avance con el profesor guía y con investigadores del área.
+Su ejecución queda por acreditar mediante los instrumentos, actas o
+registros correspondientes. La evidencia reunida en este apéndice procede
+de las fuentes documentales y de los registros técnicos descritos.
+
+% Rutas de respaldo en el repositorio de F.A.M.A.
+% docs/modelos/01_primera_prueba_poc.md
+% docs/adr/0013_bucle_retroalimentacion_curacion_semi_manual_mlops.md
+% docs/adr/0069-integracion-de-acceso-evaluacion-y-datasets.md
+% docs/manuales/particiones_versionadas.md
+% docs/manuales/integracion_dev_20261024.md
+% docs/receipts/integracion_dev_20261024.json
+% docs/manuales/actualizacion_oficial_0004_20261025.md
+% docs/receipts/actualizacion_oficial_0004_20261025.json

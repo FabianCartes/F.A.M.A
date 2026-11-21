@@ -1,0 +1,162 @@
+\chapter{Definiciones y abreviaciones del Negocio}
+\label{ap:definiciones-negocio}
+
+Este apéndice reúne los conceptos que se emplean en F.A.M.A. para describir
+la gestión de grabaciones, el entrenamiento de modelos y la revisión de
+predicciones. Las definiciones se presentan en el contexto de la
+bioacústica y del diagnóstico acústico de motores.
+
+\section{Definiciones del dominio}
+
+\begin{description}
+    \item[Administrador] Usuario que gestiona cuentas y asignaciones de
+    recursos y puede designar el modelo predeterminado. La operación de la
+    infraestructura corresponde al responsable técnico del nodo.
+
+    \item[Arquitectura híbrida] Organización que combina el procesamiento
+    local de audios y modelos con servicios de almacenamiento y persistencia
+    en la nube.
+
+    \item[Bioacústica] Estudio de los sonidos producidos por los seres vivos.
+    En el proyecto se aplica al reconocimiento de especies de aves a partir
+    de grabaciones.
+
+    \item[Checkpoint] Archivo que conserva los pesos de un modelo en un
+    estado determinado y puede incluir su configuración y procedencia.
+    Permite recuperar el modelo con un predictor compatible.
+
+    \item[Clase acústica] Categoría que se desea reconocer, como una especie
+    de ave o una condición de funcionamiento de un motor. La etiqueta es
+    el valor que identifica esa categoría en un registro.
+
+    \item[Clasificación acústica] Tarea de asignar una grabación a una de
+    las clases contempladas para un dominio acústico.
+
+    \item[Confianza de predicción] Puntuación que el modelo asigna a la clase
+    predicha. Su interpretación como probabilidad de acierto requiere una
+    evaluación de calibración.
+
+    \item[Conjunto de datos (\textit{dataset})] Colección organizada de
+    grabaciones, etiquetas y metadatos destinada al desarrollo o evaluación
+    de modelos. El acceso puede ser privado o concederse a otros usuarios
+    mediante las asignaciones correspondientes.
+
+    \item[Curación de datos] Revisión de audios, etiquetas y procedencia
+    para decidir qué aportes son aptos para incorporarse a un conjunto de
+    datos.
+
+    \item[Diagnóstico acústico de motores] Análisis de las señales sonoras
+    del motor para clasificar grabaciones según las condiciones de operación
+    o falla contempladas por el modelo.
+
+    \item[Ensamble] Modelo compuesto que combina las salidas de varios
+    modelos para obtener una predicción conjunta.
+
+    \item[Entrenamiento] Proceso en el que se ajustan los pesos de un modelo
+    utilizando ejemplos de la partición de entrenamiento.
+
+    \item[Espectrograma Mel] Representación numérica de la energía de una
+    grabación a lo largo del tiempo y en bandas de frecuencia en escala Mel.
+    Puede visualizarse como imagen y utilizarse como entrada del modelo.
+
+    \item[Evaluación] Medición del desempeño de un modelo mediante la
+    comparación entre sus predicciones y las etiquetas de referencia de
+    una partición identificada.
+
+    \item[Exactitud (\textit{accuracy})] Proporción de ejemplos evaluados
+    cuya clase predicha coincide con la etiqueta de referencia.
+
+    \item[Exhaustividad (\textit{recall})] Proporción de ejemplos de una
+    clase que el modelo identifica correctamente como pertenecientes a ella.
+
+    \item[Fuga de datos] Uso directo o indirecto de información reservada
+    para evaluar el modelo durante su entrenamiento o ajuste. Puede ocurrir
+    si fragmentos de una misma grabación quedan en particiones distintas.
+
+    \item[Grupo de origen] Conjunto de grabaciones relacionadas, por ejemplo
+    por provenir del mismo audio original o de un grabador identificado.
+    Se conserva dentro de una misma partición para reducir la fuga de datos.
+
+    \item[Inferencia] Ejecución de un modelo entrenado sobre un audio de
+    entrada para obtener una predicción o un resultado de rechazo según
+    el predictor utilizado.
+
+    \item[Ingesta] Incorporación de grabaciones al sistema mediante las
+    operaciones de carga, importación o sincronización habilitadas.
+
+    \item[Instantánea de entrenamiento (\textit{snapshot})] Selección
+    identificada de grabaciones y metadatos que sirve como fuente de un
+    experimento. La identificación de la fuente permite rastrear qué
+    datos utilizó un trabajo.
+
+    \item[Investigador] Usuario que trabaja con los conjuntos de datos que
+    tiene autorizados. Puede preparar experimentos, entrenar modelos,
+    consultar resultados y revisar predicciones dentro de su ámbito de acceso.
+
+    \item[Macro F1] Promedio aritmético del F1 de las clases evaluadas.
+    El F1 de cada clase combina su precisión y exhaustividad mediante la
+    media armónica. El promedio asigna el mismo peso a cada clase.
+
+    \item[Metadatos acústicos] Información que describe una grabación,
+    como su duración, frecuencia de muestreo, origen, clase y ubicación,
+    según los datos registrados.
+
+    \item[Modelo activo] Modelo designado explícitamente como
+    predeterminado en el ámbito correspondiente. Su utilización requiere
+    que el predictor pueda acceder a los pesos necesarios.
+
+    \item[Nodo de procesamiento local] Estación o servidor que ejecuta
+    el procesamiento acústico y las operaciones de entrenamiento e
+    inferencia de F.A.M.A.
+
+    \item[Particiones] Subconjuntos que se reservan para entrenar, validar
+    y probar el modelo. El entrenamiento ajusta los pesos, la validación
+    orienta la selección del modelo y la prueba permite estimar su
+    desempeño sobre ejemplos reservados.
+
+    \item[Precisión (\textit{precision})] Proporción de predicciones de
+    una clase que coinciden con la etiqueta de referencia de esa clase.
+
+    \item[Preprocesamiento] Transformaciones que preparan la grabación
+    para el modelo. Pueden incluir remuestreo, selección de ventanas,
+    extracción de características y normalización.
+
+    \item[Retroalimentación (\textit{feedback})] Confirmación o corrección
+    que el usuario registra sobre una predicción. Un aporte incorporado
+    puede incluirse en una nueva preparación para un entrenamiento posterior.
+
+    \item[Trazabilidad] Capacidad de identificar la relación entre los
+    datos y particiones utilizados, el modelo obtenido, su evaluación y
+    las predicciones o correcciones asociadas.
+\end{description}
+
+\section{Abreviaciones}
+
+\begin{description}
+    \item[CP] Caso de prueba.
+    \item[CPU] Unidad central de procesamiento.
+    \item[CU] Caso de uso.
+    \item[F.A.M.A.] Flujo de clasificación de Audio y Machine-learning Avanzado.
+    \item[GCP] \textit{Google Cloud Platform}, plataforma de servicios en la nube.
+    \item[GCS] \textit{Google Cloud Storage}, servicio de almacenamiento de objetos.
+    \item[GPU] Unidad de procesamiento gráfico.
+    \item[HPSS] Separación armónica y percusiva
+    (\textit{Harmonic-Percussive Source Separation}).
+    \item[IAM] Gestión de identidades y accesos
+    (\textit{Identity and Access Management}).
+    \item[MFCC] Coeficientes cepstrales en escala Mel
+    (\textit{Mel-Frequency Cepstral Coefficients}).
+    \item[MLOps] \textit{Machine Learning Operations}. Prácticas para
+    organizar y operar el ciclo de vida de los modelos de aprendizaje
+    automático.
+    \item[MVP] Producto mínimo viable (\textit{Minimum Viable Product}).
+    \item[RF] Requerimiento funcional.
+    \item[RMS] Raíz cuadrática media (\textit{Root Mean Square}).
+    \item[RNF] Requerimiento no funcional.
+    \item[STFT] Transformada de Fourier de tiempo corto
+    (\textit{Short-Time Fourier Transform}).
+    \item[TDD] Desarrollo guiado por pruebas
+    (\textit{Test-Driven Development}).
+    \item[VAN] Valor actual neto.
+    \item[VRAM] Memoria de video utilizada por la GPU.
+\end{description}

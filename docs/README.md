@@ -28,6 +28,9 @@ Memoria formal del proyecto de título y análisis de sus objetivos.
 
 - [`analisis_objetivos_fama.md`](tesis/analisis_objetivos_fama.md): Análisis de Objetivos del Proyecto F.A.M.A.
 - [`memoria_proyecto_titulo_2026_1.md`](tesis/memoria_proyecto_titulo_2026_1.md): Memoria del proyecto de título 2026-1 ([PDF](tesis/memoria_proyecto_titulo_2026_1.pdf))
+- [`bitacora_evolucion_decisiones.md`](tesis/bitacora_evolucion_decisiones.md): Propuesta original, decisiones adoptadas, motivos y evidencias para la defensa (DEC-01 a DEC-14).
+- Revisiones técnicas de los capítulos [1](tesis/revision_tecnica_capitulo_01.md) y [2](tesis/revision_tecnica_capitulo_02.md): contraste de la memoria con el código, con hallazgos y redacciones propuestas.
+- Anexos LaTeX para Overleaf: [A, definiciones](tesis/anexo_a_definiciones.tex); [B, recopilación de información](tesis/anexo_b_recopilacion_informacion.tex); [C, operaciones HTTP](tesis/anexo_c_funcionalidad_endpoints.tex); D, gestión del proyecto ([principal](tesis/05-gestionproyecto.tex), [Carta Gantt](tesis/cartagantt.tex), [estimación por casos de uso](tesis/estimacionCU.tex), [resumen de esfuerzo](tesis/resumenesfuerzo.tex)); [E, casos de uso restantes](tesis/anexo_e_casos_de_uso_restantes.tex); [F, diccionario de datos](tesis/anexo_f_diccionario_datos.tex).
 
 ### [`arquitectura/`](arquitectura/) — Arquitectura
 
@@ -232,6 +235,8 @@ ADR numerados secuencialmente. Un ADR reemplazado conserva su ubicación y decla
 ### [`receipts/`](receipts/) — Evidencia reproducible
 
 Recibos JSON legibles por máquinas que registran comandos, resultados y límites de cada verificación. Los recibos son cortes históricos: no describen el estado actual del sistema ni ejecuciones nuevas.
+
+- Docker del 9 de noviembre de 2026 (rama `fix/afinamiento-integral`): [arranque local en CPU](receipts/comprobacion_docker_local_20261109.json), [imagen completa, Cloud SQL/GCS y dependencias](receipts/verificacion_docker_cloud_y_dependencias_20261109.json) y [cierre de la verificación](receipts/cierre_verificacion_docker_20261109.json). Los cambios de código que verificaban no se incorporaron a `mvp`, que conserva su propia configuración desplegada.
 
 ### [`images/`](images/) — Imágenes
 

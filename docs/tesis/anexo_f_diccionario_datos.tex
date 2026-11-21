@@ -1,0 +1,443 @@
+\chapter{Diccionario de datos}
+\label{ap:diccionario-datos}
+
+El diccionario describe la persistencia de F.A.M.A. según la revisión
+\texttt{0004\_integration} de las migraciones. Complementa el modelo
+de datos del capítulo~6 con los tipos físicos, las relaciones y las
+reglas de los campos del flujo principal. Las tablas auxiliares del
+módulo ZIP se presentan en un inventario por función.
+
+El capítulo~6 incluye \texttt{nodo\_procesamiento} y
+\texttt{registro\_pipeline} en el modelo de diseño. En el esquema
+descrito, la telemetría se obtiene del nodo en ejecución y los
+mensajes de entrenamiento se consultan junto con el progreso del
+trabajo.
+
+PostgreSQL almacena las cuentas, el inventario acústico, los resultados
+del entrenamiento y los registros de operación. Los audios y los
+archivos de pesos se conservan como archivos del nodo u objetos de
+Google Cloud Storage (GCS), según la operación. La base registra
+referencias e información de integridad cuando están disponibles.
+
+La marca \textbf{PK} identifica la clave primaria y \textbf{FK}
+identifica una clave foránea declarada en la migración. Varias marcas
+PK en una tabla indican una clave compuesta. En la columna de nulidad,
+\emph{Sí} indica que el campo admite \texttt{NULL}. Los campos con clave
+primaria o con solo la marca FK en estas tablas son obligatorios.
+La marca \emph{No} indica un campo obligatorio sin esas claves.
+\texttt{TIMESTAMPTZ} representa fecha y hora con zona horaria.
+Los valores iniciales del ORM se aplican al insertar mediante la
+aplicación y son independientes de los valores por defecto de SQL.
+
+\begingroup
+\small
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.12}
+
+\section*{Identidad, sesiones y seguridad}
+
+\subsection*{\texttt{usuario}}
+
+Cuenta autenticada y rol de acceso. El correo es único y el rol admite los valores administrador e investigador.
+
+\noindent
+\begin{tabular}{@{}p{0.30\linewidth}p{0.16\linewidth}p{0.10\linewidth}p{0.36\linewidth}@{}}
+\hline
+\textbf{Campo} & \textbf{Tipo} & \textbf{Nulo / clave} & \textbf{Significado y reglas} \\
+\hline
+\texttt{id\_\allowbreak{}usuario} & \texttt{INTEGER} & PK & Identificador de la cuenta. Se genera al insertar. \\
+\texttt{correo\_\allowbreak{}electronico} & \texttt{VARCHAR(150)} & No & Correo utilizado para iniciar sesión. \\
+\texttt{hash\_\allowbreak{}contrasena} & \texttt{VARCHAR(255)} & No & Huella de la contraseña. \\
+\texttt{rol} & \texttt{VARCHAR(50)} & No & Rol de acceso. El ORM lo inicializa con investigador. \\
+\texttt{nombre\_\allowbreak{}completo} & \texttt{VARCHAR(150)} & No & Nombre visible. El ORM admite una cadena vacía como valor inicial. \\
+\texttt{activo} & \texttt{BOOLEAN} & No & Habilitación de la cuenta. El ORM lo inicializa con verdadero. \\
+\texttt{fecha\_\allowbreak{}creacion} & \texttt{TIMESTAMPTZ} & No & Fecha de alta. El ORM usa la fecha y hora actual en UTC. \\
+\texttt{ultimo\_\allowbreak{}acceso} & \texttt{TIMESTAMPTZ} & Sí & Fecha del último acceso, cuando está disponible. \\
+\hline
+\end{tabular}
+
+\subsection*{\texttt{sesion\_\allowbreak{}web}}
+
+Sesión web con vigencia absoluta y límite de inactividad.
+
+\noindent
+\begin{tabular}{@{}p{0.30\linewidth}p{0.16\linewidth}p{0.10\linewidth}p{0.36\linewidth}@{}}
+\hline
+\textbf{Campo} & \textbf{Tipo} & \textbf{Nulo / clave} & \textbf{Significado y reglas} \\
+\hline
+\texttt{token\_\allowbreak{}hash} & \texttt{VARCHAR(64)} & PK & Huella del token de sesión. \\
+\texttt{id\_\allowbreak{}usuario} & \texttt{INTEGER} & FK & Usuario autenticado. Referencia a \texttt{usuario}. \\
+\texttt{expira\_\allowbreak{}en} & \texttt{BIGINT} & No & Vencimiento absoluto, en segundos Unix. \\
+\texttt{inactiva\_\allowbreak{}en} & \texttt{BIGINT} & No & Vencimiento por inactividad, en segundos Unix. \\
+\hline
+\end{tabular}
+
+\subsection*{\texttt{recuperacion\_\allowbreak{}cuenta}}
+
+Credencial de recuperación vigente por usuario. La huella del token es única.
+
+\noindent
+\begin{tabular}{@{}p{0.30\linewidth}p{0.16\linewidth}p{0.10\linewidth}p{0.36\linewidth}@{}}
+\hline
+\textbf{Campo} & \textbf{Tipo} & \textbf{Nulo / clave} & \textbf{Significado y reglas} \\
+\hline
+\texttt{id\_\allowbreak{}usuario} & \texttt{INTEGER} & PK, FK & Usuario titular de la recuperación. Referencia a \texttt{usuario}. \\
+\texttt{token\_\allowbreak{}hash} & \texttt{VARCHAR(64)} & No & Huella del token temporal. \\
+\texttt{expira\_\allowbreak{}en} & \texttt{BIGINT} & No & Vencimiento en segundos Unix. \\
+\hline
+\end{tabular}
+
+\subsection*{\texttt{control\_\allowbreak{}cuentas}}
+
+Fila de coordinación para serializar cambios sensibles de las cuentas.
+
+\noindent
+\begin{tabular}{@{}p{0.30\linewidth}p{0.16\linewidth}p{0.10\linewidth}p{0.36\linewidth}@{}}
+\hline
+\textbf{Campo} & \textbf{Tipo} & \textbf{Nulo / clave} & \textbf{Significado y reglas} \\
+\hline
+\texttt{id} & \texttt{INTEGER} & PK & Identificador de la fila de control. Debe valer 1. \\
+\hline
+\end{tabular}
+
+\subsection*{\texttt{cuota\_\allowbreak{}acceso}}
+
+Contador temporal para aplicar límites a solicitudes de acceso.
+
+\noindent
+\begin{tabular}{@{}p{0.30\linewidth}p{0.16\linewidth}p{0.10\linewidth}p{0.36\linewidth}@{}}
+\hline
+\textbf{Campo} & \textbf{Tipo} & \textbf{Nulo / clave} & \textbf{Significado y reglas} \\
+\hline
+\texttt{clave\_\allowbreak{}hash} & \texttt{VARCHAR(64)} & PK & Huella de la clave con la que se agrupan los intentos. \\
+\texttt{intentos} & \texttt{INTEGER} & No & Cantidad de intentos. Debe ser mayor que cero. \\
+\texttt{expira\_\allowbreak{}en} & \texttt{BIGINT} & No & Vencimiento de la ventana en segundos Unix. \\
+\hline
+\end{tabular}
+
+\subsection*{\texttt{evento\_\allowbreak{}seguridad}}
+
+Registro de operaciones de seguridad. Los identificadores contextuales se conservan como enteros.
+
+\noindent
+\begin{tabular}{@{}p{0.30\linewidth}p{0.16\linewidth}p{0.10\linewidth}p{0.36\linewidth}@{}}
+\hline
+\textbf{Campo} & \textbf{Tipo} & \textbf{Nulo / clave} & \textbf{Significado y reglas} \\
+\hline
+\texttt{id} & \texttt{BIGINT} & PK & Identificador del evento. Se genera al insertar. \\
+\texttt{occurred\_\allowbreak{}at} & \texttt{BIGINT} & No & Momento del evento en segundos Unix. \\
+\texttt{action} & \texttt{VARCHAR(48)} & No & Código de la operación auditada. \\
+\texttt{outcome} & \texttt{VARCHAR(12)} & No & Resultado permitido por el esquema. Valores success y denied. \\
+\texttt{actor\_\allowbreak{}id} & \texttt{INTEGER} & Sí & Identificador de quien realizó la operación, cuando se conoce. \\
+\texttt{subject\_\allowbreak{}user\_\allowbreak{}id} & \texttt{INTEGER} & Sí & Identificador de la cuenta afectada, si corresponde. \\
+\texttt{dataset\_\allowbreak{}id} & \texttt{INTEGER} & Sí & Identificador del conjunto afectado, si corresponde. \\
+\hline
+\end{tabular}
+
+\section*{Conjuntos de datos y permisos}
+
+\subsection*{\texttt{conjunto\_\allowbreak{}datos}}
+
+Catálogo de conjuntos acústicos del flujo principal. El nombre es único.
+
+\noindent
+\begin{tabular}{@{}p{0.30\linewidth}p{0.16\linewidth}p{0.10\linewidth}p{0.36\linewidth}@{}}
+\hline
+\textbf{Campo} & \textbf{Tipo} & \textbf{Nulo / clave} & \textbf{Significado y reglas} \\
+\hline
+\texttt{id\_\allowbreak{}conjunto\_\allowbreak{}datos} & \texttt{INTEGER} & PK & Identificador del conjunto. Se genera al insertar. \\
+\texttt{nombre} & \texttt{VARCHAR(100)} & No & Nombre del conjunto de datos. \\
+\texttt{ruta\_\allowbreak{}gcp} & \texttt{VARCHAR(500)} & No & Referencia de almacenamiento del conjunto en GCS. \\
+\texttt{estado} & \texttt{VARCHAR(50)} & No & Estado operativo. El valor inicial del ORM es sincronizado. \\
+\texttt{id\_\allowbreak{}usuario\_\allowbreak{}carga} & \texttt{INTEGER} & Sí & Identificador del usuario que realizó la carga, cuando se registra. \\
+\texttt{fecha\_\allowbreak{}carga} & \texttt{TIMESTAMPTZ} & No & Fecha de registro. El ORM usa la fecha y hora actual en UTC. \\
+\texttt{tamano\_\allowbreak{}total\_\allowbreak{}bytes} & \texttt{BIGINT} & No & Tamaño total en bytes. El ORM lo inicializa con 0. \\
+\texttt{cantidad\_\allowbreak{}audios} & \texttt{INTEGER} & No & Cantidad registrada de audios. El ORM lo inicializa con 0. \\
+\texttt{finalidad} & \texttt{TEXT} & No & Finalidad declarada. El ORM la inicializa con \guillemotleft{}Entrenamiento bioacústico\guillemotright{}. \\
+\texttt{base\_\allowbreak{}licitud} & \texttt{VARCHAR(50)} & No & Base de licitud declarada. El ORM la inicializa con \guillemotleft{}Investigación académica\guillemotright{}. \\
+\hline
+\end{tabular}
+
+\subsection*{\texttt{audio}}
+
+Metadatos de una grabación registrada en un conjunto. La fila referencia el archivo mediante su ruta.
+
+\noindent
+\begin{tabular}{@{}p{0.30\linewidth}p{0.16\linewidth}p{0.10\linewidth}p{0.36\linewidth}@{}}
+\hline
+\textbf{Campo} & \textbf{Tipo} & \textbf{Nulo / clave} & \textbf{Significado y reglas} \\
+\hline
+\texttt{id\_\allowbreak{}audio} & \texttt{INTEGER} & PK & Identificador de la grabación. Se genera al insertar. \\
+\texttt{id\_\allowbreak{}conjunto\_\allowbreak{}datos} & \texttt{INTEGER} & FK & Conjunto al que pertenece la grabación. Referencia a \texttt{conjunto\_\allowbreak{}datos}. \\
+\texttt{nombre\_\allowbreak{}archivo} & \texttt{VARCHAR(255)} & No & Nombre del archivo registrado. \\
+\texttt{ruta\_\allowbreak{}gcp} & \texttt{VARCHAR(500)} & No & Referencia del objeto de audio en GCS. \\
+\texttt{clase} & \texttt{VARCHAR(100)} & No & Etiqueta acústica de la grabación. \\
+\texttt{frecuencia\_\allowbreak{}muestreo} & \texttt{INTEGER} & Sí & Frecuencia de muestreo en hercios. \\
+\texttt{duracion\_\allowbreak{}segundos} & \texttt{FLOAT} & Sí & Duración de la grabación en segundos. \\
+\texttt{tamano\_\allowbreak{}bytes} & \texttt{BIGINT} & No & Tamaño en bytes. El ORM lo inicializa con 0. \\
+\texttt{hash\_\allowbreak{}archivo} & \texttt{VARCHAR(64)} & Sí & Huella del archivo, cuando se registra. \\
+\texttt{fecha\_\allowbreak{}subida} & \texttt{TIMESTAMPTZ} & No & Fecha de registro. El ORM usa la fecha y hora actual en UTC. \\
+\hline
+\end{tabular}
+
+\subsection*{\texttt{asignacion\_\allowbreak{}dataset}}
+
+Permiso explícito de un usuario sobre un conjunto de datos. La pareja identifica la asignación.
+
+\noindent
+\begin{tabular}{@{}p{0.30\linewidth}p{0.16\linewidth}p{0.10\linewidth}p{0.36\linewidth}@{}}
+\hline
+\textbf{Campo} & \textbf{Tipo} & \textbf{Nulo / clave} & \textbf{Significado y reglas} \\
+\hline
+\texttt{id\_\allowbreak{}usuario} & \texttt{INTEGER} & PK, FK & Usuario autorizado. Referencia a \texttt{usuario}. \\
+\texttt{id\_\allowbreak{}conjunto\_\allowbreak{}datos} & \texttt{INTEGER} & PK, FK & Conjunto de datos asignado. Referencia a \texttt{conjunto\_\allowbreak{}datos}. \\
+\hline
+\end{tabular}
+
+\subsection*{\texttt{solicitud\_\allowbreak{}dataset}}
+
+Solicitud de acceso identificada por usuario y conjunto. Los datos de decisión se completan al aprobar o rechazar.
+
+\noindent
+\begin{tabular}{@{}p{0.30\linewidth}p{0.16\linewidth}p{0.10\linewidth}p{0.36\linewidth}@{}}
+\hline
+\textbf{Campo} & \textbf{Tipo} & \textbf{Nulo / clave} & \textbf{Significado y reglas} \\
+\hline
+\texttt{id\_\allowbreak{}usuario} & \texttt{INTEGER} & PK, FK & Usuario solicitante. Referencia a \texttt{usuario}. \\
+\texttt{id\_\allowbreak{}conjunto\_\allowbreak{}datos} & \texttt{INTEGER} & PK, FK & Conjunto solicitado. Referencia a \texttt{conjunto\_\allowbreak{}datos}. \\
+\texttt{status} & \texttt{VARCHAR(12)} & No & Estado de la solicitud. Valores pending, approved y rejected. \\
+\texttt{requested\_\allowbreak{}at} & \texttt{BIGINT} & No & Momento de la solicitud, en segundos Unix. \\
+\texttt{decided\_\allowbreak{}at} & \texttt{BIGINT} & Sí & Momento de la decisión, en segundos Unix. \\
+\texttt{decided\_\allowbreak{}by} & \texttt{INTEGER} & Sí & Identificador de quien tomó la decisión. \\
+\hline
+\end{tabular}
+
+\section*{Entrenamiento y evaluación}
+
+\subsection*{\texttt{modelo}}
+
+Registro de un modelo entrenado y de la procedencia de su artefacto. El identificador de usuario se registra como dato de autoría.
+
+\noindent
+\begin{tabular}{@{}p{0.30\linewidth}p{0.16\linewidth}p{0.10\linewidth}p{0.36\linewidth}@{}}
+\hline
+\textbf{Campo} & \textbf{Tipo} & \textbf{Nulo / clave} & \textbf{Significado y reglas} \\
+\hline
+\texttt{id\_\allowbreak{}modelo} & \texttt{INTEGER} & PK & Identificador del modelo. Se genera al insertar. \\
+\texttt{id\_\allowbreak{}usuario} & \texttt{INTEGER} & Sí & Identificador de quien inició el entrenamiento, cuando está registrado. \\
+\texttt{id\_\allowbreak{}conjunto\_\allowbreak{}datos} & \texttt{INTEGER} & FK, Sí & Conjunto usado en el entrenamiento, cuando se conoce. Referencia a \texttt{conjunto\_\allowbreak{}datos}. \\
+\texttt{clase\_\allowbreak{}objetivo} & \texttt{VARCHAR(100)} & No & Descripción del dominio o las clases objetivo. El ORM conserva \guillemotleft{}15 Aves Chilenas\guillemotright{} como valor inicial histórico. \\
+\texttt{actualizacion\_\allowbreak{}de} & \texttt{INTEGER} & FK, Sí & Identificador del modelo anterior, si se registra una actualización. Referencia a \texttt{modelo}. \\
+\texttt{arquitectura} & \texttt{VARCHAR(255)} & No & Arquitectura del modelo. \\
+\texttt{epocas} & \texttt{INTEGER} & No & Cantidad de épocas registrada para el entrenamiento. \\
+\texttt{tasa\_\allowbreak{}aprendizaje} & \texttt{FLOAT} & No & Tasa de aprendizaje. \\
+\texttt{tamano\_\allowbreak{}lote} & \texttt{INTEGER} & No & Tamaño del lote. \\
+\texttt{precision} & \texttt{FLOAT} & Sí & Exactitud de validación registrada como porcentaje por el entrenador. \\
+\texttt{perdida} & \texttt{FLOAT} & Sí & Valor de la función de pérdida registrado. \\
+\texttt{ruta\_\allowbreak{}binario\_\allowbreak{}gcp} & \texttt{VARCHAR(500)} & No & Referencia del archivo de pesos. El nombre histórico de la columna alude a GCS. \\
+\texttt{tamano\_\allowbreak{}bytes} & \texttt{BIGINT} & No & Tamaño en bytes. El ORM lo inicializa con 0. \\
+\texttt{hash\_\allowbreak{}binario} & \texttt{VARCHAR(64)} & Sí & Huella SHA-256 de los pesos registrados, cuando está disponible. \\
+\texttt{activo} & \texttt{BOOLEAN} & No & Marca de activación. El ORM lo inicializa con falso. \\
+\texttt{estado} & \texttt{VARCHAR(50)} & No & Estado del modelo. El ORM lo inicializa con entrenado. \\
+\texttt{fecha\_\allowbreak{}entrenamiento} & \texttt{TIMESTAMPTZ} & No & Fecha del entrenamiento. El ORM usa la fecha y hora actual en UTC. \\
+\hline
+\end{tabular}
+
+\subsection*{\texttt{metrica\_\allowbreak{}entrenamiento}}
+
+Mediciones por época vinculadas a un modelo.
+
+\noindent
+\begin{tabular}{@{}p{0.30\linewidth}p{0.16\linewidth}p{0.10\linewidth}p{0.36\linewidth}@{}}
+\hline
+\textbf{Campo} & \textbf{Tipo} & \textbf{Nulo / clave} & \textbf{Significado y reglas} \\
+\hline
+\texttt{id\_\allowbreak{}metrica} & \texttt{INTEGER} & PK & Identificador de la medición. Se genera al insertar. \\
+\texttt{id\_\allowbreak{}modelo} & \texttt{INTEGER} & FK & Modelo al que pertenece la medición. Referencia a \texttt{modelo}. \\
+\texttt{epoca} & \texttt{INTEGER} & No & Número de época. \\
+\texttt{precision} & \texttt{FLOAT} & No & Exactitud de validación de la época, en porcentaje. \\
+\texttt{perdida} & \texttt{FLOAT} & No & Pérdida registrada en la época. \\
+\texttt{puntuacion\_\allowbreak{}validacion} & \texttt{FLOAT} & Sí & Puntuación de validación adicional, si se registra. \\
+\texttt{tiempo\_\allowbreak{}epoca} & \texttt{FLOAT} & Sí & Tiempo empleado en la época, en segundos. \\
+\hline
+\end{tabular}
+
+\subsection*{\texttt{model\_\allowbreak{}evaluation}}
+
+Evaluación de un artefacto y una partición concretos. El esquema exige un número positivo de muestras y reserva el informe para evaluaciones completadas.
+
+\noindent
+\begin{tabular}{@{}p{0.30\linewidth}p{0.16\linewidth}p{0.10\linewidth}p{0.36\linewidth}@{}}
+\hline
+\textbf{Campo} & \textbf{Tipo} & \textbf{Nulo / clave} & \textbf{Significado y reglas} \\
+\hline
+\texttt{id\_\allowbreak{}evaluation} & \texttt{INTEGER} & PK & Identificador de la evaluación. Se genera al insertar. \\
+\texttt{id\_\allowbreak{}modelo} & \texttt{INTEGER} & FK & Modelo evaluado. Referencia a \texttt{modelo}. \\
+\texttt{schema\_\allowbreak{}version} & \texttt{INTEGER} & No & Versión del formato del informe. Valores 1 y 2. \\
+\texttt{evaluator\_\allowbreak{}version} & \texttt{VARCHAR(100)} & No & Versión del evaluador. \\
+\texttt{checkpoint\_\allowbreak{}sha256} & \texttt{VARCHAR(64)} & No & SHA-256 del archivo de pesos evaluado. \\
+\texttt{dataset} & \texttt{VARCHAR(255)} & No & Identidad del conjunto evaluado. \\
+\texttt{split} & \texttt{VARCHAR(10)} & No & Partición evaluada. Valores val y test. \\
+\texttt{manifest\_\allowbreak{}sha256} & \texttt{VARCHAR(64)} & No & SHA-256 del manifiesto usado en la evaluación. \\
+\texttt{classes} & \texttt{JSON} & No & Lista ordenada de clases evaluadas. \\
+\texttt{predictor\_\allowbreak{}config} & \texttt{JSON} & No & Configuración del predictor. \\
+\texttt{preprocessing\_\allowbreak{}config} & \texttt{JSON} & No & Configuración del preprocesamiento. \\
+\texttt{aggregation\_\allowbreak{}config} & \texttt{JSON} & No & Configuración de la agregación. \\
+\texttt{sample\_\allowbreak{}count} & \texttt{INTEGER} & No & Número de muestras evaluadas. \\
+\texttt{report} & \texttt{JSON} & Sí & Informe con métricas, matriz de confusión y cobertura. \\
+\texttt{status} & \texttt{VARCHAR(10)} & No & Estado de la evaluación. Valores pending, running, completed y failed. \\
+\texttt{error\_\allowbreak{}reason} & \texttt{VARCHAR(2000)} & Sí & Motivo requerido cuando la evaluación falla. \\
+\texttt{created\_\allowbreak{}at} & \texttt{TIMESTAMPTZ} & No & Fecha de creación del registro. \\
+\texttt{started\_\allowbreak{}at} & \texttt{TIMESTAMPTZ} & Sí & Fecha de inicio cuando se registra. \\
+\texttt{finished\_\allowbreak{}at} & \texttt{TIMESTAMPTZ} & Sí & Fecha de término en un estado final. \\
+\texttt{code\_\allowbreak{}revision} & \texttt{VARCHAR(255)} & Sí & Revisión del código asociada al informe, cuando se registra. \\
+\hline
+\end{tabular}
+
+\section*{Predicción y retroalimentación}
+
+\subsection*{\texttt{prediccion}}
+
+Resultado de una inferencia acústica y referencia de su entrada. El identificador textual del predictor se resuelve en el catálogo de modelos.
+
+\noindent
+\begin{tabular}{@{}p{0.30\linewidth}p{0.16\linewidth}p{0.10\linewidth}p{0.36\linewidth}@{}}
+\hline
+\textbf{Campo} & \textbf{Tipo} & \textbf{Nulo / clave} & \textbf{Significado y reglas} \\
+\hline
+\texttt{id\_\allowbreak{}prediccion} & \texttt{INTEGER} & PK & Identificador de la inferencia. Se genera al insertar. \\
+\texttt{ruta\_\allowbreak{}audio\_\allowbreak{}prueba} & \texttt{VARCHAR(255)} & No & Referencia al audio de entrada. \\
+\texttt{etiqueta\_\allowbreak{}predicha} & \texttt{VARCHAR(100)} & No & Clase devuelta por el predictor. \\
+\texttt{confianza} & \texttt{FLOAT} & No & Puntuación de confianza devuelta por el predictor. \\
+\texttt{modelo\_\allowbreak{}id} & \texttt{VARCHAR(100)} & Sí & Identificador textual del predictor utilizado. \\
+\texttt{dataset\_\allowbreak{}name} & \texttt{VARCHAR(100)} & Sí & Nombre del conjunto asociado a la predicción. \\
+\texttt{nombre\_\allowbreak{}original} & \texttt{VARCHAR(255)} & Sí & Nombre original de la grabación enviada. \\
+\texttt{fecha\_\allowbreak{}carga} & \texttt{TIMESTAMPTZ} & Sí & Fecha de carga, cuando está disponible. \\
+\texttt{fecha\_\allowbreak{}prediccion} & \texttt{TIMESTAMPTZ} & No & Fecha de inferencia. El ORM usa la fecha y hora actual en UTC. \\
+\hline
+\end{tabular}
+
+\subsection*{\texttt{acceso\_\allowbreak{}prediccion}}
+
+Vincula una predicción con el conjunto y el usuario para aplicar controles de acceso.
+
+\noindent
+\begin{tabular}{@{}p{0.30\linewidth}p{0.16\linewidth}p{0.10\linewidth}p{0.36\linewidth}@{}}
+\hline
+\textbf{Campo} & \textbf{Tipo} & \textbf{Nulo / clave} & \textbf{Significado y reglas} \\
+\hline
+\texttt{id\_\allowbreak{}prediccion} & \texttt{INTEGER} & PK, FK & Predicción a la que corresponde el vínculo. Referencia a \texttt{prediccion}. \\
+\texttt{id\_\allowbreak{}conjunto\_\allowbreak{}datos} & \texttt{INTEGER} & FK & Conjunto asociado al resultado. Referencia a \texttt{conjunto\_\allowbreak{}datos}. \\
+\texttt{id\_\allowbreak{}usuario} & \texttt{INTEGER} & FK & Usuario que realizó la predicción. Referencia a \texttt{usuario}. \\
+\hline
+\end{tabular}
+
+\subsection*{\texttt{retroalimentacion}}
+
+Confirmación o corrección aportada sobre una predicción. Existe como máximo un registro por predicción.
+
+\noindent
+\begin{tabular}{@{}p{0.30\linewidth}p{0.16\linewidth}p{0.10\linewidth}p{0.36\linewidth}@{}}
+\hline
+\textbf{Campo} & \textbf{Tipo} & \textbf{Nulo / clave} & \textbf{Significado y reglas} \\
+\hline
+\texttt{id\_\allowbreak{}retroalimentacion} & \texttt{INTEGER} & PK & Identificador del aporte. Se genera al insertar. \\
+\texttt{id\_\allowbreak{}prediccion} & \texttt{INTEGER} & FK & Predicción revisada. Referencia a \texttt{prediccion}. \\
+\texttt{id\_\allowbreak{}usuario} & \texttt{INTEGER} & No & Identificador del autor, obtenido de la sesión en la API. \\
+\texttt{etiqueta\_\allowbreak{}corregida} & \texttt{VARCHAR(100)} & Sí & Etiqueta propuesta cuando se corrige la predicción. \\
+\texttt{fue\_\allowbreak{}correcta} & \texttt{BOOLEAN} & No & Indica si el usuario consideró correcta la etiqueta. \\
+\texttt{procesado} & \texttt{BOOLEAN} & No & Marca de procesamiento de la revisión. El ORM lo inicializa con falso. \\
+\texttt{fecha\_\allowbreak{}retroalimentacion} & \texttt{TIMESTAMPTZ} & No & Fecha del aporte. El ORM usa la fecha y hora actual en UTC. \\
+\hline
+\end{tabular}
+
+\subsection*{\texttt{feedback\_\allowbreak{}sync}}
+
+Seguimiento de la sincronización del aporte incorporado. La clave del objeto y la ruta local son únicas.
+
+\noindent
+\begin{tabular}{@{}p{0.30\linewidth}p{0.16\linewidth}p{0.10\linewidth}p{0.36\linewidth}@{}}
+\hline
+\textbf{Campo} & \textbf{Tipo} & \textbf{Nulo / clave} & \textbf{Significado y reglas} \\
+\hline
+\texttt{id\_\allowbreak{}retroalimentacion} & \texttt{INTEGER} & PK, FK & Aporte al que corresponde la sincronización. Referencia a \texttt{retroalimentacion}. \\
+\texttt{dataset\_\allowbreak{}name} & \texttt{VARCHAR(100)} & No & Nombre del conjunto de destino. \\
+\texttt{storage\_\allowbreak{}class} & \texttt{VARCHAR(100)} & No & Componente de ruta empleado para almacenar el audio por clase. \\
+\texttt{class\_\allowbreak{}label} & \texttt{VARCHAR(100)} & No & Etiqueta acústica del aporte. \\
+\texttt{object\_\allowbreak{}key} & \texttt{VARCHAR(255)} & No & Clave del objeto de destino en GCS. \\
+\texttt{local\_\allowbreak{}relative\_\allowbreak{}path} & \texttt{VARCHAR(255)} & No & Ruta relativa de la copia local. \\
+\texttt{sha256} & \texttt{VARCHAR(64)} & No & Huella SHA-256 del audio incorporado. \\
+\texttt{status} & \texttt{VARCHAR(10)} & No & Estado de sincronización. Valores pending y synced. El ORM lo inicializa con pending. \\
+\texttt{attempts} & \texttt{INTEGER} & No & Número de intentos. El ORM lo inicializa con 0. Debe ser mayor o igual a cero. \\
+\texttt{error\_\allowbreak{}code} & \texttt{VARCHAR(32)} & Sí & Código de error del intento, cuando se registra. \\
+\texttt{incorporated\_\allowbreak{}by} & \texttt{INTEGER} & Sí & Identificador de quien incorporó el aporte. \\
+\texttt{incorporated\_\allowbreak{}at} & \texttt{TIMESTAMPTZ} & Sí & Fecha de incorporación local. \\
+\hline
+\end{tabular}
+
+\section*{Importación, exportación y revisiones ZIP}
+
+\subsection*{Recepción de archivos ZIP}
+
+\noindent
+\begin{tabular}{@{}p{0.40\linewidth}p{0.55\linewidth}@{}}
+\hline
+\textbf{Tabla} & \textbf{Datos que conserva} \\
+\hline
+\texttt{dataset\_\allowbreak{}import} & Importación solicitada por un titular. Guarda la clave de solicitud, el estado, la huella del ZIP, la previsualización y el conjunto resultante. \\
+\texttt{dataset\_\allowbreak{}import\_\allowbreak{}receipt} & Reserva para recibir un ZIP. Controla el tamaño anunciado, los bytes recibidos, el tamaño del fragmento y el estado de recepción. \\
+\texttt{dataset\_\allowbreak{}import\_\allowbreak{}chunk} & Fragmento recibido, identificado por importación e índice. Registra desplazamiento, longitud y SHA-256. \\
+\texttt{dataset\_\allowbreak{}import\_\allowbreak{}chunk\_\allowbreak{}activity} & Última actividad registrada para una recepción por fragmentos. \\
+\hline
+\end{tabular}
+
+\subsection*{Previsualización y ejecución}
+
+\noindent
+\begin{tabular}{@{}p{0.40\linewidth}p{0.55\linewidth}@{}}
+\hline
+\textbf{Tabla} & \textbf{Datos que conserva} \\
+\hline
+\texttt{dataset\_\allowbreak{}import\_\allowbreak{}summary} & Resumen de una previsualización. Conserva la huella y los totales de archivos, clases, errores, advertencias y bytes. \\
+\texttt{dataset\_\allowbreak{}import\_\allowbreak{}file} & Archivo identificado en una importación. Conserva rutas, clase, tamaño, huella, metadatos acústicos y estado de sincronización. \\
+\texttt{dataset\_\allowbreak{}import\_\allowbreak{}class} & Clase identificada en la previsualización. Su nombre y orden son únicos dentro de la importación. \\
+\texttt{dataset\_\allowbreak{}import\_\allowbreak{}issue} & Incidencia detectada. Registra severidad, código, ruta y acción sugerida cuando está disponible. \\
+\texttt{dataset\_\allowbreak{}import\_\allowbreak{}job} & Trabajo durable de previsualización, confirmación o sincronización. Guarda parámetros, avance, resultado, error y control del intento. \\
+\hline
+\end{tabular}
+
+\subsection*{Conjuntos importados y revisiones}
+
+\noindent
+\begin{tabular}{@{}p{0.40\linewidth}p{0.55\linewidth}@{}}
+\hline
+\textbf{Tabla} & \textbf{Datos que conserva} \\
+\hline
+\texttt{imported\_\allowbreak{}dataset} & Conjunto privado importado. Registra titular, nombre, descripción y revisión actual. El nombre es único para el titular. \\
+\texttt{imported\_\allowbreak{}dataset\_\allowbreak{}member} & Audio miembro del conjunto importado. Guarda clase, rutas, tamaño, huella y procedencia. La ruta relativa y la huella son únicas dentro del conjunto. \\
+\texttt{imported\_\allowbreak{}dataset\_\allowbreak{}summary} & Totales de archivos, clases y bytes para la revisión registrada del conjunto. \\
+\texttt{imported\_\allowbreak{}dataset\_\allowbreak{}revision} & Revisión identificada por conjunto y número de versión. Guarda totales verificados y la clave, generación, tamaño y huella de su manifiesto. \\
+\texttt{imported\_\allowbreak{}dataset\_\allowbreak{}revision\_\allowbreak{}object} & Archivo fijado en una revisión. Conserva procedencia, ruta, clase, huella, tamaño y verificación del objeto remoto. \\
+\hline
+\end{tabular}
+
+\subsection*{Exportación y coordinación interna}
+
+\noindent
+\begin{tabular}{@{}p{0.40\linewidth}p{0.55\linewidth}@{}}
+\hline
+\textbf{Tabla} & \textbf{Datos que conserva} \\
+\hline
+\texttt{dataset\_\allowbreak{}export} & Solicitud de creación del ZIP de una revisión. Guarda estado, progreso, vencimiento y datos de integridad del archivo generado. \\
+\texttt{dataset\_\allowbreak{}export\_\allowbreak{}session} & Autorización temporal para la descarga de una exportación. Conserva titular, vencimiento y huella de la credencial. \\
+\texttt{dataset\_\allowbreak{}import\_\allowbreak{}job\_\allowbreak{}gate} & Fila de control que coordina los trabajos de importación. \\
+\texttt{dataset\_\allowbreak{}import\_\allowbreak{}receipt\_\allowbreak{}schema} & Versión del esquema de recepción de archivos. \\
+\texttt{dataset\_\allowbreak{}import\_\allowbreak{}chunk\_\allowbreak{}schema} & Versión del esquema de recepción por fragmentos. \\
+\texttt{dataset\_\allowbreak{}import\_\allowbreak{}metadata\_\allowbreak{}backfill} & Registro de la conversión de metadatos históricos. Guarda versión, huella del origen e informe. \\
+\hline
+\end{tabular}
+
+\endgroup
+
+% Fuentes: backend/migrations/schema_0002.py, schema_0003.py y schema_0004.py.
+% Valores del ORM: backend/app/models/. Validación: backend/app/schemas/evaluation.py.

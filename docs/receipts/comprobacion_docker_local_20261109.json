@@ -1,0 +1,43 @@
+{
+  "code": "docker_local_cpu_startup_verified",
+  "verified_at_utc": "2026-11-09T14:17:09.0431111Z",
+  "source_branch": "fix/afinamiento-integral",
+  "source_commit": "84ea7dfb7aa5f8e6cd173a10752a346cd07ae424",
+  "includes_local_compose_and_launcher_changes": true,
+  "source_sha256": {
+    "docker-compose.yml": "2e6d364da82996afc795f8a8c03a620e9d2796b05a2c8b004d92df50dd1e5508",
+    "iniciar_fama.sh": "15d28a7d16145f421510123a717fa0b90b6f8997b1ad7cf77ecb96a979f9d5ef"
+  },
+  "engine": "29.9.1",
+  "compose": "5.6.0",
+  "laboratory": {
+    "project": "fama-audit-1b6f31dc",
+    "database": "fama_audit",
+    "frontend_port": 13000,
+    "backend_port": 18080,
+    "web_and_backend_bound_to_loopback": true,
+    "postgres_host_ports": [],
+    "frontend_build": "Dockerfile original",
+    "backend_build": "Código actual sobre la imagen de dependencias CPU fama-integration-checks:20261024",
+    "disposable_resources_removed": true,
+    "official_login_page_after_cleanup": 200
+  },
+  "observed_checks": {
+    "postgres_without_password": {"exit_code": 2, "rejected_by_project_guard": true},
+    "postgres_with_password": {"health": "healthy", "backend_database_identity_verified": true},
+    "before_migration": {"ready_http": 503, "code": "schema_empty", "launcher_exit": 0, "launcher_reported_pending": true},
+    "after_migration": {"ready_http": 200, "code": "schema_current", "revision": "0004_integration", "launcher_exit": 0, "launcher_reported_ready": true},
+    "web": {"login_page": 200, "installation_status": "configured", "login": 200, "administrator_session": 200, "cookie_httponly": true, "logout": 204, "session_after_logout": 401}
+  },
+  "follow_up": {
+    "launcher_displays_default_urls_with_custom_ports": true,
+    "npm_audit_production_only": {"total": 3, "critical": ["next"], "high": ["sharp", "source-map-js"]},
+    "audit_findings_are_registry_reports_not_exploit_tests": true
+  },
+  "limits": [
+    "El laboratorio usó PostgreSQL desechable y una cuenta sintética creada mediante el bootstrap explícito después de migrar.",
+    "El backend usó dependencias CPU en caché. Quedan la construcción del Dockerfile completo de backend y la prueba GPU.",
+    "La comprobación web fue HTTP a través de Next.js. Queda el recorrido del asistente gestionado contra Cloud SQL y GCS reales.",
+    "Git Bash necesitó conservar /dev/null en el argumento de curl y convertir COMPOSE_FILE para Docker Desktop. WSL Ubuntu carecía de integración con el motor."
+  ]
+}

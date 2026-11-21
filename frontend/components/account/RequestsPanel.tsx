@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from 'react';
 import { listRequests, decideRequest, type RequestsPage } from '@/lib/api/datasetAccessApi';
+import { SkeletonRows } from '@/components/common/Skeleton';
+import { initialsOf } from './AccountView';
 
 export default function RequestsPanel() {
   const [page, setPage] = useState<RequestsPage | null>(null);
@@ -35,12 +37,13 @@ export default function RequestsPanel() {
   }
   return <section className="management-card" aria-label="Solicitudes de datasets"><h2>Solicitudes de datasets</h2>
     <p>Aprueba para conceder el uso y los aportes autónomos al dataset. Rechazar no concede acceso.</p>
-    <div className="management-actions"><label>Estado de solicitudes<select value={state} disabled={busy} onChange={event => { setState(event.target.value); setNotice(''); refresh(0); }}><option value="pending">Pendientes</option><option value="approved">Aprobadas</option><option value="rejected">Rechazadas</option><option value="all">Todas</option></select></label><button disabled={busy} onClick={() => refresh()}>Actualizar solicitudes</button></div>
+    <div className="management-actions management-filter"><label>Estado de solicitudes<select value={state} disabled={busy} onChange={event => { setState(event.target.value); setNotice(''); refresh(0); }}><option value="pending">Pendientes</option><option value="approved">Aprobadas</option><option value="rejected">Rechazadas</option><option value="all">Todas</option></select></label><button disabled={busy} onClick={() => refresh()}>Actualizar solicitudes</button></div>
     {error && <p role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
-    {!page && !error && <p role="status">Cargando solicitudes…</p>}
-    {page && <><div className="management-table"><table aria-label="Solicitudes de datasets"><thead><tr><th>Solicitante</th><th>Dataset</th><th>Solicitud</th><th>Decisión</th></tr></thead><tbody>
-      {page.requests.map(item => <tr key={`${item.user_id}:${item.dataset_id}`}><td>{item.user_name}<br /><span>Cuenta #{item.user_id}</span></td><td>{item.dataset_name}</td><td>{new Date(item.requested_at * 1000).toLocaleString()}</td><td>
-        {item.status === 'pending' ? <div className="management-actions"><button className="management-primary" disabled={busy} onClick={() => void decide(item.user_id, item.dataset_id, 'approve')}>Aprobar acceso</button><button disabled={busy} onClick={() => void decide(item.user_id, item.dataset_id, 'reject')}>Rechazar solicitud</button></div> : <><p>{item.status === 'approved' ? 'Aprobada' : 'Rechazada'}</p><span>Por cuenta #{item.decided_by}{item.decided_at ? ` · ${new Date(item.decided_at * 1000).toLocaleString()}` : ''}</span></>}
+    {!page && !error && <><p role="status">Cargando solicitudes…</p><SkeletonRows rows={3} /></>}
+    {page && <><div className="management-table"><table aria-label="Solicitudes de datasets"><thead><tr><th>Solicitante</th><th>Dataset</th><th>Solicitud</th><th>Estado</th><th>Decisión</th></tr></thead><tbody>
+      {page.requests.map(item => <tr key={`${item.user_id}:${item.dataset_id}`}><td><div className="person-cell"><span className="person-avatar" aria-hidden="true">{initialsOf(item.user_name)}</span><div>{item.user_name}<br /><span>Cuenta #{item.user_id}</span></div></div></td><td>{item.dataset_name}</td><td>{new Date(item.requested_at * 1000).toLocaleString()}</td>
+        <td><span className={`account-badge ${item.status === 'pending' ? 'account-badge-suspended' : item.status === 'approved' ? 'account-badge-active' : 'account-badge-rejected'}`}>{item.status === 'pending' ? 'Pendiente' : item.status === 'approved' ? 'Aprobada' : 'Rechazada'}</span></td><td>
+        {item.status === 'pending' ? <div className="management-actions management-actions-tight"><button className="management-primary" disabled={busy} onClick={() => void decide(item.user_id, item.dataset_id, 'approve')}>Aprobar acceso</button><button className="management-danger" disabled={busy} onClick={() => void decide(item.user_id, item.dataset_id, 'reject')}>Rechazar solicitud</button></div> : <span>Por cuenta #{item.decided_by}{item.decided_at ? ` · ${new Date(item.decided_at * 1000).toLocaleString()}` : ''}</span>}
       </td></tr>)}
     </tbody></table></div>{page.requests.length === 0 && <p>No hay solicitudes con este estado.</p>}
       <div className="management-actions"><button disabled={busy || offset === 0} onClick={() => refresh(Math.max(0, offset - 20))}>Solicitudes anteriores</button><span>{page.total} solicitudes</span><button disabled={busy || offset + page.requests.length >= page.total} onClick={() => refresh(offset + 20)}>Solicitudes siguientes</button></div></>}

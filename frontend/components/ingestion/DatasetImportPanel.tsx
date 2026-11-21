@@ -62,8 +62,8 @@ const statusLabels: Record<string, string> = {
   ready: "lista para confirmar", committing: "confirmando; reintento recuperable", imported: "importada",
   failed: "fallida", cancelled: "cancelada",
 };
-const inputClass = "mt-1 block w-full rounded-lg border border-[#2d303b] bg-[#111215] px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500";
-const buttonClass = "rounded-lg border border-emerald-800/60 bg-emerald-950/40 px-3 py-2 text-xs font-semibold text-emerald-400 hover:bg-emerald-900/50 transition-colors focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed";
+const inputClass = "mt-1 block w-full rounded-lg border border-[#2d303b] bg-[#111215] px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500";
+const buttonClass = "rounded-lg border border-blue-700/60 bg-blue-950/40 px-3 py-2 text-xs font-semibold text-blue-300 hover:bg-blue-900/50 transition-colors focus-visible:outline-2 focus-visible:outline-blue-300 disabled:opacity-40 disabled:cursor-not-allowed";
 
 export default function DatasetImportPanel({ onCatalogChange, onPublishingChange, triggerLabel = "Importar dataset", datasetNames = {} }: {
   onCatalogChange?: () => void; triggerLabel?: string; datasetNames?: Record<string, string>;
@@ -274,7 +274,7 @@ export default function DatasetImportPanel({ onCatalogChange, onPublishingChange
       <svg aria-hidden="true" className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M12 16V4m-4 4l4-4 4 4" /></svg>
       {triggerLabel}
     </button>
-    {open && createPortal(<div data-testid="dataset-import-backdrop" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={event => {
+    {open && createPortal(<div data-testid="dataset-import-backdrop" className="fama-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={event => {
       if (event.target === event.currentTarget) setOpen(false);
     }}>
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className="w-full max-w-3xl max-h-[90dvh] overflow-y-auto rounded-2xl border border-[#23252e] bg-[#16171b] text-xs text-gray-300 shadow-2xl">

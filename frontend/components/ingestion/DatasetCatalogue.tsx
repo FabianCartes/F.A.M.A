@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from 'react';
 import { listCatalogue, requestAccess, type CataloguePage } from '@/lib/api/datasetAccessApi';
+import { SkeletonRows } from '@/components/common/Skeleton';
 
 export default function DatasetCatalogue() {
   const [page, setPage] = useState<CataloguePage | null>(null);
@@ -29,7 +30,7 @@ export default function DatasetCatalogue() {
     <div className="flex justify-between gap-3"><h2 className="font-semibold text-gray-100">Datasets disponibles</h2><button className={button} disabled={busy} onClick={() => refresh()}>Actualizar catálogo</button></div>
     <p className="text-xs text-gray-400">Consulta los metadatos registrados y solicita acceso. Los audios y las operaciones se habilitan cuando el administrador concede la asignación.</p>
     {error && <p role="alert" className="text-red-300">{error}</p>}
-    {!page && !error && <p role="status">Cargando catálogo…</p>}
+    {!page && !error && <><p role="status">Cargando catálogo…</p><SkeletonRows rows={3} /></>}
     {page && <><div className="overflow-x-auto"><table className="w-full text-left text-xs" aria-label="Datasets disponibles"><thead><tr><th className="p-2">Dataset y finalidad</th><th className="p-2">Audios registrados</th><th className="p-2">Tu acceso</th></tr></thead><tbody>
       {page.datasets.map(item => <tr key={item.dataset_id} className="border-t border-[#23252e]"><td className="p-2"><strong className="text-gray-100">{item.name}</strong><p className="text-gray-400 mt-1">{item.purpose}</p></td><td className="p-2">{item.audio_count}</td><td className="p-2">
         {item.assigned ? <span className="text-emerald-300">Asignado</span> : item.request_status === 'pending' ? <span className="text-amber-300">Solicitud pendiente</span> : <>

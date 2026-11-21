@@ -146,7 +146,7 @@ export default function DatasetUpload({ datasets, canCreate, busy, onUploaded, o
         <label className="sm:col-span-2">Audios<input ref={fileInput} type="file" multiple accept=".wav,.mp3,.flac,.ogg" onChange={event => { setFiles(Array.from(event.target.files ?? [])); setError(""); setMessage(""); }} className={inputStyle} /></label>
       </fieldset>
       {files.length > 0 && <p className="text-xs text-gray-400">{files.length} archivo(s) seleccionado(s): {files.map(file => file.name).join(", ")}</p>}
-      <button type="submit" disabled={busy || uploading || limits === null || !allowed || !dataset || !classLabel || files.length === 0} className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed">{uploading ? "Subiendo audios…" : "Subir audios a GCS"}</button>
+      <button type="submit" disabled={busy || uploading || limits === null || !allowed || !dataset || !classLabel || files.length === 0} className="px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed">{uploading ? "Subiendo audios…" : "Subir audios a GCS"}</button>
       {uploading && <p role="status" className="text-xs text-gray-400">Enviando los archivos seleccionados. La confirmación aparecerá al terminar.</p>}
       {message && <p role="status" className="text-xs text-gray-300">{message}</p>}
       {error && <p role="alert" className="text-xs text-red-300">{error}</p>}

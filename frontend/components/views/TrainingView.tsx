@@ -21,6 +21,7 @@ import DatasetConfirmationDialog from "@/components/ingestion/DatasetConfirmatio
 import { PARAMETER_EXPLANATIONS } from "@/lib/constants/parameterExplanations";
 import { groupTriadHistory, jointMetric, jointStatusLabel, type TriadHistoryGroup } from "@/components/training/triadHistory";
 import JointEvaluationSection from "@/components/training/JointEvaluationSection";
+import DefaultModelControl from "@/components/training/DefaultModelControl";
 
 // ============================================================================
 // INTERFACES DEL DOMINIO DE ENTRENAMIENTO (RF_04, CU_INV_02, CU_INV_03)
@@ -2358,7 +2359,7 @@ export default function TrainingView() {
 
                 {/* SVG Curves */}
                 <div className="flex-1 w-full relative mt-2">
-                  <svg className="w-full h-full overflow-visible" viewBox="0 0 300 100" preserveAspectRatio="none">
+                  <svg className="fama-chart w-full h-full overflow-visible" viewBox="0 0 300 100" preserveAspectRatio="none">
                     {/* Guías de cuadrícula */}
                     <line x1="0" y1="20" x2="300" y2="20" stroke="#1f2128" strokeDasharray="3 3" />
                     <line x1="0" y1="50" x2="300" y2="50" stroke="#1f2128" strokeDasharray="3 3" />
@@ -2595,7 +2596,11 @@ export default function TrainingView() {
                         onSynced={action => { checkpointSync.markSynced(item.id); if (action === "restored") void fetchHistory(); }} />
                     </td>
                     <td className="text-right md:py-3 md:pr-2">
-                      <TechnicalSheetButton onClick={() => { setSelectedGroup(null); setSelectedModelModal(item); }} />
+                      <div className="inline-flex flex-wrap items-start justify-end gap-2">
+                        <DefaultModelControl kind="model" id={item.id} active={item.active === true}
+                          administrator={session?.rol === "administrador"} onActivated={fetchHistory} />
+                        <TechnicalSheetButton onClick={() => { setSelectedGroup(null); setSelectedModelModal(item); }} />
+                      </div>
                     </td>
                   </tr>
                 );
@@ -2626,7 +2631,11 @@ export default function TrainingView() {
                     onSynced={(modelId, action) => { checkpointSync.markSynced(modelId); if (action === "restored") void fetchHistory(); }} />
                 </td>
                 <td className="text-right md:py-3 md:pr-2">
-                  <TechnicalSheetButton onClick={() => { setSelectedGroup(group); setSelectedModelModal(group.members[0]); }} />
+                  <div className="inline-flex flex-wrap items-start justify-end gap-2">
+                    <DefaultModelControl kind="triad" id={group.composition.id} active={group.composition.active === true}
+                      administrator={session?.rol === "administrador"} onActivated={fetchHistory} />
+                    <TechnicalSheetButton onClick={() => { setSelectedGroup(group); setSelectedModelModal(group.members[0]); }} />
+                  </div>
                 </td>
               </tr>;
               })}
@@ -2638,9 +2647,9 @@ export default function TrainingView() {
         {selectedModelModal && (
           <div
             data-testid="modal-ficha-tecnica"
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+            className="fama-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
           >
-            <div className="bg-[#16171b] border border-[#2d303b] rounded-2xl max-w-2xl md:max-w-4xl lg:max-w-5xl w-full p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="fama-modal bg-[#16171b] border border-[#2d303b] rounded-2xl max-w-2xl md:max-w-4xl lg:max-w-5xl w-full p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
               {/* Header */}
               <div className="flex items-start justify-between pb-3 border-b border-[#23252e]">
                 <div>

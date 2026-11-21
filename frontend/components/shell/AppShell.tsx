@@ -89,7 +89,7 @@ export default function AppShell({ sidebar, onNavigate, children }: AppShellProp
   }, []);
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-[#0e0f12] font-sans text-gray-100">
+    <div className="flex h-dvh overflow-hidden bg-[#080910] font-sans text-gray-100">
       <div
         data-testid="app-shell-scrim"
         aria-hidden={!isSidebarOpen}
@@ -111,7 +111,7 @@ export default function AppShell({ sidebar, onNavigate, children }: AppShellProp
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="relative z-40 flex items-center gap-3 border-b border-[#1f2128] bg-[#121316] px-3 py-2 md:hidden">
+        <header className="relative z-40 flex items-center gap-3 border-b border-[#1f2128] bg-[#0c0d16] px-3 py-2 md:hidden">
           <button
             type="button"
             onClick={() => setIsSidebarOpen((open) => !open)}
@@ -133,8 +133,9 @@ export default function AppShell({ sidebar, onNavigate, children }: AppShellProp
           <span className="font-heading text-sm font-bold tracking-tight text-white">F.A.M.A.</span>
         </header>
 
-        <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6 lg:p-8">
-          <div className="mx-auto w-full max-w-7xl">{children}</div>
+        {/* Brillos tenues del fondo del login, solo en la cabecera de cada vista. */}
+        <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6 lg:p-8 bg-[radial-gradient(ellipse_60%_320px_at_88%_0%,#424aff1f,transparent_70%),radial-gradient(ellipse_50%_280px_at_18%_0%,#cb49ff14,transparent_70%)]">
+          <div className="fama-view mx-auto w-full max-w-7xl">{children}</div>
         </main>
       </div>
     </div>

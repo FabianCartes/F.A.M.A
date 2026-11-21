@@ -954,7 +954,7 @@ def get_training_history(request: Request, response: Response, db: Session = Dep
         architectures = component_architectures(composition, models_by_id)
         dataset = db.get(ConjuntoDatos, composition.dataset_id)
         compositions.append({"id": composition.id, "version": composition.version,
-                             "job_id": composition.job_id,
+                             "job_id": composition.job_id, "active": bool(composition.activo),
                              "name": triad_display_name(dataset_label(getattr(dataset, "nombre", None)),
                                                         ordinals[composition.id], architectures),
                              "architectures": architectures,

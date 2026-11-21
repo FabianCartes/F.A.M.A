@@ -769,7 +769,7 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
         <p>La descarga compara el contenido y omite los audios que ya coinciden.{pendingSync.estimatedSize ? ` Tamaño máximo: ${pendingSync.estimatedSize}.` : ""} No inicia ningún entrenamiento.</p>
         <div className="flex justify-end gap-2">
           <button type="button" onClick={closeSyncDialog} className="px-3 py-2 rounded-lg border border-[#373a46] text-xs text-gray-200 hover:bg-[#23252e]">Cancelar</button>
-          <button type="button" onClick={() => void startSync(pendingSync.targets)} className="px-3 py-2 rounded-lg bg-emerald-600 text-xs font-semibold text-white hover:bg-emerald-500">Descargar</button>
+          <button type="button" onClick={() => void startSync(pendingSync.targets)} className="px-3 py-2 rounded-lg bg-blue-600 text-xs font-semibold text-white hover:bg-blue-500">Descargar</button>
         </div>
       </DatasetConfirmationDialog>}
       {transferStatus && <p role={transferStatus.error ? "alert" : "status"} className={`text-xs break-words ${transferStatus.error ? "text-amber-300" : "text-gray-300"}`}>{transferStatus.message}</p>}
@@ -936,7 +936,7 @@ export default function IngestionView({ onNavigate, administrator = true }: Inge
                             type="button"
                             onClick={() => handleApprove(item)}
                             disabled={processingFeedbackId !== null || !canIncorporate}
-                            className="justify-center px-2.5 py-2 md:py-1 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 transition-colors shadow-sm flex items-center gap-1 cursor-pointer"
+                            className="justify-center px-2.5 py-2 md:py-1 rounded-lg text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-40 transition-colors shadow-sm flex items-center gap-1 cursor-pointer"
                           >
                             {isProcessing ? (
                               <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">

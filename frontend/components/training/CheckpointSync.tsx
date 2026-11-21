@@ -84,7 +84,7 @@ async function requestSync(modelId: number, signal: AbortSignal): Promise<Attemp
 }
 
 const SYNCED_STYLE = "bg-emerald-950/60 text-emerald-300 border-emerald-800/60 hover:border-emerald-600";
-const PENDING_STYLE = "bg-emerald-600 text-white font-semibold border-emerald-600 hover:bg-emerald-500";
+const PENDING_STYLE = "bg-blue-600 text-white font-semibold border-blue-600 hover:bg-blue-500";
 const BUTTON_STYLE = "text-[11px] px-2.5 py-1 rounded border transition-colors disabled:opacity-50 disabled:cursor-wait";
 
 export function CheckpointSyncButton({ modelId, synced, remoteOnly = false, onSynced }: {
@@ -190,7 +190,7 @@ export function TriadCheckpointSyncButton({ models, allSynced, remoteOnly = fals
         </div>}
       <div className="flex justify-end gap-2">
         {!ok && <button type="button" onClick={() => void synchronize(failures)}
-          className="text-xs px-3 py-2 rounded-lg border border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-500">Reintentar</button>}
+          className="text-xs px-3 py-2 rounded-lg border border-blue-600 bg-blue-600 text-white hover:bg-blue-500">Reintentar</button>}
         <button type="button" onClick={close}
           className="text-xs px-3 py-2 rounded-lg border border-[#2d303b] bg-[#1c1e24] text-gray-200 hover:bg-[#252832]">Cerrar</button>
       </div>

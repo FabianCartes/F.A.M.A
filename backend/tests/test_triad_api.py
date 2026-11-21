@@ -426,6 +426,16 @@ def test_an_administrator_activates_the_composition_as_the_default_model(triad_e
     assert env.registry.get_default_model_id() == triad_key()
 
 
+def test_the_history_reports_which_composition_is_the_default(triad_env):
+    env = triad_env
+    assert login(env.client, "administrador").status_code == 200
+    composition, = env.client.get("/api/training/history").json()["compositions"]
+    assert composition["active"] is False
+    assert activate_triad(env).status_code == 200
+    composition, = env.client.get("/api/training/history").json()["compositions"]
+    assert composition["active"] is True
+
+
 def test_activating_a_model_afterwards_deactivates_the_composition(triad_env):
     env = triad_env
     assert login(env.client, "administrador").status_code == 200
