@@ -247,11 +247,3 @@ export const HistoryResponseSchema = z.object({
   history: z.array(ModelHistoryItemSchema),
 });
 export type HistoryResponse = z.infer<typeof HistoryResponseSchema>;
-
-export const ActivateModelResponseSchema = z.object({
-  success: z.boolean(),
-  active_model_id: z.number().optional(),
-  architecture: z.string().optional(),
-  error: z.string().optional(),
-});
-export type ActivateModelResponse = z.infer<typeof ActivateModelResponseSchema>;

@@ -7,7 +7,6 @@ import {
   getProgress,
   stopTraining,
   getHistory,
-  activateModel,
   ApiConnectionError,
   TrainingBusyError,
   ValidationError,
@@ -502,42 +501,6 @@ describe("trainingApi (TDD Contract Tests)", () => {
       expect(history[0].dataset).toBe("Aves Chilenas");
       expect(history[0].version).toBe(3);
       expect(history[0].active).toBe(true);
-    });
-  });
-
-  describe("activateModel", () => {
-    it("activates target model successfully", async () => {
-      const mockActivateResponse = {
-        success: true,
-        active_model_id: 1,
-        architecture: "Super-Ensamble Tri-Modelo",
-      };
-
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: async () => mockActivateResponse,
-      });
-
-      const res = await activateModel(1);
-
-      expect(global.fetch).toHaveBeenCalledWith(
-        `${API_BASE_URL}/api/training/models/1/activate`,
-        expect.objectContaining({ method: "POST" })
-      );
-      expect(res.success).toBe(true);
-      expect(res.active_model_id).toBe(1);
-    });
-
-    it("throws ApiConnectionError when activate returns 500", async () => {
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: false,
-        status: 500,
-        statusText: "Server Error",
-        json: async () => ({ detail: "Database lock" }),
-      });
-
-      await expect(activateModel(99)).rejects.toThrow(ApiConnectionError);
     });
   });
 

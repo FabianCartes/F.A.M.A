@@ -17,8 +17,6 @@ import {
   StopTrainingResponseSchema,
   ModelHistoryItem,
   HistoryResponseSchema,
-  ActivateModelResponse,
-  ActivateModelResponseSchema,
 } from "@/lib/schemas/training";
 import { ZodError } from "zod";
 
@@ -199,15 +197,4 @@ export async function getHistory(): Promise<ModelHistoryItem[]> {
     (data) => HistoryResponseSchema.parse(data)
   );
   return result.history;
-}
-
-/**
- * Marca un modelo como el activo para inferencia acústica.
- */
-export async function activateModel(modelId: number): Promise<ActivateModelResponse> {
-  return request(
-    `${API_BASE_URL}/api/training/models/${modelId}/activate`,
-    { method: "POST" },
-    (data) => ActivateModelResponseSchema.parse(data)
-  );
 }
