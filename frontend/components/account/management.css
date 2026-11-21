@@ -40,6 +40,7 @@
 .management th { color: #a3a7bc; font-weight: 600; font-size: .75rem; }
 .management td { color: #dedeea; overflow-wrap: anywhere; }
 .management td > span { color: #a3a7bc; font-size: .75rem; }
+.management td .account-badge, .management td button { white-space: nowrap; overflow-wrap: normal; }
 .management tbody tr { transition: background-color 160ms ease; }
 .management tbody tr:hover { background: #15162266; }
 .management tr[data-selected=true] { background: #1a1633; }
