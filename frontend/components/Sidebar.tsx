@@ -123,8 +123,15 @@ export default function Sidebar({
     },
   ];
 
-  navItems.push({ id: "cuenta", label: "Mi cuenta", icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4" /><path d="M4 21v-2a8 8 0 0116 0v2" /></svg> });
-  if (role === "administrador") navItems.push({ id: "administracion", label: "Administración", icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4v5c0 5-8 9-8 9s-8-4-8-9V7z" /><path d="M8 12l3 3 5-6" /></svg> });
+  const accountItems: typeof navItems = [
+    { id: "cuenta", label: "Mi cuenta", icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4" /><path d="M4 21v-2a8 8 0 0116 0v2" /></svg> },
+  ];
+  if (role === "administrador") accountItems.push({ id: "administracion", label: "Administración", icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4v5c0 5-8 9-8 9s-8-4-8-9V7z" /><path d="M8 12l3 3 5-6" /></svg> });
+
+  const groups = [
+    { id: "flujo", label: "Flujo", items: navItems },
+    { id: "cuenta", label: "Cuenta", items: accountItems },
+  ];
 
   const feedbackBadgeClass =
     pendingFeedbackCount === 0
@@ -132,7 +139,7 @@ export default function Sidebar({
       : "bg-amber-950/70 border-amber-700/60 text-amber-400";
 
   return (
-    <aside className="w-full h-full min-w-0 bg-[#121316] border-r border-[#1f2128] flex flex-col justify-between select-none overflow-x-hidden">
+    <aside className="w-full h-full min-w-0 bg-[#0c0d16] border-r border-[#1f2128] flex flex-col justify-between select-none overflow-x-hidden">
       {/* Top Section: Logo & Nav */}
       <div className="min-w-0 min-h-0 overflow-y-auto overflow-x-hidden">
         {/* Cabecera de la barra lateral con Logo F.A.M.A. y Botón de Colapso */}
@@ -184,46 +191,59 @@ export default function Sidebar({
           </button>
         </div>
 
-        {/* Navigation Items */}
+        {/* Navigation Items: workflow destinations apart from account destinations */}
         <nav
           aria-label="Navegación principal"
-          className={`p-3 space-y-1.5 mt-2 ${isCollapsed ? "md:px-1.5" : ""}`}
+          className={`p-3 mt-2 space-y-5 ${isCollapsed ? "md:px-1.5" : ""}`}
         >
-          {navItems.map((item) => {
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                id={`nav-${item.id}`}
-                type="button"
-                aria-current={isActive ? "page" : undefined}
-                onClick={() => onSelectTab(item.id)}
-                title={isCollapsed ? item.label : undefined}
-                className={`group relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium cursor-pointer transition-all ${
-                  isCollapsed ? "md:gap-0 md:justify-center md:px-0" : ""
-                } ${
-                  isActive
-                    ? "bg-[#1d1f26] text-white border border-[#2e323e] shadow-sm"
-                    : "text-gray-400 hover:text-gray-200 hover:bg-[#18191e]"
+          {groups.map((group) => (
+            <div key={group.id} role="group" aria-labelledby={`nav-group-${group.id}`} className="space-y-1">
+              <p
+                id={`nav-group-${group.id}`}
+                className={`px-3 pb-1 font-heading text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500 ${
+                  isCollapsed ? "md:sr-only" : ""
                 }`}
               >
-                <span className={isActive ? "text-white" : "text-gray-400"}>
-                  {item.icon}
-                </span>
-                <span className={isCollapsed ? "md:sr-only" : ""}>{item.label}</span>
-              </button>
-            );
-          })}
+                {group.label}
+              </p>
+              {group.items.map((item) => {
+                const isActive = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    id={`nav-${item.id}`}
+                    type="button"
+                    aria-current={isActive ? "page" : undefined}
+                    onClick={() => onSelectTab(item.id)}
+                    title={isCollapsed ? item.label : undefined}
+                    className={`group relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-semibold cursor-pointer transition-all ${
+                      isCollapsed ? "md:gap-0 md:justify-center md:px-0" : ""
+                    } ${
+                      isActive
+                        ? "bg-[#1a1633] text-white ring-1 ring-inset ring-[#3b2e7a]"
+                        : "text-gray-400 hover:text-white hover:bg-[#151622]"
+                    }`}
+                  >
+                    <span className={`transition-colors ${isActive ? "text-purple-400" : "text-gray-500 group-hover:text-gray-300"}`}>
+                      {item.icon}
+                    </span>
+                    <span className={isCollapsed ? "md:sr-only" : ""}>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </nav>
       </div>
 
       {/* Bottom Section: System Status Badges */}
+      <div className={`shrink-0 p-3 space-y-3 text-[11px] ${isCollapsed ? "md:p-2" : ""}`}>
+        <SidebarSession isCollapsed={isCollapsed} onToggleCollapsed={onToggleCollapsed} />
       <div
-        className={`shrink-0 border-t border-[#1f2128] space-y-2 text-[11px] p-4 ${
-          isCollapsed ? "md:p-2" : ""
+        className={`rounded-xl border border-[#1e2030] bg-[#10111b] space-y-2.5 p-3 ${
+          isCollapsed ? "md:p-2 md:border-transparent md:bg-transparent" : ""
         }`}
       >
-        <SidebarSession isCollapsed={isCollapsed} onToggleCollapsed={onToggleCollapsed} />
         {/* GCP Status */}
         <div
           className={`flex items-center justify-between ${isCollapsed ? "md:justify-center md:gap-1.5" : ""}`}
@@ -358,6 +378,7 @@ export default function Sidebar({
             {pendingFeedbackCount}
           </span>
         </div>
+      </div>
       </div>
     </aside>
   );

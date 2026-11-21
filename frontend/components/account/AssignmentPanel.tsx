@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { listAssignments, setAssignment, type AccountUser } from "@/lib/api/accountApi";
+import { SkeletonRows } from "@/components/common/Skeleton";
 
 export default function AssignmentPanel({ person }: { person: AccountUser }) {
   const globalAccess = person.rol === "administrador";
@@ -35,7 +36,7 @@ export default function AssignmentPanel({ person }: { person: AccountUser }) {
       : <p className="account-note">Elige los datasets que podrá utilizar esta persona. Cada botón aplica el permiso de inmediato, sin guardar el perfil.</p>}
     {!person.activo && <p className="account-note account-note-warning">La cuenta está suspendida. Podrá utilizar sus permisos cuando se reactive.</p>}
     {error && <p role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
-    {!page && !error && <p role="status">Cargando asignaciones…</p>}
+    {!page && !error && <><p role="status">Cargando asignaciones…</p><SkeletonRows rows={3} /></>}
     {page && <><ul className="account-dataset-list" aria-label="Datasets registrados">
       {page.datasets.map((dataset) => <li key={dataset.dataset_id} className="account-dataset" data-access={globalAccess || dataset.assigned}>
         <div className="account-dataset-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v7c0 4 16 4 16 0V5M4 12v7c0 4 16 4 16 0v-7" /></svg></div>

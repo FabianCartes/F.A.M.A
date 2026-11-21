@@ -58,6 +58,6 @@ describe("RootLayout public metadata contract (App Router head)", () => {
   });
 
   it("paints the browser chrome with the platform background color", () => {
-    expect(viewport.themeColor).toBe("#030712");
+    expect(viewport.themeColor).toBe("#080910");
   });
 });

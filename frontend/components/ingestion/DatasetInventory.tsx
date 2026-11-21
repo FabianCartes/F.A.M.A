@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import DatasetConfirmationDialog from "./DatasetConfirmationDialog";
+import { SkeletonRows } from "@/components/common/Skeleton";
 import { verifyDatasetContent } from "@/lib/api/ingestionApi";
 import type { ContentCheck } from "@/lib/schemas/ingestion";
 
@@ -122,7 +123,7 @@ function ContentStatus({ name, check, error, verifying, disabled, canVerify, onV
     {canVerify && <button type="button" onClick={onVerify} disabled={disabled} aria-label={`Verificar contenido de ${name}`}
       className="text-[10px] text-blue-300 hover:text-blue-200 underline underline-offset-2 disabled:opacity-40">{verifying ? "Verificando…" : "Verificar contenido"}</button>}
     {check && correctable(check) && <div><button type="button" onClick={onCorrect} disabled={disabled} aria-label={`Corregir descargando desde GCS ${name}`}
-      className="text-[10px] text-emerald-300 hover:text-emerald-200 underline underline-offset-2 disabled:opacity-40">Corregir descargando desde GCS</button></div>}
+      className="text-[10px] text-blue-300 hover:text-blue-200 underline underline-offset-2 disabled:opacity-40">Corregir descargando desde GCS</button></div>}
   </div>;
 }
 
@@ -167,7 +168,7 @@ export default function DatasetInventory({ datasets, loading, busy, onRefresh, o
           <th className="p-2 font-medium text-right">Acción</th>
         </tr></thead>
         <tbody className="divide-y divide-[#23252e]/60">
-          {loading ? <tr><td colSpan={7} className="p-6 text-center text-gray-400">Consultando datasets…</td></tr>
+          {loading ? <tr><td colSpan={7} className="p-6 text-center text-gray-400">Consultando datasets…<SkeletonRows rows={3} className="mt-4" /></td></tr>
             : datasets.length === 0 ? <tr><td colSpan={7} className="p-6 text-center text-gray-400">No hay datasets disponibles para esta cuenta.</td></tr>
               : datasets.map(item => {
                 const cloud = cloudCount(item);
@@ -202,7 +203,7 @@ export default function DatasetInventory({ datasets, loading, busy, onRefresh, o
     <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-[#23252e]">
       <span className="text-xs text-gray-400">{selection.length} dataset(s) seleccionado(s)</span>
       <div className="flex gap-2 flex-wrap">
-        <button type="button" disabled={busy || !downloadable} onClick={() => onDownload(selection.map(item => item.id))} className="px-3 py-2 rounded-lg bg-emerald-600 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed">Descargar desde GCS</button>
+        <button type="button" disabled={busy || !downloadable} onClick={() => onDownload(selection.map(item => item.id))} className="px-3 py-2 rounded-lg bg-blue-600 text-xs font-semibold text-white hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed">Descargar desde GCS</button>
       </div>
     </div>
     {anySelected && !downloadable && <p className="text-xs text-gray-500">Para descargar, selecciona únicamente colecciones con audios en el bucket actual.</p>}

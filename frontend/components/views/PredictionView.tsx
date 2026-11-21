@@ -5,6 +5,7 @@ import PredictionModelSelector, { TriadModelBadges, triadModelDetails } from "@/
 import TriadCompositionPanel from "@/components/prediction/TriadCompositionPanel";
 import { triadCompositionId } from "@/lib/api/triadCompositions";
 import InfoTooltip from "@/components/common/InfoTooltip";
+import { SkeletonRows } from "@/components/common/Skeleton";
 
 import { useState, useEffect, useMemo, useRef, useCallback, ChangeEvent, FormEvent } from "react";
 import { API_BASE_URL, apiFetch as fetch } from "@/lib/api";
@@ -503,8 +504,9 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
   const [availableModels, setAvailableModels] = useState<RegisteredModel[]>([]);
   const [selectionState, setSelectionState] = useState({ modelId: "", evaluationDialogOpen: false, evaluationDialogModelId: null as string | null });
   const selectedModelId = selectionState.modelId;
+  // Latest selection, read by inference callbacks that resolve after the user may have switched models.
   const historySelectedModel = useRef(selectedModelId);
-  historySelectedModel.current = selectedModelId;
+  useEffect(() => { historySelectedModel.current = selectedModelId; }, [selectedModelId]);
   const [catalogueError, setCatalogueError] = useState<string | null>(null);
   const [catalogueLoaded, setCatalogueLoaded] = useState(false);
   const [evaluationCatalogueStatus, setEvaluationCatalogueStatus] = useState<"available" | "unavailable" | "legacy">("legacy");
@@ -881,45 +883,61 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const historyRequest = useRef<{ sequence: number; controller: AbortController | null }>({ sequence: 0, controller: null });
-  const loadHistory = useCallback(async (cursor: number | null = null) => {
-    if (!sessionCurrent() || !selectedModelId || !privateApiSameOrigin()) return;
+  // Fetches one page and only touches state once the response settles; callers announce the loading state.
+  const fetchHistoryPage = useCallback((cursor: number | null): Promise<void> => {
+    if (!sessionCurrent() || !selectedModelId || !privateApiSameOrigin()) return Promise.resolve();
     historyRequest.current.controller?.abort();
     const controller = new AbortController();
     const sequence = ++historyRequest.current.sequence;
     historyRequest.current.controller = controller;
-    setHistoryLoading(true);
-    setHistoryError(null);
-    try {
-      const page = await getPredictionHistory(selectedModelId, controller.signal, cursor);
-      if (!sessionCurrent() || controller.signal.aborted || sequence !== historyRequest.current.sequence) return;
-      const records: HistoryItem[] = page.items.map(item => ({
-        id: item.id, filename: item.filename, timestamp: new Date(item.timestamp).toLocaleString(),
-        clase: item.clase, confianza: item.confianza, modelo: selectedModel?.name || item.modelo_id,
-      }));
-      setHistory(previous => cursor === null ? records : [...previous,
-        ...records.filter(item => !previous.some(existing => existing.id === item.id))]);
-      setHistoryModel(selectedModelId);
-      setHistoryCursor(page.next_cursor);
-    } catch (error) {
-      if (sessionCurrent() && !controller.signal.aborted && sequence === historyRequest.current.sequence)
-        setHistoryError(error instanceof Error ? error.message : 'No se pudo cargar el historial.');
-    } finally {
-      if (sessionCurrent() && !controller.signal.aborted && sequence === historyRequest.current.sequence)
-        setHistoryLoading(false);
-    }
+    const latest = () => sessionCurrent() && !controller.signal.aborted && sequence === historyRequest.current.sequence;
+    return getPredictionHistory(selectedModelId, controller.signal, cursor)
+      .then((page) => {
+        if (!latest()) return;
+        const records: HistoryItem[] = page.items.map(item => ({
+          id: item.id, filename: item.filename, timestamp: new Date(item.timestamp).toLocaleString(),
+          clase: item.clase, confianza: item.confianza, modelo: selectedModel?.name || item.modelo_id,
+        }));
+        setHistory(previous => cursor === null ? records : [...previous,
+          ...records.filter(item => !previous.some(existing => existing.id === item.id))]);
+        setHistoryModel(selectedModelId);
+        setHistoryCursor(page.next_cursor);
+      })
+      .catch((error) => {
+        if (latest()) setHistoryError(error instanceof Error ? error.message : 'No se pudo cargar el historial.');
+      })
+      .finally(() => {
+        if (latest()) setHistoryLoading(false);
+      });
   }, [selectedModelId, selectedModel?.name, sessionCurrent]);
 
-  useEffect(() => {
+  const loadHistory = useCallback(async (cursor: number | null = null) => {
+    if (!sessionCurrent() || !selectedModelId || !privateApiSameOrigin()) return;
+    setHistoryLoading(true);
+    setHistoryError(null);
+    await fetchHistoryPage(cursor);
+  }, [fetchHistoryPage, selectedModelId, sessionCurrent]);
+
+  // Reset the history view while rendering a new model or session, instead of after it was painted.
+  // The key mirrors what the history request depends on, so the reset happens exactly when it did before.
+  const historyKey = `${selectedModelId}\u0000${selectedModel?.name ?? ""}\u0000${authenticated}`;
+  const [historyResetFor, setHistoryResetFor] = useState(historyKey);
+  if (historyResetFor !== historyKey) {
+    setHistoryResetFor(historyKey);
     setHistory([]);
     setHistoryModel(selectedModelId);
     setHistoryCursor(null);
     setHistoryError(null);
-    setHistoryLoading(false);
+    setHistoryLoading(Boolean(selectedModelId && authenticated && typeof window !== "undefined" && privateApiSameOrigin()));
     setSearchTerm('');
     setClassFilter('all');
-    void loadHistory();
-    return () => { historyRequest.current.controller?.abort(); historyRequest.current.sequence++; };
-  }, [loadHistory, selectedModelId]);
+  }
+
+  useEffect(() => {
+    const request = historyRequest.current;
+    void fetchHistoryPage(null);
+    return () => { request.controller?.abort(); request.sequence++; };
+  }, [fetchHistoryPage]);
 
 
   const handleFileSelection = useCallback(
@@ -1420,7 +1438,7 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
             </button>
           </section>
           {evaluationDialogVisible && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 sm:p-6">
+            <div className="fama-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-6">
               <div
                 ref={evaluationDialogRef}
                 role="dialog"
@@ -1608,15 +1626,15 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
                 <>
                   <svg
                     viewBox="0 0 500 120"
-                    className="w-full h-24 overflow-hidden cursor-pointer"
+                    className="fama-chart w-full h-24 overflow-hidden cursor-pointer"
                     preserveAspectRatio="none"
                     onClick={handleWaveformClick}
                   >
                     <defs>
                       <linearGradient id="waveformGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.48" />
-                        <stop offset="50%" stopColor="#2563eb" stopOpacity="0.16" />
-                        <stop offset="100%" stopColor="#1d4ed8" stopOpacity="0.48" />
+                        <stop offset="0%" stopColor="#4f8dff" stopOpacity="0.48" />
+                        <stop offset="50%" stopColor="#7c62e6" stopOpacity="0.16" />
+                        <stop offset="100%" stopColor="#a40eff" stopOpacity="0.42" />
                       </linearGradient>
                     </defs>
 
@@ -1631,8 +1649,8 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
                       <path d={waveformPaths.fillD} fill="url(#waveformGradient)" />
 
                       {/* Contornos superior e inferior */}
-                      <path d={waveformPaths.topStrokeD} fill="none" stroke="#60a5fa" strokeWidth="1.6" />
-                      <path d={waveformPaths.bottomStrokeD} fill="none" stroke="#3b82f6" strokeWidth="1.2" />
+                      <path d={waveformPaths.topStrokeD} fill="none" stroke="#6fa8ff" strokeWidth="1.6" />
+                      <path d={waveformPaths.bottomStrokeD} fill="none" stroke="#a08aff" strokeWidth="1.2" />
                     </g>
 
                     {/* Cabezal de reproducción (Playhead) interactivo con animación suave */}
@@ -1731,7 +1749,7 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
           </span>
 
           {result ? (
-            <div className="bg-[#111215] border border-[#23252e] rounded-lg p-4 space-y-3">
+            <div className="fama-modal bg-[#111215] border border-[#23252e] rounded-lg p-4 space-y-3">
               <div>
                 <span className="text-[10px] text-gray-400 uppercase tracking-wider block font-semibold">
                   {result.inferenceDomain === "engine_diagnostics"
@@ -1909,7 +1927,7 @@ function PrivatePredictionView({ authenticated }: { authenticated: boolean }) {
 
         {/* Lista de Registros */}
         <div className="space-y-2">
-          {historyLoading && <p role="status" className="text-xs text-gray-400">Cargando historial…</p>}
+          {historyLoading && <><p role="status" className="text-xs text-gray-400">Cargando historial…</p><SkeletonRows rows={4} /></>}
           {historyError && <p role="status" className="text-xs text-amber-400">{historyError}</p>}
           {!historyLoading && !historyError && visibleHistory.length === 0 && <p className="text-xs text-gray-400">Sin predicciones guardadas para este modelo.</p>}
           {historyCursor !== null && historyModel === selectedModelId && <button type="button"

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getFeedbackSync } from "@/lib/api/feedbackApi";
 import type { FeedbackSyncState } from "@/lib/schemas/feedback";
 import PageControls, { PAGE_SIZE } from "@/components/common/PageControls";
+import { SkeletonRows } from "@/components/common/Skeleton";
 import { stackedCell, stackedRow, stackedTable } from "@/components/common/stackedTable";
 
 function author(id: number | null | undefined, name: string | null | undefined) {
@@ -101,7 +102,7 @@ export default function FeedbackSyncPanel({ refreshKey, onSynced }: {
     <section aria-label="Registro de audios incorporados" className="bg-[#16171b] border border-[#23252e] rounded-xl p-5 space-y-4 text-xs text-gray-300">
       <h2 className="text-sm font-bold text-white">Registro de audios incorporados</h2>
       <p>Registros aceptados, del más reciente al más antiguo y separados de la cola de revisión. La incorporación local es un hito aceptado, no una auditoría física actual. Una copia cloud confirmada es un acuse durable, no una comprobación de existencia actual en GCS.</p>
-      {loading && <p role="status">Consultando registro de audios...</p>}
+      {loading && <><p role="status">Consultando registro de audios...</p><SkeletonRows rows={3} /></>}
       {error && <p role="alert" className="text-amber-300">{error}</p>}
       {!loading && !error && records.length === 0 && <p role="status">No hay registros recientes de audios incorporados.</p>}
       {records.length > 0 && (

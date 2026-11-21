@@ -41,6 +41,24 @@ it('loads saved records after mounting and remounting, paginates, and separates 
   expect(screen.getByText('saved-20.wav')).toBeDefined();
 });
 
+it('resets the history search when another model is chosen', async () => {
+  global.fetch = vi.fn(async (input) => {
+    const url = String(input);
+    if (url.includes('/api/models')) return Response.json({ models });
+    if (url.includes('/api/inference/history'))
+      return Response.json({ items: url.includes('302') ? [item(30, 302)] : [item(20)], next_cursor: null });
+    return Response.json({});
+  });
+  render(<PredictionView />); await act(async () => {});
+  const search = screen.getByPlaceholderText('Buscar por nombre de archivo o diagnóstico...') as HTMLInputElement;
+  fireEvent.change(search, { target: { value: 'saved-20' } });
+  expect(search.value).toBe('saved-20');
+  await chooseModel(models[1].name);
+  expect((screen.getByPlaceholderText('Buscar por nombre de archivo o diagnóstico...') as HTMLInputElement).value).toBe('');
+  expect(screen.queryByText('saved-20.wav')).toBeNull();
+  expect(screen.getByText('saved-30.wav')).toBeDefined();
+});
+
 it('ignores a late history JSON after model or session changes', async () => {
   let finish!: (data: unknown) => void;
   global.fetch = vi.fn(async input => {

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { API_BASE_URL, apiFetch as fetch } from "@/lib/api";
 import { TabType } from "../Sidebar";
+import { Skeleton } from "../common/Skeleton";
 
 interface DashboardViewProps {
   onNavigate: (tab: TabType) => void;
@@ -303,7 +304,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
       {/* Fila 1: 4 KPIs Principales con Datos Dinámicos Reales */}
       <section aria-label="Métricas registradas" aria-busy={loadingStats} className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
         {/* KPI 1: Precisión del Modelo Activo */}
-        <div className="bg-[#16171b] border border-[#23252e] hover:border-[#2d303b] transition-all rounded-xl p-3.5 flex flex-col justify-between">
+        <div className="fama-lift bg-[#16171b] border border-[#23252e] hover:border-[#2d303b] transition-all rounded-xl p-3.5 flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-gray-400 text-xs font-medium">
               <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -317,7 +318,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
           </div>
           <div className="mt-2">
             <p className="text-2xl font-bold text-white font-mono">
-              {loadingStats && !stats ? "…" : metric(stats?.kpis.accuracy, 2, "%")}
+              {loadingStats && !stats ? <Skeleton className="h-8 w-24" /> : metric(stats?.kpis.accuracy, 2, "%")}
             </p>
             <p className="text-[10px] text-gray-400 mt-0.5 truncate" title={stats?.kpis.latest_model_name ?? undefined}>
               {loadingStats && !stats ? "Consultando último modelo" : stats?.kpis.latest_model_name ?? "No disponible"}
@@ -326,7 +327,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
         </div>
 
         {/* KPI 2: Pérdida de Validación */}
-        <div className="bg-[#16171b] border border-[#23252e] hover:border-[#2d303b] transition-all rounded-xl p-3.5 flex flex-col justify-between">
+        <div className="fama-lift bg-[#16171b] border border-[#23252e] hover:border-[#2d303b] transition-all rounded-xl p-3.5 flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-gray-400 text-xs font-medium">
               <svg className="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -340,7 +341,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
           </div>
           <div className="mt-2">
             <p className="text-2xl font-bold text-blue-400 font-mono">
-              {loadingStats && !stats ? "…" : metric(stats?.kpis.loss, 4)}
+              {loadingStats && !stats ? <Skeleton className="h-8 w-24" /> : metric(stats?.kpis.loss, 4)}
             </p>
             <p className="text-[10px] text-gray-400 mt-0.5">
               Último modelo registrado; no implica activación
@@ -349,7 +350,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
         </div>
 
         {/* KPI 3: Datasets Bioacústicos */}
-        <div className="bg-[#16171b] border border-[#23252e] hover:border-[#2d303b] transition-all rounded-xl p-3.5 flex flex-col justify-between">
+        <div className="fama-lift bg-[#16171b] border border-[#23252e] hover:border-[#2d303b] transition-all rounded-xl p-3.5 flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-gray-400 text-xs font-medium">
               <svg className="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -363,7 +364,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
           </div>
           <div className="mt-2">
             <p className="text-2xl font-bold text-white font-mono">
-              {loadingStats && !stats ? "…" : stats?.kpis.total_audios != null ? stats.kpis.total_audios.toLocaleString() : "No disponible"}
+              {loadingStats && !stats ? <Skeleton className="h-8 w-24" /> : stats?.kpis.total_audios != null ? stats.kpis.total_audios.toLocaleString() : "No disponible"}
             </p>
             <p className="text-[10px] text-gray-400 mt-0.5">
               {loadingStats && !stats ? "Consultando datasets" : stats?.kpis.total_datasets != null ? `${stats.kpis.total_datasets} dataset(s) registrados` : "No disponible"}
@@ -372,7 +373,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
         </div>
 
         {/* KPI 4: Total de Predicciones Realizadas */}
-        <div className="bg-[#16171b] border border-[#23252e] hover:border-[#2d303b] transition-all rounded-xl p-3.5 flex flex-col justify-between">
+        <div className="fama-lift bg-[#16171b] border border-[#23252e] hover:border-[#2d303b] transition-all rounded-xl p-3.5 flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-gray-400 text-xs font-medium">
               <svg className="w-3.5 h-3.5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -386,7 +387,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
           </div>
           <div className="mt-2">
             <p className="text-2xl font-bold text-purple-300 font-mono">
-              {loadingStats && !stats ? "…" : stats?.kpis.total_predictions ?? "No disponible"}
+              {loadingStats && !stats ? <Skeleton className="h-8 w-24" /> : stats?.kpis.total_predictions ?? "No disponible"}
             </p>
             <p className="text-[10px] text-gray-400 mt-0.5">
               Confianza prom.: {loadingStats && !stats ? "…" : metric(stats?.kpis.avg_confidence, 1, "%")}
@@ -441,8 +442,8 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
             {activeEpochData && (
               <div className="flex items-center gap-2.5 text-[10px] font-mono bg-[#111215] px-2.5 py-1 rounded border border-[#252834]">
                 <span className="text-gray-400">Época {activeEpochData.epoch}</span>
-                <span className="text-emerald-400 font-semibold">Acc: {activeEpochData.accuracy.toFixed(1)}%</span>
-                <span className="text-rose-400 font-semibold">Loss: {activeEpochData.loss.toFixed(4)}</span>
+                <span className="text-blue-400 font-semibold">Acc: {activeEpochData.accuracy.toFixed(1)}%</span>
+                <span className="text-cyan-400 font-semibold">Loss: {activeEpochData.loss.toFixed(4)}</span>
               </div>
             )}
           </div>
@@ -454,17 +455,17 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
               role="img"
               aria-label="Convergencia del modelo"
               viewBox="0 0 500 160"
-              className="w-full h-44 overflow-visible select-none"
+              className="fama-chart w-full h-44 overflow-visible select-none"
               preserveAspectRatio="none"
             >
               <defs>
                 <linearGradient id="gradAccDash" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#10b981" stopOpacity="0.32" />
-                  <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+                  <stop offset="0%" stopColor="#a08aff" stopOpacity="0.32" />
+                  <stop offset="100%" stopColor="#a08aff" stopOpacity="0.0" />
                 </linearGradient>
                 <linearGradient id="gradLossDash" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.28" />
-                  <stop offset="100%" stopColor="#f43f5e" stopOpacity="0.0" />
+                  <stop offset="0%" stopColor="#6fa8ff" stopOpacity="0.28" />
+                  <stop offset="100%" stopColor="#6fa8ff" stopOpacity="0.0" />
                 </linearGradient>
               </defs>
 
@@ -482,8 +483,8 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
                     <path d={chartGeometry.lossAreaD} fill="url(#gradLossDash)" />
 
                     {/* Curvas principales */}
-                    <path d={chartGeometry.accPathD} fill="none" stroke="#10b981" strokeWidth="2.4" />
-                    <path d={chartGeometry.lossPathD} fill="none" stroke="#f43f5e" strokeWidth="2" strokeDasharray="5 3" />
+                    <path d={chartGeometry.accPathD} fill="none" stroke="#a08aff" strokeWidth="2.4" />
+                    <path d={chartGeometry.lossPathD} fill="none" stroke="#6fa8ff" strokeWidth="2" strokeDasharray="5 3" />
                     </>}
 
                     {/* Puntos interactivos de las épocas */}
@@ -500,8 +501,8 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
                           cx={c.x}
                           cy={c.yAcc}
                           r={hoveredEpoch === c.epoch || chartGeometry.coords.length === 1 ? 6 : 4}
-                          fill="#10b981"
-                          stroke="#064e3b"
+                          fill="#a08aff"
+                          stroke="#2a2152"
                           strokeWidth="1.5"
                           className="transition-all"
                         />
@@ -509,8 +510,8 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
                           cx={c.x}
                           cy={c.yLoss}
                           r={hoveredEpoch === c.epoch || chartGeometry.coords.length === 1 ? 6 : 3.5}
-                          fill="#f43f5e"
-                          stroke="#881337"
+                          fill="#6fa8ff"
+                          stroke="#172b4d"
                           strokeWidth="1.5"
                           className="transition-all"
                         />
@@ -530,12 +531,12 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
             <div className="flex items-center justify-between text-[10px] text-gray-500 font-mono mt-1 px-3 pt-1 border-t border-[#1b1d25]">
               <span>{loadingStats && !stats ? "Consultando épocas" : stats?.training_curves[0] ? `Época ${stats.training_curves[0].epoch}` : statsUnavailable ? "Consulta no disponible" : "Sin métricas registradas"}</span>
               <div className="flex items-center gap-4">
-                <span className="flex items-center gap-1.5 text-emerald-400">
-                  <span className="w-2.5 h-0.5 bg-emerald-400 inline-block" />
+                <span className="flex items-center gap-1.5 text-blue-400">
+                  <span className="w-2.5 h-0.5 bg-blue-400 inline-block" />
                   Precisión Validación
                 </span>
-                <span className="flex items-center gap-1.5 text-rose-400">
-                  <span className="w-2.5 h-0.5 bg-rose-400 inline-block border-b border-dashed" />
+                <span className="flex items-center gap-1.5 text-cyan-400">
+                  <span className="w-2.5 h-0.5 bg-cyan-400 inline-block border-b border-dashed" />
                   Pérdida (Loss)
                 </span>
               </div>
@@ -680,7 +681,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
               </div>
               <div className="w-full bg-[#111215] rounded-full h-1.5 overflow-hidden border border-[#23252e]">
                 <div
-                  className="h-1.5 rounded-full bg-blue-500 transition-all duration-500"
+                  className="fama-bar h-1.5 rounded-full bg-blue-500 transition-all duration-500"
                   style={{ width: `${Math.min(100, Math.max(0, hardware?.cpu_percent ?? 0))}%` }}
                 />
               </div>
@@ -696,7 +697,7 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
               </div>
               <div className="w-full bg-[#111215] rounded-full h-1.5 overflow-hidden border border-[#23252e]">
                 <div
-                  className={`h-1.5 rounded-full transition-all duration-500 ${
+                  className={`fama-bar h-1.5 rounded-full transition-all duration-500 ${
                     (hardware?.host_ram_percent ?? 0) >= 90
                       ? "bg-rose-500"
                       : (hardware?.host_ram_percent ?? 0) >= 75
@@ -771,12 +772,12 @@ export default function DashboardView({ onNavigate }: DashboardViewProps) {
                     {m.accuracy != null && (
                       <span className="text-gray-400 text-[10px]">Acc: {m.accuracy.toFixed(1)}%</span>
                     )}
-                    <span className="text-emerald-400 font-semibold">{Math.round(m.weight * 100)}%</span>
+                    <span className="text-blue-300 font-semibold">{Math.round(m.weight * 100)}%</span>
                   </div>
                 </div>
                 <div className="w-full bg-[#181a22] rounded-full h-1 overflow-hidden">
                   <div
-                    className="h-1 rounded-full bg-emerald-500"
+                    className="fama-bar h-1 rounded-full bg-blue-500"
                     style={{ width: `${m.weight * 100}%` }}
                   />
                 </div>

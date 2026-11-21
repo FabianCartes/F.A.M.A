@@ -45,7 +45,7 @@ export default function DatasetConfirmationDialog({ title, onClose, returnFocus,
       trigger?.focus();
     };
   }, [onClose, returnFocus]);
-  return createPortal(<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4">
+  return createPortal(<div className="fama-backdrop fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
     <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} className={`w-full ${wide ? "max-w-3xl max-h-[85vh] overflow-y-auto" : "max-w-lg"} space-y-4 rounded-xl border border-[#373a46] bg-[#16171b] p-6 text-sm text-gray-300 shadow-2xl`}>
       {headerAction ? <header className="flex items-start justify-between gap-4">
         <h2 id={titleId} className="min-w-0 text-lg font-semibold text-white">{title}</h2>

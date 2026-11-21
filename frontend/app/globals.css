@@ -1,8 +1,146 @@
 @import "tailwindcss";
 
+/* ============================================================================
+   TEMA DE MARCA F.A.M.A.
+   Los colores provienen del logo y de la pantalla de acceso. Se redefinen las
+   escalas de Tailwind en lugar de renombrar clases: los componentes y sus
+   pruebas conservan los mismos nombres de clase (bg-blue-600, border-red-500…)
+   y solo cambia el color al que corresponden.
+   ============================================================================ */
 @theme {
   --font-heading: var(--font-montserrat), sans-serif;
   --font-body: var(--font-open-sans), sans-serif;
+
+  /* Neutros de la tarjeta y el fondo del login */
+  --color-gray-50: #f7f7fc;
+  --color-gray-100: #ededf5;
+  --color-gray-200: #dedeea;
+  --color-gray-300: #c9cbda;
+  --color-gray-400: #a3a7bc;
+  --color-gray-500: #868aa2;
+  --color-gray-600: #5a5d77;
+  --color-gray-700: #34364d;
+  --color-gray-800: #1e2030;
+  --color-gray-900: #10111b;
+  --color-gray-950: #080910;
+
+  /* Acción principal: violeta sólido del botón del login */
+  --color-blue-50: #f1ecff;
+  --color-blue-100: #e4daff;
+  --color-blue-200: #d2c2ff;
+  --color-blue-300: #bba5ff;
+  --color-blue-400: #a08aff;
+  --color-blue-500: #7c62e6;
+  --color-blue-600: #6b4fd8;
+  --color-blue-700: #5a40c2;
+  --color-blue-800: #3e2f86;
+  --color-blue-900: #2a2152;
+  --color-blue-950: #1a1633;
+  --color-indigo-300: #bba5ff;
+  --color-indigo-400: #a08aff;
+  --color-indigo-500: #7c62e6;
+  --color-indigo-600: #6b4fd8;
+  --color-violet-400: #a08aff;
+  --color-violet-500: #7c62e6;
+  --color-violet-600: #6b4fd8;
+
+  /* Acento magenta del fondo del login */
+  --color-purple-200: #ead2ff;
+  --color-purple-300: #ddb0ff;
+  --color-purple-400: #cb82ff;
+  --color-purple-500: #b05cf0;
+  --color-purple-600: #9442d9;
+  --color-purple-700: #7a33b5;
+  --color-purple-800: #55247f;
+  --color-purple-900: #33184d;
+  --color-purple-950: #1f1030;
+
+  /* Azul del logo */
+  --color-cyan-200: #c4dbff;
+  --color-cyan-300: #9cc2ff;
+  --color-cyan-400: #6fa8ff;
+  --color-cyan-500: #4f8dff;
+  --color-cyan-600: #3f78e0;
+  --color-cyan-700: #2f5fb8;
+  --color-cyan-800: #22457f;
+  --color-cyan-900: #172b4d;
+  --color-cyan-950: #0d1730;
+  /* Turquesa de acción (presets y acentos de Entrenamiento) → violeta de marca */
+  --color-teal-200: #d2c2ff;
+  --color-teal-300: #bba5ff;
+  --color-teal-400: #a08aff;
+  --color-teal-500: #7c62e6;
+  --color-teal-600: #6b4fd8;
+  --color-teal-700: #5a40c2;
+  --color-teal-800: #3e2f86;
+  --color-teal-900: #2a2152;
+  --color-teal-950: #1a1633;
+  --color-sky-400: #6fa8ff;
+  --color-sky-500: #4f8dff;
+
+  /* Estados, con fondos oscuros poco saturados */
+  --color-emerald-200: #bdf5da;
+  --color-emerald-300: #86ebbd;
+  --color-emerald-400: #4ade9a;
+  --color-emerald-500: #34c584;
+  --color-emerald-600: #2a9e6b;
+  --color-emerald-700: #227e56;
+  --color-emerald-800: #1c5a40;
+  --color-emerald-900: #15382a;
+  --color-emerald-950: #0e211a;
+  --color-green-300: #86ebbd;
+  --color-green-400: #4ade9a;
+  --color-green-500: #34c584;
+  --color-green-600: #2a9e6b;
+  --color-green-700: #227e56;
+  --color-green-800: #1c5a40;
+  --color-green-900: #15382a;
+  --color-green-950: #0e211a;
+
+  --color-amber-200: #f8e3b5;
+  --color-amber-300: #f3d08c;
+  --color-amber-400: #f5b94a;
+  --color-amber-500: #e0a030;
+  --color-amber-600: #b87f1f;
+  --color-amber-700: #8c6018;
+  --color-amber-800: #5e4214;
+  --color-amber-900: #3a2a0f;
+  --color-amber-950: #21190b;
+  --color-yellow-300: #f3d08c;
+  --color-yellow-400: #f5b94a;
+  --color-yellow-500: #e0a030;
+  --color-yellow-900: #3a2a0f;
+  --color-yellow-950: #21190b;
+
+  --color-red-200: #ffc9d3;
+  --color-red-300: #ffa7b6;
+  --color-red-400: #ff7d93;
+  --color-red-500: #e9536d;
+  --color-red-600: #c93d57;
+  --color-red-700: #9e2f45;
+  --color-red-800: #6e2434;
+  --color-red-900: #451823;
+  --color-red-950: #2a1016;
+  --color-rose-200: #ffc9d3;
+  --color-rose-300: #ffa7b6;
+  --color-rose-400: #ff7d93;
+  --color-rose-500: #e9536d;
+  --color-rose-600: #c93d57;
+  --color-rose-700: #9e2f45;
+  --color-rose-800: #6e2434;
+  --color-rose-900: #451823;
+  --color-rose-950: #2a1016;
+}
+
+/* Superficies históricas (valores fijos en los componentes) llevadas a la marca.
+   Viven en la capa de utilidades para que los estados hover/focus sigan ganando. */
+@layer utilities {
+  .bg-\[\#16171b\] { background-color: #10111b; }
+  .bg-\[\#111215\] { background-color: #0c0d16; }
+  .bg-\[\#121316\] { background-color: #0c0d16; }
+  .bg-\[\#101114\] { background-color: #0c0d16; }
+  .border-\[\#23252e\] { border-color: #1f2132; }
+  .border-\[\#1f2128\] { border-color: #1e2030; }
 }
 
 :root {
@@ -16,8 +154,8 @@ html {
 
 body {
   font-family: var(--font-open-sans), sans-serif;
-  background-color: #030712;
-  color: #f9fafb;
+  background-color: #080910;
+  color: #f7f7fc;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -46,4 +184,117 @@ h1, h2, h3, h4, h5, h6 {
   pointer-events: none;
   margin-top: 0 !important;
   margin-bottom: 0 !important;
+}
+
+/* ============================================================================
+   ANIMACIONES
+   Solo decorativas: no cambian contenido, foco ni orden de lectura. Usan
+   fill-mode "backwards" para no dejar transformaciones activas al terminar
+   (una transformación persistente rompería los modales con position: fixed).
+   ============================================================================ */
+@keyframes fama-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fama-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fama-pop {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes fama-reveal {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+
+@keyframes fama-grow {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes fama-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+/* Entrada escalonada de los bloques de cada vista al abrirla */
+.fama-view > * > * {
+  animation: fama-rise 480ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+.fama-view > * > *:nth-child(2) { animation-delay: 50ms; }
+.fama-view > * > *:nth-child(3) { animation-delay: 100ms; }
+.fama-view > * > *:nth-child(4) { animation-delay: 150ms; }
+.fama-view > * > *:nth-child(5) { animation-delay: 200ms; }
+.fama-view > * > *:nth-child(6) { animation-delay: 250ms; }
+.fama-view > * > *:nth-child(7) { animation-delay: 300ms; }
+.fama-view > * > *:nth-child(n + 8) { animation-delay: 340ms; }
+
+/* Modales: fondo que aparece y panel que emerge */
+.fama-backdrop {
+  animation: fama-fade 200ms ease-out backwards;
+}
+.fama-modal,
+[role="dialog"][aria-modal="true"] {
+  animation: fama-pop 260ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+/* Gráficos: se dibujan de izquierda a derecha */
+.fama-chart {
+  animation: fama-reveal 1100ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+/* Barras de progreso y pesos: crecen desde la izquierda */
+.fama-bar {
+  transform-origin: left center;
+  animation: fama-grow 800ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+/* Esqueletos de carga */
+.fama-skeleton {
+  display: block;
+  border-radius: 0.5rem;
+  background-color: #151622;
+  background-image: linear-gradient(90deg, #151622 0%, #22243a 50%, #151622 100%);
+  background-size: 200% 100%;
+  animation: fama-shimmer 1.4s ease-in-out infinite;
+}
+
+/* Botones: transición suave y respuesta al presionar */
+@layer base {
+  button,
+  [role="button"],
+  a {
+    transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease,
+      box-shadow 160ms ease, opacity 160ms ease, scale 120ms ease;
+  }
+  button:not(:disabled):active,
+  [role="button"]:active {
+    scale: 0.97;
+  }
+}
+
+/* Tarjetas: elevación sutil al pasar el cursor */
+.fama-lift {
+  transition: border-color 200ms ease, box-shadow 200ms ease, translate 200ms ease;
+}
+.fama-lift:hover {
+  translate: 0 -2px;
+  box-shadow: 0 10px 30px #00000059;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
